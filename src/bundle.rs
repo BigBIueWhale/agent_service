@@ -1,6 +1,6 @@
 //! Per-session result bundling.
 //!
-//! At end-of-run, the orchestrator tars three things from the session's
+//! At end-of-run, the orchestrator tars four things from the session's
 //! staging dir into `<results_dir>/<session_id>/bundle.tar.zst`:
 //!
 //! - `artifacts/` — everything the agent wrote for the operator.
@@ -8,6 +8,10 @@
 //!   assistant turn, every tool call and result, and the final
 //!   `type:"result"` event whose payload is the parsed `response`.
 //! - `output/qwen-exit-code` — the agent process's exit code.
+//! - `output/qwen.stderr` — the agent process's stderr. Usually empty;
+//!   populated only when qwen-code itself logs an internal error
+//!   (network failure to the proxy, model-server protocol error, …).
+//!   Cheap to include and the only place these errors are surfaced.
 //!
 //! Compression is `zstd`. Bundles persist forever, until explicitly
 //! removed via `DELETE /v1/agent/sessions/:id` — the lifecycle is
@@ -84,7 +88,7 @@ pub async fn create_bundle(
     let stats = walk_stats(session_dir)?;
 
     // tar --zstd --ignore-failed-read -cf <archive> -C <session_dir>
-    //     artifacts output/events.jsonl output/qwen-exit-code
+    //     artifacts output/events.jsonl output/qwen-exit-code output/qwen.stderr
     //
     // `--ignore-failed-read` makes the run robust against the case where
     // the agent crashed before writing one of the output files; we still
@@ -100,6 +104,7 @@ pub async fn create_bundle(
         "artifacts",
         "output/events.jsonl",
         "output/qwen-exit-code",
+        "output/qwen.stderr",
     ]);
     cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
@@ -165,6 +170,7 @@ fn walk_stats(session_dir: &Path) -> ServiceResult<PreTarStats> {
     for sidecar in [
         session_dir.join("output/events.jsonl"),
         session_dir.join("output/qwen-exit-code"),
+        session_dir.join("output/qwen.stderr"),
     ] {
         if let Ok(meta) = std::fs::metadata(&sidecar) {
             if meta.is_file() {

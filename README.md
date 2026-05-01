@@ -6,8 +6,13 @@ to a browser-watchable ttyd, and returns the final answer. Designed for a
 host that already runs a Qwen3.6 vLLM endpoint on `127.0.0.1` (e.g. the
 `qwen36-agent-setup` deployment one directory up).
 
-The whole API is one streaming endpoint. `POST /v1/agent/run` with two
-required fields. Two NDJSON events back. That's it.
+The API is a small lifecycle-explicit CRUD over a `session` resource:
+`POST /v1/agent/sessions` to create, `GET` to read or list,
+`POST .../cancel` to interrupt, `DELETE` to discard. One JSON shape
+(`SessionBody`) for every read, with a `status` discriminator
+(`running` | `completed` | `cancelled`). Reads are pure, writes are
+idempotent, and there is no time- or count-based eviction anywhere —
+sessions live until the operator deletes them.
 
 ## Tool palette inside the agent container
 
@@ -26,8 +31,7 @@ tree). Highlights:
   ropper, z3-solver, full binutils.
 - **Security / pentest (offline)**: sqlmap, nikto, gobuster, dirb, wfuzz,
   john (the ripper), hydra, aircrack-ng, yara, clamav.
-- **Forensics**: sleuthkit, volatility3, foremost, scalpel, bulk-extractor,
-  exiftool.
+- **Forensics**: sleuthkit, volatility3, foremost, scalpel, exiftool.
 - **Network / packet analysis**: nmap, tcpdump, tshark, termshark,
   suricata, scapy, dpkt, pyshark, impacket.
 - **Browser automation (offline)**: Playwright (Chromium + Firefox
@@ -49,26 +53,42 @@ is told this explicitly and instructed not to retry.
 
 ## What it does
 
-You hand the service a prompt and a path to a folder. It:
+You hand the service a prompt and a path to a folder via
+`POST /v1/agent/sessions`. It:
 
 1. Validates both inputs strictly — no symlinks, size caps, absolute path,
    no system roots.
-2. Acquires a strict singleton: refuses concurrent runs with HTTP 409.
+2. Acquires a strict singleton: refuses concurrent submissions with
+   HTTP 409 (`busy`, with the running session's id in the envelope).
 3. Copies the folder (perms-normalised) to a per-session staging tree.
 4. Builds a per-session network sandbox: an outer `socat` container
-   (`--network=host`, byte-forwards a Unix socket to the host's vLLM port),
-   a `--internal` Docker network with no NAT to anywhere, and an inner
-   `socat` container on that network (TCP listener that forwards to the
-   bind-mounted Unix socket).
+   (`--network=host`, byte-forwards a Unix socket to the host's vLLM
+   port); a `--internal` +
+   `com.docker.network.bridge.gateway_mode_ipv4=isolated` Docker network
+   with no NAT, no host loopback, and no bridge gateway; an inner `socat`
+   container on that network (TCP listener that forwards to the
+   bind-mounted Unix socket); and a per-session ttyd-publishing sidecar
+   on a separate non-internal bridge.
 5. Spawns the agent container — Qwen Code 0.15.6 inside the big tooling
    image — on the internal network, with DNS pointed at a no-listener
    loopback and `OPENAI_BASE_URL` set to the inner proxy's IP literal.
-6. Waits for ttyd to bind, streams `{"event":"started",...,"ttyd_url":"..."}`
-   to the HTTP client so the human can open the URL in a browser.
-7. Waits for the agent to finish, parses its `result` event from the
-   bind-mounted JSONL stream, and streams `{"event":"finished",...,"response":"..."}`.
-8. Tears down inner proxy, internal network, outer proxy, staging tree —
-   in that order.
+6. Blocks the `POST` until ttyd is reachable through the sidecar, then
+   returns `201 Created` with the `running` `SessionBody` (including the
+   `ttyd_url` the operator opens in a browser).
+7. The agent runs in the background. Its progress is observable through
+   `GET /v1/agent/sessions/<id>` (live `current_turn` and
+   `last_event_at_unix` fields, recomputed on each read from the
+   in-flight `events.jsonl`) or by attaching to ttyd in a browser.
+8. On agent exit, the orchestrator parses the final `result` event,
+   builds the result bundle (artifacts + events.jsonl + qwen-exit-code +
+   qwen.stderr), persists `finished.json`, and tears down the sandbox
+   (ttyd sidecar, inner proxy, both networks, outer proxy, staging tree
+   — in that order). The session transitions to `completed` (or
+   `cancelled` if the operator hit the cancel endpoint) and is read out
+   of the on-disk record from then on.
+9. The bundle and `finished.json` persist until `DELETE
+   /v1/agent/sessions/<id>` removes them. There is no automatic
+   pruning.
 
 The agent inside the container has full shell access, the entire
 vibe-web-terminal toolset, and Qwen Code's built-in subagent dispatch —
@@ -210,13 +230,15 @@ compromised, the agent has no path to follow it onto the publish bridge.
 ### Singleton, not a pool
 
 For now, **exactly one** agent run can be in flight at a time. A second
-`POST /v1/agent/run` while the first is running gets HTTP 409 with the
-running session's id. The architecture is structured (mutex over
-`Option<RunningSession>`) so growing into a small bounded pool is a
-mechanical change once you have more GPUs — replace the mutex with a
-semaphore + `Vec<RunningSession>`, generate per-session network names
-(already done; they're `agent-net-<uuid>`), and route each session at a
-distinct vLLM endpoint.
+`POST /v1/agent/sessions` while the first is running gets HTTP 409
+(`busy`, with the running session's id in the envelope). The
+architecture is structured (`tokio::sync::Semaphore` with one permit
+inside `runtime::Manager`, `HashMap<id, RunningEntry>` already capable
+of holding more than one entry, per-session cancel tokens already
+threaded through) so growing into a small bounded pool is a mechanical
+change once more GPUs come online. See the
+[Multi-GPU growth path](#multi-gpu-growth-path-deliberate-forward-compat)
+section below for the concrete steps.
 
 ### Why ttyd + tmux
 
@@ -264,20 +286,30 @@ Floating tags (`latest`, `main`) are not used anywhere.
 
 ## Reliability configuration
 
-Qwen Code 0.15.6 ships several built-in autonomous-run safeguards that
-are **off by default** but matter a lot for unattended runs. The image's
-`~/.qwen/settings.json` enables them all:
+Qwen Code 0.15.6 ships several built-in autonomous-run safeguards. The
+image's `~/.qwen/settings.json` configures them as follows:
 
 | Key | Value | What it does |
 |---|---|---|
-| `model.skipLoopDetection` | `false` | Activates **five** loop detectors (`packages/core/src/services/loopDetectionService.ts`): identical-tool-call repeat (×5), 50-char content chunk repeat (×10), repetitive structured thoughts (×3), excessive read-like tools (≥8 in last 15), same-tool name with varying args (×8). On detection the run aborts cleanly via `GeminiEventType.LoopDetected`. **Critical** for unattended runs — Qwen Code's default is `true` (loop detection disabled). |
+| `model.skipLoopDetection` | `true` | **Loop detection disabled.** Five streaming heuristics live in `packages/core/src/services/loopDetectionService.ts` (identical-tool-call repeat ×5, 50-char content chunk repeat ×10, repetitive structured thoughts ×3, excessive read-likes ≥8 in last 15, same-tool name with varying args ×8). They false-positive heavily on legitimate deep-codebase exploration where the agent calls `read`/`grep` repeatedly across many files in similar shapes — exactly our workload. We rely on the other backstops below (`maxSessionTurns`, `sessionTokenLimit`, the orchestrator's wall-clock cap) to catch genuinely runaway sessions. Matches Qwen Code's own default. |
 | `model.skipNextSpeakerCheck` | `true` | Prevents the CLI from auto-injecting `"Please continue."` after empty turns. Auto-prodding is a footgun for Qwen3 — pinned explicitly to defend against future Qwen Code version changes. |
-| `model.maxSessionTurns` | `200` | Last-resort turn cap. Run aborts with exit code 53 (`MAX_TURNS_EXCEEDED`) if the outer session-turn count exceeds it. Read raw at `client.ts:709-710` with no internal clamp. CLI flag `--max-session-turns` (driven by `AGENT_SERVICE_MAX_TURNS`) overrides the settings file value when present. The `MAX_TURNS = 100` constant at `client.ts:96` is unrelated — it's a recursion-depth bound on `sendMessageStream`, not a cap on session turns. **Why 200 and not lower**: the five loop detectors above + `sessionTokenLimit` + the orchestrator's wall-clock catch every stuck-mode failure before this fires; the turn cap is just the "the model is making progress but we're way past any plausible legitimate run length" backstop. |
-| `model.sessionTokenLimit` | `262144` | A **most-recent-prompt-token** cap, not cumulative. Compared at `client.ts:731-747` against `lastPromptTokenCount` (from `uiTelemetry.ts:147,180-186` — `totalTokenCount` of the most recent API response, including cached tokens). Acts as a "this request would have OOM'd or hit max-model-len" backstop; aborts the session cleanly with the run's `result` event still emitted. 262144 is Qwen3.6's `max_position_embeddings`; in practice the parent project's vLLM is configured to 152000, so this trips effectively never (vLLM rejects with HTTP 400 first). Qwen Code's default is `-1` (disabled). |
+| `model.maxSessionTurns` | `200` | Last-resort turn cap. Run aborts with exit code 53 (`MAX_TURNS_EXCEEDED`) if the outer session-turn count exceeds it. Read raw at `client.ts:709-710` with no internal clamp. CLI flag `--max-session-turns` (driven by `AGENT_SERVICE_MAX_TURNS`) overrides the settings-file value when present. The `MAX_TURNS = 100` constant at `client.ts:96` is unrelated — it's a recursion-depth bound on `sendMessageStream`, not a cap on session turns. **Why 200 and not lower**: `sessionTokenLimit` + the orchestrator's wall-clock catch the common stuck-mode failures earlier; the turn cap is just the "the model is making progress but we're way past any plausible legitimate run length" backstop. |
+| `model.sessionTokenLimit` | `262144` | A **most-recent-prompt-token** cap, not cumulative. Compared at `client.ts:731-747` against `lastPromptTokenCount` (from `uiTelemetry.ts:147,180-186` — `totalTokenCount` of the most recent API response, including cached tokens). Acts as a "this request would have OOM'd or hit max-model-len" backstop; aborts the session cleanly with the run's `result` event still emitted. 262144 is Qwen3.6's `max_position_embeddings`; in practice the parent project's vLLM is configured to 152000, so vLLM rejects with HTTP 400 first and this almost never fires directly. Qwen Code's default is `-1` (disabled). |
 
 These are independent of the sampling configuration below — none of them
 require changing `presence_penalty` away from the AWQ-recipe-mandated
 `0.0`.
+
+The orchestrator-side backstops layered on top of these:
+
+- **Wall-clock cap** (`AGENT_SERVICE_TIMEOUT_SECS`, default 7200 s = 2 h):
+  the outer-most "kill the container regardless" timer.
+- **Singleton + cancellation:** the operator can `POST .../cancel` at
+  any time; the cancel races against `docker wait`, then `docker stop`
+  + re-await for the exit code, then teardown.
+- **No `events.jsonl` mtime advance** is observable on the running
+  `SessionBody` (`last_event_at_unix`); operators can spot a wedged
+  agent without waiting for the wall-clock cap.
 
 What is **not** available in v0.15.6 (in case you're searching for it):
 no `--strict` / `--bail-on-error` flag; no time-based "stuck thinking"
@@ -297,16 +329,24 @@ QuantTrio/Qwen3.6-27B-AWQ "Best Practices" thinking-mode parameters:
   "min_p": 0.0,
   "presence_penalty": 0.0,
   "repetition_penalty": 1.0,
-  "max_tokens": 81920
+  "max_tokens": 32000
 }
 ```
 
-These are the **higher-quality** values from the model card — they accept
-slightly higher infinite-loop risk in exchange for noticeably better
-output on math and code (`presence_penalty=0.0` per Alibaba's published
-recommendation; the `linear_attn.in_proj_a/b` layers in the AWQ recipe
-are kept at BF16 specifically to mitigate the loop pathology, see the
-parent project's README §3.1).
+The temperature / top-p / top-k / min-p / penalty values are the
+**higher-quality** thinking-mode values from the model card — they
+accept slightly higher infinite-loop risk in exchange for noticeably
+better output on math and code (`presence_penalty=0.0` per Alibaba's
+published recommendation; the `linear_attn.in_proj_a/b` layers in the
+AWQ recipe are kept at BF16 specifically to mitigate the loop
+pathology, see the parent project's README §3.1).
+
+`max_tokens` is narrowed to `32000` from the model card's `81920`. A
+single completion that decodes >32K tokens almost always indicates a
+runaway generation, and bounding it reduces both the wall-clock
+exposure and the post-mortem context the operator has to wade
+through. Multi-step tasks chain many completions of this size, so the
+practical headroom is much larger than the single-completion cap.
 
 Vision is enabled (`modalities.image=true, modalities.video=true`) and
 `splitToolMedia=true` is set as documented in the parent project's §5.8.
@@ -450,9 +490,8 @@ vLLM deployment.
 # export AGENT_SERVICE_STORAGE_QUOTA=128g                # writable-storage cap; empty disables
 # export AGENT_SERVICE_STATE_DIR="$HOME/.local/state/agent_service"
 # export AGENT_SERVICE_RESULTS_DIR="$HOME/.local/state/agent_service/results"
-# export AGENT_SERVICE_RESULTS_RETAIN=20                 # past bundles to keep; 0 = unlimited
 # export AGENT_SERVICE_TIMEOUT_SECS=7200                 # 2h wall-clock cap
-# export AGENT_SERVICE_MAX_TURNS=200                     # last-resort cap; loop detectors fire much earlier
+# export AGENT_SERVICE_MAX_TURNS=200                     # last-resort turn cap (1..=1024)
 
 ./target/release/agent_service
 ```
@@ -483,11 +522,11 @@ Pre-flight verifies:
   be created.
 - Any orphan containers / networks left by a previous crash (matched by
   the `agent_service.session=*` label) are swept; any stale per-session
-  staging directories under `<state_dir>/sessions/` are removed. (The
-  results directory is **not** swept — it's the persistent home for
-  past-session bundles.)
-- Past-session bundles are pruned to `AGENT_SERVICE_RESULTS_RETAIN` by
-  oldest mtime (in case the operator just shrank the retain count).
+  staging directories under `<state_dir>/sessions/` are removed; any
+  per-session result directory under `<results_dir>/` that is missing
+  `finished.json` (a partially-written record from a crashed server) is
+  removed. **Completed result bundles are not swept** — the lifecycle
+  is explicit, so a session lives until `DELETE`.
 - `AGENT_SERVICE_LISTEN_ADDR` resolves to a loopback address — the
   service refuses to bind anywhere else, full stop.
 
@@ -500,9 +539,28 @@ pre-flight failure. Exit codes: `2` config, `10` daemon unreachable,
 ## API
 
 Listening on `127.0.0.1:8090` only. No TLS — loopback-only; if you tunnel
-this, that's the caller's job. One way to invoke, one way to consume.
+this, that's the caller's job.
 
-### `POST /v1/agent/run`
+The resource is a `session`. Every session-related endpoint returns the
+same `SessionBody` shape, discriminated by `status`
+(`running` | `completed` | `cancelled`). Required-field discipline:
+every field is always serialised, with running-only fields zeroed for
+terminal states and terminal-only fields zeroed while running, so
+clients have one parser.
+
+| Method | Path | What it does | Success status |
+|---|---|---|---|
+| `POST`   | `/v1/agent/sessions`               | Create. Body `{prompt, folder}`. Blocks until ttyd is reachable. | `201 Created` |
+| `GET`    | `/v1/agent/sessions`               | List. Combines in-memory running session (≤1) with on-disk terminal records. Sorted by `started_at_unix`. | `200 OK` |
+| `GET`    | `/v1/agent/sessions/{id}`          | Pure read; idempotent. | `200 OK` / `404` |
+| `POST`   | `/v1/agent/sessions/{id}/cancel`   | Cancel; idempotent. Awaits teardown so the returned body reflects the final state. | `200 OK` |
+| `DELETE` | `/v1/agent/sessions/{id}`          | Remove a terminal session's bundle + record from disk. Refuses while running (`409`). | `204 No Content` / `404` / `409` |
+| `GET`    | `/healthz`                         | Plain-text `ok`. For supervisor probes. | `200 OK` |
+
+There is **no** time-, count-, or read-based eviction anywhere. Reads
+never mutate. Writes (cancel, delete) are idempotent.
+
+### `POST /v1/agent/sessions` — create
 
 Request body — both fields **required**:
 
@@ -515,138 +573,216 @@ Request body — both fields **required**:
 
 Validation:
 
-- `prompt` is non-empty after trimming, ≤ 100 KiB, contains no NUL byte.
+- `prompt` is non-empty after trimming, contains no NUL byte. The
+  effective size cap is the request-body limit (`256 KiB`) imposed
+  before validation runs.
 - `folder` is an absolute path to an existing directory, with no
   symlinks anywhere in the tree, ≤ 4 GiB total, ≤ 200 000 files. System
   paths (`/`, `/etc`, `/proc`, `/sys`, `/dev`, `/boot`, `/var/run`,
   `/run`) are rejected.
 
-Successful response: `200 OK`, `Content-Type: application/x-ndjson`.
-**Exactly two newline-delimited JSON objects** in the stream:
+The call **blocks** until the agent's ttyd listener is reachable through
+the per-session sidecar (typically a few seconds). On success: `201
+Created` with the running `SessionBody` (see schema below); the
+`ttyd_url` field carries the URL the operator opens in a browser. Until
+the agent finishes, the same body is observable through `GET .../{id}`
+with live `current_turn` and `last_event_at_unix` updated on each read.
+
+### `GET /v1/agent/sessions/{id}` — read one
+
+Pure read of one session. Falls back to disk if the session is no longer
+running. `404` for unknown ids (never submitted, already DELETE'd, or
+lost in a server crash — running sessions do not survive process
+restart by design).
+
+### `GET /v1/agent/sessions` — list
+
+```json
+{
+  "sessions": [
+    { /* SessionBody for s-aaa... */ },
+    { /* SessionBody for s-bbb... */ }
+  ]
+}
+```
+
+Combines the in-memory running session (at most one, by singleton) with
+every on-disk terminal record under `<results_dir>/`. Sorted by
+`started_at_unix` ascending. Skips half-written records that are
+missing `finished.json` (they appear once the rename lands).
+
+### `POST /v1/agent/sessions/{id}/cancel` — cancel
+
+Idempotent. Cancels the per-session token; the run task observes it,
+issues `docker stop` (10 s grace) + re-await for the exit code, runs
+teardown (uninterruptible), and persists `finished.json`. The HTTP call
+**awaits** all of that, so the returned body reflects the final state
+— `status: "cancelled"` for a successful cancel; `status: "completed"`
+if the session had already terminated by the time the cancel arrived.
+A cancel on a session id that doesn't exist returns `404`.
+
+### `DELETE /v1/agent/sessions/{id}` — delete a terminal record
+
+Removes `<results_dir>/<id>/` (the persisted body and bundle).
+Returns:
+
+- `204 No Content` on success.
+- `404 Not Found` if the id is unknown.
+- `409 Conflict` (`kind: session_running`) if the session is still
+  running. The lifecycle is explicit: cancel first, then delete.
+
+### `SessionBody` schema
+
+Every session-related read returns this shape (running-only fields
+zeroed for terminal records and vice versa). Field semantics:
 
 ```jsonc
-// Line 1 — emitted as soon as ttyd is reachable.
 {
-  "event": "started",
-  "session_id": "s-1f0e7b...",
-  "ttyd_url": "http://127.0.0.1:51234/",
-  "started_at_unix": 1746115234,
-  "agent_image": "qwen-agent-template:0.1.0",
-  "model_name": "Qwen3.6-27B-AWQ"
-}
+  // Always populated
+  "session_id":         "s-1f0e7b...",
+  "status":             "running" | "completed" | "cancelled",
+  "started_at_unix":    1746115234,
+  "ttyd_url":           "http://127.0.0.1:51234/",   // empty string for sessions that
+                                                      // failed before ttyd-up
+  "prompt_preview":     "Reproduce the bug in ...",  // first 200 chars of the submitted prompt
 
-// Line 2 — emitted when the container exits, events.jsonl is parsed,
-//          and the result bundle has been written.
-{
-  "event": "finished",
-  "session_id": "s-1f0e7b...",
-  "finished_at_unix": 1746116012,
-  "duration_wall_ms": 778431,
-  "container_exit_code": 0,
-  "is_error": false,
-  "response": "<the agent's final answer text>",
-  "agent_num_turns": 17,
-  "agent_duration_ms": 776543,
-  "bundle_archive_path": "/home/user/.local/state/agent_service/results/s-1f0e7b/bundle.tar.zst",
-  "bundle_compressed_bytes": 1284412,
-  "bundle_uncompressed_bytes": 5938204,
-  "bundle_file_count": 14,
+  // Live progress (running) / frozen-at-end (terminal)
+  "current_turn":       7,           // count of `"type":"user"` lines in events.jsonl;
+                                     //   approximates tool-result→model boundaries
+                                     //   (qwen-code's own definition of a turn)
+  "last_event_at_unix": 1746115512,  // mtime of events.jsonl. Stops advancing if the
+                                     //   agent is wedged.
+
+  // Populated only on terminal status; zero/empty while running
+  "finished_at_unix":            1746116012,
+  "duration_wall_ms":            778431,
+  "container_exit_code":         0,    // `docker wait` on the agent container — usually 0
+                                       //   even when qwen failed (the wrapper exits cleanly
+                                       //   through ttyd's SIGTERM)
+  "agent_exit_code":             0,    // qwen-code's actual exit, read from
+                                       //   output/qwen-exit-code:
+                                       //   0   normal completion
+                                       //   53  hit max-session-turns
+                                       //   137 SIGKILL'd by docker stop after a cancel
+                                       //   96  wrapper: PROMPT env was empty
+                                       //   97  init:    no PROMPT or RUN_AGENT script
+                                       //   -1  setup failed before the wrapper ran
+  "is_error":                    false,
+  "response":                    "<the agent's final answer text>",
+  "agent_num_turns":             17,
+  "agent_duration_ms":           776543,
+  "bundle_archive_path":         "/home/user/.local/state/agent_service/results/s-1f0e7b/bundle.tar.zst",
+  "bundle_compressed_bytes":     1284412,
+  "bundle_uncompressed_bytes":   5938204,
+  "bundle_file_count":           14,
   "bundle_artifacts_file_count": 12,
-  "teardown_diagnostics": []
+  "teardown_diagnostics":        []    // human-readable strings; non-empty on partial failure
 }
 ```
+
+Note that `status: "completed"` does NOT mean "succeeded" — it means
+the run reached a terminal state through normal flow (as opposed to
+`cancelled` via the cancel endpoint). Use `is_error` to distinguish
+success from failure within `completed`. Failures that occur before
+ttyd-up still produce a `completed` body with `is_error: true` and an
+`agent_exit_code` of `-1`; the `response` field carries a human-readable
+explanation.
+
+### Result bundle
 
 **The bundle archive is the agent's primary output channel for files.**
-Inside `bundle.tar.zst`:
+It lives at `bundle_archive_path` (always populated on a terminal
+record; empty string only if bundle creation failed, in which case
+`teardown_diagnostics` explains why). Inside `bundle.tar.zst`:
 
 ```
-artifacts/                      ← whatever the agent wrote to /artifacts/
-   (structure determined entirely by the operator's prompt — the agent
-    is told that /artifacts is empty when it starts and that anything it
-    writes there is returned)
-output/events.jsonl             ← the agent's full structured event stream
-                                  (forensics; the same stream that ttyd
-                                   shows live during the run)
-output/qwen-exit-code           ← the qwen process's numeric exit code
+artifacts/             ← whatever the agent wrote to /artifacts/. The
+                         agent is told this directory is empty at start
+                         and that anything written there is returned.
+output/events.jsonl    ← full structured event stream (the same stream
+                         ttyd renders live during the run); forensics
+output/qwen-exit-code  ← qwen-code's numeric exit code (one line)
+output/qwen.stderr     ← qwen-code's stderr; usually empty, populated
+                         on internal qwen errors
 ```
 
-`bundle_archive_path` is **always present** (empty string only on a
-bundle creation failure, in which case `teardown_diagnostics` explains
-why). `bundle_artifacts_file_count` separates the agent's intentional
-output from the forensics sidecars, so callers can quickly spot a run
-that produced no artefacts.
+`bundle_artifacts_file_count` separates the agent's intentional output
+from the forensics sidecars, so callers can quickly spot a run that
+produced no artefacts.
 
-Past bundles persist under `AGENT_SERVICE_RESULTS_DIR` (default
-`<state_dir>/results/<session_id>/`). After each successful run the
-service prunes oldest-by-mtime bundles down to
-`AGENT_SERVICE_RESULTS_RETAIN` (default 20; set to 0 to disable
-pruning). The session's *staging* directory (under
+The session's *staging* directory (under
 `<state_dir>/sessions/<session_id>/`) is removed at the end of the run
-regardless — only the bundle persists.
+regardless — only the bundle persists, until `DELETE`.
 
-If something fails after `started` but before `finished` is emittable
-(e.g. `docker wait` itself errors), a third event shape is emitted and
-the stream closes:
+### Error envelope
 
-```json
-{"event":"error","kind":"docker_command_failed","error":"<message>","session_id":"s-..."}
-```
-
-Pre-stream failures (validation, busy, docker unavailable, image missing)
-return a non-streaming JSON body with the error shape from `error.rs`:
+Every failure response carries the same shape:
 
 ```json
-{ "error": "<message>", "kind": "<machine-readable kind>", "running_session_id": "" }
+{ "error": "<message>", "kind": "<machine-readable kind>", "session_id": "" }
 ```
 
-| HTTP | `kind` |
-|---|---|
-| 400 | `invalid_request` |
-| 409 | `busy` (`running_session_id` non-empty) |
-| 502 | `docker_command_failed` / `agent_output_missing` |
-| 503 | `docker_unavailable` / `image_missing` |
-| 504 | `timeout` |
-| 500 | `staging_failed` / `internal` |
+| HTTP | `kind` | When |
+|---|---|---|
+| 400 | `invalid_request`        | Body validation failed (prompt, folder, …). |
+| 404 | `not_found`              | Unknown session id. |
+| 409 | `busy`                   | Singleton already held; `session_id` carries the running id. |
+| 409 | `session_running`        | `DELETE` against a still-running session; `session_id` carries the offending id. Cancel first. |
+| 502 | `docker_command_failed`  | A `docker` subprocess returned non-zero. |
+| 502 | `agent_output_missing`   | The agent ran but produced no parseable `result` event. |
+| 503 | `docker_unavailable`     | Daemon not reachable as the running user. |
+| 503 | `image_missing`          | `AGENT_SERVICE_IMAGE` is not present locally. |
+| 504 | `timeout`                | A wall-clock cap was hit. |
+| 500 | `staging_failed`         | Host-side filesystem failure during staging / bundle. |
+| 500 | `internal`               | Anything else. |
 
-### `GET /v1/agent/current`
-
-Returns the currently-running session as JSON, or `404` with
-`{"running":false,"session":null}` when idle.
-
-```json
-{
-  "session_id": "s-1f0e7b...",
-  "ttyd_url": "http://127.0.0.1:51234/",
-  "started_at_unix": 1746115234,
-  "prompt_preview": "Reproduce the bug in tests/regress.test.ts and fix it."
-}
-```
-
-### `GET /healthz`
-
-`200 OK` plain-text `ok`. For supervisor probes.
+The `session_id` field is always present (empty string when not
+applicable) — clients have one parser for every error response.
 
 ---
 
 ## Example session
 
 ```bash
-# Terminal 1 — start the service
+# Terminal 1 — start the service.
 ./target/release/agent_service
 
-# Terminal 2 — kick off a run.
-curl --no-buffer -X POST \
-  -H 'Content-Type: application/json' \
+# Terminal 2 — submit a session. The POST blocks for a few seconds
+# until ttyd is reachable, then returns 201 with the running body.
+SID=$(curl -sS -X POST -H 'Content-Type: application/json' \
   --data '{
     "prompt":"Find out why tests/test_login.py::test_session_expiry fails and fix it. Use subagents to investigate independent code paths sequentially. Final answer: a unified diff of the fix and a one-paragraph root-cause explanation.",
     "folder":"/home/user/projects/myapp"
   }' \
-  http://127.0.0.1:8090/v1/agent/run
+  http://127.0.0.1:8090/v1/agent/sessions \
+  | tee /dev/stderr | jq -r '.session_id')
+
+# Open the ttyd_url field from that JSON in a browser to watch.
+
+# Poll for completion. Live `current_turn` and `last_event_at_unix`
+# advance while the agent runs; `status` flips to "completed" or
+# "cancelled" at the end.
+while :; do
+  BODY=$(curl -sS http://127.0.0.1:8090/v1/agent/sessions/"$SID")
+  STATUS=$(echo "$BODY" | jq -r .status)
+  echo "$(date +%H:%M:%S) status=$STATUS turn=$(echo "$BODY" | jq -r .current_turn)"
+  [ "$STATUS" != "running" ] && break
+  sleep 30
+done
+echo "$BODY" | jq
+
+# Cancel mid-run if needed:
+#   curl -sS -X POST http://127.0.0.1:8090/v1/agent/sessions/"$SID"/cancel | jq
+
+# Once you're done with the bundle, delete it:
+#   curl -sS -X DELETE http://127.0.0.1:8090/v1/agent/sessions/"$SID" -o /dev/null -w '%{http_code}\n'
 ```
 
-You'll see the two NDJSON lines stream out. As soon as line 1 arrives,
-open the `ttyd_url` in a browser to watch the agent reason. Line 2
-arrives when it's done, with the final answer in `response`.
+The agent runs to completion regardless of whether you keep polling,
+hold the ttyd browser tab open, or even disconnect entirely — the run
+task is detached from the HTTP request. The singleton enforces "one
+agent at a time", and `DELETE` is the only thing that removes a
+record.
 
 ---
 
@@ -659,42 +795,56 @@ agent_service/
 ├── docker/
 │   ├── Dockerfile           # qwen-agent-template:0.1.0 (agent + socat + ttyd + tools)
 │   └── config/
-│       ├── settings.json    # ~/.qwen/settings.json (sampling, modalities)
+│       ├── settings.json    # ~/.qwen/settings.json (sampling, modalities, safeguards)
 │       ├── QWEN.md          # ~/.qwen/QWEN.md (operating instructions)
-│       ├── agent_init.sh    # CMD: tmux + ttyd
+│       ├── agent_init.sh    # container CMD: tmux + ttyd in read-only attach mode
 │       └── run_agent.sh     # in-tmux: qwen | tee /output/events.jsonl
 └── src/
-    ├── main.rs              # bootstrap, listener, signals
-    ├── api.rs               # axum routes + NDJSON streaming + pre-flight
-    ├── bundle.rs            # tar.zst result bundle + retention pruning
-    ├── config.rs            # env-driven config (loopback-only enforced)
-    ├── docker_ops.rs        # subprocess wrappers around `docker`
-    ├── error.rs             # ServiceError + IntoResponse
-    ├── network.rs           # IsolatedNetwork (outer + inner socat + internal net)
+    ├── main.rs              # bootstrap, listener, signals, graceful shutdown
+    ├── api.rs               # axum routes (lifecycle CRUD) + pre-flight
+    ├── runtime.rs           # Manager: singleton, in-memory map of running sessions,
+    │                        #   on-disk persistence of terminal records, cancellation
+    │                        #   token tree, SessionBody wire shape
+    ├── session.rs           # run_one: per-session orchestration
+    │                        #   (validate → stage → network → spawn → wait → bundle → tear down)
+    ├── network.rs           # IsolatedNetwork: agent-net (--internal + isolated gateway),
+    │                        #   agent-pub (sidecar publish bridge), outer/inner socat,
+    │                        #   ttyd sidecar, post-create no-default-route assertion
+    ├── docker_ops.rs        # subprocess wrappers around `docker` (ping, image, run, …)
+    ├── bundle.rs            # tar.zst result bundle (artifacts + events.jsonl
+    │                        #   + qwen-exit-code + qwen.stderr)
     ├── result_parse.rs      # parse events.jsonl → AgentResult
-    ├── session.rs           # singleton manager + lifecycle
     ├── staging.rs           # per-session paths + copy-with-perms
-    └── validation.rs        # prompt + folder validation
+    ├── validation.rs        # prompt + folder validation
+    ├── config.rs            # env-driven config (loopback-only enforced)
+    └── error.rs             # ServiceError + IntoResponse + WireError
 ```
 
 ---
 
 ## Multi-GPU growth path (deliberate forward-compat)
 
-The singleton today is `Mutex<Option<RunningSession>>`. To grow into a
-bounded pool when more GPUs come online:
+The singleton today is a `tokio::sync::Semaphore` with one permit
+inside `runtime::Manager`; the in-memory map is already a
+`HashMap<String, Arc<RunningEntry>>` capable of holding more than one
+running entry, and the cancellation tree already gives each session
+its own child token. To grow into a bounded pool when more GPUs come
+online:
 
-1. Change `state: Mutex<Option<RunningSession>>` to
-   `(Semaphore, Mutex<Vec<RunningSession>>)` in `session.rs`.
-2. Permit the caller to pass a target vLLM endpoint per request, OR run
-   one `agent_service` per GPU and put a tiny round-robin in front.
-3. The network module already builds per-session networks named
-   `agent-net-<uuid>` and per-session container names `agent-{outproxy,inproxy,agent}-<uuid>`
-   — they don't collide.
+1. Bump `Semaphore::new(1)` to `Semaphore::new(N)` in
+   `runtime::Manager::new`. The `try_acquire_owned` call in `submit`
+   already returns `Busy` only when *no* permit is available; everything
+   else just works.
+2. Route per session to a target vLLM endpoint — either let the caller
+   pass it in `CreateRequest`, or run one `agent_service` per GPU and
+   put a tiny round-robin in front.
+3. No network or container-name changes are needed. Per-session names
+   are already `{agent-net,agent-pub,agent-{outproxy,inproxy,sidecar},agent}-<uuid>`,
+   so they don't collide across concurrent sessions.
 
-The Rust side took 5 minutes to design with this in mind. The Docker side
-already supports it because every per-session object carries a unique
-session id.
+The Rust side took 5 minutes to design with this in mind. The Docker
+side already supports it because every per-session object carries a
+unique session id.
 
 ---
 
