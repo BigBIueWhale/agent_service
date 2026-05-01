@@ -1,0 +1,48 @@
+{
+  "modelProviders": {
+    "openai": [
+      {
+        "id": "qwen36-vllm",
+        "name": "qwen36-vllm",
+        "baseUrl": "http://invalid-must-be-overridden-by-OPENAI_BASE_URL.local:8001/v1",
+        "description": "Self-hosted vLLM Qwen3.6-27B-AWQ; the host's agent_service injects OPENAI_BASE_URL at run time so this placeholder is never hit.",
+        "envKey": "OPENAI_API_KEY"
+      }
+    ]
+  },
+  "env": {
+    "OPENAI_API_KEY": "dummy-not-used-but-required-by-client"
+  },
+  "security": {
+    "auth": { "selectedType": "openai" }
+  },
+  "model": {
+    "name": "Qwen3.6-27B-AWQ",
+
+    "skipLoopDetection": false,
+    "skipNextSpeakerCheck": true,
+    "maxSessionTurns": 200,
+    "sessionTokenLimit": 262144,
+
+    "generationConfig": {
+      "modalities": { "image": true, "video": true },
+      "splitToolMedia": true,
+      "contextWindowSize": 131072,
+      "samplingParams": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repetition_penalty": 1.0,
+        "max_tokens": 81920
+      }
+    }
+  },
+  "tools": {
+    "approvalMode": "yolo",
+    "sandboxImage": ""
+  },
+  "general": { "checkpointing": { "enabled": false } },
+  "telemetry": { "enabled": false }
+}

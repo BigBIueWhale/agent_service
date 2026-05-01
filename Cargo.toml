@@ -1,0 +1,26 @@
+[package]
+name = "agent_service"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+publish = false
+
+[dependencies]
+axum               = { version = "=0.8.9", default-features = false, features = ["http1", "json", "tokio", "tracing"] }
+tokio              = { version = "=1.52.1", features = ["macros", "rt-multi-thread", "process", "fs", "sync", "time", "signal", "io-util"] }
+tower-http         = { version = "=0.6.8", features = ["trace", "limit"] }
+serde              = { version = "=1.0.228", features = ["derive"] }
+serde_json         = "=1.0.149"
+uuid               = { version = "=1.23.1", features = ["v4", "serde"] }
+thiserror          = "=2.0.18"
+tracing            = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "fmt"] }
+futures-util       = "=0.3.32"
+async-stream       = "=0.3.6"
+bytes              = "=1.11.1"
+
+[profile.release]
+opt-level    = 3
+lto          = "thin"
+codegen-units = 1
+strip        = "symbols"
