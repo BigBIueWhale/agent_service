@@ -1,48 +1,53 @@
-//! Per-session network isolation: a chain of two `socat`-running containers
-//! plus a Docker `--internal` network between the agent and the inner
-//! proxy. Both proxies are spawned and supervised by this Rust process,
-//! using the same `qwen-agent-template` image with `--entrypoint socat` —
-//! one binary, one image, one byte-forwarding pattern.
+//! Per-session network isolation: a chain of socat-running containers, two
+//! Docker bridge networks, and the agent — all spawned and supervised by
+//! this Rust process from the same `qwen-agent-template` image with
+//! `--entrypoint socat` for the proxies. One binary, one image, one
+//! byte-forwarding pattern.
 //!
 //! ```text
-//! ┌──────────────────────────────────────────────────────────────────┐
-//! │ HOST                                                             │
-//! │                                                                  │
-//! │   vLLM listening on 127.0.0.1:<vllm_port>                        │
-//! │       ▲                                                          │
-//! │       │ TCP                                                      │
-//! │       │                                                          │
-//! │   ┌───┴──────────────────────────────┐                           │
-//! │   │ OUTER PROXY CONTAINER            │  --network=host           │
-//! │   │  --entrypoint socat              │  socat                    │
-//! │   │  qwen-agent-template:0.1.0       │   UNIX-LISTEN:/sock/...   │
-//! │   │  --read-only --cap-drop ALL      │   TCP:127.0.0.1:<vllm>    │
-//! │   │  --user 1000 --memory 64m        │                           │
-//! │   └───┬──────────────────────────────┘                           │
-//! │       │ Unix socket  (bind-mounted into both proxies as /sock)   │
-//! │       │                                                          │
-//! │   ┌───┴──────────────────────────────┐                           │
-//! │   │ INNER PROXY CONTAINER            │  --network=agent-net-X    │
-//! │   │  --entrypoint socat              │  socat                    │
-//! │   │  qwen-agent-template:0.1.0       │   TCP-LISTEN:8001         │
-//! │   │  --read-only --cap-drop ALL      │   UNIX-CONNECT:/sock/...  │
-//! │   │  --user 1000 --memory 64m        │                           │
-//! │   │  --dns 127.0.0.1                 │                           │
-//! │   └───┬──────────────────────────────┘                           │
-//! │       │ TCP                                                      │
-//! │       ▼                                                          │
-//! │   ┌──────────────────────────────────┐                           │
-//! │   │ DOCKER NETWORK: agent-net-X      │  --internal               │
-//! │   │   no NAT, no internet, no host   │                           │
-//! │   └───┬──────────────────────────────┘                           │
-//! │       │                                                          │
-//! │   ┌───┴──────────────────────────────┐                           │
-//! │   │ AGENT CONTAINER                  │  qwen → http://<inner_ip> │
-//! │   │  qwen-agent-template:0.1.0       │             :8001/v1      │
-//! │   │  ttyd 7681 → 127.0.0.1:<eph>     │                           │
-//! │   │  --dns 127.0.0.1                 │                           │
-//! │   └──────────────────────────────────┘                           │
-//! └──────────────────────────────────────────────────────────────────┘
+//! ┌────────────────────────────────────────────────────────────────────────┐
+//! │ HOST                                                                   │
+//! │                                                                        │
+//! │   vLLM 127.0.0.1:<vllm_port>            ttyd publish 127.0.0.1:<eph>   │
+//! │       ▲                                       ▲                        │
+//! │       │ TCP                                   │ TCP   (-p, browser)    │
+//! │   ┌───┴──────────────────────────────┐    ┌───┴──────────────────────┐ │
+//! │   │ OUTER PROXY                       │    │ TTYD-SIDECAR             │ │
+//! │   │  --network=host                  │    │  --entrypoint socat      │ │
+//! │   │  --entrypoint socat              │    │  primary: agent-pub-X    │ │
+//! │   │  UNIX-LISTEN:/sock/vllm.sock     │    │  also:    agent-net-X    │ │
+//! │   │   → TCP:127.0.0.1:<vllm_port>    │    │  TCP-LISTEN:7681         │ │
+//! │   │                                  │    │   → TCP:<agent_ip>:7681  │ │
+//! │   └───┬──────────────────────────────┘    └───┬──────────────────────┘ │
+//! │       │ Unix socket bind-mount                │ on TWO networks       │ │
+//! │       │ (shared with inner proxy as /sock)    │                       │ │
+//! │       │                              ┌────────┘                       │ │
+//! │   ┌───┴──────────────────────────────┴┐                               │ │
+//! │   │ INNER PROXY                       │  --network=agent-net-X        │ │
+//! │   │  --entrypoint socat               │  TCP-LISTEN:8001              │ │
+//! │   │  UNIX-CONNECT:/sock/vllm.sock     │   → host's vLLM via Unix sock │ │
+//! │   └───┬───────────────────────────────┘                               │ │
+//! │       │                                                               │ │
+//! │   ┌───┴──────────────────────────────────────────┐                    │ │
+//! │   │ DOCKER NETWORK: agent-net-X                  │                    │ │
+//! │   │   --internal                                 │                    │ │
+//! │   │   gateway_mode_ipv4=isolated  (no host iface)│                    │ │
+//! │   │   no NAT, no internet, no host, no gateway   │                    │ │
+//! │   └───┬──────────────────────────────────────────┘                    │ │
+//! │       │                                                               │ │
+//! │   ┌───┴────────────────────────────┐                                  │ │
+//! │   │ AGENT CONTAINER                │  qwen → http://<inner_ip>:8001   │ │
+//! │   │  qwen-agent-template:0.1.0     │  ttyd 7681 (container-local)     │ │
+//! │   │  --dns 127.0.0.1               │  no `-p` — silently dropped on   │ │
+//! │   │  on agent-net-X ONLY           │  --internal nets; the sidecar    │ │
+//! │   │                                │  bridges to host loopback.       │ │
+//! │   └────────────────────────────────┘                                  │ │
+//! │                                                                        │ │
+//! │   DOCKER NETWORK: agent-pub-X (sidecar's `-p` lives here, --internal   │ │
+//! │     is incompatible with `-p` so this bridge is non-internal but has   │ │
+//! │     enable_ip_masquerade=false to block NAT outbound for the sidecar.  │ │
+//! │     The agent never touches it.)                                       │ │
+//! └────────────────────────────────────────────────────────────────────────┘
 //! ```
 //!
 //! ### Why two `socat` containers (and not a Rust forwarder, and not a
@@ -105,6 +110,11 @@ const SOCK_FILENAME: &str = "vllm.sock";
 
 /// Live handles to all per-session Docker objects. Held by `Session` for
 /// its lifetime; `teardown` removes everything in reverse-creation order.
+///
+/// The ttyd-sidecar fields are populated only after the agent itself has
+/// started and `attach_ttyd_sidecar` has run — they are `None` between
+/// `IsolatedNetwork::create` returning and the agent existing. Teardown
+/// tolerates either state.
 #[derive(Debug)]
 pub struct IsolatedNetwork {
     pub network_name: String,
@@ -115,6 +125,15 @@ pub struct IsolatedNetwork {
     /// started with DNS pointed at a non-listening address and cannot
     /// resolve any hostname (see module-level comment).
     pub inner_proxy_ip: String,
+    /// Per-session non-internal bridge network the ttyd sidecar uses for
+    /// `-p` host publishing. Created lazily by `attach_ttyd_sidecar`;
+    /// `None` until then.
+    pub publish_network_name: Option<String>,
+    /// Per-session ttyd-publishing socat sidecar. Dual-attached to
+    /// `publish_network_name` (primary, where `-p` lives) and
+    /// `network_name` (where it forwards to ttyd inside the agent).
+    /// `None` until `attach_ttyd_sidecar` runs.
+    pub ttyd_sidecar_container_name: Option<String>,
     /// Docker label applied to every object created for this session, so
     /// `sweep_orphans` can find them on a startup sweep. Kept on the struct
     /// for diagnostics; not needed at teardown time because the names are
@@ -226,8 +245,12 @@ impl IsolatedNetwork {
             )));
         }
 
-        // ── 2. Internal network for the inner proxy + the agent.
-        if let Err(e) = docker_ops::network_create_internal(&network_name, &session_label).await {
+        // ── 2. Agent network: --internal + gateway_mode_ipv4=isolated.
+        //    This is the primary isolation primitive: no NAT (--internal),
+        //    no reachable bridge gateway (isolated mode), no path off the
+        //    bridge subnet for anything attached to it. Pre-flight has
+        //    already verified the daemon honours the isolated-gateway flag.
+        if let Err(e) = docker_ops::network_create_agent(&network_name, &session_label).await {
             let _ = docker_ops::container_force_remove(&outer_proxy_container_name).await;
             return Err(e);
         }
@@ -310,6 +333,8 @@ impl IsolatedNetwork {
             outer_proxy_container_name,
             inner_proxy_container_name,
             inner_proxy_ip,
+            publish_network_name: None,
+            ttyd_sidecar_container_name: None,
             session_label,
         })
     }
@@ -320,17 +345,183 @@ impl IsolatedNetwork {
         format!("http://{}:{PROXY_LISTEN_PORT}/v1", self.inner_proxy_ip)
     }
 
+    /// Bring up the ttyd-publishing sidecar and return the host-loopback
+    /// port the operator can browse. Called by `session::run_inner` AFTER
+    /// the agent container has started and ttyd has bound on
+    /// `<agent_ip>:7681` inside it.
+    ///
+    /// Topology:
+    ///   1. Create per-session publish bridge `agent-pub-<sid>` (non-internal,
+    ///      masquerade off — `-p` works, NAT outbound shut).
+    ///   2. `docker run -d` sidecar with `--network=<publish bridge>` AND
+    ///      `-p 127.0.0.1::7681`. socat is `TCP-LISTEN:7681,fork → TCP:<agent_ip>:7681`.
+    ///      The publish bridge MUST be the primary network at run time —
+    ///      Docker silently drops `-p` if the primary network is `--internal`.
+    ///   3. `docker network connect <agent network> <sidecar>` to give the
+    ///      sidecar a second interface on the agent's isolated bridge so it
+    ///      can reach `agent_ip:7681`.
+    ///   4. Look up the host port `docker port` assigned to the sidecar.
+    ///   5. `wait_tcp_ready` on that port to confirm the listener is bound.
+    ///
+    /// On any error mid-setup, this function tears down whatever it
+    /// created (sidecar container, publish network) before returning the
+    /// error, so the caller's outer teardown path doesn't see partial state.
+    /// Successful setup updates `self.publish_network_name` and
+    /// `self.ttyd_sidecar_container_name`, so `teardown` removes them.
+    pub async fn attach_ttyd_sidecar(
+        &mut self,
+        cfg: &Config,
+        session_id: &str,
+        agent_ip: &str,
+    ) -> ServiceResult<u16> {
+        // Defensive: refuse to attach a sidecar twice. Catches an
+        // accidental double-call from session.rs in the future.
+        if self.ttyd_sidecar_container_name.is_some() {
+            return Err(ServiceError::Internal(
+                "attach_ttyd_sidecar called twice for the same session".into(),
+            ));
+        }
+
+        // Validate the agent IP — we splice it into a socat target spec.
+        // container_ip_on_network already does an IpAddr parse, but we
+        // re-check here as defence-in-depth: we never want shell or socat
+        // metacharacters in this string.
+        let _ip_check: std::net::IpAddr = agent_ip.parse().map_err(|e| {
+            ServiceError::Internal(format!(
+                "attach_ttyd_sidecar: agent_ip {agent_ip:?} is not a valid IP literal: {e}"
+            ))
+        })?;
+
+        let publish_network_name = format!("agent-pub-{session_id}");
+        let sidecar_container_name = format!("agent-ttydsc-{session_id}");
+
+        // ── 1. Publish bridge.
+        docker_ops::network_create_publish(&publish_network_name, &self.session_label)
+            .await?;
+
+        // From here, on any error path, tear down the publish network.
+        let result: ServiceResult<u16> = async {
+            // ── 2. Sidecar, primary on the publish bridge.
+            let listen = format!("TCP-LISTEN:{TTYD_CONTAINER_PORT},fork,reuseaddr");
+            let target = format!("TCP:{agent_ip}:{TTYD_CONTAINER_PORT}");
+            let publish_arg = format!("127.0.0.1::{TTYD_CONTAINER_PORT}");
+
+            let sidecar_args: Vec<String> = vec![
+                "--name".into(),
+                sidecar_container_name.clone(),
+                "--label".into(),
+                self.session_label.clone(),
+                "--network".into(),
+                publish_network_name.clone(),
+                "-p".into(),
+                publish_arg,
+                "--user".into(),
+                "1000:1000".into(),
+                // DNS pointed at a non-listening loopback — defence-in-depth.
+                // The sidecar reaches the agent by IP literal, never by name.
+                "--dns".into(),
+                "127.0.0.1".into(),
+                "--dns-search".into(),
+                ".".into(),
+                "--entrypoint".into(),
+                "socat".into(),
+                "--read-only".into(),
+                "--tmpfs".into(),
+                "/tmp:rw,noexec,nosuid,size=4m".into(),
+                "--cap-drop".into(),
+                "ALL".into(),
+                "--security-opt".into(),
+                "no-new-privileges:true".into(),
+                "--memory".into(),
+                "64m".into(),
+                "--pids-limit".into(),
+                "32".into(),
+                cfg.agent_image.clone(),
+                listen,
+                target,
+            ];
+
+            docker_ops::run_detached(&sidecar_args, "ttyd_sidecar_run").await?;
+
+            // ── 3. Attach the sidecar's second interface (the agent
+            //    network) so it can reach agent_ip:7681. Order is
+            //    load-bearing: had we attached it to the agent network
+            //    first, `-p` would have silently dropped because that
+            //    network is `--internal`.
+            if let Err(e) =
+                docker_ops::network_connect(&self.network_name, &sidecar_container_name).await
+            {
+                let _ =
+                    docker_ops::container_force_remove(&sidecar_container_name).await;
+                return Err(e);
+            }
+
+            // ── 4. Resolve the host port `-p` assigned to us.
+            let host_port = docker_ops::container_published_port(
+                &sidecar_container_name,
+                TTYD_CONTAINER_PORT,
+            )
+            .await
+            .map_err(|e| {
+                ServiceError::DockerCommand(format!(
+                    "ttyd sidecar did not publish 127.0.0.1:<eph>:{TTYD_CONTAINER_PORT}; \
+                     this should never happen on a non-internal bridge — check \
+                     `docker port {sidecar_container_name}` for diagnostics: {e}"
+                ))
+            })?;
+
+            // ── 5. Confirm the sidecar's TCP-LISTEN is up. socat binds
+            //    well under 100 ms; 5 s is generous headroom.
+            docker_ops::wait_tcp_ready(host_port, Duration::from_secs(5)).await?;
+
+            Ok(host_port)
+        }
+        .await;
+
+        match result {
+            Ok(host_port) => {
+                self.publish_network_name = Some(publish_network_name);
+                self.ttyd_sidecar_container_name = Some(sidecar_container_name);
+                Ok(host_port)
+            }
+            Err(e) => {
+                // Sidecar may or may not exist depending on which step
+                // failed. force_remove is idempotent.
+                let _ = docker_ops::container_force_remove(&sidecar_container_name).await;
+                let _ = docker_ops::network_remove(&publish_network_name).await;
+                Err(e)
+            }
+        }
+    }
+
     /// Best-effort teardown — collects diagnostic detail but never
     /// propagates errors as `Err`, since the caller is already finalising.
-    /// Reverse-order: inner proxy → network → outer proxy.
+    ///
+    /// Reverse-creation order:
+    ///   ttyd sidecar (if attached) → publish network (if created) →
+    ///   inner proxy → agent network → outer proxy
+    ///
+    /// Note that the agent container itself is removed by `session.rs`
+    /// before `teardown` is called — this method only handles the
+    /// orchestrator's own infrastructure.
     pub async fn teardown(self) -> Vec<String> {
         let mut diagnostics = Vec::new();
+        if let Some(sidecar) = &self.ttyd_sidecar_container_name {
+            if let Err(e) = docker_ops::container_force_remove(sidecar).await {
+                diagnostics.push(format!("ttyd sidecar rm: {e}"));
+            }
+        }
+        if let Some(pub_net) = &self.publish_network_name {
+            if let Err(e) = docker_ops::network_remove(pub_net).await {
+                diagnostics.push(format!("publish network rm: {e}"));
+            }
+        }
         if let Err(e) = docker_ops::container_force_remove(&self.inner_proxy_container_name).await
         {
             diagnostics.push(format!("inner proxy rm: {e}"));
         }
         if let Err(e) = docker_ops::network_remove(&self.network_name).await {
-            diagnostics.push(format!("network rm: {e}"));
+            diagnostics.push(format!("agent network rm: {e}"));
         }
         if let Err(e) = docker_ops::container_force_remove(&self.outer_proxy_container_name).await
         {

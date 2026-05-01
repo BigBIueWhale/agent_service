@@ -59,6 +59,7 @@ qwen --approval-mode yolo \
      --output-format stream-json \
      --include-partial-messages \
      -p "$PROMPT" \
+     2> >(tee /output/qwen.stderr >&2) \
   | tee /output/events.jsonl
 EXIT="${PIPESTATUS[0]}"
 

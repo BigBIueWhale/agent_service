@@ -3,19 +3,26 @@
 //! At end-of-run, the orchestrator tars three things from the session's
 //! staging dir into `<results_dir>/<session_id>/bundle.tar.zst`:
 //!
-//!   - `artifacts/`             (everything the agent wrote for the operator)
-//!   - `output/events.jsonl`    (the agent's full structured event stream)
-//!   - `output/qwen-exit-code`  (the agent process's exit code)
+//! - `artifacts/` — everything the agent wrote for the operator.
+//! - `output/events.jsonl` — the agent's full conversation history: every
+//!   assistant turn, every tool call and result, and the final
+//!   `type:"result"` event whose payload is the parsed `response`.
+//! - `output/qwen-exit-code` — the agent process's exit code.
 //!
-//! Compression is `zstd`. The bundle persists across sessions; old
-//! bundles are pruned by mtime to a configurable retain count.
+//! Compression is `zstd`. Bundles persist forever, until explicitly
+//! removed via `DELETE /v1/agent/sessions/:id` — the lifecycle is
+//! client-controlled and never time-based.
+//!
+//! No "response" sidecar file: the parsed answer text already lives in
+//! `<results_dir>/<id>/finished.json` (the persisted `SessionBody`),
+//! and the full history surrounding it is in `events.jsonl`.
 //!
 //! Both `tar` and `zstd` are required on the host and are verified at
 //! pre-flight (`api::pre_flight`) — failure to find them is fatal at
 //! startup, so an in-progress run can never discover the gap mid-flight.
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use tokio::process::Command;
 
@@ -198,60 +205,6 @@ fn walk_recursive(dir: &Path, files: &mut u64, bytes: &mut u64) -> ServiceResult
         }
     }
     Ok(())
-}
-
-/// Prune `results_dir` to keep at most `retain` entries (oldest by mtime
-/// first). `retain == 0` disables pruning. Best-effort: returns a list of
-/// human-readable diagnostics for anything that failed; never errors out
-/// fatally because pruning is auxiliary to a successful run.
-pub fn prune_results(results_dir: &Path, retain: u32) -> Vec<String> {
-    let mut diags = Vec::new();
-    if retain == 0 {
-        return diags;
-    }
-    let entries = match std::fs::read_dir(results_dir) {
-        Ok(e) => e,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return diags,
-        Err(e) => {
-            diags.push(io_msg("prune_results read_dir", results_dir, &e));
-            return diags;
-        }
-    };
-    let mut buckets: Vec<(SystemTime, PathBuf)> = Vec::new();
-    for entry in entries {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(e) => {
-                diags.push(format!("prune_results: read_dir entry: {e}"));
-                continue;
-            }
-        };
-        let path = entry.path();
-        let meta = match std::fs::metadata(&path) {
-            Ok(m) => m,
-            Err(e) => {
-                diags.push(io_msg("prune_results stat", &path, &e));
-                continue;
-            }
-        };
-        if !meta.is_dir() {
-            // Stray file under results/: leave it alone. Operator can
-            // investigate.
-            continue;
-        }
-        let mtime = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-        buckets.push((mtime, path));
-    }
-    buckets.sort_by_key(|(t, _)| *t);
-    let to_remove = buckets.len().saturating_sub(retain as usize);
-    for (_, path) in buckets.into_iter().take(to_remove) {
-        if let Err(e) = std::fs::remove_dir_all(&path) {
-            diags.push(io_msg("prune_results remove_dir_all", &path, &e));
-        } else {
-            tracing::info!(path = %path.display(), "prune_results: removed old bundle");
-        }
-    }
-    diags
 }
 
 /// Verify the host has both `tar` and `zstd` on PATH. Called from

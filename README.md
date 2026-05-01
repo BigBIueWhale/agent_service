@@ -81,46 +81,55 @@ model surface).
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│ HOST (public-internet-exposed)                                       │
-│                                                                      │
-│   vLLM listening on 127.0.0.1:8001                                   │
-│       ▲                                                              │
-│       │ TCP                                                          │
-│   ┌───┴──────────────────────────┐                                   │
-│   │ OUTER PROXY CONTAINER        │  --network=host                   │
-│   │  socat                       │  socat                            │
-│   │  qwen-agent-template         │   UNIX-LISTEN:/sock/vllm.sock     │
-│   │  --user 1000 --read-only     │   TCP:127.0.0.1:<vllm_port>       │
-│   │  --cap-drop ALL --memory 64m │                                   │
-│   └───┬──────────────────────────┘                                   │
-│       │ Unix socket  (bind-mounted into both proxies)                │
-│       │                                                              │
-│   ┌───┴──────────────────────────┐                                   │
-│   │ INNER PROXY CONTAINER        │  --network=agent-net-<id>         │
-│   │  socat                       │  socat                            │
-│   │  qwen-agent-template         │   TCP-LISTEN:8001                 │
-│   │  --dns 127.0.0.1             │   UNIX-CONNECT:/sock/vllm.sock    │
-│   │  --read-only --cap-drop ALL  │                                   │
-│   └───┬──────────────────────────┘                                   │
-│       │ TCP                                                          │
-│       ▼                                                              │
-│   ┌──────────────────────────────────┐                               │
-│   │ DOCKER NETWORK: agent-net-<id>   │  --internal                   │
-│   │   no NAT, no internet, no DNS    │                               │
-│   └───┬──────────────────────────────┘                               │
-│       │                                                              │
-│   ┌───┴─────────────────────────┐                                    │
-│   │ AGENT CONTAINER             │  qwen → http://<inner_ip>:8001/v1 │
-│   │  qwen-agent-template        │  ttyd 7681 → 127.0.0.1:<eph>       │
-│   │  --dns 127.0.0.1            │                                    │
-│   │  --user 1000 --cap-drop ALL │                                    │
-│   │  no --gpus, no --privileged │                                    │
-│   └─────────────────────────────┘                                    │
-│                                  ▲                                   │
-│                                  │ http (browser, read-only)         │
-│                                                                      │
-└──────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ HOST (public-internet-exposed)                                           │
+│                                                                          │
+│   vLLM 127.0.0.1:8001               ttyd publish 127.0.0.1:<eph>         │
+│       ▲                                  ▲                               │
+│       │ TCP                              │ TCP   (-p, browser)           │
+│   ┌───┴──────────────────────────┐   ┌───┴────────────────────────────┐  │
+│   │ OUTER PROXY CONTAINER        │   │ TTYD-SIDECAR CONTAINER         │  │
+│   │  --network=host              │   │  --entrypoint socat            │  │
+│   │  --entrypoint socat          │   │  primary: agent-pub-<id>       │  │
+│   │  qwen-agent-template         │   │  also:    agent-net-<id>       │  │
+│   │   UNIX-LISTEN:/sock/...      │   │   TCP-LISTEN:7681              │  │
+│   │   → TCP:127.0.0.1:<vllm>     │   │   → TCP:<agent_ip>:7681        │  │
+│   │  --user 1000 --read-only     │   │  --read-only --cap-drop ALL    │  │
+│   │  --cap-drop ALL --memory 64m │   │  --user 1000 --memory 64m      │  │
+│   └───┬──────────────────────────┘   └───┬────────────────────────────┘  │
+│       │ Unix socket  (bind-mounted        │ on TWO networks (per session) │
+│       │ into both proxies as /sock)       │                              │
+│       │                          ┌────────┘                              │
+│   ┌───┴──────────────────────────┴┐                                      │
+│   │ INNER PROXY CONTAINER          │  --network=agent-net-<id>           │
+│   │  --entrypoint socat            │   TCP-LISTEN:8001                   │
+│   │   UNIX-CONNECT:/sock/...       │   → host's vLLM via Unix sock       │
+│   │  --user 1000 --dns 127.0.0.1   │                                     │
+│   │  --read-only --cap-drop ALL    │                                     │
+│   └───┬────────────────────────────┘                                     │
+│       │ TCP                                                              │
+│       ▼                                                                  │
+│   ┌──────────────────────────────────────────────────┐                   │
+│   │ DOCKER NETWORK: agent-net-<id>                   │                   │
+│   │   --internal                                     │                   │
+│   │   gateway_mode_ipv4=isolated  (NO host iface IP) │                   │
+│   │   no NAT, no internet, no host, no gateway       │                   │
+│   └───┬──────────────────────────────────────────────┘                   │
+│       │                                                                  │
+│   ┌───┴─────────────────────────┐                                        │
+│   │ AGENT CONTAINER             │  qwen → http://<inner_ip>:8001/v1     │
+│   │  qwen-agent-template        │  ttyd 7681 (container-local; no `-p`) │
+│   │  --dns 127.0.0.1            │  on agent-net-<id> ONLY                │
+│   │  --user 1000 --cap-drop ALL │  → sidecar bridges to host loopback   │
+│   │  no --gpus, no --privileged │                                        │
+│   └─────────────────────────────┘                                        │
+│                                                                          │
+│   DOCKER NETWORK: agent-pub-<id>  (sidecar's `-p` lives here.            │
+│     `--internal` is incompatible with `-p`, so this bridge is non-       │
+│     internal but has enable_ip_masquerade=false to block outbound NAT    │
+│     for the sidecar. The agent never touches it.)                        │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
                                    │
                                 Browser
 ```
@@ -135,12 +144,21 @@ WebSocket) all pass through transparently. The orchestrator is **not** in
 the data plane; if its process is briefly unhealthy, in-flight chat
 completions keep flowing.
 
-### Why two hops, both as containers
+### Why two hops to vLLM, both as containers
 
-- **The agent is on a `--internal` Docker network.** That flag drops every
-  packet whose destination isn't on the same network — no NAT, no host
-  reachability, no internet. The only peer the agent can reach is the
-  inner proxy.
+- **The agent is on a `--internal` + `gateway_mode_ipv4=isolated` Docker
+  network.** `--internal` drops every packet whose destination isn't on
+  the same network (no NAT to internet); `gateway_mode_ipv4=isolated`
+  (Docker ≥ 27.1) additionally suppresses the host-side bridge IP, so the
+  bridge has no gateway address that the agent could route to. Together:
+  no NAT, no internet, no host loopback, no host services on `0.0.0.0`,
+  no other Docker networks. The agent's `ip route` shows exactly one
+  link-scope subnet entry — no `default via …`. **The only peer the
+  agent can reach is the inner proxy** (and, after attach, the ttyd
+  sidecar — see below). Pre-flight verifies the daemon honours the
+  isolated-gateway flag; per-session post-create asserts the agent's
+  routing table actually has no default route, catching any silent
+  Docker-semantic regression at iteration 1, not iteration 50.
 - **The host's vLLM is published with `-p 127.0.0.1:8001:8001`** (a
   deliberate property of the parent project — vLLM must not be reachable
   from anywhere else on the host). Containers cannot reach a 127.0.0.1-
@@ -158,6 +176,36 @@ completions keep flowing.
   `--security-opt no-new-privileges`, `--memory`, `--pids-limit`),
   `docker ps` / `docker logs` are the operator interface, and the
   Rust orchestrator stays purely in control of *lifecycle*, never *bytes*.
+
+### Why ttyd publishes via a sidecar, not the agent's own `-p`
+
+Docker silently drops `-p` port publishing on `--internal` networks.
+This is a fundamental incompatibility, not a bug: an internal network has
+no path to the host bridge by definition, so port-forwarding rules
+cannot be installed. The original design tried to publish ttyd directly
+from the agent container; the silent drop made `wait_for_ttyd` time out
+on every run.
+
+The fix is a per-session **socat sidecar dual-attached to two networks**:
+
+- **`agent-net-<id>`** — the internal-isolated network where the agent
+  lives. Sidecar joins this so it can reach the agent's port 7681.
+- **`agent-pub-<id>`** — a per-session non-internal bridge with
+  `enable_ip_masquerade=false`. Sidecar's primary interface; this is
+  where `-p 127.0.0.1::7681` lives. Masquerade-off keeps NAT outbound
+  shut even though the bridge isn't `--internal`.
+
+Attach order is load-bearing: sidecar's primary network MUST be the
+publish bridge (else `-p` is silently dropped); the agent network is
+joined via `docker network connect` after `docker run`. The sidecar's
+socat is fixed at `TCP-LISTEN:7681,fork → TCP:<agent_ip>:7681` — it can
+only forward to the agent's ttyd, nowhere else, target frozen at process
+start.
+
+The agent itself is **only** on `agent-net-<id>` and never has any
+interface on the publish bridge. Its `ip route` confirms this: one
+link-scope entry, no default. So even if the sidecar's socat were
+compromised, the agent has no path to follow it onto the publish bridge.
 
 ### Singleton, not a pool
 
@@ -270,43 +318,78 @@ v0.15.6) so the server defaults always land.
 
 ## Security properties
 
-- **Listens only on loopback.** The service refuses to bind anywhere else.
-- **Network isolation in depth.** The agent container is on a `--internal`
-  Docker network; the inner proxy is the only peer it can reach; the inner
-  proxy can only forward to the bind-mounted Unix socket; the outer proxy
-  is the only thing on that socket and only forwards to one fixed TCP
-  destination on the host (`127.0.0.1:<vllm_port>`). socat is byte-stupid
-  — it doesn't parse, it can't be redirected by client traffic.
+- **Listens only on loopback.** The service refuses to bind anywhere
+  else. Verified at startup by `config::parse_listen_addr`.
+- **Network isolation in depth — strictly stronger than `--internal`
+  alone.** The agent container is on a `--internal` +
+  `com.docker.network.bridge.gateway_mode_ipv4=isolated` Docker network.
+  `--internal` blocks NAT outbound; the isolated-gateway flag (Docker ≥
+  27.1) suppresses the host-side bridge IP entirely, so the bridge has
+  **no gateway address** for the agent to route to. Verified live: the
+  agent's `ip route` shows exactly one link-scope subnet entry, no
+  `default via …`. As a consequence, host services bound on `0.0.0.0`
+  (e.g. SSHd) — which were reachable on a pristine `--internal` bridge
+  via the bridge gateway — are now unreachable from the agent. The only
+  peer the agent can reach is the inner proxy (and, after sidecar
+  attach, the ttyd sidecar — see "Why ttyd publishes via a sidecar"
+  above). The inner proxy can only forward to the bind-mounted Unix
+  socket; the outer proxy is the only thing on that socket and only
+  forwards to one fixed TCP destination on the host
+  (`127.0.0.1:<vllm_port>`). socat is byte-stupid — it doesn't parse,
+  it can't be redirected by client traffic.
+- **Per-session post-create assertion.** Immediately after `docker run`
+  of the agent, the orchestrator runs `ip -4 route show` inside the
+  container and refuses to proceed if it sees any `default via …` line.
+  This catches a Docker-semantic regression (e.g. an upgrade that
+  silently changes `gateway_mode_ipv4=isolated` behaviour) on iteration
+  1, not iteration 50.
+- **Pre-flight isolated-gateway probe at boot.** Before binding the
+  listener, the orchestrator creates a throwaway labelled network with
+  `--internal -o com.docker.network.bridge.gateway_mode_ipv4=isolated`
+  and immediately removes it. Refuses to start if the daemon doesn't
+  honour the flag — the design's primary isolation primitive is
+  fail-loud, not silently degraded.
 - **DNS exfiltration is closed.** `--internal` networks alone are not
-  sufficient — Docker's embedded resolver at `127.0.0.11` forwards queries
-  via the daemon namespace and *does* reach external DNS. Every container
-  in the chain (agent, inner proxy, outer proxy) is started with
-  `--dns 127.0.0.1 --dns-search .` — resolv.conf points at a non-listening
-  loopback, so every DNS lookup fails immediately. The agent reaches the
-  inner proxy by IP literal, never by name.
-- **No GPU access** for the agent container. Verified by inspection of
-  every `run_detached` call site in `src/network.rs` and `src/session.rs`.
+  sufficient — Docker's embedded resolver at `127.0.0.11` forwards
+  queries via the daemon namespace and *does* reach external DNS on
+  non-internal networks. Every container in the chain (agent, inner
+  proxy, outer proxy, ttyd sidecar) is started with `--dns 127.0.0.1
+  --dns-search .` — resolv.conf points at a non-listening loopback, so
+  every DNS lookup fails immediately. The agent reaches the inner proxy
+  by IP literal, never by name.
+- **No GPU access** for any per-session container. Verified by
+  inspection of every `run_detached` call site in `src/network.rs` and
+  `src/session.rs`.
 - **No `--privileged` and no `CAP_*` adds anywhere** beyond the agent's
   unused `NET_BIND_SERVICE` (kept for the case where a future operator
   lowers the ttyd port below 1024).
-- **Both proxies and the agent are `--cap-drop ALL --user 1000:1000
-  --read-only --security-opt no-new-privileges`.** Each proxy is
-  additionally `--memory 64m --pids-limit 32` (small because they run
-  one socat process and nothing else); the agent gets **`--memory 32g
-  --memory-swap 32g`** (no swap) and **`--storage-opt size=128g`**
-  (writable-layer cap), with `--pids-limit 4096`. Both limits are
-  configurable via `AGENT_SERVICE_MEMORY` and
-  `AGENT_SERVICE_STORAGE_QUOTA`.
+- **All proxies, the ttyd sidecar, and the agent are `--cap-drop ALL
+  --user 1000:1000 --read-only --security-opt no-new-privileges`.**
+  Each proxy + the sidecar are additionally `--memory 64m --pids-limit
+  32` (small because each runs one socat process and nothing else); the
+  agent gets **`--memory 32g --memory-swap 32g`** (no swap) and
+  **`--storage-opt size=128g`** (writable-layer cap), with
+  `--pids-limit 4096`. Both limits are configurable via
+  `AGENT_SERVICE_MEMORY` and `AGENT_SERVICE_STORAGE_QUOTA`.
+- **The ttyd sidecar's socat target is fixed at process start** —
+  `TCP-LISTEN:7681,fork → TCP:<agent_ip>:7681`. It cannot be redirected
+  to a different destination by client traffic. The sidecar's socat
+  argv is fully constructed by the orchestrator from a parsed
+  `IpAddr` (rejected if not an IPv4 literal), never from any
+  user-controlled string.
 - **The user's source folder is *copied***, not bind-mounted, into a
-  per-session staging tree (mode-normalised to 0o755 dirs / 0o644 files)
-  before the agent sees it. The agent cannot reach back into the user's
-  actual working tree.
+  per-session staging tree (mode-normalised to 0o755 dirs / 0o644
+  files) before the agent sees it. The agent cannot reach back into
+  the user's actual working tree.
 - **Symlinks inside the source folder are rejected outright** at
   validation time.
-- **Orphan sweep on startup.** Every Docker object the service creates is
-  labelled `agent_service.session=<uuid>`. If the orchestrator crashes
-  mid-session, the next start `docker rm`s every container and `docker
-  network rm`s every network bearing that label, then begins serving.
+- **Orphan sweep on startup.** Every Docker object the service creates
+  is labelled `agent_service.session=<uuid>`. If the orchestrator
+  crashes mid-session, the next start `docker rm`s every container
+  (including the ttyd sidecar) and `docker network rm`s every network
+  (both the agent network and the per-session publish bridge) bearing
+  that label, then begins serving. Mid-creation crash recovery is
+  walked through end-to-end in `src/network.rs`.
 
 ---
 
@@ -378,8 +461,14 @@ Pre-flight verifies:
 
 - The Docker daemon is reachable as the running user (no root needed —
   the user must be in the `docker` group).
-- `AGENT_SERVICE_IMAGE` is present locally (both proxies and the agent
-  reuse it).
+- `AGENT_SERVICE_IMAGE` is present locally (both proxies, the ttyd
+  sidecar, and the agent reuse it).
+- The Docker daemon honours
+  `com.docker.network.bridge.gateway_mode_ipv4=isolated` (Docker ≥
+  27.1). Probed by creating a throwaway labelled network with that
+  option and removing it; refuses to start otherwise — this is the
+  agent network's primary isolation primitive and we will not silently
+  degrade to a weaker sandbox.
 - The host has `tar` and `zstd` on PATH (used to build the per-session
   result bundle).
 - `AGENT_SERVICE_STORAGE_QUOTA` is honoured by the local Docker storage

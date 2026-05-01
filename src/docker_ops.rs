@@ -111,19 +111,160 @@ pub async fn image_exists(tag: &str) -> ServiceResult<()> {
     Ok(())
 }
 
-/// `docker network create --internal --driver bridge --label key=val <name>`.
-pub async fn network_create_internal(name: &str, label: &str) -> ServiceResult<()> {
+/// Create the agent's per-session bridge network with maximum isolation.
+///
+/// Two flags compose here:
+///
+/// - `--internal` blocks all NAT to/from the outside world. Without it,
+///   bridge networks NAT outbound to the internet by default.
+/// - `com.docker.network.bridge.gateway_mode_ipv4=isolated` (Docker ≥ 27.1)
+///   suppresses the host-side bridge IP entirely, so the bridge has no
+///   gateway address that containers attached to it could reach. Without
+///   this, the bridge gateway IP — i.e. the host's iface on the bridge —
+///   is reachable from inside the network even with `--internal`, exposing
+///   any service the host has bound to `0.0.0.0` (SSHd, etc.).
+///
+/// Together these two are strictly stronger than `--internal` alone, and
+/// exactly what the original `agent_service` design intended ("no NAT, no
+/// internet, no host"). Pre-flight verifies the daemon supports the
+/// isolated-gateway mode (see `probe_gateway_isolated`).
+pub async fn network_create_agent(name: &str, label: &str) -> ServiceResult<()> {
     run_docker(
         [
             "network", "create",
-            "--internal",
             "--driver", "bridge",
+            "--internal",
+            "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated",
             "--label", label,
             name,
         ],
-        &format!("network_create({name})"),
+        &format!("network_create_agent({name})"),
     )
     .await?;
+    Ok(())
+}
+
+/// Create a per-session bridge network whose only purpose is to host the
+/// ttyd sidecar's `-p 127.0.0.1::7681` publish to host loopback.
+///
+/// `--internal` silently drops `-p`, so this network deliberately omits
+/// it. `enable_ip_masquerade=false` keeps NAT outbound shut so the sidecar
+/// — even though it lives on a non-internal bridge — cannot reach the
+/// internet. Only the sidecar is ever attached to this network; the agent
+/// stays on the agent network only. Combined with the isolated-gateway
+/// agent network, this means the agent has no path to the publish
+/// bridge's gateway either.
+pub async fn network_create_publish(name: &str, label: &str) -> ServiceResult<()> {
+    run_docker(
+        [
+            "network", "create",
+            "--driver", "bridge",
+            "-o", "com.docker.network.bridge.enable_ip_masquerade=false",
+            "--label", label,
+            name,
+        ],
+        &format!("network_create_publish({name})"),
+    )
+    .await?;
+    Ok(())
+}
+
+/// `docker network connect <network> <container>` — attach an already-running
+/// container to an additional network. Used to dual-attach the ttyd sidecar
+/// to both the publish network (where its `-p` lives) and the agent network
+/// (where it forwards to ttyd).
+pub async fn network_connect(network: &str, container: &str) -> ServiceResult<()> {
+    run_docker(
+        ["network", "connect", network, container],
+        &format!("network_connect({network},{container})"),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Pre-flight probe: verify the local Docker daemon supports
+/// `com.docker.network.bridge.gateway_mode_ipv4=isolated`. Creates a
+/// throwaway labelled network with the option, immediately removes it.
+///
+/// Fail-loud at startup: this is the design's primary isolation primitive.
+/// Without it, the agent's bridge would have a reachable gateway IP and
+/// any host service bound on `0.0.0.0` would be reachable from the agent.
+/// We refuse to come up rather than silently degrade to a weaker sandbox.
+pub async fn probe_gateway_isolated() -> ServiceResult<()> {
+    let probe_name = "agent-service-probe-gw-isolated";
+    // Defensive cleanup in case a prior probe crashed mid-create.
+    let _ = run_docker(
+        ["network", "rm", probe_name],
+        "probe_gateway_isolated_pre_rm",
+    )
+    .await;
+    let create_result = run_docker(
+        [
+            "network", "create",
+            "--driver", "bridge",
+            "--internal",
+            "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated",
+            "--label", "agent_service.probe=gateway_isolated",
+            probe_name,
+        ],
+        "probe_gateway_isolated_create",
+    )
+    .await;
+    // Always try to remove the probe network — even if create succeeded.
+    let _ = run_docker(
+        ["network", "rm", probe_name],
+        "probe_gateway_isolated_post_rm",
+    )
+    .await;
+    create_result
+        .map(|_| ())
+        .map_err(|e| match e {
+            ServiceError::DockerCommand(m) => ServiceError::Internal(format!(
+                "Docker daemon does not accept \
+                 `com.docker.network.bridge.gateway_mode_ipv4=isolated` (requires \
+                 Docker Engine ≥ 27.1). The agent's network sandbox depends on it; \
+                 without it, the bridge gateway IP would be reachable from inside \
+                 the agent, exposing any 0.0.0.0-bound host service. Refusing to \
+                 start. Underlying error: {m}"
+            )),
+            other => other,
+        })
+}
+
+/// Verify a container has no default route — i.e. no path off its bridge
+/// subnet. Run immediately after `docker run` of the agent to catch any
+/// silent Docker semantic change that would otherwise re-introduce a
+/// gateway. Cheap (one `docker exec`); runs once per session.
+///
+/// Expected output for an agent on `--internal + gateway_mode=isolated`:
+///   `<subnet> dev <iface> proto kernel scope link [src <addr>]`
+/// (one line, no `default via …`). Anything else is a hard failure: the
+/// session aborts before any agent code runs.
+pub async fn verify_no_default_route(container: &str) -> ServiceResult<()> {
+    let out = run_docker(
+        ["exec", container, "ip", "-4", "route", "show"],
+        &format!("verify_no_default_route({container})"),
+    )
+    .await?;
+    let trimmed = out.trim();
+    if trimmed.is_empty() {
+        return Err(ServiceError::Internal(format!(
+            "verify_no_default_route({container}): `ip -4 route show` produced no \
+             output, cannot confirm isolation; refusing to proceed"
+        )));
+    }
+    for line in trimmed.lines() {
+        let line = line.trim();
+        if line.starts_with("default") {
+            return Err(ServiceError::Internal(format!(
+                "verify_no_default_route({container}): container has a default \
+                 route ({line:?}), meaning its bridge has a reachable gateway. \
+                 The isolated-gateway design requires no default route. This \
+                 indicates Docker semantics changed under us — refusing to \
+                 proceed rather than run with a weaker sandbox than promised."
+            )));
+        }
+    }
     Ok(())
 }
 

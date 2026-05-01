@@ -320,7 +320,7 @@ RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash
 # ============================================================
 # GLOBAL NPM PACKAGES (browser automation, scraping, dev tools)
 # ============================================================
-RUN npm install -g \
+RUN npm install -g --force \
     puppeteer \
     playwright \
     cheerio \
@@ -793,7 +793,6 @@ RUN apt-get update && apt-get install -y \
     dirb \
     wfuzz \
     scalpel \
-    bulk-extractor \
     libcapstone-dev \
     libcapstone4 \
     && rm -rf /var/lib/apt/lists/*
@@ -982,7 +981,7 @@ RUN npm install -g @qwen-code/qwen-code@0.15.6 \
 
 # Bake config: settings.json (sampling params, modalities, yolo) and
 # QWEN.md (operating instructions for the agent).
-RUN mkdir -p /home/agent/.qwen
+RUN mkdir -p /home/agent/.qwen && chown -R agent:agent /home/agent/.qwen
 COPY --chown=agent:agent config/settings.json /home/agent/.qwen/settings.json
 COPY --chown=agent:agent config/QWEN.md       /home/agent/.qwen/QWEN.md
 

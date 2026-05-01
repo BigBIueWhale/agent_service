@@ -1,224 +1,135 @@
-//! HTTP surface — axum routes + streaming NDJSON response builder.
+//! HTTP surface — the lifecycle-explicit session API.
 //!
-//! The contract is deliberately tiny and opinionated:
+//! Resource: a `session`, with explicit lifecycle and idempotent verbs.
+//! All session-related endpoints share one wire body
+//! (`runtime::SessionBody`), discriminated by a `status` field with values
+//! `running` | `completed` | `cancelled`. Required-field discipline:
+//! every field is always serialised; running-only fields are zeroed for
+//! terminal states and vice versa, so clients have one parser.
 //!
-//! - `POST /v1/agent/run`  body: `{"prompt": "<str>", "folder": "<abs path>"}`.
-//!   Both fields are required and rejected if empty / malformed.
-//!   Successful response: `200 OK`, `Content-Type: application/x-ndjson`,
-//!   exactly two NDJSON lines:
-//!   1. `{"event":"started",...,"ttyd_url":"http://127.0.0.1:NNNNN/"}`
-//!   2. `{"event":"finished",...,"response":"...","is_error":bool,...}`
+//! Errors are non-streaming JSON with shape `error::WireError`.
 //!
-//!   On in-stream failure (e.g. agent OOM, container died) a third event
-//!   shape `{"event":"error",...}` is emitted and the stream closes.
-//!   Pre-stream failures (validation, busy, docker unavailable) are
-//!   returned as a non-streaming JSON body with a 4xx/5xx status and the
-//!   `WireError` shape from `error.rs`.
+//! Routes:
 //!
-//! - `GET /v1/agent/current`  returns the active session as JSON, or 404 if
-//!   the service is idle. Always-present fields, no optional members.
+//! - `POST /v1/agent/sessions` — create. Body `{prompt, folder}`. Blocks
+//!   until ttyd is reachable; returns `201 Created` with the running body.
+//! - `GET /v1/agent/sessions` — list. Combines in-memory running sessions
+//!   with on-disk terminal sessions.
+//! - `GET /v1/agent/sessions/{id}` — pure read; idempotent. 200 / 404.
+//! - `POST /v1/agent/sessions/{id}/cancel` — cancel; idempotent. 200 with
+//!   the current body (running → cancelled, or already terminal).
+//! - `DELETE /v1/agent/sessions/{id}` — delete a terminal session from
+//!   disk. 204 / 404 / 409 (still running — `cancel` first).
+//! - `GET /healthz` — plaintext `"ok"`.
 //!
-//! - `GET /healthz`  one byte of plaintext `"ok"`. For supervisor probes.
-//!
-//! Nothing else. There is one and only one way to invoke the agent and one
-//! and only one way to receive responses; the GET endpoints exist for
-//! observability, not control.
+//! There is **no** time-based eviction anywhere — sessions live until
+//! DELETE. Reads never mutate. Writes (cancel, delete) are idempotent.
 
 use std::sync::Arc;
 
 use axum::Json;
-use axum::body::Body;
-use axum::extract::State;
-use axum::http::{HeaderValue, StatusCode, header};
-use axum::response::{IntoResponse, Response};
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::routing::{get, post};
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
 
 use crate::config::Config;
 use crate::error::{ServiceError, ServiceResult};
-use crate::session::{self, FinishedEvent, RunningSession, SessionManager, StartedEvent};
+use crate::runtime::{Manager, SessionBody};
+use crate::session;
 use crate::validation;
 
 #[derive(Clone)]
 pub struct AppState {
-    /// Read-only handle to the current configuration. Currently consulted
-    /// only by `pre_flight` at startup; kept on the state for symmetry with
-    /// future endpoints (e.g., `/v1/agent/info`).
+    /// Read-only handle to the loaded configuration. Currently consulted
+    /// only by `pre_flight`; kept on the state for symmetry with future
+    /// endpoints that may want to surface effective config (e.g.,
+    /// `/v1/agent/info`).
     #[allow(dead_code)]
     pub cfg: Arc<Config>,
-    pub manager: Arc<SessionManager>,
+    pub manager: Arc<Manager>,
 }
 
 pub fn router(state: AppState) -> axum::Router {
     axum::Router::new()
-        .route("/v1/agent/run", post(run_handler))
-        .route("/v1/agent/current", get(current_handler))
-        .route("/healthz", get(healthz_handler))
-        .with_state(state)
-        .layer(
-            tower_http::limit::RequestBodyLimitLayer::new(
-                // 256 KiB cap on request bodies. Prompt+folder JSON should
-                // never approach this in practice; folder is a path string,
-                // and prompt is capped at 100 KiB by `validation`.
-                256 * 1024,
-            ),
+        .route("/v1/agent/sessions", post(create_session).get(list_sessions))
+        .route(
+            "/v1/agent/sessions/{id}",
+            get(get_session).delete(delete_session),
         )
+        .route("/v1/agent/sessions/{id}/cancel", post(cancel_session))
+        .route("/healthz", get(healthz))
+        .with_state(state)
+        .layer(tower_http::limit::RequestBodyLimitLayer::new(
+            // 256 KiB cap on request bodies. Prompt+folder JSON should
+            // never approach this in practice; prompt is capped at 1 MiB
+            // by `validation`, but the body cap here is the first layer
+            // of defence against an adversarial body.
+            256 * 1024,
+        ))
 }
 
-#[derive(Deserialize)]
-pub struct RunRequest {
+#[derive(Deserialize, Debug)]
+pub struct CreateRequest {
     pub prompt: String,
     pub folder: String,
 }
 
 #[derive(Serialize)]
-struct StreamErrorEvent<'a> {
-    event: &'a str,
-    kind: &'a str,
-    error: String,
-    session_id: String,
+struct ListResponse {
+    sessions: Vec<SessionBody>,
 }
 
-async fn healthz_handler() -> &'static str {
+async fn healthz() -> &'static str {
     "ok"
 }
 
-async fn current_handler(
+async fn create_session(
     State(state): State<AppState>,
-) -> Result<Response, ServiceError> {
-    match state.manager.current().await {
-        Some(s) => Ok((StatusCode::OK, Json(s)).into_response()),
-        None => {
-            // Maintain the required-field discipline: 404 carries an
-            // explicit shape identical to the busy/error envelope so
-            // clients have one parser for everything coming off this
-            // service.
-            #[derive(Serialize)]
-            struct IdleResponse {
-                running: bool,
-                session: Option<RunningSession>,
-            }
-            Ok((
-                StatusCode::NOT_FOUND,
-                Json(IdleResponse {
-                    running: false,
-                    session: None,
-                }),
-            )
-                .into_response())
-        }
-    }
-}
-
-async fn run_handler(
-    State(state): State<AppState>,
-    Json(body): Json<RunRequest>,
-) -> Result<Response, ServiceError> {
-    // ── Synchronous pre-flight (any failure → non-streaming 4xx/5xx) ───
+    Json(body): Json<CreateRequest>,
+) -> Result<(StatusCode, Json<SessionBody>), ServiceError> {
+    // Synchronous validation; any failure here surfaces as a 4xx with the
+    // standard WireError envelope before we ever take the singleton.
     let validated = validation::validate(&body.prompt, &body.folder)?;
-    let (size_bytes, file_count) =
-        validation::enumerate_folder(&validated.folder)?;
+    let (size_bytes, file_count) = validation::enumerate_folder(&validated.folder)?;
     tracing::info!(
         prompt_chars = body.prompt.chars().count(),
         folder = %validated.folder.display(),
         size_bytes,
         file_count,
-        "run_handler: pre-flight ok"
+        "POST /v1/agent/sessions: pre-flight ok"
     );
-
-    // ── Streaming setup ────────────────────────────────────────────────
-    // Capacity 16 is plenty: we only ever send 2-3 events per session.
-    let (tx, mut rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(16);
-
-    let manager = Arc::clone(&state.manager);
-    let tx_started = tx.clone();
-    let tx_finished = tx.clone();
-    let tx_for_error = tx.clone();
-
-    // Detached: if the HTTP client disconnects, the agent finishes anyway.
-    // The strict-singleton guarantee makes this safe — no second client can
-    // step on this run, and we want strong ownership of the docker container
-    // even across flaky network conditions.
-    tokio::spawn(async move {
-        let result = manager
-            .run(
-                validated,
-                move |ev: StartedEvent| {
-                    let bytes = encode_event_json(&ev);
-                    let _ = tx_started.try_send(Ok(bytes));
-                },
-                move |ev: FinishedEvent| {
-                    let bytes = encode_event_json(&ev);
-                    let _ = tx_finished.try_send(Ok(bytes));
-                },
-            )
-            .await;
-
-        if let Err(e) = result {
-            // Setup-phase failure (e.g., docker run failed before we ever
-            // emitted "started"). Emit an error event so the client sees
-            // *something* on the stream.
-            let envelope = StreamErrorEvent {
-                event: "error",
-                kind: e.kind_str(),
-                error: e.message(),
-                session_id: match &e {
-                    ServiceError::Busy { running_session_id } => running_session_id.clone(),
-                    _ => String::new(),
-                },
-            };
-            let bytes = encode_event_json(&envelope);
-            let _ = tx_for_error.try_send(Ok(bytes));
-        }
-        drop(tx); // close stream
-    });
-
-    let stream = async_stream::stream! {
-        while let Some(item) = rx.recv().await {
-            yield item;
-        }
-    };
-
-    let body = Body::from_stream(stream);
-    let resp = Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "application/x-ndjson")
-        .header(header::CACHE_CONTROL, "no-store")
-        // "X-Accel-Buffering: no" — make sure no intermediate proxy buffers
-        // away the per-event flushes. We only listen on loopback, but a user
-        // *could* sit a reverse proxy in front; this header is a no-op
-        // otherwise.
-        .header(
-            "x-accel-buffering",
-            HeaderValue::from_static("no"),
-        )
-        .body(body)
-        .map_err(|e| {
-            ServiceError::Internal(format!("response builder: {e}"))
-        })?;
-    Ok(resp)
+    let running = state.manager.submit(validated).await?;
+    Ok((StatusCode::CREATED, Json(running)))
 }
 
-fn encode_event_json<T: Serialize>(ev: &T) -> Bytes {
-    // Last-resort fallback: if serde refuses the value, emit a plain-text
-    // line so the client can still see *something*. This never happens in
-    // practice for our concrete event types — they are all `#[derive(Serialize)]`
-    // with primitive fields — but we don't `unwrap` even that.
-    match serde_json::to_vec(ev) {
-        Ok(mut v) => {
-            v.push(b'\n');
-            Bytes::from(v)
-        }
-        Err(e) => {
-            let s = format!(
-                r#"{{"event":"error","kind":"internal","error":"serde failure: {e}"}}{}"#,
-                "\n"
-            );
-            Bytes::from(s)
-        }
-    }
+async fn list_sessions(
+    State(state): State<AppState>,
+) -> Result<Json<ListResponse>, ServiceError> {
+    let sessions = state.manager.list().await?;
+    Ok(Json(ListResponse { sessions }))
+}
+
+async fn get_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<SessionBody>, ServiceError> {
+    Ok(Json(state.manager.get(&id).await?))
+}
+
+async fn cancel_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<SessionBody>, ServiceError> {
+    Ok(Json(state.manager.cancel(&id).await?))
+}
+
+async fn delete_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ServiceError> {
+    state.manager.delete(&id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Used at startup to validate that we can actually serve traffic before
@@ -227,14 +138,19 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
     crate::docker_ops::ping_daemon().await?;
     crate::docker_ops::image_exists(&cfg.agent_image).await?;
 
+    // The agent's network sandbox depends on
+    // `com.docker.network.bridge.gateway_mode_ipv4=isolated` (Docker ≥ 27.1)
+    // to suppress the host-side bridge IP. Without it, `--internal` alone
+    // leaves the bridge gateway reachable, exposing 0.0.0.0-bound host
+    // services to the agent. Probe once at startup; refuse to come up if
+    // the daemon doesn't honour the flag.
+    crate::docker_ops::probe_gateway_isolated().await?;
+
     // Bundle creation depends on `tar` and `zstd` on the host PATH.
     crate::bundle::check_host_dependencies().await?;
 
-    // If a storage quota was requested, verify the daemon's storage driver
-    // honours it now — better to fail at startup than to fail every session.
     if let Some(quota) = &cfg.agent_storage_quota {
-        if let Err(e) = crate::docker_ops::probe_storage_quota(&cfg.agent_image, quota).await
-        {
+        if let Err(e) = crate::docker_ops::probe_storage_quota(&cfg.agent_image, quota).await {
             return Err(ServiceError::Internal(format!(
                 "AGENT_SERVICE_STORAGE_QUOTA={quota} is set, but your Docker storage driver does not honour `--storage-opt size=…`. \
                  Either (a) configure the daemon for per-container size quotas \
@@ -250,15 +166,12 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
         );
     }
 
-    // Verify the state directory exists / can be created.
     if let Err(e) = std::fs::create_dir_all(&cfg.state_dir) {
         return Err(ServiceError::Internal(format!(
             "cannot create AGENT_SERVICE_STATE_DIR at {}: {e}",
             cfg.state_dir.display()
         )));
     }
-    // And the results directory. We deliberately do NOT sweep this one —
-    // it's the persistent home for past-session bundles.
     if let Err(e) = std::fs::create_dir_all(&cfg.results_dir) {
         return Err(ServiceError::Internal(format!(
             "cannot create AGENT_SERVICE_RESULTS_DIR at {}: {e}",
@@ -266,21 +179,14 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
         )));
     }
 
-    // Sweep any orphans from a prior crash before announcing ourselves —
-    // Docker objects first, then any leftover state directories. Both
-    // sweeps complete (or fail loudly) BEFORE the listener is bound, so
-    // no incoming request can land while a half-cleaned-up prior session
-    // is still on disk or in `docker ps`.
+    // Sweep any orphans from a prior crash before announcing ourselves.
+    // Docker objects (containers / networks), staging dirs, and any
+    // crash-interrupted result directories (no `finished.json`). Sweeps
+    // complete (or fail loudly) BEFORE the listener binds, so no incoming
+    // request can land while a half-cleaned-up prior session exists.
     session::sweep_orphans().await?;
     sweep_state_dir(&cfg.state_dir)?;
-
-    // Apply the retention policy at boot too, in case the operator just
-    // shrank `AGENT_SERVICE_RESULTS_RETAIN` and there are now-excess
-    // bundles to clean up.
-    let prune_diags = crate::bundle::prune_results(&cfg.results_dir, cfg.results_retain);
-    for d in prune_diags {
-        tracing::warn!("{d}");
-    }
+    sweep_partial_results(&cfg.results_dir)?;
 
     Ok(())
 }
@@ -289,11 +195,11 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
 /// Idempotent: silently OK if the parent doesn't exist yet.
 ///
 /// Defensive against accidents:
-/// - we read `state_dir/sessions/` only — never `state_dir` itself or
-///   anything outside it.
-/// - we use `symlink_metadata` so we don't follow symlinks out of bounds.
-/// - we skip non-directories (a stray file in this tree is unexpected;
-///   we log and leave it for the operator to look at, rather than rm it).
+/// - read `state_dir/sessions/` only — never `state_dir` itself or anything
+///   outside it.
+/// - use `symlink_metadata` so we don't follow symlinks out of bounds.
+/// - skip non-directories (a stray file in this tree is unexpected; log it
+///   and leave it for the operator to look at, rather than rm it).
 fn sweep_state_dir(state_dir: &std::path::Path) -> ServiceResult<()> {
     let sessions_dir = state_dir.join("sessions");
     let entries = match std::fs::read_dir(&sessions_dir) {
@@ -342,6 +248,81 @@ fn sweep_state_dir(state_dir: &std::path::Path) -> ServiceResult<()> {
     }
     if removed > 0 {
         tracing::info!(count = removed, "sweep_state_dir: complete");
+    }
+    Ok(())
+}
+
+/// Remove `<results_dir>/<id>/` directories that lack `finished.json`.
+///
+/// Such directories exist only as the result of a server crash mid-bundling
+/// (between the bundle write and the `finished.json` rename) — the user
+/// explicitly accepted that crash-mid-session sessions are lost, and the
+/// directory has no recoverable terminal record. Removing it keeps `list`
+/// honest and stops the dir from accumulating across many crashes.
+///
+/// Untouched if the directory has `finished.json` (durable terminal record)
+/// or is missing entirely.
+fn sweep_partial_results(results_dir: &std::path::Path) -> ServiceResult<()> {
+    let entries = match std::fs::read_dir(results_dir) {
+        Ok(e) => e,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => {
+            return Err(ServiceError::Internal(format!(
+                "sweep_partial_results: cannot read {}: {e}",
+                results_dir.display()
+            )));
+        }
+    };
+    let mut removed = 0u32;
+    for entry in entries {
+        let entry = match entry {
+            Ok(x) => x,
+            Err(e) => {
+                tracing::warn!(error = %e, "sweep_partial_results: read_dir entry");
+                continue;
+            }
+        };
+        let path = entry.path();
+        let meta = match std::fs::symlink_metadata(&path) {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    path = %path.display(),
+                    "sweep_partial_results: stat"
+                );
+                continue;
+            }
+        };
+        if !meta.is_dir() {
+            // Stray file — leave it.
+            continue;
+        }
+        if path.join("finished.json").exists() {
+            continue;
+        }
+        match std::fs::remove_dir_all(&path) {
+            Ok(()) => {
+                removed += 1;
+                tracing::info!(
+                    dir = %path.display(),
+                    "sweep_partial_results: removed crash-interrupted session dir"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    dir = %path.display(),
+                    "sweep_partial_results: rm"
+                );
+            }
+        }
+    }
+    if removed > 0 {
+        tracing::info!(
+            count = removed,
+            "sweep_partial_results: complete (these sessions were interrupted by a server crash)"
+        );
     }
     Ok(())
 }

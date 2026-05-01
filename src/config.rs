@@ -67,10 +67,6 @@ pub const MAX_PROMPT_BYTES: usize = 1024 * 1024;
 pub const MAX_STAGED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 /// 200_000 caps the staged file count — protects against tarbomb-shaped folders.
 pub const MAX_STAGED_FILES: u64 = 200_000;
-/// Default number of past-session bundles to keep under `results_dir`. 0
-/// disables retention (keep forever). Older bundles are pruned by mtime
-/// after each successful run.
-pub const AGENT_RESULTS_RETAIN_DEFAULT: u32 = 20;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -101,13 +97,14 @@ pub struct Config {
     pub agent_storage_quota: Option<String>,
     /// Filesystem root for per-session staging directories.
     pub state_dir: PathBuf,
-    /// Filesystem root for persistent per-session result bundles. Defaults
+    /// Filesystem root for persistent per-session result records. Defaults
     /// to `<state_dir>/results`. Each completed session produces a
-    /// `<results_dir>/<session_id>/bundle.tar.zst`; pruned to
-    /// `results_retain` entries (oldest first by mtime).
+    /// `<results_dir>/<session_id>/finished.json` (the persisted
+    /// `runtime::SessionBody`) plus a `bundle.tar.zst` (artifacts +
+    /// events.jsonl + qwen-exit-code). Records persist until removed via
+    /// `DELETE /v1/agent/sessions/:id` — there is no time- or count-based
+    /// pruning; the lifecycle is explicit.
     pub results_dir: PathBuf,
-    /// How many past bundles to keep. 0 = unlimited.
-    pub results_retain: u32,
     /// Wall-clock cap on a single agent run, in seconds.
     pub run_timeout_secs: u64,
     /// Max session turns passed to `qwen --max-session-turns`.
@@ -152,13 +149,6 @@ impl Config {
             _ => state_dir.join("results"),
         };
 
-        let results_retain = env_or(
-            "AGENT_SERVICE_RESULTS_RETAIN",
-            &AGENT_RESULTS_RETAIN_DEFAULT.to_string(),
-        )
-        .parse::<u32>()
-        .map_err(|e| ServiceError::Internal(format!("AGENT_SERVICE_RESULTS_RETAIN not a u32: {e}")))?;
-
         let run_timeout_secs = env_or(
             "AGENT_SERVICE_TIMEOUT_SECS",
             &AGENT_RUN_TIMEOUT_SECS_DEFAULT.to_string(),
@@ -196,7 +186,6 @@ impl Config {
             agent_storage_quota,
             state_dir,
             results_dir,
-            results_retain,
             run_timeout_secs,
             max_session_turns,
         })
