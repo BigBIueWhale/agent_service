@@ -54,10 +54,22 @@ fi
 echo
 
 EXIT=0
+# `--include-partial-messages` deliberately OMITTED. With it, qwen-code's
+# JsonOutputAdapter emits one `type:"stream_event"` line per token-decode
+# delta — ~89% of events.jsonl by line count, ~83-93% by bytes. The host's
+# result parser (`agent_service/src/result_parse.rs`) reads only the final
+# `type:"result"` line, so the partials are pure I/O cost. Keeping the flag
+# off does NOT affect correctness:
+#   - HTTP transport to vLLM is unconditionally streaming in qwen-code 0.15.6
+#     (`pipeline.ts:324-329`); the local stream-json adapter setting only
+#     controls what the CLI prints, not what it sends to the model server.
+#   - Loop / next-speaker detection runs on completed Turn events upstream
+#     of the output adapter; the adapter setting cannot affect them.
+#   - xgrammar's per-token bitmask FSM is engine-side and fires identically
+#     under either local output mode.
 qwen --approval-mode yolo \
      --max-session-turns "${AGENT_MAX_TURNS:-200}" \
      --output-format stream-json \
-     --include-partial-messages \
      -p "$PROMPT" \
      2> >(tee /output/qwen.stderr >&2) \
   | tee /output/events.jsonl

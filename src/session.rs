@@ -423,6 +423,12 @@ pub async fn run_one(
         None => (String::new(), 0, 0, 0, 0),
     };
 
+    // ── snapshot frozen progress + qwen exit code BEFORE removing staging.
+    // After `paths.remove_all()` events.jsonl and qwen-exit-code are gone
+    // from the staging tree (only available inside the bundle from now on).
+    let frozen_progress = crate::runtime::read_running_progress(&paths.events_jsonl());
+    let agent_exit_code = crate::runtime::read_agent_exit_code(&paths.root);
+
     // ── state-dir cleanup ──────────────────────────────────────────────
     teardown_diags.extend(paths.remove_all());
 
@@ -478,9 +484,12 @@ pub async fn run_one(
         started_at_unix,
         ttyd_url,
         prompt_preview,
+        current_turn: frozen_progress.0,
+        last_event_at_unix: frozen_progress.1,
         finished_at_unix,
         duration_wall_ms: wall_dur_ms,
         container_exit_code: wait_outcome.exit_code.unwrap_or(-1),
+        agent_exit_code,
         is_error: is_error_final,
         response: response_final,
         agent_num_turns: agent.num_turns,
@@ -642,9 +651,12 @@ fn setup_failure(
         started_at_unix,
         ttyd_url: String::new(),
         prompt_preview: prompt_preview.to_string(),
+        current_turn: 0,
+        last_event_at_unix: 0,
         finished_at_unix: now_unix(),
         duration_wall_ms: wall_start.elapsed().as_millis() as u64,
         container_exit_code: -1,
+        agent_exit_code: -1,
         is_error: true,
         response,
         agent_num_turns: 0,
@@ -679,9 +691,12 @@ fn cancellation_terminal(
         started_at_unix,
         ttyd_url: String::new(),
         prompt_preview: prompt_preview.to_string(),
+        current_turn: 0,
+        last_event_at_unix: 0,
         finished_at_unix: now_unix(),
         duration_wall_ms: wall_start.elapsed().as_millis() as u64,
         container_exit_code: -1,
+        agent_exit_code: -1,
         is_error: true,
         response: detail.to_string(),
         agent_num_turns: 0,
@@ -711,9 +726,12 @@ fn early_unwind_terminal(
         started_at_unix,
         ttyd_url: String::new(),
         prompt_preview: prompt_preview.to_string(),
+        current_turn: 0,
+        last_event_at_unix: 0,
         finished_at_unix: now_unix(),
         duration_wall_ms: wall_start.elapsed().as_millis() as u64,
         container_exit_code: -1,
+        agent_exit_code: -1,
         is_error: true,
         response: "submit() unwound before this run task could hand back ttyd readiness; \
                    no client ever received this session_id"

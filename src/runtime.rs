@@ -77,10 +77,34 @@ pub struct SessionBody {
     pub ttyd_url: String,
     pub prompt_preview: String,
 
+    // Live progress signals. For running sessions: read on each GET/list
+    // from `<state_dir>/sessions/<id>/output/events.jsonl`. For terminal
+    // sessions: frozen at run-end (zeroed if the agent never wrote
+    // events.jsonl, e.g. setup failure). `current_turn` counts
+    // `"type":"user"` lines in events.jsonl, which corresponds to
+    // tool-result-back-to-model messages — a coarse but cheap turn
+    // indicator. `last_event_at_unix` is the file's mtime; if it stops
+    // advancing, the agent is wedged.
+    pub current_turn: u64,
+    pub last_event_at_unix: u64,
+
     // Populated on transition to terminal. Zeroed/empty while running.
     pub finished_at_unix: u64,
     pub duration_wall_ms: u64,
+    /// Exit code reported by `docker wait` for the outer agent container.
+    /// This is the wrapper script's exit (typically 0 even when qwen
+    /// itself failed, because the wrapper exits cleanly through ttyd's
+    /// SIGTERM). Use `agent_exit_code` for qwen's actual exit.
     pub container_exit_code: i32,
+    /// Exit code reported by qwen-code itself, read from the
+    /// `output/qwen-exit-code` file the wrapper writes immediately before
+    /// the wrapper terminates. -1 if the file is missing or unparseable
+    /// (e.g. setup failed before the wrapper ran). Common values:
+    ///   0   normal completion
+    ///   53  hit `--max-session-turns` (qwen-code "Reached max session turns")
+    ///   137 SIGKILL'd by `docker stop` after a cancel
+    ///   other non-zero: qwen-code internal error; see events.jsonl
+    pub agent_exit_code: i32,
     pub is_error: bool,
     pub response: String,
     pub agent_num_turns: u64,
@@ -282,7 +306,10 @@ impl Manager {
                 // Update the entry with the real values now that we have
                 // them. Held briefly.
                 *entry.snapshot.lock().await = snapshot.clone();
-                Ok(running_body(&snapshot))
+                let progress = read_running_progress(
+                    &events_jsonl_path(&self.cfg, &snapshot.session_id),
+                );
+                Ok(running_body(&snapshot, progress))
             }
             Ok(Err(e)) => {
                 // The run task is doing teardown right now. Wait for it to
@@ -311,7 +338,8 @@ impl Manager {
     pub async fn get(&self, session_id: &str) -> ServiceResult<SessionBody> {
         if let Some(entry) = self.inner.lock().await.running.get(session_id).cloned() {
             let snap = entry.snapshot.lock().await.clone();
-            return Ok(running_body(&snap));
+            let progress = read_running_progress(&events_jsonl_path(&self.cfg, session_id));
+            return Ok(running_body(&snap, progress));
         }
         read_terminal(&self.cfg, session_id).await
     }
@@ -325,7 +353,8 @@ impl Manager {
             let mut v = Vec::with_capacity(inner.running.len());
             for entry in inner.running.values() {
                 let snap = entry.snapshot.lock().await.clone();
-                v.push(running_body(&snap));
+                let progress = read_running_progress(&events_jsonl_path(&self.cfg, &snap.session_id));
+                v.push(running_body(&snap, progress));
             }
             v
         };
@@ -544,17 +573,23 @@ impl Manager {
 // ── helpers ───────────────────────────────────────────────────────────────
 
 /// Build the wire body for a running snapshot. Required-field discipline:
-/// every field present, terminal-only fields zeroed.
-fn running_body(s: &RunningSnapshot) -> SessionBody {
+/// every field present, terminal-only fields zeroed. `progress` carries
+/// the live `(current_turn, last_event_at_unix)` reading the caller has
+/// just taken from disk.
+fn running_body(s: &RunningSnapshot, progress: (u64, u64)) -> SessionBody {
+    let (current_turn, last_event_at_unix) = progress;
     SessionBody {
         session_id: s.session_id.clone(),
         status: SessionStatus::Running,
         started_at_unix: s.started_at_unix,
         ttyd_url: s.ttyd_url.clone(),
         prompt_preview: s.prompt_preview.clone(),
+        current_turn,
+        last_event_at_unix,
         finished_at_unix: 0,
         duration_wall_ms: 0,
         container_exit_code: 0,
+        agent_exit_code: 0,
         is_error: false,
         response: String::new(),
         agent_num_turns: 0,
@@ -565,6 +600,70 @@ fn running_body(s: &RunningSnapshot) -> SessionBody {
         bundle_file_count: 0,
         bundle_artifacts_file_count: 0,
         teardown_diagnostics: Vec::new(),
+    }
+}
+
+/// Path to a session's live `events.jsonl` while it is running. Once the
+/// session reaches a terminal state, this file is bundled and removed
+/// from staging — the on-disk path is no longer valid, and frozen values
+/// from `finished.json` are returned instead.
+pub fn events_jsonl_path(cfg: &Config, session_id: &str) -> PathBuf {
+    cfg.state_dir
+        .join("sessions")
+        .join(session_id)
+        .join("output")
+        .join("events.jsonl")
+}
+
+/// Read the live `events.jsonl` and return `(current_turn, last_event_at_unix)`.
+/// `current_turn` counts `"type":"user"` lines (≈ tool-result-back-to-model
+/// boundaries — qwen-code's own definition of a "turn"). Both fields are
+/// 0 if the file does not exist or cannot be read.
+///
+/// Cost: linear byte scan of the file. Acceptable for periodic polling
+/// (~30 s); if you need it for higher-frequency reads, consider an
+/// incremental tracker keyed by file size and a starting byte offset.
+pub fn read_running_progress(events_path: &std::path::Path) -> (u64, u64) {
+    use std::io::BufRead;
+    let meta = match std::fs::metadata(events_path) {
+        Ok(m) => m,
+        Err(_) => return (0, 0),
+    };
+    let last_event_at_unix = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let mut current_turn: u64 = 0;
+    if let Ok(file) = std::fs::File::open(events_path) {
+        let reader = std::io::BufReader::new(file);
+        for line in reader.lines() {
+            match line {
+                Ok(s) => {
+                    if s.contains(r#""type":"user""#) {
+                        current_turn = current_turn.saturating_add(1);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    }
+    (current_turn, last_event_at_unix)
+}
+
+/// Read the agent's own exit code from `output/qwen-exit-code` in the
+/// staging directory. Distinct from `container_exit_code` (which is what
+/// `docker wait` reports for the outer wrapper) — the wrapper exits 0
+/// even when qwen-code itself returned a non-zero code, because the
+/// wrapper terminates cleanly through ttyd's SIGTERM. Returns -1 if the
+/// file is missing (setup failed before the wrapper ran) or its content
+/// cannot be parsed as `i32`.
+pub fn read_agent_exit_code(staging_root: &std::path::Path) -> i32 {
+    let p = staging_root.join("output").join("qwen-exit-code");
+    match std::fs::read_to_string(&p) {
+        Ok(s) => s.trim().parse::<i32>().unwrap_or(-1),
+        Err(_) => -1,
     }
 }
 
