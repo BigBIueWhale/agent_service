@@ -329,24 +329,52 @@ QuantTrio/Qwen3.6-27B-AWQ "Best Practices" thinking-mode parameters:
   "min_p": 0.0,
   "presence_penalty": 0.0,
   "repetition_penalty": 1.0,
-  "max_tokens": 32000
+  "max_tokens": 32768
 }
 ```
 
 The temperature / top-p / top-k / min-p / penalty values are the
-**higher-quality** thinking-mode values from the model card — they
-accept slightly higher infinite-loop risk in exchange for noticeably
-better output on math and code (`presence_penalty=0.0` per Alibaba's
-published recommendation; the `linear_attn.in_proj_a/b` layers in the
-AWQ recipe are kept at BF16 specifically to mitigate the loop
-pathology, see the parent project's README §3.1).
+thinking-mode "higher-quality" recipe from the QuantTrio/Qwen3.6-27B-AWQ
+model card — they accept slightly higher infinite-loop risk in exchange
+for noticeably better output on math and code (`presence_penalty=0.0`
+per Alibaba's published recommendation; the `linear_attn.in_proj_a/b`
+layers in the AWQ recipe are kept at BF16 specifically to mitigate the
+loop pathology, see the parent project's README §3.1).
 
-`max_tokens` is narrowed to `32000` from the model card's `81920`. A
-single completion that decodes >32K tokens almost always indicates a
-runaway generation, and bounding it reduces both the wall-clock
-exposure and the post-mortem context the operator has to wade
-through. Multi-step tasks chain many completions of this size, so the
-practical headroom is much larger than the single-completion cap.
+`max_tokens = 32,768` is **Alibaba's general-tasks recommendation** for
+this model (from the card's "Best Practices" block). The card publishes
+two values: `32,768` for general tasks (our regime — agentic coding
+with thinking on), and `81,920` for "highly complex math / programming
+**competition** outputs". The 81,920 value is also the parent project's
+server-side default via patch §7.6 for clients that send no
+`max_tokens`; we send it explicitly here, so the agent operates at the
+general-tasks value rather than the benchmarking-grade one. Lowering it
+further would clip the model's `<think>` blocks mid-thought, which
+corrupts agent loops — the model's training expects up to ~32K of
+thinking-plus-answer per turn and we honour that.
+
+`contextWindowSize = 120,000` is **deliberately aligned to the
+deployment's effective prompt budget**, namely
+`max_model_len − max_tokens = 152,000 − 32,768 ≈ 119,232 → 120,000`.
+The parent project's `max_model_len` is hardware-bound at 152,000
+(parent README §5.2 — 9.7 GiB KV pool at gmu=0.97 → 158,368 boot KV
+tokens, 1.04× concurrency at full max-len). With qwen-code's default
+`chatCompression.contextPercentageThreshold=0.7`, history compaction
+fires at 84,000 prompt tokens — well below vLLM's hard 120K cap, so
+qwen-code's client-side machinery has room to react before vLLM has to
+return HTTP 400. Setting `contextWindowSize` higher than the effective
+prompt budget (e.g., qwen-code's docs example of `131,072`) lets the
+client send prompts that vLLM will then reject — which manifests as a
+terminal `completed` session whose `response` is the vLLM error string.
+Don't do that.
+
+Note: Alibaba's model card recommends "**at least 128K tokens** to
+preserve thinking capabilities". Our effective prompt budget is 120K,
+**8K below that floor** — a structural compromise from running 27B AWQ
++ full-fidelity vision + BF16 KV on a 32 GB card. Pushing
+`max_model_len` higher costs other invariants the parent project has
+chosen to defend (concurrency slack, cold-path 4-MP image safety,
+§5.2). The deficit is hardware-bound, not tunable here.
 
 Vision is enabled (`modalities.image=true, modalities.video=true`) and
 `splitToolMedia=true` is set as documented in the parent project's §5.8.
