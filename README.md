@@ -361,20 +361,19 @@ parent README §7.12). It is deliberately not duplicated here: vLLM
 honours one default per field, and adding the same triple to every
 request would be redundant noise on the wire.
 
-`contextWindowSize = 119,232` is **the exact effective prompt budget**:
-`max_model_len − max_tokens = 152,000 − 32,768 = 119,232`. Not rounded.
-qwen-code does **not** subtract `max_tokens` from `contextWindowSize`
-when budgeting the prompt, so this value is the largest prompt size
-that still leaves room for a full-budget completion. One token over
-returns vLLM HTTP 400; we observed exactly that in May 2026 with a
-prior `120,000` value (prompt at 119,233 + max_tokens 32,768 = 152,001,
-one token past `max_model_len = 152,000`).
-The parent project's `max_model_len` is hardware-bound at 152,000
-(parent README §5.2 — 9.7 GiB KV pool at gmu=0.97 → 158,368 boot KV
-tokens, 1.04× concurrency at full max-len). With qwen-code's default
-`chatCompression.contextPercentageThreshold=0.7`, history compaction
-nominally fires at ~83,500 prompt tokens — below the cap, so the
-client-side machinery has room to react before vLLM has to return 400.
+`contextWindowSize = 152,000` matches vLLM's `max_model_len`. qwen-code
+treats this as the model's **total context window** (prompt + output),
+not as a prompt budget — its history-compaction trigger fires at
+`chatCompression.contextPercentageThreshold × contextWindowSize`
+(default `0.7 × 152,000 = 106,400` server-counted prompt tokens) and
+relies on the server to enforce the actual cap. vLLM rejects any
+request where `prompt + max_tokens > max_model_len`, which with our
+`max_tokens = 32,768` means a hard cliff at prompt ~119,232. The
+trigger-to-cliff window is therefore ~12.8K tokens — runway for
+compaction to fire before vLLM rejects, though tight enough that one
+oversized tool result can span it. The parent project's `max_model_len`
+is hardware-bound at 152,000 (parent README §5.2 — 9.7 GiB KV pool at
+gmu=0.97 → 158,368 boot KV tokens, 1.04× concurrency at full max-len).
 A failure mode we observed where this safety net does not save us:
 when a single assistant turn emits a degenerate ~32K-token block (e.g.
 a single-token repetition loop) and qwen-code retains the rejected
