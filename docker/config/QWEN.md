@@ -258,6 +258,31 @@ return before dispatching the next. Do not set `run_in_background: true`.
 Choose the most specific `subagent_type` for the work; fall back to
 `general-purpose` when nothing more specific fits.
 
+## Shell execution — use `timeout` and `is_background` deliberately
+
+`run_shell_command` exposes two parameters most agents forget; use them.
+
+- **`timeout: 600000`** (10 min, the max) on any shell command that may
+  exceed 2 minutes — compile invocations on large codebases, full test
+  suites, heavy data processing. The default is `120000` (2 min);
+  commands that hit it return a banal *"Command timed out after 120000ms"*
+  body that is easy to misdiagnose as a slow test rather than the
+  qwen-code wall.
+- **`is_background: true`** for any shell command whose duration is
+  genuinely uncertain (a custom test binary you just compiled, a server,
+  a watcher). Background calls return a shell ID immediately and let
+  you keep working; poll output via `Read` on the output file. The
+  default of foreground is right for `ls`, `git commit`, `npm test`;
+  it is wrong when you cannot predict whether the binary will exit
+  at all.
+
+If a binary appears to hang on the first foreground run, **run
+`file <path>` before rewriting the source.** Verify it is actually an
+ELF executable rather than a precompiled header (`.gch`), a static
+archive (`.a`), or another artefact your compile invocation
+accidentally produced — order of `g++` inputs matters and a stray
+`.hpp` listed first turns the whole invocation into a header build.
+
 ## Returning your work to the operator
 
 You have exactly two output channels, and they always behave the same way:
