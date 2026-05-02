@@ -76,7 +76,7 @@ You hand the service a prompt and a path to a folder via
    returns `201 Created` with the `running` `SessionBody` (including the
    `ttyd_url` the operator opens in a browser).
 7. The agent runs in the background. Its progress is observable through
-   `GET /v1/agent/sessions/<id>` (live `current_turn` and
+   `GET /v1/agent/sessions/<id>` (live `num_turns` and
    `last_event_at_unix` fields, recomputed on each read from the
    in-flight `events.jsonl`) or by attaching to ttyd in a browser.
 8. On agent exit, the orchestrator parses the final `result` event,
@@ -614,7 +614,7 @@ the per-session sidecar (typically a few seconds). On success: `201
 Created` with the running `SessionBody` (see schema below); the
 `ttyd_url` field carries the URL the operator opens in a browser. Until
 the agent finishes, the same body is observable through `GET .../{id}`
-with live `current_turn` and `last_event_at_unix` updated on each read.
+with live `num_turns` and `last_event_at_unix` updated on each read.
 
 ### `GET /v1/agent/sessions/{id}` — read one
 
@@ -675,9 +675,10 @@ zeroed for terminal records and vice versa). Field semantics:
   "prompt_preview":     "Reproduce the bug in ...",  // first 200 chars of the submitted prompt
 
   // Live progress (running) / frozen-at-end (terminal)
-  "current_turn":       7,           // count of `"type":"user"` lines in events.jsonl;
-                                     //   approximates tool-result→model boundaries
-                                     //   (qwen-code's own definition of a turn)
+  "num_turns":          17,          // count of distinct LLM invocations: contiguous runs
+                                     //   of `"type":"assistant"` lines in events.jsonl
+                                     //   collapse to one (each invocation emits multiple
+                                     //   assistant lines, one per content block).
   "last_event_at_unix": 1746115512,  // mtime of events.jsonl. Stops advancing if the
                                      //   agent is wedged.
 
@@ -695,9 +696,13 @@ zeroed for terminal records and vice versa). Field semantics:
                                        //   96  wrapper: PROMPT env was empty
                                        //   97  init:    no PROMPT or RUN_AGENT script
                                        //   -1  setup failed before the wrapper ran
-  "is_error":                    false,
+  "is_process_error":            false,// qwen-code itself errored (structured error
+                                       //   envelope, mid-run crash, or pre-ttyd setup
+                                       //   failure). Does NOT mean "the response is
+                                       //   useful": a vLLM 400 that becomes the agent's
+                                       //   final answer leaves this false. Inspect
+                                       //   `response` for wire-error envelopes if needed.
   "response":                    "<the agent's final answer text>",
-  "agent_num_turns":             17,
   "agent_duration_ms":           776543,
   "bundle_archive_path":         "/home/user/.local/state/agent_service/results/s-1f0e7b/bundle.tar.zst",
   "bundle_compressed_bytes":     1284412,
@@ -710,11 +715,15 @@ zeroed for terminal records and vice versa). Field semantics:
 
 Note that `status: "completed"` does NOT mean "succeeded" — it means
 the run reached a terminal state through normal flow (as opposed to
-`cancelled` via the cancel endpoint). Use `is_error` to distinguish
-success from failure within `completed`. Failures that occur before
-ttyd-up still produce a `completed` body with `is_error: true` and an
-`agent_exit_code` of `-1`; the `response` field carries a human-readable
-explanation.
+`cancelled` via the cancel endpoint). `is_process_error` distinguishes
+qwen-code-process-level failures (crash, structured-error envelope,
+pre-ttyd setup failure — these produce a `completed` body with
+`is_process_error: true` and `agent_exit_code: -1`, with the
+`response` carrying a human-readable explanation) from clean process
+exits. It does **not** detect the case where qwen-code ran cleanly
+but the agent's final answer is itself an error string (e.g., a vLLM
+HTTP 400 echoed back by the model as its last assistant turn) — for
+that, inspect `response` directly.
 
 ### Result bundle
 
@@ -787,13 +796,13 @@ SID=$(curl -sS -X POST -H 'Content-Type: application/json' \
 
 # Open the ttyd_url field from that JSON in a browser to watch.
 
-# Poll for completion. Live `current_turn` and `last_event_at_unix`
+# Poll for completion. Live `num_turns` and `last_event_at_unix`
 # advance while the agent runs; `status` flips to "completed" or
 # "cancelled" at the end.
 while :; do
   BODY=$(curl -sS http://127.0.0.1:8090/v1/agent/sessions/"$SID")
   STATUS=$(echo "$BODY" | jq -r .status)
-  echo "$(date +%H:%M:%S) status=$STATUS turn=$(echo "$BODY" | jq -r .current_turn)"
+  echo "$(date +%H:%M:%S) status=$STATUS turn=$(echo "$BODY" | jq -r .num_turns)"
   [ "$STATUS" != "running" ] && break
   sleep 30
 done

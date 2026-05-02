@@ -77,15 +77,13 @@ pub struct SessionBody {
     pub ttyd_url: String,
     pub prompt_preview: String,
 
-    // Live progress signals. For running sessions: read on each GET/list
-    // from `<state_dir>/sessions/<id>/output/events.jsonl`. For terminal
-    // sessions: frozen at run-end (zeroed if the agent never wrote
-    // events.jsonl, e.g. setup failure). `current_turn` counts
-    // `"type":"user"` lines in events.jsonl, which corresponds to
-    // tool-result-back-to-model messages — a coarse but cheap turn
-    // indicator. `last_event_at_unix` is the file's mtime; if it stops
-    // advancing, the agent is wedged.
-    pub current_turn: u64,
+    /// Number of distinct LLM invocations the agent has completed so far.
+    /// Live for running sessions, frozen at run-end for terminal ones.
+    /// Counted as contiguous runs of `"type":"assistant"` lines in
+    /// `events.jsonl` (one assistant turn produces multiple lines — one
+    /// per content block: thinking, text, tool_use — so consecutive
+    /// assistant lines belong to a single invocation).
+    pub num_turns: u64,
     pub last_event_at_unix: u64,
 
     // Populated on transition to terminal. Zeroed/empty while running.
@@ -105,9 +103,13 @@ pub struct SessionBody {
     ///   137 SIGKILL'd by `docker stop` after a cancel
     ///   other non-zero: qwen-code internal error; see events.jsonl
     pub agent_exit_code: i32,
-    pub is_error: bool,
+    /// True iff the qwen-code process itself terminated abnormally
+    /// (structured error envelope, mid-run crash, or setup failure
+    /// before ttyd-up). **Does not mean "the response is useful"**: a
+    /// vLLM 400 that becomes the agent's final answer leaves this
+    /// false. Inspect `response` for wire-error envelopes if needed.
+    pub is_process_error: bool,
     pub response: String,
-    pub agent_num_turns: u64,
     pub agent_duration_ms: u64,
     pub bundle_archive_path: String,
     pub bundle_compressed_bytes: u64,
@@ -574,25 +576,24 @@ impl Manager {
 
 /// Build the wire body for a running snapshot. Required-field discipline:
 /// every field present, terminal-only fields zeroed. `progress` carries
-/// the live `(current_turn, last_event_at_unix)` reading the caller has
+/// the live `(num_turns, last_event_at_unix)` reading the caller has
 /// just taken from disk.
 fn running_body(s: &RunningSnapshot, progress: (u64, u64)) -> SessionBody {
-    let (current_turn, last_event_at_unix) = progress;
+    let (num_turns, last_event_at_unix) = progress;
     SessionBody {
         session_id: s.session_id.clone(),
         status: SessionStatus::Running,
         started_at_unix: s.started_at_unix,
         ttyd_url: s.ttyd_url.clone(),
         prompt_preview: s.prompt_preview.clone(),
-        current_turn,
+        num_turns,
         last_event_at_unix,
         finished_at_unix: 0,
         duration_wall_ms: 0,
         container_exit_code: 0,
         agent_exit_code: 0,
-        is_error: false,
+        is_process_error: false,
         response: String::new(),
-        agent_num_turns: 0,
         agent_duration_ms: 0,
         bundle_archive_path: String::new(),
         bundle_compressed_bytes: 0,
@@ -615,10 +616,12 @@ pub fn events_jsonl_path(cfg: &Config, session_id: &str) -> PathBuf {
         .join("events.jsonl")
 }
 
-/// Read the live `events.jsonl` and return `(current_turn, last_event_at_unix)`.
-/// `current_turn` counts `"type":"user"` lines (≈ tool-result-back-to-model
-/// boundaries — qwen-code's own definition of a "turn"). Both fields are
-/// 0 if the file does not exist or cannot be read.
+/// Read the live `events.jsonl` and return `(num_turns, last_event_at_unix)`.
+/// `num_turns` is the number of distinct LLM invocations the agent has
+/// completed so far, counted as contiguous runs of `"type":"assistant"`
+/// lines (one invocation emits multiple assistant lines — one per content
+/// block — so consecutive assistant lines collapse to a single turn).
+/// Both fields are 0 if the file does not exist or cannot be read.
 ///
 /// Cost: linear byte scan of the file. Acceptable for periodic polling
 /// (~30 s); if you need it for higher-frequency reads, consider an
@@ -635,21 +638,24 @@ pub fn read_running_progress(events_path: &std::path::Path) -> (u64, u64) {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let mut current_turn: u64 = 0;
+    let mut num_turns: u64 = 0;
+    let mut prev_was_assistant = false;
     if let Ok(file) = std::fs::File::open(events_path) {
         let reader = std::io::BufReader::new(file);
         for line in reader.lines() {
             match line {
                 Ok(s) => {
-                    if s.contains(r#""type":"user""#) {
-                        current_turn = current_turn.saturating_add(1);
+                    let is_assistant = s.contains(r#""type":"assistant""#);
+                    if is_assistant && !prev_was_assistant {
+                        num_turns = num_turns.saturating_add(1);
                     }
+                    prev_was_assistant = is_assistant;
                 }
                 Err(_) => break,
             }
         }
     }
-    (current_turn, last_event_at_unix)
+    (num_turns, last_event_at_unix)
 }
 
 /// Read the agent's own exit code from `output/qwen-exit-code` in the

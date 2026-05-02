@@ -21,14 +21,14 @@
 //!      `Cancelled` body. Whatever artifacts the agent already wrote are
 //!      preserved in the bundle.
 //!    - wall-clock timeout: same as cancellation but `Completed` with
-//!      `is_error=true`.
+//!      `is_process_error=true`.
 //! 7. Write `output/response.txt` so the answer text is durable on disk.
 //! 8. Bundle (best-effort — failures end up as `teardown_diagnostics`).
 //! 9. Tear down docker objects + remove the state-dir tree.
 //!
 //! Failure at any step BEFORE ttyd-up: clean up everything that was created
 //! up to that point, send an `Err` over `ttyd_tx`, and return a terminal
-//! body with `is_error=true`. Failure AFTER ttyd-up follows the same
+//! body with `is_process_error=true`. Failure AFTER ttyd-up follows the same
 //! cleanup path but the runtime layer has already returned the running
 //! body to the HTTP caller, so the failure surfaces only via a subsequent
 //! `get` / `list` poll.
@@ -50,7 +50,7 @@ use crate::validation::ValidatedRequest;
 
 /// Drive one session to a terminal state. Always returns a `SessionBody`
 /// with `status` ∈ {`Completed`, `Cancelled`}; setup errors before ttyd-up
-/// produce a `Completed` body with `is_error=true` (the session "ran" in
+/// produce a `Completed` body with `is_process_error=true` (the session "ran" in
 /// the sense that we attempted to). Cancellation observed before any agent
 /// turn ran also produces a `Cancelled` body — the user explicitly stopped
 /// it, so the lifecycle is honest.
@@ -376,7 +376,6 @@ pub async fn run_one(
                 paths.events_jsonl().display(),
                 wait_outcome.exit_code,
             ),
-            num_turns: 0,
             duration_ms: 0,
         },
     };
@@ -484,15 +483,14 @@ pub async fn run_one(
         started_at_unix,
         ttyd_url,
         prompt_preview,
-        current_turn: frozen_progress.0,
+        num_turns: frozen_progress.0,
         last_event_at_unix: frozen_progress.1,
         finished_at_unix,
         duration_wall_ms: wall_dur_ms,
         container_exit_code: wait_outcome.exit_code.unwrap_or(-1),
         agent_exit_code,
-        is_error: is_error_final,
+        is_process_error: is_error_final,
         response: response_final,
-        agent_num_turns: agent.num_turns,
         agent_duration_ms: agent.duration_ms,
         bundle_archive_path,
         bundle_compressed_bytes,
@@ -611,7 +609,7 @@ async fn cancellable_container_wait(
 
 // ── early-failure body builders ────────────────────────────────────────────
 
-/// Build a terminal `Completed`-with-`is_error` body and ALSO send the
+/// Build a terminal `Completed`-with-`is_process_error` body and ALSO send the
 /// `Err` over `ttyd_tx`. Used for failures that occur before ttyd-up.
 fn setup_failure(
     ttyd_tx: oneshot::Sender<ServiceResult<RunningSnapshot>>,
@@ -651,15 +649,14 @@ fn setup_failure(
         started_at_unix,
         ttyd_url: String::new(),
         prompt_preview: prompt_preview.to_string(),
-        current_turn: 0,
+        num_turns: 0,
         last_event_at_unix: 0,
         finished_at_unix: now_unix(),
         duration_wall_ms: wall_start.elapsed().as_millis() as u64,
         container_exit_code: -1,
         agent_exit_code: -1,
-        is_error: true,
+        is_process_error: true,
         response,
-        agent_num_turns: 0,
         agent_duration_ms: 0,
         bundle_archive_path: String::new(),
         bundle_compressed_bytes: 0,
@@ -691,15 +688,14 @@ fn cancellation_terminal(
         started_at_unix,
         ttyd_url: String::new(),
         prompt_preview: prompt_preview.to_string(),
-        current_turn: 0,
+        num_turns: 0,
         last_event_at_unix: 0,
         finished_at_unix: now_unix(),
         duration_wall_ms: wall_start.elapsed().as_millis() as u64,
         container_exit_code: -1,
         agent_exit_code: -1,
-        is_error: true,
+        is_process_error: true,
         response: detail.to_string(),
-        agent_num_turns: 0,
         agent_duration_ms: 0,
         bundle_archive_path: String::new(),
         bundle_compressed_bytes: 0,
@@ -726,17 +722,16 @@ fn early_unwind_terminal(
         started_at_unix,
         ttyd_url: String::new(),
         prompt_preview: prompt_preview.to_string(),
-        current_turn: 0,
+        num_turns: 0,
         last_event_at_unix: 0,
         finished_at_unix: now_unix(),
         duration_wall_ms: wall_start.elapsed().as_millis() as u64,
         container_exit_code: -1,
         agent_exit_code: -1,
-        is_error: true,
+        is_process_error: true,
         response: "submit() unwound before this run task could hand back ttyd readiness; \
                    no client ever received this session_id"
             .into(),
-        agent_num_turns: 0,
         agent_duration_ms: 0,
         bundle_archive_path: String::new(),
         bundle_compressed_bytes: 0,

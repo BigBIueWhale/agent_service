@@ -22,8 +22,6 @@ pub struct AgentResult {
     /// populated, never empty — we synthesise a placeholder if the upstream
     /// event is malformed, since downstream consumers rely on the field.
     pub response: String,
-    /// Number of agent turns that ran (0 if the upstream event omitted it).
-    pub num_turns: u64,
     /// Wall-clock duration the agent spent, in ms (0 if upstream omitted).
     pub duration_ms: u64,
 }
@@ -110,10 +108,6 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         }
     };
 
-    let num_turns = result_event
-        .get("num_turns")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
     let duration_ms = result_event
         .get("duration_ms")
         .and_then(|v| v.as_u64())
@@ -122,7 +116,6 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
     Ok(AgentResult {
         is_error,
         response,
-        num_turns,
         duration_ms,
     })
 }
