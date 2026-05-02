@@ -27,7 +27,7 @@
     "generationConfig": {
       "modalities": { "image": true, "video": true },
       "splitToolMedia": true,
-      "contextWindowSize": 120000,
+      "contextWindowSize": 119232,
       "samplingParams": {
         "temperature": 0.6,
         "top_p": 0.95,

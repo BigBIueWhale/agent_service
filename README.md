@@ -353,24 +353,40 @@ further would clip the model's `<think>` blocks mid-thought, which
 corrupts agent loops — the model's training expects up to ~32K of
 thinking-plus-answer per turn and we honour that.
 
-`contextWindowSize = 120,000` is **deliberately aligned to the
-deployment's effective prompt budget**, namely
-`max_model_len − max_tokens = 152,000 − 32,768 ≈ 119,232 → 120,000`.
+A second-line defense against the Qwen3.x single-token degenerate-emission
+loop is enforced **server-side** by the parent project (vLLM
+`SamplingParams.repetition_detection`, set as a per-server default in
+the parent's `monkey_patch_repetition_detection_default.py` — see
+parent README §7.12). It is deliberately not duplicated here: vLLM
+honours one default per field, and adding the same triple to every
+request would be redundant noise on the wire.
+
+`contextWindowSize = 119,232` is **the exact effective prompt budget**:
+`max_model_len − max_tokens = 152,000 − 32,768 = 119,232`. Not rounded.
+qwen-code does **not** subtract `max_tokens` from `contextWindowSize`
+when budgeting the prompt, so this value is the largest prompt size
+that still leaves room for a full-budget completion. One token over
+returns vLLM HTTP 400; we observed exactly that in May 2026 with a
+prior `120,000` value (prompt at 119,233 + max_tokens 32,768 = 152,001,
+one token past `max_model_len = 152,000`).
 The parent project's `max_model_len` is hardware-bound at 152,000
 (parent README §5.2 — 9.7 GiB KV pool at gmu=0.97 → 158,368 boot KV
 tokens, 1.04× concurrency at full max-len). With qwen-code's default
 `chatCompression.contextPercentageThreshold=0.7`, history compaction
-fires at 84,000 prompt tokens — well below vLLM's hard 120K cap, so
-qwen-code's client-side machinery has room to react before vLLM has to
-return HTTP 400. Setting `contextWindowSize` higher than the effective
-prompt budget (e.g., qwen-code's docs example of `131,072`) lets the
-client send prompts that vLLM will then reject — which manifests as a
-terminal `completed` session whose `response` is the vLLM error string.
-Don't do that.
+nominally fires at ~83,500 prompt tokens — below the cap, so the
+client-side machinery has room to react before vLLM has to return 400.
+A failure mode we observed where this safety net does not save us:
+when a single assistant turn emits a degenerate ~32K-token block (e.g.
+a single-token repetition loop) and qwen-code retains the rejected
+output in conversation history, two such bursts inflate the prompt
+faster than compaction can react. The parent project's vLLM patch
+§7.12 (server-side `repetition_detection` default) is the layered
+defense for that case.
 
 Note: Alibaba's model card recommends "**at least 128K tokens** to
-preserve thinking capabilities". Our effective prompt budget is 120K,
-**8K below that floor** — a structural compromise from running 27B AWQ
+preserve thinking capabilities". Our effective prompt budget is
+119,232, **~8.8K below that floor** — a structural compromise from
+running 27B AWQ
 + full-fidelity vision + BF16 KV on a 32 GB card. Pushing
 `max_model_len` higher costs other invariants the parent project has
 chosen to defend (concurrency slack, cold-path 4-MP image safety,
