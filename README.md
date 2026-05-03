@@ -374,13 +374,48 @@ compaction to fire before vLLM rejects, though tight enough that one
 oversized tool result can span it. The parent project's `max_model_len`
 is hardware-bound at 152,000 (parent README §5.2 — 9.7 GiB KV pool at
 gmu=0.97 → 158,368 boot KV tokens, 1.04× concurrency at full max-len).
-A failure mode we observed where this safety net does not save us:
-when a single assistant turn emits a degenerate ~32K-token block (e.g.
-a single-token repetition loop) and qwen-code retains the rejected
-output in conversation history, two such bursts inflate the prompt
-faster than compaction can react. The parent project's vLLM patch
-§7.12 (server-side `repetition_detection` default) is the layered
-defense for that case.
+Three failure modes we have observed where this safety net does not
+save us, and how each is or isn't defended:
+
+1. **Single-token degenerate emission burst.** A single assistant
+   turn emits a wall of identical tokens (e.g. 32,768 zeros when
+   encoding `2·10^50` as a literal). Qwen-code retains the rejected
+   output in conversation history; two such bursts inflate the prompt
+   faster than compaction can react. **Defended** by parent vLLM patch
+   §7.12 (server-side `RepetitionDetectionParams` default with
+   `max_pattern_size=8, min_count=96`), which terminates generation
+   server-side once any 1-to-8-token cycle hits 96 reps. Single-token
+   bursts are now bounded to ~96 tokens.
+
+2. **Compaction failing on its first attempt.** Qwen-code's
+   `tryCompressChat` calls the same model with a system prompt
+   demanding a `<scratchpad>` reasoning block followed by a
+   `<state_snapshot>` XML object (`prompts.ts:378-436`), at the same
+   `max_tokens=32,768`. When the model burns its output budget on
+   `<scratchpad>` reasoning and emits an empty `<state_snapshot>`,
+   qwen-code sets `hasFailedCompressionAttempt=true`
+   (`client.ts:1167-1173`, on `COMPRESSION_FAILED_EMPTY_SUMMARY` or
+   `COMPRESSION_FAILED_INFLATED_TOKEN_COUNT`) and silently NOOPs every
+   subsequent compaction call (`chatCompressionService.ts:117`). The
+   latch never clears for the session, so once tripped, history grows
+   unbounded into the cliff regardless of subsequent turn behavior.
+   **Not defended** in the current stack; mitigation would require
+   patching qwen-code (e.g. supplying a different compression prompt
+   that fits comfortably inside the output budget, or clearing the
+   latch on transient failures).
+
+3. **Paragraph-level cycles inside `<think>` blocks.** The model
+   repetitively emits the same ~80-token paragraph hundreds of times
+   within a single thinking block, exhausting the per-turn `max_tokens`
+   on degenerate reasoning content. §7.12's `max_pattern_size=8` only
+   catches 1-to-8-token cycles, so paragraph-level cycles bypass it
+   entirely. **Not defended** by any current vLLM-side patch; this is
+   model-side OOD behavior (the parent project classifies analogous
+   OOD-emission cases as Class B — model misbehavior, not
+   infrastructure bug — at parent README §6.5) for which mitigation
+   would require either tighter sampling penalties, a paragraph-window
+   detector at the agent_service or qwen-code layer, or a new
+   server-side defense surface.
 
 Note: Alibaba's model card recommends "**at least 128K tokens** to
 preserve thinking capabilities". Our effective prompt budget is
