@@ -1673,4 +1673,56 @@ index 4bcea69..8ea8b86 100644
            ? true
            : (this.params.run_in_background ??
              (subagentConfig.background === true ||
-
+diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
+index d0bb989..9e92f03 100644
+--- a/packages/cli/src/utils/nonInteractiveHelpers.test.ts
++++ b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
+@@ -426,5 +426,32 @@ describe('buildSystemMessage', () => {
+       getModel: vi.fn().mockReturnValue('test-model'),
+       getCliVersion: vi.fn().mockReturnValue('1.0.0'),
+       getDebugMode: vi.fn().mockReturnValue(false),
++      getForegroundAgentsOnly: vi.fn().mockReturnValue(false),
++      getSubagentManager: vi.fn().mockReturnValue({
++        listSubagents: vi.fn().mockResolvedValue([]),
++      }),
++    } as unknown as Config;
++  });
++
++  it('advertises only callable agents in foreground-only mode', async () => {
++    const config = {
++      ...mockConfig,
++      getForegroundAgentsOnly: vi.fn().mockReturnValue(true),
++      getSubagentManager: vi.fn().mockReturnValue({
++        listSubagents: vi.fn().mockResolvedValue([
++          { name: 'general-purpose' },
++          { name: 'Explore' },
++          { name: 'statusline-setup' },
++          { name: 'custom-agent' },
++        ]),
++      }),
+     } as unknown as Config;
++
++    const result = await buildSystemMessage(
++      config,
++      'test-session-id',
++      'auto' as PermissionMode,
++    );
++
++    expect(result.agents).toEqual(['general-purpose', 'Explore']);
+   });
+diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/utils/nonInteractiveHelpers.ts
+index b17b1a7..9c4ab29 100644
+--- a/packages/cli/src/utils/nonInteractiveHelpers.ts
++++ b/packages/cli/src/utils/nonInteractiveHelpers.ts
+@@ -238,6 +238,11 @@ export async function buildSystemMessage(
+     const subagentManager = config.getSubagentManager();
+     const subagents = await subagentManager.listSubagents();
+     agentNames = subagents.map((subagent) => subagent.name);
++    if (config.getForegroundAgentsOnly()) {
++      agentNames = agentNames.filter(
++        (name) => name === 'general-purpose' || name === 'Explore',
++      );
++    }
+   } catch (error) {
+     debugLogger.error('[buildSystemMessage] Failed to load subagents:', error);
+   }

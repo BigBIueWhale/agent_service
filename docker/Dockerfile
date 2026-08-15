@@ -84,6 +84,7 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
       packages/core/src/permissions/permission-manager.test.ts \
       packages/core/src/tools/agent/agent.test.ts \
       packages/cli/src/config/config.test.ts \
+      packages/cli/src/utils/nonInteractiveHelpers.test.ts \
  && test "$(node scripts/cli-entry.js --version)" = '0.21.12'
 
 FROM agent-os AS agent

@@ -22,7 +22,7 @@
   },
   "agent": {
     "image_tag": "qwen38-agent:0.21.12-b965d5f8-v1",
-    "image_id": "sha256:999b67c23404d1f38433fa804bfe8fcff2bbfb32611ba5441b62cf13adf48666",
+    "image_id": "sha256:e6c3fd75cc6fd56cb3b46046d80ca9d7c733a72eb77da6a403a4e379654ef046",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
@@ -52,7 +52,7 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "2a923d2cf9568d4bb493efba423f743f46dee4dfc78bd3525aefe94f2f719375"
+      "patch_sha256": "0c621cd8000bb61af633614ee775950b454b02b05a7bb54c9b62824587138181"
     }
   },
   "backend": {

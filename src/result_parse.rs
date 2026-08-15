@@ -244,10 +244,7 @@ fn validate_init_event(
             "write_file",
         ],
     )?;
-    exact_string_array(
-        "agents",
-        &["Explore", "general-purpose", "statusline-setup"],
-    )?;
+    exact_string_array("agents", &["Explore", "general-purpose"])?;
     let mcp_servers = object
         .get("mcp_servers")
         .and_then(serde_json::Value::as_array)
@@ -338,7 +335,7 @@ fn truncate(value: &str, max: usize) -> String {
 mod tests {
     use super::*;
 
-    const INIT: &str = "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[\"status\"],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\",\"statusline-setup\"]}\n";
+    const INIT: &str = "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[\"status\"],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n";
 
     fn parse_text(text: &str) -> ServiceResult<AgentResult> {
         let path = std::env::temp_dir().join(format!(

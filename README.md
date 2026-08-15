@@ -157,7 +157,7 @@ The pin was rechecked on 2026-08-15: GitHub's latest stable release was
 unused second execution path; the reviewed commit archive is the sole source.
 The build first verifies both hashes and that every hunk applies cleanly. It then
 runs `npm ci` against the upstream lock file, applies upstream's own `patch-package`
-set, builds the CLI, bundles it, and runs the seven focused suites covering all
+set, builds the CLI, bundles it, and runs the eight focused suites covering all
 modified areas. No published npm package or mutable `latest` tag is executed.
 
 The local patch provides:
@@ -174,6 +174,8 @@ The local patch provides:
   partial call after a length stop;
 - foreground-only `general-purpose` and `Explore` agents, with no forks,
   background work, teams, worktrees, custom types, model overrides, or nesting.
+- init metadata filtered through the identical two-agent policy, so uncallable
+  internal agents are not advertised as an alternate behavior.
 
 The allowed client tools are exactly:
 
@@ -233,7 +235,13 @@ tokens and 0.386-second time-to-first-token versus 12.970 seconds for a zero-cac
 control, a measured 33.639× improvement. The exact measurements and test command
 are recorded in the backend README. Agent-service acceptance additionally exercises
 multi-turn native tool history so request construction cannot accidentally defeat
-the cache while a synthetic benchmark still passes.
+the cache while a synthetic benchmark still passes. In the final controlled
+five-turn Qwen Code run, vLLM observed 68,109 queried prompt tokens, 62,400 local
+cache-hit tokens (91.617848%), 0.867486238 seconds of aggregate time-to-first-token,
+0.726381441 seconds of aggregate prefill time, and 15.441475868 seconds of aggregate
+request latency; Qwen's terminal agent duration was 16.445 seconds. Qwen Code's
+compatibility usage field reported zero cache-read tokens, so the acceptance relies
+on the authoritative vLLM counters rather than that lossy frontend field.
 
 ## Network and filesystem isolation
 
@@ -297,6 +305,13 @@ not the host binary. The Rust binary is built by the pinned Rust 1.95.0 image wi
 by exact image ID plus labels for the upstream version/commit/archive/patch and all
 three configuration files. The service image is sealed by committed source, stack
 lock, and Cargo lock labels.
+
+Pinning is not a claim that the upstream dependency graph has no security debt. The
+Qwen `npm ci` build currently reports 66 audit advisories (2 low, 36 moderate, 25
+high, 3 critical). The build records that fact and does not run `npm audit fix`:
+doing so would introduce an unreviewed mutable dependency graph. Remediation means
+reviewing a newer exact upstream tree or a narrow explicit patch, then rebuilding
+and re-running every gate.
 
 Putting a version string in a README is not considered a pin. The scripts require a
 clean repository and validate host tool versions, GPU/driver, file hashes, image IDs,
@@ -384,7 +399,7 @@ A release is not complete merely because the images build. The required gates ar
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
 2. clean Qwen archive extraction, patch check/application, full patched build, and
-   all seven focused upstream suites (the researched baseline was 1,571 tests);
+   all eight focused upstream suites (1,624 tests in the pinned tree);
 3. agent-image label/hash/version checks and network-none route proof;
 4. exact live backend container/image/labels/command/listener/version/model/tokenizer;
 5. sealed model path from agent loopback, with no route or DNS;
