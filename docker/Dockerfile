@@ -110,9 +110,12 @@ RUN test "$(node /opt/qwen-code/scripts/cli-entry.js --version)" = '0.21.12'
 COPY docker/config/settings.json /opt/agent/settings.json
 COPY docker/config/QWEN.md /opt/agent/QWEN.md
 COPY docker/config/run_agent.sh /opt/agent/run_agent.sh
+COPY docker/tests/run_agent_signal_contract.sh /tmp/run_agent_signal_contract.sh
 RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_SHA256}" \
  && test "$(sha256sum /opt/agent/QWEN.md | cut -d' ' -f1)" = "${INSTRUCTIONS_SHA256}" \
  && test "$(sha256sum /opt/agent/run_agent.sh | cut -d' ' -f1)" = "${WRAPPER_SHA256}" \
+ && bash /tmp/run_agent_signal_contract.sh /opt/agent/run_agent.sh \
+ && rm -f /tmp/run_agent_signal_contract.sh \
  && chmod 0555 /opt/agent/run_agent.sh \
  && chmod -R a-w /opt/agent
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8

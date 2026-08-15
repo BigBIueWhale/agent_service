@@ -8,7 +8,7 @@
     "rust_amd64_image": "rust@sha256:4c2fd73ef19c5ef9d54bee03b06b2839a392604fbfcd578ed948b71b37c1d7fb",
     "docker_cli_archive": "https://download.docker.com/linux/static/stable/x86_64/docker-29.7.2.tgz",
     "docker_cli_archive_sha256": "803d433f226db4776e1768fd319fc6c6e4935a456acf84fcc0080818b854bc8f",
-    "agent_apt_lock_sha256": "92af4ce44711f5b3d7b8c1dc46a3b01001d9fae3573ad19b18de1f72aa678f1e",
+    "agent_apt_lock_sha256": "71f67f688678308b2bbd65d9c7fd1a3bbd2a72f33da35bcab6e71bf4ded9752a",
     "service_apt_lock_sha256": "faf20a1900aebde3893b4b5e28025aeb83f23620fce6f729979c0a4607d5dd4f"
   },
   "service": {
@@ -22,7 +22,7 @@
   },
   "agent": {
     "image_tag": "qwen38-agent:0.21.12-b965d5f8-v1",
-    "image_id": "sha256:e6c3fd75cc6fd56cb3b46046d80ca9d7c733a72eb77da6a403a4e379654ef046",
+    "image_id": "sha256:2e637cfedcc696e050d38ba0ce5f4018438d9fa62075d14d8f0c6b8ca3d12a1a",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
@@ -31,7 +31,7 @@
     "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
     "settings_sha256": "0b1a527ed721c07e37b69fb664fd1709ea485a909a954faaade133812dba78db",
     "instructions_sha256": "9e7dbc771dedd0a1178df52960ae7d5650a1e44f05ee401c31255110ac01bacd",
-    "wrapper_sha256": "85817e32efa09e8eba02d1a25a45d8a77fe324ca52c62c6aff205fce31cb9ea2",
+    "wrapper_sha256": "b3f0c5e28cf79ef075f4979908f591b23d05d87252bbed4f5413915f76450a51",
     "model_base_url": "http://127.0.0.1:18000/v1",
     "model_proxy_port": 18000,
     "strict_tools": [

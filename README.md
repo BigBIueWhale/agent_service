@@ -285,6 +285,14 @@ stderr, exit code, and final response are placed in a deterministic `bundle.tar.
 Missing bundle entries, symlinks, read races, or tar errors are process failures.
 There is no `--ignore-failed-read` path.
 
+Cancellation is safe at the readiness boundary as well as during later tool use.
+The wrapper installs signal handlers and creates all required output sidecars before
+publishing `ready.json`, launches Qwen in a dedicated `setsid` process group, and
+forwards termination to that entire group. The requested exit code is synchronously
+recorded before forwarding, so cancellation cannot silently lose its bundle if a
+descendant delays shutdown. `util-linux=2.39.3-9ubuntu6.5`, which supplies `setsid`,
+is an explicit image input rather than an incidental base-image dependency.
+
 ## Reproducibility and real version pinning
 
 [`docker/Dockerfile`](docker/Dockerfile) has digest-pinned linux/amd64 Ubuntu, Node,
@@ -413,7 +421,8 @@ A release is not complete merely because the images build. The required gates ar
 11. native-context boundary and K8V4 memory evidence inherited from the exact live
     backend image;
 12. graceful cancellation, unlimited-wait shutdown, orphan sweep, listener audit,
-    and a final clean Git repository under `Ronen Zyroff <rzyroff@gmail.com>`.
+    including immediate cancellation at the published-readiness boundary, and a
+    final clean Git repository under `Ronen Zyroff <rzyroff@gmail.com>`.
 
 Any unrun or failed gate must be reported as such. There is no fallback declaration
 of success.

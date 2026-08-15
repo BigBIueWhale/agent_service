@@ -62,6 +62,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
+qwen_pid=""
+qwen_pgid=""
+qwen_status=255
+tee_status=255
+termination_exit=0
+termination_forward_failed=0
+termination_record_failed=0
+forward_termination() {
+  local exit_code="$1"
+  termination_exit="${exit_code}"
+  if ! printf '%s\n' "${exit_code}" >"${EXIT_FILE}" || \
+     ! sync -f "${EXIT_FILE}"; then
+    termination_record_failed=1
+    printf 'AGENT_ERROR code=102 message=failed to durably record requested termination\n' >&2
+  fi
+  if [[ -n "${qwen_pgid}" ]] && kill -0 -- "-${qwen_pgid}" 2>/dev/null; then
+    if ! kill -TERM -- "-${qwen_pgid}" 2>/dev/null && \
+       kill -0 -- "-${qwen_pgid}" 2>/dev/null; then
+      termination_forward_failed=1
+      printf 'AGENT_ERROR code=101 message=failed to forward termination to Qwen process group %s\n' \
+        "${qwen_pgid}" >&2
+    fi
+  fi
+}
+trap 'forward_termination 143' TERM
+trap 'forward_termination 130' INT
+
 curl --fail --silent --show-error \
   --retry 30 --retry-all-errors --retry-connrefused --retry-delay 1 \
   --connect-timeout 1 --max-time 35 \
@@ -83,28 +110,11 @@ jq -e '.count > 0 and .max_model_len == 262144 and (.tokens | type == "array")' 
   "${tokenize_tmp}" >/dev/null || \
   fatal 98 "vLLM tokenizer response violates the locked contract: $(tr -d '\n' <"${tokenize_tmp}")"
 
+: >"${EVENTS_FILE}"
+: >"${STDERR_FILE}"
 printf '{"model":"%s","context_window":262144,"token_count":%s}\n' \
   "${MODEL_ID}" "$(jq -r '.count' "${tokenize_tmp}")" >"${READY_FILE}"
 printf 'AGENT_READY model=%s context=262144 network=loopback-only\n' "${MODEL_ID}"
-
-qwen_pid=""
-qwen_status=255
-tee_status=255
-termination_exit=0
-termination_forward_failed=0
-forward_termination() {
-  local exit_code="$1"
-  termination_exit="${exit_code}"
-  if [[ -n "${qwen_pid}" ]] && kill -0 "${qwen_pid}" 2>/dev/null; then
-    if ! kill -TERM "${qwen_pid}" 2>/dev/null; then
-      termination_forward_failed=1
-      printf 'AGENT_ERROR code=101 message=failed to forward termination to Qwen PID %s\n' \
-        "${qwen_pid}" >&2
-    fi
-  fi
-}
-trap 'forward_termination 143' TERM
-trap 'forward_termination 130' INT
 
 wait_for_child() {
   local child_pid="$1" result_name="$2" child_status
@@ -121,10 +131,9 @@ wait_for_child() {
 }
 
 set +e
-: >"${STDERR_FILE}"
 tee "${EVENTS_FILE}" <"${events_fifo}" &
 tee_pid="$!"
-node /opt/qwen-code/scripts/cli-entry.js \
+setsid node /opt/qwen-code/scripts/cli-entry.js \
   --input-format=text \
   --approval-mode=yolo \
   --output-format=stream-json \
@@ -138,6 +147,7 @@ node /opt/qwen-code/scripts/cli-entry.js \
   >"${events_fifo}" \
   2>>"${STDERR_FILE}" &
 qwen_pid="$!"
+qwen_pgid="${qwen_pid}"
 if (( termination_exit != 0 )); then
   forward_termination "${termination_exit}"
 fi
@@ -145,6 +155,7 @@ wait_for_child "${qwen_pid}" qwen_status
 wait_for_child "${tee_pid}" tee_status
 set -e
 
+(( termination_record_failed == 0 )) || fatal 102 "failed to durably record a requested termination"
 (( termination_forward_failed == 0 )) || fatal 101 "failed to forward a requested termination signal"
 [[ "${tee_status}" == 0 ]] || fatal 99 "event capture failed with tee exit ${tee_status}"
 if (( termination_exit != 0 && qwen_status == 0 )); then
