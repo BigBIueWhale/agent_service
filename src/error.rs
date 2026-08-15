@@ -2,16 +2,15 @@
 //!
 //! Every variant carries a dynamic `String` message, populated with enough
 //! context (paths, IDs, the operation that failed, the underlying cause) to
-//! diagnose without grepping logs. We never panic, never call `.unwrap()` /
-//! `.expect()`, never silently swallow a failure. Failures bubble up as
-//! `Err(ServiceError::...)` and are converted to JSON HTTP responses at the
-//! API boundary by `IntoResponse`.
+//! diagnose without grepping logs. Runtime failures are returned explicitly
+//! and never silently swallowed; they become `Err(ServiceError::...)` and are
+//! converted to JSON HTTP responses at the API boundary by `IntoResponse`.
 
 use std::fmt;
 
-use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use serde::Serialize;
 
 #[derive(Debug, Clone)]
@@ -34,7 +33,7 @@ pub enum ServiceError {
     DockerUnavailable(String),
     /// 503 — agent template image (or proxy image) is not present locally.
     ImageMissing(String),
-    /// 502 — Docker subprocess (run / network create / etc.) returned non-zero.
+    /// 502 — Docker subprocess (run / inspect / stop / logs / etc.) returned non-zero.
     DockerCommand(String),
     /// 500 — host-side filesystem failure (staging, state dir, results dir, …).
     Staging(String),
@@ -101,8 +100,9 @@ impl ServiceError {
     /// string for variants that don't reference a specific session.
     pub fn session_id(&self) -> &str {
         match self {
-            Self::NotFound { session_id }
-            | Self::SessionRunning { session_id } => session_id.as_str(),
+            Self::NotFound { session_id } | Self::SessionRunning { session_id } => {
+                session_id.as_str()
+            }
             Self::Busy { running_session_id } => running_session_id.as_str(),
             _ => "",
         }

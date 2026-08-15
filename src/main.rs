@@ -17,25 +17,18 @@ mod staging;
 mod validation;
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use crate::api::{AppState, pre_flight};
+use crate::api::{pre_flight, AppState};
 use crate::config::Config;
 use crate::error::ServiceError;
 use crate::runtime::Manager;
 
-/// Wall-clock ceiling on `Manager::shutdown`. The longest-known step the
-/// run task can be in mid-cancel is `docker stop` (10 s grace) followed by
-/// the post-stop `docker wait` (30 s) plus a teardown that touches docker
-/// networks and the local filesystem. 60 s gives us comfortable headroom;
-/// blowing past it indicates a wedged docker daemon, in which case we'd
-/// rather exit non-zero and let the operator's supervisor restart us than
-/// hang the shutdown indefinitely.
-const SHUTDOWN_CEILING: Duration = Duration::from_secs(60);
-
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> std::process::ExitCode {
-    init_tracing();
+    if let Err(error) = init_tracing() {
+        eprintln!("agent_service: tracing initialization failed: {error}");
+        return std::process::ExitCode::from(2);
+    }
 
     let cfg = match Config::load() {
         Ok(c) => Arc::new(c),
@@ -47,15 +40,13 @@ async fn main() -> std::process::ExitCode {
 
     tracing::info!(
         listen = %cfg.listen_addr,
-        vllm = %format!("{}:{}", cfg.vllm_host, cfg.vllm_port),
+        profile = %cfg.lock.profile,
+        vllm = %cfg.vllm_endpoint,
         model = %cfg.vllm_model_name,
         agent_image = %cfg.agent_image,
         agent_memory = %cfg.agent_memory_limit,
-        agent_storage_quota = ?cfg.agent_storage_quota,
         state_dir = %cfg.state_dir.display(),
         results_dir = %cfg.results_dir.display(),
-        run_timeout_secs = cfg.run_timeout_secs,
-        max_session_turns = cfg.max_session_turns,
         qwen_code_version = config::QWEN_CODE_VERSION,
         "agent_service starting"
     );
@@ -112,7 +103,7 @@ async fn main() -> std::process::ExitCode {
     // HTTP requests have drained. Detached run tasks may still be running.
     tracing::info!("HTTP server drained; awaiting session-level shutdown");
 
-    let session_shutdown_outcome = manager.shutdown(SHUTDOWN_CEILING).await;
+    let session_shutdown_outcome = manager.shutdown().await;
 
     // Surface BOTH outcomes — a serve error AND a shutdown overrun are both
     // worth knowing about, and they often correlate.
@@ -233,45 +224,18 @@ async fn wait_for_sigterm_only() {
     }
 }
 
-fn init_tracing() {
-    // tracing isn't initialised yet, so we use eprintln! for any visible
-    // failure here. We try the user-supplied RUST_LOG first; if it doesn't
-    // parse (only realistic failure mode), we say so explicitly and fall
-    // back to a hardcoded default rather than continuing in silence.
-    let filter = match tracing_subscriber::EnvFilter::try_from_default_env() {
-        Ok(f) => f,
-        Err(env_err) => {
-            // try_from_default_env returns Err if RUST_LOG is unset OR
-            // malformed. Distinguish so the operator only sees a warning
-            // for genuine misconfiguration.
-            if std::env::var_os("RUST_LOG").is_some() {
-                eprintln!(
-                    "agent_service: RUST_LOG is set but not parseable as an EnvFilter directive: \
-                     {env_err}; falling back to default `info,tower_http=warn,axum=warn`"
-                );
-            }
-            match tracing_subscriber::EnvFilter::try_new("info,tower_http=warn,axum=warn") {
-                Ok(f) => f,
-                Err(default_err) => {
-                    // The hardcoded directive is valid; reaching this means
-                    // a tracing-subscriber regression. Loud message and a
-                    // last-resort minimal filter.
-                    eprintln!(
-                        "agent_service: hardcoded fallback EnvFilter `info,tower_http=warn,axum=warn` \
-                         did not parse: {default_err}; this is a bug in tracing-subscriber. \
-                         Using bare `info`."
-                    );
-                    tracing_subscriber::EnvFilter::new("info")
-                }
-            }
-        }
-    };
+fn init_tracing() -> Result<(), String> {
+    // Logging is part of the one pinned mode: RUST_LOG is intentionally not
+    // consulted, so a host environment cannot silently change diagnostics.
+    let filter = tracing_subscriber::EnvFilter::try_new("info,tower_http=warn,axum=warn")
+        .map_err(|error| format!("the compiled logging filter is invalid: {error}"))?;
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)
         .with_writer(std::io::stderr)
         .compact()
-        .init();
+        .try_init()
+        .map_err(|error| format!("cannot install the tracing subscriber: {error}"))
 }
 
 fn preflight_exit_code(e: &ServiceError) -> std::process::ExitCode {

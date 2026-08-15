@@ -1,41 +1,17 @@
-//! Per-session result bundling.
+//! Deterministic, required session bundling.
 //!
-//! At end-of-run, the orchestrator tars four things from the session's
-//! staging dir into `<results_dir>/<session_id>/bundle.tar.zst`:
-//!
-//! - `artifacts/` — everything the agent wrote for the operator.
-//! - `output/events.jsonl` — the agent's full conversation history: every
-//!   assistant turn, every tool call and result, and the final
-//!   `type:"result"` event whose payload is the parsed `response`.
-//! - `output/qwen-exit-code` — the agent process's exit code.
-//! - `output/qwen.stderr` — the agent process's stderr. Usually empty;
-//!   populated only when qwen-code itself logs an internal error
-//!   (network failure to the proxy, model-server protocol error, …).
-//!   Cheap to include and the only place these errors are surfaced.
-//!
-//! Compression is `zstd`. Bundles persist forever, until explicitly
-//! removed via `DELETE /v1/agent/sessions/:id` — the lifecycle is
-//! client-controlled and never time-based.
-//!
-//! No "response" sidecar file: the parsed answer text already lives in
-//! `<results_dir>/<id>/finished.json` (the persisted `SessionBody`),
-//! and the full history surrounding it is in `events.jsonl`.
-//!
-//! Both `tar` and `zstd` are required on the host and are verified at
-//! pre-flight (`api::pre_flight`) — failure to find them is fatal at
-//! startup, so an in-progress run can never discover the gap mid-flight.
+//! The archive contains the final mutable workspace, explicit artifacts, the
+//! original prompt control record, and every output sidecar. Missing entries,
+//! unreadable files, symlinks, tar failures, or rename failures are hard
+//! session errors. There is no `--ignore-failed-read` path.
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::process::Stdio;
+use std::{fs::OpenOptions, os::unix::fs::OpenOptionsExt};
 
 use tokio::process::Command;
 
-use crate::error::{ServiceError, ServiceResult, io_msg};
-
-/// Cap on how long bundling is allowed to take. Far more than enough for
-/// a 128 GiB worth of artifacts at zstd default speed (~500 MB/s); if it
-/// blows past this, something is genuinely wrong on the host.
-const BUNDLE_TIMEOUT: Duration = Duration::from_secs(600);
+use crate::error::{io_msg, ServiceError, ServiceResult};
 
 #[derive(Debug, Clone)]
 pub struct BundleStats {
@@ -46,99 +22,141 @@ pub struct BundleStats {
     pub artifacts_file_count: u64,
 }
 
-/// Build the per-session bundle. Returns `Ok(stats)` on success. Returns
-/// `Err(ServiceError)` if `tar` itself fails or is too slow — the caller
-/// is expected to log a teardown diagnostic and surface an empty
-/// `bundle_archive_path` to the client rather than propagate this as a
-/// hard error (the agent's response is independently captured and worth
-/// returning).
-pub async fn create_bundle(
-    session_dir: &Path,
-    archive_path: &Path,
-) -> ServiceResult<BundleStats> {
+pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceResult<BundleStats> {
+    for required in ["staged", "artifacts", "control", "output"] {
+        let path = session_dir.join(required);
+        let metadata = std::fs::symlink_metadata(&path).map_err(|error| {
+            ServiceError::Internal(io_msg("bundle required entry", &path, &error))
+        })?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(ServiceError::Internal(format!(
+                "bundle required entry {} is not a real directory",
+                path.display()
+            )));
+        }
+    }
+    for required in [
+        "control/prompt.txt",
+        "output/ready.json",
+        "output/events.jsonl",
+        "output/qwen.stderr",
+        "output/qwen-exit-code",
+        "output/response.txt",
+    ] {
+        let path = session_dir.join(required);
+        let metadata = std::fs::symlink_metadata(&path).map_err(|error| {
+            ServiceError::Internal(io_msg("bundle required file", &path, &error))
+        })?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err(ServiceError::Internal(format!(
+                "bundle required file {} is not a regular non-symlink file",
+                path.display()
+            )));
+        }
+    }
+
+    let stats = walk_selected(session_dir)?;
     let parent = archive_path.parent().ok_or_else(|| {
         ServiceError::Internal(format!(
-            "bundle archive path has no parent: {}",
+            "bundle path has no parent: {}",
             archive_path.display()
         ))
     })?;
-    std::fs::create_dir_all(parent)
-        .map_err(|e| ServiceError::Internal(io_msg("create bundle parent dir", parent, &e)))?;
-
-    let session_dir_str = session_dir.to_str().ok_or_else(|| {
-        ServiceError::Internal(format!(
-            "session dir contains non-UTF-8 path: {}",
-            session_dir.display()
-        ))
+    std::fs::create_dir_all(parent).map_err(|error| {
+        ServiceError::Internal(io_msg("create bundle directory", parent, &error))
     })?;
-    let archive_str = archive_path.to_str().ok_or_else(|| {
-        ServiceError::Internal(format!(
-            "bundle archive path contains non-UTF-8 path: {}",
-            archive_path.display()
-        ))
-    })?;
-    if session_dir_str.contains(':') || archive_str.contains(':') {
+    if archive_path.exists() {
         return Err(ServiceError::Internal(format!(
-            "bundle path contains a ':' which would confuse tar: session={session_dir_str:?} archive={archive_str:?}"
+            "refusing to overwrite existing bundle {}",
+            archive_path.display()
         )));
     }
-
-    // Compute uncompressed stats *before* tarring, so we have them even if
-    // tar partially writes.
-    let stats = walk_stats(session_dir)?;
-
-    // tar --zstd --ignore-failed-read -cf <archive> -C <session_dir>
-    //     artifacts output/events.jsonl output/qwen-exit-code output/qwen.stderr
-    //
-    // `--ignore-failed-read` makes the run robust against the case where
-    // the agent crashed before writing one of the output files; we still
-    // bundle whatever exists.
-    let mut cmd = Command::new("tar");
-    cmd.args([
-        "--zstd",
-        "--ignore-failed-read",
-        "-cf",
-        archive_str,
-        "-C",
-        session_dir_str,
-        "artifacts",
-        "output/events.jsonl",
-        "output/qwen-exit-code",
-        "output/qwen.stderr",
-    ]);
-    cmd.stdin(std::process::Stdio::null());
-    cmd.stdout(std::process::Stdio::piped());
-    cmd.stderr(std::process::Stdio::piped());
-
-    let fut = async {
-        let out = cmd.output().await.map_err(|e| {
-            ServiceError::Internal(format!("bundle: failed to spawn tar: {e}"))
+    let archive_name = archive_path.file_name().ok_or_else(|| {
+        ServiceError::Internal(format!(
+            "bundle path has no file name: {}",
+            archive_path.display()
+        ))
+    })?;
+    let mut partial_name = archive_name.to_os_string();
+    partial_name.push(".partial");
+    let partial = archive_path.with_file_name(partial_name);
+    let partial_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&partial)
+        .map_err(|error| {
+            ServiceError::Internal(format!(
+                "create new partial bundle {} without overwrite: {error}",
+                partial.display()
+            ))
         })?;
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            let code = out
-                .status
-                .code()
-                .map(|c| c.to_string())
-                .unwrap_or_else(|| "<signal>".into());
-            return Err(ServiceError::Internal(format!(
-                "bundle: tar exited with code {code}; stderr: {stderr}"
-            )));
-        }
-        Ok(())
-    };
-    match tokio::time::timeout(BUNDLE_TIMEOUT, fut).await {
-        Ok(r) => r?,
-        Err(_) => {
-            return Err(ServiceError::Timeout(format!(
-                "bundle: tar exceeded {BUNDLE_TIMEOUT:?}"
-            )));
-        }
-    }
 
-    let compressed_bytes = std::fs::metadata(archive_path)
-        .map(|m| m.len())
-        .map_err(|e| ServiceError::Internal(io_msg("stat bundle archive", archive_path, &e)))?;
+    let session = utf8_path(session_dir, "session directory")?;
+    let mut command = Command::new("tar");
+    command
+        .args([
+            "--zstd",
+            "--sort=name",
+            "--mtime=@0",
+            "--owner=0",
+            "--group=0",
+            "--numeric-owner",
+            "--format=posix",
+            "--pax-option=delete=atime,delete=ctime",
+            "-cf",
+            "-",
+            "-C",
+            session,
+            "staged",
+            "artifacts",
+            "control",
+            "output",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(partial_file))
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    let output = command.output().await.map_err(|error| {
+        ServiceError::Internal(format!("bundle: cannot execute pinned tar: {error}"))
+    })?;
+    if !output.status.success() {
+        return Err(ServiceError::Internal(format!(
+            "bundle: tar exited {:?}; stderr: {}; stdout: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr).trim(),
+            "<archive bytes were directed to the exclusive partial file>"
+        )));
+    }
+    let compressed_bytes = std::fs::metadata(&partial)
+        .map_err(|error| ServiceError::Internal(io_msg("stat partial bundle", &partial, &error)))?
+        .len();
+    if compressed_bytes == 0 {
+        return Err(ServiceError::Internal(format!(
+            "bundle: pinned tar produced an empty archive at {}",
+            partial.display()
+        )));
+    }
+    std::fs::File::open(&partial)
+        .and_then(|file| file.sync_all())
+        .map_err(|error| ServiceError::Internal(io_msg("sync partial bundle", &partial, &error)))?;
+    std::fs::hard_link(&partial, archive_path).map_err(|error| {
+        ServiceError::Internal(format!(
+            "bundle: no-clobber publication {} -> {} failed: {error}",
+            partial.display(),
+            archive_path.display()
+        ))
+    })?;
+    std::fs::remove_file(&partial).map_err(|error| {
+        ServiceError::Internal(io_msg(
+            "remove published partial bundle link",
+            &partial,
+            &error,
+        ))
+    })?;
+    std::fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| ServiceError::Internal(io_msg("sync bundle directory", parent, &error)))?;
 
     Ok(BundleStats {
         archive_path: archive_path.to_path_buf(),
@@ -150,88 +168,74 @@ pub async fn create_bundle(
 }
 
 #[derive(Default)]
-struct PreTarStats {
+struct TreeStats {
     uncompressed_bytes: u64,
     file_count: u64,
     artifacts_file_count: u64,
 }
 
-fn walk_stats(session_dir: &Path) -> ServiceResult<PreTarStats> {
-    let mut s = PreTarStats::default();
-
-    let artifacts = session_dir.join("artifacts");
-    if artifacts.exists() {
-        let (af, ab) = walk_dir(&artifacts)?;
-        s.artifacts_file_count = af;
-        s.file_count += af;
-        s.uncompressed_bytes += ab;
-    }
-
-    for sidecar in [
-        session_dir.join("output/events.jsonl"),
-        session_dir.join("output/qwen-exit-code"),
-        session_dir.join("output/qwen.stderr"),
-    ] {
-        if let Ok(meta) = std::fs::metadata(&sidecar) {
-            if meta.is_file() {
-                s.file_count += 1;
-                s.uncompressed_bytes += meta.len();
-            }
+fn walk_selected(session_dir: &Path) -> ServiceResult<TreeStats> {
+    let mut stats = TreeStats::default();
+    for name in ["staged", "artifacts", "control", "output"] {
+        let before = stats.file_count;
+        walk(&session_dir.join(name), &mut stats)?;
+        if name == "artifacts" {
+            stats.artifacts_file_count = stats.file_count.saturating_sub(before);
         }
     }
-
-    Ok(s)
+    Ok(stats)
 }
 
-fn walk_dir(dir: &Path) -> ServiceResult<(u64, u64)> {
-    let mut files = 0u64;
-    let mut bytes = 0u64;
-    walk_recursive(dir, &mut files, &mut bytes)?;
-    Ok((files, bytes))
-}
-
-fn walk_recursive(dir: &Path, files: &mut u64, bytes: &mut u64) -> ServiceResult<()> {
-    let entries = std::fs::read_dir(dir)
-        .map_err(|e| ServiceError::Internal(io_msg("walk_recursive read_dir", dir, &e)))?;
-    for entry in entries {
+fn walk(path: &Path, stats: &mut TreeStats) -> ServiceResult<()> {
+    for entry in std::fs::read_dir(path)
+        .map_err(|error| ServiceError::Internal(io_msg("bundle read directory", path, &error)))?
+    {
         let entry = entry
-            .map_err(|e| ServiceError::Internal(io_msg("walk_recursive entry", dir, &e)))?;
-        let path = entry.path();
-        let meta = std::fs::symlink_metadata(&path)
-            .map_err(|e| ServiceError::Internal(io_msg("walk_recursive stat", &path, &e)))?;
-        if meta.file_type().is_symlink() {
-            // Don't follow; don't count. Defensive.
-            continue;
+            .map_err(|error| ServiceError::Internal(io_msg("bundle read entry", path, &error)))?;
+        let child = entry.path();
+        let metadata = std::fs::symlink_metadata(&child)
+            .map_err(|error| ServiceError::Internal(io_msg("bundle stat entry", &child, &error)))?;
+        if metadata.file_type().is_symlink() {
+            return Err(ServiceError::Internal(format!(
+                "bundle refuses symlink {}",
+                child.display()
+            )));
         }
-        if meta.is_dir() {
-            walk_recursive(&path, files, bytes)?;
-        } else if meta.is_file() {
-            *files += 1;
-            *bytes = bytes.saturating_add(meta.len());
+        if metadata.is_dir() {
+            walk(&child, stats)?;
+        } else if metadata.is_file() {
+            stats.file_count = stats.file_count.saturating_add(1);
+            stats.uncompressed_bytes = stats.uncompressed_bytes.saturating_add(metadata.len());
+        } else {
+            return Err(ServiceError::Internal(format!(
+                "bundle refuses non-file/non-directory {}",
+                child.display()
+            )));
         }
     }
     Ok(())
 }
 
-/// Verify the host has both `tar` and `zstd` on PATH. Called from
-/// `api::pre_flight`.
+fn utf8_path<'a>(path: &'a Path, role: &str) -> ServiceResult<&'a str> {
+    path.to_str().ok_or_else(|| {
+        ServiceError::Internal(format!("{role} path is not UTF-8: {}", path.display()))
+    })
+}
+
 pub async fn check_host_dependencies() -> ServiceResult<()> {
-    for (binary, role) in [
-        ("tar", "bundle creation"),
-        ("zstd", "bundle compression"),
-    ] {
-        let out = Command::new(binary)
+    for binary in ["tar", "zstd"] {
+        let output = Command::new(binary)
             .arg("--version")
+            .stdin(Stdio::null())
             .output()
             .await
-            .map_err(|e| {
-                ServiceError::Internal(format!(
-                    "host is missing `{binary}` (needed for {role}): {e}"
-                ))
+            .map_err(|error| {
+                ServiceError::Internal(format!("pinned service image lacks {binary}: {error}"))
             })?;
-        if !out.status.success() {
+        if !output.status.success() {
             return Err(ServiceError::Internal(format!(
-                "host's `{binary}` (needed for {role}) returned non-zero on `--version`"
+                "{binary} --version failed with {:?}",
+                output.status.code()
             )));
         }
     }

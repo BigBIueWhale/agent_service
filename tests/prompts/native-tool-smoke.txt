@@ -1,0 +1,9 @@
+Perform this acceptance task entirely inside /workspace.
+
+1. Use list_directory on /workspace.
+2. Use read_file to read /workspace/input.txt.
+3. Use write_file to create /workspace/verified.txt containing exactly two lines:
+   native-tool-round-trip-ok
+   source=agent-service-native-tool-smoke-input
+4. Use read_file to read /workspace/verified.txt and verify its exact contents.
+5. Do not modify input.txt. In the final answer, state whether every required tool step and exact-content check succeeded. Do not claim success if any tool call or verification failed.

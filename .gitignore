@@ -1,4 +1,6 @@
 /target
+/.runtime
+/artifacts
 /Cargo.lock.bak
 *.swp
 *.tmp

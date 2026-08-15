@@ -1,0 +1,7 @@
+Perform this acceptance task entirely inside /workspace.
+
+First use the native agent tool to launch exactly one Explore foreground subagent. Ask it to inspect /workspace, read input.txt, and return the exact file name and contents without editing anything. Wait for its result. Then independently use the main thread's read_file tool to verify input.txt. Finally use write_file to create /workspace/subagent-verified.txt containing exactly:
+
+foreground-subagent-round-trip-ok
+
+Read that file back. In the final answer, report whether the awaited child result, the main-thread verification, and the exact output-file check all succeeded. Do not claim success if any step failed.

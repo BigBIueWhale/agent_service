@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::{MAX_PROMPT_BYTES, MAX_STAGED_BYTES, MAX_STAGED_FILES};
-use crate::error::{ServiceError, ServiceResult, io_msg};
+use crate::error::{io_msg, ServiceError, ServiceResult};
 
 /// Validated, normalised representation of a `RunRequest` body.
 #[derive(Debug)]
@@ -17,9 +17,15 @@ pub struct ValidatedRequest {
     pub folder: PathBuf,
 }
 
-pub fn validate(prompt: &str, folder: &str) -> ServiceResult<ValidatedRequest> {
+pub fn validate(
+    prompt: &str,
+    folder: &str,
+    host_input_root: &Path,
+    state_dir: &Path,
+    results_dir: &Path,
+) -> ServiceResult<ValidatedRequest> {
     let prompt = validate_prompt(prompt)?;
-    let folder = validate_folder(folder)?;
+    let folder = validate_folder(folder, host_input_root, state_dir, results_dir)?;
     Ok(ValidatedRequest { prompt, folder })
 }
 
@@ -44,7 +50,12 @@ fn validate_prompt(prompt: &str) -> ServiceResult<String> {
     Ok(prompt.to_string())
 }
 
-fn validate_folder(folder_str: &str) -> ServiceResult<PathBuf> {
+fn validate_folder(
+    folder_str: &str,
+    host_input_root: &Path,
+    state_dir: &Path,
+    results_dir: &Path,
+) -> ServiceResult<PathBuf> {
     if folder_str.is_empty() {
         return Err(ServiceError::InvalidRequest(
             "field `folder` is empty".into(),
@@ -65,11 +76,7 @@ fn validate_folder(folder_str: &str) -> ServiceResult<PathBuf> {
     // Canonicalise to resolve `..`, symlinks, and dedup separators. If
     // canonicalisation fails the path is invalid for our purposes.
     let canonical = std::fs::canonicalize(raw).map_err(|e| {
-        ServiceError::InvalidRequest(io_msg(
-            "field `folder` cannot be resolved",
-            raw,
-            &e,
-        ))
+        ServiceError::InvalidRequest(io_msg("field `folder` cannot be resolved", raw, &e))
     })?;
 
     let meta = std::fs::symlink_metadata(&canonical).map_err(|e| {
@@ -84,6 +91,29 @@ fn validate_folder(folder_str: &str) -> ServiceResult<PathBuf> {
             "field `folder` ({}) is not a directory",
             canonical.display()
         )));
+    }
+
+    let input_root = std::fs::canonicalize(host_input_root).map_err(|error| {
+        ServiceError::Internal(io_msg(
+            "canonicalize pinned host_input_root",
+            host_input_root,
+            &error,
+        ))
+    })?;
+    if !canonical.starts_with(&input_root) || canonical == input_root {
+        return Err(ServiceError::InvalidRequest(format!(
+            "field `folder` ({}) must be a strict descendant of the sole mounted input root {}",
+            canonical.display(),
+            input_root.display()
+        )));
+    }
+    for forbidden in [state_dir, results_dir] {
+        if canonical.starts_with(forbidden) || forbidden.starts_with(&canonical) {
+            return Err(ServiceError::InvalidRequest(format!(
+                "field `folder` ({}) overlaps service-owned runtime path {}; refusing recursive/self-modifying staging",
+                canonical.display(), forbidden.display()
+            )));
+        }
     }
 
     // Refuse system-level roots — copying them would be a self-DoS even with
@@ -166,4 +196,23 @@ fn walk(dir: &Path, bytes: &mut u64, files: &mut u64) -> ServiceResult<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_prompt;
+    use crate::config::MAX_PROMPT_BYTES;
+
+    #[test]
+    fn prompt_validation_is_exact_and_fail_closed() {
+        assert_eq!(
+            validate_prompt("  keep surrounding space  ")
+                .expect("valid prompt")
+                .as_str(),
+            "  keep surrounding space  "
+        );
+        assert!(validate_prompt(" \n\t ").is_err());
+        assert!(validate_prompt("invalid\0prompt").is_err());
+        assert!(validate_prompt(&"x".repeat(MAX_PROMPT_BYTES + 1)).is_err());
+    }
 }

@@ -1,235 +1,381 @@
-//! Service configuration. All fields are required (no silent defaults that
-//! could mask a misconfiguration on a public-facing host); the `Config::load`
-//! function falls back to opinionated defaults explicitly and logs each one.
+//! The checked-in stack lock is the only configuration source.
+//!
+//! This service intentionally has one mode of operation.  There are no
+//! environment-variable overrides, defaults, compatibility aliases, or
+//! optional profiles.  `config/stack.lock.json` is compiled into the binary,
+//! parsed with `deny_unknown_fields`, and validated before Docker is touched.
 
-use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use serde::Deserialize;
+
 use crate::error::{ServiceError, ServiceResult};
 
-/// Compile-time pinned versions. Centralised so the README, the Dockerfile,
-/// and the runtime all agree.
-pub const QWEN_CODE_VERSION: &str = "0.15.6";
-pub const AGENT_IMAGE_TAG_DEFAULT: &str = "qwen-agent-template:0.1.0";
-/// Default RAM ceiling for the agent container. Passed verbatim to
-/// `docker run --memory=…`; the format is whatever the docker daemon
-/// accepts (`32g`, `32G`, `32768m`, `32GB`, …).
-pub const AGENT_MEMORY_LIMIT_DEFAULT: &str = "32g";
-/// Default writable-storage ceiling for the agent container. Passed to
-/// `docker run --storage-opt size=…`. Requires a Docker storage driver
-/// that supports per-container size quotas (overlay2 on xfs+pquota, or
-/// btrfs / zfs / devicemapper). See pre-flight detection in `api::pre_flight`.
-pub const AGENT_STORAGE_QUOTA_DEFAULT: &str = "128g";
+pub const STACK_LOCK_JSON: &str = include_str!("../config/stack.lock.json");
+pub const QWEN_CODE_VERSION: &str = "0.21.12";
 
-/// Default `--max-session-turns` for the headless `qwen` invocation.
-///
-/// 200 is ~3× the Qwen3-Coder SWE-bench mean (64.3 turns/task) — generous
-/// for our actual use case (corpus / codebase deep-dives where a single
-/// thorough run can legitimately take well over 100 turns), while still
-/// bounding genuinely runaway sessions.
-///
-/// Five other safety layers already catch the common pathological modes
-/// before this cap fires: the five `LoopDetectionService` heuristics
-/// (tool-call repeat, content chunk repeat, repetitive thoughts,
-/// excessive read-likes, action stagnation), `sessionTokenLimit`, and
-/// the orchestrator's wall-clock timeout. The turn cap is the
-/// last-resort layer; it doesn't need to be tight.
-pub const AGENT_MAX_TURNS_DEFAULT: u32 = 200;
-/// Sanity-only ceiling for `AGENT_SERVICE_MAX_TURNS`. There is **no**
-/// internal cap inside Qwen Code 0.15.6 on `model.maxSessionTurns` — it's
-/// read raw at `packages/core/src/core/client.ts:709-710` with no clamp
-/// (the `MAX_TURNS = 100` constant nearby at line 96 is a *recursion-depth*
-/// bound on `sendMessageStream`, an unrelated mechanism). This 1024
-/// ceiling exists only to refuse obvious typos like `99999999` while still
-/// admitting any realistic value.
-pub const AGENT_MAX_TURNS_HARD_CAP: u32 = 1024;
-/// Default wall-clock cap for a single agent run, in seconds.
-///
-/// 2 hours. The use case (full corpus / codebase deep-dives at up to ~200
-/// turns) can legitimately run longer than the SWE-bench-derived 90-minute
-/// figure I started with — at this stack's measured throughput (71 tok/s
-/// decode at low context, 50–60 at full 130K, parent README §11 B9 / B16)
-/// 200 turns × ~30 s/turn averages out near 100 minutes, plus a couple of
-/// deep-think outliers easily push past 90 min for thorough work. Loop
-/// detectors and `sessionTokenLimit` catch genuinely stuck sessions much
-/// earlier; this wall-clock is the absolute floor under "kill the
-/// container regardless".
-pub const AGENT_RUN_TIMEOUT_SECS_DEFAULT: u64 = 7200;
-
-/// 1 MiB caps the prompt. Generous enough to embed a literal corpus chunk
-/// directly in the prompt for "focus on this passage" workflows; well under
-/// the model's 152K-token window so the agent has plenty of room to think
-/// and to receive tool results.
+/// The prompt is additionally bounded by the HTTP request-body limit from
+/// the lock file.  Keeping this lower semantic limit explicit makes error
+/// messages useful when a syntactically valid JSON body contains an
+/// unexpectedly enormous prompt.
 pub const MAX_PROMPT_BYTES: usize = 1024 * 1024;
-/// 4 GiB caps the staged folder size. The folder is *copied* before the
-/// container starts; an unbounded copy would be a trivial DoS lever.
 pub const MAX_STAGED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
-/// 200_000 caps the staged file count — protects against tarbomb-shaped folders.
 pub const MAX_STAGED_FILES: u64 = 200_000;
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Loopback-only listen address (we refuse anything else; see `parse_listen_addr`).
+    pub lock: StackLock,
     pub listen_addr: SocketAddr,
-    /// Host where vLLM serves the OpenAI-compatible API.
-    pub vllm_host: String,
-    /// Port where vLLM serves the OpenAI-compatible API.
-    pub vllm_port: u16,
-    /// Model name vLLM advertises (the `--served-model-name`).
-    pub vllm_model_name: String,
-    /// Tag of the pre-built agent template image (`docker build -t <this>`).
-    /// The same image is used for both the agent container and the socat
-    /// proxy — `socat` is part of the image's core-utilities apt block, so
-    /// there's no need for a second image to maintain.
-    pub agent_image: String,
-    /// `docker run --memory=…` value. Default 32g.
-    pub agent_memory_limit: String,
-    /// `docker run --memory-swap=…` value. Defaults to the same as
-    /// `agent_memory_limit`, which disables swap (the agent gets exactly
-    /// `agent_memory_limit` of RAM and zero swap).
-    pub agent_memory_swap_limit: String,
-    /// `docker run --storage-opt size=…` value. `None` disables the
-    /// flag entirely; default `Some("128g")`. Pre-flight verifies that
-    /// the local Docker storage driver actually honours this, so the
-    /// service refuses to start if a quota was requested but cannot be
-    /// enforced (rather than silently running without one).
-    pub agent_storage_quota: Option<String>,
-    /// Filesystem root for per-session staging directories.
     pub state_dir: PathBuf,
-    /// Filesystem root for persistent per-session result records. Defaults
-    /// to `<state_dir>/results`. Each completed session produces a
-    /// `<results_dir>/<session_id>/finished.json` (the persisted
-    /// `runtime::SessionBody`) plus a `bundle.tar.zst` (artifacts +
-    /// events.jsonl + qwen-exit-code). Records persist until removed via
-    /// `DELETE /v1/agent/sessions/:id` — there is no time- or count-based
-    /// pruning; the lifecycle is explicit.
     pub results_dir: PathBuf,
-    /// Wall-clock cap on a single agent run, in seconds.
-    pub run_timeout_secs: u64,
-    /// Max session turns passed to `qwen --max-session-turns`.
-    pub max_session_turns: u32,
+    pub host_input_root: PathBuf,
+    pub agent_image: String,
+    pub agent_memory_limit: String,
+    pub agent_memory_swap_limit: String,
+    pub vllm_model_name: String,
+    pub vllm_endpoint: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StackLock {
+    pub schema_version: u32,
+    pub profile: String,
+    pub build: BuildLock,
+    pub service: ServiceLock,
+    pub agent: AgentLock,
+    pub backend: BackendLock,
+    pub host: HostLock,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildLock {
+    pub ubuntu_amd64_image: String,
+    pub ubuntu_snapshot: String,
+    pub node_amd64_image: String,
+    pub rust_amd64_image: String,
+    pub docker_cli_archive: String,
+    pub docker_cli_archive_sha256: String,
+    pub agent_apt_lock_sha256: String,
+    pub service_apt_lock_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServiceLock {
+    pub listen: String,
+    pub container_name: String,
+    pub image_tag: String,
+    pub state_dir: String,
+    pub results_dir: String,
+    pub host_input_root: String,
+    pub request_body_limit_bytes: usize,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentLock {
+    pub image_tag: String,
+    pub image_id: String,
+    pub memory: String,
+    pub memory_swap: String,
+    pub pids_limit: u32,
+    pub tmpfs_tmp: String,
+    pub tmpfs_qwen_home: String,
+    pub tmpfs_qwen_runtime: String,
+    pub settings_sha256: String,
+    pub instructions_sha256: String,
+    pub wrapper_sha256: String,
+    pub model_base_url: String,
+    pub model_proxy_port: u16,
+    pub strict_tools: Vec<String>,
+    pub qwen_code: QwenCodeLock,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QwenCodeLock {
+    pub version: String,
+    pub tag: String,
+    pub commit: String,
+    pub source_archive: String,
+    pub source_archive_sha256: String,
+    pub patch_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BackendLock {
+    pub project_dir: String,
+    pub container_name: String,
+    pub project_label: String,
+    pub profile_label: String,
+    pub image_tag: String,
+    pub image_id: String,
+    pub endpoint: String,
+    pub version: String,
+    pub vllm_commit: String,
+    pub served_model: String,
+    pub max_model_len: u64,
+    pub model_repository: String,
+    pub model_revision: String,
+    pub model_manifest: String,
+    pub model_manifest_sha256: String,
+    pub kv_cache_dtype: String,
+    pub command: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostLock {
+    pub docker_version: String,
+    pub docker_buildx_version: String,
+    pub buildkit_version: String,
+    pub git_version: String,
+    pub jq_version: String,
+    pub coreutils_version: String,
+    pub nvidia_container_cli_version: String,
+    pub gpu_name: String,
+    pub gpu_memory_mib: u64,
+    pub driver_version: String,
+    pub docker_socket: String,
+    pub docker_socket_gid: u32,
 }
 
 impl Config {
     pub fn load() -> ServiceResult<Self> {
-        let listen_addr = parse_listen_addr(&env_or("AGENT_SERVICE_LISTEN_ADDR", "127.0.0.1:8090"))?;
-        let vllm_host = env_or("AGENT_SERVICE_VLLM_HOST", "127.0.0.1");
-        let vllm_port = env_or("AGENT_SERVICE_VLLM_PORT", "8001")
-            .parse::<u16>()
-            .map_err(|e| ServiceError::Internal(format!("AGENT_SERVICE_VLLM_PORT not a u16: {e}")))?;
-        let vllm_model_name = env_or("AGENT_SERVICE_MODEL_NAME", "Qwen3.6-27B-AWQ");
-        let agent_image = env_or("AGENT_SERVICE_IMAGE", AGENT_IMAGE_TAG_DEFAULT);
+        reject_legacy_overrides()?;
 
-        let agent_memory_limit = env_or("AGENT_SERVICE_MEMORY", AGENT_MEMORY_LIMIT_DEFAULT);
-        if agent_memory_limit.is_empty() {
+        let disk_lock_path = "/home/user/Desktop/agent_service/config/stack.lock.json";
+        let disk_lock = std::fs::read_to_string(disk_lock_path).map_err(|error| {
+            ServiceError::Internal(format!(
+                "cannot read the mounted stack lock at {disk_lock_path}: {error}"
+            ))
+        })?;
+        if disk_lock.as_bytes() != STACK_LOCK_JSON.as_bytes() {
             return Err(ServiceError::Internal(
-                "AGENT_SERVICE_MEMORY is empty — refuse to run an unbounded-memory agent container".into(),
+                "the mounted config/stack.lock.json differs byte-for-byte from the lock compiled into the service image; rebuild before starting".into(),
             ));
         }
-        let agent_memory_swap_limit =
-            env_or("AGENT_SERVICE_MEMORY_SWAP", &agent_memory_limit);
 
-        // AGENT_SERVICE_STORAGE_QUOTA: any non-empty value → use it as the
-        // quota; an empty string explicitly disables the flag (operator
-        // opt-out for storage drivers that don't support quotas).
-        let agent_storage_quota = match env::var("AGENT_SERVICE_STORAGE_QUOTA") {
-            Ok(v) if v.is_empty() => None,
-            Ok(v) => Some(v),
-            Err(_) => Some(AGENT_STORAGE_QUOTA_DEFAULT.to_string()),
-        };
+        let lock: StackLock = serde_json::from_str(STACK_LOCK_JSON).map_err(|e| {
+            ServiceError::Internal(format!(
+                "compiled config/stack.lock.json is malformed or does not match the strict schema: {e}"
+            ))
+        })?;
+        validate_lock(&lock)?;
 
-        let state_dir = match env::var("AGENT_SERVICE_STATE_DIR") {
-            Ok(v) if !v.is_empty() => PathBuf::from(v),
-            _ => default_state_dir()?,
-        };
-
-        let results_dir = match env::var("AGENT_SERVICE_RESULTS_DIR") {
-            Ok(v) if !v.is_empty() => PathBuf::from(v),
-            _ => state_dir.join("results"),
-        };
-
-        let run_timeout_secs = env_or(
-            "AGENT_SERVICE_TIMEOUT_SECS",
-            &AGENT_RUN_TIMEOUT_SECS_DEFAULT.to_string(),
-        )
-        .parse::<u64>()
-        .map_err(|e| ServiceError::Internal(format!("AGENT_SERVICE_TIMEOUT_SECS not a u64: {e}")))?;
-        if !(30..=24 * 3600).contains(&run_timeout_secs) {
+        let listen_addr: SocketAddr = lock.service.listen.parse().map_err(|e| {
+            ServiceError::Internal(format!(
+                "stack lock service.listen {:?} is not a socket address: {e}",
+                lock.service.listen
+            ))
+        })?;
+        if listen_addr != "127.0.0.1:8090".parse().expect("literal is valid") {
             return Err(ServiceError::Internal(format!(
-                "AGENT_SERVICE_TIMEOUT_SECS must be between 30 and 86400, got {run_timeout_secs}"
-            )));
-        }
-
-        let max_session_turns = env_or(
-            "AGENT_SERVICE_MAX_TURNS",
-            &AGENT_MAX_TURNS_DEFAULT.to_string(),
-        )
-        .parse::<u32>()
-        .map_err(|e| ServiceError::Internal(format!("AGENT_SERVICE_MAX_TURNS not a u32: {e}")))?;
-        if !(1..=AGENT_MAX_TURNS_HARD_CAP).contains(&max_session_turns) {
-            return Err(ServiceError::Internal(format!(
-                "AGENT_SERVICE_MAX_TURNS must be in 1..={AGENT_MAX_TURNS_HARD_CAP} \
-                 (sanity-only upper bound; Qwen Code itself does not clamp the value, but \
-                 anything above ~hundreds is almost certainly a typo); got {max_session_turns}"
+                "the sole supported service.listen is 127.0.0.1:8090; lock contains {listen_addr}"
             )));
         }
 
         Ok(Self {
             listen_addr,
-            vllm_host,
-            vllm_port,
-            vllm_model_name,
-            agent_image,
-            agent_memory_limit,
-            agent_memory_swap_limit,
-            agent_storage_quota,
-            state_dir,
-            results_dir,
-            run_timeout_secs,
-            max_session_turns,
+            state_dir: PathBuf::from(&lock.service.state_dir),
+            results_dir: PathBuf::from(&lock.service.results_dir),
+            host_input_root: PathBuf::from(&lock.service.host_input_root),
+            agent_image: lock.agent.image_tag.clone(),
+            agent_memory_limit: lock.agent.memory.clone(),
+            agent_memory_swap_limit: lock.agent.memory_swap.clone(),
+            vllm_model_name: lock.backend.served_model.clone(),
+            vllm_endpoint: lock.backend.endpoint.clone(),
+            lock,
         })
     }
 }
 
-fn env_or(key: &str, default: &str) -> String {
-    match env::var(key) {
-        Ok(v) if !v.is_empty() => v,
-        _ => default.to_string(),
-    }
-}
-
-fn parse_listen_addr(s: &str) -> ServiceResult<SocketAddr> {
-    let addr: SocketAddr = s.parse().map_err(|e| {
-        ServiceError::Internal(format!(
-            "AGENT_SERVICE_LISTEN_ADDR ({s:?}) is not a host:port pair: {e}"
-        ))
-    })?;
-    if !addr.ip().is_loopback() {
+fn reject_legacy_overrides() -> ServiceResult<()> {
+    let mut present = std::env::vars_os()
+        .filter_map(|(key, _)| key.into_string().ok())
+        .filter(|key| key.starts_with("AGENT_SERVICE_") || key.starts_with("OPENAI_"))
+        .collect::<Vec<_>>();
+    present.sort();
+    if !present.is_empty() {
         return Err(ServiceError::Internal(format!(
-            "AGENT_SERVICE_LISTEN_ADDR must be loopback (127.0.0.1 or ::1) — refusing to bind to {} because the host is exposed to the public internet",
-            addr.ip()
+            "unsupported configuration environment variable(s) present: {}. This project has exactly one mode; edit and rebuild the pinned stack lock instead of overriding runtime semantics.",
+            present.join(", ")
         )));
     }
-    Ok(addr)
+    Ok(())
 }
 
-fn default_state_dir() -> ServiceResult<PathBuf> {
-    let xdg = match env::var("XDG_STATE_HOME") {
-        Ok(v) if !v.is_empty() => PathBuf::from(v),
-        _ => {
-            let home = env::var("HOME").map_err(|e| {
-                ServiceError::Internal(format!(
-                    "neither XDG_STATE_HOME nor HOME is set in the environment: {e}"
-                ))
-            })?;
-            if home.is_empty() {
-                return Err(ServiceError::Internal(
-                    "HOME is set but empty".into(),
-                ));
-            }
-            PathBuf::from(home).join(".local").join("state")
+fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
+    let fail = |message: String| Err(ServiceError::Internal(format!("stack lock: {message}")));
+
+    if lock.schema_version != 1 {
+        return fail(format!(
+            "schema_version must be 1, got {}",
+            lock.schema_version
+        ));
+    }
+    if lock.profile != "qwen38-agent-service-v1" {
+        return fail(format!("unexpected profile {:?}", lock.profile));
+    }
+    if lock.service.container_name != "qwen38-agent-service"
+        || lock.service.image_tag != "qwen38-agent-service:1.0.0"
+    {
+        return fail(
+            "service container/image identity differs from the sole supported deployment".into(),
+        );
+    }
+    if lock.agent.qwen_code.version != QWEN_CODE_VERSION
+        || lock.agent.qwen_code.tag != "v0.21.12"
+        || lock.agent.qwen_code.commit.len() != 40
+    {
+        return fail(
+            "Qwen Code version/tag/commit pin is inconsistent with this source tree".into(),
+        );
+    }
+    let expected_archive = format!(
+        "https://codeload.github.com/QwenLM/qwen-code/tar.gz/{}",
+        lock.agent.qwen_code.commit
+    );
+    if lock.agent.qwen_code.source_archive != expected_archive {
+        return fail("Qwen Code source URL is not derived from its exact commit".into());
+    }
+    for (name, digest) in [
+        ("ubuntu_amd64_image", lock.build.ubuntu_amd64_image.as_str()),
+        ("node_amd64_image", lock.build.node_amd64_image.as_str()),
+        ("rust_amd64_image", lock.build.rust_amd64_image.as_str()),
+    ] {
+        if !digest.contains("@sha256:") || digest.rsplit(':').next().map(str::len) != Some(64) {
+            return fail(format!(
+                "build.{name} is not an immutable sha256 image reference"
+            ));
         }
-    };
-    Ok(xdg.join("agent_service"))
+    }
+    if lock.build.ubuntu_snapshot.len() != 16 || !lock.build.ubuntu_snapshot.ends_with('Z') {
+        return fail("build.ubuntu_snapshot must be an explicit YYYYMMDDThhmmssZ snapshot".into());
+    }
+    if lock.build.docker_cli_archive
+        != "https://download.docker.com/linux/static/stable/x86_64/docker-29.7.2.tgz"
+        || lock.build.docker_cli_archive_sha256.len() != 64
+        || lock.build.agent_apt_lock_sha256.len() != 64
+        || lock.build.service_apt_lock_sha256.len() != 64
+    {
+        return fail("Docker CLI archive or apt lock hashes are not exact".into());
+    }
+    if lock.service.request_body_limit_bytes != 2 * 1024 * 1024 {
+        return fail("service.request_body_limit_bytes must be exactly 2097152".into());
+    }
+    for (name, path) in [
+        ("state_dir", lock.service.state_dir.as_str()),
+        ("results_dir", lock.service.results_dir.as_str()),
+        ("host_input_root", lock.service.host_input_root.as_str()),
+        ("backend.project_dir", lock.backend.project_dir.as_str()),
+        ("host.docker_socket", lock.host.docker_socket.as_str()),
+    ] {
+        if !std::path::Path::new(path).is_absolute() {
+            return fail(format!("{name} must be an absolute path, got {path:?}"));
+        }
+    }
+    if !PathBuf::from(&lock.service.state_dir).starts_with(&lock.backend.project_dir)
+        && !PathBuf::from(&lock.service.state_dir).starts_with("/home/user/Desktop/agent_service")
+    {
+        return fail("state_dir is outside the pinned project runtime directory".into());
+    }
+    if lock.agent.model_base_url != "http://127.0.0.1:18000/v1"
+        || lock.agent.model_proxy_port != 18000
+    {
+        return fail("agent model proxy must be exactly http://127.0.0.1:18000/v1".into());
+    }
+    if !lock.agent.image_id.starts_with("sha256:") || lock.agent.image_id.len() != 71 {
+        return fail(
+            "agent.image_id is not an exact built Docker image ID; run the pinned build workflow"
+                .into(),
+        );
+    }
+    if [
+        lock.agent.settings_sha256.as_str(),
+        lock.agent.instructions_sha256.as_str(),
+        lock.agent.wrapper_sha256.as_str(),
+    ]
+    .iter()
+    .any(|digest| digest.len() != 64)
+    {
+        return fail("agent settings/instructions/wrapper hashes are not SHA256 values".into());
+    }
+    let expected_tools = [
+        "agent",
+        "edit",
+        "glob",
+        "grep_search",
+        "list_directory",
+        "notebook_edit",
+        "read_file",
+        "run_shell_command",
+        "todo_write",
+        "write_file",
+    ];
+    if lock
+        .agent
+        .strict_tools
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        != expected_tools
+    {
+        return fail("agent.strict_tools differs from the reviewed strict native tool set".into());
+    }
+    if lock.backend.endpoint != "http://127.0.0.1:8000"
+        || lock.backend.served_model != "qwen3.8-27b-nvfp4-k8v4"
+        || lock.backend.max_model_len != 262_144
+        || lock.backend.kv_cache_dtype != "turboquant_k8v4"
+    {
+        return fail(
+            "backend endpoint/model/context/KV contract differs from the sole supported deployment"
+                .into(),
+        );
+    }
+    if lock.backend.model_repository != "unsloth/Qwen3.8-27B-NVFP4"
+        || lock.backend.model_manifest != "model-snapshot-16b6615a.sha256"
+    {
+        return fail(
+            "backend model repository/manifest identity differs from the refreshed snapshot".into(),
+        );
+    }
+    if !lock.backend.image_id.starts_with("sha256:") || lock.backend.image_id.len() != 71 {
+        return fail("backend.image_id is not an exact Docker image ID".into());
+    }
+    if lock.backend.model_revision.len() != 40
+        || lock.backend.vllm_commit.len() != 40
+        || lock.backend.model_manifest_sha256.len() != 64
+        || lock.agent.qwen_code.source_archive_sha256.len() != 64
+        || lock.agent.qwen_code.patch_sha256.len() != 64
+    {
+        return fail(
+            "one or more source/model/patch commit or SHA256 pins have the wrong length".into(),
+        );
+    }
+    if lock.backend.command.is_empty() {
+        return fail("backend.command may not be empty".into());
+    }
+    if lock.host.nvidia_container_cli_version != "1.19.1"
+        || lock.host.docker_buildx_version != "v0.36.1"
+        || lock.host.buildkit_version != "v0.32.2"
+        || lock.host.git_version != "2.43.0"
+        || lock.host.jq_version != "jq-1.7"
+        || lock.host.coreutils_version != "9.4"
+        || lock.host.gpu_name != "NVIDIA GeForce RTX 5090"
+        || lock.host.gpu_memory_mib != 32_607
+        || lock.host.driver_version != "595.71.05"
+        || lock.host.docker_socket != "/var/run/docker.sock"
+        || lock.host.docker_socket_gid != 984
+    {
+        return fail(
+            "host GPU/driver/container-runtime/socket contract differs from the reviewed machine"
+                .into(),
+        );
+    }
+    Ok(())
 }

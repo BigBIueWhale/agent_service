@@ -23,10 +23,9 @@
 //! - **Reads are pure**: `get`, `list`. They never mutate state. Multiple
 //!   concurrent reads with retries are safe and yield identical results.
 //!
-//! - **Writes are idempotent**: `cancel` on a terminal session returns the
-//!   current body without erroring; `delete` on a missing session returns
-//!   `NotFound` (a definite "gone" rather than a silent success, because
-//!   the operator may want to know).
+//! - **Lifecycle writes are unambiguous**: `cancel` on a terminal session
+//!   returns the current body; `delete` on a missing session returns
+//!   `NotFound` (a definite "gone" rather than a silent success).
 //!
 //! - **Lifecycle is explicit**: `running` → terminal (`completed` |
 //!   `cancelled`) → DELETE'd. There is no implicit transition; in particular,
@@ -44,12 +43,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, Notify, Semaphore, oneshot};
+use tokio::sync::{oneshot, Mutex, Notify, Semaphore};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::error::{ServiceError, ServiceResult, io_msg};
+use crate::error::{io_msg, ServiceError, ServiceResult};
 use crate::session;
 use crate::validation::ValidatedRequest;
 
@@ -74,25 +73,24 @@ pub struct SessionBody {
 
     // Carried through every state transition.
     pub started_at_unix: u64,
-    pub ttyd_url: String,
+    pub model: String,
+    pub context_window: u64,
     pub prompt_preview: String,
 
     /// Number of distinct LLM invocations the agent has completed so far.
     /// Live for running sessions, frozen at run-end for terminal ones.
-    /// Counted as contiguous runs of `"type":"assistant"` lines in
-    /// `events.jsonl` (one assistant turn produces multiple lines — one
-    /// per content block: thinking, text, tool_use — so consecutive
-    /// assistant lines belong to a single invocation).
+    /// Counted from completed main-thread `"type":"assistant"` messages in
+    /// `events.jsonl`; Qwen Code emits one complete assistant message per
+    /// model invocation when partial-message output is disabled.
     pub num_turns: u64,
     pub last_event_at_unix: u64,
 
     // Populated on transition to terminal. Zeroed/empty while running.
     pub finished_at_unix: u64,
     pub duration_wall_ms: u64,
-    /// Exit code reported by `docker wait` for the outer agent container.
-    /// This is the wrapper script's exit (typically 0 even when qwen
-    /// itself failed, because the wrapper exits cleanly through ttyd's
-    /// SIGTERM). Use `agent_exit_code` for qwen's actual exit.
+    /// Exit code reported by `docker wait` for the agent container. The
+    /// wrapper propagates Qwen Code's exit status after durably capturing
+    /// output, so this should equal `agent_exit_code` on an ordinary run.
     pub container_exit_code: i32,
     /// Exit code reported by qwen-code itself, read from the
     /// `output/qwen-exit-code` file the wrapper writes immediately before
@@ -105,7 +103,7 @@ pub struct SessionBody {
     pub agent_exit_code: i32,
     /// True iff the qwen-code process itself terminated abnormally
     /// (structured error envelope, mid-run crash, or setup failure
-    /// before ttyd-up). **Does not mean "the response is useful"**: a
+    /// before model/tokenizer readiness). **Does not mean "the response is useful"**: a
     /// vLLM 400 that becomes the agent's final answer leaves this
     /// false. Inspect `response` for wire-error envelopes if needed.
     pub is_process_error: bool,
@@ -119,7 +117,7 @@ pub struct SessionBody {
     pub teardown_diagnostics: Vec<String>,
 }
 
-/// The "ttyd is reachable" snapshot the run task hands back to `submit`
+/// The exact model/tokenizer-preflight snapshot the run task hands back to `submit`
 /// over the readiness oneshot. `submit` then uses it to fill in the
 /// running-state fields of the public `SessionBody` it returns to the
 /// HTTP caller, and to update the in-memory entry that `cancel` / `list` /
@@ -128,8 +126,9 @@ pub struct SessionBody {
 pub struct RunningSnapshot {
     pub session_id: String,
     pub started_at_unix: u64,
-    pub ttyd_url: String,
     pub prompt_preview: String,
+    pub model: String,
+    pub context_window: u64,
 }
 
 /// In-memory entry for a running session. Removed from the map by the run
@@ -138,7 +137,7 @@ pub struct RunningSnapshot {
 /// the on-disk record.
 struct RunningEntry {
     /// Mutable across the entry's lifetime: starts as a placeholder with
-    /// empty `ttyd_url` and `started_at_unix=0`, replaced once by `submit`
+    /// `started_at_unix=0`, replaced once by `submit`
     /// after the readiness oneshot fires. Held very briefly.
     snapshot: Mutex<RunningSnapshot>,
     /// Child of `Manager.shutdown_token`. `cancel(id)` cancels this child;
@@ -164,6 +163,7 @@ pub struct Manager {
 
 struct Inner {
     running: HashMap<String, Arc<RunningEntry>>,
+    unpersisted_terminal: HashMap<String, SessionBody>,
 }
 
 impl Manager {
@@ -172,6 +172,7 @@ impl Manager {
             cfg,
             inner: Arc::new(Mutex::new(Inner {
                 running: HashMap::new(),
+                unpersisted_terminal: HashMap::new(),
             })),
             singleton: Arc::new(Semaphore::new(1)),
             shutdown_token: CancellationToken::new(),
@@ -180,17 +181,18 @@ impl Manager {
 
     /// Submit a new session.
     ///
-    /// Blocks until the agent's ttyd listener is reachable through the
-    /// per-session sidecar (typically a few seconds; bounded internally by
-    /// `session::run_one`'s per-step timeouts). Returns the `running` view
-    /// once `ttyd_url` is populated and the session is observable via
+    /// Blocks until the isolated agent has verified the exact backend model
+    /// and exercised its real tokenizer endpoint (typically a few seconds;
+    /// bounded internally by `session::run_one`'s setup timeouts). Qwen Code
+    /// then tokenizes every fully rendered request before inference. Returns
+    /// the `running` view once readiness is observable via
     /// `get` / `list` / `cancel`.
     ///
     /// Errors:
     /// - `Internal("server is shutting down …")` if shutdown has begun.
     /// - `Busy{running_session_id}` if the singleton is already held.
-    /// - Any setup error from `session::run_one` that fires before ttyd is
-    ///   reachable (docker run failure, network setup failure, …).
+    /// - Any setup error from `session::run_one` before model/tokenizer
+    ///   readiness (Docker run failure, network setup failure, …).
     pub async fn submit(&self, req: ValidatedRequest) -> ServiceResult<SessionBody> {
         if self.shutdown_token.is_cancelled() {
             return Err(ServiceError::Internal(
@@ -225,12 +227,13 @@ impl Manager {
 
         // Insert the entry FIRST, with a placeholder snapshot. This
         // guarantees that any concurrent `cancel`/`shutdown` between now
-        // and "ttyd-up" can find this session and signal its cancel token.
+        // and "agent-ready" can find this session and signal its cancel token.
         let placeholder = RunningSnapshot {
             session_id: session_id.clone(),
             started_at_unix: 0,
-            ttyd_url: String::new(),
             prompt_preview: prompt_preview.clone(),
+            model: self.cfg.vllm_model_name.clone(),
+            context_window: self.cfg.lock.backend.max_model_len,
         };
         let entry = Arc::new(RunningEntry {
             snapshot: Mutex::new(placeholder),
@@ -252,7 +255,7 @@ impl Manager {
             inner.running.insert(session_id.clone(), Arc::clone(&entry));
         }
 
-        let (ttyd_tx, ttyd_rx) = oneshot::channel::<ServiceResult<RunningSnapshot>>();
+        let (ready_tx, ready_rx) = oneshot::channel::<ServiceResult<RunningSnapshot>>();
 
         // Spawn the run task. It owns the permit, the cancel token (clone),
         // and the manager's `inner` handle so it can self-evict from the
@@ -273,7 +276,7 @@ impl Manager {
                 &session_id_for_task,
                 req,
                 cancel_for_task,
-                ttyd_tx,
+                ready_tx,
                 prompt_preview_for_task,
             )
             .await;
@@ -281,36 +284,36 @@ impl Manager {
             // Persist the terminal record before removing from the map. Order
             // matters: a concurrent `get` will fall back to disk the moment
             // the map entry is gone, so disk must be ready first.
-            if let Err(e) = persist_terminal(&cfg, &body).await {
-                tracing::error!(
-                    session_id = %body.session_id,
-                    error = %e,
-                    "persist_terminal failed; the terminal record could not be written. \
-                     The map entry will still be evicted (correct), but a subsequent `get` \
-                     for this session will return NotFound (degraded). Investigate disk."
-                );
+            let persist_error = persist_terminal(&cfg, &body).await.err();
+            let mut inner = inner_for_task.lock().await;
+            inner.running.remove(&session_id_for_task);
+            if let Some(error) = persist_error {
+                let mut retained = body;
+                retained.is_process_error = true;
+                retained.teardown_diagnostics.push(format!(
+                    "terminal persistence failed; body retained only in service memory: {error}"
+                ));
+                tracing::error!(session_id = %retained.session_id, error = %error,
+                    "terminal persistence failed; retaining terminal body in memory");
+                inner
+                    .unpersisted_terminal
+                    .insert(session_id_for_task.clone(), retained);
             }
-
-            inner_for_task
-                .lock()
-                .await
-                .running
-                .remove(&session_id_for_task);
+            drop(inner);
 
             // Wake every observer (cancel waiter, shutdown waiter).
             finished_for_task.notify_waiters();
         });
 
-        // Wait for either ttyd-up (success) or early error (the run task is
+        // Wait for either exact agent preflight (success) or early error (the run task is
         // already running its own teardown).
-        match ttyd_rx.await {
+        match ready_rx.await {
             Ok(Ok(snapshot)) => {
                 // Update the entry with the real values now that we have
                 // them. Held briefly.
                 *entry.snapshot.lock().await = snapshot.clone();
-                let progress = read_running_progress(
-                    &events_jsonl_path(&self.cfg, &snapshot.session_id),
-                );
+                let progress =
+                    read_running_progress(&events_jsonl_path(&self.cfg, &snapshot.session_id))?;
                 Ok(running_body(&snapshot, progress))
             }
             Ok(Err(e)) => {
@@ -338,11 +341,17 @@ impl Manager {
     /// Pure read of a session by id. Looks in memory first (running
     /// sessions), falls back to disk (terminal sessions).
     pub async fn get(&self, session_id: &str) -> ServiceResult<SessionBody> {
-        if let Some(entry) = self.inner.lock().await.running.get(session_id).cloned() {
+        let inner = self.inner.lock().await;
+        if let Some(entry) = inner.running.get(session_id).cloned() {
+            drop(inner);
             let snap = entry.snapshot.lock().await.clone();
-            let progress = read_running_progress(&events_jsonl_path(&self.cfg, session_id));
+            let progress = read_running_progress(&events_jsonl_path(&self.cfg, session_id))?;
             return Ok(running_body(&snap, progress));
         }
+        if let Some(body) = inner.unpersisted_terminal.get(session_id).cloned() {
+            return Ok(body);
+        }
+        drop(inner);
         read_terminal(&self.cfg, session_id).await
     }
 
@@ -352,19 +361,19 @@ impl Manager {
     pub async fn list(&self) -> ServiceResult<Vec<SessionBody>> {
         let mut bodies: Vec<SessionBody> = {
             let inner = self.inner.lock().await;
-            let mut v = Vec::with_capacity(inner.running.len());
+            let mut v = Vec::with_capacity(inner.running.len() + inner.unpersisted_terminal.len());
             for entry in inner.running.values() {
                 let snap = entry.snapshot.lock().await.clone();
-                let progress = read_running_progress(&events_jsonl_path(&self.cfg, &snap.session_id));
+                let progress =
+                    read_running_progress(&events_jsonl_path(&self.cfg, &snap.session_id))?;
                 v.push(running_body(&snap, progress));
             }
+            v.extend(inner.unpersisted_terminal.values().cloned());
             v
         };
 
-        let running_ids: std::collections::HashSet<String> = bodies
-            .iter()
-            .map(|b| b.session_id.clone())
-            .collect();
+        let running_ids: std::collections::HashSet<String> =
+            bodies.iter().map(|b| b.session_id.clone()).collect();
 
         let dir_iter = match std::fs::read_dir(&self.cfg.results_dir) {
             Ok(it) => it,
@@ -379,37 +388,31 @@ impl Manager {
         };
 
         for entry in dir_iter {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => {
-                    tracing::warn!(error = %e, "list: read_dir entry — skipping");
-                    continue;
-                }
-            };
+            let entry = entry.map_err(|e| {
+                ServiceError::Internal(io_msg(
+                    "list: read results_dir entry",
+                    &self.cfg.results_dir,
+                    &e,
+                ))
+            })?;
             let path = entry.path();
-            let name = match path.file_name().and_then(|n| n.to_str()) {
-                Some(n) => n.to_string(),
-                None => continue,
-            };
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or_else(|| {
+                    ServiceError::Internal(format!(
+                        "list: result entry has no UTF-8 file name: {}",
+                        path.display()
+                    ))
+                })?
+                .to_string();
             if running_ids.contains(&name) {
                 continue;
             }
-            // Skip dirs that don't have finished.json yet — these are
-            // either partial bundles from a crashed server (rare) or
-            // half-written rename targets (microsecond window). Either
-            // way they'd show up the next time `list` is called once
-            // finished.json lands.
-            match read_terminal(&self.cfg, &name).await {
-                Ok(body) => bodies.push(body),
-                Err(ServiceError::NotFound { .. }) => continue,
-                Err(e) => {
-                    tracing::warn!(
-                        session_id = %name,
-                        error = %e,
-                        "list: skipping unreadable terminal record"
-                    );
-                }
-            }
+            // Running IDs were excluded above. Every remaining service-owned
+            // directory must have a valid durable terminal record; a partial
+            // or malformed entry is an invariant error, not an omitted row.
+            bodies.push(read_terminal(&self.cfg, &name).await?);
         }
         bodies.sort_by_key(|b| b.started_at_unix);
         Ok(bodies)
@@ -463,6 +466,26 @@ impl Manager {
         self.get(session_id).await
     }
 
+    /// Wait without polling until a running session becomes terminal. If it
+    /// is already terminal, return immediately. The notification loop closes
+    /// the subscribe-after-notify race by rechecking the map after creating
+    /// each future.
+    pub async fn wait_terminal(&self, session_id: &str) -> ServiceResult<SessionBody> {
+        loop {
+            let entry = self.inner.lock().await.running.get(session_id).cloned();
+            let Some(entry) = entry else {
+                return self.get(session_id).await;
+            };
+            let notified = entry.finished.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if !self.inner.lock().await.running.contains_key(session_id) {
+                continue;
+            }
+            notified.as_mut().await;
+        }
+    }
+
     /// Remove a terminal session from disk. The lifecycle is explicit:
     /// `delete` refuses to act on a running session (`SessionRunning`/409)
     /// — the operator must `cancel` first.
@@ -483,8 +506,29 @@ impl Manager {
             )));
         }
         let dir = self.cfg.results_dir.join(session_id);
+        let retained = self
+            .inner
+            .lock()
+            .await
+            .unpersisted_terminal
+            .contains_key(session_id);
         match tokio::fs::remove_dir_all(&dir).await {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                self.inner
+                    .lock()
+                    .await
+                    .unpersisted_terminal
+                    .remove(session_id);
+                Ok(())
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && retained => {
+                self.inner
+                    .lock()
+                    .await
+                    .unpersisted_terminal
+                    .remove(session_id);
+                Ok(())
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(ServiceError::NotFound {
                 session_id: session_id.to_string(),
             }),
@@ -501,23 +545,15 @@ impl Manager {
     /// strongest "no in-flight session remains" signal we have, since the
     /// run task holds the permit until its teardown completes.
     ///
-    /// `ceiling` caps the total wait. On overrun, returns `Timeout` —
-    /// the server may then exit with a non-zero status; the OS reclaims
-    /// any leaked resources, and the next startup's orphan sweep picks up
-    /// any leftover docker objects.
-    pub async fn shutdown(&self, ceiling: Duration) -> ServiceResult<()> {
+    /// There is deliberately no shutdown deadline: shutdown first cancels
+    /// the session, then waits until its fail-closed teardown is genuinely
+    /// finished. Exiting early would orphan state while claiming success.
+    pub async fn shutdown(&self) -> ServiceResult<()> {
         // Refuse new submissions. Already-spawned setup will observe the
         // cascade-cancellation below.
         self.shutdown_token.cancel();
 
-        let in_flight: Vec<String> = self
-            .inner
-            .lock()
-            .await
-            .running
-            .keys()
-            .cloned()
-            .collect();
+        let in_flight: Vec<String> = self.inner.lock().await.running.keys().cloned().collect();
         if in_flight.is_empty() && self.singleton.available_permits() == 1 {
             tracing::info!("shutdown: no in-flight session — clean exit");
             return Ok(());
@@ -533,39 +569,16 @@ impl Manager {
         // "permit acquired" and "map insert" will also have its task
         // observe the cascade-cancellation and terminate, releasing the
         // permit.
-        let permit_acquire = Arc::clone(&self.singleton).acquire_owned();
-        match tokio::time::timeout(ceiling, permit_acquire).await {
-            Ok(Ok(_permit)) => {
+        match Arc::clone(&self.singleton).acquire_owned().await {
+            Ok(_permit) => {
                 tracing::info!("shutdown: singleton permit free — all sessions terminal");
                 Ok(())
             }
-            Ok(Err(closed)) => {
+            Err(closed) => {
                 // Semaphore::close() was called somewhere; we do not call
                 // it ourselves, so this path is unexpected.
                 Err(ServiceError::Internal(format!(
                     "shutdown: semaphore closed unexpectedly: {closed}"
-                )))
-            }
-            Err(_elapsed) => {
-                let still: Vec<String> = self
-                    .inner
-                    .lock()
-                    .await
-                    .running
-                    .keys()
-                    .cloned()
-                    .collect();
-                Err(ServiceError::Timeout(format!(
-                    "shutdown: {} session(s) did not reach terminal state within {:?} ({}); \
-                     leftover docker containers and networks (if any) will be reaped on the \
-                     next startup's orphan sweep",
-                    still.len(),
-                    ceiling,
-                    if still.is_empty() {
-                        "in-flight setup did not yield".to_string()
-                    } else {
-                        still.join(", ")
-                    }
                 )))
             }
         }
@@ -584,7 +597,8 @@ fn running_body(s: &RunningSnapshot, progress: (u64, u64)) -> SessionBody {
         session_id: s.session_id.clone(),
         status: SessionStatus::Running,
         started_at_unix: s.started_at_unix,
-        ttyd_url: s.ttyd_url.clone(),
+        model: s.model.clone(),
+        context_window: s.context_window,
         prompt_preview: s.prompt_preview.clone(),
         num_turns,
         last_event_at_unix,
@@ -617,60 +631,86 @@ pub fn events_jsonl_path(cfg: &Config, session_id: &str) -> PathBuf {
 }
 
 /// Read the live `events.jsonl` and return `(num_turns, last_event_at_unix)`.
-/// `num_turns` is the number of distinct LLM invocations the agent has
-/// completed so far, counted as contiguous runs of `"type":"assistant"`
-/// lines (one invocation emits multiple assistant lines — one per content
-/// block — so consecutive assistant lines collapse to a single turn).
-/// Both fields are 0 if the file does not exist or cannot be read.
+/// `num_turns` is the number of completed main-thread assistant messages, one
+/// per model invocation with partial-message output disabled. Both fields are
+/// 0 only when the file does not exist yet; malformed or unreadable state is
+/// an explicit error.
 ///
-/// Cost: linear byte scan of the file. Acceptable for periodic polling
-/// (~30 s); if you need it for higher-frequency reads, consider an
-/// incremental tracker keyed by file size and a starting byte offset.
-pub fn read_running_progress(events_path: &std::path::Path) -> (u64, u64) {
-    use std::io::BufRead;
+/// Cost: a linear byte scan. The service is a singleton and reads occur only
+/// on explicit API requests, so this favors exactness over a mutable cache.
+pub fn read_running_progress(events_path: &std::path::Path) -> ServiceResult<(u64, u64)> {
     let meta = match std::fs::metadata(events_path) {
         Ok(m) => m,
-        Err(_) => return (0, 0),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, 0)),
+        Err(error) => {
+            return Err(ServiceError::Internal(io_msg(
+                "read_running_progress: stat",
+                events_path,
+                &error,
+            )))
+        }
     };
-    let last_event_at_unix = meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let mut num_turns: u64 = 0;
-    let mut prev_was_assistant = false;
-    if let Ok(file) = std::fs::File::open(events_path) {
-        let reader = std::io::BufReader::new(file);
-        for line in reader.lines() {
-            match line {
-                Ok(s) => {
-                    let is_assistant = s.contains(r#""type":"assistant""#);
-                    if is_assistant && !prev_was_assistant {
-                        num_turns = num_turns.saturating_add(1);
-                    }
-                    prev_was_assistant = is_assistant;
-                }
-                Err(_) => break,
-            }
+    let modified = meta.modified().map_err(|error| {
+        ServiceError::Internal(io_msg(
+            "read_running_progress: event modification time",
+            events_path,
+            &error,
+        ))
+    })?;
+    let last_event_at_unix = modified
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| {
+            ServiceError::Internal(format!(
+                "read_running_progress: event modification time for {} predates the Unix epoch: {error}",
+                events_path.display()
+            ))
+        })?
+        .as_secs();
+    let text = std::fs::read_to_string(events_path).map_err(|error| {
+        ServiceError::Internal(io_msg("read_running_progress: read", events_path, &error))
+    })?;
+    let mut num_turns = 0u64;
+    for (index, chunk) in text.split_inclusive('\n').enumerate() {
+        // `tee` can be observed after writing part of the next JSON object.
+        // That is an explicit in-progress state, not malformed completed
+        // data, so only newline-terminated records participate in progress.
+        if !chunk.ends_with('\n') {
+            continue;
+        }
+        let line = chunk.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = serde_json::from_str(line).map_err(|error| {
+            ServiceError::Internal(format!(
+                "read_running_progress: completed JSONL record {} is malformed: {error}",
+                index + 1
+            ))
+        })?;
+        let object = value.as_object().ok_or_else(|| {
+            ServiceError::Internal(format!(
+                "read_running_progress: completed JSONL record {} is not an object",
+                index + 1
+            ))
+        })?;
+        let event_type = object
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                ServiceError::Internal(format!(
+                    "read_running_progress: completed JSONL record {} lacks string type",
+                    index + 1
+                ))
+            })?;
+        if event_type == "assistant"
+            && object
+                .get("parent_tool_use_id")
+                .is_none_or(serde_json::Value::is_null)
+        {
+            num_turns = num_turns.saturating_add(1);
         }
     }
-    (num_turns, last_event_at_unix)
-}
-
-/// Read the agent's own exit code from `output/qwen-exit-code` in the
-/// staging directory. Distinct from `container_exit_code` (which is what
-/// `docker wait` reports for the outer wrapper) — the wrapper exits 0
-/// even when qwen-code itself returned a non-zero code, because the
-/// wrapper terminates cleanly through ttyd's SIGTERM. Returns -1 if the
-/// file is missing (setup failed before the wrapper ran) or its content
-/// cannot be parsed as `i32`.
-pub fn read_agent_exit_code(staging_root: &std::path::Path) -> i32 {
-    let p = staging_root.join("output").join("qwen-exit-code");
-    match std::fs::read_to_string(&p) {
-        Ok(s) => s.trim().parse::<i32>().unwrap_or(-1),
-        Err(_) => -1,
-    }
+    Ok((num_turns, last_event_at_unix))
 }
 
 pub fn preview(s: &str) -> String {
@@ -686,39 +726,99 @@ fn finished_json_path(cfg: &Config, session_id: &str) -> PathBuf {
     cfg.results_dir.join(session_id).join("finished.json")
 }
 
-/// Persist the terminal record atomically to disk. Writes `finished.json.tmp`,
-/// then renames over `finished.json` so observers never see a partial file.
+/// Persist the terminal record atomically to disk. Writes and syncs
+/// `finished.json.tmp`, then hard-links it to the previously absent
+/// `finished.json`. Unlike `rename`, hard-link publication cannot clobber a
+/// destination created after our initial checks.
 async fn persist_terminal(cfg: &Config, body: &SessionBody) -> ServiceResult<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
     let dir = cfg.results_dir.join(&body.session_id);
-    tokio::fs::create_dir_all(&dir).await.map_err(|e| {
+    std::fs::create_dir_all(&dir).map_err(|e| {
         ServiceError::Internal(io_msg("persist_terminal: create_dir_all", &dir, &e))
     })?;
     let final_path = dir.join("finished.json");
     let tmp_path = dir.join("finished.json.tmp");
+    if final_path.exists() {
+        return Err(ServiceError::Internal(format!(
+            "persist_terminal({}): refusing to overwrite existing {}",
+            body.session_id,
+            final_path.display()
+        )));
+    }
     let bytes = serde_json::to_vec_pretty(body).map_err(|e| {
         ServiceError::Internal(format!(
             "persist_terminal({}): serde_json failure on terminal SessionBody: {e}",
             body.session_id
         ))
     })?;
-    tokio::fs::write(&tmp_path, &bytes).await.map_err(|e| {
-        ServiceError::Internal(io_msg("persist_terminal: write tmp", &tmp_path, &e))
-    })?;
-    tokio::fs::rename(&tmp_path, &final_path).await.map_err(|e| {
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&tmp_path)
+        .map_err(|e| {
+            ServiceError::Internal(io_msg("persist_terminal: create tmp", &tmp_path, &e))
+        })?;
+    file.write_all(&bytes)
+        .and_then(|_| file.sync_all())
+        .map_err(|e| {
+            ServiceError::Internal(io_msg("persist_terminal: write/sync tmp", &tmp_path, &e))
+        })?;
+    std::fs::hard_link(&tmp_path, &final_path).map_err(|e| {
         ServiceError::Internal(format!(
-            "persist_terminal({}): rename {} → {}: {e}",
+            "persist_terminal({}): no-clobber publish {} → {}: {e}",
             body.session_id,
             tmp_path.display(),
             final_path.display()
         ))
     })?;
+    std::fs::remove_file(&tmp_path).map_err(|e| {
+        ServiceError::Internal(io_msg(
+            "persist_terminal: remove published tmp link",
+            &tmp_path,
+            &e,
+        ))
+    })?;
+    std::fs::File::open(&dir)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|e| {
+            ServiceError::Internal(io_msg("persist_terminal: sync result directory", &dir, &e))
+        })?;
     Ok(())
 }
 
 /// Read the on-disk terminal record. `NotFound` if the directory or
 /// finished.json doesn't exist; `Internal` on read or parse failure.
 async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionBody> {
+    if !is_safe_session_id(session_id) {
+        return Err(ServiceError::InvalidRequest(format!(
+            "session_id {session_id:?} is not the required s-<32-lowercase-hex> shape"
+        )));
+    }
     let path = finished_json_path(cfg, session_id);
+    match tokio::fs::symlink_metadata(&path).await {
+        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {}
+        Ok(_) => {
+            return Err(ServiceError::Internal(format!(
+                "read_terminal({session_id}): {} is not a regular non-symlink file",
+                path.display()
+            )));
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(ServiceError::NotFound {
+                session_id: session_id.to_string(),
+            });
+        }
+        Err(e) => {
+            return Err(ServiceError::Internal(io_msg(
+                "read_terminal: stat finished.json",
+                &path,
+                &e,
+            )));
+        }
+    }
     let bytes = match tokio::fs::read(&path).await {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -744,7 +844,7 @@ async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionB
 
 /// Cheap defensive check that a session_id is the shape we generate.
 /// Used by `delete` before joining a path. Format: `s-` + 32 lowercase hex.
-fn is_safe_session_id(s: &str) -> bool {
+pub(crate) fn is_safe_session_id(s: &str) -> bool {
     if s.len() != 34 {
         return false;
     }

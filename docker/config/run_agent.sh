@@ -1,103 +1,156 @@
-#!/bin/bash
-# Launched inside the tmux session by agent_init.sh.
-#
-# Reads the prompt from the read-only control mount at /run/agent/prompt.txt,
-# invokes Qwen Code CLI in stream-json headless mode, and tees the JSONL
-# event stream to /output/events.jsonl. The host parses the last `result`
-# event from that file once docker reports the container has exited.
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-set -uo pipefail
+readonly PROMPT_FILE=/run/agent/prompt.txt
+readonly EVENTS_FILE=/output/events.jsonl
+readonly STDERR_FILE=/output/qwen.stderr
+readonly EXIT_FILE=/output/qwen-exit-code
+readonly READY_FILE=/output/ready.json
+readonly SETTINGS_SOURCE=/opt/agent/settings.json
+readonly INSTRUCTIONS_SOURCE=/opt/agent/QWEN.md
+readonly QWEN_HOME=/qwen-home
+readonly QWEN_RUNTIME_DIR=/qwen-runtime
+readonly MODEL_ID=qwen3.8-27b-nvfp4-k8v4
+readonly MODEL_BASE=http://127.0.0.1:18000
+readonly STRICT_TOOLS=agent,edit,glob,grep_search,list_directory,notebook_edit,read_file,run_shell_command,todo_write,write_file
 
-cd /workspace
-mkdir -p /output
+fatal() {
+  local code="$1"
+  shift
+  printf 'FATAL[%s]: %s\n' "${code}" "$*" >&2
+  printf '%s\n' "${code}" >"${EXIT_FILE}"
+  exit "${code}"
+}
 
-PROMPT_FILE=/run/agent/prompt.txt
-if [ ! -f "$PROMPT_FILE" ]; then
-    echo "FATAL: $PROMPT_FILE missing — host should have bind-mounted /run/agent" >&2
-    echo 96 > /output/qwen-exit-code
-    touch /output/.done
-    exit 96
-fi
-PROMPT="$(cat "$PROMPT_FILE")"
+umask 077
+export QWEN_HOME QWEN_RUNTIME_DIR
+export NO_COLOR=1
+export QWEN_TELEMETRY_ENABLED=false
+export XDG_CACHE_HOME=/qwen-runtime/cache
+export NPM_CONFIG_CACHE=/qwen-runtime/npm
+export PIP_CACHE_DIR=/qwen-runtime/pip
+export CARGO_HOME=/qwen-runtime/cargo
+export GOPATH=/qwen-runtime/go
+[[ "$(id -u)" == 1000 && "$(id -g)" == 1000 ]] || \
+  fatal 90 "agent must run as uid:gid 1000:1000"
+[[ -f "${PROMPT_FILE}" && ! -L "${PROMPT_FILE}" ]] || \
+  fatal 91 "${PROMPT_FILE} must be a regular, non-symlink file"
+[[ -r "${SETTINGS_SOURCE}" && -r "${INSTRUCTIONS_SOURCE}" ]] || \
+  fatal 92 "pinned Qwen configuration is missing from /opt/agent"
+[[ -d /workspace && -d /artifacts && -d /output ]] || \
+  fatal 93 "required workspace, artifacts, or output mount is missing"
 
-PROMPT_BYTES=$(wc -c < "$PROMPT_FILE" | tr -d ' ')
-WORKSPACE_ENTRIES=$(find /workspace -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
+mkdir -p "${QWEN_HOME}" /qwen-runtime
+cp --no-preserve=mode,ownership "${SETTINGS_SOURCE}" "${QWEN_HOME}/settings.json"
+cp --no-preserve=mode,ownership "${INSTRUCTIONS_SOURCE}" "${QWEN_HOME}/QWEN.md"
+chmod 0600 "${QWEN_HOME}/settings.json" "${QWEN_HOME}/QWEN.md"
 
-cat <<EOF
-============================================================
-qwen3.6 agent run
-  Model:         ${OPENAI_MODEL:-<unset>}
-  Endpoint:      ${OPENAI_BASE_URL:-<unset>}
-  Approval:      yolo (every tool call auto-approved)
-  Max turns:     ${AGENT_MAX_TURNS:-200}
-  Workspace:     /workspace ($WORKSPACE_ENTRIES top-level entries)
-  Artifacts:     /artifacts (empty; bundled and returned at end of run)
-  Prompt bytes:  $PROMPT_BYTES
-============================================================
+route_report="$(ip -4 route show)"
+[[ -z "${route_report}" ]] || fatal 94 "network-none invariant failed; IPv4 route table is not empty: ${route_report}"
 
------ Prompt -----
-$PROMPT
-------------------
+models_tmp="$(mktemp /tmp/agent-models.XXXXXXXX.json)"
+tokenize_tmp="$(mktemp /tmp/agent-tokenize.XXXXXXXX.json)"
+events_fifo_dir="$(mktemp -d /tmp/agent-events.XXXXXXXX)"
+events_fifo="${events_fifo_dir}/stream"
+mkfifo -m 0600 "${events_fifo}"
+cleanup() {
+  # ShellCheck does not follow EXIT-trap reachability into this handler.
+  # shellcheck disable=SC2317
+  rm -f -- "${models_tmp}" "${tokenize_tmp}" "${events_fifo}"
+  # shellcheck disable=SC2317
+  rmdir -- "${events_fifo_dir}"
+}
+trap cleanup EXIT
 
-EOF
+curl --fail --silent --show-error \
+  --retry 30 --retry-all-errors --retry-connrefused --retry-delay 1 \
+  --connect-timeout 1 --max-time 35 \
+  "${MODEL_BASE}/v1/models" >"${models_tmp}" || \
+  fatal 95 "the sole loopback model endpoint never became reachable"
 
-# Sanity-check that the model server is reachable before we spend a turn
-# on a request that will just time out. We don't fail-fast on a non-200
-# health response — vLLM might not expose a /health, and a flaky proxy
-# might return 502 transiently.
-echo "Probing model server at ${OPENAI_BASE_URL:-<unset>} ..."
-if curl --max-time 5 -fsS "${OPENAI_BASE_URL:-http://invalid:0}/models" -o /tmp/models.json 2>/dev/null; then
-    echo "  reachable; advertised models: $(jq -r '.data[].id' /tmp/models.json 2>/dev/null | tr '\n' ',' | sed 's/,$//')"
-else
-    echo "  WARNING: /v1/models probe failed; the agent will try anyway."
-fi
-echo
+jq -e --arg model "${MODEL_ID}" \
+  '.data | length == 1 and .[0].id == $model and .[0].max_model_len == 262144' \
+  "${models_tmp}" >/dev/null || \
+  fatal 96 "model identity or context length does not match the locked contract: $(tr -d '\n' <"${models_tmp}")"
 
-EXIT=0
-# `--include-partial-messages` deliberately OMITTED. With it, qwen-code's
-# JsonOutputAdapter emits one `type:"stream_event"` line per token-decode
-# delta — ~89% of events.jsonl by line count, ~83-93% by bytes. The host's
-# result parser (`agent_service/src/result_parse.rs`) reads only the final
-# `type:"result"` line, so the partials are pure I/O cost. Keeping the flag
-# off does NOT affect correctness:
-#   - HTTP transport to vLLM is unconditionally streaming in qwen-code 0.15.6
-#     (`pipeline.ts:324-329`); the local stream-json adapter setting only
-#     controls what the CLI prints, not what it sends to the model server.
-#   - Loop / next-speaker detection runs on completed Turn events upstream
-#     of the output adapter; the adapter setting cannot affect them.
-#   - xgrammar's per-token bitmask FSM is engine-side and fires identically
-#     under either local output mode.
-qwen --approval-mode yolo \
-     --max-session-turns "${AGENT_MAX_TURNS:-200}" \
-     --output-format stream-json \
-     -p "$PROMPT" \
-     2> >(tee /output/qwen.stderr >&2) \
-  | tee /output/events.jsonl
-EXIT="${PIPESTATUS[0]}"
+curl --fail --silent --show-error \
+  --connect-timeout 2 --max-time 30 \
+  -H 'content-type: application/json' \
+  --data '{"model":"qwen3.8-27b-nvfp4-k8v4","prompt":"agent-service-tokenizer-preflight"}' \
+  "${MODEL_BASE}/tokenize" >"${tokenize_tmp}" || \
+  fatal 97 "vLLM real-tokenizer preflight failed"
+jq -e '.count > 0 and .max_model_len == 262144 and (.tokens | type == "array")' \
+  "${tokenize_tmp}" >/dev/null || \
+  fatal 98 "vLLM tokenizer response violates the locked contract: $(tr -d '\n' <"${tokenize_tmp}")"
 
-EVENTS_LINES=$(wc -l < /output/events.jsonl 2>/dev/null | tr -d ' ' || echo 0)
+printf '{"model":"%s","context_window":262144,"token_count":%s}\n' \
+  "${MODEL_ID}" "$(jq -r '.count' "${tokenize_tmp}")" >"${READY_FILE}"
+printf 'AGENT_READY model=%s context=262144 network=loopback-only\n' "${MODEL_ID}"
 
-cat <<EOF
-
-============================================================
-qwen exited with code: $EXIT
-events captured:       $EVENTS_LINES lines
-events.jsonl path:     /output/events.jsonl
-============================================================
-EOF
-
-# Surface the last result line for the human watcher's convenience —
-# the host parses the same file programmatically.
-if [ -f /output/events.jsonl ]; then
-    LAST_RESULT="$(grep '"type":"result"' /output/events.jsonl | tail -1)"
-    if [ -n "$LAST_RESULT" ]; then
-        echo
-        echo "----- Final result event -----"
-        echo "$LAST_RESULT" | jq -r '. as $r | "is_error: \($r.is_error)\nresult:\n\($r.result // ($r.error.message // "<no message>"))"'
-        echo "------------------------------"
+qwen_pid=""
+qwen_status=255
+tee_status=255
+termination_exit=0
+termination_forward_failed=0
+forward_termination() {
+  local exit_code="$1"
+  termination_exit="${exit_code}"
+  if [[ -n "${qwen_pid}" ]] && kill -0 "${qwen_pid}" 2>/dev/null; then
+    if ! kill -TERM "${qwen_pid}" 2>/dev/null; then
+      termination_forward_failed=1
+      printf 'AGENT_ERROR code=101 message=failed to forward termination to Qwen PID %s\n' \
+        "${qwen_pid}" >&2
     fi
-fi
+  fi
+}
+trap 'forward_termination 143' TERM
+trap 'forward_termination 130' INT
 
-echo "$EXIT" > /output/qwen-exit-code
-touch /output/.done
-exit "$EXIT"
+wait_for_child() {
+  local child_pid="$1" result_name="$2" child_status
+  while true; do
+    set +e
+    wait "${child_pid}"
+    child_status="$?"
+    set -e
+    if ! kill -0 "${child_pid}" 2>/dev/null; then
+      printf -v "${result_name}" '%s' "${child_status}"
+      return 0
+    fi
+  done
+}
+
+set +e
+: >"${STDERR_FILE}"
+tee "${EVENTS_FILE}" <"${events_fifo}" &
+tee_pid="$!"
+node /opt/qwen-code/scripts/cli-entry.js \
+  --input-format=text \
+  --approval-mode=yolo \
+  --output-format=stream-json \
+  --strict-tools="${STRICT_TOOLS}" \
+  --foreground-agents-only \
+  --max-subagent-depth=1 \
+  --max-session-turns=-1 \
+  --max-tool-calls=-1 \
+  --no-chat-recording \
+  <"${PROMPT_FILE}" \
+  >"${events_fifo}" \
+  2>>"${STDERR_FILE}" &
+qwen_pid="$!"
+if (( termination_exit != 0 )); then
+  forward_termination "${termination_exit}"
+fi
+wait_for_child "${qwen_pid}" qwen_status
+wait_for_child "${tee_pid}" tee_status
+set -e
+
+(( termination_forward_failed == 0 )) || fatal 101 "failed to forward a requested termination signal"
+[[ "${tee_status}" == 0 ]] || fatal 99 "event capture failed with tee exit ${tee_status}"
+if (( termination_exit != 0 && qwen_status == 0 )); then
+  qwen_status="${termination_exit}"
+fi
+printf '%s\n' "${qwen_status}" >"${EXIT_FILE}"
+sync -f "${EVENTS_FILE}" "${STDERR_FILE}" "${EXIT_FILE}" || \
+  fatal 100 "failed to flush agent output files"
+exit "${qwen_status}"
