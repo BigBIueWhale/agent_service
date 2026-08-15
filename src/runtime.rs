@@ -631,10 +631,11 @@ pub fn events_jsonl_path(cfg: &Config, session_id: &str) -> PathBuf {
 }
 
 /// Read the live `events.jsonl` and return `(num_turns, last_event_at_unix)`.
-/// `num_turns` is the number of completed main-thread assistant messages, one
-/// per model invocation with partial-message output disabled. Both fields are
-/// 0 only when the file does not exist yet; malformed or unreadable state is
-/// an explicit error.
+/// `num_turns` is the number of completed main-thread model invocations. Qwen
+/// stream-JSON can emit zero-usage thinking/text fragments before the one
+/// assistant record carrying final per-invocation usage, so fragments are not
+/// turns. Both fields are 0 only when the file does not exist yet; malformed or
+/// unreadable state is an explicit error.
 ///
 /// Cost: a linear byte scan. The service is a singleton and reads occur only
 /// on explicit API requests, so this favors exactness over a mutable cache.
@@ -693,7 +694,7 @@ pub fn read_running_progress(events_path: &std::path::Path) -> ServiceResult<(u6
                 index + 1
             ))
         })?;
-        let event_type = object
+        object
             .get("type")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| {
@@ -702,11 +703,7 @@ pub fn read_running_progress(events_path: &std::path::Path) -> ServiceResult<(u6
                     index + 1
                 ))
             })?;
-        if event_type == "assistant"
-            && object
-                .get("parent_tool_use_id")
-                .is_none_or(serde_json::Value::is_null)
-        {
+        if crate::result_parse::is_completed_main_turn(object) {
             num_turns = num_turns.saturating_add(1);
         }
     }

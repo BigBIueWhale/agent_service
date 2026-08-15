@@ -60,15 +60,8 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
             )));
         }
         required_string(object, "uuid", *line_number)?;
-        if position == 0
-            && !(event_type == "system"
-                && object.get("subtype").and_then(serde_json::Value::as_str)
-                    == Some("session_start"))
-        {
-            return Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl first event must be system/session_start, got type={event_type:?} subtype={:?}",
-                object.get("subtype")
-            )));
+        if position == 0 {
+            validate_init_event(object, *line_number)?;
         }
         let value = required_string(object, "session_id", *line_number)?;
         match &stream_session_id {
@@ -81,11 +74,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
             _ => {}
         }
 
-        if event_type == "assistant"
-            && object
-                .get("parent_tool_use_id")
-                .is_none_or(serde_json::Value::is_null)
-        {
+        if is_completed_main_turn(object) {
             main_assistant_events = main_assistant_events.saturating_add(1);
         }
         if event_type == "result" {
@@ -186,6 +175,124 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
     })
 }
 
+fn validate_init_event(
+    object: &serde_json::Map<String, serde_json::Value>,
+    line: usize,
+) -> ServiceResult<()> {
+    let exact_string = |key: &str, expected: &str| -> ServiceResult<()> {
+        let actual = required_string(object, key, line)?;
+        if actual == expected {
+            Ok(())
+        } else {
+            Err(ServiceError::AgentOutputMissing(format!(
+                "events.jsonl init field {key} must be {expected:?}, got {actual:?}"
+            )))
+        }
+    };
+    exact_string("type", "system")?;
+    exact_string("subtype", "init")?;
+    exact_string("cwd", "/workspace")?;
+    exact_string("model", "qwen3.8-27b-nvfp4-k8v4")?;
+    exact_string("permission_mode", "yolo")?;
+    exact_string("qwen_code_version", "0.21.12")?;
+
+    let exact_string_array = |key: &str, expected: &[&str]| -> ServiceResult<()> {
+        let values = object
+            .get(key)
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| {
+                ServiceError::AgentOutputMissing(format!(
+                    "events.jsonl init field {key} must be an array"
+                ))
+            })?;
+        let mut actual = values
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        ServiceError::AgentOutputMissing(format!(
+                            "events.jsonl init field {key} contains a non-string or empty value"
+                        ))
+                    })
+            })
+            .collect::<ServiceResult<Vec<_>>>()?;
+        actual.sort_unstable();
+        let mut wanted = expected.to_vec();
+        wanted.sort_unstable();
+        if actual == wanted {
+            Ok(())
+        } else {
+            Err(ServiceError::AgentOutputMissing(format!(
+                "events.jsonl init field {key} differs from the pinned contract: expected {wanted:?}, got {actual:?}"
+            )))
+        }
+    };
+    exact_string_array(
+        "tools",
+        &[
+            "agent",
+            "edit",
+            "glob",
+            "grep_search",
+            "list_directory",
+            "notebook_edit",
+            "read_file",
+            "run_shell_command",
+            "todo_write",
+            "write_file",
+        ],
+    )?;
+    exact_string_array(
+        "agents",
+        &["Explore", "general-purpose", "statusline-setup"],
+    )?;
+    let mcp_servers = object
+        .get("mcp_servers")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| {
+            ServiceError::AgentOutputMissing(
+                "events.jsonl init field mcp_servers must be an array".into(),
+            )
+        })?;
+    if !mcp_servers.is_empty() {
+        return Err(ServiceError::AgentOutputMissing(format!(
+            "events.jsonl init advertised unexpected MCP servers: {mcp_servers:?}"
+        )));
+    }
+    if !object
+        .get("slash_commands")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|values| {
+            !values.is_empty()
+                && values
+                    .iter()
+                    .all(|value| value.as_str().is_some_and(|value| !value.is_empty()))
+        })
+    {
+        return Err(ServiceError::AgentOutputMissing(
+            "events.jsonl init lacks a non-empty string-array slash_commands field".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn is_completed_main_turn(object: &serde_json::Map<String, serde_json::Value>) -> bool {
+    object.get("type").and_then(serde_json::Value::as_str) == Some("assistant")
+        && object
+            .get("parent_tool_use_id")
+            .is_none_or(serde_json::Value::is_null)
+        && object
+            .get("message")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|message| message.get("usage"))
+            .and_then(serde_json::Value::as_object)
+            .and_then(|usage| usage.get("input_tokens"))
+            .and_then(serde_json::Value::as_u64)
+            .is_some_and(|tokens| tokens > 0)
+}
+
 fn required_string<'a>(
     object: &'a serde_json::Map<String, serde_json::Value>,
     key: &str,
@@ -231,6 +338,8 @@ fn truncate(value: &str, max: usize) -> String {
 mod tests {
     use super::*;
 
+    const INIT: &str = "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[\"status\"],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\",\"statusline-setup\"]}\n";
+
     fn parse_text(text: &str) -> ServiceResult<AgentResult> {
         let path = std::env::temp_dir().join(format!(
             "agent-service-result-{}.jsonl",
@@ -244,35 +353,28 @@ mod tests {
 
     #[test]
     fn accepts_one_terminal_success() {
-        let text = concat!(
-            "{\"type\":\"system\",\"subtype\":\"session_start\",\"uuid\":\"u1\",\"session_id\":\"a\"}\n",
-            "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null}\n",
-            "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u3\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{},\"permission_denials\":[]}\n"
+        let text = format!(
+            "{INIT}{{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{{\"usage\":{{\"input_tokens\":42}}}}}}\n{{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u3\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{{}},\"permission_denials\":[]}}\n"
         );
-        let parsed = parse_text(text).expect("strict valid stream parses");
+        let parsed = parse_text(&text).expect("strict valid stream parses");
         assert_eq!(parsed.response, "ok");
         assert_eq!(parsed.num_turns, 1);
     }
 
     #[test]
     fn rejects_duplicate_or_post_terminal_events() {
-        let prefix = "{\"type\":\"system\",\"subtype\":\"session_start\",\"uuid\":\"u1\",\"session_id\":\"a\"}\n";
         let result = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u2\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":0,\"result\":\"ok\",\"usage\":{},\"permission_denials\":[]}\n";
-        assert!(parse_text(&format!("{prefix}{result}{result}")).is_err());
-        assert!(parse_text(&format!("{prefix}{result}{prefix}")).is_err());
+        assert!(parse_text(&format!("{INIT}{result}{result}")).is_err());
+        assert!(parse_text(&format!("{INIT}{result}{INIT}")).is_err());
     }
 
     #[test]
     fn rejects_malformed_and_truncated_streams() {
         assert!(parse_text("not-json\n").is_err());
-        assert!(parse_text(
-            "{\"type\":\"system\",\"subtype\":\"session_start\",\"uuid\":\"u1\",\"session_id\":\"a\"}\n"
-        )
-        .is_err());
-        assert!(parse_text(
-            "{\"type\":\"system\",\"subtype\":\"session_start\",\"uuid\":\"u1\"}\n"
-        )
-        .is_err());
+        assert!(parse_text(INIT).is_err());
+        assert!(
+            parse_text("{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\"}\n").is_err()
+        );
         assert!(
             parse_text("{\"type\":\"stream_event\",\"uuid\":\"u1\",\"session_id\":\"a\"}\n")
                 .is_err()

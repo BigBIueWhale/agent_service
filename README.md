@@ -217,11 +217,13 @@ for future Codex compatibility, but this service has only the reviewed Qwen Code
 mode today.
 
 The client itself emits stream-JSON. The service requires every completed line to
-be a JSON object, a first `system/session_start` event, a stable session ID, exactly
-one terminal result as the final event, an internally consistent main-turn count,
-and the complete success/error envelope. Duplicate results, post-result output,
-malformed lines, missing fields, an empty successful result, and a missing result are
-hard errors. It never chooses a convenient-looking “last result.”
+be a JSON object, a first `system/init` event whose Qwen version/model/workspace/tool
+metadata exactly matches the deployed contract, a stable session ID, exactly one
+terminal result as the final event, an internally consistent main-turn count, and
+the complete success/error envelope. Zero-usage streaming fragments are not
+mistaken for additional turns. Duplicate results, post-result output, malformed
+lines, missing fields, an empty successful result, and a missing result are hard
+errors. It never chooses a convenient-looking “last result.”
 
 ## Prefix caching evidence
 
