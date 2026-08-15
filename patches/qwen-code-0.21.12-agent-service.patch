@@ -1,0 +1,1676 @@
+diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/config.test.ts
+index 2022b31..16cc38b 100644
+--- a/packages/cli/src/config/config.test.ts
++++ b/packages/cli/src/config/config.test.ts
+@@ -1015,6 +1015,23 @@ describe('parseArguments', () => {
+     expect(argv.allowedTools).toEqual(['read_file', 'ShellTool(git status)']);
+   });
+ 
++  it('should support comma-separated values for --strict-tools', async () => {
++    process.argv = [
++      'node',
++      'script.js',
++      '--strict-tools',
++      'read_file,run_shell_command',
++    ];
++    const argv = await parseArguments();
++    expect(argv.strictTools).toEqual(['read_file', 'run_shell_command']);
++  });
++
++  it('should parse --foreground-agents-only explicitly', async () => {
++    process.argv = ['node', 'script.js', '--foreground-agents-only'];
++    const argv = await parseArguments();
++    expect(argv.foregroundAgentsOnly).toBe(true);
++  });
++
+   it('should support comma-separated values for --allowed-mcp-server-names', async () => {
+     process.argv = [
+       'node',
+diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.ts
+index bf538d2..f0f1848 100755
+--- a/packages/cli/src/config/config.ts
++++ b/packages/cli/src/config/config.ts
+@@ -221,6 +221,8 @@ export interface CliArgs {
+   maxToolCalls: number | undefined;
+   maxSubagentDepth: number | undefined;
+   coreTools: string[] | undefined;
++  strictTools?: string[] | undefined;
++  foregroundAgentsOnly?: boolean | undefined;
+   excludeTools: string[] | undefined;
+   disabledSlashCommands: string[] | undefined;
+   authType: string | undefined;
+@@ -924,6 +926,20 @@ export async function parseArguments(): Promise<CliArgs> {
+           coerce: (tools: string[]) =>
+             tools.flatMap((tool) => tool.split(',').map((t) => t.trim())),
+         })
++        .option('strict-tools', {
++          type: 'array',
++          string: true,
++          description:
++            'Strict universal tool allowlist; unlike --core-tools, this also gates dynamic and synthetic tools',
++          coerce: (tools: string[]) =>
++            tools.flatMap((tool) => tool.split(',').map((t) => t.trim())),
++        })
++        .option('foreground-agents-only', {
++          type: 'boolean',
++          default: false,
++          description:
++            'Defensive unattended mode: Agent may launch only the built-in general-purpose or Explore agent, always inline and sequentially; forks, background agents, teams, worktrees, and model overrides are rejected',
++        })
+         .option('exclude-tools', {
+           type: 'array',
+           string: true,
+@@ -2147,6 +2163,8 @@ export async function loadCliConfig(
+       bareMode || safeMode
+         ? undefined
+         : argv.coreTools || settings.tools?.core || undefined,
++    strictTools: argv.strictTools,
++    foregroundAgentsOnly: argv.foregroundAgentsOnly,
+     allowedTools:
+       bareMode || safeMode
+         ? argv.allowedTools || undefined
+diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/config.ts
+index 9698a8e..c6d9d0b 100644
+--- a/packages/core/src/config/config.ts
++++ b/packages/core/src/config/config.ts
+@@ -962,6 +962,8 @@ export interface ConfigParameters {
+   systemPrompt?: string;
+   appendSystemPrompt?: string;
+   coreTools?: string[];
++  strictTools?: string[];
++  foregroundAgentsOnly?: boolean;
+   allowedTools?: string[];
+   excludeTools?: string[];
+   /**
+@@ -1845,6 +1847,8 @@ export class Config {
+   private readonly appendSystemPrompt: string | undefined;
+   private liveAppendSystemPrompt: string | undefined;
+   private readonly coreTools: string[] | undefined;
++  private readonly strictTools: string[] | undefined;
++  private readonly foregroundAgentsOnly: boolean;
+   private readonly allowedTools: string[] | undefined;
+   private readonly excludeTools: string[] | undefined;
+   private readonly disabledSlashCommands: readonly string[];
+@@ -2180,6 +2184,8 @@ export class Config {
+     this.systemPrompt = params.systemPrompt;
+     this.appendSystemPrompt = params.appendSystemPrompt;
+     this.coreTools = params.coreTools;
++    this.strictTools = params.strictTools;
++    this.foregroundAgentsOnly = params.foregroundAgentsOnly ?? false;
+     this.allowedTools = params.allowedTools;
+     this.excludeTools = params.excludeTools;
+     this.disabledSlashCommands = Object.freeze([
+@@ -5318,6 +5324,19 @@ export class Config {
+     return this.coreTools;
+   }
+ 
++  /** Universal registry allowlist used by the pinned defensive agent mode. */
++  getStrictTools(): string[] | undefined {
++    return this.strictTools;
++  }
++
++  /**
++   * Agent-service mode: delegation is bounded to one awaited child at a time.
++   * This is enforced by Agent's schema, validation, and dispatch path.
++   */
++  getForegroundAgentsOnly(): boolean {
++    return this.foregroundAgentsOnly;
++  }
++
+   /**
+    * Returns the merged allow-rules for PermissionManager.
+    *
+diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core/contentGenerator.ts
+index 7216c26..4a22651 100644
+--- a/packages/core/src/core/contentGenerator.ts
++++ b/packages/core/src/core/contentGenerator.ts
+@@ -48,11 +48,27 @@ export interface ContentGenerator {
+ 
+   countTokens(request: CountTokensParameters): Promise<CountTokensResponse>;
+ 
++  /**
++   * Count the exact provider request after conversion to its wire format.
++   * Implementations may omit this unless they support a server-authoritative
++   * tokenizer. Callers that explicitly require exact counting must fail closed
++   * when the method is unavailable.
++   */
++  countRequestTokens?(
++    request: GenerateContentParameters,
++    userPromptId: string,
++  ): Promise<ExactRequestTokenCount>;
++
+   embedContent(request: EmbedContentParameters): Promise<EmbedContentResponse>;
+ 
+   useSummarizedThinking(): boolean;
+ }
+ 
++export type ExactRequestTokenCount = {
++  totalTokens: number;
++  maxModelLen: number;
++};
++
+ export enum AuthType {
+   USE_OPENAI = 'openai',
+   QWEN_OAUTH = 'qwen-oauth',
+@@ -173,6 +189,14 @@ export type ContentGeneratorConfig = {
+   // When true, the model rejects enable_thinking=false with a 400 error
+   // (e.g. qwen3.8-max-preview), so thinking must never be disabled on the wire.
+   thinkingMandatory?: boolean;
++  // Require a successful structured-tool terminal before exposing a model tool
++  // call. Disables compatibility recovery from plain text and suppresses calls
++  // carried by truncated or mismatched responses.
++  strictToolCalling?: boolean;
++  // Use the vLLM server's /tokenize endpoint on the fully rendered OpenAI
++  // request. This is deliberately an explicit backend contract rather than a
++  // boolean: no heuristic or alternate tokenizer is an acceptable fallback.
++  exactTokenCounting?: 'vllm';
+   // Supported input modalities. Unsupported media types are replaced with text
+   // placeholders. Leave undefined to use automatic detection from model name.
+   modalities?: InputModalities;
+@@ -457,6 +481,19 @@ class LazyContentGenerator implements ContentGenerator {
+     return (await this.getGeneratorForUse()).countTokens(request);
+   }
+ 
++  async countRequestTokens(
++    request: GenerateContentParameters,
++    userPromptId: string,
++  ): Promise<ExactRequestTokenCount> {
++    const generator = await this.getGeneratorForUse();
++    if (!generator.countRequestTokens) {
++      throw new Error(
++        'Exact request token counting is not supported by this content generator.',
++      );
++    }
++    return generator.countRequestTokens(request, userPromptId);
++  }
++
+   async embedContent(
+     request: EmbedContentParameters,
+   ): Promise<EmbedContentResponse> {
+diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
+index 5ae5029..657b09a 100644
+--- a/packages/core/src/core/geminiChat.test.ts
++++ b/packages/core/src/core/geminiChat.test.ts
+@@ -5253,6 +5253,77 @@ describe('GeminiChat', async () => {
+       expect(requestConfig.maxOutputTokens).toBe(9_999);
+     });
+ 
++    it('uses vLLM exact rendered-prompt counts with no heuristic pad or margin', async () => {
++      vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
++        authType: AuthType.USE_OPENAI,
++        model: 'qwen3.8-27b-nvfp4-k8v4',
++        contextWindowSize: 262_144,
++        exactTokenCounting: 'vllm',
++        samplingParams: { max_tokens: 262_144 },
++      });
++      mockContentGenerator.countRequestTokens = vi
++        .fn()
++        .mockResolvedValue({ totalTokens: 12_345, maxModelLen: 262_144 });
++      vi.spyOn(ChatCompressionService.prototype, 'compress').mockResolvedValue({
++        newHistory: null,
++        info: {
++          originalTokenCount: 12_345,
++          newTokenCount: 12_345,
++          compressionStatus: CompressionStatus.NOOP,
++        },
++      });
++      vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
++        makeStreamResponse('exact count response'),
++      );
++
++      const chatInstance = new GeminiChat(
++        mockConfig,
++        config,
++        [],
++        undefined,
++        uiTelemetryService,
++      );
++      const stream = await chatInstance.sendMessageStream(
++        'qwen3.8-27b-nvfp4-k8v4',
++        { message: 'hi' },
++        'prompt-vllm-exact-count',
++      );
++      for await (const _ of stream) {
++        /* consume */
++      }
++
++      expect(mockContentGenerator.countRequestTokens).toHaveBeenCalledTimes(2);
++      const requestConfig = vi.mocked(
++        mockContentGenerator.generateContentStream,
++      ).mock.calls[0][0].config as { maxOutputTokens?: number };
++      expect(requestConfig.maxOutputTokens).toBe(249_799);
++    });
++
++    it('fails closed when exact request token counting is unavailable', async () => {
++      vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
++        authType: AuthType.USE_OPENAI,
++        model: 'qwen3.8-27b-nvfp4-k8v4',
++        contextWindowSize: 262_144,
++        exactTokenCounting: 'vllm',
++      });
++
++      const chatInstance = new GeminiChat(
++        mockConfig,
++        config,
++        [],
++        undefined,
++        uiTelemetryService,
++      );
++      await expect(
++        chatInstance.sendMessageStream(
++          'qwen3.8-27b-nvfp4-k8v4',
++          { message: 'hi' },
++          'prompt-vllm-exact-missing',
++        ),
++      ).rejects.toThrow('cannot count rendered requests');
++      expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();
++    });
++
+     it('keeps the overhead pad after compression uses an estimated baseline', async () => {
+       vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
+         authType: AuthType.USE_GEMINI,
+@@ -5927,6 +5998,62 @@ describe('GeminiChat', async () => {
+       }
+     });
+ 
++    it('does not replay invalid streams in strict tool-calling mode', async () => {
++      vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
++        authType: AuthType.USE_GEMINI,
++        model: 'test-model',
++        maxRetries: 0,
++        strictToolCalling: true,
++      });
++      vi.mocked(mockContentGenerator.generateContentStream).mockImplementation(
++        async () => streamResponse(stopResponse([])),
++      );
++
++      const stream = await chat.sendMessageStream(
++        'test-model',
++        { message: 'test' },
++        'prompt-id-strict-no-invalid-retry',
++      );
++      await expect(
++        (async () => {
++          for await (const _ of stream) {
++            /* consume */
++          }
++        })(),
++      ).rejects.toThrow(InvalidStreamError);
++
++      expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(
++        1,
++      );
++      expect(mockLogContentRetry).not.toHaveBeenCalled();
++    });
++
++    it('maps maxRetries zero to one outer establishment attempt', async () => {
++      vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
++        authType: AuthType.USE_GEMINI,
++        model: 'test-model',
++        maxRetries: 0,
++        strictToolCalling: true,
++      });
++      vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
++        streamResponse(stopResponse([{ text: 'done' }])),
++      );
++
++      const stream = await chat.sendMessageStream(
++        'test-model',
++        { message: 'test' },
++        'prompt-id-strict-one-establishment-attempt',
++      );
++      for await (const _ of stream) {
++        /* consume */
++      }
++
++      expect(mockRetryWithBackoff).toHaveBeenCalledWith(
++        expect.any(Function),
++        expect.objectContaining({ maxAttempts: 1, persistentMode: false }),
++      );
++    });
++
+     it('should fail after all retries on persistent invalid content and report metrics', async () => {
+       vi.useFakeTimers();
+       try {
+@@ -15129,6 +15256,41 @@ describe('GeminiChat', async () => {
+       } as unknown as GenerateContentResponse;
+     }
+ 
++    it('keeps XML text non-executable in strict tool-calling mode', async () => {
++      vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
++        authType: AuthType.USE_GEMINI,
++        model: 'test-model',
++        maxRetries: 0,
++        strictToolCalling: true,
++      });
++      const xml =
++        '<invoke name="run_shell_command"><parameter name="command">printf should-not-run</parameter></invoke>';
++      vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
++        (async function* () {
++          yield xmlChunk(xml, 'STOP');
++        })(),
++      );
++
++      const stream = await chat.sendMessageStream(
++        'gemini-pro',
++        { message: 'show the XML literally' },
++        'prompt-strict-xml',
++      );
++      const chunks: GenerateContentResponse[] = [];
++      for await (const event of stream) {
++        if (event.type === StreamEventType.CHUNK) chunks.push(event.value);
++      }
++
++      expect(
++        chunks.some((chunk) =>
++          chunk.candidates?.[0]?.content?.parts?.some(
++            (part) => part.functionCall,
++          ),
++        ),
++      ).toBe(false);
++      expect(chat.getHistory().at(-1)?.parts).toEqual([{ text: xml }]);
++    });
++
+     it('recovers XML tool calls from plain text content and updates history', async () => {
+       const xml =
+         '<invoke name="read_file"><parameter name="file_path">a.ts</parameter></invoke>';
+diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
+index 8051292..314cfa3 100644
+--- a/packages/core/src/core/geminiChat.ts
++++ b/packages/core/src/core/geminiChat.ts
+@@ -48,6 +48,7 @@ import {
+ import type { Config } from '../config/config.js';
+ import type { ContentGenerator, InputModalities } from './contentGenerator.js';
+ import {
++  clampExactOutputTokensToWindow,
+   clampOutputTokensToWindow,
+   defaultOutputCeiling,
+   DEFAULT_TOKEN_LIMIT,
+@@ -1866,8 +1867,11 @@ export class GeminiChat {
+    * Public history readers still use {@link getHistory}, which returns a
+    * defensive deep copy for caller mutation safety.
+    */
+-  private getRequestHistory(currentUserContent?: Content): Content[] {
+-    const curatedHistory = extractCuratedHistory(this.history);
++  private getRequestHistoryFrom(
++    sourceHistory: Content[],
++    currentUserContent?: Content,
++  ): Content[] {
++    const curatedHistory = extractCuratedHistory(sourceHistory);
+     const { maxRecentImages, imagePayloadThreshold } = resolveCompactionTuning(
+       this.config.getChatCompression(),
+     );
+@@ -1900,6 +1904,23 @@ export class GeminiChat {
+     return curatedHistory.map(copyContentContainer);
+   }
+ 
++  private getRequestHistory(currentUserContent?: Content): Content[] {
++    return this.getRequestHistoryFrom(this.history, currentUserContent);
++  }
++
++  private getRequestHistoryWithPendingForRoute(
++    pendingUserContent: Content,
++    supportedModalities: InputModalities,
++  ): Content[] {
++    return slimCompactionInput(
++      this.getRequestHistoryFrom(
++        [...this.history, pendingUserContent],
++        pendingUserContent,
++      ),
++      supportedModalities,
++    ).slimmedHistory;
++  }
++
+   private getRequestHistoryForRoute(
+     currentUserContent: Content | undefined,
+     supportedModalities: InputModalities,
+@@ -2262,6 +2283,38 @@ export class GeminiChat {
+     // estimate.
+     const contextWindowForClamp =
+       cgConfigForThresholds?.contextWindowSize ?? DEFAULT_TOKEN_LIMIT;
++    const exactTokenCounting =
++      cgConfigForThresholds?.exactTokenCounting === 'vllm';
++    const tokenCountGenerator =
++      exactRoute?.contentGenerator ?? this.config.getContentGenerator();
++    const countExactRequestTokens = async (
++      contents: Content[],
++    ): Promise<number> => {
++      if (!exactTokenCounting) {
++        throw new Error(
++          'Internal error: exact token counting called while disabled.',
++        );
++      }
++      if (!tokenCountGenerator.countRequestTokens) {
++        throw new Error(
++          'exactTokenCounting=vllm is configured, but the active content generator cannot count rendered requests.',
++        );
++      }
++      const result = await tokenCountGenerator.countRequestTokens(
++        {
++          model,
++          contents,
++          config: { ...this.generationConfig, ...params.config },
++        },
++        prompt_id,
++      );
++      if (result.maxModelLen !== contextWindowForClamp) {
++        throw new Error(
++          `Exact tokenizer max_model_len=${result.maxModelLen} does not match contextWindowSize=${contextWindowForClamp}.`,
++        );
++      }
++      return result.totalTokens;
++    };
+     let promptTokensForClamp = 0;
+ 
+     let currentUserContent: Content | undefined;
+@@ -2337,13 +2390,20 @@ export class GeminiChat {
+       // `getContextLengthExceededInfo` → `tryCompress` → RETRY branch)
+       // is the documented safety net when this under-count causes
+       // hard-rescue to miss.
+-      const effectiveTokens = estimatePromptTokens(
+-        this.lastPromptTokenCount > 0 ? [] : this.getHistoryShallow(true),
+-        userContent,
+-        this.lastPromptTokenCount,
+-        this.lastOutputTokenCount,
+-        imageTokenEstimate,
+-      );
++      const effectiveTokens = exactTokenCounting
++        ? await countExactRequestTokens(
++            this.getRequestHistoryWithPendingForRoute(
++              userContent,
++              requestModalities,
++            ),
++          )
++        : estimatePromptTokens(
++            this.lastPromptTokenCount > 0 ? [] : this.getHistoryShallow(true),
++            userContent,
++            this.lastPromptTokenCount,
++            this.lastOutputTokenCount,
++            imageTokenEstimate,
++          );
+       const isHardTier = effectiveTokens >= hard;
+       const shouldForceFromHard =
+         !exactRoute &&
+@@ -2393,13 +2453,20 @@ export class GeminiChat {
+         );
+       }
+       const localPromptTokensAfterCompression = shouldForceFromHard
+-        ? estimatePromptTokens(
+-            this.lastPromptTokenCount > 0 ? [] : this.getHistoryShallow(true),
+-            userContent,
+-            this.lastPromptTokenCount,
+-            this.lastOutputTokenCount,
+-            imageTokenEstimate,
+-          )
++        ? exactTokenCounting
++          ? await countExactRequestTokens(
++              this.getRequestHistoryWithPendingForRoute(
++                userContent,
++                requestModalities,
++              ),
++            )
++          : estimatePromptTokens(
++              this.lastPromptTokenCount > 0 ? [] : this.getHistoryShallow(true),
++              userContent,
++              this.lastPromptTokenCount,
++              this.lastOutputTokenCount,
++              imageTokenEstimate,
++            )
+         : 0;
+       if (
+         shouldStopAfterHardRescue(
+@@ -2539,8 +2606,9 @@ export class GeminiChat {
+       // self-corrects when provider usage arrives. An under-count is the ONE
+       // way `prompt + max_tokens` can still overflow the window, so keep the
+       // pad until provider usage replaces the estimate.
+-      promptTokensForClamp =
+-        this.lastPromptTokenCount > 0
++      promptTokensForClamp = exactTokenCounting
++        ? await countExactRequestTokens(requestContents)
++        : this.lastPromptTokenCount > 0
+           ? estimatePromptTokens(
+               [],
+               userContent,
+@@ -2550,7 +2618,7 @@ export class GeminiChat {
+               /* conservative= */ true,
+             )
+           : effectiveTokens;
+-      if (this.promptCountIsEstimateDerived()) {
++      if (!exactTokenCounting && this.promptCountIsEstimateDerived()) {
+         promptTokensForClamp += ESTIMATE_CLAMP_OVERHEAD_PAD;
+         debugLogger.debug(
+           `[clamp] estimate-derived prompt count; padded by ` +
+@@ -2559,11 +2627,17 @@ export class GeminiChat {
+             `count=${this.lastPromptTokenCount}`,
+         );
+       }
+-      const clampedMaxOutputTokens = clampOutputTokensToWindow(
+-        outputCeiling,
+-        contextWindowForClamp,
+-        promptTokensForClamp,
+-      );
++      const clampedMaxOutputTokens = exactTokenCounting
++        ? clampExactOutputTokensToWindow(
++            outputCeiling,
++            contextWindowForClamp,
++            promptTokensForClamp,
++          )
++        : clampOutputTokensToWindow(
++            outputCeiling,
++            contextWindowForClamp,
++            promptTokensForClamp,
++          );
+       params = {
+         ...params,
+         config: {
+@@ -2644,6 +2718,7 @@ export class GeminiChat {
+         const cgConfig =
+           exactRoute?.contentGeneratorConfig ??
+           self.config.getContentGeneratorConfig();
++        const strictToolCalling = cgConfig?.strictToolCalling === true;
+         const requestOverrides = exactRoute
+           ? {
+               contentGenerator: exactRoute.contentGenerator,
+@@ -2674,11 +2749,17 @@ export class GeminiChat {
+         // outputCeiling fallback is defensive and should not fire in practice.
+         const effectiveInitialMaxOutputTokens =
+           params.config?.maxOutputTokens ?? outputCeiling;
+-        const escalatedLimit = clampOutputTokensToWindow(
+-          OUTPUT_TOKEN_CEILING,
+-          contextWindowForClamp,
+-          promptTokensForClamp,
+-        );
++        const escalatedLimit = exactTokenCounting
++          ? clampExactOutputTokensToWindow(
++              OUTPUT_TOKEN_CEILING,
++              contextWindowForClamp,
++              promptTokensForClamp,
++            )
++          : clampOutputTokensToWindow(
++              OUTPUT_TOKEN_CEILING,
++              contextWindowForClamp,
++              promptTokensForClamp,
++            );
+         const shouldEscalateMaxOutputTokens =
+           effectiveInitialMaxOutputTokens < escalatedLimit;
+ 
+@@ -2952,7 +3033,9 @@ export class GeminiChat {
+               // continuation one below.
+               transportContinuationText.trim().length === 0 &&
+               transportStreamRetryCount <
+-                TRANSPORT_STREAM_RETRY_CONFIG.maxRetries
++                (strictToolCalling
++                  ? 0
++                  : TRANSPORT_STREAM_RETRY_CONFIG.maxRetries)
+             ) {
+               self.popPendingPartialAssistantTurn();
+               transportStreamRetryCount++;
+@@ -3005,7 +3088,9 @@ export class GeminiChat {
+               !streamYieldedFunctionCall &&
+               transportContinuationText.trim().length > 0 &&
+               transportContinuationCount <
+-                TRANSPORT_STREAM_RETRY_CONFIG.maxContinuationRetries;
++                (strictToolCalling
++                  ? 0
++                  : TRANSPORT_STREAM_RETRY_CONFIG.maxContinuationRetries);
+             if (canContinueAfterTransportCut) {
+               self.popPendingPartialAssistantTurn();
+               transportContinuationCount++;
+@@ -3199,8 +3284,9 @@ export class GeminiChat {
+             // Invalid stream responses use INVALID_STREAM_RETRY_CONFIG, which
+             // is independent from HTTP retries handled by retryWithBackoff.
+             const isInvalidStreamError = error instanceof InvalidStreamError;
+-            const maxInvalidStreamRetries =
+-              isInvalidStreamError && error.type === 'PROTOCOL_TAG_LEAK'
++            const maxInvalidStreamRetries = strictToolCalling
++              ? 0
++              : isInvalidStreamError && error.type === 'PROTOCOL_TAG_LEAK'
+                 ? INVALID_STREAM_RETRY_CONFIG.protocolTagLeakMaxRetries
+                 : INVALID_STREAM_RETRY_CONFIG.transientMaxRetries;
+             const invalidStreamRetryCount =
+@@ -3323,8 +3409,9 @@ export class GeminiChat {
+               attemptState.rollback();
+               if (!(error instanceof InvalidStreamError)) throw error;
+ 
+-              const maxContinuationRetries =
+-                error.type === 'PROTOCOL_TAG_LEAK'
++              const maxContinuationRetries = strictToolCalling
++                ? 0
++                : error.type === 'PROTOCOL_TAG_LEAK'
+                   ? INVALID_STREAM_RETRY_CONFIG.protocolTagLeakMaxRetries
+                   : INVALID_STREAM_RETRY_CONFIG.transientMaxRetries;
+               const continuationRetryCount =
+@@ -3900,13 +3987,18 @@ export class GeminiChat {
+         prompt_id,
+       );
+     const cgConfig = this.config.getContentGeneratorConfig();
++    const strictToolCalling = cgConfig?.strictToolCalling === true;
+     const authType = overrides?.retryAuthType ?? cgConfig?.authType;
+     const extraRetryErrorCodes =
+       overrides?.retryErrorCodes ?? cgConfig?.retryErrorCodes;
+     // Fallback models never enter persistent retry mode — persistent mode
+     // is the caller's explicit opt-in for the primary model only.
+-    const persistentMode = overrides ? false : isUnattendedMode();
++    const persistentMode =
++      overrides || strictToolCalling ? false : isUnattendedMode();
+     const streamResponse = await retryWithBackoff(apiCall, {
++      ...(cgConfig?.maxRetries !== undefined
++        ? { maxAttempts: Math.max(1, Math.floor(cgConfig.maxRetries) + 1) }
++        : {}),
+       shouldRetryOnError: (error: unknown) => {
+         if (error instanceof Error) {
+           if (isSchemaDepthError(error.message)) return false;
+@@ -4444,6 +4536,8 @@ export class GeminiChat {
+     goalContext?: GoalTurnPermit,
+     transportContinuationPrefix?: string,
+   ): AsyncGenerator<GenerateContentResponse> {
++    const strictToolCalling =
++      this.config.getContentGeneratorConfig().strictToolCalling === true;
+     // Collect ALL parts from the model response (including thoughts for recording)
+     const allModelParts: Part[] = [];
+     const usedToolCallIds = collectToolCallIdsFromHistory(this.history);
+@@ -4774,6 +4868,7 @@ export class GeminiChat {
+     // field instead of using the structured tool_calls array. Detect and
+     // recover these so the agent loop is not broken. See #8003.
+     if (
++      !strictToolCalling &&
+       streamError === null &&
+       !hasToolCall &&
+       hasFinishReason &&
+diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts b/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
+index 6383d97..a2e866f 100644
+--- a/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
++++ b/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
+@@ -37,6 +37,7 @@ import { subagentNameContext } from '../../utils/subagentNameContext.js';
+ import type {
+   ContentGenerator,
+   ContentGeneratorConfig,
++  ExactRequestTokenCount,
+   InputModalities,
+ } from '../contentGenerator.js';
+ import { OpenAIContentConverter } from '../openaiContentGenerator/converter.js';
+@@ -1212,6 +1213,18 @@ export class LoggingContentGenerator implements ContentGenerator {
+     return this.wrapped.countTokens(req);
+   }
+ 
++  async countRequestTokens(
++    req: GenerateContentParameters,
++    userPromptId: string,
++  ): Promise<ExactRequestTokenCount> {
++    if (!this.wrapped.countRequestTokens) {
++      throw new Error(
++        'Exact request token counting is not supported by the wrapped content generator.',
++      );
++    }
++    return this.wrapped.countRequestTokens(req, userPromptId);
++  }
++
+   async embedContent(
+     req: EmbedContentParameters,
+   ): Promise<EmbedContentResponse> {
+diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/packages/core/src/core/openaiContentGenerator/converter.test.ts
+index 9c65b85..ab14499 100644
+--- a/packages/core/src/core/openaiContentGenerator/converter.test.ts
++++ b/packages/core/src/core/openaiContentGenerator/converter.test.ts
+@@ -3732,6 +3732,79 @@ describe('OpenAIContentConverter', () => {
+       expect(response.modelVersion).toBe('test-model');
+     });
+ 
++    it('suppresses diagnostic tool prefixes on a length terminal in strict mode', () => {
++      const response = converter.convertOpenAIResponseToGemini(
++        {
++          object: 'chat.completion',
++          id: 'chatcmpl-truncated-tool',
++          created: 123,
++          model: 'test-model',
++          choices: [
++            {
++              index: 0,
++              message: {
++                role: 'assistant',
++                content: null,
++                tool_calls: [
++                  {
++                    id: 'call_1',
++                    type: 'function',
++                    function: {
++                      name: 'run_shell_command',
++                      arguments: '{"command":"printf unsafe-prefix',
++                    },
++                  },
++                ],
++              },
++              finish_reason: 'length',
++              logprobs: null,
++            },
++          ],
++        } as unknown as OpenAI.Chat.ChatCompletion,
++        { ...requestContext, strictToolCalling: true },
++      );
++
++      expect(response.functionCalls).toBeUndefined();
++      expect(response.candidates?.[0]?.finishReason).toBe(
++        FinishReason.MAX_TOKENS,
++      );
++    });
++
++    it('rejects malformed completed tool arguments in strict mode', () => {
++      expect(() =>
++        converter.convertOpenAIResponseToGemini(
++          {
++            object: 'chat.completion',
++            id: 'chatcmpl-malformed-tool',
++            created: 123,
++            model: 'test-model',
++            choices: [
++              {
++                index: 0,
++                message: {
++                  role: 'assistant',
++                  content: null,
++                  tool_calls: [
++                    {
++                      id: 'call_1',
++                      type: 'function',
++                      function: {
++                        name: 'read_file',
++                        arguments: '{"file_path":',
++                      },
++                    },
++                  ],
++                },
++                finish_reason: 'tool_calls',
++                logprobs: null,
++              },
++            ],
++          } as unknown as OpenAI.Chat.ChatCompletion,
++          { ...requestContext, strictToolCalling: true },
++        ),
++      ).toThrow('malformed tool arguments');
++    });
++
+     it('omits the input/output breakdown when only total tokens are reported', () => {
+       const response = converter.convertOpenAIResponseToGemini(
+         {
+@@ -6803,11 +6876,15 @@ describe('Truncated tool call detection in streaming', () => {
+     converter = OpenAIContentConverter;
+   });
+ 
+-  function createStreamingRequestContext(model = 'test-model'): RequestContext {
++  function createStreamingRequestContext(
++    model = 'test-model',
++    strictToolCalling = false,
++  ): RequestContext {
+     return {
+       model,
+       modalities: {},
+       startTime: 0,
++      strictToolCalling,
+       toolCallParser: new StreamingToolCallParser(),
+     };
+   }
+@@ -6825,9 +6902,10 @@ describe('Truncated tool call detection in streaming', () => {
+       arguments: string;
+     }>,
+     finishReason: string,
++    strictToolCalling = false,
+   ) {
+     // One stream-local context covers every chunk of this simulated stream.
+-    const ctx = createStreamingRequestContext();
++    const ctx = createStreamingRequestContext('test-model', strictToolCalling);
+ 
+     // Feed argument chunks (no finish_reason yet)
+     for (const tc of toolCallChunks) {
+@@ -7328,6 +7406,72 @@ describe('Truncated tool call detection in streaming', () => {
+     });
+   });
+ 
++  it('does not expose a truncated function call in strict mode', () => {
++    const result = feedToolCallChunks(
++      converter,
++      [
++        {
++          index: 0,
++          id: 'call_1',
++          name: 'run_shell_command',
++          arguments: '{"command":"printf unsafe-prefix',
++        },
++      ],
++      'length',
++      true,
++    );
++
++    expect(result.candidates?.[0]?.finishReason).toBe(FinishReason.MAX_TOKENS);
++    expect(result.functionCalls).toBeUndefined();
++    expect(
++      result.candidates?.[0]?.content?.parts?.some(
++        (part) => part.functionCall,
++      ),
++    ).toBe(false);
++  });
++
++  it('requires a tool_calls terminal in strict mode', () => {
++    expect(() =>
++      feedToolCallChunks(
++        converter,
++        [
++          {
++            index: 0,
++            id: 'call_1',
++            name: 'read_file',
++            arguments: '{"file_path":"README.md"}',
++          },
++        ],
++        'stop',
++        true,
++      ),
++    ).toThrow('without a tool_calls terminal');
++  });
++
++  it('exposes a completed identified call in strict mode', () => {
++    const result = feedToolCallChunks(
++      converter,
++      [
++        {
++          index: 0,
++          id: 'call_1',
++          name: 'read_file',
++          arguments: '{"file_path":"README.md"}',
++        },
++      ],
++      'tool_calls',
++      true,
++    );
++
++    expect(result.functionCalls).toEqual([
++      {
++        id: 'call_1',
++        name: 'read_file',
++        args: { file_path: 'README.md' },
++      },
++    ]);
++  });
++
+   it('should detect truncation with multi-chunk streaming arguments', () => {
+     // Feed arguments in multiple small chunks like real streaming
+     const conv = OpenAIContentConverter;
+diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packages/core/src/core/openaiContentGenerator/converter.ts
+index ffd8dfc..48a503d 100644
+--- a/packages/core/src/core/openaiContentGenerator/converter.ts
++++ b/packages/core/src/core/openaiContentGenerator/converter.ts
+@@ -1236,13 +1236,58 @@ export function convertOpenAIResponseToGemini(
+     // Handle text content
+     parts.push(...textParts);
+ 
+-    // Handle tool calls
+-    if (choice.message.tool_calls) {
++    // A tool call is executable only when the provider completed the
++    // structured-tool branch normally. Diagnostic prefixes returned with a
++    // length terminal must never become local actions.
++    if (
++      requestContext.strictToolCalling &&
++      choice.message.tool_calls?.length &&
++      choice.finish_reason !== 'tool_calls' &&
++      choice.finish_reason !== 'length'
++    ) {
++      throw new InvalidStreamError(
++        'Model response carried tool calls without a tool_calls terminal.',
++        'MALFORMED_TOOL_CALL',
++      );
++    }
++    if (
++      choice.message.tool_calls &&
++      (!requestContext.strictToolCalling ||
++        choice.finish_reason === 'tool_calls')
++    ) {
+       for (const toolCall of choice.message.tool_calls) {
+         if (toolCall.function) {
+           let args: Record<string, unknown> = {};
+           if (toolCall.function.arguments) {
+-            args = safeJsonParse(toolCall.function.arguments, {});
++            if (requestContext.strictToolCalling) {
++              try {
++                const parsed: unknown = JSON.parse(toolCall.function.arguments);
++                if (
++                  typeof parsed !== 'object' ||
++                  parsed === null ||
++                  Array.isArray(parsed)
++                ) {
++                  throw new Error('tool arguments are not an object');
++                }
++                args = parsed as Record<string, unknown>;
++              } catch {
++                throw new InvalidStreamError(
++                  'Model response contained malformed tool arguments.',
++                  'MALFORMED_TOOL_CALL',
++                );
++              }
++            } else {
++              args = safeJsonParse(toolCall.function.arguments, {});
++            }
++          }
++          if (
++            requestContext.strictToolCalling &&
++            (!toolCall.id || !toolCall.function.name?.trim())
++          ) {
++            throw new InvalidStreamError(
++              'Model response contained an unidentified tool call.',
++              'MALFORMED_TOOL_CALL',
++            );
+           }
+ 
+           parts.push({
+@@ -1666,14 +1711,28 @@ export function convertOpenAIChunkToGemini(
+     }
+ 
+     const toolCallWithoutName = toolCallParser.hasNamelessToolCall();
+-    const completedToolCalls = choice.finish_reason
+-      ? toolCallParser.getCompletedToolCalls()
+-      : [];
+     // Some providers report "stop" or "tool_calls" for JSON cut off by the
+     // token limit, so validate the parser state independently of finish_reason.
+     const toolCallsTruncated = choice.finish_reason
+       ? toolCallParser.hasIncompleteToolCalls()
+       : false;
++    const invalidToolCall =
++      toolCallParser.hasInvalidToolCallIndex() ||
++      toolCallWithoutName ||
++      toolCallParser.hasConflictingToolCallIdentity() ||
++      (!toolCallsTruncated && toolCallParser.hasInvalidToolCallArguments());
++    const parsedToolCalls =
++      choice.finish_reason && !toolCallsTruncated && !invalidToolCall
++        ? toolCallParser.getCompletedToolCalls()
++        : [];
++    const completedToolCalls = requestContext.strictToolCalling
++      ? choice.finish_reason === 'tool_calls' &&
++        parsedToolCalls.every((toolCall) => Boolean(toolCall.id))
++        ? parsedToolCalls
++        : []
++      : choice.finish_reason
++        ? toolCallParser.getCompletedToolCalls()
++        : [];
+     if (
+       choice.finish_reason &&
+       requestContext.pendingThinkingTagCandidate?.closingTagName
+@@ -1697,9 +1756,24 @@ export function convertOpenAIChunkToGemini(
+     }
+ 
+     if (
++      requestContext.strictToolCalling &&
+       choice.finish_reason &&
+-      (toolCallParser.hasInvalidToolCallIndex() ||
+-        toolCallWithoutName ||
++      choice.finish_reason !== 'tool_calls' &&
++      choice.finish_reason !== 'length' &&
++      parsedToolCalls.length > 0
++    ) {
++      requestContext.pendingUntrustedResponseParts = undefined;
++      throw new InvalidStreamError(
++        'Model response carried tool calls without a tool_calls terminal.',
++        'MALFORMED_TOOL_CALL',
++      );
++    }
++
++    if (
++      choice.finish_reason &&
++      ((invalidToolCall &&
++        (!requestContext.strictToolCalling ||
++          choice.finish_reason !== 'length')) ||
+         (choice.finish_reason === 'tool_calls' &&
+           completedToolCalls.length === 0))
+     ) {
+diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
+index f4166d4..c5ee9a3 100644
+--- a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
++++ b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
+@@ -1,4 +1,7 @@
+-import type { ContentGenerator } from '../contentGenerator.js';
++import type {
++  ContentGenerator,
++  ExactRequestTokenCount,
++} from '../contentGenerator.js';
+ import type { Config } from '../../config/config.js';
+ import { type OpenAICompatibleProvider } from './provider/index.js';
+ import type {
+@@ -107,6 +110,13 @@ export class OpenAIContentGenerator implements ContentGenerator {
+     }
+   }
+ 
++  async countRequestTokens(
++    request: GenerateContentParameters,
++    userPromptId: string,
++  ): Promise<ExactRequestTokenCount> {
++    return this.pipeline.countRequestTokens(request, userPromptId);
++  }
++
+   async embedContent(
+     request: EmbedContentParameters,
+   ): Promise<EmbedContentResponse> {
+diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts
+new file mode 100644
+index 0000000..9e8125a
+--- /dev/null
++++ b/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts
+@@ -0,0 +1,64 @@
++/**
++ * @license
++ * Copyright 2025 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import { describe, expect, it } from 'vitest';
++import {
++  deriveVllmTokenizeUrl,
++  validateVllmTokenizeResponse,
++} from './pipeline.js';
++
++describe('vLLM exact token counting', () => {
++  it('derives the root tokenizer endpoint from a /v1 API base', () => {
++    expect(deriveVllmTokenizeUrl('http://127.0.0.1:8000/v1')).toBe(
++      'http://127.0.0.1:8000/tokenize',
++    );
++    expect(deriveVllmTokenizeUrl('http://localhost:8000/prefix/v1/')).toBe(
++      'http://localhost:8000/prefix/tokenize',
++    );
++  });
++
++  it('rejects ambiguous or non-vLLM API bases', () => {
++    expect(() => deriveVllmTokenizeUrl(undefined)).toThrow(
++      'requires an explicit OpenAI baseUrl',
++    );
++    expect(() => deriveVllmTokenizeUrl('http://127.0.0.1:8000')).toThrow(
++      'requires baseUrl to end in /v1',
++    );
++    expect(() =>
++      deriveVllmTokenizeUrl('http://127.0.0.1:8000/v1?route=other'),
++    ).toThrow('without query parameters');
++  });
++
++  it('accepts only an integer count with the configured model window', () => {
++    expect(
++      validateVllmTokenizeResponse(
++        { count: 12_345, max_model_len: 262_144 },
++        262_144,
++      ),
++    ).toEqual({ totalTokens: 12_345, maxModelLen: 262_144 });
++  });
++
++  it('fails closed on malformed or mismatched responses', () => {
++    expect(() =>
++      validateVllmTokenizeResponse(
++        { count: 12.5, max_model_len: 262_144 },
++        262_144,
++      ),
++    ).toThrow('refusing to estimate');
++    expect(() =>
++      validateVllmTokenizeResponse(
++        { count: 12_345, max_model_len: 131_072 },
++        262_144,
++      ),
++    ).toThrow('refusing to use mismatched limits');
++    expect(() =>
++      validateVllmTokenizeResponse(
++        { count: 12_345, max_model_len: 262_144 },
++        undefined,
++      ),
++    ).toThrow('requires an explicit positive contextWindowSize');
++  });
++});
+diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
+index a7aaf90..a5d7caa 100644
+--- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
++++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
+@@ -11,6 +11,7 @@ import {
+ } from '@google/genai';
+ import type {
+   ContentGeneratorConfig,
++  ExactRequestTokenCount,
+   PromptCacheSharingParameters,
+ } from '../contentGenerator.js';
+ import { OpenAIContentConverter } from './converter.js';
+@@ -434,6 +435,72 @@ async function* withStreamGuards(
+ 
+ export type { PipelineConfig } from './types.js';
+ 
++type VllmTokenizeResponse = {
++  count?: unknown;
++  max_model_len?: unknown;
++};
++
++export function deriveVllmTokenizeUrl(baseUrl: string | undefined): string {
++  if (!baseUrl) {
++    throw new Error(
++      'exactTokenCounting=vllm requires an explicit OpenAI baseUrl ending in /v1.',
++    );
++  }
++
++  const parsed = new URL(baseUrl);
++  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
++    throw new Error(
++      'exactTokenCounting=vllm requires a credential-free baseUrl without query parameters or a fragment.',
++    );
++  }
++  const normalizedPath = parsed.pathname.replace(/\/+$/, '');
++  if (!normalizedPath.endsWith('/v1')) {
++    throw new Error(
++      `exactTokenCounting=vllm requires baseUrl to end in /v1; received ${parsed.origin}${parsed.pathname}`,
++    );
++  }
++  parsed.pathname = `${normalizedPath.slice(0, -3)}/tokenize`.replace(
++    /\/{2,}/g,
++    '/',
++  );
++  return parsed.toString();
++}
++
++export function validateVllmTokenizeResponse(
++  response: VllmTokenizeResponse,
++  expectedMaxModelLen: number | undefined,
++): ExactRequestTokenCount {
++  const totalTokens = response.count;
++  const maxModelLen = response.max_model_len;
++  if (
++    !Number.isSafeInteger(totalTokens) ||
++    (totalTokens as number) < 0 ||
++    !Number.isSafeInteger(maxModelLen) ||
++    (maxModelLen as number) <= 0
++  ) {
++    throw new Error(
++      'vLLM /tokenize returned an invalid count or max_model_len; refusing to estimate.',
++    );
++  }
++  if (
++    !Number.isSafeInteger(expectedMaxModelLen) ||
++    (expectedMaxModelLen as number) <= 0
++  ) {
++    throw new Error(
++      'exactTokenCounting=vllm requires an explicit positive contextWindowSize.',
++    );
++  }
++  if (maxModelLen !== expectedMaxModelLen) {
++    throw new Error(
++      `vLLM /tokenize reports max_model_len=${maxModelLen}, but contextWindowSize=${expectedMaxModelLen}; refusing to use mismatched limits.`,
++    );
++  }
++  return {
++    totalTokens: totalTokens as number,
++    maxModelLen: maxModelLen as number,
++  };
++}
++
+ export class ContentGenerationPipeline {
+   client: OpenAI;
+   private contentGeneratorConfig: ContentGeneratorConfig;
+@@ -454,6 +521,50 @@ export class ContentGenerationPipeline {
+     );
+   }
+ 
++  async countRequestTokens(
++    request: PromptCacheSharingParameters,
++    userPromptId: string,
++  ): Promise<ExactRequestTokenCount> {
++    if (this.contentGeneratorConfig.exactTokenCounting !== 'vllm') {
++      throw new Error(
++        'Exact request token counting was called without exactTokenCounting=vllm.',
++      );
++    }
++
++    const context = this.createRequestContext(request, true);
++    const wireRequest = await this.buildRequest(
++      request,
++      userPromptId,
++      context,
++      true,
++    );
++    const tokenizeBody: Record<string, unknown> = {
++      model: wireRequest.model,
++      messages: wireRequest.messages,
++      add_generation_prompt: true,
++    };
++    if (wireRequest.tools !== undefined) {
++      tokenizeBody['tools'] = wireRequest.tools;
++    }
++    const requestRecord = wireRequest as unknown as Record<string, unknown>;
++    if (requestRecord['chat_template_kwargs'] !== undefined) {
++      tokenizeBody['chat_template_kwargs'] =
++        requestRecord['chat_template_kwargs'];
++    }
++
++    const response = await this.client.post<VllmTokenizeResponse>(
++      deriveVllmTokenizeUrl(this.contentGeneratorConfig.baseUrl),
++      {
++        body: tokenizeBody,
++        signal: request.config?.abortSignal,
++      },
++    );
++    return validateVllmTokenizeResponse(
++      response,
++      this.contentGeneratorConfig.contextWindowSize,
++    );
++  }
++
+   async execute(
+     request: PromptCacheSharingParameters,
+     userPromptId: string,
+@@ -1420,6 +1531,7 @@ export class ContentGenerationPipeline {
+       model: effectiveModel,
+       modalities: this.contentGeneratorConfig.modalities ?? {},
+       startTime: Date.now(),
++      strictToolCalling: this.contentGeneratorConfig.strictToolCalling === true,
+       splitToolMedia:
+         providerOverrides.splitToolMedia ??
+         this.contentGeneratorConfig.splitToolMedia ??
+diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/core/src/core/openaiContentGenerator/types.ts
+index 134ecd7..1cc33ff 100644
+--- a/packages/core/src/core/openaiContentGenerator/types.ts
++++ b/packages/core/src/core/openaiContentGenerator/types.ts
+@@ -43,6 +43,7 @@ export interface RequestContext {
+   model: string;
+   modalities: InputModalities;
+   startTime: number;
++  strictToolCalling?: boolean;
+   toolCallParser?: StreamingToolCallParser;
+   responseParsingOptions?: OpenAIResponseParsingOptions;
+   taggedThinkingParser?: TaggedThinkingParser;
+diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core/tokenLimits.test.ts
+index 6d72689..c148861 100644
+--- a/packages/core/src/core/tokenLimits.test.ts
++++ b/packages/core/src/core/tokenLimits.test.ts
+@@ -4,6 +4,7 @@ import {
+   tokenLimit,
+   knownTokenLimit,
+   clampOutputTokensToWindow,
++  clampExactOutputTokensToWindow,
+   outputClampMargin,
+   defaultOutputCeiling,
+   reconcileMaxTokens,
+@@ -571,6 +572,26 @@ describe('clampOutputTokensToWindow', () => {
+   });
+ });
+ 
++describe('clampExactOutputTokensToWindow', () => {
++  it('uses every exactly measured token of remaining room', () => {
++    expect(clampExactOutputTokensToWindow(262_144, 262_144, 12_345)).toBe(
++      249_799,
++    );
++  });
++
++  it('respects an explicit output ceiling', () => {
++    expect(clampExactOutputTokensToWindow(131_072, 262_144, 12_345)).toBe(
++      131_072,
++    );
++  });
++
++  it('fails closed when the rendered prompt leaves no generation room', () => {
++    expect(() => clampExactOutputTokensToWindow(10, 262_144, 262_144)).toThrow(
++      'exceeding the 262144-token context window',
++    );
++  });
++});
++
+ describe('defaultOutputCeiling', () => {
+   it('clips a model advertising more than the ceiling down to it', () => {
+     // deepseek-v4 advertises 384K output → clipped to OUTPUT_TOKEN_CEILING.
+diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
+index 4b7c7f6..d246909 100644
+--- a/packages/core/src/core/tokenLimits.ts
++++ b/packages/core/src/core/tokenLimits.ts
+@@ -75,6 +75,36 @@ export function clampOutputTokensToWindow(
+   return Math.min(outputCeiling, Math.max(MIN_CLAMPED_OUTPUT_TOKENS, room));
+ }
+ 
++/**
++ * Clamp against a server-authoritative count of the fully rendered prompt.
++ * Unlike the estimate path, this intentionally has no heuristic margin and no
++ * minimum-output floor: either the exact remaining room is used or the turn
++ * fails before it can overflow vLLM's configured context window.
++ */
++export function clampExactOutputTokensToWindow(
++  outputCeiling: number,
++  contextWindowSize: number,
++  exactPromptTokens: number,
++): TokenCount {
++  if (
++    !Number.isSafeInteger(outputCeiling) ||
++    outputCeiling <= 0 ||
++    !Number.isSafeInteger(contextWindowSize) ||
++    contextWindowSize <= 0 ||
++    !Number.isSafeInteger(exactPromptTokens) ||
++    exactPromptTokens < 0
++  ) {
++    throw new Error('Exact output clamp received invalid token limits.');
++  }
++  const room = contextWindowSize - exactPromptTokens;
++  if (room <= 0) {
++    throw new Error(
++      `Exact rendered prompt uses ${exactPromptTokens} tokens, exceeding the ${contextWindowSize}-token context window before generation.`,
++    );
++  }
++  return Math.min(outputCeiling, room);
++}
++
+ export function parsePositiveIntegerEnvValue(
+   raw: string | undefined,
+ ): number | undefined {
+diff --git a/packages/core/src/models/constants.ts b/packages/core/src/models/constants.ts
+index 4f55526..0280a42 100644
+--- a/packages/core/src/models/constants.ts
++++ b/packages/core/src/models/constants.ts
+@@ -35,6 +35,8 @@ export const MODEL_GENERATION_CONFIG_FIELDS = [
+   'customHeaders',
+   'extra_body',
+   'thinkingMandatory',
++  'strictToolCalling',
++  'exactTokenCounting',
+   'modalities',
+   'splitToolMedia',
+   'toolResultContentFormat',
+diff --git a/packages/core/src/models/content-generator-config.ts b/packages/core/src/models/content-generator-config.ts
+index 751d7aa..af2b7c7 100644
+--- a/packages/core/src/models/content-generator-config.ts
++++ b/packages/core/src/models/content-generator-config.ts
+@@ -89,6 +89,8 @@ export function buildAgentContentGeneratorConfig(
+ 
+   if (modelId && modelId !== parentConfig.model) {
+     nextConfig.thinkingMandatory = undefined;
++    nextConfig.strictToolCalling = undefined;
++    nextConfig.exactTokenCounting = undefined;
+   }
+ 
+   nextConfig.apiKey = resolveCredentialField(
+@@ -177,7 +179,12 @@ function applyResolvedModelConfig(
+   // model capabilities such as thinkingMandatory, which must not leak.
+   for (const field of MODEL_GENERATION_CONFIG_FIELDS) {
+     const registryValue = resolvedModel.generationConfig[field];
+-    if (registryValue !== undefined || field === 'thinkingMandatory') {
++    if (
++      registryValue !== undefined ||
++      field === 'thinkingMandatory' ||
++      field === 'strictToolCalling' ||
++      field === 'exactTokenCounting'
++    ) {
+       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       (targetConfig as any)[field] = registryValue;
+     }
+diff --git a/packages/core/src/models/types.ts b/packages/core/src/models/types.ts
+index dd84b36..eebbb82 100644
+--- a/packages/core/src/models/types.ts
++++ b/packages/core/src/models/types.ts
+@@ -44,6 +44,8 @@ export type ModelGenerationConfig = Pick<
+   | 'customHeaders'
+   | 'extra_body'
+   | 'thinkingMandatory'
++  | 'strictToolCalling'
++  | 'exactTokenCounting'
+   | 'contextWindowSize'
+   | 'modalities'
+   | 'splitToolMedia'
+diff --git a/packages/core/src/permissions/permission-manager.test.ts b/packages/core/src/permissions/permission-manager.test.ts
+index 15964b8..e3f20c6 100644
+--- a/packages/core/src/permissions/permission-manager.test.ts
++++ b/packages/core/src/permissions/permission-manager.test.ts
+@@ -1627,6 +1627,7 @@ function makeConfig(
+     permissionsAsk: string[];
+     permissionsDeny: string[];
+     coreTools: string[];
++    strictTools: string[];
+     projectRoot: string;
+     cwd: string;
+     approvalMode: string;
+@@ -1637,6 +1638,7 @@ function makeConfig(
+     getPermissionsAsk: () => opts.permissionsAsk,
+     getPermissionsDeny: () => opts.permissionsDeny,
+     getCoreTools: () => opts.coreTools,
++    getStrictTools: () => opts.strictTools,
+     getProjectRoot: () => opts.projectRoot ?? '/project',
+     getCwd: () => opts.cwd ?? '/project',
+     getApprovalMode: () => opts.approvalMode ?? 'default',
+@@ -2604,6 +2606,20 @@ describe('PermissionManager', () => {
+       // Other MCP tools without deny rule should still be enabled
+       expect(await pm.isToolEnabled('mcp__puppeteer__navigate')).toBe(true);
+     });
++
++    it('strictTools universally gates core, dynamic, and synthetic tools', async () => {
++      pm = new PermissionManager(
++        makeConfig({ strictTools: ['read_file', 'Bash'] }),
++      );
++      pm.initialize();
++      expect(await pm.isToolEnabled('read_file')).toBe(true);
++      expect(await pm.isToolEnabled('run_shell_command')).toBe(true);
++      expect(await pm.isToolEnabled('edit')).toBe(false);
++      expect(await pm.isToolEnabled('skill')).toBe(false);
++      expect(await pm.isToolEnabled('agent')).toBe(false);
++      expect(await pm.isToolEnabled('send_message')).toBe(false);
++      expect(await pm.isToolEnabled('mcp__puppeteer__navigate')).toBe(false);
++    });
+   });
+ 
+   describe('session rules', () => {
+diff --git a/packages/core/src/permissions/permission-manager.ts b/packages/core/src/permissions/permission-manager.ts
+index 8e53833..bfc063a 100644
+--- a/packages/core/src/permissions/permission-manager.ts
++++ b/packages/core/src/permissions/permission-manager.ts
+@@ -88,6 +88,8 @@ export interface PermissionManagerConfig {
+    *             (e.g. `"Bash"` to block all shell commands) instead.
+    */
+   getCoreTools?(): string[] | undefined;
++  /** Universal allowlist that also gates dynamic and synthetic tools. */
++  getStrictTools?(): string[] | undefined;
+ }
+ 
+ /**
+@@ -140,6 +142,7 @@ export class PermissionManager {
+    * Populated during `initialize()` from `config.getCoreTools()`.
+    */
+   private coreToolsAllowList: Set<string> | null = null;
++  private strictToolsAllowList: Set<string> | null = null;
+ 
+   constructor(private readonly config: PermissionManagerConfig) {}
+ 
+@@ -167,6 +170,12 @@ export class PermissionManager {
+         rawCoreTools.map((t) => parseRule(t).toolName),
+       );
+     }
++    const rawStrictTools = this.config.getStrictTools?.();
++    if (rawStrictTools && rawStrictTools.length > 0) {
++      this.strictToolsAllowList = new Set(
++        rawStrictTools.map((t) => parseRule(t).toolName),
++      );
++    }
+ 
+     // When the session starts in AUTO (via `tools.approvalMode: 'auto'` in
+     // settings.json or `--approval-mode auto` on the CLI), the constructor
+@@ -612,6 +621,13 @@ export class PermissionManager {
+   async isToolEnabled(toolName: string): Promise<boolean> {
+     const canonicalName = resolveToolName(toolName);
+ 
++    if (
++      this.strictToolsAllowList !== null &&
++      !this.strictToolsAllowList.has(canonicalName)
++    ) {
++      return false;
++    }
++
+     // Non-core tools bypass coreTools allowlist check
+     if (!this.isCoreTool(canonicalName)) {
+       const decision = await this.evaluate({ toolName: canonicalName });
+diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
+index 6d3fb50..ab4e9b8 100644
+--- a/packages/core/src/tools/agent/agent.test.ts
++++ b/packages/core/src/tools/agent/agent.test.ts
+@@ -205,6 +205,7 @@ describe('AgentTool', () => {
+       getSessionId: vi.fn().mockReturnValue('test-session-id'),
+       getCliVersion: vi.fn().mockReturnValue('test-version'),
+       getSubagentManager: vi.fn(),
++      getForegroundAgentsOnly: vi.fn().mockReturnValue(false),
+       getGeminiClient: vi.fn().mockReturnValue(undefined),
+       getHookSystem: vi.fn().mockReturnValue(undefined),
+       getStopHookBlockingCap: vi.fn().mockReturnValue(8),
+@@ -449,6 +450,51 @@ describe('AgentTool', () => {
+   });
+ 
+   describe('schema generation', () => {
++    it('exposes only sequential built-in delegation in foreground-agents-only mode', async () => {
++      vi.mocked(config.getForegroundAgentsOnly).mockReturnValue(true);
++      const strictTool = new AgentTool(config);
++      await vi.runAllTimersAsync();
++
++      const schema = strictTool.schema.parametersJsonSchema as {
++        properties: Record<string, { enum?: string[] }>;
++      };
++      expect(Object.keys(schema.properties).sort()).toEqual([
++        'description',
++        'prompt',
++        'subagent_type',
++        'todo_id',
++      ]);
++      expect(schema.properties['subagent_type'].enum).toEqual([
++        'general-purpose',
++        'Explore',
++      ]);
++      expect(strictTool.description).toContain(
++        'only sequential, foreground delegation',
++      );
++      expect(strictTool.description).not.toContain('background by default');
++      expect(
++        strictTool.validateToolParams({
++          description: 'bad fork',
++          prompt: 'do work',
++          subagent_type: 'fork',
++        }),
++      ).toMatch(/only.*general-purpose.*Explore/i);
++      expect(
++        strictTool.validateToolParams({
++          description: 'bad background',
++          prompt: 'do work',
++          run_in_background: true,
++        }),
++      ).toMatch(/background agents are disabled/i);
++      expect(
++        strictTool.validateToolParams({
++          description: 'good foreground',
++          prompt: 'do work',
++          subagent_type: 'Explore',
++        }),
++      ).toBeNull();
++    });
++
+     it('keeps subagent_type open when named subagents are available', () => {
+       const schema = agentTool.schema;
+       const properties = schema.parametersJsonSchema as {
+diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
+index 4bcea69..8ea8b86 100644
+--- a/packages/core/src/tools/agent/agent.ts
++++ b/packages/core/src/tools/agent/agent.ts
+@@ -1004,8 +1004,49 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+ </example>
+ `;
+ 
+-    // Update description using object property assignment since it's readonly
+-    (this as { description: string }).description = baseDescription;
++    const foregroundOnlyDescription = `Launch one built-in subagent and wait for it to finish before the parent continues.
++
++This installation deliberately permits only sequential, foreground delegation. The child result is returned inline, keeping noisy exploration out of the parent context without creating concurrent model requests or orphaned work.
++
++Available subagent types:
++- **general-purpose**: bounded multi-step research or implementation using the inherited local tool surface.
++- **Explore**: read-only codebase discovery and analysis.
++
++Use a detailed, self-contained prompt. Treat the child result as evidence and verify it before relying on it. Background execution, forks, teams, worktrees, custom agent definitions, and model overrides are unavailable in this installation.`;
++
++    // Update description using object property assignment since it's readonly.
++    (this as { description: string }).description =
++      this.config.getForegroundAgentsOnly()
++        ? foregroundOnlyDescription
++        : baseDescription;
++
++    if (this.config.getForegroundAgentsOnly()) {
++      const strictSchema = this.parameterSchema as {
++        properties?: Record<string, unknown>;
++      };
++      if (strictSchema.properties) {
++        for (const field of [
++          'fork_turns',
++          'fork_tools',
++          'fork_profile',
++          'run_in_background',
++          'isolation',
++          'working_dir',
++          'model',
++          'name',
++          'plan_mode_required',
++          'read_only',
++        ]) {
++          delete strictSchema.properties[field];
++        }
++        strictSchema.properties['subagent_type'] = {
++          type: 'string',
++          enum: ['general-purpose', 'Explore'],
++          description:
++            'The built-in foreground agent type. Omit for general-purpose.',
++        };
++      }
++    }
+ 
+     // Update the parameter schema by modifying the existing object
+     const schema = this.parameterSchema as {
+@@ -1035,7 +1076,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+       const availableGrades = [
+         ...this.subagentManager.getAvailableModelGrades().keys(),
+       ];
+-      if (availableGrades.length > 0) {
++      if (
++        availableGrades.length > 0 &&
++        !this.config.getForegroundAgentsOnly()
++      ) {
+         schema.properties.model = {
+           type: 'string',
+           enum: availableGrades,
+@@ -1075,6 +1119,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+       return 'Parameter "todo_id" must be a non-empty string of at most 500 characters.';
+     }
+ 
++    if (this.config.getForegroundAgentsOnly()) {
++      if (params.run_in_background === true) {
++        return 'Background agents are disabled: this installation permits only one awaited foreground subagent at a time.';
++      }
++      if (
++        params.subagent_type !== undefined &&
++        !['general-purpose', 'explore'].includes(
++          params.subagent_type.toLowerCase(),
++        )
++      ) {
++        return 'Only the built-in "general-purpose" and "Explore" foreground subagents are available in this installation.';
++      }
++      const unsupported = [
++        ['model', params.model],
++        ['fork_turns', params.fork_turns],
++        ['fork_tools', params.fork_tools],
++        ['fork_profile', params.fork_profile],
++        ['isolation', params.isolation],
++        ['working_dir', params.working_dir],
++        ['name', params.name],
++        ['plan_mode_required', params.plan_mode_required],
++        ['read_only', params.read_only],
++      ].find(([, value]) => value !== undefined);
++      if (unsupported) {
++        return `Parameter "${unsupported[0]}" is disabled by foreground-agents-only mode.`;
++      }
++    }
++
+     if (params.subagent_type !== undefined) {
+       if (
+         typeof params.subagent_type !== 'string' ||
+@@ -2696,8 +2768,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+       // Implicit background requests downgrade to an awaited foreground run
+       // instead of orphaning the child's results. The runtime spawn guard
+       // above rejects an explicit run_in_background: true request.
+-      const backgroundRequested =
+-        isFork && !this.config.isInteractive()
++      const backgroundRequested = this.config.getForegroundAgentsOnly()
++        ? false
++        : isFork && !this.config.isInteractive()
+           ? true
+           : (this.params.run_in_background ??
+             (subagentConfig.background === true ||
+
