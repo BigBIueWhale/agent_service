@@ -780,72 +780,10 @@ async fn preflight(policy: &Policy) -> Result<Value, String> {
             backend_cache_owner_mode.trim(),
         ));
     }
-    let backend_ipv4_routes = docker(
-        [
-            "exec",
-            policy.backend_container_name.as_str(),
-            "/usr/sbin/ip",
-            "-4",
-            "route",
-            "show",
-        ],
-        "backend_ipv4_routes",
-        Some(DOCKER_TIMEOUT),
-    )
-    .await?;
-    let backend_ipv6_routes = docker(
-        [
-            "exec",
-            policy.backend_container_name.as_str(),
-            "/usr/sbin/ip",
-            "-6",
-            "route",
-            "show",
-        ],
-        "backend_ipv6_routes",
-        Some(DOCKER_TIMEOUT),
-    )
-    .await?;
-    if !backend_ipv4_routes.trim().is_empty() || !backend_ipv6_routes.trim().is_empty() {
-        return Err(format!(
-            "backend network-none route drift: IPv4={:?}, IPv6={:?}",
-            backend_ipv4_routes.trim(),
-            backend_ipv6_routes.trim(),
-        ));
-    }
-    let service_ipv4_routes = docker(
-        [
-            "exec",
-            policy.service_container_name.as_str(),
-            "/usr/sbin/ip",
-            "-4",
-            "route",
-            "show",
-        ],
-        "service_ipv4_routes",
-        Some(DOCKER_TIMEOUT),
-    )
-    .await?;
-    let service_ipv6_routes = docker(
-        [
-            "exec",
-            policy.service_container_name.as_str(),
-            "/usr/sbin/ip",
-            "-6",
-            "route",
-            "show",
-        ],
-        "service_ipv6_routes",
-        Some(DOCKER_TIMEOUT),
-    )
-    .await?;
-    if !service_ipv4_routes.trim().is_empty() || !service_ipv6_routes.trim().is_empty() {
-        return Err(format!(
-            "service network-none route drift: IPv4={:?}, IPv6={:?}",
-            service_ipv4_routes.trim(),
-            service_ipv6_routes.trim(),
-        ));
-    }
+    let (backend_ipv4_routes, backend_ipv6_routes) =
+        require_network_none_routes(policy.backend_container_name.as_str(), "backend").await?;
+    let (service_ipv4_routes, service_ipv6_routes) =
+        require_network_none_routes(policy.service_container_name.as_str(), "service").await?;
     let gpu = docker(
         [
             "exec",
@@ -878,6 +816,89 @@ async fn preflight(policy: &Policy) -> Result<Value, String> {
         "service_ipv6_routes": service_ipv6_routes.trim(),
         "gpu_record": gpu.trim(),
     }))
+}
+
+/// Prove an exact network-none route state without requiring `iproute2` in the
+/// inspected container.  Both the backend and service images are deliberately
+/// minimal, but Linux exposes the authoritative per-network-namespace tables
+/// through procfs.  The shell expression is fixed broker policy rather than
+/// caller-controlled input; it distinguishes an absent IPv6 table (IPv6 is not
+/// available in the namespace) from a present table that must be readable.
+async fn require_network_none_routes(
+    container: &str,
+    label: &str,
+) -> Result<(String, String), String> {
+    let ipv4_label = format!("{label}_ipv4_routes");
+    let ipv4 = docker(
+        ["exec", container, "/usr/bin/cat", "/proc/net/route"],
+        &ipv4_label,
+        Some(DOCKER_TIMEOUT),
+    )
+    .await?;
+    validate_empty_ipv4_route_table(&ipv4, label)?;
+
+    let ipv6_label = format!("{label}_ipv6_routes");
+    let ipv6 = docker(
+        [
+            "exec",
+            container,
+            "/bin/sh",
+            "-ceu",
+            "if [ -e /proc/net/ipv6_route ]; then /usr/bin/cat /proc/net/ipv6_route; fi",
+        ],
+        &ipv6_label,
+        Some(DOCKER_TIMEOUT),
+    )
+    .await?;
+    validate_empty_ipv6_route_table(&ipv6, label)?;
+
+    // The service-side schema intentionally receives normalized empty route
+    // evidence after the raw procfs records have passed the checks above.
+    Ok((String::new(), String::new()))
+}
+
+fn validate_empty_ipv4_route_table(table: &str, label: &str) -> Result<(), String> {
+    const EXPECTED_HEADER: [&str; 11] = [
+        "Iface",
+        "Destination",
+        "Gateway",
+        "Flags",
+        "RefCnt",
+        "Use",
+        "Metric",
+        "Mask",
+        "MTU",
+        "Window",
+        "IRTT",
+    ];
+
+    let mut lines = table.lines();
+    let header = lines
+        .next()
+        .ok_or_else(|| format!("{label} IPv4 procfs route table is missing its header"))?;
+    if header.split_whitespace().collect::<Vec<_>>() != EXPECTED_HEADER {
+        return Err(format!(
+            "{label} IPv4 procfs route header drift: {:?}",
+            truncate(header, 1024)
+        ));
+    }
+    if let Some(route) = lines.find(|line| !line.trim().is_empty()) {
+        return Err(format!(
+            "{label} network-none namespace has a forbidden IPv4 route: {:?}",
+            truncate(route, 1024)
+        ));
+    }
+    Ok(())
+}
+
+fn validate_empty_ipv6_route_table(table: &str, label: &str) -> Result<(), String> {
+    if let Some(route) = table.lines().find(|line| !line.trim().is_empty()) {
+        return Err(format!(
+            "{label} network-none namespace has a forbidden IPv6 route: {:?}",
+            truncate(route, 1024)
+        ));
+    }
+    Ok(())
 }
 
 fn require_image_id(value: &Value, expected: &str, label: &str) -> Result<(), String> {
@@ -2486,12 +2507,41 @@ mod tests {
 
     use super::{
         drain_bounded, load_policy, optional_running, parse_agent_ready, parse_capture_complete,
-        parse_request, validate_session_id, Request,
+        parse_request, validate_empty_ipv4_route_table, validate_empty_ipv6_route_table,
+        validate_session_id, Request,
     };
 
     #[test]
     fn compiled_policy_is_exact() {
         load_policy().expect("compiled broker policy must pass exact validation");
+    }
+
+    #[test]
+    fn procfs_route_tables_require_exactly_no_routes() {
+        let header =
+            "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n";
+        validate_empty_ipv4_route_table(header, "fixture")
+            .expect("a canonical header-only IPv4 table must pass");
+        validate_empty_ipv6_route_table("", "fixture")
+            .expect("an absent or empty IPv6 table must pass");
+
+        let route = format!("{header}eth0\t00000000\t0100007F\t0003\t0\t0\t0\t00000000\t0\t0\t0\n");
+        assert!(validate_empty_ipv4_route_table(&route, "fixture").is_err());
+        assert!(validate_empty_ipv6_route_table(
+            "00000000000000000000000000000000 00 00 00 00000000000000000000000000000000 01 00000000 00000000 00000001 lo\n",
+            "fixture",
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn procfs_ipv4_route_proof_rejects_missing_or_drifted_headers() {
+        assert!(validate_empty_ipv4_route_table("", "fixture").is_err());
+        assert!(validate_empty_ipv4_route_table(
+            "Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window\n",
+            "fixture",
+        )
+        .is_err());
     }
 
     #[test]
