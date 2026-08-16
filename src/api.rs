@@ -389,6 +389,14 @@ async fn verify_agent_image_labels(cfg: &Config) -> ServiceResult<()> {
             cfg.lock.agent.qwen_code.patch_sha256.as_str(),
         ),
         (
+            "agent_service.qwen.source-patch-manifest.sha256",
+            cfg.lock
+                .agent
+                .qwen_code
+                .source_patch_manifest_sha256
+                .as_str(),
+        ),
+        (
             "agent_service.settings.sha256",
             cfg.lock.agent.settings_sha256.as_str(),
         ),

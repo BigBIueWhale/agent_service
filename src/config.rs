@@ -102,6 +102,7 @@ pub struct QwenCodeLock {
     pub source_archive: String,
     pub source_archive_sha256: String,
     pub patch_sha256: String,
+    pub source_patch_manifest_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -241,6 +242,13 @@ fn reject_legacy_overrides() -> ServiceResult<()> {
     Ok(())
 }
 
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+}
+
 fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     let fail = |message: String| Err(ServiceError::Internal(format!("stack lock: {message}")));
 
@@ -291,9 +299,9 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     }
     if lock.build.docker_cli_archive
         != "https://download.docker.com/linux/static/stable/x86_64/docker-29.7.2.tgz"
-        || lock.build.docker_cli_archive_sha256.len() != 64
-        || lock.build.agent_apt_lock_sha256.len() != 64
-        || lock.build.service_apt_lock_sha256.len() != 64
+        || !is_sha256(&lock.build.docker_cli_archive_sha256)
+        || !is_sha256(&lock.build.agent_apt_lock_sha256)
+        || !is_sha256(&lock.build.service_apt_lock_sha256)
     {
         return fail("Docker CLI archive or apt lock hashes are not exact".into());
     }
@@ -333,7 +341,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         lock.agent.wrapper_sha256.as_str(),
     ]
     .iter()
-    .any(|digest| digest.len() != 64)
+    .any(|digest| !is_sha256(digest))
     {
         return fail("agent settings/instructions/wrapper hashes are not SHA256 values".into());
     }
@@ -440,12 +448,13 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     }
     if lock.backend.model_revision.len() != 40
         || lock.backend.vllm_commit.len() != 40
-        || lock.backend.model_manifest_sha256.len() != 64
-        || lock.agent.qwen_code.source_archive_sha256.len() != 64
-        || lock.agent.qwen_code.patch_sha256.len() != 64
+        || !is_sha256(&lock.backend.model_manifest_sha256)
+        || !is_sha256(&lock.agent.qwen_code.source_archive_sha256)
+        || !is_sha256(&lock.agent.qwen_code.patch_sha256)
+        || !is_sha256(&lock.agent.qwen_code.source_patch_manifest_sha256)
     {
         return fail(
-            "one or more source/model/patch commit or SHA256 pins have the wrong length".into(),
+            "one or more source/model/patch commit or lowercase SHA256 pins are malformed".into(),
         );
     }
     if lock.backend.command.is_empty() {
@@ -546,5 +555,18 @@ mod tests {
         let mut lock = checked_in_lock();
         lock.backend.agent_defaults.final_response_token_budget = 131_071;
         assert_agent_policy_rejected(lock);
+    }
+
+    #[test]
+    fn source_patch_manifest_must_be_a_lowercase_sha256() {
+        let mut lock = checked_in_lock();
+        lock.agent.qwen_code.source_patch_manifest_sha256 = "g".repeat(64);
+        let error = validate_lock(&lock).expect_err("non-hex manifest digest must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("source/model/patch commit or lowercase SHA256 pins are malformed"),
+            "unexpected validation error: {error}"
+        );
     }
 }

@@ -478,9 +478,9 @@ passed 2,326 tests in the expanded sixteen-suite focused matrix. The sealed runt
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
 review-diff, semantic-manifest, settings, instruction, and wrapper labels. The
 build script treats any other image ID as drift.
-The pinned Rust 1.95.0 service stage also passed all ten service tests and a locked
-release build, including fail-closed tests for default-policy drift and nonempty
-slash-command advertisement.
+The pinned Rust 1.95.0 service stage also passed all eleven service tests and a
+locked release build, including fail-closed tests for default-policy drift,
+semantic-manifest identity, and nonempty slash-command advertisement.
 
 Pinning is not a claim that the upstream dependency graph has no security debt. The
 Qwen `npm ci` build currently reports 66 audit advisories (2 low, 36 moderate, 25
