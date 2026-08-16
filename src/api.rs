@@ -519,6 +519,49 @@ async fn verify_backend_container(cfg: &Config) -> ServiceResult<()> {
             )));
         }
     }
+    let mounts = value
+        .pointer("/Mounts")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| ServiceError::Internal("backend inspect lacks Mounts array".into()))?;
+    let model_mounts = mounts
+        .iter()
+        .filter(|mount| {
+            mount.get("Destination").and_then(serde_json::Value::as_str) == Some("/model")
+        })
+        .collect::<Vec<_>>();
+    if model_mounts.len() != 1 {
+        return Err(ServiceError::Internal(format!(
+            "backend must have exactly one /model mount, observed {}",
+            model_mounts.len()
+        )));
+    }
+    let model_mount = model_mounts[0];
+    let expected_model_source = std::path::Path::new(&cfg.lock.backend.project_dir)
+        .join(&cfg.lock.backend.model_directory);
+    let expected_model_source = expected_model_source.to_str().ok_or_else(|| {
+        ServiceError::Internal("locked corrected-model path is not valid UTF-8".into())
+    })?;
+    require_equal(
+        "backend corrected-model mount source",
+        model_mount
+            .get("Source")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<missing>"),
+        expected_model_source,
+    )?;
+    require_equal(
+        "backend corrected-model mount type",
+        model_mount
+            .get("Type")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<missing>"),
+        "bind",
+    )?;
+    if model_mount.get("RW").and_then(serde_json::Value::as_bool) != Some(false) {
+        return Err(ServiceError::Internal(
+            "backend corrected-model mount is not read-only".into(),
+        ));
+    }
     let labels: std::collections::HashMap<String, String> = serde_json::from_value(
         value
             .pointer("/Config/Labels")
@@ -535,6 +578,22 @@ async fn verify_backend_container(cfg: &Config) -> ServiceResult<()> {
         (
             "qwen38.model.revision",
             cfg.lock.backend.model_revision.as_str(),
+        ),
+        (
+            "qwen38.model.official-revision",
+            cfg.lock.backend.official_model_revision.as_str(),
+        ),
+        (
+            "qwen38.model.correction",
+            cfg.lock.backend.model_correction.as_str(),
+        ),
+        (
+            "qwen38.model.sha256",
+            cfg.lock.backend.model_sha256.as_str(),
+        ),
+        (
+            "qwen38.model.manifest.sha256",
+            cfg.lock.backend.model_manifest_sha256.as_str(),
         ),
         (
             "org.opencontainers.image.revision",

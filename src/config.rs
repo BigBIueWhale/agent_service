@@ -121,6 +121,11 @@ pub struct BackendLock {
     pub max_model_len: u64,
     pub model_repository: String,
     pub model_revision: String,
+    pub official_model_repository: String,
+    pub official_model_revision: String,
+    pub model_directory: String,
+    pub model_correction: String,
+    pub model_sha256: String,
     pub model_manifest: String,
     pub model_manifest_sha256: String,
     pub kv_cache_dtype: String,
@@ -368,12 +373,16 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         return fail("agent.strict_tools differs from the reviewed strict native tool set".into());
     }
     if lock.backend.endpoint != "http://127.0.0.1:8000"
+        || lock.backend.profile_label != "single-loopback-vision-k8v4-agent-v11"
+        || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v11"
+        || lock.backend.image_id
+            != "sha256:4c466b6d07b2a618fd147f25551e4b0cec52a74d0fd3572249ca3b4a40b42c8a"
         || lock.backend.served_model != "qwen3.8-27b-nvfp4-k8v4"
         || lock.backend.max_model_len != 262_144
         || lock.backend.kv_cache_dtype != "turboquant_k8v4"
     {
         return fail(
-            "backend endpoint/model/context/KV contract differs from the sole supported deployment"
+            "backend endpoint/profile/image/model/context/KV contract differs from the sole supported deployment"
                 .into(),
         );
     }
@@ -434,20 +443,34 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         .collect::<Vec<_>>()
         != required_environment
     {
-        return fail("backend environment differs from the strict v10 runtime contract".into());
+        return fail("backend environment differs from the strict v11 runtime contract".into());
     }
     if lock.backend.model_repository != "unsloth/Qwen3.8-27B-NVFP4"
-        || lock.backend.model_manifest != "model-snapshot-16b6615a.sha256"
+        || lock.backend.model_revision != "16b6615af3548b88e2d8e382457bc705b00479cf"
+        || lock.backend.official_model_repository != "Qwen/Qwen3.8-27B"
+        || lock.backend.official_model_revision
+            != "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+        || lock.backend.model_directory != "Qwen3.8-27B-NVFP4-Corrected"
+        || lock.backend.model_correction
+            != "restore-161-offset-rmsnorms-from-official-bf16-v1"
+        || lock.backend.model_manifest
+            != "model-corrected-16b6615a-norms-1d4bf0f2.sha256"
+        || lock.backend.model_sha256
+            != "5fd70b38b3708e47adc1e9e9ab90f5d688ec01177d0718fdd16678696fdb0988"
+        || lock.backend.model_manifest_sha256
+            != "3a86177c30b97035d27ad0cf516fc4c2ddb83701c4de4fc6adcb23c7c2531bfc"
     {
         return fail(
-            "backend model repository/manifest identity differs from the refreshed snapshot".into(),
+            "backend corrected-model identity differs from the sole deployable snapshot".into(),
         );
     }
     if !lock.backend.image_id.starts_with("sha256:") || lock.backend.image_id.len() != 71 {
         return fail("backend.image_id is not an exact Docker image ID".into());
     }
     if lock.backend.model_revision.len() != 40
+        || lock.backend.official_model_revision.len() != 40
         || lock.backend.vllm_commit.len() != 40
+        || !is_sha256(&lock.backend.model_sha256)
         || !is_sha256(&lock.backend.model_manifest_sha256)
         || !is_sha256(&lock.agent.qwen_code.source_archive_sha256)
         || !is_sha256(&lock.agent.qwen_code.patch_sha256)
@@ -566,6 +589,40 @@ mod tests {
             error
                 .to_string()
                 .contains("source/model/patch commit or lowercase SHA256 pins are malformed"),
+            "unexpected validation error: {error}"
+        );
+    }
+
+    #[test]
+    fn uncorrected_or_unpinned_model_identity_is_rejected() {
+        let mutations: [fn(&mut StackLock); 3] = [
+            |lock: &mut StackLock| {
+                lock.backend.model_directory = "Qwen3.8-27B-NVFP4-Unsloth".into();
+            },
+            |lock: &mut StackLock| lock.backend.model_correction = "none".into(),
+            |lock: &mut StackLock| {
+                lock.backend.official_model_repository = "unknown/model".into();
+            },
+        ];
+        for mutate in mutations {
+            let mut lock = checked_in_lock();
+            mutate(&mut lock);
+            let error = validate_lock(&lock).expect_err("uncorrected model identity must fail");
+            assert!(
+                error
+                    .to_string()
+                    .contains("backend corrected-model identity differs"),
+                "unexpected validation error: {error}"
+            );
+        }
+
+        let mut lock = checked_in_lock();
+        lock.backend.model_sha256 = "0".repeat(63);
+        let error = validate_lock(&lock).expect_err("malformed model digest must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("backend corrected-model identity differs"),
             "unexpected validation error: {error}"
         );
     }

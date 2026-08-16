@@ -2,7 +2,7 @@
 
 This repository is the one supported local-agent experience for this workstation.
 It runs a pinned, patched Qwen Code client in an offline Docker container against
-the already deployed Qwen3.8-27B Unsloth NVFP4 backend. It is intentionally a
+the already deployed, corrected Qwen3.8-27B NVFP4 backend. It is intentionally a
 singleton: one long-lived main agent thread, optional sequential foreground
 subagents, one model, one sampling policy, one context policy, one network path,
 and one set of scripts.
@@ -23,8 +23,11 @@ The fixed stack is:
 
 | Component | Locked value |
 |---|---|
-| Model | `unsloth/Qwen3.8-27B-NVFP4` |
+| Model source | `unsloth/Qwen3.8-27B-NVFP4` |
 | Model revision | `16b6615af3548b88e2d8e382457bc705b00479cf` |
+| Official BF16 reference | `Qwen/Qwen3.8-27B` at `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` |
+| Deployable correction | Restore all 161 offset-RMSNorm tensors from the official revision |
+| Corrected model SHA-256 | `5fd70b38b3708e47adc1e9e9ab90f5d688ec01177d0718fdd16678696fdb0988` |
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
 | vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a` |
@@ -45,11 +48,18 @@ The fixed stack is:
 
 Every longer pin—including base-image digests, package snapshot and versions,
 source archive and patch hashes, Docker/BuildKit versions, image identity, live
-backend command, model manifest, driver, GPU, and configuration hashes—is in
+backend command, corrected model directory/hash/correction/manifest, official BF16
+revision, driver, GPU, and configuration hashes—is in
 [`config/stack.lock.json`](config/stack.lock.json). The lock is compiled into the
 service binary. At startup, the mounted copy must match the compiled copy
 byte-for-byte, the agent image ID and labels must match it, and the live backend
 container and HTTP endpoints must match it field-for-field.
+
+The service independently requires `/model` to be the exact corrected directory as
+one read-only bind mount and requires the backend container's source revision,
+official revision, correction recipe, corrected model digest, and manifest digest
+labels. The backend's own status performs the complete file-manifest verification.
+An uncorrected Unsloth mount cannot satisfy this lock.
 
 The backend repository remains authoritative for the server patches, model-file
 manifest, VRAM accounting, native-context proof, prompt template, parser tests,
@@ -357,7 +367,7 @@ errors. It never chooses a convenient-looking “last result.”
 ## Prefix caching evidence
 
 Prefix caching is enabled in the sole backend command. It is not accepted on faith:
-the exact v10 backend's chronological image-history probe measured a 6.1716-second
+the exact corrected backend's chronological image-history probe measured a 6.1716-second
 cold TTFT with zero prefix/multimodal hits, then a 0.3520-second warm Anthropic TTFT
 with 14,560 prefix-hit tokens and a multimodal-cache hit—a 17.531× improvement.
 OpenAI and Anthropic histories rendered to identical token IDs. Changed image bytes
@@ -478,7 +488,7 @@ passed 2,326 tests in the expanded sixteen-suite focused matrix. The sealed runt
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
 review-diff, semantic-manifest, settings, instruction, and wrapper labels. The
 build script treats any other image ID as drift.
-The pinned Rust 1.95.0 service stage also passed all eleven service tests and a
+The pinned Rust 1.95.0 service stage also passed all twelve service tests and a
 locked release build, including fail-closed tests for default-policy drift,
 semantic-manifest identity, and nonempty slash-command advertisement.
 
@@ -572,7 +582,7 @@ misleading 404. Shutdown has no arbitrary teardown deadline.
 ## Acceptance gates
 
 A release is not complete merely because the images build. Every required gate below
-passed against the pinned agent image and the exact live v10 backend:
+passed against the pinned agent image and the exact live v11 corrected backend:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
 2. clean Qwen archive extraction, semantic drift/idempotence/rollback checks,
