@@ -3,6 +3,12 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/common.sh
 source "${SCRIPT_DIR}/scripts/common.sh"
+report_status_audit_failure() {
+  local status="$1" source="$2" line="$3" command="$4"
+  printf 'ERROR: unhandled status audit failure (exit %d) at %s:%s while running: %s\n' \
+    "${status}" "${source}" "${line}" "${command}" >&2
+}
+trap 'report_status_audit_failure "$?" "${BASH_SOURCE[0]}" "${LINENO}" "${BASH_COMMAND}"' ERR
 require_no_arguments "./status.sh" "$@"
 check_host_tools_and_versions
 check_pinned_inputs

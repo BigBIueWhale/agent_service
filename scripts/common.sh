@@ -696,14 +696,54 @@ assert_hardened_component_base() {
     "$(lock_value '.host.container_apparmor_profile')"
 }
 
+assert_network_none_docker_sandbox() {
+  local name="$1" sandbox_id sandbox_key none_network_id networks ports
+  sandbox_id="$(docker inspect --format '{{.NetworkSettings.SandboxID}}' "${name}")"
+  [[ "${sandbox_id}" =~ ^[0-9a-f]{64}$ ]] || \
+    die "${name} has an invalid Docker network sandbox ID: ${sandbox_id:-<empty>}"
+  sandbox_key="$(docker inspect --format '{{.NetworkSettings.SandboxKey}}' "${name}")"
+  require_equal "${name} Docker network sandbox key" "${sandbox_key}" \
+    "/var/run/docker/netns/${sandbox_id:0:12}"
+  none_network_id="$(docker network inspect --format '{{.Id}}' none)"
+  [[ "${none_network_id}" =~ ^[0-9a-f]{64}$ ]] || \
+    die "Docker's none network has an invalid immutable ID: ${none_network_id:-<empty>}"
+  networks="$(docker inspect --format '{{json .NetworkSettings.Networks}}' "${name}")"
+  jq -e --arg network_id "${none_network_id}" '
+    type == "object" and
+    (keys == ["none"]) and
+    (.none | type == "object") and
+    (.none | keys == [
+      "Aliases", "DNSNames", "DriverOpts", "EndpointID", "Gateway",
+      "GlobalIPv6Address", "GlobalIPv6PrefixLen", "GwPriority", "IPAMConfig",
+      "IPAddress", "IPPrefixLen", "IPv6Gateway", "Links", "MacAddress",
+      "NetworkID"
+    ]) and
+    .none.IPAMConfig == null and
+    .none.Links == null and
+    .none.Aliases == null and
+    .none.DriverOpts == null and
+    .none.DNSNames == null and
+    .none.NetworkID == $network_id and
+    (.none.EndpointID | type == "string" and test("^[0-9a-f]{64}$")) and
+    .none.Gateway == "" and
+    .none.IPAddress == "" and
+    .none.MacAddress == "" and
+    .none.IPPrefixLen == 0 and
+    .none.IPv6Gateway == "" and
+    .none.GlobalIPv6Address == "" and
+    .none.GlobalIPv6PrefixLen == 0 and
+    .none.GwPriority == 0
+  ' <<<"${networks}" >/dev/null || \
+    die "${name} Docker network metadata does not describe one exact addressless none-network endpoint: ${networks}"
+  ports="$(docker inspect --format '{{json .NetworkSettings.Ports}}' "${name}")"
+  require_equal "${name} Docker network-settings ports" "${ports}" '{}'
+}
+
 assert_network_none_proc() {
-  local name="$1" pid route_file ipv6_route_file dev_file interfaces namespace host_namespace
+  local name="$1" pid route_file ipv6_route_file dev_file interfaces
+  assert_network_none_docker_sandbox "${name}"
   pid="$(docker inspect --format '{{.State.Pid}}' "${name}")"
   [[ "${pid}" =~ ^[1-9][0-9]*$ ]] || die "${name} has an invalid host PID: ${pid}"
-  namespace="$(readlink "/proc/${pid}/ns/net")"
-  host_namespace="$(readlink /proc/self/ns/net)"
-  [[ -n "${namespace}" && "${namespace}" != "${host_namespace}" ]] || \
-    die "${name} does not have a distinct network namespace: component=${namespace:-unreadable} host=${host_namespace:-unreadable}"
   route_file="/proc/${pid}/net/route"
   ipv6_route_file="/proc/${pid}/net/ipv6_route"
   dev_file="/proc/${pid}/net/dev"
