@@ -565,21 +565,53 @@ remove_owned_component_if_exact() {
 }
 
 wait_for_container_event() {
-  local name="$1" event="$2" seconds="$3" grep_status
-  set +o pipefail
-  timeout --foreground "${seconds}s" docker logs --follow --since 0s "${name}" 2>&1 |
-    tee /dev/stderr |
-    grep --fixed-strings --line-regexp --max-count=1 "${event}" >/dev/null
-  grep_status="${PIPESTATUS[2]}"
-  set -o pipefail
-  if [[ "${grep_status}" != 0 ]]; then
-    if ! docker inspect --format \
-      'Container readiness failure state: name={{.Name}} status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}}' \
-      "${name}" >&2; then
-      printf 'Could not inspect failure state for container %s.\n' "${name}" >&2
+  local name="$1" event="$2" seconds="$3"
+  local deadline log_fd log_pid line remaining read_status=0 follower_status=0
+  local found=false running
+
+  # Every caller has just created a new, uniquely named container. Read its
+  # complete log so a fast readiness event emitted before attachment cannot be
+  # lost. A Bash timed read is the event-driven deadline: there is no polling.
+  # Closing the process-substitution FD and terminating only the exact Docker
+  # log follower makes the successful path return immediately even when the
+  # ready container produces no subsequent output.
+  deadline=$((SECONDS + seconds))
+  exec {log_fd}< <(docker logs --follow "${name}" 2>&1)
+  log_pid="$!"
+  while ((SECONDS < deadline)); do
+    remaining=$((deadline - SECONDS))
+    if IFS= read -r -t "${remaining}" line <&"${log_fd}"; then
+      printf '%s\n' "${line}" >&2
+      if [[ "${line}" == "${event}" ]]; then
+        found=true
+        break
+      fi
+    else
+      read_status="$?"
+      break
     fi
-    die "Container ${name} did not emit its exact readiness event within ${seconds}s: ${event}"
+  done
+
+  exec {log_fd}<&-
+  if kill -0 "${log_pid}" 2>/dev/null; then
+    kill "${log_pid}" 2>/dev/null || follower_status="$?"
   fi
+  wait "${log_pid}" 2>/dev/null || follower_status="$?"
+
+  if [[ "${found}" == true ]]; then
+    running="$(docker inspect --format '{{.State.Running}}' "${name}")" || \
+      die "Container ${name} emitted readiness but its running state could not be inspected"
+    require_equal "container ${name} post-readiness running state" "${running}" true
+    return 0
+  fi
+
+  if ! docker inspect --format \
+    'Container readiness failure state: name={{.Name}} status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}}' \
+    "${name}" >&2; then
+    printf 'Could not inspect failure state for container %s.\n' "${name}" >&2
+  fi
+  die "Container ${name} did not emit its exact readiness event within ${seconds}s: ${event}" \
+    "Read status=${read_status}; log-follower status=${follower_status}."
 }
 
 assert_relay_kernel_sandbox() {

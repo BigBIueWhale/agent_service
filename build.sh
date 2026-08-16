@@ -8,6 +8,7 @@ check_host_tools_and_versions
 check_pinned_inputs
 require_release_commit
 require_clean_committed_repository
+"${PROJECT_DIR}/scripts/test-common.sh"
 
 AGENT_IMAGE="$(lock_value '.agent.image_tag')"
 RELAY_IMAGE="$(lock_value '.relay.image_tag')"
