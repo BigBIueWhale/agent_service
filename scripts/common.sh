@@ -71,6 +71,12 @@ check_pinned_inputs() {
   require_equal "agent apt lock SHA256" \
     "$(sha256_file "${PROJECT_DIR}/config/agent-apt-packages.lock")" \
     "$(lock_value '.build.agent_apt_lock_sha256')"
+  require_equal "JKS normalizer SHA256" \
+    "$(sha256_file "${PROJECT_DIR}/docker/scripts/normalize_jks.py")" \
+    "$(lock_value '.build.jks_normalizer_sha256')"
+  require_equal "JKS normalizer test SHA256" \
+    "$(sha256_file "${PROJECT_DIR}/docker/tests/test_normalize_jks.py")" \
+    "$(lock_value '.build.jks_normalizer_test_sha256')"
   require_equal "service apt lock SHA256" \
     "$(sha256_file "${PROJECT_DIR}/config/service-apt-packages.lock")" \
     "$(lock_value '.build.service_apt_lock_sha256')"

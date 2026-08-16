@@ -2,6 +2,7 @@
   "schema_version": 1,
   "profile": "qwen38-agent-service-v2",
   "build": {
+    "source_date_epoch": 1786725153,
     "ubuntu_amd64_image": "ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467",
     "ubuntu_snapshot": "20260814T120000Z",
     "node_amd64_image": "node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436",
@@ -9,6 +10,8 @@
     "docker_cli_archive": "https://download.docker.com/linux/static/stable/x86_64/docker-29.7.2.tgz",
     "docker_cli_archive_sha256": "803d433f226db4776e1768fd319fc6c6e4935a456acf84fcc0080818b854bc8f",
     "agent_apt_lock_sha256": "71f67f688678308b2bbd65d9c7fd1a3bbd2a72f33da35bcab6e71bf4ded9752a",
+    "jks_normalizer_sha256": "309570025cc08c1ea865d67607e357d92cbb32ce2afe9af5e17c2cd7af8c3d6a",
+    "jks_normalizer_test_sha256": "9e9060b44eee4132a78a9a523d8525a0b53c8665f61b16f4b5cc5e3d2e03fcb1",
     "service_apt_lock_sha256": "faf20a1900aebde3893b4b5e28025aeb83f23620fce6f729979c0a4607d5dd4f"
   },
   "service": {
@@ -21,8 +24,8 @@
     "request_body_limit_bytes": 2097152
   },
   "agent": {
-    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v4",
-    "image_id": "sha256:cc916c63598c5953810482e2e5f614eaa1e96695f5c07bfb2c3f2f894e9aa323",
+    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v5",
+    "image_id": "sha256:b58feacef0a13333d19f701a00ef1774c82a94c19325dd38fc1b5f7ff439d66f",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,

@@ -41,7 +41,7 @@ The fixed stack is:
 | Thinking | Required, `xhigh` |
 | Historical thinking | `preserve_thinking=false` |
 | Qwen Code | `0.21.12`, commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38` |
-| Agent image | `sha256:cc916c63598c5953810482e2e5f614eaa1e96695f5c07bfb2c3f2f894e9aa323` |
+| Agent image | `sha256:b58feacef0a13333d19f701a00ef1774c82a94c19325dd38fc1b5f7ff439d66f` |
 | Service | Rust, one session at a time, Docker-only |
 | Service listener | `127.0.0.1:8090` only |
 | Model listener | `127.0.0.1:8000` only |
@@ -473,10 +473,25 @@ initial TLS bootstrap still authenticates repository metadata by Ubuntu's signed
 `InRelease`; after the exact CA package is installed, the snapshot is fetched again
 with ordinary certificate verification. Qwen and Docker CLI remote archives use
 BuildKit `ADD --checksum=sha256:...` and are hashed again inside the build.
-The Dockerfile frontend itself is digest-pinned, and BuildKit receives
-`SOURCE_DATE_EPOCH=1786725153`, the exact upstream Qwen commit timestamp, as a
-build argument so image creation and layer timestamps do not depend on rebuild
-time.
+The Dockerfile frontend itself is digest-pinned. The stack lock records
+`SOURCE_DATE_EPOCH=1786725153`, the exact upstream Qwen commit timestamp, and the
+build passes it to BuildKit. Images are exported through a temporary Docker archive
+with `rewrite-timestamp=true` and only then loaded into the local daemon; plain
+`--load` is intentionally not used because it fixes image metadata but leaves
+build-time file timestamps inside layers.
+
+Reproducibility also requires removing or normalizing content that embeds wall-clock
+time. The build removes Vitest and Node compile caches, canonicalizes the Git-LFS
+system configuration, regenerates font caches from epoch-normalized font metadata,
+and removes package-manager logs and auxiliary caches. Java's JKS trust store embeds
+an eight-byte creation timestamp in every entry, so the hashed, fail-closed
+[`normalize_jks.py`](docker/scripts/normalize_jks.py) validates the existing JKS
+integrity digest, parses the complete version-2 structure, changes only those entry
+timestamps, recalculates and verifies the integrity digest, preserves file ownership
+and mode, and proves idempotence. Its focused tests run inside the pinned Docker
+build before it is used on the real 121-certificate trust store. Two independent
+`--no-cache` agent builds must produce the exact locked image ID; a cached rebuild
+alone is not accepted as reproducibility evidence.
 
 The service image contains Docker CLI 29.7.2 from the exact official static archive,
 not the host binary. The Rust binary is built by the pinned Rust 1.95.0 image with
@@ -486,13 +501,16 @@ three configuration files. The service image is sealed by committed source, stac
 lock, and Cargo lock labels.
 
 The current agent image is
-`sha256:cc916c63598c5953810482e2e5f614eaa1e96695f5c07bfb2c3f2f894e9aa323`.
+`sha256:b58feacef0a13333d19f701a00ef1774c82a94c19325dd38fc1b5f7ff439d66f`.
 Its build reconstructed forty-six changed/new files from pristine upstream and
 passed 2,326 tests in the expanded sixteen-suite focused matrix. The sealed runtime
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
 review-diff, semantic-manifest, settings, instruction, and wrapper labels. The
-build script treats any other image ID as drift.
-The pinned Rust 1.95.0 service stage also passed all thirteen service tests and a
+build script treats any other image ID as drift. The image also carries Qwen
+Code's exact upstream Apache-2.0 license plus this repository's Unlicense and
+third-party scope notice; those documentation files do not alter the executable
+client or its locked behavior.
+The pinned Rust 1.95.0 service stage also passed all fourteen service tests and a
 locked release build, including fail-closed tests for default-policy drift,
 semantic-manifest identity, and nonempty slash-command advertisement.
 
@@ -502,6 +520,21 @@ high, 3 critical). The build records that fact and does not run `npm audit fix`:
 doing so would introduce an unreviewed mutable dependency graph. Remediation means
 reviewing a newer exact upstream tree or a narrow explicit patch, then rebuilding
 and re-running every gate.
+
+## Licensing and third-party scope
+
+Original material in this repository for which the repository author owns the
+copyright is released under [The Unlicense](LICENSE), SPDX identifier
+`Unlicense`. Qwen Code and any review patch or generated transformation containing
+its source remain under Qwen Code's upstream Apache-2.0 terms. The paired Qwen
+model and vLLM backend retain their own upstream terms as well.
+
+This scope is intentional: The Unlicense makes the original agent-service work
+freely reusable without falsely claiming the right to dedicate Alibaba, QwenLM,
+vLLM, package-author, or container-vendor material to the public domain. The exact
+boundary and preserved Apache-2.0 text are in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
+[LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt).
 
 Putting a version string in a README is not considered a pin. The scripts require a
 clean repository and validate host tool versions, GPU/driver, file hashes, image IDs,

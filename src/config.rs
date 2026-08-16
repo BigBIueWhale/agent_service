@@ -53,6 +53,7 @@ pub struct StackLock {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BuildLock {
+    pub source_date_epoch: u64,
     pub ubuntu_amd64_image: String,
     pub ubuntu_snapshot: String,
     pub node_amd64_image: String,
@@ -60,6 +61,8 @@ pub struct BuildLock {
     pub docker_cli_archive: String,
     pub docker_cli_archive_sha256: String,
     pub agent_apt_lock_sha256: String,
+    pub jks_normalizer_sha256: String,
+    pub jks_normalizer_test_sha256: String,
     pub service_apt_lock_sha256: String,
 }
 
@@ -306,13 +309,19 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     if lock.build.ubuntu_snapshot.len() != 16 || !lock.build.ubuntu_snapshot.ends_with('Z') {
         return fail("build.ubuntu_snapshot must be an explicit YYYYMMDDThhmmssZ snapshot".into());
     }
-    if lock.build.docker_cli_archive
+    if lock.build.source_date_epoch != 1_786_725_153
+        || lock.build.docker_cli_archive
         != "https://download.docker.com/linux/static/stable/x86_64/docker-29.7.2.tgz"
         || !is_sha256(&lock.build.docker_cli_archive_sha256)
         || !is_sha256(&lock.build.agent_apt_lock_sha256)
+        || !is_sha256(&lock.build.jks_normalizer_sha256)
+        || !is_sha256(&lock.build.jks_normalizer_test_sha256)
         || !is_sha256(&lock.build.service_apt_lock_sha256)
     {
-        return fail("Docker CLI archive or apt lock hashes are not exact".into());
+        return fail(
+            "source-date epoch, Docker CLI archive, apt locks, or JKS normalizer hashes are not exact"
+                .into(),
+        );
     }
     if lock.service.request_body_limit_bytes != 2 * 1024 * 1024 {
         return fail("service.request_body_limit_bytes must be exactly 2097152".into());
@@ -617,6 +626,29 @@ mod tests {
             error
                 .to_string()
                 .contains("source/model/patch commit or lowercase SHA256 pins are malformed"),
+            "unexpected validation error: {error}"
+        );
+    }
+
+    #[test]
+    fn reproducible_build_inputs_must_remain_exact() {
+        let mut lock = checked_in_lock();
+        lock.build.source_date_epoch += 1;
+        let error = validate_lock(&lock).expect_err("source-date drift must fail closed");
+        assert!(
+            error.to_string().contains(
+                "source-date epoch, Docker CLI archive, apt locks, or JKS normalizer hashes are not exact"
+            ),
+            "unexpected validation error: {error}"
+        );
+
+        let mut lock = checked_in_lock();
+        lock.build.jks_normalizer_sha256 = "G".repeat(64);
+        let error = validate_lock(&lock).expect_err("normalizer hash drift must fail closed");
+        assert!(
+            error.to_string().contains(
+                "source-date epoch, Docker CLI archive, apt locks, or JKS normalizer hashes are not exact"
+            ),
             "unexpected validation error: {error}"
         );
     }

@@ -21,6 +21,8 @@ NODE_IMAGE="$(lock_value '.build.node_amd64_image')"
 RUST_IMAGE="$(lock_value '.build.rust_amd64_image')"
 UBUNTU_SNAPSHOT="$(lock_value '.build.ubuntu_snapshot')"
 AGENT_APT_LOCK_SHA256="$(lock_value '.build.agent_apt_lock_sha256')"
+JKS_NORMALIZER_SHA256="$(lock_value '.build.jks_normalizer_sha256')"
+JKS_NORMALIZER_TEST_SHA256="$(lock_value '.build.jks_normalizer_test_sha256')"
 SERVICE_APT_LOCK_SHA256="$(lock_value '.build.service_apt_lock_sha256')"
 QWEN_COMMIT="$(lock_value '.agent.qwen_code.commit')"
 QWEN_SOURCE_ARCHIVE="$(lock_value '.agent.qwen_code.source_archive')"
@@ -32,24 +34,41 @@ DOCKER_CLI_ARCHIVE_SHA256="$(lock_value '.build.docker_cli_archive_sha256')"
 readonly AGENT_IMAGE SERVICE_IMAGE SOURCE_COMMIT SETTINGS_SHA256 INSTRUCTIONS_SHA256
 readonly WRAPPER_SHA256 STACK_LOCK_SHA256 CARGO_LOCK_SHA256 UBUNTU_IMAGE NODE_IMAGE
 readonly RUST_IMAGE UBUNTU_SNAPSHOT AGENT_APT_LOCK_SHA256 SERVICE_APT_LOCK_SHA256
+readonly JKS_NORMALIZER_SHA256 JKS_NORMALIZER_TEST_SHA256
 readonly QWEN_COMMIT QWEN_SOURCE_ARCHIVE QWEN_SOURCE_ARCHIVE_SHA256 QWEN_PATCH_SHA256
 readonly QWEN_SOURCE_PATCH_MANIFEST_SHA256
 readonly DOCKER_CLI_ARCHIVE DOCKER_CLI_ARCHIVE_SHA256
-readonly SOURCE_DATE_EPOCH=1786725153
+SOURCE_DATE_EPOCH="$(lock_value '.build.source_date_epoch')"
+readonly SOURCE_DATE_EPOCH
+
+BUILD_EXPORT_DIR="$(mktemp -d /tmp/qwen38-agent-service-build.XXXXXX)"
+case "${BUILD_EXPORT_DIR}" in
+  /tmp/qwen38-agent-service-build.*) ;;
+  *) die "Unexpected temporary build-export directory: ${BUILD_EXPORT_DIR}" ;;
+esac
+readonly BUILD_EXPORT_DIR
+cleanup_build_export() {
+  rm -rf -- "${BUILD_EXPORT_DIR}"
+}
+trap cleanup_build_export EXIT
+AGENT_ARCHIVE="${BUILD_EXPORT_DIR}/agent.tar"
+SERVICE_ARCHIVE="${BUILD_EXPORT_DIR}/service.tar"
+readonly AGENT_ARCHIVE SERVICE_ARCHIVE
 
 printf 'Building the one pinned agent image (clean Qwen source + reviewed patch + contract tests)...\n'
 docker buildx build \
   --builder default \
   --platform linux/amd64 \
   --provenance=false \
-  --load \
   --target agent \
-  --tag "${AGENT_IMAGE}" \
+  --output "type=docker,dest=${AGENT_ARCHIVE},name=${AGENT_IMAGE},rewrite-timestamp=true" \
   --build-arg "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" \
   --build-arg "UBUNTU_IMAGE=${UBUNTU_IMAGE}" \
   --build-arg "NODE_IMAGE=${NODE_IMAGE}" \
   --build-arg "UBUNTU_SNAPSHOT=${UBUNTU_SNAPSHOT}" \
   --build-arg "AGENT_APT_LOCK_SHA256=${AGENT_APT_LOCK_SHA256}" \
+  --build-arg "JKS_NORMALIZER_SHA256=${JKS_NORMALIZER_SHA256}" \
+  --build-arg "JKS_NORMALIZER_TEST_SHA256=${JKS_NORMALIZER_TEST_SHA256}" \
   --build-arg "QWEN_COMMIT=${QWEN_COMMIT}" \
   --build-arg "QWEN_SOURCE_ARCHIVE=${QWEN_SOURCE_ARCHIVE}" \
   --build-arg "QWEN_SOURCE_ARCHIVE_SHA256=${QWEN_SOURCE_ARCHIVE_SHA256}" \
@@ -60,6 +79,8 @@ docker buildx build \
   --build-arg "WRAPPER_SHA256=${WRAPPER_SHA256}" \
   --file "${PROJECT_DIR}/docker/Dockerfile" \
   "${PROJECT_DIR}"
+docker load --input "${AGENT_ARCHIVE}"
+rm -f -- "${AGENT_ARCHIVE}"
 require_equal "agent image ID" "$(image_id "${AGENT_IMAGE}")" "$(lock_value '.agent.image_id')"
 require_agent_image_contract
 
@@ -68,9 +89,8 @@ docker buildx build \
   --builder default \
   --platform linux/amd64 \
   --provenance=false \
-  --load \
   --target service \
-  --tag "${SERVICE_IMAGE}" \
+  --output "type=docker,dest=${SERVICE_ARCHIVE},name=${SERVICE_IMAGE},rewrite-timestamp=true" \
   --build-arg "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" \
   --build-arg "UBUNTU_IMAGE=${UBUNTU_IMAGE}" \
   --build-arg "RUST_IMAGE=${RUST_IMAGE}" \
@@ -83,6 +103,8 @@ docker buildx build \
   --build-arg "CARGO_LOCK_SHA256=${CARGO_LOCK_SHA256}" \
   --file "${PROJECT_DIR}/docker/Dockerfile" \
   "${PROJECT_DIR}"
+docker load --input "${SERVICE_ARCHIVE}"
+rm -f -- "${SERVICE_ARCHIVE}"
 
 require_service_image_contract
 printf 'Build complete. Agent=%s Service=%s\n' "$(image_id "${AGENT_IMAGE}")" "$(image_id "${SERVICE_IMAGE}")"
