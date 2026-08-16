@@ -18,24 +18,63 @@ line_of() {
 }
 
 TERM_TRAP_LINE="$(line_of "trap 'forward_termination 143' TERM")"
-EVENTS_INIT_LINE="$(line_of ": >\"\${EVENTS_FILE}\"")"
-STDERR_INIT_LINE="$(line_of ": >\"\${STDERR_FILE}\"")"
-READY_LINE="$(line_of "printf '{\"model\":\"%s\",\"context_window\":262144,\"token_count\":%s}\\n'")"
-readonly TERM_TRAP_LINE EVENTS_INIT_LINE STDERR_INIT_LINE READY_LINE
+READY_LINE="$(line_of "printf 'AGENT_READY model=%s context=262144 network=loopback-only token_count=%s sandbox=%s\\n'")"
+# These are deliberately literal source landmarks; expansion would make the
+# contract test search for this test process's environment instead.
+# shellcheck disable=SC2016
+TOOLCHAIN_VERIFY_LINE="$(line_of 'python3 "${TOOLCHAIN_VERIFIER_SOURCE}"')"
+# shellcheck disable=SC2016
+RUNTIME_CONTRACT_VERIFY_LINE="$(line_of 'python3 "${RUNTIME_CONTRACT_VERIFIER_SOURCE}"')"
+EFFECT_ROOT_LINE="$(line_of 'mkdir --mode=0700 /qwen-runtime/effects')"
+SCRATCH_ROOT_LINE="$(line_of 'mkdir --mode=0700 /tmp/qwen-subagents')"
+# shellcheck disable=SC2016
+START_GATE_LINE="$(line_of 'flock --exclusive "${START_GATE_FILE}" true')"
+# shellcheck disable=SC2016
+AGENT_EXEC_LINE="$(line_of 'setsid "${AGENT_EXEC}"')"
+# shellcheck disable=SC2016
+ATTEST_LINE="$(line_of 'expected_attestation="AGENT_EXEC_READY sandbox=${AGENT_EXEC_SANDBOX}"')"
+RELEASE_LINE="$(line_of "if ! printf 'EXEC\\n'")"
+readonly TERM_TRAP_LINE READY_LINE AGENT_EXEC_LINE ATTEST_LINE RELEASE_LINE
+readonly TOOLCHAIN_VERIFY_LINE EFFECT_ROOT_LINE SCRATCH_ROOT_LINE
+readonly RUNTIME_CONTRACT_VERIFY_LINE
+readonly START_GATE_LINE
 
 (( TERM_TRAP_LINE < READY_LINE )) || {
   printf 'TERM trap must be installed before readiness is published\n' >&2
   exit 1
 }
-(( EVENTS_INIT_LINE < READY_LINE && STDERR_INIT_LINE < READY_LINE )) || {
-  printf 'required output sidecars must exist before readiness is published\n' >&2
+(( TOOLCHAIN_VERIFY_LINE < READY_LINE )) || {
+  printf 'toolchain contract must be validated before readiness is published\n' >&2
   exit 1
 }
+(( RUNTIME_CONTRACT_VERIFY_LINE < TOOLCHAIN_VERIFY_LINE )) || {
+  printf 'canonical runtime contract must precede toolchain validation and readiness\n' >&2
+  exit 1
+}
+(( EFFECT_ROOT_LINE < READY_LINE && SCRATCH_ROOT_LINE < READY_LINE )) || {
+  printf 'effect-journal and subagent-scratch roots must exist before readiness\n' >&2
+  exit 1
+}
+(( TERM_TRAP_LINE < START_GATE_LINE && START_GATE_LINE < READY_LINE )) || {
+  printf 'the termination handler must cover the start gate and the gate must precede readiness\n' >&2
+  exit 1
+}
+(( AGENT_EXEC_LINE < ATTEST_LINE && ATTEST_LINE < READY_LINE && READY_LINE < RELEASE_LINE )) || {
+  printf 'Qwen must be sandbox-attested before readiness and released only afterward\n' >&2
+  exit 1
+}
+if grep -Eq -- '--retry|retry-connrefused|retry-all-errors' "${WRAPPER}"; then
+  printf 'model readiness must use the broker gate and one preflight, not curl retries\n' >&2
+  exit 1
+fi
 
-line_of 'setsid node /opt/qwen-code/scripts/cli-entry.js' >/dev/null
+line_of '[[ ! -e /output ]]' >/dev/null
+line_of 'readonly AGENT_EXEC=/opt/agent/agent_exec' >/dev/null
 line_of "kill -TERM -- \"-\${qwen_pgid}\"" >/dev/null
-line_of "printf '%s\\n' \"\${exit_code}\" >\"\${EXIT_FILE}\"" >/dev/null
-line_of "sync -f \"\${EXIT_FILE}\"" >/dev/null
+if grep -Eq -- '/output/(events|qwen|ready|response)|setsid node|tee ' "${WRAPPER}"; then
+  printf 'Qwen wrapper must not hold the service output mount or capture files\n' >&2
+  exit 1
+fi
 
 bash -n "${WRAPPER}"
 shellcheck -x "${WRAPPER}"

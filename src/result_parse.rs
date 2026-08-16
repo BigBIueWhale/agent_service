@@ -367,10 +367,7 @@ mod tests {
 
     #[test]
     fn rejects_advertised_slash_commands() {
-        let unexpected = INIT.replace(
-            "\"slash_commands\":[]",
-            "\"slash_commands\":[\"status\"]",
-        );
+        let unexpected = INIT.replace("\"slash_commands\":[]", "\"slash_commands\":[\"status\"]");
         assert!(parse_text(&unexpected).is_err());
     }
 }

@@ -1,5 +1,5 @@
 diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/config.test.ts
-index 2022b3156efcfd5bc3523e49fd2e1e3bdc54c3e5..c51380eb8761232b746ae558fc12397d5ffac6c1 100644
+index 2022b3156efcfd5bc3523e49fd2e1e3bdc54c3e5..a4b98023651a9eb4239f40d1672ac3d238858bc6 100644
 --- a/packages/cli/src/config/config.test.ts
 +++ b/packages/cli/src/config/config.test.ts
 @@ -1015,6 +1015,23 @@ describe('parseArguments', () => {
@@ -26,11 +26,17 @@ index 2022b3156efcfd5bc3523e49fd2e1e3bdc54c3e5..c51380eb8761232b746ae558fc12397d
    it('should support comma-separated values for --allowed-mcp-server-names', async () => {
      process.argv = [
        'node',
-@@ -3055,6 +3072,46 @@ describe('loadCliConfig with allowed-mcp-server-names', () => {
+@@ -3055,6 +3072,60 @@ describe('loadCliConfig with allowed-mcp-server-names', () => {
      expect(config.getMcpServers()).toEqual(baseSettings.mcpServers);
    });
  
 +  it('drops every ambient or injected MCP server in foreground-only agent-service mode', async () => {
++    vi.stubEnv('QWEN38_AGENT_SERVICE_LOCKED', '1');
++    vi.stubEnv('QWEN_SYSTEM_MD', '/opt/agent/system.md');
++    vi.stubEnv(
++      'QWEN_DEPLOYMENT_CONTRACT_MD',
++      '/opt/agent/deployment-contract.md',
++    );
 +    process.argv = ['node', 'script.js', '--foreground-agents-only'];
 +    const argv = await parseArguments();
 +    const config = await loadCliConfig(
@@ -70,11 +76,19 @@ index 2022b3156efcfd5bc3523e49fd2e1e3bdc54c3e5..c51380eb8761232b746ae558fc12397d
 +    expect(config.getAutoSkillConfirmEnabled()).toBe(false);
 +  });
 +
++  it('fails closed when the foreground-only deployment prompt paths are not sealed', async () => {
++    process.argv = ['node', 'script.js', '--foreground-agents-only'];
++    const argv = await parseArguments();
++    await expect(
++      loadCliConfig(baseSettings, argv, undefined, []),
++    ).rejects.toThrow('requires QWEN38_AGENT_SERVICE_LOCKED=1');
++  });
++
    it('should allow only the specified MCP server', async () => {
      process.argv = [
        'node',
 diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.ts
-index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b3f0e3d3c 100755
+index bf538d25955bdacc664352d5beeba66d54c41c7a..662388f90d9f70217c76cad884dba9bb62483597 100755
 --- a/packages/cli/src/config/config.ts
 +++ b/packages/cli/src/config/config.ts
 @@ -221,6 +221,8 @@ export interface CliArgs {
@@ -107,15 +121,47 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b
          .option('exclude-tools', {
            type: 'array',
            string: true,
-@@ -1573,6 +1589,7 @@ export async function loadCliConfig(
+@@ -1573,6 +1589,39 @@ export async function loadCliConfig(
    const bareMode = isBareMode(argv.bare);
    const safeMode =
      argv.safeMode !== undefined ? argv.safeMode : isSafeModeEnv();
 +  const lockedAgentServiceMode = argv.foregroundAgentsOnly === true;
++  if (lockedAgentServiceMode) {
++    const requiredEnvironment: Record<string, string> = {
++      QWEN38_AGENT_SERVICE_LOCKED: '1',
++      QWEN_SYSTEM_MD: '/opt/agent/system.md',
++      QWEN_DEPLOYMENT_CONTRACT_MD: '/opt/agent/deployment-contract.md',
++    };
++    for (const [name, expected] of Object.entries(requiredEnvironment)) {
++      if (process.env[name] !== expected) {
++        throw new Error(
++          `Locked agent-service configuration requires ${name}=${expected}; received ${JSON.stringify(process.env[name])}`,
++        );
++      }
++    }
++    for (const forbidden of [
++      'QWEN_SYSTEM_IDENTITY_MD',
++      'QWEN_WRITE_SYSTEM_MD',
++    ]) {
++      if (process.env[forbidden] !== undefined) {
++        throw new Error(
++          `Locked agent-service configuration forbids environment override ${forbidden}`,
++        );
++      }
++    }
++    if (
++      argv.systemPrompt !== undefined ||
++      argv.appendSystemPrompt !== undefined
++    ) {
++      throw new Error(
++        'Locked agent-service configuration forbids CLI system-prompt overrides',
++      );
++    }
++  }
  
    // Surface `--insecure` as an env var so it reaches the undici dispatcher
    // layer (which controls TLS verification) without threading a flag through
-@@ -1638,7 +1655,7 @@ export async function loadCliConfig(
+@@ -1638,7 +1687,7 @@ export async function loadCliConfig(
    );
  
    let outputLanguageFilePath: string | undefined;
@@ -124,7 +170,7 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b
      if (fs.existsSync(projectOutputLanguagePath)) {
        outputLanguageFilePath = projectOutputLanguagePath;
      } else if (fs.existsSync(globalOutputLanguagePath)) {
-@@ -1652,10 +1669,16 @@ export async function loadCliConfig(
+@@ -1652,10 +1701,16 @@ export async function loadCliConfig(
    );
  
    const includeDirectories = (
@@ -143,7 +189,7 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b
  
    // LSP configuration: enabled only via --experimental-lsp flag
    const lspEnabled = !bareMode && argv.experimentalLsp === true;
-@@ -2100,9 +2123,11 @@ export async function loadCliConfig(
+@@ -2100,9 +2155,11 @@ export async function loadCliConfig(
    // Top tier = session-injected (ACP/IDE) servers plus `--mcp-config`; CLI wins
    // over the session source on a name clash. Both sit above settings/`.mcp.json`
    // and are never gated (#4615).
@@ -157,7 +203,7 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b
        ? { ...sessionMcpServers, ...(cliMcpServers ?? {}) }
        : undefined;
    // Bare/safe mode still drop settings.mcpServers/`.mcp.json` entirely (local,
-@@ -2110,7 +2135,7 @@ export async function loadCliConfig(
+@@ -2110,7 +2167,7 @@ export async function loadCliConfig(
    // servers are an explicit, per-invocation argument from the caller (ACP
    // `session/new`, `--mcp-config`), not ambient local state, so they survive.
    const mcpServers =
@@ -166,7 +212,7 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b
        ? { ...topTierMcpServers }
        : assembleMcpServers(settings.mcpServers, cwd, topTierMcpServers);
    // Top-tier servers are never gated (#4615, see the comment above), so this
-@@ -2120,7 +2145,10 @@ export async function loadCliConfig(
+@@ -2120,7 +2177,10 @@ export async function loadCliConfig(
    // state at all, not even a read with no behavioral effect. Revisit if a
    // future gated top-tier source needs this to run under safe mode too.
    const pendingMcpServers =
@@ -178,7 +224,7 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b
        ? undefined
        : getPendingGatedMcpServers(mcpServers, cwd);
  
-@@ -2138,6 +2166,9 @@ export async function loadCliConfig(
+@@ -2138,6 +2198,9 @@ export async function loadCliConfig(
          ? includeDirectories.length > 0
          : (settings.context?.loadFromIncludeDirectories ?? false),
      importFormat: settings.context?.importFormat || 'tree',
@@ -188,7 +234,7 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b
      debugMode,
      question,
      systemPrompt: argv.systemPrompt,
-@@ -2147,6 +2178,8 @@ export async function loadCliConfig(
+@@ -2147,6 +2210,8 @@ export async function loadCliConfig(
        bareMode || safeMode
          ? undefined
          : argv.coreTools || settings.tools?.core || undefined,
@@ -197,7 +243,7 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b
      allowedTools:
        bareMode || safeMode
          ? argv.allowedTools || undefined
-@@ -2193,19 +2226,24 @@ export async function loadCliConfig(
+@@ -2193,19 +2258,24 @@ export async function loadCliConfig(
      },
      toolInvocationGuard: hostPolicy?.toolInvocationGuard,
      // Permission rule persistence callback (writes to settings files).
@@ -235,7 +281,7 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b
      toolDiscoveryCommand:
        bareMode || safeMode ? undefined : settings.tools?.discoveryCommand,
      toolCallCommand:
-@@ -2363,27 +2401,27 @@ export async function loadCliConfig(
+@@ -2363,27 +2433,27 @@ export async function loadCliConfig(
        format: outputSettingsFormat,
      },
      enableManagedAutoMemory:
@@ -532,6 +578,156 @@ index b17b1a73a26992ec8a97226931984785a31e24b1..b60acb96ca152f91a759c145f226f179
    } catch (error) {
      debugLogger.error('[buildSystemMessage] Failed to load subagents:', error);
    }
+diff --git a/packages/core/src/agents/runtime/agent-context.test.ts b/packages/core/src/agents/runtime/agent-context.test.ts
+index 71e11a419c180037c0a22c8fb9cf982b1dd2c67a..5212b234311c8b379a4976c9d8cdd96466f6165d 100644
+--- a/packages/core/src/agents/runtime/agent-context.test.ts
++++ b/packages/core/src/agents/runtime/agent-context.test.ts
+@@ -10,6 +10,7 @@ import {
+   childLaunchDepth,
+   getCurrentAgentDepth,
+   getCurrentAgentId,
++  getCurrentQwen38SubagentExecution,
+   getRuntimeContentGenerator,
+   isTopLevelSession,
+   runWithAgentContext,
+@@ -80,6 +81,42 @@ describe('agent-context (agentId)', () => {
+   });
+ });
+ 
++describe('agent-context (Qwen3.8 subagent execution)', () => {
++  it('exposes scratch and role only within the invocation frame', async () => {
++    expect(getCurrentQwen38SubagentExecution()).toBeUndefined();
++    const execution = {
++      scratchDir: '/tmp/qwen-subagents/Explore-test',
++      subagentType: 'Explore' as const,
++    };
++    await runWithAgentContext(
++      'Explore-test',
++      async () => {
++        expect(getCurrentQwen38SubagentExecution()).toEqual(execution);
++      },
++      undefined,
++      execution,
++    );
++    expect(getCurrentQwen38SubagentExecution()).toBeUndefined();
++  });
++
++  it('preserves the outer execution metadata in a nested legacy frame', async () => {
++    const execution = {
++      scratchDir: '/tmp/qwen-subagents/general-purpose-test',
++      subagentType: 'general-purpose' as const,
++    };
++    await runWithAgentContext(
++      'outer',
++      async () => {
++        await runWithAgentContext('inner', async () => {
++          expect(getCurrentQwen38SubagentExecution()).toEqual(execution);
++        });
++      },
++      undefined,
++      execution,
++    );
++  });
++});
++
+ describe('agent-context (runtimeView)', () => {
+   it('returns undefined outside any frame', () => {
+     expect(getRuntimeContentGenerator()).toBeUndefined();
+diff --git a/packages/core/src/agents/runtime/agent-context.ts b/packages/core/src/agents/runtime/agent-context.ts
+index 433be1ba66d0cd0c021594a7c92a62f533357d35..c5e89d44f12e7e14034dad63e0f8d415c5de094f 100644
+--- a/packages/core/src/agents/runtime/agent-context.ts
++++ b/packages/core/src/agents/runtime/agent-context.ts
+@@ -31,9 +31,15 @@ export interface RuntimeContentGeneratorView {
+   readonly contentGeneratorConfig: ContentGeneratorConfig;
+ }
+ 
++export interface Qwen38SubagentExecutionContext {
++  readonly scratchDir: string;
++  readonly subagentType: 'general-purpose' | 'Explore';
++}
++
+ interface AgentContext {
+   readonly agentId?: string;
+   readonly runtimeView?: RuntimeContentGeneratorView;
++  readonly qwen38Execution?: Qwen38SubagentExecutionContext;
+   /**
+    * Nesting depth — 0 for a top-level subagent (called from a user's
+    * top-level interaction), +1 per nested `runWithAgentContext` frame.
+@@ -51,6 +57,7 @@ export function runWithAgentContext<T>(
+   agentId: string,
+   fn: () => Promise<T>,
+   depthOverride?: number,
++  qwen38Execution?: Qwen38SubagentExecutionContext,
+ ): Promise<T> {
+   const current = storage.getStore() ?? {};
+   // Auto-increment depth: top-level = 0, nested = parent+1. No caller has
+@@ -60,7 +67,15 @@ export function runWithAgentContext<T>(
+   // recomputes from a top-level (depth 0) parent and a resumed nested agent
+   // would regain spawn capacity it should not have.
+   const depth = depthOverride ?? (current.depth ?? -1) + 1;
+-  return storage.run({ ...current, agentId, depth }, fn);
++  return storage.run(
++    {
++      ...current,
++      agentId,
++      depth,
++      ...(qwen38Execution ? { qwen38Execution } : {}),
++    },
++    fn,
++  );
+ }
+ 
+ export function runWithRuntimeContentGenerator<T>(
+@@ -75,6 +90,12 @@ export function getCurrentAgentId(): string | null {
+   return storage.getStore()?.agentId ?? null;
+ }
+ 
++export function getCurrentQwen38SubagentExecution():
++  | Qwen38SubagentExecutionContext
++  | undefined {
++  return storage.getStore()?.qwen38Execution;
++}
++
+ /**
+  * Returns the depth of the current agent context frame. 0 means we're
+  * inside a top-level subagent (or no subagent at all — but in that case
+diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/agents/runtime/agent-core.ts
+index 191b5abdc09e2cc89778aa05b1a4a95e239a4d91..c9946bf0ddc58ec55336b539c97b1a644a088bd7 100644
+--- a/packages/core/src/agents/runtime/agent-core.ts
++++ b/packages/core/src/agents/runtime/agent-core.ts
+@@ -25,6 +25,7 @@ import type { Config } from '../../config/config.js';
+ import {
+   getCurrentAgentDepth,
+   getCurrentAgentId,
++  getCurrentQwen38SubagentExecution,
+   getRuntimeContentGenerator,
+   isTopLevelSession,
+   runWithAgentContext,
+@@ -69,6 +70,10 @@ import type {
+ } from '@google/genai';
+ import { GeminiChat } from '../../core/geminiChat.js';
+ import { assembleSystemPrompt } from '../../core/prompts.js';
++import {
++  appendQwen38DeploymentContract,
++  appendQwen38SubagentInvocation,
++} from '../../core/qwen38-deployment-prompt.js';
+ import {
+   dedupeToolCallsById,
+   getProviderToolCallId,
+@@ -2304,8 +2309,12 @@ Important Rules:
+ 
+     // Context files (QWEN.md + output-language.md) keep the subagent aligned
+     // with project conventions; the volatile auto-memory section stays last.
++    const deploymentPrompt = appendQwen38DeploymentContract(finalPrompt);
+     return assembleSystemPrompt({
+-      base: finalPrompt,
++      base: appendQwen38SubagentInvocation(
++        deploymentPrompt,
++        getCurrentQwen38SubagentExecution(),
++      ),
+       contextFiles: this.runtimeContext.getUserMemory(),
+       autoMemory: this.runtimeContext.getAutoMemoryPrompt(),
+     });
 diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/config.ts
 index 9698a8e478ac5c03d4873c5a67333849ca779b09..7a3529c99ec2a2250e3bafa102cb3026fe7f91be 100644
 --- a/packages/core/src/config/config.ts
@@ -3281,10 +3477,29 @@ index 134ecd700ea51a17aa922f835261bd6848141d99..1cc33ffccdf72130df49831d44af9620
    responseParsingOptions?: OpenAIResponseParsingOptions;
    taggedThinkingParser?: TaggedThinkingParser;
 diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.ts
-index 72d1aa58f0a1f1a780bb190b90cb1609fa50e1a5..f4c29e8e4b3a8f43b558b865fbc07e52f8d8786c 100644
+index 72d1aa58f0a1f1a780bb190b90cb1609fa50e1a5..5e25a12c4607ef37c144a00316721b62031a44c7 100644
 --- a/packages/core/src/core/prompts.ts
 +++ b/packages/core/src/core/prompts.ts
-@@ -543,9 +543,8 @@ When you encounter an obstacle, do not use destructive actions as a shortcut to
+@@ -14,6 +14,7 @@ import { QWEN_DIR } from '../config/storage.js';
+ import type { GenerateContentConfig } from '@google/genai';
+ import { InputFormat } from '../output/types.js';
+ import { createDebugLogger } from '../utils/debugLogger.js';
++import { appendQwen38DeploymentContract } from './qwen38-deployment-prompt.js';
+ 
+ const debugLogger = createDebugLogger('PROMPTS');
+ 
+@@ -289,7 +290,9 @@ export function getCoreSystemPrompt(
+   // ignored whenever `QWEN_SYSTEM_MD` is in effect (including empty-file clear).
+   let basePrompt: string;
+   if (systemMdEnabled) {
+-    basePrompt = fs.readFileSync(systemMdPath, 'utf8');
++    basePrompt = appendQwen38DeploymentContract(
++      fs.readFileSync(systemMdPath, 'utf8'),
++    );
+   } else {
+     const coreIdentity =
+       resolveCoreIdentityOverride() ??
+@@ -543,9 +546,8 @@ When you encounter an obstacle, do not use destructive actions as a shortcut to
  /**
   * Provides the system prompt for the history compression process.
   *
@@ -3296,7 +3511,7 @@ index 72d1aa58f0a1f1a780bb190b90cb1609fa50e1a5..f4c29e8e4b3a8f43b558b865fbc07e52
   * claude-code's compaction format: primary_request_and_intent,
   * key_technical_concepts, files_and_code_sections, errors_and_fixes,
   * problem_solving, all_user_messages, pending_tasks, current_work,
-@@ -560,7 +559,7 @@ export function getCompressionPrompt(): string {
+@@ -560,7 +562,7 @@ export function getCompressionPrompt(): string {
    return `
  You are the component that summarizes a conversation when its context window is about to overflow. The summary you produce will become the agent's ONLY memory of everything that happened before this point. The agent will resume its work based solely on this summary plus a small number of restored file / image attachments that follow.
  
@@ -3305,6 +3520,195 @@ index 72d1aa58f0a1f1a780bb190b90cb1609fa50e1a5..f4c29e8e4b3a8f43b558b865fbc07e52
  
  Then produce the final summary as the EXACT XML structure below. Be dense. Omit conversational filler.
  
+diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..d6aa1e8147d7efb64cefb69d67d2789b77543765
+--- /dev/null
++++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
+@@ -0,0 +1,99 @@
++/**
++ * @license
++ * Copyright 2025 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import fs from 'node:fs';
++import {
++  QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH,
++  QWEN38_LOCKED_RUNTIME_ENV,
++  QWEN38_LOCKED_SYSTEM_PROMPT_PATH,
++  appendQwen38DeploymentContract,
++  appendQwen38SubagentInvocation,
++  getQwen38DeploymentContract,
++} from './qwen38-deployment-prompt.js';
++
++describe('Qwen3.8 deployment prompt', () => {
++  beforeEach(() => {
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, undefined);
++    vi.stubEnv('QWEN_SYSTEM_MD', undefined);
++    vi.stubEnv('QWEN_DEPLOYMENT_CONTRACT_MD', undefined);
++  });
++
++  afterEach(() => {
++    vi.restoreAllMocks();
++    vi.unstubAllEnvs();
++  });
++
++  it('does not alter ordinary upstream prompt construction', () => {
++    expect(getQwen38DeploymentContract()).toBe('');
++    expect(appendQwen38DeploymentContract('ordinary prompt')).toBe(
++      'ordinary prompt',
++    );
++  });
++
++  it('requires both immutable paths in the locked runtime', () => {
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    vi.stubEnv('QWEN_SYSTEM_MD', '/tmp/not-the-sealed-prompt');
++    vi.stubEnv(
++      'QWEN_DEPLOYMENT_CONTRACT_MD',
++      QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH,
++    );
++    expect(() => getQwen38DeploymentContract()).toThrow(
++      `QWEN_SYSTEM_MD=${QWEN38_LOCKED_SYSTEM_PROMPT_PATH}`,
++    );
++  });
++
++  it('appends the exact sealed deployment contract', () => {
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    vi.stubEnv('QWEN_SYSTEM_MD', QWEN38_LOCKED_SYSTEM_PROMPT_PATH);
++    vi.stubEnv(
++      'QWEN_DEPLOYMENT_CONTRACT_MD',
++      QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH,
++    );
++    vi.spyOn(fs, 'lstatSync').mockReturnValue({
++      isFile: () => true,
++      isSymbolicLink: () => false,
++    } as fs.Stats);
++    vi.spyOn(fs, 'readFileSync').mockReturnValue(
++      'LOCKED_DEPLOYMENT_CONTRACT_V1\n',
++    );
++
++    expect(appendQwen38DeploymentContract('role prompt')).toBe(
++      'role prompt\n\n---\n\nLOCKED_DEPLOYMENT_CONTRACT_V1',
++    );
++  });
++
++  it('requires and appends the unique invocation scratch in locked subagents', () => {
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    const prompt = appendQwen38SubagentInvocation('role and contract', {
++      scratchDir: '/tmp/qwen-subagents/Explore-abc123',
++      subagentType: 'Explore',
++    });
++    expect(prompt).toContain('Role: Explore');
++    expect(prompt).toContain('/tmp/qwen-subagents/Explore-abc123');
++    expect(() =>
++      appendQwen38SubagentInvocation('role and contract', undefined),
++    ).toThrow('outside its invocation frame');
++  });
++
++  it('rejects an empty, CRLF, or unterminated contract', () => {
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    vi.stubEnv('QWEN_SYSTEM_MD', QWEN38_LOCKED_SYSTEM_PROMPT_PATH);
++    vi.stubEnv(
++      'QWEN_DEPLOYMENT_CONTRACT_MD',
++      QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH,
++    );
++    vi.spyOn(fs, 'lstatSync').mockReturnValue({
++      isFile: () => true,
++      isSymbolicLink: () => false,
++    } as fs.Stats);
++    const read = vi.spyOn(fs, 'readFileSync');
++    for (const invalid of ['', 'unterminated', 'windows\r\n']) {
++      read.mockReturnValueOnce(invalid);
++      expect(() => getQwen38DeploymentContract()).toThrow('terminal newline');
++    }
++  });
++});
+diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..31ca49dbdac91dbee8d1b51a34e552c6e49663d7
+--- /dev/null
++++ b/packages/core/src/core/qwen38-deployment-prompt.ts
+@@ -0,0 +1,78 @@
++/**
++ * @license
++ * Copyright 2025 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import fs from 'node:fs';
++
++export const QWEN38_LOCKED_RUNTIME_ENV = 'QWEN38_AGENT_SERVICE_LOCKED';
++export const QWEN38_LOCKED_SYSTEM_PROMPT_PATH = '/opt/agent/system.md';
++export const QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH =
++  '/opt/agent/deployment-contract.md';
++
++function readRequiredRegularFile(filePath: string, label: string): string {
++  const stat = fs.lstatSync(filePath);
++  if (!stat.isFile() || stat.isSymbolicLink()) {
++    throw new Error(
++      `${label} must be a regular, non-symlink file: ${filePath}`,
++    );
++  }
++  const text = fs.readFileSync(filePath, 'utf8');
++  if (!text.trim() || !text.endsWith('\n') || text.includes('\r')) {
++    throw new Error(
++      `${label} must be nonempty UTF-8-style LF text with a terminal newline: ${filePath}`,
++    );
++  }
++  return text.trim();
++}
++
++export function isQwen38LockedAgentServiceRuntime(): boolean {
++  return process.env[QWEN38_LOCKED_RUNTIME_ENV] === '1';
++}
++
++/**
++ * Return the immutable deployment contract for the one locked agent-service
++ * runtime. Outside that runtime there is no implicit local deployment prompt.
++ */
++export function getQwen38DeploymentContract(): string {
++  if (!isQwen38LockedAgentServiceRuntime()) return '';
++
++  const systemPath = process.env['QWEN_SYSTEM_MD'];
++  const contractPath = process.env['QWEN_DEPLOYMENT_CONTRACT_MD'];
++  if (systemPath !== QWEN38_LOCKED_SYSTEM_PROMPT_PATH) {
++    throw new Error(
++      `locked agent-service requires QWEN_SYSTEM_MD=${QWEN38_LOCKED_SYSTEM_PROMPT_PATH}`,
++    );
++  }
++  if (contractPath !== QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH) {
++    throw new Error(
++      `locked agent-service requires QWEN_DEPLOYMENT_CONTRACT_MD=${QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH}`,
++    );
++  }
++
++  return readRequiredRegularFile(contractPath, 'deployment contract');
++}
++
++export function appendQwen38DeploymentContract(base: string): string {
++  const contract = getQwen38DeploymentContract();
++  return contract ? `${base.trim()}\n\n---\n\n${contract}` : base;
++}
++
++export function appendQwen38SubagentInvocation(
++  base: string,
++  execution:
++    | {
++        readonly scratchDir: string;
++        readonly subagentType: 'general-purpose' | 'Explore';
++      }
++    | undefined,
++): string {
++  if (!isQwen38LockedAgentServiceRuntime()) return base;
++  if (!execution) {
++    throw new Error(
++      'locked agent-service subagent prompt was built outside its invocation frame',
++    );
++  }
++  return `${base.trim()}\n\n## This foreground invocation\n\n- Role: ${execution.subagentType}\n- Private scratch root: ${execution.scratchDir}\n- TMPDIR, language caches, and build caches are routed beneath that exact scratch root.\n- Scratch is not a deliverable and is not automatically bundled. Deliberately promote anything that must survive to /workspace or /artifacts.\n- The scratch tree remains available to the parent until session teardown; cleanup errors are teardown diagnostics, never silent success.`;
++}
 diff --git a/packages/core/src/core/session-recovery.ts b/packages/core/src/core/session-recovery.ts
 index f87557c07ac3fd0c647600d93ebdb776e3058b38..3b115b2ee6698600974bc993f240738439979266 100644
 --- a/packages/core/src/core/session-recovery.ts
@@ -9788,6 +10192,139 @@ index 9a37b9b3e192534f76d3e9f8e15038d79985a969..725f2c917156e717afb30a79865d97e0
 +    };
    }
  }
+diff --git a/packages/core/src/subagents/builtin-agents.test.ts b/packages/core/src/subagents/builtin-agents.test.ts
+index 69485029501e26d26f35ef9de3d52564f7e63271..30cf243ff98107f6dedb83cf2bf3f300b89e12a4 100644
+--- a/packages/core/src/subagents/builtin-agents.test.ts
++++ b/packages/core/src/subagents/builtin-agents.test.ts
+@@ -60,20 +60,29 @@ describe('BuiltinAgentRegistry', () => {
+       expect(exploreAgent?.model).toBeUndefined();
+     });
+ 
+-    it('keeps the Explore agent read-only without banning shell pipelines', () => {
++    it('gives Explore writable local investigation tools without control-plane tools', () => {
+       const exploreAgent = BuiltinAgentRegistry.getBuiltinAgent('Explore');
+ 
+       expect(exploreAgent?.tools).not.toContain(ToolNames.TODO_WRITE);
+       expect(exploreAgent?.tools).not.toContain(ToolNames.MEMORY);
+       expect(exploreAgent?.tools).not.toContain(ToolNames.ASK_USER_QUESTION);
++      expect(exploreAgent?.tools).not.toContain(ToolNames.AGENT);
++      expect(exploreAgent?.tools).not.toContain(ToolNames.WEB_FETCH);
++      expect(exploreAgent?.tools).not.toContain(ToolNames.SKILL);
++      expect(exploreAgent?.tools).toContain(ToolNames.WRITE_FILE);
++      expect(exploreAgent?.tools).toContain(ToolNames.EDIT);
++      expect(exploreAgent?.tools).toContain(ToolNames.NOTEBOOK_EDIT);
+       expect(exploreAgent?.systemPrompt).toContain(
+-        'pipelines are allowed when every command is read-only',
++        'Exploration is a role, not a mechanical read-only permission profile',
+       );
+-      expect(exploreAgent?.systemPrompt).not.toContain('(>, >>, |)');
++      expect(exploreAgent?.systemPrompt).toContain('PDF extraction/rendering');
++      expect(exploreAgent?.systemPrompt).toContain(
++        'hashed before and after your run',
++      );
++      expect(exploreAgent?.systemPrompt).not.toContain('CRITICAL: READ-ONLY');
+     });
+ 
+-    // Regression for #7126: Explore is a read-only search worker that
+-    // typically runs as a subagent with no human in the loop. An
++    // Explore runs as a foreground worker with no human in the loop. An
+     // interactive question tool would block the pipeline forever.
+     it('should not give the Explore agent the interactive question tool', () => {
+       const exploreAgent = BuiltinAgentRegistry.getBuiltinAgent('Explore');
+diff --git a/packages/core/src/subagents/builtin-agents.ts b/packages/core/src/subagents/builtin-agents.ts
+index 8be015325f52b18d01ad4f3ea140be2c18724385..d025223565e57c4ada9a128f539fce74411a0d76 100644
+--- a/packages/core/src/subagents/builtin-agents.ts
++++ b/packages/core/src/subagents/builtin-agents.ts
+@@ -4,7 +4,7 @@
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+-import { ToolDisplayNames, ToolNames } from '../tools/tool-names.js';
++import { ToolNames } from '../tools/tool-names.js';
+ import type { SubagentConfig } from './types.js';
+ 
+ /**
+@@ -47,59 +47,33 @@ Notes:
+     {
+       name: 'Explore',
+       description:
+-        'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.',
+-      systemPrompt: `You are a file search specialist agent. You excel at thoroughly navigating and exploring codebases.
+-
+-=== CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
+-This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:
+-- Creating new files (no ${ToolDisplayNames.WRITE_FILE}, touch, or file creation of any kind)
+-- Modifying existing files (no ${ToolDisplayNames.EDIT} operations)
+-- Deleting files (no rm or deletion)
+-- Moving or copying files (no mv or cp)
+-- Creating temporary files anywhere, including /tmp
+-- Redirecting output to files (>, >>, or writing heredocs); pipelines are allowed when every command is read-only and no command sends data to a network endpoint (no curl, wget, nc, or similar)
+-- Running ANY commands that change system state
+-
+-Your role is EXCLUSIVELY to search and analyze existing code. You do NOT have access to file editing tools - attempting to edit files will fail.
+-
+-Your strengths:
+-- Rapidly finding files using glob patterns
+-- Searching code and text with powerful regex patterns
+-- Reading and analyzing file contents
+-
+-Guidelines:
+-- Use ${ToolDisplayNames.GLOB} for broad file pattern matching
+-- Use ${ToolDisplayNames.GREP} for searching file contents with regex
+-- Use ${ToolDisplayNames.READ_FILE} when you know the specific file path you need to read
+-- Use ${ToolDisplayNames.SHELL} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
+-- NEVER use ${ToolDisplayNames.SHELL} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
+-- Adapt your search approach based on the thoroughness level specified by the caller
+-- Return file paths as absolute paths in your final response
+-- For clear communication, avoid using emojis
+-- Communicate your final report directly as a regular message - do NOT attempt to create files
+-
+-NOTE: You are meant to be a fast agent that returns output as quickly as possible. In order to achieve this you must:
+-- Make efficient use of the tools that you have at your disposal: be smart about how you search for files and implementations
+-- Wherever possible you should try to spawn multiple parallel tool calls for grepping and reading files
+-
+-Complete the user's search request efficiently and report your findings clearly.
+-
+-Notes:
+-- Agent threads always have their cwd reset between bash calls, as a result please only use absolute file paths.
+-- In your final response, share file paths (always absolute, never relative) that are relevant to the task. Include code snippets only when the exact text is load-bearing (e.g., a bug you found, a function signature the caller asked for) — do not recap code you merely read.
+-- For clear communication with the user the assistant MUST avoid using emojis.`,
++        'Investigative foreground agent for code, documents, archives, media, data, and local computational probes. Explore is read-oriented in purpose but may use private scratch and make visible staged-workspace changes when the investigation genuinely requires them.',
++      systemPrompt: `You are the Explore subagent working for a parent agent. Complete only the assigned investigation and return concise, evidence-based findings that the parent can integrate.
++
++Exploration is a role, not a mechanical read-only permission profile:
++- Prefer your unique scratch directory for PDF extraction/rendering, archive expansion, generated indexes, SQLite imports, compiler probes, media conversion, temporary source trees, and other disposable derived data.
++- You may create or modify files in the staged /workspace when that is genuinely required by the investigation. You may create explicit durable deliverables in /artifacts when the assignment requests them.
++- Workspace and artifact effects are hashed before and after your run and appended to your result as trusted runtime metadata. Do not hide effects, claim that scratch files are durable, or attempt to edit the journal.
++- The operator's original source is not mounted read-write. Never confuse the staged /workspace with the original folder.
++- Use the installed offline toolchain through run_shell_command. Network installation, remote fetch, package registries, and alternate services are unavailable.
++- Use absolute paths because shell working directories reset between calls.
++- Inspect broadly, then narrow. Verify important claims and report exact paths, commands, results, uncertainties, and blockers.
++- Do not launch another agent, ask the user an interactive question, or expand the assignment.
++
++Return the result as a normal response to the parent. Include code excerpts only when their exact text is load-bearing.`,
+       tools: [
+         ToolNames.READ_FILE,
+         ToolNames.GREP,
+         ToolNames.GLOB,
+         ToolNames.SHELL,
+         ToolNames.LS,
+-        ToolNames.WEB_FETCH,
+-        ToolNames.SKILL,
+-        ToolNames.LSP,
+-        // ASK_USER_QUESTION is deliberately absent: Explore is a read-only
+-        // search worker that typically runs as a subagent with no human in
+-        // the loop — an interactive question would block forever (#7126).
++        ToolNames.WRITE_FILE,
++        ToolNames.EDIT,
++        ToolNames.NOTEBOOK_EDIT,
++        // AGENT, TODO_WRITE, ASK_USER_QUESTION, WEB_FETCH, SKILL, and LSP are
++        // deliberately absent. Explore is a foreground worker with no human
++        // question loop or network/plugin surface, but it retains the local
++        // write/computation tools needed for real investigations.
+       ],
+     },
+     {
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
 index 6d3fb50ffbd2178e70b30b7bd221e40aacee875f..ab4e9b8d81b9c58bce29daf2657e8615a16ee435 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
@@ -9853,10 +10390,23 @@ index 6d3fb50ffbd2178e70b30b7bd221e40aacee875f..ab4e9b8d81b9c58bce29daf2657e8615
        const schema = agentTool.schema;
        const properties = schema.parametersJsonSchema as {
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69016900455ceac4840a9cef2f19c615372..8ea8b86e9d9f30e7721320b027c9c9a66c581ca8 100644
+index 4bcea69016900455ceac4840a9cef2f19c615372..8929512dbc1473398ef1ace2717d7c4c746b4a12 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
-@@ -1004,8 +1004,49 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -130,6 +130,12 @@ import type {
+ } from '../../agents/background-tasks.js';
+ import { buildModelIdContext, resolveModelId } from '../../utils/modelId.js';
+ import type { AuthOverrides } from '../../models/content-generator-config.js';
++import { isQwen38LockedAgentServiceRuntime } from '../../core/qwen38-deployment-prompt.js';
++import { createQwen38SubagentScratch } from './qwen38-subagent-scratch.js';
++import {
++  beginQwen38EffectJournal,
++  finishQwen38EffectJournal,
++} from './qwen38-effect-journal.js';
+ 
+ function persistBackgroundCancellation(
+   metaPath: string,
+@@ -1004,8 +1010,49 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
  </example>
  `;
  
@@ -9868,7 +10418,7 @@ index 4bcea69016900455ceac4840a9cef2f19c615372..8ea8b86e9d9f30e7721320b027c9c9a6
 +
 +Available subagent types:
 +- **general-purpose**: bounded multi-step research or implementation using the inherited local tool surface.
-+- **Explore**: read-only codebase discovery and analysis.
++- **Explore**: evidence-oriented investigation with private scratch and visible, journaled staged-workspace effects.
 +
 +Use a detailed, self-contained prompt. Treat the child result as evidence and verify it before relying on it. Background execution, forks, teams, worktrees, custom agent definitions, and model overrides are unavailable in this installation.`;
 +
@@ -9908,7 +10458,7 @@ index 4bcea69016900455ceac4840a9cef2f19c615372..8ea8b86e9d9f30e7721320b027c9c9a6
  
      // Update the parameter schema by modifying the existing object
      const schema = this.parameterSchema as {
-@@ -1035,7 +1076,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1035,7 +1082,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        const availableGrades = [
          ...this.subagentManager.getAvailableModelGrades().keys(),
        ];
@@ -9920,7 +10470,7 @@ index 4bcea69016900455ceac4840a9cef2f19c615372..8ea8b86e9d9f30e7721320b027c9c9a6
          schema.properties.model = {
            type: 'string',
            enum: availableGrades,
-@@ -1075,6 +1119,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1075,6 +1125,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        return 'Parameter "todo_id" must be a non-empty string of at most 500 characters.';
      }
  
@@ -9955,7 +10505,15 @@ index 4bcea69016900455ceac4840a9cef2f19c615372..8ea8b86e9d9f30e7721320b027c9c9a6
      if (params.subagent_type !== undefined) {
        if (
          typeof params.subagent_type !== 'string' ||
-@@ -2696,8 +2768,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2567,6 +2645,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+     // background-agent concurrency caps (agents.maxParallelAgentsByModel).
+     let subagentModelId: string | undefined;
+     let subagentRuntimeAuthOverrides: AuthOverrides | undefined;
++    let qwen38EffectSummary: string | undefined;
+     const releaseBackgroundSlotReservation = () => {
+       if (backgroundSlotReservation && !backgroundSlotReservationConsumed) {
+         this.config
+@@ -2696,8 +2775,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // Implicit background requests downgrade to an awaited foreground run
        // instead of orphaning the child's results. The runtime spawn guard
        // above rejects an explicit run_in_background: true request.
@@ -9967,6 +10525,799 @@ index 4bcea69016900455ceac4840a9cef2f19c615372..8ea8b86e9d9f30e7721320b027c9c9a6
            ? true
            : (this.params.run_in_background ??
              (subagentConfig.background === true ||
+@@ -3944,6 +4024,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+       }
+ 
+       const fgHookOpts = { ...hookOpts, signal: fgAbortController.signal };
++      const qwen38LockedRuntime = isQwen38LockedAgentServiceRuntime();
++      if (qwen38LockedRuntime && !this.config.getForegroundAgentsOnly()) {
++        throw new Error(
++          'locked Qwen3.8 agent-service runtime reached an unlocked agent dispatcher',
++        );
++      }
++      let qwen38Execution:
++        | {
++            scratchDir: string;
++            subagentType: 'general-purpose' | 'Explore';
++          }
++        | undefined;
++      if (qwen38LockedRuntime) {
++        if (
++          subagentConfig.name !== 'general-purpose' &&
++          subagentConfig.name !== 'Explore'
++        ) {
++          throw new Error(
++            `locked Qwen3.8 runtime refused unexpected foreground subagent type ${JSON.stringify(subagentConfig.name)}`,
++          );
++        }
++        const scratch = createQwen38SubagentScratch(subagentConfig.name);
++        qwen38Execution = {
++          scratchDir: scratch.root,
++          subagentType: subagentConfig.name,
++        };
++      }
+       // Wrap in qwen-code.subagent span (#3731 Phase 3). Foreground
+       // invocations are child spans of the AGENT tool's `qwen-code.tool`
+       // span, inheriting its traceId so the trace tree stays unified.
+@@ -3952,11 +4059,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+           this.buildSubagentSpanSpec(hookOpts, subagentConfig, 'foreground'),
+           fgAbortController.signal,
+           (recordSpanOutcome) =>
+-            runWithAgentContext(hookOpts.agentId, () =>
+-              this.runSubagentWithHooks(subagent, contextState, {
+-                ...fgHookOpts,
+-                recordSpanOutcome,
+-              }),
++            runWithAgentContext(
++              hookOpts.agentId,
++              () =>
++                this.runSubagentWithHooks(subagent, contextState, {
++                  ...fgHookOpts,
++                  recordSpanOutcome,
++                }),
++              undefined,
++              qwen38Execution,
+             ),
+         );
+ 
+@@ -4112,12 +4223,45 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+           depth: launchDepth,
+         });
+ 
+-        const stopHookWarning = await runFramed();
++        const effectJournal =
++          qwen38Execution?.subagentType === 'Explore'
++            ? await beginQwen38EffectJournal()
++            : undefined;
++        let stopHookWarning: string | undefined;
++        let runError: unknown;
++        try {
++          stopHookWarning = await runFramed();
++        } catch (error) {
++          runError = error;
++        }
++        if (effectJournal) {
++          try {
++            qwen38EffectSummary = (
++              await finishQwen38EffectJournal(effectJournal)
++            ).modelSummary;
++          } catch (journalError) {
++            if (runError) {
++              throw new AggregateError(
++                [runError, journalError],
++                `subagent execution and mandatory Explore effect journaling both failed`,
++              );
++            }
++            throw journalError;
++          }
++        }
++        if (runError) throw runError;
++        const effectSuffix = qwen38EffectSummary
++          ? `\n\n${qwen38EffectSummary}`
++          : '';
+         const terminateMode = subagent.getTerminateMode();
+-        const finalText = appendStopHookBlockingCapWarning(
+-          toModelVisibleSubagentResult(subagent.getFinalText(), terminateMode),
+-          stopHookWarning,
+-        );
++        const finalText =
++          appendStopHookBlockingCapWarning(
++            toModelVisibleSubagentResult(
++              subagent.getFinalText(),
++              terminateMode,
++            ),
++            stopHookWarning,
++          ) + effectSuffix;
+         const wtSuffix = formatWorktreeSuffix(await cleanupWorktreeIsolation());
+         if (terminateMode === AgentTerminateMode.ERROR) {
+           return {
+@@ -4266,8 +4410,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+         terminateReason: `Failed to run subagent: ${errorMessage}`,
+       };
+ 
++      const effectSuffix = qwen38EffectSummary
++        ? `\n\n${qwen38EffectSummary}`
++        : '';
+       return {
+-        llmContent: `Failed to run subagent: ${errorMessage}${wtSuffix}`,
++        llmContent: `Failed to run subagent: ${errorMessage}${wtSuffix}${effectSuffix}`,
+         returnDisplay: errorDisplay,
+       };
+     }
+diff --git a/packages/core/src/tools/agent/qwen38-effect-journal.test.ts b/packages/core/src/tools/agent/qwen38-effect-journal.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..82df63eba0809dcdf50ce475aa4df5b9c95c268a
+--- /dev/null
++++ b/packages/core/src/tools/agent/qwen38-effect-journal.test.ts
+@@ -0,0 +1,119 @@
++/**
++ * @license
++ * Copyright 2025 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { afterEach, describe, expect, it } from 'vitest';
++import {
++  beginQwen38EffectJournal,
++  finishQwen38EffectJournal,
++} from './qwen38-effect-journal.js';
++
++const cleanup: string[] = [];
++
++function fixture(): {
++  root: string;
++  workspace: string;
++  artifacts: string;
++  journals: string;
++} {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen38-effects-test-'));
++  cleanup.push(root);
++  const workspace = path.join(root, 'workspace');
++  const artifacts = path.join(root, 'artifacts');
++  const journals = path.join(root, 'journals');
++  fs.mkdirSync(workspace, { mode: 0o700 });
++  fs.mkdirSync(artifacts, { mode: 0o700 });
++  fs.mkdirSync(journals, { mode: 0o700 });
++  return { root, workspace, artifacts, journals };
++}
++
++afterEach(() => {
++  for (const item of cleanup.splice(0)) {
++    fs.rmSync(item, { recursive: true, force: true });
++  }
++});
++
++describe('Qwen3.8 Explore effect journal', () => {
++  it('reports content, metadata, creation, removal, symlink, and artifact effects', async () => {
++    const { workspace, artifacts, journals } = fixture();
++    fs.writeFileSync(path.join(workspace, 'modified.bin'), Buffer.from([1, 2]));
++    fs.writeFileSync(path.join(workspace, 'removed.txt'), 'remove me');
++    fs.writeFileSync(path.join(workspace, 'chmod.txt'), 'same');
++    fs.symlinkSync('modified.bin', path.join(workspace, 'link'));
++    const journal = await beginQwen38EffectJournal({
++      workspaceRoot: workspace,
++      artifactsRoot: artifacts,
++      journalRoot: journals,
++    });
++
++    fs.writeFileSync(path.join(workspace, 'modified.bin'), Buffer.from([1, 3]));
++    fs.rmSync(path.join(workspace, 'removed.txt'));
++    fs.chmodSync(path.join(workspace, 'chmod.txt'), 0o600);
++    fs.rmSync(path.join(workspace, 'link'));
++    fs.symlinkSync('chmod.txt', path.join(workspace, 'link'));
++    fs.writeFileSync(path.join(workspace, 'created.txt'), 'new');
++    fs.writeFileSync(path.join(artifacts, 'report.txt'), 'report');
++
++    const report = await finishQwen38EffectJournal(journal);
++    expect(report.workspace.created).toEqual(['created.txt']);
++    expect(report.workspace.removed).toEqual(['removed.txt']);
++    expect(report.workspace.contentModified).toEqual(['link', 'modified.bin']);
++    expect(report.workspace.metadataModified).toEqual(['chmod.txt']);
++    expect(report.artifacts.created).toEqual(['report.txt']);
++    expect(report.modelSummary).toContain(
++      'QWEN38_TRUSTED_EXPLORE_EFFECT_JOURNAL_V1',
++    );
++    expect(report.modelSummary).toContain('path_list_truncated=false');
++    expect(fs.readFileSync(report.manifestPath, 'utf8')).toContain(
++      report.journalId,
++    );
++  });
++
++  it('does not treat scratch-only writes as project effects', async () => {
++    const { root, workspace, artifacts, journals } = fixture();
++    const journal = await beginQwen38EffectJournal({
++      workspaceRoot: workspace,
++      artifactsRoot: artifacts,
++      journalRoot: journals,
++    });
++    fs.writeFileSync(path.join(root, 'scratch-only'), 'derived');
++    const report = await finishQwen38EffectJournal(journal);
++    expect(report.workspace).toEqual({
++      created: [],
++      removed: [],
++      contentModified: [],
++      metadataModified: [],
++    });
++    expect(report.artifacts).toEqual(report.workspace);
++  });
++
++  it('refuses a symlinked project root instead of following it', async () => {
++    const { root, workspace, artifacts, journals } = fixture();
++    const linked = path.join(root, 'linked-workspace');
++    fs.symlinkSync(workspace, linked);
++    await expect(
++      beginQwen38EffectJournal({
++        workspaceRoot: linked,
++        artifactsRoot: artifacts,
++        journalRoot: journals,
++      }),
++    ).rejects.toThrow('not a real directory');
++  });
++
++  it('refuses a non-private journal root', async () => {
++    const { workspace, artifacts, journals } = fixture();
++    fs.chmodSync(journals, 0o755);
++    await expect(
++      beginQwen38EffectJournal({
++        workspaceRoot: workspace,
++        artifactsRoot: artifacts,
++        journalRoot: journals,
++      }),
++    ).rejects.toThrow('mode-0700');
++  });
++});
+diff --git a/packages/core/src/tools/agent/qwen38-effect-journal.ts b/packages/core/src/tools/agent/qwen38-effect-journal.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..26ce26b683bde990ec7d80b2528333268c0b774e
+--- /dev/null
++++ b/packages/core/src/tools/agent/qwen38-effect-journal.ts
+@@ -0,0 +1,389 @@
++/**
++ * @license
++ * Copyright 2025 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import { createHash, randomUUID } from 'node:crypto';
++import { constants, createReadStream } from 'node:fs';
++import fs from 'node:fs/promises';
++import path from 'node:path';
++
++export const QWEN38_EFFECT_JOURNAL_ROOT = '/qwen-runtime/effects';
++const SUMMARY_PATH_LIMIT = 256;
++
++type EntryKind = 'directory' | 'file' | 'symlink' | 'special';
++
++interface ManifestEntry {
++  readonly kind: EntryKind;
++  readonly mode: number;
++  readonly size?: number;
++  readonly sha256?: string;
++  readonly target?: string;
++  readonly rdev?: number;
++}
++
++interface RootSnapshot {
++  readonly label: 'workspace' | 'artifacts';
++  readonly root: string;
++  readonly entries: Map<string, ManifestEntry>;
++}
++
++export interface Qwen38EffectPaths {
++  readonly created: string[];
++  readonly removed: string[];
++  readonly contentModified: string[];
++  readonly metadataModified: string[];
++}
++
++export interface Qwen38EffectJournalReport {
++  readonly schemaVersion: 1;
++  readonly journalId: string;
++  readonly manifestPath: string;
++  readonly manifestSha256: string;
++  readonly workspace: Qwen38EffectPaths;
++  readonly artifacts: Qwen38EffectPaths;
++  readonly modelSummary: string;
++}
++
++export interface Qwen38EffectJournal {
++  readonly journalId: string;
++  readonly workspaceRoot: string;
++  readonly artifactsRoot: string;
++  readonly journalRoot: string;
++  readonly beforeWorkspace: RootSnapshot;
++  readonly beforeArtifacts: RootSnapshot;
++}
++
++export class Qwen38EffectJournalError extends Error {
++  constructor(message: string) {
++    super(message);
++    this.name = 'Qwen38EffectJournalError';
++  }
++}
++
++function normalizeMode(mode: number): number {
++  return mode & 0o7777;
++}
++
++async function hashRegularFile(filePath: string): Promise<ManifestEntry> {
++  const handle = await fs.open(
++    filePath,
++    constants.O_RDONLY | constants.O_NOFOLLOW,
++  );
++  try {
++    const before = await handle.stat();
++    if (!before.isFile()) {
++      throw new Error('path stopped being a regular file during snapshot');
++    }
++    const hash = createHash('sha256');
++    const stream = createReadStream(filePath, {
++      fd: handle.fd,
++      autoClose: false,
++    });
++    for await (const chunk of stream) hash.update(chunk as Buffer);
++    const after = await handle.stat();
++    if (
++      before.dev !== after.dev ||
++      before.ino !== after.ino ||
++      before.size !== after.size ||
++      before.mtimeMs !== after.mtimeMs
++    ) {
++      throw new Error('regular file changed while it was being hashed');
++    }
++    return {
++      kind: 'file',
++      mode: normalizeMode(after.mode),
++      size: after.size,
++      sha256: hash.digest('hex'),
++    };
++  } finally {
++    await handle.close();
++  }
++}
++
++async function snapshotRoot(
++  label: 'workspace' | 'artifacts',
++  root: string,
++): Promise<RootSnapshot> {
++  if (!path.isAbsolute(root)) {
++    throw new Qwen38EffectJournalError(
++      `${label} root is not absolute: ${root}`,
++    );
++  }
++  const rootStat = await fs.lstat(root);
++  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
++    throw new Qwen38EffectJournalError(
++      `${label} root is not a real directory: ${root}`,
++    );
++  }
++  if ((await fs.realpath(root)) !== path.resolve(root)) {
++    throw new Qwen38EffectJournalError(
++      `${label} root resolves outside its declared path: ${root}`,
++    );
++  }
++
++  const entries = new Map<string, ManifestEntry>();
++  const failures: string[] = [];
++  const walk = async (directory: string, relativeDirectory: string) => {
++    let names: string[];
++    try {
++      names = await fs.readdir(directory);
++      names.sort((a, b) => Buffer.from(a).compare(Buffer.from(b)));
++    } catch (error) {
++      failures.push(
++        `${relativeDirectory || '.'}: readdir: ${error instanceof Error ? error.message : String(error)}`,
++      );
++      return;
++    }
++
++    for (const name of names) {
++      const relative = relativeDirectory
++        ? path.posix.join(relativeDirectory, name)
++        : name;
++      const absolute = path.join(directory, name);
++      try {
++        const stat = await fs.lstat(absolute);
++        if (stat.isSymbolicLink()) {
++          entries.set(relative, {
++            kind: 'symlink',
++            mode: normalizeMode(stat.mode),
++            target: await fs.readlink(absolute),
++          });
++        } else if (stat.isDirectory()) {
++          entries.set(relative, {
++            kind: 'directory',
++            mode: normalizeMode(stat.mode),
++          });
++          await walk(absolute, relative);
++        } else if (stat.isFile()) {
++          entries.set(relative, await hashRegularFile(absolute));
++        } else {
++          entries.set(relative, {
++            kind: 'special',
++            mode: normalizeMode(stat.mode),
++            size: stat.size,
++            rdev: stat.rdev,
++          });
++        }
++      } catch (error) {
++        failures.push(
++          `${relative}: inspect: ${error instanceof Error ? error.message : String(error)}`,
++        );
++      }
++    }
++  };
++
++  await walk(root, '');
++  if (failures.length > 0) {
++    const preview = failures.slice(0, 20).join('; ');
++    throw new Qwen38EffectJournalError(
++      `${label} effect snapshot is incomplete (${failures.length} failures): ${preview}`,
++    );
++  }
++  return { label, root, entries };
++}
++
++function sameContent(before: ManifestEntry, after: ManifestEntry): boolean {
++  if (before.kind !== after.kind) return false;
++  switch (before.kind) {
++    case 'file':
++      return before.sha256 === after.sha256 && before.size === after.size;
++    case 'symlink':
++      return before.target === after.target;
++    case 'special':
++      return before.rdev === after.rdev && before.size === after.size;
++    case 'directory':
++      return true;
++    default: {
++      const exhaustive: never = before.kind;
++      return exhaustive;
++    }
++  }
++}
++
++function compareSnapshots(
++  before: RootSnapshot,
++  after: RootSnapshot,
++): Qwen38EffectPaths {
++  const created: string[] = [];
++  const removed: string[] = [];
++  const contentModified: string[] = [];
++  const metadataModified: string[] = [];
++  const names = new Set([...before.entries.keys(), ...after.entries.keys()]);
++  for (const name of [...names].sort((a, b) =>
++    Buffer.from(a).compare(Buffer.from(b)),
++  )) {
++    const oldEntry = before.entries.get(name);
++    const newEntry = after.entries.get(name);
++    if (!oldEntry) {
++      created.push(name);
++    } else if (!newEntry) {
++      removed.push(name);
++    } else if (!sameContent(oldEntry, newEntry)) {
++      contentModified.push(name);
++    } else if (oldEntry.mode !== newEntry.mode) {
++      metadataModified.push(name);
++    }
++  }
++  return { created, removed, contentModified, metadataModified };
++}
++
++async function requirePrivateJournalRoot(journalRoot: string): Promise<void> {
++  if (!path.isAbsolute(journalRoot)) {
++    throw new Qwen38EffectJournalError(
++      `effect journal root is not absolute: ${journalRoot}`,
++    );
++  }
++  await fs.mkdir(journalRoot, { recursive: true, mode: 0o700 });
++  const stat = await fs.lstat(journalRoot);
++  if (
++    !stat.isDirectory() ||
++    stat.isSymbolicLink() ||
++    (stat.mode & 0o777) !== 0o700 ||
++    (await fs.realpath(journalRoot)) !== path.resolve(journalRoot)
++  ) {
++    throw new Qwen38EffectJournalError(
++      `effect journal root must be a real mode-0700 directory: ${journalRoot}`,
++    );
++  }
++}
++
++export async function beginQwen38EffectJournal(options?: {
++  workspaceRoot?: string;
++  artifactsRoot?: string;
++  journalRoot?: string;
++}): Promise<Qwen38EffectJournal> {
++  const workspaceRoot = options?.workspaceRoot ?? '/workspace';
++  const artifactsRoot = options?.artifactsRoot ?? '/artifacts';
++  const journalRoot = options?.journalRoot ?? QWEN38_EFFECT_JOURNAL_ROOT;
++  await requirePrivateJournalRoot(journalRoot);
++  const [beforeWorkspace, beforeArtifacts] = await Promise.all([
++    snapshotRoot('workspace', workspaceRoot),
++    snapshotRoot('artifacts', artifactsRoot),
++  ]);
++  return {
++    journalId: randomUUID(),
++    workspaceRoot,
++    artifactsRoot,
++    journalRoot,
++    beforeWorkspace,
++    beforeArtifacts,
++  };
++}
++
++function collectSummaryLines(
++  label: 'workspace' | 'artifacts',
++  effects: Qwen38EffectPaths,
++  remaining: { value: number },
++): string[] {
++  const lines: string[] = [];
++  for (const [kind, paths] of Object.entries(effects) as Array<
++    [keyof Qwen38EffectPaths, string[]]
++  >) {
++    lines.push(`${label}.${kind}.count=${paths.length}`);
++    for (const item of paths) {
++      if (remaining.value === 0) continue;
++      lines.push(`${label}.${kind}.path=${JSON.stringify(item)}`);
++      remaining.value -= 1;
++    }
++  }
++  return lines;
++}
++
++async function writeJournalManifest(
++  journal: Qwen38EffectJournal,
++  payload: object,
++): Promise<{ manifestPath: string; manifestSha256: string }> {
++  const manifestPath = path.join(
++    journal.journalRoot,
++    `${journal.journalId}.json`,
++  );
++  const temporaryPath = `${manifestPath}.${randomUUID()}.tmp`;
++  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
++  const handle = await fs.open(temporaryPath, 'wx', 0o600);
++  try {
++    await handle.writeFile(bytes);
++    await handle.sync();
++  } finally {
++    await handle.close();
++  }
++  try {
++    await fs.rename(temporaryPath, manifestPath);
++    const directory = await fs.open(journal.journalRoot, 'r');
++    try {
++      await directory.sync();
++    } finally {
++      await directory.close();
++    }
++  } catch (error) {
++    await fs.rm(temporaryPath, { force: true });
++    throw error;
++  }
++  return {
++    manifestPath,
++    manifestSha256: createHash('sha256').update(bytes).digest('hex'),
++  };
++}
++
++export async function finishQwen38EffectJournal(
++  journal: Qwen38EffectJournal,
++): Promise<Qwen38EffectJournalReport> {
++  const [afterWorkspace, afterArtifacts] = await Promise.all([
++    snapshotRoot('workspace', journal.workspaceRoot),
++    snapshotRoot('artifacts', journal.artifactsRoot),
++  ]);
++  const workspace = compareSnapshots(journal.beforeWorkspace, afterWorkspace);
++  const artifacts = compareSnapshots(journal.beforeArtifacts, afterArtifacts);
++  const payload = {
++    schema_version: 1,
++    journal_id: journal.journalId,
++    roots: {
++      workspace: journal.workspaceRoot,
++      artifacts: journal.artifactsRoot,
++    },
++    effects: { workspace, artifacts },
++  };
++  const { manifestPath, manifestSha256 } = await writeJournalManifest(
++    journal,
++    payload,
++  );
++
++  const totalPaths = [workspace, artifacts].reduce(
++    (total, effects) =>
++      total +
++      effects.created.length +
++      effects.removed.length +
++      effects.contentModified.length +
++      effects.metadataModified.length,
++    0,
++  );
++  const remaining = { value: SUMMARY_PATH_LIMIT };
++  const lines = [
++    'QWEN38_TRUSTED_EXPLORE_EFFECT_JOURNAL_V1',
++    `manifest=${manifestPath}`,
++    `manifest_sha256=${manifestSha256}`,
++    `effect_path_count=${totalPaths}`,
++    ...collectSummaryLines('workspace', workspace, remaining),
++    ...collectSummaryLines('artifacts', artifacts, remaining),
++  ];
++  if (totalPaths > SUMMARY_PATH_LIMIT) {
++    lines.push(
++      `path_list_truncated=true`,
++      `path_list_limit=${SUMMARY_PATH_LIMIT}`,
++      'Read the exact hashed manifest before relying on omitted path details.',
++    );
++  } else {
++    lines.push('path_list_truncated=false');
++  }
++
++  return {
++    schemaVersion: 1,
++    journalId: journal.journalId,
++    manifestPath,
++    manifestSha256,
++    workspace,
++    artifacts,
++    modelSummary: lines.join('\n'),
++  };
++}
+diff --git a/packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts b/packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..12d2d8da8ac6d6169c90358c53786eddcb14b6f4
+--- /dev/null
++++ b/packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts
+@@ -0,0 +1,61 @@
++/**
++ * @license
++ * Copyright 2025 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import fs from 'node:fs';
++import path from 'node:path';
++import { afterEach, describe, expect, it } from 'vitest';
++import {
++  createQwen38ScratchTestRoot,
++  createQwen38SubagentScratch,
++} from './qwen38-subagent-scratch.js';
++
++const cleanup: string[] = [];
++
++afterEach(() => {
++  for (const item of cleanup.splice(0)) {
++    fs.rmSync(item, { recursive: true, force: true });
++  }
++});
++
++describe('Qwen3.8 foreground-subagent scratch', () => {
++  it('creates a unique private tree for each invocation', () => {
++    const root = createQwen38ScratchTestRoot();
++    cleanup.push(root);
++    const first = createQwen38SubagentScratch('Explore', root);
++    const second = createQwen38SubagentScratch('Explore', root);
++
++    expect(first.root).not.toBe(second.root);
++    expect(path.dirname(first.root)).toBe(root);
++    for (const directory of Object.values(first)) {
++      const stat = fs.lstatSync(directory);
++      expect(stat.isDirectory()).toBe(true);
++      expect(stat.isSymbolicLink()).toBe(false);
++      expect(stat.mode & 0o777).toBe(0o700);
++    }
++  });
++
++  it('refuses a symlinked scratch root', () => {
++    const parent = createQwen38ScratchTestRoot();
++    cleanup.push(parent);
++    const real = path.join(parent, 'real');
++    const link = path.join(parent, 'link');
++    fs.mkdirSync(real, { mode: 0o700 });
++    fs.symlinkSync(real, link);
++
++    expect(() => createQwen38SubagentScratch('Explore', link)).toThrow(
++      'not a real directory',
++    );
++  });
++
++  it('refuses a root whose permissions are not private', () => {
++    const root = createQwen38ScratchTestRoot();
++    cleanup.push(root);
++    fs.chmodSync(root, 0o755);
++    expect(() => createQwen38SubagentScratch('general-purpose', root)).toThrow(
++      'mode 0700',
++    );
++  });
++});
+diff --git a/packages/core/src/tools/agent/qwen38-subagent-scratch.ts b/packages/core/src/tools/agent/qwen38-subagent-scratch.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..7c9c492f57f0671a099b8f89b4b62bb372f4990e
+--- /dev/null
++++ b/packages/core/src/tools/agent/qwen38-subagent-scratch.ts
+@@ -0,0 +1,81 @@
++/**
++ * @license
++ * Copyright 2025 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++
++export const QWEN38_SUBAGENT_SCRATCH_ROOT = '/tmp/qwen-subagents';
++
++export interface Qwen38SubagentScratch {
++  readonly root: string;
++  readonly cache: string;
++  readonly pip: string;
++  readonly npm: string;
++  readonly cargo: string;
++  readonly go: string;
++}
++
++function requirePrivateRealDirectory(directory: string, label: string): void {
++  const stat = fs.lstatSync(directory);
++  if (!stat.isDirectory() || stat.isSymbolicLink()) {
++    throw new Error(`${label} is not a real directory: ${directory}`);
++  }
++  if ((stat.mode & 0o777) !== 0o700) {
++    throw new Error(`${label} must have mode 0700: ${directory}`);
++  }
++  if (fs.realpathSync(directory) !== path.resolve(directory)) {
++    throw new Error(
++      `${label} resolves outside its declared path: ${directory}`,
++    );
++  }
++}
++
++function createPrivateDirectory(directory: string): void {
++  fs.mkdirSync(directory, { mode: 0o700 });
++  requirePrivateRealDirectory(directory, 'subagent scratch directory');
++}
++
++export function createQwen38SubagentScratch(
++  subagentType: 'general-purpose' | 'Explore',
++  scratchRoot = QWEN38_SUBAGENT_SCRATCH_ROOT,
++): Qwen38SubagentScratch {
++  if (!path.isAbsolute(scratchRoot)) {
++    throw new Error(`subagent scratch root must be absolute: ${scratchRoot}`);
++  }
++  fs.mkdirSync(scratchRoot, { recursive: true, mode: 0o700 });
++  requirePrivateRealDirectory(scratchRoot, 'subagent scratch root');
++
++  const root = fs.mkdtempSync(path.join(scratchRoot, `${subagentType}-`));
++  fs.chmodSync(root, 0o700);
++  requirePrivateRealDirectory(root, 'subagent invocation scratch');
++
++  const scratch: Qwen38SubagentScratch = {
++    root,
++    cache: path.join(root, 'cache'),
++    pip: path.join(root, 'pip'),
++    npm: path.join(root, 'npm'),
++    cargo: path.join(root, 'cargo'),
++    go: path.join(root, 'go'),
++  };
++  for (const directory of [
++    scratch.cache,
++    scratch.pip,
++    scratch.npm,
++    scratch.cargo,
++    scratch.go,
++  ]) {
++    createPrivateDirectory(directory);
++  }
++  return scratch;
++}
++
++/** Test helper: create a mode-correct private root under the host temp dir. */
++export function createQwen38ScratchTestRoot(): string {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen38-scratch-test-'));
++  fs.chmodSync(root, 0o700);
++  return root;
++}
 diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read-file.ts
 index ab8f8f0137e5f1685f405c607690ac122f713430..ee052a59dcf32deeee1b9fbc10107cce29c6242e 100644
 --- a/packages/core/src/tools/read-file.ts
@@ -10772,6 +12123,78 @@ index 0000000000000000000000000000000000000000..132eec8f49da3d69796a8f0c41584413
 +    expect(wideResult.error).toMatch(/30:1/);
 +  });
 +});
+diff --git a/packages/core/src/utils/shellContextEnv.test.ts b/packages/core/src/utils/shellContextEnv.test.ts
+index b1b558fcb2cb67badafff625453a6b75c26bc48d..ef9fe8002f9e9a4da99b64da69c9b5e4cf0ee519 100644
+--- a/packages/core/src/utils/shellContextEnv.test.ts
++++ b/packages/core/src/utils/shellContextEnv.test.ts
+@@ -220,6 +220,29 @@ describe('getShellContextEnvVars', () => {
+     expect(env['QWEN_CODE_AGENT_ID']).toBe('my-agent-42');
+   });
+ 
++  it('routes every subagent scratch/cache variable through its invocation tree', async () => {
++    const scratch = '/tmp/qwen-subagents/Explore-test';
++    const env = await runWithAgentContext(
++      'Explore-test',
++      async () => getShellContextEnvVars(),
++      undefined,
++      { scratchDir: scratch, subagentType: 'Explore' },
++    );
++    expect(env).toMatchObject({
++      QWEN_CODE_AGENT_ID: 'Explore-test',
++      QWEN_SUBAGENT_SCRATCH: scratch,
++      QWEN_SUBAGENT_TYPE: 'Explore',
++      TMPDIR: scratch,
++      TMP: scratch,
++      TEMP: scratch,
++      XDG_CACHE_HOME: `${scratch}/cache`,
++      PIP_CACHE_DIR: `${scratch}/pip`,
++      NPM_CONFIG_CACHE: `${scratch}/npm`,
++      CARGO_HOME: `${scratch}/cargo`,
++      GOPATH: `${scratch}/go`,
++    });
++  });
++
+   it('returns QWEN_CODE_PROMPT_ID when called within prompt context', () => {
+     const env = promptIdContext.run('prompt-abc', () =>
+       getShellContextEnvVars(),
+diff --git a/packages/core/src/utils/shellContextEnv.ts b/packages/core/src/utils/shellContextEnv.ts
+index 1d7dc09cad4819c3eedf3e1323c4efb26c6e4baa..b9e81e60dc492493645602e5521c9e121d85ee8a 100644
+--- a/packages/core/src/utils/shellContextEnv.ts
++++ b/packages/core/src/utils/shellContextEnv.ts
+@@ -24,7 +24,10 @@
+  */
+ 
+ import { accessSync, closeSync, constants, openSync, readSync } from 'node:fs';
+-import { getCurrentAgentId } from '../agents/runtime/agent-context.js';
++import {
++  getCurrentAgentId,
++  getCurrentQwen38SubagentExecution,
++} from '../agents/runtime/agent-context.js';
+ import { promptIdContext } from './promptIdContext.js';
+ import {
+   sessionIdContext,
+@@ -156,6 +159,21 @@ export function getShellContextEnvVars(): Record<string, string> {
+   const agentId = getCurrentAgentId();
+   env['QWEN_CODE_AGENT_ID'] = agentId ?? '';
+ 
++  const qwen38Execution = getCurrentQwen38SubagentExecution();
++  if (qwen38Execution) {
++    const scratch = qwen38Execution.scratchDir;
++    env['QWEN_SUBAGENT_SCRATCH'] = scratch;
++    env['QWEN_SUBAGENT_TYPE'] = qwen38Execution.subagentType;
++    env['TMPDIR'] = scratch;
++    env['TMP'] = scratch;
++    env['TEMP'] = scratch;
++    env['XDG_CACHE_HOME'] = `${scratch}/cache`;
++    env['PIP_CACHE_DIR'] = `${scratch}/pip`;
++    env['NPM_CONFIG_CACHE'] = `${scratch}/npm`;
++    env['CARGO_HOME'] = `${scratch}/cargo`;
++    env['GOPATH'] = `${scratch}/go`;
++  }
++
+   const promptId = promptIdContext.getStore();
+   env['QWEN_CODE_PROMPT_ID'] = promptId ?? '';
+ 
 diff --git a/scripts/generate-git-commit-info.js b/scripts/generate-git-commit-info.js
 index 75c8bb97ba3588bb15dc6305dfa4a19c6c4dba6b..f948e688d40fff6edba9be50a00b8091c72d39bd 100644
 --- a/scripts/generate-git-commit-info.js

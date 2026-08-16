@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "contract_id": "qwen38-agent-runtime-v1",
+  "profile": "qwen38-agent-service-v3",
+  "sealed_environment": {
+    "marker_name": "QWEN38_AGENT_SERVICE_LOCKED",
+    "marker_value": "1",
+    "qwen_home": "/opt/agent",
+    "system_prompt_path": "/opt/agent/system.md",
+    "deployment_contract_path": "/opt/agent/deployment-contract.md",
+    "uid": 1000,
+    "gid": 1000,
+    "read_only_root": true
+  },
+  "filesystem": {
+    "workspace": "/workspace",
+    "artifacts": "/artifacts",
+    "streams": "/streams",
+    "output": "/output",
+    "output_mounted_in_agent": false,
+    "output_owner_component": "session-capture",
+    "runtime": "/qwen-runtime",
+    "effect_manifest_root": "/qwen-runtime/effects",
+    "subagent_scratch_root": "/tmp/qwen-subagents",
+    "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
+    "tmpfs_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
+    "operator_source_writable": false,
+    "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+output-unmounted-v1"
+  },
+  "network": {
+    "agent_network_mode": "none",
+    "model_base_url": "http://127.0.0.1:18000/v1",
+    "model_proxy_port": 18000,
+    "model_relay_ready_event": "RELAY_READY role=agent-model",
+    "start_gate_file": "/run/agent/start-gate.lock",
+    "interfaces": [
+      "lo"
+    ],
+    "ipv4_addresses": [
+      "127.0.0.1/8"
+    ],
+    "ipv6_addresses": [],
+    "ipv4_routes": [],
+    "ipv6_routes": [],
+    "default_route": false,
+    "dns": false,
+    "internet": false,
+    "host_network": false,
+    "docker_socket": false,
+    "gpu": false
+  },
+  "model": {
+    "served_name": "qwen3.8-27b-nvfp4-k8v4",
+    "checkpoint_repository": "unsloth/Qwen3.8-27B-NVFP4",
+    "checkpoint_revision": "16b6615af3548b88e2d8e382457bc705b00479cf",
+    "correction": "restore-161-offset-rmsnorms-from-official-bf16-v1",
+    "weights": "mixed-nvfp4-fp8",
+    "kv_cache": "turboquant_k8v4",
+    "context_window_tokens": 262144,
+    "mtp": false,
+    "speculative_decoding": false,
+    "cpu_offload_gb": 0,
+    "kv_offload": false
+  },
+  "generation": {
+    "thinking_enabled": true,
+    "reasoning_effort": "xhigh",
+    "preserve_thinking": false,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "thinking_token_budget": 262144,
+    "final_response_token_budget": 131072,
+    "parallel_tool_calls": false,
+    "request_retries": 0,
+    "token_counting": "vllm-exact-rendered-request",
+    "fallback_token_counting": false
+  },
+  "vision": {
+    "enabled": true,
+    "tower_dtype": "bfloat16",
+    "transport": "inline-static-png",
+    "source_modes": [
+      "RGB",
+      "RGBA"
+    ],
+    "max_images_per_rendered_request": 15,
+    "max_source_pixels_per_image": 16777216,
+    "max_source_bytes_per_image": 104857600,
+    "max_aspect_ratio": 30,
+    "lossless_original_bytes": true,
+    "low_detail": false,
+    "video": false,
+    "audio": false,
+    "split_tool_media": false,
+    "compaction_relocates_images": false
+  },
+  "native_tools": [
+    "agent",
+    "edit",
+    "glob",
+    "grep_search",
+    "list_directory",
+    "notebook_edit",
+    "read_file",
+    "run_shell_command",
+    "todo_write",
+    "write_file"
+  ],
+  "subagents": {
+    "allowed_roles": [
+      "general-purpose",
+      "Explore"
+    ],
+    "foreground_only": true,
+    "sequential": true,
+    "max_depth": 1,
+    "nested": false,
+    "background": false,
+    "teams": false,
+    "forks": false,
+    "worktrees": false,
+    "model_overrides": false,
+    "explore_mechanically_read_only": false,
+    "explore_effect_journal_required": true
+  },
+  "execution": {
+    "max_session_turns": -1,
+    "max_cumulative_tool_calls": -1,
+    "max_tool_calls_per_turn": 1000,
+    "max_wall_time_seconds": -1,
+    "chat_recording": false,
+    "slash_commands": false,
+    "runtime_installation": false,
+    "xml_tool_recovery": false,
+    "partial_tool_execution": false,
+    "side_effect_retry": false,
+    "model_preflight_retries": 0,
+    "model_preflight_requests": 1,
+    "compaction_model_override": false
+  },
+  "toolchain": {
+    "manifest_path": "/opt/agent/toolchain-manifest.json",
+    "apt_lock_path": "/opt/locks/agent-apt-packages.lock",
+    "apt_lock_sha256": "71f67f688678308b2bbd65d9c7fd1a3bbd2a72f33da35bcab6e71bf4ded9752a",
+    "capability_categories": [
+      "languages-runtimes",
+      "compilers-build-systems",
+      "source-debugging",
+      "structured-data-databases",
+      "documents",
+      "images-media-diagrams",
+      "archives-synchronization",
+      "shell-editor-userland"
+    ]
+  },
+  "components": {
+    "settings_sha256": "b0c8a5e2bc242c6bec0bc6361f67f853ef411dca0c76903059ec6f1eea1f69f2",
+    "instructions_sha256": "d14ffbf5a7f8650928421477017d8a5b3570e11057689ee8b7dc13e48b1bc5d4",
+    "system_prompt_sha256": "7bbcb01682b7725bfb5f7aea5645516d939f06577940f8b6bf234a8dd3e25679",
+    "deployment_contract_sha256": "585a5d60d1ecbbc7a604ddd4e26eb52441ee3b76bb3cdbc0c93409ca5945359c",
+    "toolchain_manifest_sha256": "5a4106c147bfa51cd7c04962f529a068330a4b2d8b6dde84a164cb1e56667060",
+    "wrapper_sha256": "62ccc6deb8cd5aec8a15984cc2c2fc5b4e775646a0218600f67fec83af806cd2",
+    "agent_exec_source_sha256": "d11d246955c8757da56223675ee31649310ba34abd1210c08704c4ba03512dbf"
+  }
+}

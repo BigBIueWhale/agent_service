@@ -7,7 +7,11 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
-use std::{fs::OpenOptions, os::unix::fs::OpenOptionsExt};
+use std::{
+    collections::BTreeMap,
+    fs::OpenOptions,
+    os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
+};
 
 use tokio::process::Command;
 
@@ -55,21 +59,29 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
         }
     }
 
-    let stats = walk_selected(session_dir)?;
+    let before = snapshot_selected(session_dir)?;
     let parent = archive_path.parent().ok_or_else(|| {
         ServiceError::Internal(format!(
             "bundle path has no parent: {}",
             archive_path.display()
         ))
     })?;
-    std::fs::create_dir_all(parent).map_err(|error| {
-        ServiceError::Internal(io_msg("create bundle directory", parent, &error))
-    })?;
-    if archive_path.exists() {
-        return Err(ServiceError::Internal(format!(
-            "refusing to overwrite existing bundle {}",
-            archive_path.display()
-        )));
+    ensure_service_owned_result_directory(parent)?;
+    match std::fs::symlink_metadata(archive_path) {
+        Ok(_) => {
+            return Err(ServiceError::Internal(format!(
+                "refusing to overwrite existing bundle {}",
+                archive_path.display()
+            )));
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(ServiceError::Internal(io_msg(
+                "stat bundle destination",
+                archive_path,
+                &error,
+            )));
+        }
     }
     let archive_name = archive_path.file_name().ok_or_else(|| {
         ServiceError::Internal(format!(
@@ -123,6 +135,17 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
                 "<archive bytes were directed to the exclusive partial file>"
             )));
         }
+        let after = snapshot_selected(session_dir)?;
+        if before.entries != after.entries
+            || before.uncompressed_bytes != after.uncompressed_bytes
+            || before.file_count != after.file_count
+            || before.artifacts_file_count != after.artifacts_file_count
+        {
+            return Err(ServiceError::Internal(format!(
+                "bundle: selected session tree changed while tar was reading it; no archive was accepted; first difference: {}",
+                first_snapshot_difference(&before.entries, &after.entries)
+            )));
+        }
         let compressed_bytes = std::fs::metadata(&partial)
             .map_err(|error| {
                 ServiceError::Internal(io_msg("stat partial bundle", &partial, &error))
@@ -163,9 +186,9 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
         Ok(BundleStats {
             archive_path: archive_path.to_path_buf(),
             compressed_bytes,
-            uncompressed_bytes: stats.uncompressed_bytes,
-            file_count: stats.file_count,
-            artifacts_file_count: stats.artifacts_file_count,
+            uncompressed_bytes: before.uncompressed_bytes,
+            file_count: before.file_count,
+            artifacts_file_count: before.artifacts_file_count,
         })
     }
     .await;
@@ -203,6 +226,68 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
     }
 }
 
+/// Create or validate one per-session result directory. The service process
+/// owns this namespace; following a pre-created symlink or accepting ambient
+/// umask drift would undermine every no-clobber publication check inside it.
+pub(crate) fn ensure_service_owned_result_directory(path: &Path) -> ServiceResult<()> {
+    let mut created = false;
+    match std::fs::create_dir(path) {
+        Ok(()) => {
+            created = true;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).map_err(
+                |error| ServiceError::Internal(io_msg("chmod result directory", path, &error)),
+            )?;
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => {
+            return Err(ServiceError::Internal(io_msg(
+                "create result directory",
+                path,
+                &error,
+            )));
+        }
+    }
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|error| ServiceError::Internal(io_msg("stat result directory", path, &error)))?;
+    let expected_uid = unsafe { libc::geteuid() };
+    let expected_gid = unsafe { libc::getegid() };
+    if !metadata.is_dir()
+        || metadata.file_type().is_symlink()
+        || metadata.permissions().mode() & 0o777 != 0o755
+        || metadata.uid() != expected_uid
+        || metadata.gid() != expected_gid
+    {
+        return Err(ServiceError::Internal(format!(
+            "result directory {} has unsafe type/mode/owner: type={:?} mode={:o} uid={} gid={} expected={}:{}",
+            path.display(),
+            metadata.file_type(),
+            metadata.permissions().mode() & 0o777,
+            metadata.uid(),
+            metadata.gid(),
+            expected_uid,
+            expected_gid,
+        )));
+    }
+    if created {
+        let parent = path.parent().ok_or_else(|| {
+            ServiceError::Internal(format!(
+                "result directory {} has no parent to sync",
+                path.display()
+            ))
+        })?;
+        std::fs::File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|error| {
+                ServiceError::Internal(io_msg(
+                    "sync result root after directory creation",
+                    parent,
+                    &error,
+                ))
+            })?;
+    }
+    Ok(())
+}
+
 async fn run_with_stdout_file(
     command: &mut Command,
     stdout_file: std::fs::File,
@@ -220,32 +305,55 @@ async fn run_with_stdout_file(
     })
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct EntryFingerprint {
+    kind: u8,
+    device: u64,
+    inode: u64,
+    mode: u32,
+    uid: u32,
+    gid: u32,
+    links: u64,
+    size: u64,
+    modified_seconds: i64,
+    modified_nanoseconds: i64,
+    changed_seconds: i64,
+    changed_nanoseconds: i64,
+}
+
 #[derive(Default)]
-struct TreeStats {
+struct TreeSnapshot {
     uncompressed_bytes: u64,
     file_count: u64,
     artifacts_file_count: u64,
+    entries: BTreeMap<PathBuf, EntryFingerprint>,
 }
 
-fn walk_selected(session_dir: &Path) -> ServiceResult<TreeStats> {
-    let mut stats = TreeStats::default();
+fn snapshot_selected(session_dir: &Path) -> ServiceResult<TreeSnapshot> {
+    let mut snapshot = TreeSnapshot::default();
+    record_entry(session_dir, session_dir, &mut snapshot)?;
     for name in ["staged", "artifacts", "control", "output"] {
-        let before = stats.file_count;
-        walk(&session_dir.join(name), &mut stats)?;
+        let before = snapshot.file_count;
+        walk(session_dir, &session_dir.join(name), &mut snapshot)?;
         if name == "artifacts" {
-            stats.artifacts_file_count = stats.file_count.saturating_sub(before);
+            snapshot.artifacts_file_count = snapshot.file_count.saturating_sub(before);
         }
     }
-    Ok(stats)
+    Ok(snapshot)
 }
 
-fn walk(path: &Path, stats: &mut TreeStats) -> ServiceResult<()> {
-    for entry in std::fs::read_dir(path)
+fn walk(base: &Path, path: &Path, snapshot: &mut TreeSnapshot) -> ServiceResult<()> {
+    record_entry(base, path, snapshot)?;
+    let mut children = std::fs::read_dir(path)
         .map_err(|error| ServiceError::Internal(io_msg("bundle read directory", path, &error)))?
-    {
-        let entry = entry
-            .map_err(|error| ServiceError::Internal(io_msg("bundle read entry", path, &error)))?;
-        let child = entry.path();
+        .map(|entry| {
+            entry
+                .map(|value| value.path())
+                .map_err(|error| ServiceError::Internal(io_msg("bundle read entry", path, &error)))
+        })
+        .collect::<ServiceResult<Vec<_>>>()?;
+    children.sort();
+    for child in children {
         let metadata = std::fs::symlink_metadata(&child)
             .map_err(|error| ServiceError::Internal(io_msg("bundle stat entry", &child, &error)))?;
         if metadata.file_type().is_symlink() {
@@ -255,10 +363,12 @@ fn walk(path: &Path, stats: &mut TreeStats) -> ServiceResult<()> {
             )));
         }
         if metadata.is_dir() {
-            walk(&child, stats)?;
+            walk(base, &child, snapshot)?;
         } else if metadata.is_file() {
-            stats.file_count = stats.file_count.saturating_add(1);
-            stats.uncompressed_bytes = stats.uncompressed_bytes.saturating_add(metadata.len());
+            record_metadata(base, &child, &metadata, snapshot)?;
+            snapshot.file_count = snapshot.file_count.saturating_add(1);
+            snapshot.uncompressed_bytes =
+                snapshot.uncompressed_bytes.saturating_add(metadata.len());
         } else {
             return Err(ServiceError::Internal(format!(
                 "bundle refuses non-file/non-directory {}",
@@ -267,6 +377,92 @@ fn walk(path: &Path, stats: &mut TreeStats) -> ServiceResult<()> {
         }
     }
     Ok(())
+}
+
+fn record_entry(base: &Path, path: &Path, snapshot: &mut TreeSnapshot) -> ServiceResult<()> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|error| ServiceError::Internal(io_msg("bundle stat entry", path, &error)))?;
+    if metadata.file_type().is_symlink() {
+        return Err(ServiceError::Internal(format!(
+            "bundle refuses symlink {}",
+            path.display()
+        )));
+    }
+    if !metadata.is_dir() && !metadata.is_file() {
+        return Err(ServiceError::Internal(format!(
+            "bundle refuses non-file/non-directory {}",
+            path.display()
+        )));
+    }
+    record_metadata(base, path, &metadata, snapshot)
+}
+
+fn record_metadata(
+    base: &Path,
+    path: &Path,
+    metadata: &std::fs::Metadata,
+    snapshot: &mut TreeSnapshot,
+) -> ServiceResult<()> {
+    let relative = path.strip_prefix(base).map_err(|error| {
+        ServiceError::Internal(format!(
+            "bundle path {} is outside selected root {}: {error}",
+            path.display(),
+            base.display()
+        ))
+    })?;
+    let kind = if metadata.is_dir() {
+        1
+    } else if metadata.is_file() {
+        2
+    } else {
+        return Err(ServiceError::Internal(format!(
+            "bundle refuses unsupported entry type {}",
+            path.display()
+        )));
+    };
+    let fingerprint = EntryFingerprint {
+        kind,
+        device: metadata.dev(),
+        inode: metadata.ino(),
+        mode: metadata.mode(),
+        uid: metadata.uid(),
+        gid: metadata.gid(),
+        links: metadata.nlink(),
+        size: metadata.size(),
+        modified_seconds: metadata.mtime(),
+        modified_nanoseconds: metadata.mtime_nsec(),
+        changed_seconds: metadata.ctime(),
+        changed_nanoseconds: metadata.ctime_nsec(),
+    };
+    if snapshot
+        .entries
+        .insert(relative.to_path_buf(), fingerprint)
+        .is_some()
+    {
+        return Err(ServiceError::Internal(format!(
+            "bundle encountered duplicate selected path {}",
+            relative.display()
+        )));
+    }
+    Ok(())
+}
+
+fn first_snapshot_difference(
+    before: &BTreeMap<PathBuf, EntryFingerprint>,
+    after: &BTreeMap<PathBuf, EntryFingerprint>,
+) -> String {
+    for path in before.keys().chain(after.keys()) {
+        match (before.get(path), after.get(path)) {
+            (Some(left), Some(right)) if left == right => {}
+            (Some(left), Some(right)) => {
+                return format!("{} metadata {:?} -> {:?}", path.display(), left, right);
+            }
+            (Some(_), None) => return format!("{} was removed", path.display()),
+            (None, Some(_)) => return format!("{} was created", path.display()),
+            (None, None) => {}
+        }
+    }
+    "aggregate counters changed without a differing entry (internal invariant)".to_string()
 }
 
 fn utf8_path<'a>(path: &'a Path, role: &str) -> ServiceResult<&'a str> {
@@ -297,6 +493,8 @@ pub async fn check_host_dependencies() -> ServiceResult<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::{symlink, PermissionsExt};
+
     use super::*;
 
     #[tokio::test]
@@ -323,5 +521,82 @@ mod tests {
             b"archive-bytes"
         );
         std::fs::remove_file(path).expect("test removes stdout file");
+    }
+
+    #[test]
+    fn result_directory_is_exact_owned_mode_and_never_follows_symlink() {
+        let root = std::env::temp_dir().join(format!(
+            "qwen38-result-dir-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        let results = root.join("results");
+        std::fs::create_dir_all(&results).expect("create results fixture root");
+        let owned = results.join("s-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        ensure_service_owned_result_directory(&owned).expect("create exact result directory");
+        assert_eq!(
+            std::fs::metadata(&owned)
+                .expect("stat result directory")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
+
+        std::fs::set_permissions(&owned, std::fs::Permissions::from_mode(0o777))
+            .expect("drift result mode");
+        let error = ensure_service_owned_result_directory(&owned)
+            .expect_err("unsafe existing mode must not be silently fixed");
+        assert!(error.to_string().contains("unsafe type/mode/owner"));
+
+        let outside = root.join("outside");
+        std::fs::create_dir(&outside).expect("create outside fixture");
+        let link = results.join("s-cccccccccccccccccccccccccccccccc");
+        symlink(&outside, &link).expect("create hostile result symlink");
+        let error = ensure_service_owned_result_directory(&link)
+            .expect_err("result directory symlink must fail closed");
+        assert!(error.to_string().contains("unsafe type/mode/owner"));
+        assert!(outside.is_dir());
+        std::fs::remove_dir_all(&root).expect("remove result directory fixture");
+    }
+
+    #[test]
+    fn selected_tree_snapshot_detects_content_replacement_and_namespace_changes() {
+        let root = std::env::temp_dir().join(format!(
+            "qwen38-bundle-snapshot-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        for directory in ["staged", "artifacts", "control", "output"] {
+            std::fs::create_dir_all(root.join(directory)).expect("create snapshot fixture");
+        }
+        let selected = root.join("staged/value.bin");
+        std::fs::write(&selected, b"AAAA").expect("write original selected content");
+        let before = snapshot_selected(&root).expect("snapshot original selected tree");
+
+        // Atomic same-length replacement cannot hide behind an unchanged byte
+        // count or pathname: inode and directory metadata are both frozen.
+        let replacement = root.join("staged/replacement.bin");
+        std::fs::write(&replacement, b"BBBB").expect("write replacement content");
+        std::fs::rename(&replacement, &selected).expect("atomically replace selected file");
+        let replaced = snapshot_selected(&root).expect("snapshot replaced selected tree");
+        assert_ne!(before.entries, replaced.entries);
+        let replacement_difference = first_snapshot_difference(&before.entries, &replaced.entries);
+        assert!(replacement_difference.contains("staged"));
+
+        let created = root.join("artifacts/new.txt");
+        std::fs::write(&created, b"new").expect("create selected artifact");
+        let with_created = snapshot_selected(&root).expect("snapshot created entry");
+        assert_ne!(replaced.entries, with_created.entries);
+        assert_eq!(with_created.artifacts_file_count, 1);
+        assert!(
+            first_snapshot_difference(&replaced.entries, &with_created.entries)
+                .contains("artifacts")
+        );
+
+        std::fs::remove_file(&created).expect("remove selected artifact");
+        let after_removal = snapshot_selected(&root).expect("snapshot removed entry");
+        assert_eq!(after_removal.artifacts_file_count, 0);
+        assert_ne!(with_created.entries, after_removal.entries);
+
+        std::fs::remove_dir_all(&root).expect("remove bundle snapshot fixture");
     }
 }

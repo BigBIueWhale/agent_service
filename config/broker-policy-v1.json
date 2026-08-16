@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "policy_id": "qwen38-docker-broker-v1",
+  "profile": "qwen38-agent-service-v3",
+  "docker_server_version": "29.7.2",
+  "broker_container_name": "qwen38-docker-broker",
+  "broker": {
+    "image_tag": "qwen38-docker-broker:1.0.0",
+    "memory": "64m",
+    "memory_swap": "64m",
+    "pids_limit": 64,
+    "uid": 1000,
+    "gid": 984,
+    "docker_socket": "/var/run/docker.sock"
+  },
+  "broker_socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
+  "runtime_root": "/home/user/Desktop/agent_service/.runtime",
+  "state_dir": "/home/user/Desktop/agent_service/.runtime/state",
+  "model_socket_dir": "/home/user/Desktop/agent_service/.runtime/model-socket",
+  "service_container_name": "qwen38-agent-service",
+  "backend_container_name": "qwen38-agent-native",
+  "backend_cache_volume": "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v13",
+  "backend_cache_mount": "/home/vllm/.cache/vllm",
+  "backend_cache_owner_mode": "2000:0:770",
+  "model_bridge_container_name": "qwen38-model-bridge",
+  "model_ingress_container_name": "qwen38-model-ingress",
+  "agent": {
+    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v6",
+    "image_id": "sha256:692bf22c9e15b67145b3997d9d46c5cbf2e3a534c2fcbabf2e97a66c23455b92",
+    "memory": "32g",
+    "memory_swap": "32g",
+    "pids_limit": 4096,
+    "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
+    "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
+    "ready_event_prefix": "AGENT_READY model=qwen3.8-27b-nvfp4-k8v4 context=262144 network=loopback-only token_count=",
+    "sandbox": "landlock-fs-v4-write-roots-v1+output-unmounted-v1"
+  },
+  "relay": {
+    "image_tag": "qwen38-fixed-relay:1.0.0",
+    "image_id": "sha256:8b3aa7c098e5a9c757302340bf5554b9bd36c7c30640c1ce07d5cd1fc38417d1",
+    "sandbox": "landlock-net-v4+seccomp-socket-v2",
+    "memory": "32m",
+    "memory_swap": "32m",
+    "pids_limit": 32,
+    "role": "agent-model"
+  },
+  "capture": {
+    "image_tag": "qwen38-session-capture:1.0.0",
+    "image_id": "sha256:d87f39d60370eb5190e7ec166807131b90d545d6da20929a1e6fa7ccf7c186de",
+    "capture_id": "unix-stream-capture-v1",
+    "memory": "32m",
+    "memory_swap": "32m",
+    "pids_limit": 32,
+    "ready_event": "CAPTURE_READY capture=unix-stream-capture-v1 events=/streams/events.sock stderr=/streams/stderr.sock",
+    "complete_event_prefix": "CAPTURE_COMPLETE capture=unix-stream-capture-v1 events_bytes="
+  }
+}

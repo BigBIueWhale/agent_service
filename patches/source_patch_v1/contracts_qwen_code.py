@@ -484,6 +484,188 @@ def _validate_tool_policy_after(state: State) -> None:
         )
 
 
+def _validate_deployment_prompt_scratch_before(state: State) -> None:
+    label = "deployment prompt, scratch, and effect journal precondition"
+    builtin = "packages/core/src/subagents/builtin-agents.ts"
+    _require_all(
+        state,
+        builtin,
+        (
+            "CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS",
+            "Creating temporary files anywhere, including /tmp",
+            "ToolNames.WEB_FETCH",
+        ),
+        label=label,
+    )
+    for path in (
+        "packages/core/src/core/qwen38-deployment-prompt.ts",
+        "packages/core/src/tools/agent/qwen38-subagent-scratch.ts",
+        "packages/core/src/tools/agent/qwen38-effect-journal.ts",
+    ):
+        _require(path not in state, f"{label}: {path} unexpectedly exists upstream")
+
+
+def _validate_deployment_prompt_scratch_after(state: State) -> None:
+    label = "deployment prompt, scratch, and effect journal result"
+    cli = "packages/cli/src/config/config.ts"
+    prompt = "packages/core/src/core/qwen38-deployment-prompt.ts"
+    prompts = "packages/core/src/core/prompts.ts"
+    core = "packages/core/src/agents/runtime/agent-core.ts"
+    context = "packages/core/src/agents/runtime/agent-context.ts"
+    shell = "packages/core/src/utils/shellContextEnv.ts"
+    builtin = "packages/core/src/subagents/builtin-agents.ts"
+    agent = "packages/core/src/tools/agent/agent.ts"
+    scratch = "packages/core/src/tools/agent/qwen38-subagent-scratch.ts"
+    journal = "packages/core/src/tools/agent/qwen38-effect-journal.ts"
+
+    _require_all(
+        state,
+        cli,
+        (
+            "QWEN38_AGENT_SERVICE_LOCKED: '1'",
+            "QWEN_SYSTEM_MD: '/opt/agent/system.md'",
+            "QWEN_DEPLOYMENT_CONTRACT_MD: '/opt/agent/deployment-contract.md'",
+            "Locked agent-service configuration forbids CLI system-prompt overrides",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        prompt,
+        (
+            "QWEN38_LOCKED_SYSTEM_PROMPT_PATH = '/opt/agent/system.md'",
+            "'/opt/agent/deployment-contract.md'",
+            "stat.isSymbolicLink()",
+            "must be nonempty UTF-8-style LF text with a terminal newline",
+            "appendQwen38DeploymentContract",
+            "appendQwen38SubagentInvocation",
+            "locked agent-service subagent prompt was built outside its invocation frame",
+            "Private scratch root:",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        prompts,
+        (
+            "appendQwen38DeploymentContract",
+            "fs.readFileSync(systemMdPath, 'utf8')",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core,
+        (
+            "getCurrentQwen38SubagentExecution",
+            "appendQwen38DeploymentContract(finalPrompt)",
+            "appendQwen38SubagentInvocation(",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        context,
+        (
+            "export interface Qwen38SubagentExecutionContext",
+            "readonly scratchDir: string;",
+            "readonly subagentType: 'general-purpose' | 'Explore';",
+            "getCurrentQwen38SubagentExecution",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        shell,
+        (
+            "env['QWEN_SUBAGENT_SCRATCH'] = scratch;",
+            "env['TMPDIR'] = scratch;",
+            "env['XDG_CACHE_HOME'] = `${scratch}/cache`;",
+            "env['PIP_CACHE_DIR'] = `${scratch}/pip`;",
+            "env['NPM_CONFIG_CACHE'] = `${scratch}/npm`;",
+            "env['CARGO_HOME'] = `${scratch}/cargo`;",
+            "env['GOPATH'] = `${scratch}/go`;",
+        ),
+        label=label,
+    )
+    scratch_source = _require_all(
+        state,
+        scratch,
+        (
+            "QWEN38_SUBAGENT_SCRATCH_ROOT = '/tmp/qwen-subagents'",
+            "fs.mkdtempSync(path.join(scratchRoot, `${subagentType}-`))",
+            "stat.isSymbolicLink()",
+            "must have mode 0700",
+            "fs.realpathSync(directory) !== path.resolve(directory)",
+        ),
+        label=label,
+    )
+    _require(
+        scratch_source.count("createPrivateDirectory(directory)") == 1,
+        f"{label}: language-specific scratch children are no longer created uniformly",
+    )
+    _require_all(
+        state,
+        journal,
+        (
+            "QWEN38_EFFECT_JOURNAL_ROOT = '/qwen-runtime/effects'",
+            "constants.O_RDONLY | constants.O_NOFOLLOW",
+            "createHash('sha256')",
+            "regular file changed while it was being hashed",
+            "snapshotRoot('workspace'",
+            "snapshotRoot('artifacts'",
+            "contentModified",
+            "metadataModified",
+            "QWEN38_TRUSTED_EXPLORE_EFFECT_JOURNAL_V1",
+            "path_list_truncated=true",
+            "Read the exact hashed manifest before relying on omitted path details.",
+        ),
+        label=label,
+    )
+    builtin_source = _require_all(
+        state,
+        builtin,
+        (
+            "Exploration is a role, not a mechanical read-only permission profile",
+            "ToolNames.WRITE_FILE",
+            "ToolNames.EDIT",
+            "ToolNames.NOTEBOOK_EDIT",
+            "hashed before and after your run",
+        ),
+        label=label,
+    )
+    _require(
+        "CRITICAL: READ-ONLY MODE" not in builtin_source
+        and "ToolNames.WEB_FETCH," not in builtin_source
+        and "ToolNames.SKILL," not in builtin_source,
+        f"{label}: Explore retained the obsolete read-only/network/plugin surface",
+    )
+    agent_source = _require_all(
+        state,
+        agent,
+        (
+            "createQwen38SubagentScratch(subagentConfig.name)",
+            "beginQwen38EffectJournal()",
+            "await finishQwen38EffectJournal(effectJournal)",
+            "subagent execution and mandatory Explore effect journaling both failed",
+            "qwen38EffectSummary",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        agent_source,
+        (
+            "const effectJournal =",
+            "await beginQwen38EffectJournal()",
+            "stopHookWarning = await runFramed();",
+            "await finishQwen38EffectJournal(effectJournal)",
+            "if (runError) throw runError;",
+        ),
+        label=label,
+        location=agent,
+    )
+
+
 def _validate_image_before(state: State) -> None:
     label = "full-quality chronological image precondition"
     image = "packages/core/src/utils/image-view.ts"
@@ -699,6 +881,25 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         "packages/core/src/tools/agent/agent.test.ts": (
             "exposes only sequential built-in delegation in foreground-agents-only mode",
         ),
+        "packages/core/src/core/qwen38-deployment-prompt.test.ts": (
+            "requires both immutable paths in the locked runtime",
+            "requires and appends the unique invocation scratch in locked subagents",
+        ),
+        "packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts": (
+            "creates a unique private tree for each invocation",
+            "refuses a symlinked scratch root",
+        ),
+        "packages/core/src/tools/agent/qwen38-effect-journal.test.ts": (
+            "reports content, metadata, creation, removal, symlink, and artifact effects",
+            "does not treat scratch-only writes as project effects",
+            "refuses a symlinked project root instead of following it",
+        ),
+        "packages/core/src/subagents/builtin-agents.test.ts": (
+            "gives Explore writable local investigation tools without control-plane tools",
+        ),
+        "packages/core/src/utils/shellContextEnv.test.ts": (
+            "routes every subagent scratch/cache variable through its invocation tree",
+        ),
         "packages/core/src/utils/qwen38-image-contract.test.ts": (
             "emits the exact original PNG bytes at their full dimensions",
             "fails closed for JPEG instead of transcoding or forwarding it",
@@ -780,6 +981,25 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_tool_policy_before,
         validate_after=_validate_tool_policy_after,
+    ),
+    SemanticConcern(
+        name="deployment-prompts-subagent-scratch-and-effect-journal",
+        rationale=(
+            "The generic upstream main prompt advertises unavailable host, parallel, "
+            "background, skill, and fallback behaviors, while upstream Explore is "
+            "mechanically read-only and even forbids /tmp. The sealed deployment must "
+            "replace that base with one immutable prompt contract, give both foreground "
+            "roles unique private scratch, keep Explore computationally writable, and "
+            "hash/journal every Explore workspace or artifact effect for the parent."
+        ),
+        removal_condition=(
+            "Remove only when upstream can require an immutable distributor prompt and "
+            "shared subagent contract, attach per-invocation scratch to every shell spawn, "
+            "and provide Git-independent content-hash effect journaling without making "
+            "Explore read-only or following untrusted symlinks."
+        ),
+        validate_before=_validate_deployment_prompt_scratch_before,
+        validate_after=_validate_deployment_prompt_scratch_after,
     ),
     SemanticConcern(
         name="original-png-and-image-chronology",

@@ -14,6 +14,7 @@ use serde::Deserialize;
 use crate::error::{ServiceError, ServiceResult};
 
 pub const STACK_LOCK_JSON: &str = include_str!("../config/stack.lock.json");
+pub const BROKER_POLICY_JSON: &str = include_str!("../config/broker-policy-v1.json");
 pub const QWEN_CODE_VERSION: &str = "0.21.12";
 
 /// The prompt is additionally bounded by the HTTP request-body limit from
@@ -31,9 +32,9 @@ pub struct Config {
     pub state_dir: PathBuf,
     pub results_dir: PathBuf,
     pub host_input_root: PathBuf,
+    pub broker_socket: PathBuf,
+    pub model_socket: PathBuf,
     pub agent_image: String,
-    pub agent_memory_limit: String,
-    pub agent_memory_swap_limit: String,
     pub vllm_model_name: String,
     pub vllm_endpoint: String,
 }
@@ -45,9 +46,57 @@ pub struct StackLock {
     pub profile: String,
     pub build: BuildLock,
     pub service: ServiceLock,
+    pub broker: BrokerLock,
+    pub relay: RelayLock,
+    pub capture: CaptureLock,
     pub agent: AgentLock,
     pub backend: BackendLock,
     pub host: HostLock,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BrokerLock {
+    pub policy_id: String,
+    pub container_name: String,
+    pub image_tag: String,
+    pub image_id: String,
+    pub socket_path: String,
+    pub policy_sha256: String,
+    pub source_sha256: String,
+    pub memory: String,
+    pub memory_swap: String,
+    pub pids_limit: u32,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RelayLock {
+    pub image_tag: String,
+    pub image_id: String,
+    pub source_sha256: String,
+    pub sandbox: String,
+    pub memory: String,
+    pub memory_swap: String,
+    pub pids_limit: u32,
+    pub model_socket_dir: String,
+    pub service_socket_dir: String,
+    pub model_bridge_container: String,
+    pub model_ingress_container: String,
+    pub service_bridge_container: String,
+    pub service_ingress_container: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CaptureLock {
+    pub image_tag: String,
+    pub image_id: String,
+    pub source_sha256: String,
+    pub capture_id: String,
+    pub memory: String,
+    pub memory_swap: String,
+    pub pids_limit: u32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -61,6 +110,11 @@ pub struct BuildLock {
     pub docker_cli_archive: String,
     pub docker_cli_archive_sha256: String,
     pub agent_apt_lock_sha256: String,
+    pub toolchain_verifier_sha256: String,
+    pub toolchain_verifier_test_sha256: String,
+    pub runtime_contract_verifier_sha256: String,
+    pub runtime_contract_verifier_test_sha256: String,
+    pub wrapper_contract_test_sha256: String,
     pub jks_normalizer_sha256: String,
     pub jks_normalizer_test_sha256: String,
     pub service_apt_lock_sha256: String,
@@ -72,6 +126,12 @@ pub struct ServiceLock {
     pub listen: String,
     pub container_name: String,
     pub image_tag: String,
+    pub user: String,
+    pub memory: String,
+    pub memory_swap: String,
+    pub pids_limit: u32,
+    pub tmpfs_tmp: String,
+    pub runtime_root: String,
     pub state_dir: String,
     pub results_dir: String,
     pub host_input_root: String,
@@ -90,7 +150,13 @@ pub struct AgentLock {
     pub tmpfs_qwen_runtime: String,
     pub settings_sha256: String,
     pub instructions_sha256: String,
+    pub system_prompt_sha256: String,
+    pub deployment_contract_sha256: String,
+    pub toolchain_manifest_sha256: String,
+    pub runtime_contract_sha256: String,
     pub wrapper_sha256: String,
+    pub agent_exec_source_sha256: String,
+    pub agent_exec_sandbox: String,
     pub model_base_url: String,
     pub model_proxy_port: u16,
     pub strict_tools: Vec<String>,
@@ -118,9 +184,12 @@ pub struct BackendLock {
     pub profile_label: String,
     pub image_tag: String,
     pub image_id: String,
+    pub user: String,
     pub rootfs_read_only: bool,
     pub tmpfs: BTreeMap<String, String>,
     pub cache_volume: String,
+    pub cache_mount: String,
+    pub cache_owner_mode: String,
     pub endpoint: String,
     pub version: String,
     pub vllm_commit: String,
@@ -185,8 +254,88 @@ pub struct HostLock {
     pub gpu_name: String,
     pub gpu_memory_mib: u64,
     pub driver_version: String,
+    pub dockerd_path: String,
+    pub dockerd_sha256: String,
+    pub docker_security_options: Vec<String>,
+    pub container_apparmor_profile: String,
     pub docker_socket: String,
     pub docker_socket_gid: u32,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BrokerPolicy {
+    schema_version: u32,
+    policy_id: String,
+    profile: String,
+    docker_server_version: String,
+    broker_container_name: String,
+    broker: BrokerPolicyBroker,
+    broker_socket_path: String,
+    runtime_root: String,
+    state_dir: String,
+    model_socket_dir: String,
+    service_container_name: String,
+    backend_container_name: String,
+    backend_cache_volume: String,
+    backend_cache_mount: String,
+    backend_cache_owner_mode: String,
+    model_bridge_container_name: String,
+    model_ingress_container_name: String,
+    agent: BrokerPolicyAgent,
+    relay: BrokerPolicyRelay,
+    capture: BrokerPolicyCapture,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BrokerPolicyBroker {
+    image_tag: String,
+    memory: String,
+    memory_swap: String,
+    pids_limit: u32,
+    uid: u32,
+    gid: u32,
+    docker_socket: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BrokerPolicyAgent {
+    image_tag: String,
+    image_id: String,
+    memory: String,
+    memory_swap: String,
+    pids_limit: u32,
+    tmpfs_tmp: String,
+    tmpfs_qwen_runtime: String,
+    ready_event_prefix: String,
+    sandbox: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BrokerPolicyRelay {
+    image_tag: String,
+    image_id: String,
+    sandbox: String,
+    memory: String,
+    memory_swap: String,
+    pids_limit: u32,
+    role: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BrokerPolicyCapture {
+    image_tag: String,
+    image_id: String,
+    capture_id: String,
+    memory: String,
+    memory_swap: String,
+    pids_limit: u32,
+    ready_event: String,
+    complete_event_prefix: String,
 }
 
 impl Config {
@@ -218,7 +367,7 @@ impl Config {
                 lock.service.listen
             ))
         })?;
-        if listen_addr != "127.0.0.1:8090".parse().expect("literal is valid") {
+        if listen_addr != SocketAddr::from(([127, 0, 0, 1], 8090)) {
             return Err(ServiceError::Internal(format!(
                 "the sole supported service.listen is 127.0.0.1:8090; lock contains {listen_addr}"
             )));
@@ -229,9 +378,9 @@ impl Config {
             state_dir: PathBuf::from(&lock.service.state_dir),
             results_dir: PathBuf::from(&lock.service.results_dir),
             host_input_root: PathBuf::from(&lock.service.host_input_root),
+            broker_socket: PathBuf::from(&lock.broker.socket_path),
+            model_socket: PathBuf::from(&lock.relay.model_socket_dir).join("relay.sock"),
             agent_image: lock.agent.image_tag.clone(),
-            agent_memory_limit: lock.agent.memory.clone(),
-            agent_memory_swap_limit: lock.agent.memory_swap.clone(),
             vllm_model_name: lock.backend.served_model.clone(),
             vllm_endpoint: lock.backend.endpoint.clone(),
             lock,
@@ -270,14 +419,20 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
             lock.schema_version
         ));
     }
-    if lock.profile != "qwen38-agent-service-v2" {
+    if lock.profile != "qwen38-agent-service-v3" {
         return fail(format!("unexpected profile {:?}", lock.profile));
     }
     if lock.service.container_name != "qwen38-agent-service"
-        || lock.service.image_tag != "qwen38-agent-service:2.0.0"
+        || lock.service.image_tag != "qwen38-agent-service:3.0.0"
+        || lock.service.user != "1000:1000"
+        || lock.service.memory != "2g"
+        || lock.service.memory_swap != "2g"
+        || lock.service.pids_limit != 512
+        || lock.service.tmpfs_tmp != "rw,nosuid,nodev,noexec,size=256m,mode=1777"
+        || lock.service.runtime_root != "/home/user/Desktop/agent_service/.runtime"
     {
         return fail(
-            "service container/image identity differs from the sole supported deployment".into(),
+            "service container/image/user/resource contract differs from the sole supported deployment".into(),
         );
     }
     if lock.agent.qwen_code.version != QWEN_CODE_VERSION
@@ -311,7 +466,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     }
     if lock.build.source_date_epoch != 1_786_725_153
         || lock.build.docker_cli_archive
-        != "https://download.docker.com/linux/static/stable/x86_64/docker-29.7.2.tgz"
+            != "https://download.docker.com/linux/static/stable/x86_64/docker-29.7.2.tgz"
         || !is_sha256(&lock.build.docker_cli_archive_sha256)
         || !is_sha256(&lock.build.agent_apt_lock_sha256)
         || !is_sha256(&lock.build.jks_normalizer_sha256)
@@ -326,10 +481,63 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     if lock.service.request_body_limit_bytes != 2 * 1024 * 1024 {
         return fail("service.request_body_limit_bytes must be exactly 2097152".into());
     }
+    if lock.broker.policy_id != "qwen38-docker-broker-v1"
+        || lock.broker.container_name != "qwen38-docker-broker"
+        || lock.broker.image_tag != "qwen38-docker-broker:1.0.0"
+        || lock.broker.memory != "64m"
+        || lock.broker.memory_swap != "64m"
+        || lock.broker.pids_limit != 64
+        || !lock.broker.image_id.starts_with("sha256:")
+        || lock.broker.image_id.len() != 71
+        || !is_sha256(&lock.broker.policy_sha256)
+        || !is_sha256(&lock.broker.source_sha256)
+    {
+        return fail(
+            "broker identity, image, resource, or source-policy hash contract drift".into(),
+        );
+    }
+    if lock.relay.image_tag != "qwen38-fixed-relay:1.0.0"
+        || !lock.relay.image_id.starts_with("sha256:")
+        || lock.relay.image_id.len() != 71
+        || !is_sha256(&lock.relay.source_sha256)
+        || lock.relay.sandbox != "landlock-net-v4+seccomp-socket-v2"
+        || lock.relay.memory != "32m"
+        || lock.relay.memory_swap != "32m"
+        || lock.relay.pids_limit != 32
+        || lock.relay.model_bridge_container != "qwen38-model-bridge"
+        || lock.relay.model_ingress_container != "qwen38-model-ingress"
+        || lock.relay.service_bridge_container != "qwen38-service-bridge"
+        || lock.relay.service_ingress_container != "qwen38-service-ingress"
+    {
+        return fail(
+            "fixed-relay identity, image, resource, or container-name contract drift".into(),
+        );
+    }
+    if lock.capture.image_tag != "qwen38-session-capture:1.0.0"
+        || !lock.capture.image_id.starts_with("sha256:")
+        || lock.capture.image_id.len() != 71
+        || !is_sha256(&lock.capture.source_sha256)
+        || lock.capture.capture_id != "unix-stream-capture-v1"
+        || lock.capture.memory != "32m"
+        || lock.capture.memory_swap != "32m"
+        || lock.capture.pids_limit != 32
+    {
+        return fail("session-capture identity, image, resource, or source contract drift".into());
+    }
     for (name, path) in [
+        ("runtime_root", lock.service.runtime_root.as_str()),
         ("state_dir", lock.service.state_dir.as_str()),
         ("results_dir", lock.service.results_dir.as_str()),
         ("host_input_root", lock.service.host_input_root.as_str()),
+        ("broker.socket_path", lock.broker.socket_path.as_str()),
+        (
+            "relay.model_socket_dir",
+            lock.relay.model_socket_dir.as_str(),
+        ),
+        (
+            "relay.service_socket_dir",
+            lock.relay.service_socket_dir.as_str(),
+        ),
         ("backend.project_dir", lock.backend.project_dir.as_str()),
         ("host.docker_socket", lock.host.docker_socket.as_str()),
     ] {
@@ -337,13 +545,34 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
             return fail(format!("{name} must be an absolute path, got {path:?}"));
         }
     }
-    if !PathBuf::from(&lock.service.state_dir).starts_with(&lock.backend.project_dir)
-        && !PathBuf::from(&lock.service.state_dir).starts_with("/home/user/Desktop/agent_service")
+    let runtime_root = PathBuf::from(&lock.service.runtime_root);
+    if lock.service.host_input_root != "/home/user"
+        || lock.service.state_dir != "/home/user/Desktop/agent_service/.runtime/state"
+        || lock.service.results_dir != "/home/user/Desktop/agent_service/.runtime/results"
+        || !PathBuf::from(&lock.service.state_dir).starts_with(&runtime_root)
+        || !PathBuf::from(&lock.service.results_dir).starts_with(&runtime_root)
+        || lock.broker.socket_path
+            != "/home/user/Desktop/agent_service/.runtime/control/broker.sock"
+        || lock.relay.model_socket_dir != "/home/user/Desktop/agent_service/.runtime/model-socket"
+        || lock.relay.service_socket_dir
+            != "/home/user/Desktop/agent_service/.runtime/service-socket"
+        || !PathBuf::from(&lock.broker.socket_path).starts_with(&runtime_root)
+        || !PathBuf::from(&lock.relay.model_socket_dir).starts_with(&runtime_root)
+        || !PathBuf::from(&lock.relay.service_socket_dir).starts_with(&runtime_root)
     {
-        return fail("state_dir is outside the pinned project runtime directory".into());
+        return fail(
+            "input root or broker/model/service Unix-socket paths drift from the one runtime tree"
+                .into(),
+        );
     }
     if lock.agent.model_base_url != "http://127.0.0.1:18000/v1"
         || lock.agent.model_proxy_port != 18000
+        || lock.agent.memory != "32g"
+        || lock.agent.memory_swap != "32g"
+        || lock.agent.pids_limit != 4096
+        || lock.agent.tmpfs_tmp != "rw,nosuid,nodev,size=8g,mode=1777"
+        || lock.agent.tmpfs_qwen_runtime
+            != "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700"
     {
         return fail("agent model proxy must be exactly http://127.0.0.1:18000/v1".into());
     }
@@ -356,12 +585,28 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     if [
         lock.agent.settings_sha256.as_str(),
         lock.agent.instructions_sha256.as_str(),
+        lock.agent.system_prompt_sha256.as_str(),
+        lock.agent.deployment_contract_sha256.as_str(),
+        lock.agent.toolchain_manifest_sha256.as_str(),
+        lock.agent.runtime_contract_sha256.as_str(),
         lock.agent.wrapper_sha256.as_str(),
+        lock.agent.agent_exec_source_sha256.as_str(),
+        lock.build.toolchain_verifier_sha256.as_str(),
+        lock.build.toolchain_verifier_test_sha256.as_str(),
+        lock.build.runtime_contract_verifier_sha256.as_str(),
+        lock.build.runtime_contract_verifier_test_sha256.as_str(),
+        lock.build.wrapper_contract_test_sha256.as_str(),
     ]
     .iter()
     .any(|digest| !is_sha256(digest))
     {
-        return fail("agent settings/instructions/wrapper hashes are not SHA256 values".into());
+        return fail(
+            "agent settings/instructions/prompts/toolchain/wrapper hashes are not SHA256 values"
+                .into(),
+        );
+    }
+    if lock.agent.agent_exec_sandbox != "landlock-fs-v4-write-roots-v1+output-unmounted-v1" {
+        return fail("agent_exec sandbox identity drift".into());
     }
     let expected_tools = [
         "agent",
@@ -385,11 +630,12 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     {
         return fail("agent.strict_tools differs from the reviewed strict native tool set".into());
     }
-    if lock.backend.endpoint != "http://127.0.0.1:8000"
-        || lock.backend.profile_label != "single-loopback-vision-k8v4-agent-v12"
-        || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v12"
+    if lock.backend.container_name != "qwen38-agent-native"
+        || lock.backend.endpoint != "http://127.0.0.1:8000"
+        || lock.backend.profile_label != "socket-isolated-nonroot-vision-k8v4-agent-v13"
+        || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v13"
         || lock.backend.image_id
-            != "sha256:5d545d85950310cb09bebacba9083a242e8943c92669428eb23468d959f4f2d5"
+            != "sha256:587e8710c6630edd249f19b46837c12ebe5b5dcdc98486e215ac48a66644dc7f"
         || lock.backend.served_model != "qwen3.8-27b-nvfp4-k8v4"
         || lock.backend.max_model_len != 262_144
         || lock.backend.kv_cache_dtype != "turboquant_k8v4"
@@ -401,22 +647,20 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     }
     let expected_backend_tmpfs = BTreeMap::from([
         (
-            "/root".to_string(),
-            "rw,nosuid,nodev,exec,size=4g,mode=0700".to_string(),
-        ),
-        (
             "/run".to_string(),
-            "rw,nosuid,nodev,noexec,size=64m,mode=0755".to_string(),
+            "rw,nosuid,nodev,noexec,size=64m,uid=2000,gid=0,mode=0700".to_string(),
         ),
         (
             "/tmp".to_string(),
             "rw,nosuid,nodev,exec,size=2g,mode=1777".to_string(),
         ),
     ]);
-    if !lock.backend.rootfs_read_only
+    if lock.backend.user != "2000:0"
+        || !lock.backend.rootfs_read_only
         || lock.backend.tmpfs != expected_backend_tmpfs
-        || lock.backend.cache_volume
-            != "qwen38-vllm-cache-single-loopback-vision-agent-v12"
+        || lock.backend.cache_volume != "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v13"
+        || lock.backend.cache_mount != "/home/vllm/.cache/vllm"
+        || lock.backend.cache_owner_mode != "2000:0:770"
     {
         return fail(
             "backend immutable-root/tmpfs/cache-volume contract differs from the sole supported deployment"
@@ -460,6 +704,13 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         );
     }
     let required_environment = [
+        "HOME=/home/vllm",
+        "VLLM_CACHE_ROOT=/home/vllm/.cache/vllm",
+        "XDG_CACHE_HOME=/home/vllm/.cache/vllm/xdg-cache",
+        "XDG_CONFIG_HOME=/home/vllm/.cache/vllm/xdg-config",
+        "CUDA_CACHE_PATH=/home/vllm/.cache/vllm/cuda",
+        "HF_HOME=/home/vllm/.cache/vllm/huggingface",
+        "PYTHONDONTWRITEBYTECODE=1",
         "HF_HUB_OFFLINE=1",
         "TRANSFORMERS_OFFLINE=1",
         "DO_NOT_TRACK=1",
@@ -480,18 +731,17 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         .collect::<Vec<_>>()
         != required_environment
     {
-        return fail("backend environment differs from the strict v12 runtime contract".into());
+        return fail(
+            "backend environment differs from the strict non-root v13 runtime contract".into(),
+        );
     }
     if lock.backend.model_repository != "unsloth/Qwen3.8-27B-NVFP4"
         || lock.backend.model_revision != "16b6615af3548b88e2d8e382457bc705b00479cf"
         || lock.backend.official_model_repository != "Qwen/Qwen3.8-27B"
-        || lock.backend.official_model_revision
-            != "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+        || lock.backend.official_model_revision != "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
         || lock.backend.model_directory != "Qwen3.8-27B-NVFP4-Corrected"
-        || lock.backend.model_correction
-            != "restore-161-offset-rmsnorms-from-official-bf16-v1"
-        || lock.backend.model_manifest
-            != "model-corrected-16b6615a-norms-1d4bf0f2.sha256"
+        || lock.backend.model_correction != "restore-161-offset-rmsnorms-from-official-bf16-v1"
+        || lock.backend.model_manifest != "model-corrected-16b6615a-norms-1d4bf0f2.sha256"
         || lock.backend.model_sha256
             != "5fd70b38b3708e47adc1e9e9ab90f5d688ec01177d0718fdd16678696fdb0988"
         || lock.backend.model_manifest_sha256
@@ -529,6 +779,16 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.host.gpu_name != "NVIDIA GeForce RTX 5090"
         || lock.host.gpu_memory_mib != 32_607
         || lock.host.driver_version != "595.71.05"
+        || lock.host.dockerd_path != "/usr/bin/dockerd"
+        || lock.host.dockerd_sha256
+            != "e14a01198315d279c8615db9aa7edeb755caf46db925dba46f80c92115093c01"
+        || lock.host.docker_security_options
+            != [
+                "name=apparmor",
+                "name=seccomp,profile=builtin",
+                "name=cgroupns",
+            ]
+        || lock.host.container_apparmor_profile != "docker-default"
         || lock.host.docker_socket != "/var/run/docker.sock"
         || lock.host.docker_socket_gid != 984
     {
@@ -536,6 +796,248 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
             "host GPU/driver/container-runtime/socket contract differs from the reviewed machine"
                 .into(),
         );
+    }
+    validate_embedded_broker_policy(lock)?;
+    Ok(())
+}
+
+fn validate_embedded_broker_policy(lock: &StackLock) -> ServiceResult<()> {
+    let policy: BrokerPolicy = serde_json::from_str(BROKER_POLICY_JSON).map_err(|error| {
+        ServiceError::Internal(format!(
+            "compiled config/broker-policy-v1.json is malformed or does not match its strict schema: {error}"
+        ))
+    })?;
+
+    let mut mismatches = Vec::new();
+    macro_rules! same {
+        ($name:literal, $policy_value:expr, $lock_value:expr) => {
+            if $policy_value != $lock_value {
+                mismatches.push($name);
+            }
+        };
+    }
+
+    same!("schema_version", policy.schema_version, lock.schema_version);
+    same!("policy_id", policy.policy_id.as_str(), lock.broker.policy_id.as_str());
+    same!("profile", policy.profile.as_str(), lock.profile.as_str());
+    same!(
+        "docker_server_version",
+        policy.docker_server_version.as_str(),
+        lock.host.docker_version.as_str()
+    );
+    same!(
+        "broker_container_name",
+        policy.broker_container_name.as_str(),
+        lock.broker.container_name.as_str()
+    );
+    same!(
+        "broker.image_tag",
+        policy.broker.image_tag.as_str(),
+        lock.broker.image_tag.as_str()
+    );
+    same!(
+        "broker.memory",
+        policy.broker.memory.as_str(),
+        lock.broker.memory.as_str()
+    );
+    same!(
+        "broker.memory_swap",
+        policy.broker.memory_swap.as_str(),
+        lock.broker.memory_swap.as_str()
+    );
+    same!(
+        "broker.pids_limit",
+        policy.broker.pids_limit,
+        lock.broker.pids_limit
+    );
+    same!("broker.uid", policy.broker.uid, 1000);
+    same!("broker.gid", policy.broker.gid, lock.host.docker_socket_gid);
+    same!(
+        "broker.docker_socket",
+        policy.broker.docker_socket.as_str(),
+        lock.host.docker_socket.as_str()
+    );
+    same!(
+        "broker_socket_path",
+        policy.broker_socket_path.as_str(),
+        lock.broker.socket_path.as_str()
+    );
+    same!(
+        "runtime_root",
+        policy.runtime_root.as_str(),
+        lock.service.runtime_root.as_str()
+    );
+    same!(
+        "state_dir",
+        policy.state_dir.as_str(),
+        lock.service.state_dir.as_str()
+    );
+    same!(
+        "model_socket_dir",
+        policy.model_socket_dir.as_str(),
+        lock.relay.model_socket_dir.as_str()
+    );
+    same!(
+        "service_container_name",
+        policy.service_container_name.as_str(),
+        lock.service.container_name.as_str()
+    );
+    same!(
+        "backend_container_name",
+        policy.backend_container_name.as_str(),
+        lock.backend.container_name.as_str()
+    );
+    same!(
+        "backend_cache_volume",
+        policy.backend_cache_volume.as_str(),
+        lock.backend.cache_volume.as_str()
+    );
+    same!(
+        "backend_cache_mount",
+        policy.backend_cache_mount.as_str(),
+        lock.backend.cache_mount.as_str()
+    );
+    same!(
+        "backend_cache_owner_mode",
+        policy.backend_cache_owner_mode.as_str(),
+        lock.backend.cache_owner_mode.as_str()
+    );
+    same!(
+        "model_bridge_container_name",
+        policy.model_bridge_container_name.as_str(),
+        lock.relay.model_bridge_container.as_str()
+    );
+    same!(
+        "model_ingress_container_name",
+        policy.model_ingress_container_name.as_str(),
+        lock.relay.model_ingress_container.as_str()
+    );
+    same!(
+        "agent.image_tag",
+        policy.agent.image_tag.as_str(),
+        lock.agent.image_tag.as_str()
+    );
+    same!(
+        "agent.image_id",
+        policy.agent.image_id.as_str(),
+        lock.agent.image_id.as_str()
+    );
+    same!(
+        "agent.memory",
+        policy.agent.memory.as_str(),
+        lock.agent.memory.as_str()
+    );
+    same!(
+        "agent.memory_swap",
+        policy.agent.memory_swap.as_str(),
+        lock.agent.memory_swap.as_str()
+    );
+    same!("agent.pids_limit", policy.agent.pids_limit, lock.agent.pids_limit);
+    same!(
+        "agent.tmpfs_tmp",
+        policy.agent.tmpfs_tmp.as_str(),
+        lock.agent.tmpfs_tmp.as_str()
+    );
+    same!(
+        "agent.tmpfs_qwen_runtime",
+        policy.agent.tmpfs_qwen_runtime.as_str(),
+        lock.agent.tmpfs_qwen_runtime.as_str()
+    );
+    same!(
+        "agent.ready_event_prefix",
+        policy.agent.ready_event_prefix.as_str(),
+        format!(
+            "AGENT_READY model={} context={} network=loopback-only token_count=",
+            lock.backend.served_model, lock.backend.max_model_len
+        )
+        .as_str()
+    );
+    same!(
+        "agent.sandbox",
+        policy.agent.sandbox.as_str(),
+        lock.agent.agent_exec_sandbox.as_str()
+    );
+    same!(
+        "relay.image_tag",
+        policy.relay.image_tag.as_str(),
+        lock.relay.image_tag.as_str()
+    );
+    same!(
+        "relay.image_id",
+        policy.relay.image_id.as_str(),
+        lock.relay.image_id.as_str()
+    );
+    same!(
+        "relay.sandbox",
+        policy.relay.sandbox.as_str(),
+        lock.relay.sandbox.as_str()
+    );
+    same!(
+        "relay.memory",
+        policy.relay.memory.as_str(),
+        lock.relay.memory.as_str()
+    );
+    same!(
+        "relay.memory_swap",
+        policy.relay.memory_swap.as_str(),
+        lock.relay.memory_swap.as_str()
+    );
+    same!("relay.pids_limit", policy.relay.pids_limit, lock.relay.pids_limit);
+    same!("relay.role", policy.relay.role.as_str(), "agent-model");
+    same!(
+        "capture.image_tag",
+        policy.capture.image_tag.as_str(),
+        lock.capture.image_tag.as_str()
+    );
+    same!(
+        "capture.image_id",
+        policy.capture.image_id.as_str(),
+        lock.capture.image_id.as_str()
+    );
+    same!(
+        "capture.capture_id",
+        policy.capture.capture_id.as_str(),
+        lock.capture.capture_id.as_str()
+    );
+    same!(
+        "capture.memory",
+        policy.capture.memory.as_str(),
+        lock.capture.memory.as_str()
+    );
+    same!(
+        "capture.memory_swap",
+        policy.capture.memory_swap.as_str(),
+        lock.capture.memory_swap.as_str()
+    );
+    same!(
+        "capture.pids_limit",
+        policy.capture.pids_limit,
+        lock.capture.pids_limit
+    );
+    same!(
+        "capture.ready_event",
+        policy.capture.ready_event.as_str(),
+        format!(
+            "CAPTURE_READY capture={} events=/streams/events.sock stderr=/streams/stderr.sock",
+            lock.capture.capture_id
+        )
+        .as_str()
+    );
+    same!(
+        "capture.complete_event_prefix",
+        policy.capture.complete_event_prefix.as_str(),
+        format!(
+            "CAPTURE_COMPLETE capture={} events_bytes=",
+            lock.capture.capture_id
+        )
+        .as_str()
+    );
+
+    if !mismatches.is_empty() {
+        return Err(ServiceError::Internal(format!(
+            "compiled broker policy disagrees with the stack lock for duplicated field(s): {}",
+            mismatches.join(", ")
+        )));
     }
     Ok(())
 }
@@ -655,7 +1157,8 @@ mod tests {
 
     #[test]
     fn writable_backend_or_runtime_mount_drift_is_rejected() {
-        let mutations: [fn(&mut StackLock); 3] = [
+        let mutations: [fn(&mut StackLock); 6] = [
+            |lock: &mut StackLock| lock.backend.user = "0:0".into(),
             |lock: &mut StackLock| lock.backend.rootfs_read_only = false,
             |lock: &mut StackLock| {
                 lock.backend
@@ -663,6 +1166,8 @@ mod tests {
                     .insert("/root".into(), "rw,size=4g".into());
             },
             |lock: &mut StackLock| lock.backend.cache_volume = "unowned-cache".into(),
+            |lock: &mut StackLock| lock.backend.cache_mount = "/root/.cache/vllm".into(),
+            |lock: &mut StackLock| lock.backend.cache_owner_mode = "0:0:770".into(),
         ];
         for mutate in mutations {
             let mut lock = checked_in_lock();
@@ -707,6 +1212,29 @@ mod tests {
             error
                 .to_string()
                 .contains("backend corrected-model identity differs"),
+            "unexpected validation error: {error}"
+        );
+    }
+
+    #[test]
+    fn component_image_ids_must_match_the_typed_broker_policy_by_name() {
+        let mut lock = checked_in_lock();
+        std::mem::swap(&mut lock.relay.image_id, &mut lock.capture.image_id);
+        let error = validate_lock(&lock).expect_err("transposed image IDs must fail closed");
+        assert!(
+            error.to_string().contains(
+                "compiled broker policy disagrees with the stack lock for duplicated field(s): relay.image_id, capture.image_id"
+            ),
+            "unexpected validation error: {error}"
+        );
+
+        let mut lock = checked_in_lock();
+        std::mem::swap(&mut lock.broker.image_id, &mut lock.relay.image_id);
+        let error = validate_lock(&lock).expect_err("broker/relay image transposition must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("compiled broker policy disagrees with the stack lock for duplicated field(s): relay.image_id"),
             "unexpected validation error: {error}"
         );
     }

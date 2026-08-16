@@ -29,10 +29,12 @@ pub enum ServiceError {
     /// `cancel` first and then `delete`. Carries the offending session_id
     /// so the operator can act on it.
     SessionRunning { session_id: String },
+    /// 409 — the caller's source tree changed after its descriptor-anchored
+    /// snapshot began. The caller may retry only after making the input tree
+    /// quiescent; this is neither a static request error nor a server defect.
+    SourceChanged(String),
     /// 503 — Docker daemon not reachable as the running user.
     DockerUnavailable(String),
-    /// 503 — agent template image (or proxy image) is not present locally.
-    ImageMissing(String),
     /// 502 — Docker subprocess (run / inspect / stop / logs / etc.) returned non-zero.
     DockerCommand(String),
     /// 500 — host-side filesystem failure (staging, state dir, results dir, …).
@@ -50,8 +52,10 @@ impl ServiceError {
         match self {
             Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             Self::NotFound { .. } => StatusCode::NOT_FOUND,
-            Self::Busy { .. } | Self::SessionRunning { .. } => StatusCode::CONFLICT,
-            Self::DockerUnavailable(_) | Self::ImageMissing(_) => StatusCode::SERVICE_UNAVAILABLE,
+            Self::Busy { .. } | Self::SessionRunning { .. } | Self::SourceChanged(_) => {
+                StatusCode::CONFLICT
+            }
+            Self::DockerUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::DockerCommand(_) | Self::AgentOutputMissing(_) => StatusCode::BAD_GATEWAY,
             Self::Staging(_) | Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Timeout(_) => StatusCode::GATEWAY_TIMEOUT,
@@ -64,8 +68,8 @@ impl ServiceError {
             Self::NotFound { .. } => "not_found",
             Self::Busy { .. } => "busy",
             Self::SessionRunning { .. } => "session_running",
+            Self::SourceChanged(_) => "source_changed",
             Self::DockerUnavailable(_) => "docker_unavailable",
-            Self::ImageMissing(_) => "image_missing",
             Self::DockerCommand(_) => "docker_command_failed",
             Self::Staging(_) => "staging_failed",
             Self::Timeout(_) => "timeout",
@@ -77,8 +81,8 @@ impl ServiceError {
     pub fn message(&self) -> String {
         match self {
             Self::InvalidRequest(m)
+            | Self::SourceChanged(m)
             | Self::DockerUnavailable(m)
-            | Self::ImageMissing(m)
             | Self::DockerCommand(m)
             | Self::Staging(m)
             | Self::Timeout(m)

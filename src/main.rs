@@ -9,7 +9,6 @@ mod bundle;
 mod config;
 mod docker_ops;
 mod error;
-mod network;
 mod result_parse;
 mod runtime;
 mod session;
@@ -44,7 +43,6 @@ async fn main() -> std::process::ExitCode {
         vllm = %cfg.vllm_endpoint,
         model = %cfg.vllm_model_name,
         agent_image = %cfg.agent_image,
-        agent_memory = %cfg.agent_memory_limit,
         state_dir = %cfg.state_dir.display(),
         results_dir = %cfg.results_dir.display(),
         qwen_code_version = config::QWEN_CODE_VERSION,
@@ -83,27 +81,51 @@ async fn main() -> std::process::ExitCode {
         );
         return std::process::ExitCode::from(1);
     }
+    let shutdown_signals = match install_shutdown_signals() {
+        Ok(signals) => signals,
+        Err(error) => {
+            eprintln!("agent_service: cannot install exact shutdown handlers: {error}");
+            return std::process::ExitCode::from(1);
+        }
+    };
     tracing::info!(addr = %actual_addr, "listening (loopback only)");
+    println!(
+        "SERVICE_READY profile={} listen={} network=none",
+        cfg.lock.profile, actual_addr
+    );
 
     let app = api::router(state);
 
-    let signal_future = wait_for_signal();
+    let shutdown = tokio_util::sync::CancellationToken::new();
+    let graceful_shutdown = shutdown.clone().cancelled_owned();
+    let serve_future = async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(graceful_shutdown)
+            .await
+    };
+    tokio::pin!(serve_future);
 
-    // axum's `with_graceful_shutdown` stops accepting new connections and
-    // drains in-flight HTTP requests when the future resolves. We do NOT
-    // run `manager.shutdown()` inside that future — axum's drain only
-    // covers HTTP-level work, and our session run-task is detached
-    // (it lives past the HTTP request that submitted it). We drive the
-    // session-level shutdown ourselves below, after axum returns.
-    let serve_result = axum::serve(listener, app)
-        .with_graceful_shutdown(signal_future)
-        .await;
-
-    // At this point: no more new HTTP requests will be accepted; in-flight
-    // HTTP requests have drained. Detached run tasks may still be running.
-    tracing::info!("HTTP server drained; awaiting session-level shutdown");
-
-    let session_shutdown_outcome = manager.shutdown().await;
+    // A signal broadcasts shutdown to both layers at the same time. This is
+    // essential for a live GET /wait request: cancelling the detached agent
+    // task lets that request reach its terminal body, while Axum keeps the
+    // existing connection alive long enough to drain it. Waiting for HTTP to
+    // drain before cancelling the agent would create a circular wait.
+    let serve_result;
+    let session_shutdown_outcome;
+    tokio::select! {
+        _ = wait_for_signal(shutdown_signals) => {
+            shutdown.cancel();
+            tracing::info!("shutdown broadcast; draining HTTP while cancelling the active session");
+            (serve_result, session_shutdown_outcome) =
+                tokio::join!(&mut serve_future, manager.shutdown());
+        }
+        result = &mut serve_future => {
+            serve_result = result;
+            shutdown.cancel();
+            tracing::error!("HTTP server ended before a shutdown signal; cancelling the active session");
+            session_shutdown_outcome = manager.shutdown().await;
+        }
+    }
 
     // Surface BOTH outcomes — a serve error AND a shutdown overrun are both
     // worth knowing about, and they often correlate.
@@ -113,7 +135,7 @@ async fn main() -> std::process::ExitCode {
             std::process::ExitCode::SUCCESS
         }
         (Ok(()), Err(e)) => {
-            eprintln!("agent_service: session-level shutdown overran: {e}");
+            eprintln!("agent_service: session-level shutdown failed: {e}");
             std::process::ExitCode::from(3)
         }
         (Err(e), Ok(())) => {
@@ -123,57 +145,32 @@ async fn main() -> std::process::ExitCode {
         (Err(server_err), Err(shutdown_err)) => {
             eprintln!(
                 "agent_service: server error: {server_err}; \
-                 session-level shutdown also overran: {shutdown_err}"
+                 session-level shutdown also failed: {shutdown_err}"
             );
             std::process::ExitCode::from(1)
         }
     }
 }
 
-/// Resolves on the first SIGINT or SIGTERM. If installing either handler
-/// fails, log and resolve immediately so the server doesn't get stuck
-/// running forever — operator can ctrl-C twice or `kill -9` if needed,
-/// and a logged error makes the install failure visible.
-async fn wait_for_signal() {
-    let mut sigint = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-    {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::error!(
-                error = %e,
-                "cannot install SIGINT handler — graceful shutdown via Ctrl-C is unavailable; \
-                 use SIGTERM (default for `kill <pid>`) or SIGKILL if needed"
-            );
-            // Fall back to waiting on SIGTERM only.
-            return wait_for_sigterm_only().await;
-        }
-    };
-    let mut sigterm = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-    {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::error!(
-                error = %e,
-                "cannot install SIGTERM handler — graceful shutdown via `kill <pid>` is unavailable; \
-                 SIGINT (Ctrl-C) is still wired"
-            );
-            // Fall back to SIGINT only.
-            match sigint.recv().await {
-                Some(()) => {
-                    tracing::info!("received SIGINT; initiating graceful shutdown");
-                }
-                None => {
-                    tracing::error!(
-                        "SIGINT signal stream closed unexpectedly (kernel deregistered handler?); \
-                         falling through to graceful shutdown without a triggering signal"
-                    );
-                }
-            }
-            return;
-        }
-    };
+struct ShutdownSignals {
+    sigint: tokio::signal::unix::Signal,
+    sigterm: tokio::signal::unix::Signal,
+}
+
+fn install_shutdown_signals() -> Result<ShutdownSignals, String> {
+    let sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+        .map_err(|error| format!("install SIGINT handler: {error}"))?;
+    let sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .map_err(|error| format!("install SIGTERM handler: {error}"))?;
+    Ok(ShutdownSignals { sigint, sigterm })
+}
+
+/// Both streams are installed before `SERVICE_READY` is emitted. A closed
+/// stream initiates the same graceful path and is logged as a kernel/runtime
+/// fault; it never activates a one-signal or wait-forever fallback.
+async fn wait_for_signal(mut signals: ShutdownSignals) {
     tokio::select! {
-        sig = sigint.recv() => {
+        sig = signals.sigint.recv() => {
             match sig {
                 Some(()) => {
                     tracing::info!("received SIGINT; initiating graceful shutdown");
@@ -185,7 +182,7 @@ async fn wait_for_signal() {
                 }
             }
         }
-        sig = sigterm.recv() => {
+        sig = signals.sigterm.recv() => {
             match sig {
                 Some(()) => {
                     tracing::info!("received SIGTERM; initiating graceful shutdown");
@@ -196,30 +193,6 @@ async fn wait_for_signal() {
                     );
                 }
             }
-        }
-    }
-}
-
-async fn wait_for_sigterm_only() {
-    match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-        Ok(mut s) => match s.recv().await {
-            Some(()) => {
-                tracing::info!("received SIGTERM; initiating graceful shutdown");
-            }
-            None => {
-                tracing::error!(
-                    "SIGTERM signal stream closed unexpectedly; initiating graceful shutdown anyway"
-                );
-            }
-        },
-        Err(e) => {
-            tracing::error!(
-                error = %e,
-                "cannot install SIGTERM handler either — graceful shutdown unavailable; \
-                 the server will run until killed"
-            );
-            // Wait forever — the operator is on their own to kill the process.
-            std::future::pending::<()>().await;
         }
     }
 }
@@ -241,7 +214,6 @@ fn init_tracing() -> Result<(), String> {
 fn preflight_exit_code(e: &ServiceError) -> std::process::ExitCode {
     match e {
         ServiceError::DockerUnavailable(_) => std::process::ExitCode::from(10),
-        ServiceError::ImageMissing(_) => std::process::ExitCode::from(11),
         ServiceError::Internal(_) => std::process::ExitCode::from(12),
         _ => std::process::ExitCode::from(1),
     }

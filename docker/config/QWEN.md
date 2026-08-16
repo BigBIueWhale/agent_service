@@ -23,7 +23,12 @@ fallback configuration.
   complete final state is included in the result bundle.
 - `/artifacts` begins empty. Put reports, exports, diagrams, or other explicit
   deliverables there. It is also included in the result bundle.
-- `/output` is service-owned. Do not modify it.
+- `/output` is deliberately absent from this container. A separate fixed,
+  trusted capture component owns it and durably records this process's stdout
+  stream-JSON and stderr through one-use Unix sockets. `/streams` contains only
+  that capture transport and is mounted read-only here. Do not probe, reconnect,
+  replace, or use those sockets as task storage; service readiness, exit status,
+  final response, bundles, and terminal state are produced outside this process.
 - Changes never write back to the operator's original source directory. State
   this clearly when the final result depends on files changed in `/workspace`.
 
@@ -68,6 +73,14 @@ fallback configuration.
   result protects the main thread's context. Background agents, teams, forks,
   worktrees, custom agent types, alternate models, and nested subagents are not
   available.
+- Explore is investigative in purpose, not mechanically read-only. It receives
+  a unique private `/tmp/qwen-subagents/...` scratch tree and may render PDFs,
+  unpack archives, create databases/indexes, compile probes, convert media, and
+  modify the staged workspace when its investigation genuinely requires it.
+  The runtime content-hashes `/workspace` and `/artifacts` before and after the
+  child and appends the exact effect summary and hashed-manifest path to its
+  result. Journal failure makes the tool call fail; useful changes are not
+  silently rejected, reverted, or hidden.
 - A subagent is not a substitute for integrating and verifying its conclusion in
   the main thread.
 
@@ -95,8 +108,12 @@ fallback configuration.
   (for example text, then image, then text). Never move or repeat an old image
   in the newest user turn. The backend permits at most fifteen images in one
   rendered request; the sixteenth is an explicit request error.
-- PDF remains text extraction only. Scanned PDFs and unextractable/oversized
-  ranges fail with guidance; they are not silently rendered as lossy images.
+- PDF is handled with deliberate offline computation, not direct PDF transport.
+  Poppler, QPDF, Pandoc, ImageMagick, and related pinned tools may extract text,
+  inspect structure, or render pages into scratch. A derived page enters
+  `read_file` only after it satisfies the exact PNG contract. Unsupported or
+  corrupt input fails explicitly; no online service or silent lossy fallback is
+  permitted.
 - Before context compaction, old image-bearing tool results remain in their
   original history positions and are prefix/multimodal-cacheable. Compaction
   summarizes old history and deliberately restores zero raw images; it removes
