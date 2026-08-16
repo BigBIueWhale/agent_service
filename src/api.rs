@@ -148,6 +148,7 @@ struct BrokerPreflight {
     docker_version: String,
     agent_image: serde_json::Value,
     relay_image: serde_json::Value,
+    capture_image: serde_json::Value,
     broker: serde_json::Value,
     backend: serde_json::Value,
     service: serde_json::Value,
@@ -182,6 +183,10 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
     )?;
     verify_agent_image_labels(cfg, single_inspect(&evidence.agent_image, "agent image")?)?;
     verify_relay_image(cfg, single_inspect(&evidence.relay_image, "relay image")?)?;
+    verify_capture_image(
+        cfg,
+        single_inspect(&evidence.capture_image, "session-capture image")?,
+    )?;
     verify_broker_container(cfg, single_inspect(&evidence.broker, "broker container")?)?;
     verify_service_container(cfg, single_inspect(&evidence.service, "service container")?).await?;
     let backend = single_inspect(&evidence.backend, "backend container")?;
@@ -662,6 +667,36 @@ fn verify_relay_image(cfg: &Config, value: &serde_json::Value) -> ServiceResult<
     ] {
         require_equal(
             &format!("fixed relay image label {key}"),
+            labels.get(key).map(String::as_str).unwrap_or("<missing>"),
+            expected,
+        )?;
+    }
+    Ok(())
+}
+
+fn verify_capture_image(cfg: &Config, value: &serde_json::Value) -> ServiceResult<()> {
+    require_image_id(value, &cfg.lock.capture.image_id, "session capture")?;
+    let labels = labels(value, "session-capture image")?;
+    let expected = [
+        ("agent_service.profile", cfg.lock.profile.as_str()),
+        ("agent_service.component", "session-capture"),
+        (
+            "agent_service.capture.source.sha256",
+            cfg.lock.capture.source_sha256.as_str(),
+        ),
+        (
+            "agent_service.capture.id",
+            cfg.lock.capture.capture_id.as_str(),
+        ),
+    ];
+    if labels.len() != expected.len() {
+        return Err(ServiceError::Internal(format!(
+            "session-capture image must have exactly the four locked provenance labels, observed {labels:?}"
+        )));
+    }
+    for (key, expected) in expected {
+        require_equal(
+            &format!("session-capture image label {key}"),
             labels.get(key).map(String::as_str).unwrap_or("<missing>"),
             expected,
         )?;
@@ -2344,8 +2379,10 @@ mod tests {
 
     use super::{
         committed_terminal_for_sweep, require_owned_runtime_directory, sweep_partial_results,
-        sweep_state_dir, validate_terminal_storage, CreateRequest,
+        sweep_state_dir, validate_terminal_storage, verify_capture_image, BrokerPreflight,
+        CreateRequest,
     };
+    use crate::config::{Config, StackLock, STACK_LOCK_JSON};
     use crate::runtime::{SessionBody, SessionStatus};
 
     struct TestTree(PathBuf);
@@ -2481,6 +2518,94 @@ mod tests {
         );
         let error = result.expect_err("unknown request fields must fail closed");
         assert!(error.to_string().contains("unknown field `fallback`"));
+    }
+
+    fn test_config() -> Config {
+        let lock: StackLock =
+            serde_json::from_str(STACK_LOCK_JSON).expect("compiled stack lock must parse");
+        Config {
+            listen_addr: lock.service.listen.parse().expect("locked listen address"),
+            state_dir: PathBuf::from(&lock.service.state_dir),
+            results_dir: PathBuf::from(&lock.service.results_dir),
+            host_input_root: PathBuf::from(&lock.service.host_input_root),
+            broker_socket: PathBuf::from(&lock.broker.socket_path),
+            model_socket: PathBuf::from(&lock.relay.model_socket_dir).join("relay.sock"),
+            agent_image: lock.agent.image_tag.clone(),
+            vllm_model_name: lock.backend.served_model.clone(),
+            vllm_endpoint: lock.backend.endpoint.clone(),
+            lock,
+        }
+    }
+
+    fn broker_preflight_fixture() -> serde_json::Value {
+        serde_json::json!({
+            "policy_id": "policy",
+            "profile": "profile",
+            "docker_version": "version",
+            "agent_image": [],
+            "relay_image": [],
+            "capture_image": [],
+            "broker": [],
+            "backend": [],
+            "service": [],
+            "model_bridge": [],
+            "model_ingress": [],
+            "backend_cache_volume": [],
+            "backend_cache_owner_mode": "",
+            "backend_ipv4_routes": "",
+            "backend_ipv6_routes": "",
+            "service_ipv4_routes": "",
+            "service_ipv6_routes": "",
+            "gpu_record": ""
+        })
+    }
+
+    #[test]
+    fn broker_preflight_schema_requires_capture_image_and_remains_closed() {
+        let exact = broker_preflight_fixture();
+        serde_json::from_value::<BrokerPreflight>(exact.clone())
+            .expect("the broker's exact capture-image evidence must deserialize");
+
+        let mut missing = exact.clone();
+        missing
+            .as_object_mut()
+            .expect("fixture object")
+            .remove("capture_image");
+        assert!(serde_json::from_value::<BrokerPreflight>(missing).is_err());
+
+        let mut unknown = exact;
+        unknown
+            .as_object_mut()
+            .expect("fixture object")
+            .insert("fallback".into(), serde_json::Value::Bool(true));
+        assert!(serde_json::from_value::<BrokerPreflight>(unknown).is_err());
+    }
+
+    #[test]
+    fn session_capture_image_requires_exact_id_and_provenance_labels() {
+        let cfg = test_config();
+        let mut image = serde_json::json!({
+            "Id": cfg.lock.capture.image_id,
+            "Config": {
+                "Labels": {
+                    "agent_service.profile": cfg.lock.profile,
+                    "agent_service.component": "session-capture",
+                    "agent_service.capture.source.sha256": cfg.lock.capture.source_sha256,
+                    "agent_service.capture.id": cfg.lock.capture.capture_id
+                }
+            }
+        });
+        verify_capture_image(&cfg, &image).expect("exact capture image must pass");
+
+        image["Config"]["Labels"]["fallback"] = serde_json::Value::Bool(true);
+        assert!(verify_capture_image(&cfg, &image).is_err());
+        image["Config"]["Labels"]
+            .as_object_mut()
+            .expect("labels object")
+            .remove("fallback");
+        image["Config"]["Labels"]["agent_service.capture.id"] =
+            serde_json::Value::String("different-capture".into());
+        assert!(verify_capture_image(&cfg, &image).is_err());
     }
 
     #[test]

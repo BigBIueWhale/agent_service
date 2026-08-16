@@ -568,12 +568,15 @@ wait_for_container_event() {
   local name="$1" event="$2" seconds="$3" grep_status
   set +o pipefail
   timeout --foreground "${seconds}s" docker logs --follow --since 0s "${name}" 2>&1 |
+    tee /dev/stderr |
     grep --fixed-strings --line-regexp --max-count=1 "${event}" >/dev/null
-  grep_status="${PIPESTATUS[1]}"
+  grep_status="${PIPESTATUS[2]}"
   set -o pipefail
   if [[ "${grep_status}" != 0 ]]; then
-    if ! docker logs --tail 200 "${name}" >&2; then
-      printf 'Could not read diagnostic logs from container %s.\n' "${name}" >&2
+    if ! docker inspect --format \
+      'Container readiness failure state: name={{.Name}} status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}}' \
+      "${name}" >&2; then
+      printf 'Could not inspect failure state for container %s.\n' "${name}" >&2
     fi
     die "Container ${name} did not emit its exact readiness event within ${seconds}s: ${event}"
   fi
