@@ -589,8 +589,10 @@ assert_relay_kernel_sandbox() {
     "$(awk '$1 == "NoNewPrivs:" {print $2}' "${status_file}")" 1
   require_equal "${name} kernel seccomp mode" \
     "$(awk '$1 == "Seccomp:" {print $2}' "${status_file}")" 2
+  # One filter is Docker's pinned builtin profile; the relay stacks its
+  # socket-domain and no-new-bind filters on top of it.
   require_equal "${name} stacked seccomp filter count" \
-    "$(awk '$1 == "Seccomp_filters:" {print $2}' "${status_file}")" 2
+    "$(awk '$1 == "Seccomp_filters:" {print $2}' "${status_file}")" 3
   require_equal "${name} exact sandbox readiness count" \
     "$(docker logs "${name}" 2>&1 | grep --fixed-strings --line-regexp --count "${event}" || true)" 1
 }
