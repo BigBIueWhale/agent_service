@@ -10,7 +10,7 @@ This directory is part of the reproducible build input. Patches are applied only
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Patch SHA-256: `0c621cd8000bb61af633614ee775950b454b02b05a7bb54c9b62824587138181`
+- Patch SHA-256: `08f67ebfc068b2a2d1df6c262bc6fcfeeaab73affa66273740246191a98b20c4`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -19,19 +19,27 @@ The patch adds the requirements that upstream 0.21.12 does not provide as one fa
 
 - exact rendered-request token counts from vLLM's real `/tokenize` endpoint;
 - an exact `max_tokens = min(configured_output_ceiling, context_window - rendered_prompt_tokens)` clamp, with no heuristic margin, padding, minimum, or fallback estimate;
+- exact rendered-token automatic-compaction gating before generation, including
+  the actual image expansion, template, and tool schemas;
 - strict native tool-call parsing and a successful-tool-call terminal invariant;
 - no XML recovery, automatic continuation, semantic-changing retry, or partial tool execution after a length stop;
 - one universal tool allowlist covering core, dynamic, MCP, skill, and synthetic tools;
 - an explicit foreground-agents-only mode that exposes only `general-purpose` and `Explore`, returns results inline, and rejects forks, background work, teams, worktrees, custom agent types, and model overrides.
 - init metadata filtered through that same policy, so it does not advertise internal or uncallable agent types.
+- locked settings loading before initialization: no workspace settings or `.env`, no ambient/project/CLI/session/injected MCP, and no include-directory override;
+- immutable `QWEN_HOME=/opt/agent`, with hooks, extensions, skills, output-language injection, `.qwen/rules`, permission persistence, managed/automatic/team memory, auto-dream, auto-skill, custom slash commands, and workflows disabled;
+- leading slash prompts treated as literal task text and an exactly empty advertised slash-command list, while ordinary project `QWEN.md` and `AGENTS.md` guidance remains available;
+- complete source-PNG validation and decoding with static 8-bit RGB/RGBA,
+  16,777,216-pixel, 30:1, and 100-MiB limits; no resize/transcode fallback;
+- chronological text-image-text tool results with `splitToolMedia=false`, plus
+  fail-closed rejection of non-PNG and file/remote image transports.
 
 Verification performed in the pinned Node image:
 
 - the complete patched TypeScript/CLI build passed;
-- six focused core files passed: 1,235 tests, including the complete 259-test Agent suite with pinned Git 2.39.5;
-- the CLI configuration suite passed: 336 tests;
-- the CLI non-interactive helper suite passed: 53 tests;
-- total focused tests: 1,624 passed, zero failed;
+- nine focused core files passed, including the complete Agent suite, exact-tokenizer tests, strict PNG/container/decode tests, chronological media tests, and the locked runtime-isolation contract;
+- all three focused CLI suites passed, covering configuration, initialization metadata, literal leading-slash prompts, and the non-interactive path;
+- total focused tests: 1,720 passed across twelve suites, zero failed;
 - a sealed runtime capture observed two `/tokenize` calls followed by one streaming `/v1/chat/completions` call;
 - the three requests carried identical messages, tools, and chat-template kwargs;
 - a synthetic exact prompt count of 12,345 produced `max_tokens: 249799` for the 262,144-token deployed context;

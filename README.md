@@ -7,10 +7,11 @@ singleton: one long-lived main agent thread, optional sequential foreground
 subagents, one model, one sampling policy, one context policy, one network path,
 and one set of scripts.
 
-There is no Claude mode, Codex mode, Qwen3.6 mode, vision mode, reduced-context
-mode, alternate port, retry downgrade, heuristic tokenizer, XML tool recovery,
-host client installation, or compatibility fallback. A contradiction is an error
-with evidence, not an invitation to try something else.
+There is no Claude mode, Codex mode, Qwen3.6 mode, text-only mode,
+reduced-context mode, alternate port, retry downgrade, heuristic context clamp,
+XML tool recovery, host client installation, or compatibility fallback. Vision is
+an inseparable part of the one mode, not a switch. A contradiction is an error with
+evidence, not an invitation to try something else.
 
 The application itself runs in Docker. The host scripts perform only explicit
 diagnostics and Docker lifecycle control. They do not install packages or modify
@@ -30,11 +31,14 @@ The fixed stack is:
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
 | Context | Native `262144` tokens |
-| Vision | Disabled |
+| Vision | Complete BF16 tower, full released image-processor pixel budget |
+| Images | At most 15 original static PNGs; 16,777,216 pixels each; aspect ratio at most 30:1 |
+| Image transport | Lossless inline PNG; static 8-bit RGB/RGBA only; video/audio rejected |
 | MTP/speculative decoding | Disabled |
 | Thinking | Required, `xhigh` |
 | Historical thinking | `preserve_thinking=false` |
 | Qwen Code | `0.21.12`, commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38` |
+| Agent image | `sha256:303601e191432b197970203b7e9c220833d871c5338c43b8a735d812f65ac77c` |
 | Service | Rust, one session at a time, Docker-only |
 | Service listener | `127.0.0.1:8090` only |
 | Model listener | `127.0.0.1:8000` only |
@@ -60,16 +64,20 @@ the model card creates physical VRAM.
 The pinned vLLM implementation accounts for K8V4 as 24,832 bytes per token across
 Qwen3.8's sixteen full-attention layers. That is 6.0625 GiB of raw full-attention
 cache at 262,144 tokens and about 23.126 GiB at one million tokens. The deployed
-text-only model loads about 20.47 GiB of weights on an RTX 5090 with 32,607 MiB.
-After hybrid-state paging and alignment, the measured 6.45 GiB cache reservation
-provides 264,115 cache tokens, only 1,971 above the native limit. The final cold
-acceptance used 30,287 MiB and left 1,824 MiB free.
+vision-capable model logs 21.34 GiB of loaded model memory. After hybrid-state
+paging and alignment, its explicit 6.45 GiB cache reservation provides 264,115
+cache tokens, only 1,971 above the native limit. CUDA graphs remain enabled. The
+vision encoder temporarily receives the already reserved 1,024 MiB TurboQuant
+workspace plus 640 MiB fixed headroom without changing cache capacity, text-prefill
+chunking, weight precision, image precision, or the context window.
 
 Accordingly, the only honest quality-first maximum on this GPU is native 262,144.
-The backend proved a 262,143-token prompt plus one output token and correctly
-rejected a request that exceeded the physical model window. A static-YaRN startup
-was experimentally bracketed around 336K before OOM, but it lacks both quality
-validation and operational margin and is not a supported mode.
+The exact final backend proved a 262,143-token prompt plus one output token with all
+fifteen maximum-size images and correctly rejected a request that exceeded the
+physical model window. Fifteen distinct 4096-by-4096 images were also transcribed
+successfully in one normal request; the sixteenth was rejected. A static-YaRN
+startup was experimentally bracketed around 336K before OOM, but it lacks both
+quality validation and operational margin and is not a supported mode.
 
 K8V4 here is a runtime cache format. The NVFP4 checkpoint does not contain a
 precomputed 4-bit value cache. TurboQuant quantizes each live key to FP8 and each
@@ -112,6 +120,26 @@ and the current turn's reasoning remain. This is the selected long-horizon polic
 it spends the scarce context window on the continuing task rather than repeatedly
 paying for every old hidden trace. The setting does not disable thinking.
 
+These are defaults at both layers, not suggestions in prose. vLLM defaults omitted
+request fields to thinking enabled, xhigh, unpreserved historical thinking, and the
+exact tuple above. The pinned Qwen Code settings send the same values explicitly,
+including `thinking_token_budget=262144`,
+`final_response_token_budget=131072`, and `add_vision_id=false`. The backend maps
+high and max to the canonical xhigh rendering and rejects medium, low, or disabled
+thinking in this profile. A client cannot accidentally obtain the old Qwen3.6
+repetition intervention or a weaker fast path.
+
+Every main-turn context-boundary decision that can trigger compaction or set the
+outbound generation limit uses the real vLLM tokenizer on the fully rendered
+request. Before compaction and again before generation, Qwen Code sends the exact
+messages, typed tool history, image parts, tool schemas, and template arguments to
+the backend `/tokenize` endpoint. `max_tokens` is then exactly
+`min(262144, 262144 - rendered_prompt_tokens)`. There is no character division,
+`target // 8`, image-token guess, padding margin, minimum-output fabrication, local
+tokenizer, or tokenizer fallback in the compaction trigger or outbound clamp. If
+the tokenizer is missing, malformed, or reports another model window, the turn
+fails before generation.
+
 Session turns and cumulative tool calls have no arbitrary cutoff. One model turn
 has a 1,000-tool-call circuit breaker for degenerate output. Auto-compaction is
 delayed to the latest safe threshold supported by the pinned client. Subagents run
@@ -133,7 +161,9 @@ The audit retained principles, not old hunks:
 - exact tokenizer and render/parse tests are still necessary;
 - malformed historical tool chains must still fail closed;
 - the Qwen3.6 egress rename and repetition detector are obsolete and rejected;
-- old multimodal workarounds are unreachable because this profile is truly text-only;
+- old Qwen3.6 multimodal workarounds are obsolete; current image handling was
+  re-derived from the Qwen3.8 template, current vLLM, and the measured full-quality
+  backend contract;
 - several reasoning-ingress and parser reconstruction issues are fixed or superseded
   upstream;
 - current code nevertheless had new tool-grammar, truncation, TurboQuant workspace,
@@ -144,8 +174,9 @@ The old `agent_service` design also contained good outer-envelope ideas alongsid
 obsolete implementation: singleton ownership, copied disposable workspaces,
 offline/no-GPU agents, explicit cancellation, durable JSONL and bundles, labels,
 orphan recovery, and ordered teardown were kept. Qwen Code 0.15.6, Qwen3.6 AWQ,
-port 8001, ttyd, wildcard bridge plumbing, vision, 152K context, host installation,
-warning-only probes, polling waits, and mutable package installation were removed.
+port 8001, ttyd, wildcard bridge plumbing, 152K context, host installation,
+warning-only probes, polling waits, lossy vision fallbacks, and mutable package
+installation were removed.
 
 ## The pinned Qwen Code patch
 
@@ -155,10 +186,12 @@ The pin was rechecked on 2026-08-15: GitHub's latest stable release was
 `v0.21.12`, and npm's `latest` metadata reported both version `0.21.12` and
 `gitHead=b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`. The npm tarball is not an
 unused second execution path; the reviewed commit archive is the sole source.
+The current patch SHA-256 is
+`08f67ebfc068b2a2d1df6c262bc6fcfeeaab73affa66273740246191a98b20c4`.
 The build first verifies both hashes and that every hunk applies cleanly. It then
 runs `npm ci` against the upstream lock file, applies upstream's own `patch-package`
-set, builds the CLI, bundles it, and runs the eight focused suites covering all
-modified areas. No published npm package or mutable `latest` tag is executed.
+set, builds the CLI, bundles it, and runs twelve focused suites covering all modified
+areas. No published npm package or mutable `latest` tag is executed.
 
 The local patch provides:
 
@@ -167,15 +200,33 @@ The local patch provides:
 - exact `max_tokens = min(configured ceiling, context window - rendered tokens)`;
 - no character estimate, byte division, padding margin, token safety margin,
   minimum-output fabrication, or tokenizer fallback;
+- the same exact rendered-request count drives the automatic-compaction threshold,
+  including image tokens and tool schemas;
 - a universal strict native-tool allowlist covering built-in, dynamic, MCP, skill,
   and synthetic tools;
 - a successful-tool-call terminal invariant;
 - no XML recovery, implicit semantic retry, automatic continuation, or executable
   partial call after a length stop;
 - foreground-only `general-purpose` and `Explore` agents, with no forks,
-  background work, teams, worktrees, custom types, model overrides, or nesting.
+  background work, teams, worktrees, custom types, model overrides, or nesting;
 - init metadata filtered through the identical two-agent policy, so uncallable
-  internal agents are not advertised as an alternate behavior.
+  internal agents are not advertised as an alternate behavior;
+- workspace settings and environment discovery disabled before initialization,
+  with ambient, project, CLI, and injected MCP servers all excluded from the
+  locked mode while ordinary project `QWEN.md` and `AGENTS.md` task instructions
+  remain available;
+- an immutable `QWEN_HOME=/opt/agent` containing only the sealed settings and
+  instructions, with no writable home-state mount and no host Qwen state;
+- hooks, extensions, skills, `.qwen/rules`, output-language injection, include
+  directories, custom slash commands/workflows, and permission-rule persistence
+  removed from the supported runtime surface; leading `/...` prompt text is literal
+  task text and init advertises an empty slash-command list;
+- managed memory, auto-memory, auto-dream, team memory/synchronization, auto-skill,
+  and skill confirmation forced off in both sealed settings and code getters;
+- original full-resolution PNG reads with complete pixel decoding, no transcode,
+  strict source bounds, and fail-closed transport;
+- `splitToolMedia=false` and typed tool content parts, preserving text-image-text
+  chronology inside the originating tool response.
 
 The allowed client tools are exactly:
 
@@ -200,6 +251,52 @@ unbounded legacy kitchen sink: every top-level package version is recorded in
 [`config/agent-apt-packages.lock`](config/agent-apt-packages.lock), and the Ubuntu
 snapshot pins all transitive packages. There is no `sudo`, SSH server, ttyd, browser
 server, package bootstrap script, or runtime installer.
+
+## Full-quality images and exact chronology
+
+Images enter the agent only through `read_file` in the copied `/workspace`. The
+creation API remains deliberately small—folder plus text prompt—so there is no
+second upload protocol or alternate history renderer. The model calls `read_file`
+at the point where it needs an image, and that tool result stays at that exact point
+in the ongoing conversation.
+
+The one accepted source contract is:
+
+- static PNG with an exact PNG signature and well-formed terminal container;
+- eight-bit RGB or explicit RGBA source pixels;
+- at most 16,777,216 source pixels and 100 MiB on disk;
+- aspect ratio at most 30:1 in either orientation;
+- one complete decoder pass before egress, including IDAT validation;
+- rejection of `acTL`, `fcTL`, and `fdAT`, palette, grayscale, 16-bit, tRNS,
+  orientation metadata other than identity, corrupt data, and trailing bytes.
+
+JPEG, WebP, GIF/APNG, and BMP raster sources are errors. SVG is never accepted as
+vision media; its source can be read only as text. Remote/file image URLs and
+generated image embeddings are errors. The client sends the original PNG bytes as
+`data:image/png;base64,` without resizing, cropping, reorientation, low-detail
+selection, or JPEG conversion. The server independently enforces the same source
+pixel/aspect/mode contract, composites accepted RGBA deterministically onto pinned
+white, and runs the complete BF16 vision tower with the released dynamic-resolution
+processor. PDF remains text extraction only; it never turns into an unannounced
+lossy image path.
+
+`splitToolMedia=false` and `toolResultContentFormat=parts` are both pinned. A result
+such as text → image → text is therefore one `role=tool` message with the same part
+order and original tool-call ID. It is not detached, clumped into the newest user
+turn, or replayed as a later attachment. Unit tests compare that exact wire shape
+and reject non-PNG inline media and every file/remote image reference.
+
+Before compaction, old image-bearing tool results remain at their chronological
+positions. vLLM can reuse both the unchanged rendered prefix and the SHA-256-keyed
+multimodal processor entry. On compaction, `maxRecentImagesToRetain=0`: old raw
+pixels are removed with the compacted history rather than moved into a false recent
+turn. The visible summary can preserve findings, while completed hidden thinking is
+also omitted. This is the selected long-thread policy.
+
+The limit is fifteen images in one rendered request, not fifteen over the lifetime
+of a session. Their visual expansion still counts inside the same native 262,144
+total-token window. No text context or output reservation was reduced to enable
+vision; the exact tokenizer simply reports the real remaining room on each turn.
 
 ## Tool-call and streaming correctness
 
@@ -230,18 +327,32 @@ errors. It never chooses a convenient-looking “last result.”
 ## Prefix caching evidence
 
 Prefix caching is enabled in the sole backend command. It is not accepted on faith:
-the backend's timed 65K-token agent continuation reported 64,480 cached prompt
-tokens and 0.386-second time-to-first-token versus 12.970 seconds for a zero-cache
-control, a measured 33.639× improvement. The exact measurements and test command
-are recorded in the backend README. Agent-service acceptance additionally exercises
-multi-turn native tool history so request construction cannot accidentally defeat
-the cache while a synthetic benchmark still passes. In the final controlled
-five-turn Qwen Code run, vLLM observed 68,109 queried prompt tokens, 62,400 local
-cache-hit tokens (91.617848%), 0.867486238 seconds of aggregate time-to-first-token,
-0.726381441 seconds of aggregate prefill time, and 15.441475868 seconds of aggregate
-request latency; Qwen's terminal agent duration was 16.445 seconds. Qwen Code's
-compatibility usage field reported zero cache-read tokens, so the acceptance relies
-on the authoritative vLLM counters rather than that lossy frontend field.
+the exact v10 backend's chronological image-history probe measured a 6.1716-second
+cold TTFT with zero prefix/multimodal hits, then a 0.3520-second warm Anthropic TTFT
+with 14,560 prefix-hit tokens and a multimodal-cache hit—a 17.531× improvement.
+OpenAI and Anthropic histories rendered to identical token IDs. Changed image bytes
+missed the multimodal cache; moving identical bytes hit the multimodal cache but
+missed the prefix cache, proving the two mechanisms are not being conflated.
+
+The real Qwen Code path was also measured from authoritative vLLM counters. Session
+`s-a0def9ef00b8444c82ec0069d5cd3dce` completed four native model turns—text read,
+original-PNG read, shell, and final response—and added 53,867 prompt tokens, of which
+35,360 were prefix-cache hits. Its two image-history queries produced one
+multimodal-cache hit: the first request after the image tool result encoded it, and
+the later request reused the exact image while it remained in its chronological tool
+position.
+
+The identical task was then run as session
+`s-18eb0b39b0f54c13b03c3ba103233859`. All four native turns passed again. It added
+53,592 prompt tokens, of which 45,760 were prefix-cache hits, and both multimodal
+queries were hits. Mean backend TTFT across the four requests fell from 1.129958153
+seconds to 0.279406309 seconds, a 4.044140-times improvement. Qwen process time fell
+from 30.552 seconds to 18.774 seconds. These are sampled agent runs, so the claim is
+cache reuse and measured timing separation—not deterministic output identity.
+
+Qwen Code's compatibility usage field reported zero cache reads in both runs even
+though vLLM's counters proved the hits. The release therefore uses backend counters,
+not that frontend compatibility field, as its cache authority.
 
 ## Network and filesystem isolation
 
@@ -278,6 +389,22 @@ results. Every requested source folder must be a strict descendant of the pinned
 system roots, more than 200,000 files, or more than 4 GiB are rejected before the
 agent starts.
 
+The copied repository may still contain ordinary `QWEN.md` and `AGENTS.md` files;
+those remain task-level project guidance. They cannot create a second runtime
+configuration. `QWEN_HOME` is the read-only `/opt/agent`, and there is no writable
+`/qwen-home` mount or host Qwen state. In the mandatory foreground-agent mode, Qwen
+Code does not load workspace `.qwen/settings.json`, workspace `.env`, project
+hooks/extensions/skills, `.qwen/rules`, `.qwen/output-language.md`, `.mcp.json`,
+`--mcp-config`, or session-injected MCP servers. It also disables managed memory,
+auto-memory/dream, team memory/synchronization, auto-skill, custom slash commands,
+workflows, include directories, and permission-rule persistence. A leading slash in
+the submitted prompt is ordinary task text, and init metadata must report
+`slash_commands: []`. These files remain ordinary copied source files and may be
+inspected when relevant to the task, but they cannot replace the pinned model,
+xhigh thinking, sampling tuple, tokenizer path, tool allowlist, or network boundary.
+Source-level tests cover these isolation invariants; live acceptance also uses a
+deliberately contradictory workspace configuration.
+
 The source folder is copied. The original is never mutated. Executable semantics are
 preserved while dangerous mode bits are stripped. The agent modifies `/workspace`;
 the final workspace, `/artifacts`, prompt record, ready record, complete events,
@@ -313,6 +440,15 @@ not the host binary. The Rust binary is built by the pinned Rust 1.95.0 image wi
 by exact image ID plus labels for the upstream version/commit/archive/patch and all
 three configuration files. The service image is sealed by committed source, stack
 lock, and Cargo lock labels.
+
+The current agent image is
+`sha256:303601e191432b197970203b7e9c220833d871c5338c43b8a735d812f65ac77c`.
+Its build reconstructed thirty-three changed/new files from pristine upstream and
+passed twelve suites with 1,720 tests. A second build from the same sealed inputs
+reproduced the exact image ID. The build script treats any other ID as drift.
+The pinned Rust 1.95.0 service stage also passed all ten service tests and a locked
+release build, including fail-closed tests for default-policy drift and nonempty
+slash-command advertisement.
 
 Pinning is not a claim that the upstream dependency graph has no security debt. The
 Qwen `npm ci` build currently reports 66 audit advisories (2 low, 36 moderate, 25
@@ -403,11 +539,12 @@ misleading 404. Shutdown has no arbitrary teardown deadline.
 
 ## Acceptance gates
 
-A release is not complete merely because the images build. The required gates are:
+A release is not complete merely because the images build. Every required gate below
+passed against the pinned agent image and the exact live v10 backend:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
 2. clean Qwen archive extraction, patch check/application, full patched build, and
-   all eight focused upstream suites (1,624 tests in the pinned tree);
+   all twelve focused upstream suites (1,720 tests in the pinned tree);
 3. agent-image label/hash/version checks and network-none route proof;
 4. exact live backend container/image/labels/command/listener/version/model/tokenizer;
 5. sealed model path from agent loopback, with no route or DNS;
@@ -416,13 +553,43 @@ A release is not complete merely because the images build. The required gates ar
 8. malformed/duplicate/post-terminal stream failures;
 9. complete and truncated tool-call behavior for streaming and non-streaming server
    paths;
-10. repeated agentic turns showing actual cached prompt tokens and materially lower
-    time-to-first-token;
-11. native-context boundary and K8V4 memory evidence inherited from the exact live
-    backend image;
-12. graceful cancellation, unlimited-wait shutdown, orphan sweep, listener audit,
+10. original-PNG tool reads, non-PNG rejection, chronological tool-image history,
+    and no image detachment to a recent user turn;
+11. repeated text/image agentic turns showing actual cached prompt tokens,
+    multimodal cache hits, and materially lower time-to-first-token;
+12. native-context boundary, fifteen-image/full-pixel vision proof, and K8V4 memory
+    evidence inherited from the exact live backend image;
+13. graceful cancellation, unlimited-wait shutdown, orphan sweep, listener audit,
     including immediate cancellation at the published-readiness boundary, and a
     final clean Git repository under `Ronen Zyroff <rzyroff@gmail.com>`.
 
-Any unrun or failed gate must be reported as such. There is no fallback declaration
-of success.
+The main hostile-workspace acceptance deliberately supplied contradictory `.env`,
+`.qwen/settings.json`, MCP, hook, rule, skill, memory, output-language, and custom
+slash-command fixtures. Init advertised exactly the ten allowed native tools,
+`general-purpose` and `Explore`, no MCP servers, and no slash commands. Ordinary
+project `QWEN.md` and `AGENTS.md` guidance remained active. Native text, original-PNG
+vision, and shell calls all returned correlated typed results; the model read
+`VISION_TOOL_PROOF_7F3C` from the image. No hostile marker was executed or included.
+
+Session `s-db8a64fabf494192b844d174a37ee9d8` then passed a JPEG directly to native
+`read_file`. It returned a typed error naming the missing exact PNG signature; no
+conversion, resize, retry, or alternate tool path occurred. Session
+`s-604472363cb04672a38ae01fc130ac16` invoked exactly one foreground `Explore`
+subagent, retained parent/child tool IDs, returned its native `read_file` result, and
+was verified in the main thread.
+
+While that subagent session was live, the agent container exposed only `lo`, had an
+empty IPv4 route table, failed public DNS lookup, had no NVIDIA devices or published
+ports, and reached the sealed model only through `127.0.0.1:18000`. All three session
+containers had read-only roots, all capabilities dropped, and no-new-privileges.
+After completion they were absent.
+
+Finally, session `s-5639d985a0e7465f93277e393348540e` was cancelled immediately
+after readiness while its prompt required a long foreground command. Cancellation
+returned in 0.311 seconds, durably recorded exit 143, archived the two-event partial
+stream without inventing a success/result event, emitted no forbidden final marker,
+and removed all three owned containers. Script argument-rejection probes also proved
+that start, status, stop, and build reject an alternate mode before changing state.
+
+Any future changed input must rerun the affected gates. There is no fallback
+declaration of success.

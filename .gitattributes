@@ -1,0 +1,3 @@
+# Unified-diff blank context lines contain the format's required one-byte marker.
+# Whitespace is checked on the reconstructed Qwen source, not on diff grammar.
+patches/*.patch -whitespace

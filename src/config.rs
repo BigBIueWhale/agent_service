@@ -83,7 +83,6 @@ pub struct AgentLock {
     pub memory_swap: String,
     pub pids_limit: u32,
     pub tmpfs_tmp: String,
-    pub tmpfs_qwen_home: String,
     pub tmpfs_qwen_runtime: String,
     pub settings_sha256: String,
     pub instructions_sha256: String,
@@ -124,7 +123,40 @@ pub struct BackendLock {
     pub model_manifest: String,
     pub model_manifest_sha256: String,
     pub kv_cache_dtype: String,
+    pub vision: VisionLock,
+    pub agent_defaults: AgentDefaultsLock,
+    pub environment: Vec<String>,
     pub command: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VisionLock {
+    pub enabled: bool,
+    pub unquantized_dtype: String,
+    pub max_images: u32,
+    pub max_source_pixels: u64,
+    pub max_aspect_ratio: u32,
+    pub allowed_data_url_prefix: String,
+    pub source_modes: Vec<String>,
+    pub video_count: u32,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentDefaultsLock {
+    pub enable_thinking: bool,
+    pub reasoning_effort: String,
+    pub preserve_thinking: bool,
+    pub add_vision_id: bool,
+    pub temperature: f64,
+    pub top_p: f64,
+    pub top_k: u32,
+    pub min_p: f64,
+    pub presence_penalty: f64,
+    pub repetition_penalty: f64,
+    pub thinking_token_budget: u64,
+    pub final_response_token_budget: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -218,11 +250,11 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
             lock.schema_version
         ));
     }
-    if lock.profile != "qwen38-agent-service-v1" {
+    if lock.profile != "qwen38-agent-service-v2" {
         return fail(format!("unexpected profile {:?}", lock.profile));
     }
     if lock.service.container_name != "qwen38-agent-service"
-        || lock.service.image_tag != "qwen38-agent-service:1.0.0"
+        || lock.service.image_tag != "qwen38-agent-service:2.0.0"
     {
         return fail(
             "service container/image identity differs from the sole supported deployment".into(),
@@ -337,6 +369,65 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
                 .into(),
         );
     }
+    if !lock.backend.vision.enabled
+        || lock.backend.vision.unquantized_dtype != "bfloat16"
+        || lock.backend.vision.max_images != 15
+        || lock.backend.vision.max_source_pixels != 16_777_216
+        || lock.backend.vision.max_aspect_ratio != 30
+        || lock.backend.vision.allowed_data_url_prefix != "data:image/png;base64,"
+        || lock
+            .backend
+            .vision
+            .source_modes
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            != ["RGB", "RGBA"]
+        || lock.backend.vision.video_count != 0
+    {
+        return fail("backend vision contract differs from the sole full-quality profile".into());
+    }
+    let defaults = &lock.backend.agent_defaults;
+    if !defaults.enable_thinking
+        || defaults.reasoning_effort != "xhigh"
+        || defaults.preserve_thinking
+        || defaults.add_vision_id
+        || defaults.temperature != 1.0
+        || defaults.top_p != 0.95
+        || defaults.top_k != 20
+        || defaults.min_p != 0.0
+        || defaults.presence_penalty != 0.0
+        || defaults.repetition_penalty != 1.0
+        || defaults.thinking_token_budget != 262_144
+        || defaults.final_response_token_budget != 131_072
+    {
+        return fail(
+            "backend agent defaults differ from Qwen3.8 xhigh thinking-mode policy".into(),
+        );
+    }
+    let required_environment = [
+        "HF_HUB_OFFLINE=1",
+        "TRANSFORMERS_OFFLINE=1",
+        "DO_NOT_TRACK=1",
+        "VLLM_NO_USAGE_STATS=1",
+        "VLLM_DEBUG_WORKSPACE=1",
+        "VLLM_ENFORCE_STRICT_TOOL_CALLING=1",
+        "VLLM_QWEN38_STRICT_IMAGE_CONTRACT=1",
+        "VLLM_QWEN38_VISION_HEADROOM_BYTES=671088640",
+        "VLLM_MAX_IMAGE_PIXELS=16777216",
+        "GLOO_SOCKET_IFNAME=lo",
+        "NCCL_SOCKET_IFNAME=lo",
+    ];
+    if lock
+        .backend
+        .environment
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        != required_environment
+    {
+        return fail("backend environment differs from the strict v10 runtime contract".into());
+    }
     if lock.backend.model_repository != "unsloth/Qwen3.8-27B-NVFP4"
         || lock.backend.model_manifest != "model-snapshot-16b6615a.sha256"
     {
@@ -378,4 +469,82 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_lock, StackLock, STACK_LOCK_JSON};
+
+    fn checked_in_lock() -> StackLock {
+        serde_json::from_str(STACK_LOCK_JSON).expect("checked-in lock must match the strict schema")
+    }
+
+    fn assert_agent_policy_rejected(lock: StackLock) {
+        let error = validate_lock(&lock).expect_err("weakened agent policy must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("backend agent defaults differ from Qwen3.8 xhigh thinking-mode policy"),
+            "unexpected validation error: {error}"
+        );
+    }
+
+    #[test]
+    fn checked_in_lock_is_the_exact_supported_policy() {
+        validate_lock(&checked_in_lock()).expect("checked-in stack lock must be accepted");
+    }
+
+    #[test]
+    fn weaker_thinking_or_preserved_history_is_rejected() {
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.enable_thinking = false;
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.reasoning_effort = "medium".into();
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.preserve_thinking = true;
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.add_vision_id = true;
+        assert_agent_policy_rejected(lock);
+    }
+
+    #[test]
+    fn sampling_or_phase_budget_drift_is_rejected() {
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.temperature = 0.7;
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.top_p = 0.8;
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.top_k = 40;
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.min_p = 0.01;
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.presence_penalty = 1.5;
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.repetition_penalty = 1.1;
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.thinking_token_budget = 262_143;
+        assert_agent_policy_rejected(lock);
+
+        let mut lock = checked_in_lock();
+        lock.backend.agent_defaults.final_response_token_budget = 131_071;
+        assert_agent_policy_rejected(lock);
+    }
 }

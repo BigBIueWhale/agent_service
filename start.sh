@@ -57,23 +57,52 @@ docker run -d \
   --mount "type=bind,src=${PROJECT_DIR}/.runtime,dst=${PROJECT_DIR}/.runtime" \
   "${SERVICE_IMAGE}" >/dev/null
 
-for _ in $(seq 1 120); do
-  if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:8090/healthz >/dev/null 2>&1; then
-    "${PROJECT_DIR}/status.sh"
-    exit 0
+cleanup_failed_service() {
+  if ! container_exists "${SERVICE_NAME}"; then
+    return
   fi
-  if ! service_running="$(docker inspect --format '{{.State.Running}}' "${SERVICE_NAME}")"; then
-    die "Could not inspect service container while awaiting readiness"
+  local observed_profile
+  observed_profile="$(docker inspect --format '{{index .Config.Labels "agent_service.profile"}}' "${SERVICE_NAME}")" || {
+    printf 'Refusing failed-start cleanup because container ownership could not be inspected: %s\n' "${SERVICE_NAME}" >&2
+    return 1
+  }
+  if [[ "${observed_profile}" != "${PROFILE}" ]]; then
+    printf 'Refusing failed-start cleanup of unowned container %s (profile=%s)\n' \
+      "${SERVICE_NAME}" "${observed_profile}" >&2
+    return 1
   fi
-  if [[ "${service_running}" != true ]]; then
-    if ! docker logs --tail 300 "${SERVICE_NAME}" >&2; then
-      printf 'Additionally failed to read service logs.\n' >&2
-    fi
-    die "Service container exited before health readiness"
+  docker container rm --force "${SERVICE_NAME}" >/dev/null
+}
+
+wait_for_listen_event() {
+  local grep_status
+  # docker logs --follow blocks in the daemon and wakes on the exact Rust
+  # readiness event or container exit. grep closes the stream on the first
+  # match; inspect PIPESTATUS for grep itself so Docker's expected SIGPIPE is
+  # not mistaken for a failed match.
+  set +o pipefail
+  timeout --foreground 120s docker logs --follow --since 0s "${SERVICE_NAME}" 2>&1 |
+    grep --fixed-strings --max-count=1 'listening (loopback only)' >/dev/null
+  grep_status="${PIPESTATUS[1]}"
+  set -o pipefail
+  return "${grep_status}"
+}
+
+if ! wait_for_listen_event; then
+  if ! docker logs --tail 300 "${SERVICE_NAME}" >&2; then
+    printf 'Additionally failed to read service logs.\n' >&2
   fi
-  sleep 1
-done
-if ! docker logs --tail 300 "${SERVICE_NAME}" >&2; then
-  printf 'Additionally failed to read service logs.\n' >&2
+  cleanup_failed_service || true
+  die "Service did not emit its exact loopback-listener readiness event within 120 seconds"
 fi
-die "Service did not become healthy within 120 seconds"
+
+if ! curl --fail --silent --show-error --max-time 10 \
+  http://127.0.0.1:8090/healthz >/dev/null; then
+  docker logs --tail 300 "${SERVICE_NAME}" >&2 || true
+  cleanup_failed_service || true
+  die "Service emitted readiness but its single health check failed"
+fi
+if ! "${PROJECT_DIR}/status.sh"; then
+  cleanup_failed_service || true
+  die "Service emitted readiness but failed the complete live contract"
+fi

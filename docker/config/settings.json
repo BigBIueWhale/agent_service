@@ -43,7 +43,6 @@
     "chatCompression": {
       "enableScreenshotTrigger": false,
       "maxRecentImagesToRetain": 0,
-      "imageTokenEstimate": 1,
       "maxRecentFilesToRetain": 20
     }
   },
@@ -60,6 +59,14 @@
     "agentTeam": false,
     "artifact": false,
     "emitToolUseSummaries": false
+  },
+  "memory": {
+    "enableManagedAutoMemory": false,
+    "enableManagedAutoDream": false,
+    "enableAutoSkill": false,
+    "autoSkillConfirm": false,
+    "enableTeamMemory": false,
+    "enableTeamMemorySync": false
   },
   "tools": {
     "approvalMode": "yolo",
@@ -85,7 +92,7 @@
         "baseUrl": "http://127.0.0.1:18000/v1",
         "capabilities": {
           "agent": true,
-          "vision": false
+          "vision": true
         },
         "generationConfig": {
           "timeout": 86400000,
@@ -93,9 +100,11 @@
           "thinkingMandatory": true,
           "strictToolCalling": true,
           "exactTokenCounting": "vllm",
+          "splitToolMedia": false,
+          "toolResultContentFormat": "parts",
           "contextWindowSize": 262144,
           "modalities": {
-            "image": false,
+            "image": true,
             "pdf": false,
             "audio": false,
             "video": false
@@ -117,7 +126,8 @@
             "chat_template_kwargs": {
               "enable_thinking": true,
               "preserve_thinking": false,
-              "reasoning_effort": "xhigh"
+              "reasoning_effort": "xhigh",
+              "add_vision_id": false
             }
           }
         }

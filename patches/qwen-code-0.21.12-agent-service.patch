@@ -1,5 +1,5 @@
 diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/config.test.ts
-index 2022b31..16cc38b 100644
+index 2022b3156efcfd5bc3523e49fd2e1e3bdc54c3e5..c51380eb8761232b746ae558fc12397d5ffac6c1 100644
 --- a/packages/cli/src/config/config.test.ts
 +++ b/packages/cli/src/config/config.test.ts
 @@ -1015,6 +1015,23 @@ describe('parseArguments', () => {
@@ -26,8 +26,55 @@ index 2022b31..16cc38b 100644
    it('should support comma-separated values for --allowed-mcp-server-names', async () => {
      process.argv = [
        'node',
+@@ -3055,6 +3072,46 @@ describe('loadCliConfig with allowed-mcp-server-names', () => {
+     expect(config.getMcpServers()).toEqual(baseSettings.mcpServers);
+   });
+ 
++  it('drops every ambient or injected MCP server in foreground-only agent-service mode', async () => {
++    process.argv = ['node', 'script.js', '--foreground-agents-only'];
++    const argv = await parseArguments();
++    const config = await loadCliConfig(
++      {
++        ...baseSettings,
++        context: { includeDirectories: ['/ambient/include'] },
++        memory: {
++          enableManagedAutoMemory: true,
++          enableManagedAutoDream: true,
++          enableTeamMemory: true,
++          enableTeamMemorySync: true,
++          enableAutoSkill: true,
++          autoSkillConfirm: true,
++        },
++      },
++      argv,
++      undefined,
++      [],
++      undefined,
++      undefined,
++      {
++        injected: { command: 'node', args: ['untrusted-server.js'] },
++      },
++    );
++    expect(config.getMcpServers()).toEqual({});
++    const configParams = mockConfigConstructorParams.mock.calls.at(-1)?.[0];
++    expect(configParams.includeDirectories).toEqual([]);
++    expect(config.getContextRuleExcludes()).toEqual(['**']);
++    expect(config.getOutputLanguageFilePath()).toBeUndefined();
++    expect(config.getOnPersistPermissionRule()).toBeUndefined();
++    expect(config.getManagedAutoMemoryEnabled()).toBe(false);
++    expect(config.isManagedMemoryAvailable()).toBe(false);
++    expect(config.getManagedAutoDreamEnabled()).toBe(false);
++    expect(config.getTeamMemoryEnabled()).toBe(false);
++    expect(config.getTeamMemorySyncEnabled()).toBe(false);
++    expect(config.getAutoSkillEnabled()).toBe(false);
++    expect(config.getAutoSkillConfirmEnabled()).toBe(false);
++  });
++
+   it('should allow only the specified MCP server', async () => {
+     process.argv = [
+       'node',
 diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.ts
-index bf538d2..f0f1848 100755
+index bf538d25955bdacc664352d5beeba66d54c41c7a..50686eb05a787a3d71e8f9a7e723ac6b3f0e3d3c 100755
 --- a/packages/cli/src/config/config.ts
 +++ b/packages/cli/src/config/config.ts
 @@ -221,6 +221,8 @@ export interface CliArgs {
@@ -60,7 +107,88 @@ index bf538d2..f0f1848 100755
          .option('exclude-tools', {
            type: 'array',
            string: true,
-@@ -2147,6 +2163,8 @@ export async function loadCliConfig(
+@@ -1573,6 +1589,7 @@ export async function loadCliConfig(
+   const bareMode = isBareMode(argv.bare);
+   const safeMode =
+     argv.safeMode !== undefined ? argv.safeMode : isSafeModeEnv();
++  const lockedAgentServiceMode = argv.foregroundAgentsOnly === true;
+ 
+   // Surface `--insecure` as an env var so it reaches the undici dispatcher
+   // layer (which controls TLS verification) without threading a flag through
+@@ -1638,7 +1655,7 @@ export async function loadCliConfig(
+   );
+ 
+   let outputLanguageFilePath: string | undefined;
+-  if (!bareMode && !safeMode) {
++  if (!bareMode && !safeMode && !lockedAgentServiceMode) {
+     if (fs.existsSync(projectOutputLanguagePath)) {
+       outputLanguageFilePath = projectOutputLanguagePath;
+     } else if (fs.existsSync(globalOutputLanguagePath)) {
+@@ -1652,10 +1669,16 @@ export async function loadCliConfig(
+   );
+ 
+   const includeDirectories = (
+-    bareMode || safeMode ? [] : (settings.context?.includeDirectories ?? [])
++    bareMode || safeMode || lockedAgentServiceMode
++      ? []
++      : (settings.context?.includeDirectories ?? [])
+   )
+     .map(resolvePath)
+-    .concat((argv.includeDirectories || []).map(resolvePath));
++    .concat(
++      lockedAgentServiceMode
++        ? []
++        : (argv.includeDirectories || []).map(resolvePath),
++    );
+ 
+   // LSP configuration: enabled only via --experimental-lsp flag
+   const lspEnabled = !bareMode && argv.experimentalLsp === true;
+@@ -2100,9 +2123,11 @@ export async function loadCliConfig(
+   // Top tier = session-injected (ACP/IDE) servers plus `--mcp-config`; CLI wins
+   // over the session source on a name clash. Both sit above settings/`.mcp.json`
+   // and are never gated (#4615).
+-  const cliMcpServers = parseMcpConfig(argv.mcpConfig);
++  const cliMcpServers = lockedAgentServiceMode
++    ? null
++    : parseMcpConfig(argv.mcpConfig);
+   const topTierMcpServers =
+-    sessionMcpServers || cliMcpServers
++    !lockedAgentServiceMode && (sessionMcpServers || cliMcpServers)
+       ? { ...sessionMcpServers, ...(cliMcpServers ?? {}) }
+       : undefined;
+   // Bare/safe mode still drop settings.mcpServers/`.mcp.json` entirely (local,
+@@ -2110,7 +2135,7 @@ export async function loadCliConfig(
+   // servers are an explicit, per-invocation argument from the caller (ACP
+   // `session/new`, `--mcp-config`), not ambient local state, so they survive.
+   const mcpServers =
+-    bareMode || safeMode
++    bareMode || safeMode || lockedAgentServiceMode
+       ? { ...topTierMcpServers }
+       : assembleMcpServers(settings.mcpServers, cwd, topTierMcpServers);
+   // Top-tier servers are never gated (#4615, see the comment above), so this
+@@ -2120,7 +2145,10 @@ export async function loadCliConfig(
+   // state at all, not even a read with no behavioral effect. Revisit if a
+   // future gated top-tier source needs this to run under safe mode too.
+   const pendingMcpServers =
+-    bareMode || safeMode || approvalMode === ApprovalMode.YOLO
++    bareMode ||
++    safeMode ||
++    lockedAgentServiceMode ||
++    approvalMode === ApprovalMode.YOLO
+       ? undefined
+       : getPendingGatedMcpServers(mcpServers, cwd);
+ 
+@@ -2138,6 +2166,9 @@ export async function loadCliConfig(
+         ? includeDirectories.length > 0
+         : (settings.context?.loadFromIncludeDirectories ?? false),
+     importFormat: settings.context?.importFormat || 'tree',
++    // Ordinary QWEN.md/AGENTS.md files remain project instructions. The
++    // service does not accept a second Qwen-specific conditional-rule layer.
++    contextRuleExcludes: lockedAgentServiceMode ? ['**'] : [],
+     debugMode,
+     question,
+     systemPrompt: argv.systemPrompt,
+@@ -2147,6 +2178,8 @@ export async function loadCliConfig(
        bareMode || safeMode
          ? undefined
          : argv.coreTools || settings.tools?.core || undefined,
@@ -69,8 +197,343 @@ index bf538d2..f0f1848 100755
      allowedTools:
        bareMode || safeMode
          ? argv.allowedTools || undefined
+@@ -2193,19 +2226,24 @@ export async function loadCliConfig(
+     },
+     toolInvocationGuard: hostPolicy?.toolInvocationGuard,
+     // Permission rule persistence callback (writes to settings files).
+-    onPersistPermissionRule: async (scope, ruleType, rule) => {
+-      const currentSettings = loadSettings(cwd);
+-      const settingScope =
+-        scope === 'project' ? SettingScope.Workspace : SettingScope.User;
+-      const key = `permissions.${ruleType}`;
+-      const currentRules: string[] =
+-        currentSettings.forScope(settingScope).settings.permissions?.[
+-          ruleType
+-        ] ?? [];
+-      if (!currentRules.includes(rule)) {
+-        currentSettings.setValue(settingScope, key, [...currentRules, rule]);
+-      }
+-    },
++    onPersistPermissionRule: lockedAgentServiceMode
++      ? undefined
++      : async (scope, ruleType, rule) => {
++          const currentSettings = loadSettings(cwd);
++          const settingScope =
++            scope === 'project' ? SettingScope.Workspace : SettingScope.User;
++          const key = `permissions.${ruleType}`;
++          const currentRules: string[] =
++            currentSettings.forScope(settingScope).settings.permissions?.[
++              ruleType
++            ] ?? [];
++          if (!currentRules.includes(rule)) {
++            currentSettings.setValue(settingScope, key, [
++              ...currentRules,
++              rule,
++            ]);
++          }
++        },
+     toolDiscoveryCommand:
+       bareMode || safeMode ? undefined : settings.tools?.discoveryCommand,
+     toolCallCommand:
+@@ -2363,27 +2401,27 @@ export async function loadCliConfig(
+       format: outputSettingsFormat,
+     },
+     enableManagedAutoMemory:
+-      bareMode || safeMode
++      bareMode || safeMode || lockedAgentServiceMode
+         ? false
+         : (settings.memory?.enableManagedAutoMemory ?? true),
+     enableManagedAutoDream:
+-      bareMode || safeMode
++      bareMode || safeMode || lockedAgentServiceMode
+         ? false
+         : (settings.memory?.enableManagedAutoDream ?? true),
+     enableTeamMemory:
+-      bareMode || safeMode
++      bareMode || safeMode || lockedAgentServiceMode
+         ? false
+         : (settings.memory?.enableTeamMemory ?? false),
+     enableTeamMemorySync:
+-      bareMode || safeMode
++      bareMode || safeMode || lockedAgentServiceMode
+         ? false
+         : (settings.memory?.enableTeamMemorySync ?? false),
+     enableAutoSkill:
+-      bareMode || safeMode
++      bareMode || safeMode || lockedAgentServiceMode
+         ? false
+         : (settings.memory?.enableAutoSkill ?? false),
+     autoSkillConfirm:
+-      bareMode || safeMode
++      bareMode || safeMode || lockedAgentServiceMode
+         ? false
+         : (settings.memory?.autoSkillConfirm ?? true),
+     memoryAgentTimeoutMinutes: settings.memory?.agentTimeoutMinutes,
+diff --git a/packages/cli/src/gemini.test.tsx b/packages/cli/src/gemini.test.tsx
+index 09f7820792dd53bdb8ef28c280428834d2346723..daaef5fc879674db81eedfe5999927a55172072c 100644
+--- a/packages/cli/src/gemini.test.tsx
++++ b/packages/cli/src/gemini.test.tsx
+@@ -14,6 +14,7 @@ import {
+   type MockInstance,
+ } from 'vitest';
+ import {
++  existsSync,
+   mkdirSync,
+   mkdtempSync,
+   readFileSync,
+@@ -21,7 +22,7 @@ import {
+   writeFileSync,
+ } from 'node:fs';
+ import { tmpdir } from 'node:os';
+-import { join } from 'node:path';
++import { join, resolve } from 'node:path';
+ import {
+   createNonInteractivePromptId,
+   main,
+@@ -61,7 +62,16 @@ const lspConfigWatcherMock = vi.hoisted(() => ({
+ 
+ describe('gemini import boundary', () => {
+   it('does not statically import ACP or noninteractive auth branches', () => {
+-    const source = readFileSync('src/gemini.tsx', 'utf8');
++    const monorepoPath = resolve(
++      process.cwd(),
++      'packages/cli/src/gemini.tsx',
++    );
++    const source = readFileSync(
++      existsSync(monorepoPath)
++        ? monorepoPath
++        : resolve(process.cwd(), 'src/gemini.tsx'),
++      'utf8',
++    );
+ 
+     expect(source).not.toContain(
+       "import { runAcpAgent } from './acp-integration/acpAgent.js'",
+@@ -81,6 +91,19 @@ describe('gemini import boundary', () => {
+     expect(source).toMatch(
+       /await import\(\s*['"]\.\/core\/initializer\.js['"]\s*\)/,
+     );
++    expect(source).toContain('argv.foregroundAgentsOnly');
++    expect(source).toContain('skipLoadEnvironment: true');
++    expect(source).toContain('skipWorkspaceSettings: true');
++    expect(source).toContain('workspaceTrusted: false');
++    expect(source).toContain(
++      'isBareMode(argv.bare) || argv.foregroundAgentsOnly',
++    );
++    expect(source).toContain(
++      'config.isSafeMode() ||\n      argv.foregroundAgentsOnly',
++    );
++    expect(source).toMatch(
++      /if \(!isBareMode\(argv\.bare\) && !argv\.foregroundAgentsOnly\) \{\s*initializeLlmOutputLanguage/,
++    );
+   });
+ });
+ 
+diff --git a/packages/cli/src/gemini.tsx b/packages/cli/src/gemini.tsx
+index 72409fdd80ae54d84ee30f170408aa423d463906..aced76c3c497896f488dade645cd1af7a1e66c62 100644
+--- a/packages/cli/src/gemini.tsx
++++ b/packages/cli/src/gemini.tsx
+@@ -430,7 +430,21 @@ export async function main() {
+   markAcpStartup('settingsLoadStart');
+   const settings = isBareMode(argv.bare)
+     ? createMinimalSettings()
+-    : loadSettings();
++    : loadSettings(
++        process.cwd(),
++        argv.foregroundAgentsOnly
++          ? {
++              // The agent-service image supplies one immutable user settings
++              // file. An arbitrary target repository must not replace its
++              // model, sampling, thinking, hooks, tools, or environment with
++              // .qwen/settings.json or .env. Project QWEN.md/source discovery
++              // remains independent and continues to work.
++              skipLoadEnvironment: true,
++              skipWorkspaceSettings: true,
++              workspaceTrusted: false,
++            }
++          : true,
++      );
+   markAcpStartup('settingsLoadEnd');
+ 
+   // Propagate corruption state to child process via env vars so
+@@ -840,13 +854,14 @@ export async function main() {
+   profileCheckpoint('after_sandbox_check');
+ 
+   // Initialize output language file before config loads to ensure it's included in context
+-  if (!isBareMode(argv.bare)) {
++  if (!isBareMode(argv.bare) && !argv.foregroundAgentsOnly) {
+     initializeLlmOutputLanguage(settings.merged.general?.outputLanguage);
+   }
+ 
+   {
+     // Start settings file watcher (skip in bare mode)
+-    const settingsWatcher = isBareMode(argv.bare)
++    const settingsWatcher =
++      isBareMode(argv.bare) || argv.foregroundAgentsOnly
+       ? undefined
+       : new SettingsWatcher(settings);
+     settingsWatcher?.startWatching();
+@@ -898,7 +913,9 @@ export async function main() {
+ 
+     const extensionRefreshState = new ExtensionRefreshState();
+     const extensionFileWatcher =
+-      isBareMode(argv.bare) || config.isSafeMode()
++      isBareMode(argv.bare) ||
++      config.isSafeMode() ||
++      argv.foregroundAgentsOnly
+         ? undefined
+         : new ExtensionFileWatcher(config, undefined, extensionRefreshState);
+     extensionFileWatcher?.startWatching();
+diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
+index 6dfe8f8a93518e147715f534c56f16989e2281f0..aca1ab1d2676d94cd7282bc3703cde3bcdc57eea 100644
+--- a/packages/cli/src/nonInteractiveCli.ts
++++ b/packages/cli/src/nonInteractiveCli.ts
+@@ -150,6 +150,7 @@ function suppressedOutputBody(structuredCaptured: boolean): string {
+ 
+ import {
+   normalizePartList,
++  shouldInterpretSlashCommands,
+   extractPartsFromUserMessage,
+   buildSystemMessage,
+   createToolProgressHandler,
+@@ -1113,7 +1114,7 @@ export async function runNonInteractive(
+ 
+       if (!initialPartList) {
+         let slashHandled = false;
+-        if (isSlashCommand(input)) {
++        if (shouldInterpretSlashCommands(config) && isSlashCommand(input)) {
+           const slashCommandResult = await handleSlashCommand(
+             input,
+             abortController,
+@@ -1321,7 +1322,7 @@ export async function runNonInteractive(
+       const recoveredAgentsNotice =
+         resumedSessionData &&
+         !options.continueInterrupted &&
+-        !isSlashCommand(input)
++        (!shouldInterpretSlashCommands(config) || !isSlashCommand(input))
+           ? config.consumePendingRecoveredAgentsNotice()
+           : null;
+       if (recoveredAgentsNotice) {
+diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
+index d0bb98988061f4f31178cec7569a2dd299a289f9..dc8c34285c38ee6f13978d2709db40b828087d3f 100644
+--- a/packages/cli/src/utils/nonInteractiveHelpers.test.ts
++++ b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
+@@ -24,6 +24,7 @@ import type {
+ import type { JsonOutputAdapterInterface } from '../nonInteractive/io/BaseJsonOutputAdapter.js';
+ import {
+   normalizePartList,
++  shouldInterpretSlashCommands,
+   extractPartsFromUserMessage,
+   computeUsageFromMetrics,
+   buildSystemMessage,
+@@ -33,6 +34,20 @@ import {
+   insertAfterFunctionResponses,
+ } from './nonInteractiveHelpers.js';
+ 
++describe('shouldInterpretSlashCommands', () => {
++  it('treats every locked agent-service prompt as literal task text', () => {
++    const lockedConfig = {
++      getForegroundAgentsOnly: () => true,
++    } as Config;
++    const ordinaryConfig = {
++      getForegroundAgentsOnly: () => false,
++    } as Config;
++
++    expect(shouldInterpretSlashCommands(lockedConfig)).toBe(false);
++    expect(shouldInterpretSlashCommands(ordinaryConfig)).toBe(true);
++  });
++});
++
+ // Mock dependencies
+ vi.mock('../nonInteractiveCliCommands.js', () => ({
+   getAvailableCommands: vi
+@@ -426,9 +441,39 @@ describe('buildSystemMessage', () => {
+       getModel: vi.fn().mockReturnValue('test-model'),
+       getCliVersion: vi.fn().mockReturnValue('1.0.0'),
+       getDebugMode: vi.fn().mockReturnValue(false),
++      getForegroundAgentsOnly: vi.fn().mockReturnValue(false),
++      getSubagentManager: vi.fn().mockReturnValue({
++        listSubagents: vi.fn().mockResolvedValue([]),
++      }),
+     } as unknown as Config;
+   });
+ 
++  it('advertises only callable agents in foreground-only mode', async () => {
++    const config = {
++      ...mockConfig,
++      getForegroundAgentsOnly: vi.fn().mockReturnValue(true),
++      getSubagentManager: vi.fn().mockReturnValue({
++        listSubagents: vi
++          .fn()
++          .mockResolvedValue([
++            { name: 'general-purpose' },
++            { name: 'Explore' },
++            { name: 'statusline-setup' },
++            { name: 'custom-agent' },
++          ]),
++      }),
++    } as unknown as Config;
++
++    const result = await buildSystemMessage(
++      config,
++      'test-session-id',
++      'auto' as PermissionMode,
++    );
++
++    expect(result.agents).toEqual(['general-purpose', 'Explore']);
++    expect(result.slash_commands).toEqual([]);
++  });
++
+   it('should build system message with all fields', async () => {
+     const result = await buildSystemMessage(
+       mockConfig,
+diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/utils/nonInteractiveHelpers.ts
+index b17b1a73a26992ec8a97226931984785a31e24b1..b60acb96ca152f91a759c145f226f179fe95cbf6 100644
+--- a/packages/cli/src/utils/nonInteractiveHelpers.ts
++++ b/packages/cli/src/utils/nonInteractiveHelpers.ts
+@@ -64,6 +64,15 @@ export function normalizePartList(parts: PartListUnion | null): Part[] {
+   return [parts as Part];
+ }
+ 
++/**
++ * The agent-service prompt is always literal task text. Interpreting a leading
++ * slash would let copied workspace commands or workflows execute before the
++ * model and outside the locked native-tool history.
++ */
++export function shouldInterpretSlashCommands(config: Config): boolean {
++  return !config.getForegroundAgentsOnly();
++}
++
+ /**
+  * Extracts user message parts from a CLI protocol message.
+  *
+@@ -229,8 +238,11 @@ export async function buildSystemMessage(
+       }))
+     : [];
+ 
+-  // Load slash commands available in ACP mode
+-  const slashCommands = await loadSlashCommandNames(config);
++  // Locked agent-service prompts are literal task text, so advertising slash
++  // commands would promise an execution surface that is intentionally absent.
++  const slashCommands = config.getForegroundAgentsOnly()
++    ? []
++    : await loadSlashCommandNames(config);
+ 
+   // Load subagent names from config
+   let agentNames: string[] = [];
+@@ -238,6 +250,11 @@ export async function buildSystemMessage(
+     const subagentManager = config.getSubagentManager();
+     const subagents = await subagentManager.listSubagents();
+     agentNames = subagents.map((subagent) => subagent.name);
++    if (config.getForegroundAgentsOnly()) {
++      agentNames = agentNames.filter(
++        (name) => name === 'general-purpose' || name === 'Explore',
++      );
++    }
+   } catch (error) {
+     debugLogger.error('[buildSystemMessage] Failed to load subagents:', error);
+   }
 diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/config.ts
-index 9698a8e..c6d9d0b 100644
+index 9698a8e478ac5c03d4873c5a67333849ca779b09..7a3529c99ec2a2250e3bafa102cb3026fe7f91be 100644
 --- a/packages/core/src/config/config.ts
 +++ b/packages/core/src/config/config.ts
 @@ -962,6 +962,8 @@ export interface ConfigParameters {
@@ -100,7 +563,55 @@ index 9698a8e..c6d9d0b 100644
      this.allowedTools = params.allowedTools;
      this.excludeTools = params.excludeTools;
      this.disabledSlashCommands = Object.freeze([
-@@ -5318,6 +5324,19 @@ export class Config {
+@@ -2698,7 +2704,11 @@ export class Config {
+           (n) => n.trim() !== '' && n.toLowerCase() !== 'none',
+         );
+     recordStartupEvent('config_initialize_extensions_initial_start');
+-    if (!this.isSafeMode() && !this.getBareMode()) {
++    if (
++      !this.isSafeMode() &&
++      !this.getBareMode() &&
++      !this.getForegroundAgentsOnly()
++    ) {
+       await this.extensionManager.refreshCache();
+     } else if (!this.isSafeMode() && explicitExtensionNames.length > 0) {
+       await this.extensionManager.refreshCache({
+@@ -2710,7 +2720,11 @@ export class Config {
+ 
+     // Bare mode and read-only replay helpers skip all hook loading and execution.
+     recordStartupEvent('config_initialize_hooks_start');
+-    if (!options?.skipHooks && !this.getDisableAllHooks()) {
++    if (
++      !options?.skipHooks &&
++      !this.getDisableAllHooks() &&
++      !this.getForegroundAgentsOnly()
++    ) {
+       this.hookSystem = new HookSystem(this);
+       await this.hookSystem.initialize();
+       this.debugLogger.debug('Hook system initialized');
+@@ -2965,7 +2979,7 @@ export class Config {
+ 
+     this.subagentManager = new SubagentManager(this);
+     recordStartupEvent('config_initialize_skills_start');
+-    if (!options?.skipSkillManager) {
++    if (!options?.skipSkillManager && !this.getForegroundAgentsOnly()) {
+       if (this.getAutoSkillEnabled() && this.isTrustedFolder()) {
+         try {
+           const curatorResult = await maybeRunAutoSkillCurator(
+@@ -3011,7 +3025,11 @@ export class Config {
+     }
+ 
+     recordStartupEvent('config_initialize_extensions_final_start');
+-    if (!this.getBareMode() && !this.isSafeMode()) {
++    if (
++      !this.getBareMode() &&
++      !this.isSafeMode() &&
++      !this.getForegroundAgentsOnly()
++    ) {
+       await this.extensionManager.refreshCache();
+     }
+     recordStartupEvent('config_initialize_extensions_final_end');
+@@ -5318,6 +5336,19 @@ export class Config {
      return this.coreTools;
    }
  
@@ -120,8 +631,153 @@ index 9698a8e..c6d9d0b 100644
    /**
     * Returns the merged allow-rules for PermissionManager.
     *
+@@ -7072,7 +7103,12 @@ export class Config {
+    * Check if all hooks are disabled.
+    */
+   getDisableAllHooks(): boolean {
+-    return this.disableAllHooks || this.getBareMode() || this.isSafeMode();
++    return (
++      this.disableAllHooks ||
++      this.getBareMode() ||
++      this.isSafeMode() ||
++      this.getForegroundAgentsOnly()
++    );
+   }
+ 
+   getStopHookBlockingCap(): number {
+@@ -7081,7 +7117,10 @@ export class Config {
+ 
+   getManagedAutoMemoryEnabled(): boolean {
+     return (
+-      this.enableManagedAutoMemory && !this.getBareMode() && !this.isSafeMode()
++      this.enableManagedAutoMemory &&
++      !this.getBareMode() &&
++      !this.isSafeMode() &&
++      !this.getForegroundAgentsOnly()
+     );
+   }
+ 
+@@ -7091,7 +7130,7 @@ export class Config {
+    * for tests / power users ('0' forces off, '1' forces on).
+    */
+   getTeamMemoryEnabled(): boolean {
+-    if (this.getBareMode()) {
++    if (this.getBareMode() || this.getForegroundAgentsOnly()) {
+       return false;
+     }
+     const override = process.env['QWEN_CODE_MEMORY_TEAM'];
+@@ -7111,7 +7150,7 @@ export class Config {
+    * Off by default since it mutates the repo and pushes. Inert in bare mode.
+    */
+   getTeamMemorySyncEnabled(): boolean {
+-    if (this.getBareMode()) {
++    if (this.getBareMode() || this.getForegroundAgentsOnly()) {
+       return false;
+     }
+     const override = process.env['QWEN_CODE_MEMORY_TEAM_SYNC'];
+@@ -7125,17 +7164,29 @@ export class Config {
+   }
+ 
+   isManagedMemoryAvailable(): boolean {
+-    return this.enableManagedAutoMemory && !this.getBareMode();
++    return (
++      this.enableManagedAutoMemory &&
++      !this.getBareMode() &&
++      !this.getForegroundAgentsOnly()
++    );
+   }
+ 
+   getManagedAutoDreamEnabled(): boolean {
+     return (
+-      this.enableManagedAutoDream && !this.getBareMode() && !this.isSafeMode()
++      this.enableManagedAutoDream &&
++      !this.getBareMode() &&
++      !this.isSafeMode() &&
++      !this.getForegroundAgentsOnly()
+     );
+   }
+ 
+   getAutoSkillEnabled(): boolean {
+-    return this.enableAutoSkill && !this.getBareMode() && !this.isSafeMode();
++    return (
++      this.enableAutoSkill &&
++      !this.getBareMode() &&
++      !this.isSafeMode() &&
++      !this.getForegroundAgentsOnly()
++    );
+   }
+ 
+   /**
+@@ -7152,7 +7203,11 @@ export class Config {
+   }
+ 
+   getAutoSkillConfirmEnabled(): boolean {
+-    return this.autoSkillConfirm && !this.getBareMode();
++    return (
++      this.autoSkillConfirm &&
++      !this.getBareMode() &&
++      !this.getForegroundAgentsOnly()
++    );
+   }
+ 
+   /**
+diff --git a/packages/core/src/config/qwen38-agent-service-contract.test.ts b/packages/core/src/config/qwen38-agent-service-contract.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..a97bb32ada8faa59310ead25374bf2c95570ff6e
+--- /dev/null
++++ b/packages/core/src/config/qwen38-agent-service-contract.test.ts
+@@ -0,0 +1,49 @@
++/**
++ * @license
++ * Copyright 2025 Google LLC
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import { existsSync, readFileSync } from 'node:fs';
++import { resolve } from 'node:path';
++import { describe, expect, it } from 'vitest';
++
++describe('Qwen3.8 locked agent-service initialization contract', () => {
++  it('disables ambient extension, hook, and skill initialization', () => {
++    const monorepoPath = resolve(
++      process.cwd(),
++      'packages/core/src/config/config.ts',
++    );
++    const source = readFileSync(
++      existsSync(monorepoPath)
++        ? monorepoPath
++        : resolve(process.cwd(), 'src/config/config.ts'),
++      'utf8',
++    );
++
++    expect(source).toMatch(
++      /!this\.isSafeMode\(\)\s*&&\s*!this\.getBareMode\(\)\s*&&\s*!this\.getForegroundAgentsOnly\(\)/,
++    );
++    expect(source).toMatch(
++      /!options\?\.skipHooks\s*&&\s*!this\.getDisableAllHooks\(\)\s*&&\s*!this\.getForegroundAgentsOnly\(\)/,
++    );
++    expect(source).toContain(
++      '!options?.skipSkillManager && !this.getForegroundAgentsOnly()',
++    );
++    expect(source).toMatch(
++      /!this\.getBareMode\(\)\s*&&\s*!this\.isSafeMode\(\)\s*&&\s*!this\.getForegroundAgentsOnly\(\)/,
++    );
++    expect(source).toMatch(
++      /getManagedAutoMemoryEnabled\(\)[\s\S]*?!this\.getForegroundAgentsOnly\(\)/,
++    );
++    expect(source).toMatch(
++      /isManagedMemoryAvailable\(\)[\s\S]*?!this\.getForegroundAgentsOnly\(\)/,
++    );
++    expect(source).toMatch(
++      /getManagedAutoDreamEnabled\(\)[\s\S]*?!this\.getForegroundAgentsOnly\(\)/,
++    );
++    expect(source).toMatch(
++      /getAutoSkillEnabled\(\)[\s\S]*?!this\.getForegroundAgentsOnly\(\)/,
++    );
++  });
++});
 diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core/contentGenerator.ts
-index 7216c26..4a22651 100644
+index 7216c26e3886929d382e7ab9039eb0c2d9feb86c..4a2265146dd9b82df4d74bc27a9f7075126d5a03 100644
 --- a/packages/core/src/core/contentGenerator.ts
 +++ b/packages/core/src/core/contentGenerator.ts
 @@ -48,11 +48,27 @@ export interface ContentGenerator {
@@ -188,7 +844,7 @@ index 7216c26..4a22651 100644
      request: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
-index 5ae5029..657b09a 100644
+index 5ae502915f145ed3fd21191f5ed6791d33cad21d..657b09a7d7fa218f73b6dbd952fae02812889a3a 100644
 --- a/packages/core/src/core/geminiChat.test.ts
 +++ b/packages/core/src/core/geminiChat.test.ts
 @@ -5253,6 +5253,77 @@ describe('GeminiChat', async () => {
@@ -375,7 +1031,7 @@ index 5ae5029..657b09a 100644
        const xml =
          '<invoke name="read_file"><parameter name="file_path">a.ts</parameter></invoke>';
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
-index 8051292..314cfa3 100644
+index 80512921e716a98465ebb4685d99df52c0330940..314cfa3715d69b287701b7496a22c71edf5c0cfd 100644
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
 @@ -48,6 +48,7 @@ import {
@@ -678,7 +1334,7 @@ index 8051292..314cfa3 100644
        !hasToolCall &&
        hasFinishReason &&
 diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts b/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
-index 6383d97..a2e866f 100644
+index 6383d97e70eb302de3c8d9d1f500e73e281546ce..a2e866ffb1402c500d326ad50a4f3cbf81e2d444 100644
 --- a/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
 +++ b/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
 @@ -37,6 +37,7 @@ import { subagentNameContext } from '../../utils/subagentNameContext.js';
@@ -709,10 +1365,174 @@ index 6383d97..a2e866f 100644
      req: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
 diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/packages/core/src/core/openaiContentGenerator/converter.test.ts
-index 9c65b85..ab14499 100644
+index 9c65b8532081bf40ba6bfb99f1b00e7e7460726a..e7f565cfbd1ab53ab3726116d9c8755d3d5b49d3 100644
 --- a/packages/core/src/core/openaiContentGenerator/converter.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/converter.test.ts
-@@ -3732,6 +3732,79 @@ describe('OpenAIContentConverter', () => {
+@@ -1994,7 +1994,90 @@ describe('OpenAIContentConverter', () => {
+       ).toBe('data:image/png;base64,aaa');
+     });
+ 
+-    it('should convert function responses with fileData to tool message with embedded image_url', () => {
++    it('preserves text-image-text chronology inside the originating tool result', () => {
++      const request: GenerateContentParameters = {
++        model: 'models/test',
++        contents: [
++          {
++            role: 'model',
++            parts: [
++              { functionCall: { id: 'c1', name: 'read_file', args: {} } },
++            ],
++          },
++          {
++            role: 'user',
++            parts: [
++              {
++                functionResponse: {
++                  id: 'c1',
++                  name: 'read_file',
++                  response: { output: 'before-image' },
++                  parts: [
++                    { inlineData: { mimeType: 'image/png', data: 'aaa' } },
++                    { text: 'after-image' },
++                  ],
++                },
++              },
++            ],
++          },
++        ] as Content[],
++      };
++
++      const messages = converter.convertGeminiRequestToOpenAI(request, {
++        ...requestContext,
++        splitToolMedia: false,
++        toolResultContentFormat: 'parts',
++      });
++
++      expect(messages).toHaveLength(2);
++      expect(messages[1].role).toBe('tool');
++      expect(messages.filter((message) => message.role === 'user')).toEqual([]);
++      expect(messages[1].content).toEqual([
++        { type: 'text', text: 'before-image' },
++        {
++          type: 'image_url',
++          image_url: { url: 'data:image/png;base64,aaa' },
++        },
++        { type: 'text', text: 'after-image' },
++      ]);
++    });
++
++    it('rejects non-PNG and non-inline image transports before request egress', () => {
++      const inlineJpeg: GenerateContentParameters = {
++        model: 'models/test',
++        contents: [
++          {
++            role: 'user',
++            parts: [{ inlineData: { mimeType: 'image/jpeg', data: 'aaa' } }],
++          },
++        ],
++      };
++      const remotePng: GenerateContentParameters = {
++        model: 'models/test',
++        contents: [
++          {
++            role: 'user',
++            parts: [
++              {
++                fileData: {
++                  mimeType: 'image/png',
++                  fileUri: 'https://example.invalid/image.png',
++                },
++              },
++            ],
++          },
++        ],
++      };
++
++      expect(() =>
++        converter.convertGeminiRequestToOpenAI(inlineJpeg, requestContext),
++      ).toThrow(/only inline image\/png/);
++      expect(() =>
++        converter.convertGeminiRequestToOpenAI(remotePng, requestContext),
++      ).toThrow(/forbids file\/remote image references/);
++    });
++
++    it('rejects image fileData inside a function response', () => {
+       const request: GenerateContentParameters = {
+         model: 'models/test',
+         contents: [
+@@ -2033,29 +2116,9 @@ describe('OpenAIContentConverter', () => {
+         ],
+       };
+ 
+-      const messages = converter.convertGeminiRequestToOpenAI(
+-        request,
+-        requestContext,
+-      );
+-
+-      // Should have tool message with both text and image content
+-      const toolMessage = messages.find((message) => message.role === 'tool');
+-      expect(toolMessage).toBeDefined();
+-      expect(Array.isArray(toolMessage?.content)).toBe(true);
+-      const contentArray = toolMessage?.content as Array<{
+-        type: string;
+-        text?: string;
+-        image_url?: { url: string };
+-      }>;
+-      expect(contentArray).toHaveLength(2);
+-      expect(contentArray[0].type).toBe('text');
+-      expect(contentArray[0].text).toBe('File content');
+-      expect(contentArray[1].type).toBe('image_url');
+-      expect(contentArray[1].image_url?.url).toBe('base64imagedata');
+-
+-      // No separate user message should be created
+-      const userMessage = messages.find((message) => message.role === 'user');
+-      expect(userMessage).toBeUndefined();
++      expect(() =>
++        converter.convertGeminiRequestToOpenAI(request, requestContext),
++      ).toThrow(/forbids file\/remote image references/);
+     });
+ 
+     it('should convert PDF inlineData to tool message with embedded input_file', () => {
+@@ -2193,7 +2256,7 @@ describe('OpenAIContentConverter', () => {
+       expect(userMessage).toBeUndefined();
+     });
+ 
+-    it('should convert image fileData URL to tool message with embedded image_url', () => {
++    it('rejects remote image fileData URLs', () => {
+       const request: GenerateContentParameters = {
+         model: 'models/test',
+         contents: [
+@@ -2234,26 +2297,9 @@ describe('OpenAIContentConverter', () => {
+         ],
+       };
+ 
+-      const messages = converter.convertGeminiRequestToOpenAI(
+-        request,
+-        requestContext,
+-      );
+-
+-      const toolMessage = messages.find((message) => message.role === 'tool');
+-      expect(toolMessage).toBeDefined();
+-      expect(Array.isArray(toolMessage?.content)).toBe(true);
+-      const contentArray = toolMessage?.content as Array<{
+-        type: string;
+-        text?: string;
+-        image_url?: { url: string };
+-      }>;
+-      expect(contentArray).toHaveLength(2);
+-      expect(contentArray[0].type).toBe('text');
+-      expect(contentArray[0].text).toBe('Image content');
+-      expect(contentArray[1].type).toBe('image_url');
+-      expect(contentArray[1].image_url?.url).toBe(
+-        'https://upload.wikimedia.org/wikipedia/commons/a/a7/Camponotus_flavomarginatus_ant.jpg',
+-      );
++      expect(() =>
++        converter.convertGeminiRequestToOpenAI(request, requestContext),
++      ).toThrow(/forbids file\/remote image references/);
+     });
+ 
+     it('should convert PDF fileData URL to tool message with embedded file', () => {
+@@ -3732,6 +3778,79 @@ describe('OpenAIContentConverter', () => {
        expect(response.modelVersion).toBe('test-model');
      });
  
@@ -792,7 +1612,7 @@ index 9c65b85..ab14499 100644
      it('omits the input/output breakdown when only total tokens are reported', () => {
        const response = converter.convertOpenAIResponseToGemini(
          {
-@@ -6803,11 +6876,15 @@ describe('Truncated tool call detection in streaming', () => {
+@@ -6803,11 +6922,15 @@ describe('Truncated tool call detection in streaming', () => {
      converter = OpenAIContentConverter;
    });
  
@@ -809,7 +1629,7 @@ index 9c65b85..ab14499 100644
        toolCallParser: new StreamingToolCallParser(),
      };
    }
-@@ -6825,9 +6902,10 @@ describe('Truncated tool call detection in streaming', () => {
+@@ -6825,9 +6948,10 @@ describe('Truncated tool call detection in streaming', () => {
        arguments: string;
      }>,
      finishReason: string,
@@ -821,7 +1641,7 @@ index 9c65b85..ab14499 100644
  
      // Feed argument chunks (no finish_reason yet)
      for (const tc of toolCallChunks) {
-@@ -7328,6 +7406,72 @@ describe('Truncated tool call detection in streaming', () => {
+@@ -7328,6 +7452,70 @@ describe('Truncated tool call detection in streaming', () => {
      });
    });
  
@@ -843,9 +1663,7 @@ index 9c65b85..ab14499 100644
 +    expect(result.candidates?.[0]?.finishReason).toBe(FinishReason.MAX_TOKENS);
 +    expect(result.functionCalls).toBeUndefined();
 +    expect(
-+      result.candidates?.[0]?.content?.parts?.some(
-+        (part) => part.functionCall,
-+      ),
++      result.candidates?.[0]?.content?.parts?.some((part) => part.functionCall),
 +    ).toBe(false);
 +  });
 +
@@ -894,11 +1712,69 @@ index 9c65b85..ab14499 100644
    it('should detect truncation with multi-chunk streaming arguments', () => {
      // Feed arguments in multiple small chunks like real streaming
      const conv = OpenAIContentConverter;
+@@ -7497,24 +7685,19 @@ describe('modality filtering', () => {
+     expect(parts[0].text).toContain('does not support image input');
+   });
+ 
+-  it('keeps BMP image data when image modality is enabled', () => {
++  it('rejects BMP image data when image modality is enabled', () => {
+     const conv = OpenAIContentConverter;
+     const request = makeRequest([
+       {
+         inlineData: { mimeType: 'image/bmp', data: 'abc123' },
+       } as unknown as Part,
+     ]);
+-    const messages = conv.convertGeminiRequestToOpenAI(
+-      request,
+-      makeRequestContext('gpt-4o', { image: true }),
+-    );
+-    const parts = getUserContentParts(messages) as Array<{
+-      type: string;
+-      image_url?: { url: string };
+-    }>;
+-    expect(parts).toHaveLength(1);
+-    expect(parts[0].type).toBe('image_url');
+-    expect(parts[0].image_url?.url).toBe('data:image/bmp;base64,abc123');
++    expect(() =>
++      conv.convertGeminiRequestToOpenAI(
++        request,
++        makeRequestContext('gpt-4o', { image: true }),
++      ),
++    ).toThrow(/only inline image\/png/);
+   });
+ 
+   it('replaces PDF with placeholder when pdf modality is disabled', () => {
 diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packages/core/src/core/openaiContentGenerator/converter.ts
-index ffd8dfc..48a503d 100644
+index ffd8dfcfd611ee3eedcb9d272bdcd6a6e95aba02..01455bc0456698a2b7050d3fbf0ee1bd7997d6ff 100644
 --- a/packages/core/src/core/openaiContentGenerator/converter.ts
 +++ b/packages/core/src/core/openaiContentGenerator/converter.ts
-@@ -1236,13 +1236,58 @@ export function convertOpenAIResponseToGemini(
+@@ -882,6 +882,11 @@ function createMediaContentPart(
+           requestContext,
+         );
+       }
++      if (mimeType !== 'image/png') {
++        throw new Error(
++          `The Qwen3.8 agent image contract accepts only inline image/png data; received ${mimeType}.`,
++        );
++      }
+       const dataUrl = `data:${mimeType};base64,${part.inlineData.data}`;
+       return {
+         type: 'image_url' as const,
+@@ -963,10 +968,9 @@ function createMediaContentPart(
+           requestContext,
+         );
+       }
+-      return {
+-        type: 'image_url' as const,
+-        image_url: { url: fileUri },
+-      };
++      throw new Error(
++        `The Qwen3.8 agent image contract forbids file/remote image references (${filename}); use validated inline image/png data.`,
++      );
+     }
+ 
+     if (mimeType === 'application/pdf') {
+@@ -1236,13 +1240,58 @@ export function convertOpenAIResponseToGemini(
      // Handle text content
      parts.push(...textParts);
  
@@ -960,7 +1836,7 @@ index ffd8dfc..48a503d 100644
            }
  
            parts.push({
-@@ -1666,14 +1711,28 @@ export function convertOpenAIChunkToGemini(
+@@ -1666,14 +1715,28 @@ export function convertOpenAIChunkToGemini(
      }
  
      const toolCallWithoutName = toolCallParser.hasNamelessToolCall();
@@ -992,7 +1868,7 @@ index ffd8dfc..48a503d 100644
      if (
        choice.finish_reason &&
        requestContext.pendingThinkingTagCandidate?.closingTagName
-@@ -1697,9 +1756,24 @@ export function convertOpenAIChunkToGemini(
+@@ -1697,9 +1760,24 @@ export function convertOpenAIChunkToGemini(
      }
  
      if (
@@ -1020,7 +1896,7 @@ index ffd8dfc..48a503d 100644
            completedToolCalls.length === 0))
      ) {
 diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
-index f4166d4..c5ee9a3 100644
+index f4166d4acf86580baff7cb8c1542d9055cbbf854..c5ee9a37138067d089a5da116e83ec06d7d8bde0 100644
 --- a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
 +++ b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
 @@ -1,4 +1,7 @@
@@ -1048,7 +1924,7 @@ index f4166d4..c5ee9a3 100644
    ): Promise<EmbedContentResponse> {
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts
 new file mode 100644
-index 0000000..9e8125a
+index 0000000000000000000000000000000000000000..9e8125a785a73374088ffbdf7665c840a9414823
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts
 @@ -0,0 +1,64 @@
@@ -1117,7 +1993,7 @@ index 0000000..9e8125a
 +  });
 +});
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-index a7aaf90..a5d7caa 100644
+index a7aaf90244b6df047db5c37b2ee5b5d4bb30be99..a5d7caa8edeefdcc3d3f6b3ed79842f7256037e0 100644
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 @@ -11,6 +11,7 @@ import {
@@ -1261,7 +2137,7 @@ index a7aaf90..a5d7caa 100644
          providerOverrides.splitToolMedia ??
          this.contentGeneratorConfig.splitToolMedia ??
 diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/core/src/core/openaiContentGenerator/types.ts
-index 134ecd7..1cc33ff 100644
+index 134ecd700ea51a17aa922f835261bd6848141d99..1cc33ffccdf72130df49831d44af96201682c39b 100644
 --- a/packages/core/src/core/openaiContentGenerator/types.ts
 +++ b/packages/core/src/core/openaiContentGenerator/types.ts
 @@ -43,6 +43,7 @@ export interface RequestContext {
@@ -1273,7 +2149,7 @@ index 134ecd7..1cc33ff 100644
    responseParsingOptions?: OpenAIResponseParsingOptions;
    taggedThinkingParser?: TaggedThinkingParser;
 diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core/tokenLimits.test.ts
-index 6d72689..c148861 100644
+index 6d72689d858ee621c5e26ea60c9ac2df12ba835b..c148861cf010e52ad6bfa5b9ac22ed05d08f53f5 100644
 --- a/packages/core/src/core/tokenLimits.test.ts
 +++ b/packages/core/src/core/tokenLimits.test.ts
 @@ -4,6 +4,7 @@ import {
@@ -1312,7 +2188,7 @@ index 6d72689..c148861 100644
    it('clips a model advertising more than the ceiling down to it', () => {
      // deepseek-v4 advertises 384K output → clipped to OUTPUT_TOKEN_CEILING.
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
-index 4b7c7f6..d246909 100644
+index 4b7c7f6232bc38eac507f453234e3a77136b0cef..d246909ddd1985f8fab69013ee5b131708874df2 100644
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
 @@ -75,6 +75,36 @@ export function clampOutputTokensToWindow(
@@ -1353,7 +2229,7 @@ index 4b7c7f6..d246909 100644
    raw: string | undefined,
  ): number | undefined {
 diff --git a/packages/core/src/models/constants.ts b/packages/core/src/models/constants.ts
-index 4f55526..0280a42 100644
+index 4f55526cdfd16cba68c84e7ee78fd89b0d87d2af..0280a42b9ec91643064f8ba5f1703de6937b6a80 100644
 --- a/packages/core/src/models/constants.ts
 +++ b/packages/core/src/models/constants.ts
 @@ -35,6 +35,8 @@ export const MODEL_GENERATION_CONFIG_FIELDS = [
@@ -1366,7 +2242,7 @@ index 4f55526..0280a42 100644
    'splitToolMedia',
    'toolResultContentFormat',
 diff --git a/packages/core/src/models/content-generator-config.ts b/packages/core/src/models/content-generator-config.ts
-index 751d7aa..af2b7c7 100644
+index 751d7aa7e1307e9980e6820271826b2927379d22..af2b7c731a946f28d7e54f057b833d89f3cd5dc9 100644
 --- a/packages/core/src/models/content-generator-config.ts
 +++ b/packages/core/src/models/content-generator-config.ts
 @@ -89,6 +89,8 @@ export function buildAgentContentGeneratorConfig(
@@ -1393,7 +2269,7 @@ index 751d7aa..af2b7c7 100644
        (targetConfig as any)[field] = registryValue;
      }
 diff --git a/packages/core/src/models/types.ts b/packages/core/src/models/types.ts
-index dd84b36..eebbb82 100644
+index dd84b360dd2ed672db1ff829948284a9a645019d..eebbb8266e3491f1c887d47de3d3d4c89392bc49 100644
 --- a/packages/core/src/models/types.ts
 +++ b/packages/core/src/models/types.ts
 @@ -44,6 +44,8 @@ export type ModelGenerationConfig = Pick<
@@ -1406,7 +2282,7 @@ index dd84b36..eebbb82 100644
    | 'modalities'
    | 'splitToolMedia'
 diff --git a/packages/core/src/permissions/permission-manager.test.ts b/packages/core/src/permissions/permission-manager.test.ts
-index 15964b8..e3f20c6 100644
+index 15964b89746e1e733b324b6db919f72c007d04ab..e3f20c665282e3b2da0f81bbf0d02a00645788c1 100644
 --- a/packages/core/src/permissions/permission-manager.test.ts
 +++ b/packages/core/src/permissions/permission-manager.test.ts
 @@ -1627,6 +1627,7 @@ function makeConfig(
@@ -1447,7 +2323,7 @@ index 15964b8..e3f20c6 100644
  
    describe('session rules', () => {
 diff --git a/packages/core/src/permissions/permission-manager.ts b/packages/core/src/permissions/permission-manager.ts
-index 8e53833..bfc063a 100644
+index 8e53833e0995b3bf164b12792d0f533c513da344..bfc063a8a79cf081b27a88e001011c5de948d8ab 100644
 --- a/packages/core/src/permissions/permission-manager.ts
 +++ b/packages/core/src/permissions/permission-manager.ts
 @@ -88,6 +88,8 @@ export interface PermissionManagerConfig {
@@ -1495,7 +2371,7 @@ index 8e53833..bfc063a 100644
      if (!this.isCoreTool(canonicalName)) {
        const decision = await this.evaluate({ toolName: canonicalName });
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..ab4e9b8 100644
+index 6d3fb50ffbd2178e70b30b7bd221e40aacee875f..ab4e9b8d81b9c58bce29daf2657e8615a16ee435 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
 @@ -205,6 +205,7 @@ describe('AgentTool', () => {
@@ -1559,7 +2435,7 @@ index 6d3fb50..ab4e9b8 100644
        const schema = agentTool.schema;
        const properties = schema.parametersJsonSchema as {
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..8ea8b86 100644
+index 4bcea69016900455ceac4840a9cef2f19c615372..8ea8b86e9d9f30e7721320b027c9c9a66c581ca8 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -1004,8 +1004,49 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
@@ -1673,56 +2549,808 @@ index 4bcea69..8ea8b86 100644
            ? true
            : (this.params.run_in_background ??
              (subagentConfig.background === true ||
-diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
-index d0bb989..9e92f03 100644
---- a/packages/cli/src/utils/nonInteractiveHelpers.test.ts
-+++ b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
-@@ -426,5 +426,32 @@ describe('buildSystemMessage', () => {
-       getModel: vi.fn().mockReturnValue('test-model'),
-       getCliVersion: vi.fn().mockReturnValue('1.0.0'),
-       getDebugMode: vi.fn().mockReturnValue(false),
-+      getForegroundAgentsOnly: vi.fn().mockReturnValue(false),
-+      getSubagentManager: vi.fn().mockReturnValue({
-+        listSubagents: vi.fn().mockResolvedValue([]),
+diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read-file.ts
+index ab8f8f0137e5f1685f405c607690ac122f713430..ee052a59dcf32deeee1b9fbc10107cce29c6242e 100644
+--- a/packages/core/src/tools/read-file.ts
++++ b/packages/core/src/tools/read-file.ts
+@@ -540,7 +540,7 @@ export class ReadFileTool extends BaseDeclarativeTool<
+     super(
+       ReadFileTool.Name,
+       ToolDisplayNames.READ_FILE,
+-      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. If the file is large, the content will be truncated. The tool's response will clearly indicate if truncation has occurred and will provide details on how to read more of the file using the 'offset' and 'limit' parameters. Handles text, images (PNG, JPG, GIF, WEBP, SVG, BMP), PDF files, and Jupyter notebooks (.ipynb). For text files, it can read specific line ranges. For PDF files, use the 'pages' parameter to extract specific page ranges as text (e.g. '1-5'). Max ${PDF_MAX_PAGES_PER_READ} pages per request. Large PDFs cannot be read all at once when the model does not support native PDF input; retry with narrower page ranges if the tool reports a PDF is too large. With a configured vision bridge, failed PDF text extraction or an irreducibly large single page may be transcribed automatically, at most four pages per call; this transcription is lossy and marked as untrusted. This tool can read Jupyter notebooks (.ipynb) and returns structured cell content with outputs.`,
++      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. If a text file is large, the content will be truncated and the response will explain how to continue with 'offset' and 'limit'. Image input has one fail-closed full-quality contract: a static PNG with 8-bit RGB or RGBA source pixels, at most 16,777,216 pixels, aspect ratio at most 30:1, and at most 100 MB on disk. The exact original PNG bytes are sent losslessly with no resize, crop, orientation, JPEG transcode, or decoder fallback. JPEG, WebP, GIF/APNG, BMP, grayscale, palette, 16-bit, RGB tRNS, over-limit, and corrupt image inputs are rejected. PDF input is text extraction only; PDF pages are never silently rendered into lossy image substitutes. Use the 'pages' parameter to extract a specific PDF range as text (e.g. '1-5'), at most ${PDF_MAX_PAGES_PER_READ} pages per request. Large or scanned PDFs fail with explicit narrower-range or conversion guidance. Jupyter notebooks (.ipynb) return structured cell content with outputs.`,
+       Kind.Read,
+       {
+         properties: {
+diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/fileUtils.ts
+index 211be6ca6c6ab86d1a43d4242e38c6e2a3ed1214..daca71422149b1e0c29d8d853ec4b0ae3ad16364 100644
+--- a/packages/core/src/utils/fileUtils.ts
++++ b/packages/core/src/utils/fileUtils.ts
+@@ -53,11 +53,6 @@ import {
+ } from './image-view.js';
+ 
+ const debugLogger = createDebugLogger('FILE_UTILS');
+-const CANONICAL_IMAGE_MIME_TYPES = new Set([
+-  'image/jpeg',
+-  'image/png',
+-  'image/webp',
+-]);
+ 
+ // Default values for encoding and separator format
+ export const DEFAULT_ENCODING: BufferEncoding = 'utf-8';
+@@ -1115,23 +1110,20 @@ export async function processSingleFileContent(
+       mime.getType(filePath) ??
+       MIME_LITE_MISSING_VIDEO_TYPES.get(path.extname(filePath).toLowerCase()) ??
+       'application/octet-stream';
+-    const shouldRenderImageOverview =
+-      fileType === 'image' && CANONICAL_IMAGE_MIME_TYPES.has(mediaMimeType);
++    // In this deployment every raster image enters the one strict PNG path.
++    // Do not let an extension/MIME mismatch bypass validation and reach a
++    // forward-verbatim fallback.
++    const shouldRenderImageOverview = fileType === 'image';
+     const displayName = path.basename(displayPath);
+     // Use optional call (`?.()`) so mock Configs that don't implement
+     // getContentGeneratorConfig still work for non-media file types.
+     const modalities: InputModalities =
+       config.getContentGeneratorConfig?.()?.modalities ?? {};
+ 
+-    // Vision-capable main model, explicit read (not `@`-reference): when text
+-    // extraction overflows or fails, render pages to images for the model
+-    // itself. Deliberately keyed on `modalities.image` (not `!modalities.pdf`)
+-    // so an image+pdf model's dense `pages` read can still be rescued; the
+-    // native whole-PDF base64 branch runs earlier and is unaffected.
+-    const willRenderPdfImages =
+-      fileType === 'pdf' &&
+-      !!modalities.image &&
+-      largePdfBehavior !== 'reference';
++    // PDF is text-only in the one supported profile. Rendering a PDF page
++    // would create a lossy JPEG outside the static original-PNG contract and
++    // would be an unannounced modality fallback, so it is never attempted.
++    const willRenderPdfImages = false;
+     // Text-only main model on a bridge-capable path: prepare bounded PDF page
+     // images for the caller to transcribe. `preserveUnsupportedImage` also
+     // keeps ordinary images available to a bridge-capable caller, while
+@@ -1461,77 +1453,59 @@ export async function processSingleFileContent(
+         };
+       }
+       case 'image': {
+-        if (shouldRenderImageOverview) {
+-          try {
+-            const view = await renderImageOverview(
+-              filePath,
+-              signal ?? new AbortController().signal,
+-            );
+-            return {
+-              llmContent: [
+-                {
+-                  text:
+-                    `Image overview: ${view.outputWidth}x${view.outputHeight}; ` +
+-                    `oriented source: ${view.sourceWidth}x${view.sourceHeight}. ` +
+-                    `If details are too small, use tool_search for "zoom image", then ` +
+-                    `call zoom_image with coordinates normalized from 0 to 1000.`,
+-                },
+-                {
+-                  inlineData: {
+-                    data: view.bytes.toString('base64'),
+-                    mimeType: view.mimeType,
+-                    displayName,
+-                  },
+-                },
+-              ],
+-              returnDisplay: `Read image file: ${relativePathForDisplay}`,
+-            };
+-          } catch (error) {
+-            signal?.throwIfAborted();
+-            if (error instanceof ImageViewError) {
+-              // Non-size render failures (sharp missing, animated,
+-              // unsupported, or corrupt input) fall through to the legacy
+-              // inline-bytes branch below rather than hard-failing the read,
+-              // matching main's forward-verbatim behaviour. The size codes
+-              // stay a hard error because that branch cannot shrink them.
+-              if (
+-                error.code === 'source_too_large' ||
+-                error.code === 'output_too_large'
+-              ) {
+-                const userMessage = error.message.replace(`: ${filePath}`, '');
+-                return {
+-                  llmContent: userMessage,
+-                  returnDisplay: userMessage,
+-                  error: error.message,
+-                  errorType: ToolErrorType.FILE_TOO_LARGE,
+-                };
+-              }
+-            } else {
+-              throw error;
+-            }
+-          }
++        if (!shouldRenderImageOverview) {
++          return {
++            llmContent:
++              'Raster image did not enter the required PNG validator.',
++            returnDisplay: 'Raster image validation failed.',
++            error: `Internal image classification error: ${displayPath}`,
++            errorType: ToolErrorType.READ_CONTENT_FAILURE,
++          };
+         }
+-        const contentBuffer = await fs.promises.readFile(filePath);
+-        const base64Data = contentBuffer.toString('base64');
+-        const base64SizeInMB = base64Data.length / (1024 * 1024);
+-        if (base64SizeInMB > 9.9) {
++        try {
++          const view = await renderImageOverview(
++            filePath,
++            signal ?? new AbortController().signal,
++          );
+           return {
+-            llmContent: `File exceeds the 10MB data URI limit after base64 encoding (${base64SizeInMB.toFixed(2)}MB encoded).`,
+-            returnDisplay: `File exceeds the 10MB data URI limit after base64 encoding.`,
+-            error: `File exceeds the 10MB data URI limit after base64 encoding: ${displayPath} (${base64SizeInMB.toFixed(2)}MB encoded)`,
+-            errorType: ToolErrorType.FILE_TOO_LARGE,
++            llmContent: [
++              {
++                text:
++                  `Full-quality original PNG: ${view.outputWidth}x${view.outputHeight}; ` +
++                  'lossless source bytes preserved exactly; no resize, crop, orientation, or transcode.',
++              },
++              {
++                inlineData: {
++                  data: view.bytes.toString('base64'),
++                  mimeType: view.mimeType,
++                  displayName,
++                },
++              },
++            ],
++            returnDisplay: `Read full-quality PNG: ${relativePathForDisplay}`,
++          };
++        } catch (error) {
++          signal?.throwIfAborted();
++          if (!(error instanceof ImageViewError)) throw error;
++          const userMessage = error.message.replace(`: ${filePath}`, '');
++          const errorType =
++            error.code === 'source_too_large' ||
++            error.code === 'output_too_large' ||
++            error.code === 'pixel_limit'
++              ? ToolErrorType.FILE_TOO_LARGE
++              : error.code === 'aspect_ratio' ||
++                  error.code === 'unsupported_image' ||
++                  error.code === 'animated_image' ||
++                  error.code === 'invalid_png_contract'
++                ? ToolErrorType.INVALID_TOOL_PARAMS
++                : ToolErrorType.READ_CONTENT_FAILURE;
++          return {
++            llmContent: userMessage,
++            returnDisplay: userMessage,
++            error: error.message,
++            errorType,
+           };
+         }
+-        return {
+-          llmContent: {
+-            inlineData: {
+-              data: base64Data,
+-              mimeType: mediaMimeType,
+-              displayName,
+-            },
+-          },
+-          returnDisplay: `Read image file: ${relativePathForDisplay}`,
+-        };
+       }
+       case 'audio':
+       case 'video': {
+diff --git a/packages/core/src/utils/image-view.test.ts b/packages/core/src/utils/image-view.test.ts
+index fa1aa32ac68f49e12bafa32c2ddb2719d7072066..a251cc04d2aa5ec46715e4fc0de734078c3e8071 100644
+--- a/packages/core/src/utils/image-view.test.ts
++++ b/packages/core/src/utils/image-view.test.ts
+@@ -26,7 +26,7 @@ describe('image views', () => {
+     await fs.rm(root, { recursive: true, force: true });
+   });
+ 
+-  it('keeps a small overview at its oriented source size', async () => {
++  it('returns the original small PNG bytes without transcoding', async () => {
+     const filePath = path.join(root, 'small.png');
+     await sharp({
+       create: {
+@@ -39,11 +39,12 @@ describe('image views', () => {
+       .png()
+       .toFile(filePath);
+ 
++    const original = await fs.readFile(filePath);
+     const view = await renderImageOverview(filePath, signal);
+     const metadata = await sharp(view.bytes).metadata();
+ 
+     expect(view).toMatchObject({
+-      mimeType: 'image/jpeg',
++      mimeType: 'image/png',
+       sourceWidth: 20,
+       sourceHeight: 10,
+       selectedWidth: 20,
+@@ -51,10 +52,11 @@ describe('image views', () => {
+       outputWidth: 20,
+       outputHeight: 10,
+     });
+-    expect(metadata).toMatchObject({ width: 20, height: 10, format: 'jpeg' });
++    expect(metadata).toMatchObject({ width: 20, height: 10, format: 'png' });
++    expect(view.bytes.equals(original)).toBe(true);
+   });
+ 
+-  it('bounds a large overview by the shared edge and patch budget', async () => {
++  it('keeps a large in-contract PNG at full source resolution', async () => {
+     const filePath = path.join(root, 'large.png');
+     await sharp({
+       create: {
+@@ -67,15 +69,160 @@ describe('image views', () => {
+       .png()
+       .toFile(filePath);
+ 
++    const original = await fs.readFile(filePath);
+     const view = await renderImageOverview(filePath, signal);
+ 
+-    expect(Math.max(view.outputWidth, view.outputHeight)).toBeLessThanOrEqual(
+-      1568,
+-    );
+-    expect(
+-      Math.ceil(view.outputWidth / 28) * Math.ceil(view.outputHeight / 28),
+-    ).toBeLessThanOrEqual(1568);
+-    expect(view.bytes.length).toBeLessThanOrEqual(9 * 1024 * 1024);
++    expect(view).toMatchObject({
++      mimeType: 'image/png',
++      sourceWidth: 4000,
++      sourceHeight: 2000,
++      outputWidth: 4000,
++      outputHeight: 2000,
++    });
++    expect(view.bytes.equals(original)).toBe(true);
++  });
++
++  it('accepts original 8-bit RGBA PNG bytes', async () => {
++    const filePath = path.join(root, 'alpha.png');
++    await sharp({
++      create: {
++        width: 64,
++        height: 64,
++        channels: 4,
++        background: { r: 10, g: 20, b: 30, alpha: 0.5 },
++      },
++    })
++      .png()
++      .toFile(filePath);
++
++    const original = await fs.readFile(filePath);
++    const view = await renderImageOverview(filePath, signal);
++    expect(view.mimeType).toBe('image/png');
++    expect(view.bytes.equals(original)).toBe(true);
++  });
++
++  it('rejects a source above the exact 16,777,216-pixel contract', async () => {
++    const filePath = path.join(root, 'too-many-pixels.png');
++    await sharp({
++      create: {
++        width: 4097,
++        height: 4096,
++        channels: 3,
++        background: '#804020',
++      },
++    })
++      .png()
++      .toFile(filePath);
++
++    await expect(renderImageOverview(filePath, signal)).rejects.toMatchObject({
++      code: 'pixel_limit',
++    });
++  });
++
++  it('rejects a source above the empirically proven 30:1 aspect ratio', async () => {
++    const filePath = path.join(root, 'too-wide.png');
++    await sharp({
++      create: {
++        width: 31,
++        height: 1,
++        channels: 3,
++        background: '#804020',
++      },
++    })
++      .png()
++      .toFile(filePath);
++
++    await expect(renderImageOverview(filePath, signal)).rejects.toMatchObject({
++      code: 'aspect_ratio',
++    });
++  });
++
++  it('rejects grayscale and non-PNG sources rather than converting them', async () => {
++    const grayscale = path.join(root, 'gray.png');
++    await sharp(Buffer.alloc(32 * 32, 128), {
++      raw: { width: 32, height: 32, channels: 1 },
++    })
++      .toColourspace('b-w')
++      .png()
++      .toFile(grayscale);
++    expect((await fs.readFile(grayscale))[25]).toBe(0);
++    const jpeg = path.join(root, 'photo.jpg');
++    await sharp({
++      create: {
++        width: 32,
++        height: 32,
++        channels: 3,
++        background: '#804020',
++      },
++    })
++      .jpeg()
++      .toFile(jpeg);
++
++    await expect(renderImageOverview(grayscale, signal)).rejects.toMatchObject({
++      code: 'invalid_png_contract',
++    });
++    await expect(renderImageOverview(jpeg, signal)).rejects.toMatchObject({
++      code: 'invalid_png_contract',
++    });
++  });
++
++  it.each(['acTL', 'fcTL', 'fdAT'])(
++    'rejects the APNG %s chunk before decoder normalization',
++    async (chunkType) => {
++      const filePath = path.join(root, 'animated.png');
++      const base = await sharp({
++        create: {
++          width: 32,
++          height: 32,
++          channels: 3,
++          background: '#804020',
++        },
++      })
++        .png()
++        .toBuffer();
++      const fakeAnimationChunk = Buffer.concat([
++        Buffer.alloc(4),
++        Buffer.from(chunkType, 'ascii'),
++        Buffer.alloc(4),
++      ]);
++      await fs.writeFile(
++        filePath,
++        Buffer.concat([
++          base.subarray(0, 33),
++          fakeAnimationChunk,
++          base.subarray(33),
++        ]),
++      );
++
++      await expect(
++        renderImageOverview(filePath, signal),
++      ).rejects.toMatchObject({
++        code: 'animated_image',
++      });
++    },
++  );
++
++  it('fully decodes pixels and rejects corrupt IDAT data before egress', async () => {
++    const filePath = path.join(root, 'corrupt-idat.png');
++    const valid = await sharp({
++      create: {
++        width: 64,
++        height: 64,
++        channels: 3,
++        background: '#804020',
++      },
++    })
++      .png()
++      .toBuffer();
++    const corrupt = Buffer.from(valid);
++    const idatTypeOffset = corrupt.indexOf(Buffer.from('IDAT', 'ascii'));
++    expect(idatTypeOffset).toBeGreaterThan(0);
++    corrupt[idatTypeOffset + 4] ^= 0xff;
++    await fs.writeFile(filePath, corrupt);
++
++    await expect(renderImageOverview(filePath, signal)).rejects.toMatchObject({
++      code: 'decode_failed',
++    });
+   });
+ 
+   it('may magnify a normalized crop while preserving its source dimensions', async () => {
+@@ -111,12 +258,12 @@ describe('image views', () => {
+     expect(view.bytes.length).toBeLessThanOrEqual(9 * 1024 * 1024);
+   });
+ 
+-  it('reports decode_failed for a corrupt canonical image', async () => {
++  it('reports an invalid PNG contract for a corrupt canonical image', async () => {
+     const filePath = path.join(root, 'corrupt.png');
+     await fs.writeFile(filePath, 'not a real png');
+ 
+     await expect(renderImageOverview(filePath, signal)).rejects.toMatchObject({
+-      code: 'decode_failed',
++      code: 'invalid_png_contract',
+     });
+   });
+ });
+diff --git a/packages/core/src/utils/image-view.ts b/packages/core/src/utils/image-view.ts
+index ba3d14d56315663da1dd0d1f8bf08c61d682f24e..cd4d3ccb4712b6c2056c97c2def29310b7ecf923 100644
+--- a/packages/core/src/utils/image-view.ts
++++ b/packages/core/src/utils/image-view.ts
+@@ -15,6 +15,9 @@ const IMAGE_JPEG_QUALITY = 92;
+ export const IMAGE_MAX_SOURCE_BYTES = 100 * 1024 * 1024;
+ const IMAGE_MAX_OUTPUT_BYTES = 9 * 1024 * 1024;
+ const SUPPORTED_IMAGE_FORMATS = new Set(['jpeg', 'png', 'webp']);
++export const QWEN38_IMAGE_MAX_PIXELS = 16_777_216;
++export const QWEN38_IMAGE_MAX_ASPECT_RATIO = 30;
++const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+ 
+ export interface NormalizedRegion {
+   x1: number;
+@@ -25,7 +28,7 @@ export interface NormalizedRegion {
+ 
+ export interface ImageView {
+   bytes: Buffer;
+-  mimeType: 'image/jpeg';
++  mimeType: 'image/jpeg' | 'image/png';
+   sourceWidth: number;
+   sourceHeight: number;
+   selectedWidth: number;
+@@ -53,6 +56,9 @@ export type ImageViewErrorCode =
+   | 'source_too_large'
+   | 'unsupported_image'
+   | 'animated_image'
++  | 'invalid_png_contract'
++  | 'pixel_limit'
++  | 'aspect_ratio'
+   | 'decode_failed'
+   | 'output_too_large';
+ 
+@@ -65,6 +71,205 @@ export class ImageViewError extends Error {
+   }
+ }
+ 
++interface StrictPngHeader {
++  width: number;
++  height: number;
++  bitDepth: number;
++  colorType: number;
++}
++
++/**
++ * Parse the PNG container itself before asking an image library to decode it.
++ * This keeps the client contract aligned with the serving contract: one IHDR,
++ * at least one IDAT, one terminal IEND, no animation control, and no tRNS
++ * transparency shortcut. Decoder metadata is checked independently below.
++ */
++function inspectStrictPng(bytes: Buffer, filePath: string): StrictPngHeader {
++  const fail = (reason: string): never => {
++    throw new ImageViewError(
++      'invalid_png_contract',
++      `Image violates the Qwen3.8 full-quality PNG contract (${reason}): ${filePath}`,
++    );
++  };
++
++  if (
++    bytes.length < PNG_SIGNATURE.length ||
++    !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
++  ) {
++    fail('missing exact PNG signature');
++  }
++
++  let offset = PNG_SIGNATURE.length;
++  let header: StrictPngHeader | undefined;
++  let sawIdat = false;
++  let sawIend = false;
++  while (offset < bytes.length) {
++    if (offset + 12 > bytes.length) fail('truncated chunk header');
++    const length = bytes.readUInt32BE(offset);
++    const chunkEnd = offset + 12 + length;
++    if (chunkEnd > bytes.length) fail('truncated chunk payload');
++    const type = bytes.toString('ascii', offset + 4, offset + 8);
++    const dataOffset = offset + 8;
++
++    if (!header && type !== 'IHDR') fail('IHDR is not the first chunk');
++    if (type === 'IHDR') {
++      if (header) fail('duplicate IHDR');
++      if (length !== 13) fail('IHDR length is not 13 bytes');
++      header = {
++        width: bytes.readUInt32BE(dataOffset),
++        height: bytes.readUInt32BE(dataOffset + 4),
++        bitDepth: bytes[dataOffset + 8],
++        colorType: bytes[dataOffset + 9],
++      };
++      if (header.width === 0 || header.height === 0) {
++        fail('zero image dimension');
++      }
++      if (header.bitDepth !== 8 || ![2, 6].includes(header.colorType)) {
++        fail('source pixels are not 8-bit RGB or RGBA');
++      }
++      if (
++        bytes[dataOffset + 10] !== 0 ||
++        bytes[dataOffset + 11] !== 0 ||
++        ![0, 1].includes(bytes[dataOffset + 12])
++      ) {
++        fail('unsupported PNG compression, filter, or interlace method');
++      }
++    } else if (type === 'acTL' || type === 'fcTL' || type === 'fdAT') {
++      throw new ImageViewError(
++        'animated_image',
++        `The Qwen3.8 image contract forbids animated PNG files (${type} chunk): ${filePath}`,
++      );
++    } else if (type === 'tRNS') {
++      fail('tRNS transparency is forbidden; use explicit RGBA');
++    } else if (type === 'IDAT') {
++      sawIdat = true;
++    } else if (type === 'IEND') {
++      if (length !== 0) fail('IEND is not empty');
++      sawIend = true;
++      if (chunkEnd !== bytes.length) fail('bytes follow IEND');
++    }
++
++    offset = chunkEnd;
++    if (sawIend) break;
++  }
++
++  const parsedHeader = header ?? fail('missing IHDR');
++  if (!sawIdat) fail('missing IDAT');
++  if (!sawIend) fail('missing IEND');
++  return parsedHeader;
++}
++
++async function prepareStrictOriginalPng(
++  filePath: string,
++  signal: AbortSignal,
++): Promise<{ bytes: Buffer; width: number; height: number }> {
++  signal.throwIfAborted();
++  let stats: Awaited<ReturnType<typeof fs.stat>>;
++  try {
++    stats = await fs.stat(filePath);
++  } catch (error) {
++    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
++      throw new ImageViewError(
++        'file_not_found',
++        `Image file not found: ${filePath}`,
++      );
++    }
++    throw error;
++  }
++  if (stats.isDirectory()) {
++    throw new ImageViewError(
++      'target_is_directory',
++      `Image path is a directory: ${filePath}`,
++    );
++  }
++  if (!stats.isFile()) {
++    throw new ImageViewError(
++      'target_not_regular_file',
++      `Image path is not a regular file: ${filePath}`,
++    );
++  }
++  if (stats.size > IMAGE_MAX_SOURCE_BYTES) {
++    throw new ImageViewError(
++      'source_too_large',
++      `Image file exceeds the 100 MB source limit: ${filePath}`,
++    );
++  }
++
++  const bytes = await fs.readFile(filePath, { signal });
++  if (bytes.length > IMAGE_MAX_SOURCE_BYTES) {
++    throw new ImageViewError(
++      'source_too_large',
++      `Image file exceeds the 100 MB source limit: ${filePath}`,
++    );
++  }
++  const header = inspectStrictPng(bytes, filePath);
++  const pixels = header.width * header.height;
++  if (pixels > QWEN38_IMAGE_MAX_PIXELS) {
++    throw new ImageViewError(
++      'pixel_limit',
++      `Image dimensions ${header.width}x${header.height} (${pixels} pixels) exceed the Qwen3.8 full-quality limit of ${QWEN38_IMAGE_MAX_PIXELS} pixels: ${filePath}`,
++    );
++  }
++  const shortEdge = Math.min(header.width, header.height);
++  const longEdge = Math.max(header.width, header.height);
++  if (longEdge > shortEdge * QWEN38_IMAGE_MAX_ASPECT_RATIO) {
++    throw new ImageViewError(
++      'aspect_ratio',
++      `Image dimensions ${header.width}x${header.height} exceed the empirically proven Qwen3.8 aspect-ratio limit of ${QWEN38_IMAGE_MAX_ASPECT_RATIO}:1: ${filePath}`,
++    );
++  }
++
++  let sharp: SharpConstructor;
++  try {
++    sharp = (await import('sharp')).default;
++  } catch {
++    throw new ImageViewError(
++      'renderer_unavailable',
++      'Image validation is unavailable because the pinned "sharp" image module could not be loaded.',
++    );
++  }
++  let metadata: Metadata;
++  let decodedInfo: { width: number; height: number; channels: number };
++  try {
++    const decoderOptions = {
++      failOn: 'error',
++      limitInputPixels: QWEN38_IMAGE_MAX_PIXELS,
++    } as const;
++    metadata = await sharp(bytes, decoderOptions).metadata();
++    const decoded = await sharp(bytes, decoderOptions)
++      .raw()
++      .toBuffer({ resolveWithObject: true });
++    decodedInfo = decoded.info;
++  } catch {
++    signal.throwIfAborted();
++    throw new ImageViewError(
++      'decode_failed',
++      `Failed to decode the PNG without warnings: ${filePath}`,
++    );
++  }
++  signal.throwIfAborted();
++  if (
++    metadata.format !== 'png' ||
++    metadata.width !== header.width ||
++    metadata.height !== header.height ||
++    metadata.depth !== 'uchar' ||
++    ![3, 4].includes(metadata.channels ?? 0) ||
++    decodedInfo.width !== header.width ||
++    decodedInfo.height !== header.height ||
++    ![3, 4].includes(decodedInfo.channels) ||
++    metadata.isPalette === true ||
++    (metadata.pages ?? 1) !== 1 ||
++    (metadata.orientation !== undefined && metadata.orientation !== 1)
++  ) {
++    throw new ImageViewError(
++      'invalid_png_contract',
++      `Decoded image metadata does not describe one orientation-neutral 8-bit RGB/RGBA PNG: ${filePath}`,
++    );
++  }
++
++  return { bytes, width: header.width, height: header.height };
++}
++
+ function fitsVisualBudget({ width, height }: ImageSize): boolean {
+   return (
+     width <= IMAGE_VIEW_MAX_EDGE &&
+@@ -253,17 +458,17 @@ export async function renderImageOverview(
+   filePath: string,
+   signal: AbortSignal,
+ ): Promise<ImageView> {
+-  const prepared = await prepareImage(filePath, signal);
+-  const sourceWidth = prepared.metadata.autoOrient.width;
+-  const sourceHeight = prepared.metadata.autoOrient.height;
+-  const outputSize = boundedSize(sourceWidth, sourceHeight, 1);
+-  return renderImageView(
+-    filePath,
+-    prepared,
+-    { left: 0, top: 0, width: sourceWidth, height: sourceHeight },
+-    outputSize,
+-    signal,
+-  );
++  const original = await prepareStrictOriginalPng(filePath, signal);
++  return {
++    bytes: original.bytes,
++    mimeType: 'image/png',
++    sourceWidth: original.width,
++    sourceHeight: original.height,
++    selectedWidth: original.width,
++    selectedHeight: original.height,
++    outputWidth: original.width,
++    outputHeight: original.height,
++  };
+ }
+ 
+ export async function renderNormalizedImageCrop(
+diff --git a/packages/core/src/utils/qwen38-image-contract.test.ts b/packages/core/src/utils/qwen38-image-contract.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..132eec8f49da3d69796a8f0c41584413eea2e4c4
+--- /dev/null
++++ b/packages/core/src/utils/qwen38-image-contract.test.ts
+@@ -0,0 +1,119 @@
++/**
++ * @license
++ * Copyright 2026 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import fs from 'node:fs/promises';
++import os from 'node:os';
++import path from 'node:path';
++import type { Part } from '@google/genai';
++import sharp from 'sharp';
++import { afterEach, beforeEach, describe, expect, it } from 'vitest';
++import type { Config } from '../config/config.js';
++import { ToolErrorType } from '../tools/tool-error.js';
++import { processSingleFileContent } from './fileUtils.js';
++
++describe('Qwen3.8 read_file image contract', () => {
++  let root: string;
++  let config: Config;
++
++  beforeEach(async () => {
++    root = await fs.mkdtemp(path.join(os.tmpdir(), 'qwen38-image-contract-'));
++    config = {
++      getTargetDir: () => root,
++      getContentGeneratorConfig: () => ({
++        modalities: { image: true, pdf: false, audio: false, video: false },
 +      }),
++      getTruncateToolOutputThreshold: () => 2500,
++      getTruncateToolOutputLines: () => 500,
 +    } as unknown as Config;
 +  });
 +
-+  it('advertises only callable agents in foreground-only mode', async () => {
-+    const config = {
-+      ...mockConfig,
-+      getForegroundAgentsOnly: vi.fn().mockReturnValue(true),
-+      getSubagentManager: vi.fn().mockReturnValue({
-+        listSubagents: vi.fn().mockResolvedValue([
-+          { name: 'general-purpose' },
-+          { name: 'Explore' },
-+          { name: 'statusline-setup' },
-+          { name: 'custom-agent' },
-+        ]),
-+      }),
-     } as unknown as Config;
++  afterEach(async () => {
++    await fs.rm(root, { recursive: true, force: true });
++  });
 +
-+    const result = await buildSystemMessage(
-+      config,
-+      'test-session-id',
-+      'auto' as PermissionMode,
++  it('emits the exact original PNG bytes at their full dimensions', async () => {
++    const filePath = path.join(root, 'full.png');
++    await sharp({
++      create: {
++        width: 2048,
++        height: 1024,
++        channels: 4,
++        background: { r: 10, g: 20, b: 30, alpha: 0.5 },
++      },
++    })
++      .png({ compressionLevel: 0 })
++      .toFile(filePath);
++    const original = await fs.readFile(filePath);
++
++    const result = await processSingleFileContent(filePath, config);
++    const parts = result.llmContent as Part[];
++
++    expect(result.error).toBeUndefined();
++    expect(parts[0]?.text).toMatch(
++      /Full-quality original PNG: 2048x1024.*no resize.*transcode/,
 +    );
++    expect(parts[1]?.inlineData?.mimeType).toBe('image/png');
++    expect(
++      Buffer.from(parts[1]!.inlineData!.data!, 'base64').equals(original),
++    ).toBe(true);
++    expect(result.returnDisplay).toBe('Read full-quality PNG: full.png');
++  });
 +
-+    expect(result.agents).toEqual(['general-purpose', 'Explore']);
-   });
-diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/utils/nonInteractiveHelpers.ts
-index b17b1a7..9c4ab29 100644
---- a/packages/cli/src/utils/nonInteractiveHelpers.ts
-+++ b/packages/cli/src/utils/nonInteractiveHelpers.ts
-@@ -238,6 +238,11 @@ export async function buildSystemMessage(
-     const subagentManager = config.getSubagentManager();
-     const subagents = await subagentManager.listSubagents();
-     agentNames = subagents.map((subagent) => subagent.name);
-+    if (config.getForegroundAgentsOnly()) {
-+      agentNames = agentNames.filter(
-+        (name) => name === 'general-purpose' || name === 'Explore',
-+      );
-+    }
-   } catch (error) {
-     debugLogger.error('[buildSystemMessage] Failed to load subagents:', error);
-   }
++  it('fails closed for JPEG instead of transcoding or forwarding it', async () => {
++    const filePath = path.join(root, 'photo.jpg');
++    await sharp({
++      create: {
++        width: 256,
++        height: 256,
++        channels: 3,
++        background: '#804020',
++      },
++    })
++      .jpeg()
++      .toFile(filePath);
++
++    const result = await processSingleFileContent(filePath, config);
++
++    expect(result.errorType).toBe(ToolErrorType.INVALID_TOOL_PARAMS);
++    expect(result.error).toMatch(/full-quality PNG contract/);
++    expect(result.llmContent).not.toEqual(
++      expect.objectContaining({ inlineData: expect.anything() }),
++    );
++  });
++
++  it('fails closed for excess pixels and excess aspect ratio', async () => {
++    const tooLarge = path.join(root, 'too-large.png');
++    await sharp({
++      create: {
++        width: 4097,
++        height: 4096,
++        channels: 3,
++        background: '#804020',
++      },
++    })
++      .png()
++      .toFile(tooLarge);
++    const tooWide = path.join(root, 'too-wide.png');
++    await sharp({
++      create: {
++        width: 31,
++        height: 1,
++        channels: 3,
++        background: '#804020',
++      },
++    })
++      .png()
++      .toFile(tooWide);
++
++    const largeResult = await processSingleFileContent(tooLarge, config);
++    const wideResult = await processSingleFileContent(tooWide, config);
++
++    expect(largeResult.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);
++    expect(largeResult.error).toMatch(/16777216 pixels/);
++    expect(wideResult.errorType).toBe(ToolErrorType.INVALID_TOOL_PARAMS);
++    expect(wideResult.error).toMatch(/30:1/);
++  });
++});

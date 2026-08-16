@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "profile": "qwen38-agent-service-v1",
+  "profile": "qwen38-agent-service-v2",
   "build": {
     "ubuntu_amd64_image": "ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467",
     "ubuntu_snapshot": "20260814T120000Z",
@@ -14,24 +14,23 @@
   "service": {
     "listen": "127.0.0.1:8090",
     "container_name": "qwen38-agent-service",
-    "image_tag": "qwen38-agent-service:1.0.0",
+    "image_tag": "qwen38-agent-service:2.0.0",
     "state_dir": "/home/user/Desktop/agent_service/.runtime/state",
     "results_dir": "/home/user/Desktop/agent_service/.runtime/results",
     "host_input_root": "/home/user",
     "request_body_limit_bytes": 2097152
   },
   "agent": {
-    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v1",
-    "image_id": "sha256:2e637cfedcc696e050d38ba0ce5f4018438d9fa62075d14d8f0c6b8ca3d12a1a",
+    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v2",
+    "image_id": "sha256:303601e191432b197970203b7e9c220833d871c5338c43b8a735d812f65ac77c",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
     "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
-    "tmpfs_qwen_home": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
     "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
-    "settings_sha256": "0b1a527ed721c07e37b69fb664fd1709ea485a909a954faaade133812dba78db",
-    "instructions_sha256": "9e7dbc771dedd0a1178df52960ae7d5650a1e44f05ee401c31255110ac01bacd",
-    "wrapper_sha256": "b3f0c5e28cf79ef075f4979908f591b23d05d87252bbed4f5413915f76450a51",
+    "settings_sha256": "b0c8a5e2bc242c6bec0bc6361f67f853ef411dca0c76903059ec6f1eea1f69f2",
+    "instructions_sha256": "3bae204fab3f4e3b52bfeba050b3872a5051d6b41b6d2ad09c91c3ab57094683",
+    "wrapper_sha256": "1a096746f8193c789abf4807d7b2df6442e40a879cf5d88e73ade0acca0f6ae6",
     "model_base_url": "http://127.0.0.1:18000/v1",
     "model_proxy_port": 18000,
     "strict_tools": [
@@ -52,16 +51,16 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "0c621cd8000bb61af633614ee775950b454b02b05a7bb54c9b62824587138181"
+      "patch_sha256": "08f67ebfc068b2a2d1df6c262bc6fcfeeaab73affa66273740246191a98b20c4"
     }
   },
   "backend": {
     "project_dir": "/home/user/Desktop/Qwen_best_model_ever",
     "container_name": "qwen38-agent-native",
     "project_label": "Qwen_best_model_ever",
-    "profile_label": "single-loopback-text-k8v4-agent-v6",
-    "image_tag": "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v6",
-    "image_id": "sha256:3452967bf6d1dca98122042e6d1b4445a4d5addd5ed6947e84a94e003fcac884",
+    "profile_label": "single-loopback-vision-k8v4-agent-v10",
+    "image_tag": "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v10",
+    "image_id": "sha256:1cb1528d5fc533291e5ab572f38d4b59af5d5d17b0a5f3f7a281731eec8b54da",
     "endpoint": "http://127.0.0.1:8000",
     "version": "0.27.2rc1.dev106+g9df9b0b0a",
     "vllm_commit": "9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5",
@@ -72,6 +71,46 @@
     "model_manifest": "model-snapshot-16b6615a.sha256",
     "model_manifest_sha256": "6d979221939858d8f98c7e615028e1e468cffb3ff2d501f943646c1e12ef2cdc",
     "kv_cache_dtype": "turboquant_k8v4",
+    "vision": {
+      "enabled": true,
+      "unquantized_dtype": "bfloat16",
+      "max_images": 15,
+      "max_source_pixels": 16777216,
+      "max_aspect_ratio": 30,
+      "allowed_data_url_prefix": "data:image/png;base64,",
+      "source_modes": [
+        "RGB",
+        "RGBA"
+      ],
+      "video_count": 0
+    },
+    "agent_defaults": {
+      "enable_thinking": true,
+      "reasoning_effort": "xhigh",
+      "preserve_thinking": false,
+      "add_vision_id": false,
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 20,
+      "min_p": 0.0,
+      "presence_penalty": 0.0,
+      "repetition_penalty": 1.0,
+      "thinking_token_budget": 262144,
+      "final_response_token_budget": 131072
+    },
+    "environment": [
+      "HF_HUB_OFFLINE=1",
+      "TRANSFORMERS_OFFLINE=1",
+      "DO_NOT_TRACK=1",
+      "VLLM_NO_USAGE_STATS=1",
+      "VLLM_DEBUG_WORKSPACE=1",
+      "VLLM_ENFORCE_STRICT_TOOL_CALLING=1",
+      "VLLM_QWEN38_STRICT_IMAGE_CONTRACT=1",
+      "VLLM_QWEN38_VISION_HEADROOM_BYTES=671088640",
+      "VLLM_MAX_IMAGE_PIXELS=16777216",
+      "GLOO_SOCKET_IFNAME=lo",
+      "NCCL_SOCKET_IFNAME=lo"
+    ],
     "command": [
       "/model",
       "--served-model-name",
@@ -80,7 +119,6 @@
       "127.0.0.1",
       "--port",
       "8000",
-      "--language-model-only",
       "--model-impl",
       "vllm",
       "--config-format",
@@ -123,7 +161,25 @@
       "--tool-call-parser",
       "qwen3_coder",
       "--default-chat-template-kwargs",
-      "{\"enable_thinking\":true,\"preserve_thinking\":false,\"reasoning_effort\":\"xhigh\"}"
+      "{\"enable_thinking\":true,\"preserve_thinking\":false,\"reasoning_effort\":\"xhigh\",\"add_vision_id\":false}",
+      "--limit-mm-per-prompt",
+      "{\"image\":{\"count\":15,\"width\":4096,\"height\":4096},\"video\":0}",
+      "--mm-processor-kwargs",
+      "{\"size\":{\"longest_edge\":16777216,\"shortest_edge\":65536}}",
+      "--mm-processor-device",
+      "cpu",
+      "--no-mm-device-do-normalize",
+      "--mm-encoder-tp-mode",
+      "weights",
+      "--mm-processor-cache-gb",
+      "4",
+      "--mm-processor-cache-type",
+      "lru",
+      "--mm-hasher-algorithm",
+      "sha256",
+      "--mm-tensor-ipc",
+      "direct_rpc",
+      "--no-skip-mm-profiling"
     ]
   },
   "host": {

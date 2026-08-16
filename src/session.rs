@@ -367,8 +367,6 @@ async fn start_agent(
         "--tmpfs".into(),
         format!("/tmp:{}", cfg.lock.agent.tmpfs_tmp),
         "--tmpfs".into(),
-        format!("/qwen-home:{}", cfg.lock.agent.tmpfs_qwen_home),
-        "--tmpfs".into(),
         format!("/qwen-runtime:{}", cfg.lock.agent.tmpfs_qwen_runtime),
         "--cap-drop".into(),
         "ALL".into(),

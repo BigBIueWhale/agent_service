@@ -258,20 +258,7 @@ fn validate_init_event(
             "events.jsonl init advertised unexpected MCP servers: {mcp_servers:?}"
         )));
     }
-    if !object
-        .get("slash_commands")
-        .and_then(serde_json::Value::as_array)
-        .is_some_and(|values| {
-            !values.is_empty()
-                && values
-                    .iter()
-                    .all(|value| value.as_str().is_some_and(|value| !value.is_empty()))
-        })
-    {
-        return Err(ServiceError::AgentOutputMissing(
-            "events.jsonl init lacks a non-empty string-array slash_commands field".into(),
-        ));
-    }
+    exact_string_array("slash_commands", &[])?;
     Ok(())
 }
 
@@ -335,7 +322,7 @@ fn truncate(value: &str, max: usize) -> String {
 mod tests {
     use super::*;
 
-    const INIT: &str = "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[\"status\"],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n";
+    const INIT: &str = "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n";
 
     fn parse_text(text: &str) -> ServiceResult<AgentResult> {
         let path = std::env::temp_dir().join(format!(
@@ -376,5 +363,14 @@ mod tests {
             parse_text("{\"type\":\"stream_event\",\"uuid\":\"u1\",\"session_id\":\"a\"}\n")
                 .is_err()
         );
+    }
+
+    #[test]
+    fn rejects_advertised_slash_commands() {
+        let unexpected = INIT.replace(
+            "\"slash_commands\":[]",
+            "\"slash_commands\":[\"status\"]",
+        );
+        assert!(parse_text(&unexpected).is_err());
     }
 }

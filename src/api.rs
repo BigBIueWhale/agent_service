@@ -481,6 +481,36 @@ async fn verify_backend_container(cfg: &Config) -> ServiceResult<()> {
             cfg.lock.backend.command, command
         )));
     }
+    let environment: Vec<String> = serde_json::from_value(
+        value
+            .pointer("/Config/Env")
+            .cloned()
+            .ok_or_else(|| ServiceError::Internal("backend inspect lacks Config.Env".into()))?,
+    )
+    .map_err(|error| ServiceError::Internal(format!("backend environment shape invalid: {error}")))?;
+    for expected in &cfg.lock.backend.environment {
+        let key = expected
+            .split_once('=')
+            .map(|(key, _)| key)
+            .ok_or_else(|| {
+                ServiceError::Internal(format!(
+                    "locked backend environment entry has no '=': {expected:?}"
+                ))
+            })?;
+        let matching = environment
+            .iter()
+            .filter(|entry| {
+                entry
+                    .split_once('=')
+                    .is_some_and(|(actual_key, _)| actual_key == key)
+            })
+            .collect::<Vec<_>>();
+        if matching.len() != 1 || matching[0].as_str() != expected {
+            return Err(ServiceError::Internal(format!(
+                "backend environment drift for {key}; expected exactly {expected:?}; observed {matching:?}"
+            )));
+        }
+    }
     let labels: std::collections::HashMap<String, String> = serde_json::from_value(
         value
             .pointer("/Config/Labels")

@@ -8,7 +8,7 @@ readonly EXIT_FILE=/output/qwen-exit-code
 readonly READY_FILE=/output/ready.json
 readonly SETTINGS_SOURCE=/opt/agent/settings.json
 readonly INSTRUCTIONS_SOURCE=/opt/agent/QWEN.md
-readonly QWEN_HOME=/qwen-home
+readonly QWEN_HOME=/opt/agent
 readonly QWEN_RUNTIME_DIR=/qwen-runtime
 readonly MODEL_ID=qwen3.8-27b-nvfp4-k8v4
 readonly MODEL_BASE=http://127.0.0.1:18000
@@ -24,6 +24,7 @@ fatal() {
 
 umask 077
 export QWEN_HOME QWEN_RUNTIME_DIR
+export QWEN38_LOCAL_API_KEY=local-loopback-only
 export NO_COLOR=1
 export QWEN_TELEMETRY_ENABLED=false
 export XDG_CACHE_HOME=/qwen-runtime/cache
@@ -40,10 +41,10 @@ export GOPATH=/qwen-runtime/go
 [[ -d /workspace && -d /artifacts && -d /output ]] || \
   fatal 93 "required workspace, artifacts, or output mount is missing"
 
-mkdir -p "${QWEN_HOME}" /qwen-runtime
-cp --no-preserve=mode,ownership "${SETTINGS_SOURCE}" "${QWEN_HOME}/settings.json"
-cp --no-preserve=mode,ownership "${INSTRUCTIONS_SOURCE}" "${QWEN_HOME}/QWEN.md"
-chmod 0600 "${QWEN_HOME}/settings.json" "${QWEN_HOME}/QWEN.md"
+mkdir -p /qwen-runtime
+[[ "${SETTINGS_SOURCE}" == "${QWEN_HOME}/settings.json" && \
+   "${INSTRUCTIONS_SOURCE}" == "${QWEN_HOME}/QWEN.md" ]] || \
+  fatal 103 "QWEN_HOME must be the immutable /opt/agent configuration directory"
 
 route_report="$(ip -4 route show)"
 [[ -z "${route_report}" ]] || fatal 94 "network-none invariant failed; IPv4 route table is not empty: ${route_report}"

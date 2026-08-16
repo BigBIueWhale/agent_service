@@ -81,9 +81,13 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
       packages/core/src/core/openaiContentGenerator/converter.test.ts \
       packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts \
       packages/core/src/core/tokenLimits.test.ts \
+      packages/core/src/config/qwen38-agent-service-contract.test.ts \
       packages/core/src/permissions/permission-manager.test.ts \
       packages/core/src/tools/agent/agent.test.ts \
+      packages/core/src/utils/image-view.test.ts \
+      packages/core/src/utils/qwen38-image-contract.test.ts \
       packages/cli/src/config/config.test.ts \
+      packages/cli/src/gemini.test.tsx \
       packages/cli/src/utils/nonInteractiveHelpers.test.ts \
  && test "$(node scripts/cli-entry.js --version)" = '0.21.12'
 
@@ -94,7 +98,7 @@ ARG WRAPPER_SHA256
 ARG QWEN_COMMIT
 ARG QWEN_SOURCE_ARCHIVE_SHA256
 ARG QWEN_PATCH_SHA256
-LABEL agent_service.profile="qwen38-agent-service-v1" \
+LABEL agent_service.profile="qwen38-agent-service-v2" \
       agent_service.qwen.version="0.21.12" \
       agent_service.qwen.commit="${QWEN_COMMIT}" \
       agent_service.qwen.archive.sha256="${QWEN_SOURCE_ARCHIVE_SHA256}" \
@@ -187,7 +191,7 @@ FROM service-os AS service
 ARG SOURCE_COMMIT
 ARG STACK_LOCK_SHA256
 ARG CARGO_LOCK_SHA256
-LABEL agent_service.profile="qwen38-agent-service-v1" \
+LABEL agent_service.profile="qwen38-agent-service-v2" \
       agent_service.source.commit="${SOURCE_COMMIT}" \
       agent_service.stack-lock.sha256="${STACK_LOCK_SHA256}" \
       agent_service.cargo-lock.sha256="${CARGO_LOCK_SHA256}"
