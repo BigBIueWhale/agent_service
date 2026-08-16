@@ -370,9 +370,10 @@ errors. It never chooses a convenient-looking “last result.”
 ## Prefix caching evidence
 
 Prefix caching is enabled in the sole backend command. It is not accepted on faith:
-the exact corrected backend's chronological image-history probe measured a 6.1716-second
-cold TTFT with zero prefix/multimodal hits, then a 0.3520-second warm Anthropic TTFT
-with 14,560 prefix-hit tokens and a multimodal-cache hit—a 17.531× improvement.
+the accepted v12 corrected backend's final chronological image-history probe measured
+a 6.0440-second cold TTFT with zero prefix/multimodal hits, then a 0.3331-second warm
+Anthropic TTFT with 14,560 prefix-hit tokens and a multimodal-cache hit—an 18.146×
+improvement.
 OpenAI and Anthropic histories rendered to identical token IDs. Changed image bytes
 missed the multimodal cache; moving identical bytes hit the multimodal cache but
 missed the prefix cache, proving the two mechanisms are not being conflated.
