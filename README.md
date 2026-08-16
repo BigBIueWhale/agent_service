@@ -30,7 +30,7 @@ The fixed stack is:
 | Corrected model SHA-256 | `5fd70b38b3708e47adc1e9e9ab90f5d688ec01177d0718fdd16678696fdb0988` |
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
-| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a` |
+| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, immutable-root v12 profile |
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
 | Context | Native `262144` tokens |
@@ -58,7 +58,10 @@ container and HTTP endpoints must match it field-for-field.
 The service independently requires `/model` to be the exact corrected directory as
 one read-only bind mount and requires the backend container's source revision,
 official revision, correction recipe, corrected model digest, and manifest digest
-labels. The backend's own status performs the complete file-manifest verification.
+labels. It also requires a read-only backend root, the exact bounded `/root`, `/tmp`,
+and `/run` tmpfs contracts, exactly one labelled v12 vLLM-cache volume, and no other
+mount. Runtime JIT state therefore cannot mutate the container layer. The backend's
+own status performs the complete file-manifest verification.
 An uncorrected Unsloth mount cannot satisfy this lock.
 
 The backend repository remains authoritative for the server patches, model-file
@@ -488,7 +491,7 @@ passed 2,326 tests in the expanded sixteen-suite focused matrix. The sealed runt
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
 review-diff, semantic-manifest, settings, instruction, and wrapper labels. The
 build script treats any other image ID as drift.
-The pinned Rust 1.95.0 service stage also passed all twelve service tests and a
+The pinned Rust 1.95.0 service stage also passed all thirteen service tests and a
 locked release build, including fail-closed tests for default-policy drift,
 semantic-manifest identity, and nonempty slash-command advertisement.
 
@@ -582,7 +585,7 @@ misleading 404. Shutdown has no arbitrary teardown deadline.
 ## Acceptance gates
 
 A release is not complete merely because the images build. Every required gate below
-passed against the pinned agent image and the exact live v11 corrected backend:
+passed against the pinned agent image and the exact live v12 corrected backend:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
 2. clean Qwen archive extraction, semantic drift/idempotence/rollback checks,

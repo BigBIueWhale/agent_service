@@ -466,6 +466,28 @@ async fn verify_backend_container(cfg: &Config) -> ServiceResult<()> {
         string("/HostConfig/NetworkMode")?,
         "host",
     )?;
+    if value
+        .pointer("/HostConfig/ReadonlyRootfs")
+        .and_then(serde_json::Value::as_bool)
+        != Some(cfg.lock.backend.rootfs_read_only)
+    {
+        return Err(ServiceError::Internal(
+            "backend root filesystem is not the exact read-only contract".into(),
+        ));
+    }
+    let tmpfs: std::collections::BTreeMap<String, String> = serde_json::from_value(
+        value
+            .pointer("/HostConfig/Tmpfs")
+            .cloned()
+            .ok_or_else(|| ServiceError::Internal("backend inspect lacks tmpfs map".into()))?,
+    )
+    .map_err(|error| ServiceError::Internal(format!("backend tmpfs map invalid: {error}")))?;
+    if tmpfs != cfg.lock.backend.tmpfs {
+        return Err(ServiceError::Internal(format!(
+            "backend tmpfs contract drift; expected {:?}; observed {tmpfs:?}",
+            cfg.lock.backend.tmpfs
+        )));
+    }
     for pointer in ["/HostConfig/PortBindings", "/NetworkSettings/Ports"] {
         let ports = value
             .pointer(pointer)
@@ -523,6 +545,12 @@ async fn verify_backend_container(cfg: &Config) -> ServiceResult<()> {
         .pointer("/Mounts")
         .and_then(serde_json::Value::as_array)
         .ok_or_else(|| ServiceError::Internal("backend inspect lacks Mounts array".into()))?;
+    if mounts.len() != 2 {
+        return Err(ServiceError::Internal(format!(
+            "backend must have exactly the model and vLLM-cache mounts, observed {}",
+            mounts.len()
+        )));
+    }
     let model_mounts = mounts
         .iter()
         .filter(|mount| {
@@ -560,6 +588,41 @@ async fn verify_backend_container(cfg: &Config) -> ServiceResult<()> {
     if model_mount.get("RW").and_then(serde_json::Value::as_bool) != Some(false) {
         return Err(ServiceError::Internal(
             "backend corrected-model mount is not read-only".into(),
+        ));
+    }
+    let cache_mounts = mounts
+        .iter()
+        .filter(|mount| {
+            mount.get("Destination").and_then(serde_json::Value::as_str)
+                == Some("/root/.cache/vllm")
+        })
+        .collect::<Vec<_>>();
+    if cache_mounts.len() != 1 {
+        return Err(ServiceError::Internal(format!(
+            "backend must have exactly one /root/.cache/vllm mount, observed {}",
+            cache_mounts.len()
+        )));
+    }
+    let cache_mount = cache_mounts[0];
+    require_equal(
+        "backend vLLM cache volume",
+        cache_mount
+            .get("Name")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<missing>"),
+        &cfg.lock.backend.cache_volume,
+    )?;
+    require_equal(
+        "backend vLLM cache mount type",
+        cache_mount
+            .get("Type")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<missing>"),
+        "volume",
+    )?;
+    if cache_mount.get("RW").and_then(serde_json::Value::as_bool) != Some(true) {
+        return Err(ServiceError::Internal(
+            "backend vLLM cache mount is not writable".into(),
         ));
     }
     let labels: std::collections::HashMap<String, String> = serde_json::from_value(

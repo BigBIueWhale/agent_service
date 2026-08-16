@@ -5,6 +5,7 @@
 //! optional profiles.  `config/stack.lock.json` is compiled into the binary,
 //! parsed with `deny_unknown_fields`, and validated before Docker is touched.
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -114,6 +115,9 @@ pub struct BackendLock {
     pub profile_label: String,
     pub image_tag: String,
     pub image_id: String,
+    pub rootfs_read_only: bool,
+    pub tmpfs: BTreeMap<String, String>,
+    pub cache_volume: String,
     pub endpoint: String,
     pub version: String,
     pub vllm_commit: String,
@@ -373,16 +377,40 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         return fail("agent.strict_tools differs from the reviewed strict native tool set".into());
     }
     if lock.backend.endpoint != "http://127.0.0.1:8000"
-        || lock.backend.profile_label != "single-loopback-vision-k8v4-agent-v11"
-        || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v11"
+        || lock.backend.profile_label != "single-loopback-vision-k8v4-agent-v12"
+        || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v12"
         || lock.backend.image_id
-            != "sha256:4c466b6d07b2a618fd147f25551e4b0cec52a74d0fd3572249ca3b4a40b42c8a"
+            != "sha256:5d545d85950310cb09bebacba9083a242e8943c92669428eb23468d959f4f2d5"
         || lock.backend.served_model != "qwen3.8-27b-nvfp4-k8v4"
         || lock.backend.max_model_len != 262_144
         || lock.backend.kv_cache_dtype != "turboquant_k8v4"
     {
         return fail(
             "backend endpoint/profile/image/model/context/KV contract differs from the sole supported deployment"
+                .into(),
+        );
+    }
+    let expected_backend_tmpfs = BTreeMap::from([
+        (
+            "/root".to_string(),
+            "rw,nosuid,nodev,exec,size=4g,mode=0700".to_string(),
+        ),
+        (
+            "/run".to_string(),
+            "rw,nosuid,nodev,noexec,size=64m,mode=0755".to_string(),
+        ),
+        (
+            "/tmp".to_string(),
+            "rw,nosuid,nodev,exec,size=2g,mode=1777".to_string(),
+        ),
+    ]);
+    if !lock.backend.rootfs_read_only
+        || lock.backend.tmpfs != expected_backend_tmpfs
+        || lock.backend.cache_volume
+            != "qwen38-vllm-cache-single-loopback-vision-agent-v12"
+    {
+        return fail(
+            "backend immutable-root/tmpfs/cache-volume contract differs from the sole supported deployment"
                 .into(),
         );
     }
@@ -443,7 +471,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         .collect::<Vec<_>>()
         != required_environment
     {
-        return fail("backend environment differs from the strict v11 runtime contract".into());
+        return fail("backend environment differs from the strict v12 runtime contract".into());
     }
     if lock.backend.model_repository != "unsloth/Qwen3.8-27B-NVFP4"
         || lock.backend.model_revision != "16b6615af3548b88e2d8e382457bc705b00479cf"
@@ -591,6 +619,30 @@ mod tests {
                 .contains("source/model/patch commit or lowercase SHA256 pins are malformed"),
             "unexpected validation error: {error}"
         );
+    }
+
+    #[test]
+    fn writable_backend_or_runtime_mount_drift_is_rejected() {
+        let mutations: [fn(&mut StackLock); 3] = [
+            |lock: &mut StackLock| lock.backend.rootfs_read_only = false,
+            |lock: &mut StackLock| {
+                lock.backend
+                    .tmpfs
+                    .insert("/root".into(), "rw,size=4g".into());
+            },
+            |lock: &mut StackLock| lock.backend.cache_volume = "unowned-cache".into(),
+        ];
+        for mutate in mutations {
+            let mut lock = checked_in_lock();
+            mutate(&mut lock);
+            let error = validate_lock(&lock).expect_err("backend write drift must fail closed");
+            assert!(
+                error
+                    .to_string()
+                    .contains("backend immutable-root/tmpfs/cache-volume contract differs"),
+                "unexpected validation error: {error}"
+            );
+        }
     }
 
     #[test]
