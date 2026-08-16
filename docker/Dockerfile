@@ -57,32 +57,53 @@ FROM agent-os AS qwen-build
 ARG QWEN_SOURCE_ARCHIVE
 ARG QWEN_SOURCE_ARCHIVE_SHA256
 ARG QWEN_PATCH_SHA256
+ARG QWEN_SOURCE_PATCH_MANIFEST_SHA256
 ENV QWEN_SKIP_PREPARE=1
 ENV SOURCE_DATE_EPOCH=1786725153
 WORKDIR /src
 ADD --checksum=sha256:${QWEN_SOURCE_ARCHIVE_SHA256} \
   ${QWEN_SOURCE_ARCHIVE} /tmp/qwen-code.tar.gz
-COPY patches/qwen-code-0.21.12-agent-service.patch /tmp/agent-service.patch
+COPY patches/qwen-code-0.21.12-agent-service.patch \
+  /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch
+COPY patches/source_patch_v1 \
+  /opt/agent-artifacts/patches/source_patch_v1
 RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
       "${QWEN_SOURCE_ARCHIVE_SHA256}" \
- && test "$(sha256sum /tmp/agent-service.patch | cut -d' ' -f1)" = \
+ && test "$(sha256sum /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch | cut -d' ' -f1)" = \
       "${QWEN_PATCH_SHA256}" \
+ && test "$(sha256sum /opt/agent-artifacts/patches/source_patch_v1/manifest.sha256 | cut -d' ' -f1)" = \
+      "${QWEN_SOURCE_PATCH_MANIFEST_SHA256}" \
+ && cd /opt/agent-artifacts \
+ && sha256sum --check --strict patches/source_patch_v1/manifest.sha256 \
+ && cd /src \
  && tar -xzf /tmp/qwen-code.tar.gz --strip-components=1 -C /src \
- && git apply --check /tmp/agent-service.patch \
- && git apply /tmp/agent-service.patch \
+ && cd /opt/agent-artifacts \
+ && python3 -m unittest -v patches.source_patch_v1.test_framework \
+ && python3 -m patches.source_patch_v1.apply_qwen_code_patchset \
+      /src /opt/agent-artifacts \
+ && cd /src \
  && npm ci --ignore-scripts \
  && npx --no-install patch-package \
  && npm run build -- --cli-only \
- && node -e "const fs=require('node:fs'); for (const p of ['packages/cli/src/generated/git-commit.ts','packages/core/src/generated/git-commit.ts']) { let s=fs.readFileSync(p,'utf8'); s=s.replace(\"export const GIT_COMMIT_INFO = 'N/A';\",\"export const GIT_COMMIT_INFO = 'b965d5f8c24f';\"); fs.writeFileSync(p,s); }" \
+ && grep -Fx "export const GIT_COMMIT_INFO = 'b965d5f8c24f';" \
+      packages/cli/src/generated/git-commit.ts \
+ && grep -Fx "export const CLI_VERSION = '0.21.12';" \
+      packages/cli/src/generated/git-commit.ts \
+ && cmp packages/cli/src/generated/git-commit.ts \
+      packages/core/src/generated/git-commit.ts \
  && DEV=true node esbuild.config.js \
  && node scripts/copy_bundle_assets.js \
  && npx --no-install vitest run \
       packages/core/src/core/geminiChat.test.ts \
+      packages/core/src/core/baseLlmClient.test.ts \
+      packages/core/src/core/coreToolScheduler.test.ts \
       packages/core/src/core/openaiContentGenerator/converter.test.ts \
+      packages/core/src/core/openaiContentGenerator/pipeline.test.ts \
       packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts \
       packages/core/src/core/tokenLimits.test.ts \
       packages/core/src/config/qwen38-agent-service-contract.test.ts \
       packages/core/src/permissions/permission-manager.test.ts \
+      packages/core/src/services/chatCompressionService.test.ts \
       packages/core/src/tools/agent/agent.test.ts \
       packages/core/src/utils/image-view.test.ts \
       packages/core/src/utils/qwen38-image-contract.test.ts \
@@ -98,11 +119,13 @@ ARG WRAPPER_SHA256
 ARG QWEN_COMMIT
 ARG QWEN_SOURCE_ARCHIVE_SHA256
 ARG QWEN_PATCH_SHA256
+ARG QWEN_SOURCE_PATCH_MANIFEST_SHA256
 LABEL agent_service.profile="qwen38-agent-service-v2" \
       agent_service.qwen.version="0.21.12" \
       agent_service.qwen.commit="${QWEN_COMMIT}" \
       agent_service.qwen.archive.sha256="${QWEN_SOURCE_ARCHIVE_SHA256}" \
       agent_service.qwen.patch.sha256="${QWEN_PATCH_SHA256}" \
+      agent_service.qwen.source-patch-manifest.sha256="${QWEN_SOURCE_PATCH_MANIFEST_SHA256}" \
       agent_service.settings.sha256="${SETTINGS_SHA256}" \
       agent_service.instructions.sha256="${INSTRUCTIONS_SHA256}" \
       agent_service.wrapper.sha256="${WRAPPER_SHA256}"

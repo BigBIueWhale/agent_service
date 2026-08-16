@@ -38,7 +38,7 @@ The fixed stack is:
 | Thinking | Required, `xhigh` |
 | Historical thinking | `preserve_thinking=false` |
 | Qwen Code | `0.21.12`, commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38` |
-| Agent image | `sha256:303601e191432b197970203b7e9c220833d871c5338c43b8a735d812f65ac77c` |
+| Agent image | `sha256:cc916c63598c5953810482e2e5f614eaa1e96695f5c07bfb2c3f2f894e9aa323` |
 | Service | Rust, one session at a time, Docker-only |
 | Service listener | `127.0.0.1:8090` only |
 | Model listener | `127.0.0.1:8000` only |
@@ -178,20 +178,43 @@ port 8001, ttyd, wildcard bridge plumbing, 152K context, host installation,
 warning-only probes, polling waits, lossy vision fallbacks, and mutable package
 installation were removed.
 
-## The pinned Qwen Code patch
+## The pinned Qwen Code source transformation
 
-Upstream Qwen Code 0.21.12 is downloaded from the exact commit archive and then
-patched by [`patches/qwen-code-0.21.12-agent-service.patch`](patches/qwen-code-0.21.12-agent-service.patch).
-The pin was rechecked on 2026-08-15: GitHub's latest stable release was
-`v0.21.12`, and npm's `latest` metadata reported both version `0.21.12` and
-`gitHead=b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`. The npm tarball is not an
-unused second execution path; the reviewed commit archive is the sole source.
-The current patch SHA-256 is
-`08f67ebfc068b2a2d1df6c262bc6fcfeeaab73affa66273740246191a98b20c4`.
-The build first verifies both hashes and that every hunk applies cleanly. It then
-runs `npm ci` against the upstream lock file, applies upstream's own `patch-package`
-set, builds the CLI, bundles it, and runs twelve focused suites covering all modified
-areas. No published npm package or mutable `latest` tag is executed.
+Upstream Qwen Code is based on the exact source behind the official `v0.21.12`
+release: commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`. The tag and remote commit
+were rechecked on 2026-08-16. The only executable source input is that commit's
+archive, whose SHA-256 is
+`61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`.
+Neither a published npm package nor a mutable branch or `latest` tag is executed.
+
+Our changes are applied by the semantic transformer in
+[`patches/source_patch_v1`](patches/source_patch_v1), not by blindly feeding a large
+diff to `git apply`. Each transformed file has a reviewed before/after contract,
+exact source identity, structural landmarks, and explicit source-state rules. The
+transformer refuses the wrong upstream version, unexpected drift, an unrecognized
+intermediate state, missing/duplicated landmarks, a changed generated stage, or a
+time-of-check/time-of-use mutation. Application is transactional: a failed write
+restores the pristine tree instead of leaving a half-patched source directory. A
+second application must be byte-for-byte idempotent.
+
+[`patches/qwen-code-0.21.12-agent-service.patch`](patches/qwen-code-0.21.12-agent-service.patch)
+is generated review evidence for humans; it is independently hashed and compared
+to the transformer's exact output, but is not a second patching path. Its current
+SHA-256 is
+`77e137c098e29a1b3b28da112fc323777a588e0c23caab8532caeb03eb5c2b79`.
+The transformer's manifest SHA-256 is
+`90102ad5fef4531b4a007eac3715bb1e001f9bfa5e090204aa0c5d3a6d50ecc0`.
+Both identities are locked, checked on the host, checked again inside the Docker
+build, and recorded as image labels.
+
+The Docker build starts from a fresh extraction, runs the transformer framework's
+drift/idempotence/rollback tests, applies the semantic transformation, runs
+`npm ci` against the upstream lock file, applies upstream's own `patch-package`
+set, builds and bundles the CLI, and runs the expanded focused test matrix for every
+modified behavior. The upstream metadata generator is itself patched to emit the
+pinned release version and commit deterministically from the verified
+`SOURCE_DATE_EPOCH`; the build no longer edits generated files afterward. It rejects
+an inconsistent epoch, version, generated commit, or generated CLI/core pair.
 
 The local patch provides:
 
@@ -205,8 +228,15 @@ The local patch provides:
 - a universal strict native-tool allowlist covering built-in, dynamic, MCP, skill,
   and synthetic tools;
 - a successful-tool-call terminal invariant;
-- no XML recovery, implicit semantic retry, automatic continuation, or executable
-  partial call after a length stop;
+- no XML recovery or executable partial call after a length stop;
+- one and only one fresh resample for a malformed pre-content stream, followed by a
+  typed terminal failure if it remains malformed; no resample after visible output,
+  no length-stop continuation, no transport continuation, no alternate-model
+  fallback, and no retry that could duplicate a tool side effect;
+- exact compaction through the same main model and same cacheable prefix: the fully
+  rendered pre-summary request and proposed compacted history are both counted by
+  vLLM's tokenizer, the summary must terminate normally without tools or malformed
+  output, and any failure preserves the original history;
 - foreground-only `general-purpose` and `Explore` agents, with no forks,
   background work, teams, worktrees, custom types, model overrides, or nesting;
 - init metadata filtered through the identical two-agent policy, so uncallable
@@ -442,10 +472,12 @@ three configuration files. The service image is sealed by committed source, stac
 lock, and Cargo lock labels.
 
 The current agent image is
-`sha256:303601e191432b197970203b7e9c220833d871c5338c43b8a735d812f65ac77c`.
-Its build reconstructed thirty-three changed/new files from pristine upstream and
-passed twelve suites with 1,720 tests. A second build from the same sealed inputs
-reproduced the exact image ID. The build script treats any other ID as drift.
+`sha256:cc916c63598c5953810482e2e5f614eaa1e96695f5c07bfb2c3f2f894e9aa323`.
+Its build reconstructed forty-six changed/new files from pristine upstream and
+passed 2,326 tests in the expanded sixteen-suite focused matrix. The sealed runtime
+reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
+review-diff, semantic-manifest, settings, instruction, and wrapper labels. The
+build script treats any other image ID as drift.
 The pinned Rust 1.95.0 service stage also passed all ten service tests and a locked
 release build, including fail-closed tests for default-policy drift and nonempty
 slash-command advertisement.
@@ -543,8 +575,9 @@ A release is not complete merely because the images build. Every required gate b
 passed against the pinned agent image and the exact live v10 backend:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
-2. clean Qwen archive extraction, patch check/application, full patched build, and
-   all twelve focused upstream suites (1,720 tests in the pinned tree);
+2. clean Qwen archive extraction, semantic drift/idempotence/rollback checks,
+   transactional source transformation, review-diff equivalence, full patched
+   build, and all sixteen focused upstream suites;
 3. agent-image label/hash/version checks and network-none route proof;
 4. exact live backend container/image/labels/command/listener/version/model/tokenizer;
 5. sealed model path from agent loopback, with no route or DNS;

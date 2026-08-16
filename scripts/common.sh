@@ -77,6 +77,13 @@ check_pinned_inputs() {
   require_equal "Qwen patch SHA256" \
     "$(sha256_file "${PROJECT_DIR}/patches/qwen-code-0.21.12-agent-service.patch")" \
     "$(lock_value '.agent.qwen_code.patch_sha256')"
+  require_equal "Qwen source patch manifest SHA256" \
+    "$(sha256_file "${PROJECT_DIR}/patches/source_patch_v1/manifest.sha256")" \
+    "$(lock_value '.agent.qwen_code.source_patch_manifest_sha256')"
+  (
+    cd "${PROJECT_DIR}"
+    sha256sum --check --strict patches/source_patch_v1/manifest.sha256
+  ) || die "Qwen source transformer manifest validation failed"
   require_equal "Qwen settings SHA256" \
     "$(sha256_file "${PROJECT_DIR}/docker/config/settings.json")" \
     "$(lock_value '.agent.settings_sha256')"
@@ -123,6 +130,9 @@ require_agent_image_contract() {
     "$(image_label "${image}" agent_service.qwen.archive.sha256)" "$(lock_value '.agent.qwen_code.source_archive_sha256')"
   require_equal "agent image Qwen patch label" \
     "$(image_label "${image}" agent_service.qwen.patch.sha256)" "$(lock_value '.agent.qwen_code.patch_sha256')"
+  require_equal "agent image Qwen source patch manifest label" \
+    "$(image_label "${image}" agent_service.qwen.source-patch-manifest.sha256)" \
+    "$(lock_value '.agent.qwen_code.source_patch_manifest_sha256')"
   require_equal "agent image settings label" \
     "$(image_label "${image}" agent_service.settings.sha256)" "$(lock_value '.agent.settings_sha256')"
   require_equal "agent image instructions label" \
