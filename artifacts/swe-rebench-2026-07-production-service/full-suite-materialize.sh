@@ -25,6 +25,8 @@ readonly SERVICE_RELEASE_COMMIT=7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc
 readonly SERVICE_IMPLEMENTATION_COMMIT=bc67dae720894cbbcd62122a2a9ff6b56b042168
 readonly SERVICE_RELEASE_LOCK_SHA256=a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4
 readonly STACK_LOCK_SHA256=de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3
+readonly SOURCE_EXTRACTOR_IMAGE_ID=sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec
+readonly SOURCE_EXTRACTOR_TAR_VERSION='tar (GNU tar) 1.35'
 readonly EXPECTED_TASKS=111
 readonly MAX_STAGED_FILES=200000
 readonly MAX_STAGED_BYTES=4294967296
@@ -99,6 +101,16 @@ git -C "${SERVICE_ROOT}" merge-base --is-ancestor "${SERVICE_RELEASE_COMMIT}" HE
   die 'benchmark tooling commit does not descend from the accepted production release'
 require_sha256 "${SERVICE_ROOT}/config/release.lock.json" "${SERVICE_RELEASE_LOCK_SHA256}"
 require_sha256 "${SERVICE_ROOT}/config/stack.lock.json" "${STACK_LOCK_SHA256}"
+require_equal 'source-extractor image ID in stack lock' "${SOURCE_EXTRACTOR_IMAGE_ID}" \
+  "$(jq -er '.agent.image_id' "${SERVICE_ROOT}/config/stack.lock.json")"
+require_equal 'source-extractor image architecture' amd64 \
+  "$(docker image inspect --format '{{.Architecture}}' "${SOURCE_EXTRACTOR_IMAGE_ID}")"
+require_equal 'source-extractor image OS' linux \
+  "$(docker image inspect --format '{{.Os}}' "${SOURCE_EXTRACTOR_IMAGE_ID}")"
+require_equal 'source-extractor GNU tar version' "${SOURCE_EXTRACTOR_TAR_VERSION}" \
+  "$(docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --user 1000:1000 --entrypoint tar "${SOURCE_EXTRACTOR_IMAGE_ID}" \
+    --version | sed -n '1p')"
 jq -e \
   --arg implementation "${SERVICE_IMPLEMENTATION_COMMIT}" \
   --arg stack "${STACK_LOCK_SHA256}" \
@@ -209,6 +221,33 @@ write_symlink_manifest() {
   ) >"${output}"
 }
 
+write_image_regular_manifest() {
+  local env_id="$1" output="$2"
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --memory 1g --pids-limit 128 --env LC_ALL=C \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'find . -type f -print0 | sort -z | xargs -0 -r sha256sum --zero --' >"${output}"
+}
+
+write_image_mode_manifest() {
+  local env_id="$1" output="$2"
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --memory 1g --pids-limit 128 --env LC_ALL=C \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'find . -mindepth 1 -printf "%y %m %P -> %l\0" | sort -z' >"${output}"
+}
+
+write_image_symlink_manifest() {
+  local env_id="$1" output="$2"
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --memory 1g --pids-limit 128 --env LC_ALL=C \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'find . -type l -printf "%P -> %l\0" | sort -z' >"${output}"
+}
+
 write_environment_git_status() {
   local env_id="$1" expected_base_commit="$2" output="$3"
   docker run --rm --network none --cap-drop ALL \
@@ -248,17 +287,27 @@ write_copied_git_status() {
 
 verify_source_manifests() {
   local task_dir="$1"
-  local source_root="${task_dir}/source" scratch
+  local source_root="${task_dir}/source" scratch env_id
+  env_id="$(jq -er '.environment.image_id' "${task_dir}/manifest.json")"
   scratch="$(mktemp -d "${SUITE_ROOT}/.verify-source.XXXXXXXX")"
   write_regular_manifest "${source_root}" "${scratch}/regular.sha256z"
   write_mode_manifest "${source_root}" "${scratch}/modes.z"
   write_symlink_manifest "${source_root}" "${scratch}/symlinks.z"
+  write_image_regular_manifest "${env_id}" "${scratch}/image-regular.sha256z"
+  write_image_mode_manifest "${env_id}" "${scratch}/image-modes.z"
+  write_image_symlink_manifest "${env_id}" "${scratch}/image-symlinks.z"
   cmp -- "${task_dir}/source-regular.sha256z" "${scratch}/regular.sha256z" ||
     die "source regular-file content drift: ${source_root}"
   cmp -- "${task_dir}/source-modes.z" "${scratch}/modes.z" ||
     die "source type/mode/target drift: ${source_root}"
   cmp -- "${task_dir}/source-symlinks.z" "${scratch}/symlinks.z" ||
     die "source symlink drift: ${source_root}"
+  cmp -- "${task_dir}/source-regular.sha256z" "${scratch}/image-regular.sha256z" ||
+    die "materialized regular files differ from the exact environment image: ${source_root}"
+  cmp -- "${task_dir}/source-modes.z" "${scratch}/image-modes.z" ||
+    die "materialized types/modes/targets differ from the exact environment image: ${source_root}"
+  cmp -- "${task_dir}/source-symlinks.z" "${scratch}/image-symlinks.z" ||
+    die "materialized symlinks differ from the exact environment image: ${source_root}"
   rm -rf -- "${scratch}"
 }
 
@@ -377,6 +426,7 @@ validate_completed_task() {
   local task_id="$1"
   local task_dir="${MATERIALIZATION_ROOT}/${task_id}"
   local manifest="${task_dir}/manifest.json" archive_sha archive_bytes registry_content_hash evidence
+  local materialization_method
   [[ -d "${task_dir}" && ! -L "${task_dir}" ]] ||
     die "completed task directory is absent or a symlink: ${task_dir}"
   [[ -f "${manifest}" && ! -L "${manifest}" ]] ||
@@ -409,6 +459,21 @@ validate_completed_task() {
      (.classification == "eligible" or .classification == "production-input-contract-exclusion") and
      (.policy_order == [false,true] or .policy_order == [true,false])' \
     "${manifest}" >/dev/null || die "completed task manifest semantic mismatch: ${task_id}"
+  materialization_method="$(jq -r '.source.materialization_method // "legacy Docker direct destination copy"' \
+    "${manifest}")"
+  if [[ "${materialization_method}" == \
+    'Docker archive stream plus pinned non-root GNU tar delayed-directory restoration' ]]; then
+    require_equal "source extractor image for ${task_id}" "${SOURCE_EXTRACTOR_IMAGE_ID}" \
+      "$(jq -er '.source.extractor_image_id' "${manifest}")"
+    require_equal "source extractor tar version for ${task_id}" "${SOURCE_EXTRACTOR_TAR_VERSION}" \
+      "$(jq -er '.source.extractor_tar_version' "${manifest}")"
+    for evidence in source-archive.log source-extract.log; do
+      [[ -f "${task_dir}/${evidence}" && ! -L "${task_dir}/${evidence}" ]] ||
+        die "completed streamed-copy evidence is absent or a symlink: ${task_dir}/${evidence}"
+    done
+  elif [[ "${materialization_method}" != 'legacy Docker direct destination copy' ]]; then
+    die "unrecognized source materialization method for ${task_id}: ${materialization_method}"
+  fi
   archive_sha="$(jq -er '.environment.archive_sha256' "${manifest}")"
   archive_bytes="$(jq -er '.environment.archive_bytes' "${manifest}")"
   require_sha256 "${task_dir}/environment-image.tar" "${archive_sha}"
@@ -470,7 +535,7 @@ materialize_task() {
   local base_ref base_repository base_id base_digest env_tag env_id workdir config_user base_commit
   local language log_parser instruction_bytes file_count source_bytes symlink_count special_count
   local classification=eligible exclusion_reason='' policy_first=false policy_second=true
-  local archive_sha archive_bytes regular_sha modes_sha symlinks_sha container_name
+  local archive_sha archive_bytes regular_sha modes_sha symlinks_sha container_name source_archive
   local initial_git_status_sha initial_git_status_bytes initial_worktree_clean copied_git_status
   local registry_content_hash network_policy_source
   local -a docker_lines
@@ -597,9 +662,22 @@ materialize_task() {
   ACTIVE_CONTAINER="${container_name}"
   docker create --name "${container_name}" --network none --entrypoint true "${env_id}" \
     >"${partial_dir}/materialize-container-id.txt"
-  docker cp "${container_name}:${workdir}/." "${source_root}"
+  source_archive="${partial_dir}/source.tar.partial"
+  docker cp "${container_name}:${workdir}/." - >"${source_archive}" \
+    2>"${partial_dir}/source-archive.log"
+  chmod 0600 -- "${source_archive}"
+  sync -f "${source_archive}"
   docker rm "${container_name}" >"${partial_dir}/materialize-container-removed-id.txt"
   ACTIVE_CONTAINER=
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --memory 1g --pids-limit 128 --user 1000:1000 \
+    --mount "type=bind,src=${source_archive},dst=/input/source.tar,readonly" \
+    --mount "type=bind,src=${source_root},dst=/output" \
+    --entrypoint tar "${SOURCE_EXTRACTOR_IMAGE_ID}" \
+    --extract --file=/input/source.tar --directory=/output --no-same-owner \
+    --same-permissions --delay-directory-restore >"${partial_dir}/source-extract.log" 2>&1
+  rm -- "${source_archive}"
+  sync -f "${partial_dir}"
   chmod 0700 -- "${source_root}"
   [[ -d "${source_root}/.git" && ! -L "${source_root}/.git" ]] ||
     die "materialized source lacks a real .git directory: ${task_id}"
@@ -623,6 +701,20 @@ materialize_task() {
   write_regular_manifest "${source_root}" "${partial_dir}/source-regular.sha256z"
   write_mode_manifest "${source_root}" "${partial_dir}/source-modes.z"
   write_symlink_manifest "${source_root}" "${partial_dir}/source-symlinks.z"
+  write_image_regular_manifest "${env_id}" "${partial_dir}/source-image-regular.verify"
+  write_image_mode_manifest "${env_id}" "${partial_dir}/source-image-modes.verify"
+  write_image_symlink_manifest "${env_id}" "${partial_dir}/source-image-symlinks.verify"
+  cmp -- "${partial_dir}/source-regular.sha256z" \
+    "${partial_dir}/source-image-regular.verify" ||
+    die "materialized regular files differ from the exact environment image: ${task_id}"
+  cmp -- "${partial_dir}/source-modes.z" "${partial_dir}/source-image-modes.verify" ||
+    die "materialized types/modes/targets differ from the exact environment image: ${task_id}"
+  cmp -- "${partial_dir}/source-symlinks.z" \
+    "${partial_dir}/source-image-symlinks.verify" ||
+    die "materialized symlinks differ from the exact environment image: ${task_id}"
+  rm -- "${partial_dir}/source-image-regular.verify" \
+    "${partial_dir}/source-image-modes.verify" \
+    "${partial_dir}/source-image-symlinks.verify"
   regular_sha="$(sha256sum -- "${partial_dir}/source-regular.sha256z" | awk '{print $1}')"
   modes_sha="$(sha256sum -- "${partial_dir}/source-modes.z" | awk '{print $1}')"
   symlinks_sha="$(sha256sum -- "${partial_dir}/source-symlinks.z" | awk '{print $1}')"
@@ -685,6 +777,8 @@ materialize_task() {
     --arg regular_sha "${regular_sha}" \
     --arg modes_sha "${modes_sha}" \
     --arg symlinks_sha "${symlinks_sha}" \
+    --arg source_extractor_image "${SOURCE_EXTRACTOR_IMAGE_ID}" \
+    --arg source_extractor_tar_version "${SOURCE_EXTRACTOR_TAR_VERSION}" \
     --arg initial_git_status_sha "${initial_git_status_sha}" \
     --argjson initial_git_status_bytes "${initial_git_status_bytes}" \
     --argjson initial_worktree_clean "${initial_worktree_clean}" \
@@ -742,6 +836,9 @@ materialize_task() {
         regular_manifest_sha256:$regular_sha,
         mode_manifest_sha256:$modes_sha,
         symlink_manifest_sha256:$symlinks_sha,
+        materialization_method:"Docker archive stream plus pinned non-root GNU tar delayed-directory restoration",
+        extractor_image_id:$source_extractor_image,
+        extractor_tar_version:$source_extractor_tar_version,
         initial_git_status_sha256:$initial_git_status_sha,
         initial_git_status_bytes:$initial_git_status_bytes,
         initial_worktree_clean:$initial_worktree_clean
