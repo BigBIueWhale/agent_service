@@ -95,7 +95,7 @@ require_equal "service /tmp contract" \
   "$(docker inspect --format '{{index .HostConfig.Tmpfs "/tmp"}}' "${SERVICE_NAME}")" \
   "$(lock_value '.service.tmpfs_tmp')"
 require_equal "service mount count" \
-  "$(docker inspect --format '{{len .Mounts}}' "${SERVICE_NAME}")" 5
+  "$(docker inspect --format '{{len .Mounts}}' "${SERVICE_NAME}")" 6
 
 mount_contract() {
   local name="$1" destination="$2"
@@ -103,9 +103,12 @@ mount_contract() {
     "{{range .Mounts}}{{if eq .Destination \"${destination}\"}}{{.Source}}|{{.RW}}|{{.Type}}|{{.Propagation}}{{end}}{{end}}" \
     "${name}"
 }
-require_equal "service input-root mount" \
-  "$(mount_contract "${SERVICE_NAME}" "$(lock_value '.service.host_input_root')")" \
-  "$(lock_value '.service.host_input_root')|false|bind|rprivate"
+require_equal "service config mount" \
+  "$(mount_contract "${SERVICE_NAME}" "${PROJECT_DIR}/config")" \
+  "${PROJECT_DIR}/config|false|bind|rprivate"
+require_equal "service backend-manifests mount" \
+  "$(mount_contract "${SERVICE_NAME}" "${BACKEND_DIR}/manifests")" \
+  "${BACKEND_DIR}/manifests|false|bind|rprivate"
 require_equal "service state mount" "$(mount_contract "${SERVICE_NAME}" "${STATE_DIR}")" \
   "${STATE_DIR}|true|bind|rprivate"
 require_equal "service results mount" "$(mount_contract "${SERVICE_NAME}" "${RESULTS_DIR}")" \
