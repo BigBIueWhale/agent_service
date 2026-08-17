@@ -114,6 +114,7 @@ check_pinned_inputs() {
     cd "${PROJECT_DIR}"
     sha256sum --check --strict config/build-inputs.sha256
   ) || die "Executable build-input manifest validation failed"
+  validate_build_input_manifest_path_set
   require_equal "broker policy SHA256" \
     "$(sha256_file "${BROKER_POLICY}")" \
     "$(lock_value '.broker.policy_sha256')"
@@ -284,6 +285,54 @@ check_pinned_inputs() {
     "$(sha256_file "${PROJECT_DIR}/src/bin/agent_exec.rs")" \
     "$(lock_value '.agent.agent_exec_source_sha256')"
   bash -n "${PROJECT_DIR}/docker/config/run_agent.sh" || die "Agent wrapper shell syntax is invalid"
+}
+
+validate_build_input_manifest_path_set() {
+  local scratch listed expected actual line digest path count
+  scratch="$(mktemp -d /tmp/qwen38-build-input-paths.XXXXXX)"
+  case "${scratch}" in
+    /tmp/qwen38-build-input-paths.*) ;;
+    *) die "Unexpected build-input validation scratch path: ${scratch}" ;;
+  esac
+  listed="${scratch}/listed.nul"
+  expected="${scratch}/expected.txt"
+  actual="${scratch}/actual.txt"
+
+  if ! "${PROJECT_DIR}/scripts/list-build-inputs.sh" >"${listed}"; then
+    rm -rf -- "${scratch}"
+    die "Canonical build-input enumeration failed"
+  fi
+  count=0
+  : >"${expected}"
+  while IFS= read -r -d '' path; do
+    printf '%s\n' "${path}" >>"${expected}"
+    count=$((count + 1))
+  done <"${listed}"
+  if ((count < 40)); then
+    rm -rf -- "${scratch}"
+    die "Canonical build-input enumeration unexpectedly returned only ${count} paths"
+  fi
+  : >"${actual}"
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    if ((${#line} < 67)); then
+      rm -rf -- "${scratch}"
+      die "Build-input manifest contains a truncated record"
+    fi
+    digest="${line:0:64}"
+    path="${line:66}"
+    if [[ ! "${digest}" =~ ^[0-9a-f]{64}$ || "${line:64:2}" != '  ' || -z "${path}" ]]; then
+      rm -rf -- "${scratch}"
+      die "Build-input manifest contains a non-canonical record"
+    fi
+    printf '%s\n' "${path}" >>"${actual}"
+  done <"${BUILD_INPUTS_MANIFEST}"
+  if ! cmp -s -- "${expected}" "${actual}"; then
+    printf 'ERROR: build-input manifest path set/order differs from the canonical %s-entry tracked input set\n' "${count}" >&2
+    diff -u -- "${expected}" "${actual}" >&2 || true
+    rm -rf -- "${scratch}"
+    exit 1
+  fi
+  rm -rf -- "${scratch}"
 }
 
 require_clean_committed_repository() {

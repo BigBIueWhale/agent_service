@@ -186,7 +186,7 @@ pub async fn run_one(
             SessionStatus::Completed,
         );
     }
-    let (staged_bytes, staged_files) =
+    let (staged_bytes, staged_entries) =
         match staging::copy_into_staged(&req.source_dir, &req.folder, &paths.staged) {
             Ok(value) => value,
             Err(error) => {
@@ -203,8 +203,8 @@ pub async fn run_one(
     tracing::info!(
         session_id,
         staged_bytes,
-        staged_files,
-        "descriptor-anchored source copy passed size, type, symlink, and read-race validation"
+        staged_entries,
+        "descriptor-anchored source copy preserved opaque symlinks and passed size, type, and read-race validation"
     );
     if let Err(error) = paths.write_prompt(&req.prompt) {
         let diagnostics = paths.remove_all();

@@ -1,10 +1,13 @@
 //! Deterministic, required session bundling.
 //!
 //! The archive contains the final mutable workspace, explicit artifacts, the
-//! original prompt control record, and every output sidecar. Missing entries,
-//! unreadable files, symlinks, tar failures, or rename failures are hard
-//! session errors. There is no `--ignore-failed-read` path.
+//! original prompt control record, and every output sidecar. Symbolic links
+//! below the mutable workspace/artifact roots are recorded and archived as
+//! links without dereferencing their targets. Missing entries, unreadable
+//! files, special files, tar failures, or rename failures are hard session
+//! errors. There is no `--ignore-failed-read` path.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
 use std::{
@@ -127,6 +130,7 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
             "control",
             "output",
         ]);
+        command.env_remove("TAR_OPTIONS");
         let output = run_with_stdout_file(&mut command, partial_file).await?;
         if !output.status.success() {
             return Err(ServiceError::Internal(format!(
@@ -320,6 +324,7 @@ struct EntryFingerprint {
     modified_nanoseconds: i64,
     changed_seconds: i64,
     changed_nanoseconds: i64,
+    symlink_target: Option<OsString>,
 }
 
 #[derive(Default)]
@@ -337,7 +342,13 @@ fn snapshot_selected(session_dir: &Path) -> ServiceResult<TreeSnapshot> {
         let before = snapshot.file_count;
         walk(session_dir, &session_dir.join(name), &mut snapshot)?;
         if name == "artifacts" {
-            snapshot.artifacts_file_count = snapshot.file_count.saturating_sub(before);
+            snapshot.artifacts_file_count =
+                snapshot.file_count.checked_sub(before).ok_or_else(|| {
+                    ServiceError::Internal(format!(
+                        "bundle artifact counter moved backwards: before={before}, after={}",
+                        snapshot.file_count
+                    ))
+                })?;
         }
     }
     Ok(snapshot)
@@ -358,18 +369,13 @@ fn walk(base: &Path, path: &Path, snapshot: &mut TreeSnapshot) -> ServiceResult<
         let metadata = std::fs::symlink_metadata(&child)
             .map_err(|error| ServiceError::Internal(io_msg("bundle stat entry", &child, &error)))?;
         if metadata.file_type().is_symlink() {
-            return Err(ServiceError::Internal(format!(
-                "bundle refuses symlink {}",
-                child.display()
-            )));
-        }
-        if metadata.is_dir() {
+            record_metadata(base, &child, &metadata, snapshot)?;
+            add_archive_entry_stats(snapshot, &child, metadata.len())?;
+        } else if metadata.is_dir() {
             walk(base, &child, snapshot)?;
         } else if metadata.is_file() {
             record_metadata(base, &child, &metadata, snapshot)?;
-            snapshot.file_count = snapshot.file_count.saturating_add(1);
-            snapshot.uncompressed_bytes =
-                snapshot.uncompressed_bytes.saturating_add(metadata.len());
+            add_archive_entry_stats(snapshot, &child, metadata.len())?;
         } else {
             return Err(ServiceError::Internal(format!(
                 "bundle refuses non-file/non-directory {}",
@@ -377,6 +383,32 @@ fn walk(base: &Path, path: &Path, snapshot: &mut TreeSnapshot) -> ServiceResult<
             )));
         }
     }
+    Ok(())
+}
+
+fn add_archive_entry_stats(
+    snapshot: &mut TreeSnapshot,
+    path: &Path,
+    entry_bytes: u64,
+) -> ServiceResult<()> {
+    let file_count = snapshot.file_count.checked_add(1).ok_or_else(|| {
+        ServiceError::Internal(format!(
+            "bundle archive-entry counter overflowed u64 while recording {}",
+            path.display()
+        ))
+    })?;
+    let uncompressed_bytes = snapshot
+        .uncompressed_bytes
+        .checked_add(entry_bytes)
+        .ok_or_else(|| {
+            ServiceError::Internal(format!(
+                "bundle uncompressed-byte counter overflowed u64 while recording {}: current={} entry={entry_bytes}",
+                path.display(),
+                snapshot.uncompressed_bytes
+            ))
+        })?;
+    snapshot.file_count = file_count;
+    snapshot.uncompressed_bytes = uncompressed_bytes;
     Ok(())
 }
 
@@ -415,11 +447,24 @@ fn record_metadata(
         1
     } else if metadata.is_file() {
         2
+    } else if metadata.file_type().is_symlink() {
+        3
     } else {
         return Err(ServiceError::Internal(format!(
             "bundle refuses unsupported entry type {}",
             path.display()
         )));
+    };
+    let symlink_target = if metadata.file_type().is_symlink() {
+        Some(
+            std::fs::read_link(path)
+                .map_err(|error| {
+                    ServiceError::Internal(io_msg("bundle read symbolic link", path, &error))
+                })?
+                .into_os_string(),
+        )
+    } else {
+        None
     };
     let fingerprint = EntryFingerprint {
         kind,
@@ -434,6 +479,7 @@ fn record_metadata(
         modified_nanoseconds: metadata.mtime_nsec(),
         changed_seconds: metadata.ctime(),
         changed_nanoseconds: metadata.ctime_nsec(),
+        symlink_target,
     };
     if snapshot
         .entries
@@ -494,6 +540,7 @@ pub async fn check_host_dependencies() -> ServiceResult<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::ffi::OsStringExt;
     use std::os::unix::fs::{symlink, PermissionsExt};
 
     use super::*;
@@ -599,5 +646,154 @@ mod tests {
         assert_ne!(with_created.entries, after_removal.entries);
 
         std::fs::remove_dir_all(&root).expect("remove bundle snapshot fixture");
+    }
+
+    #[test]
+    fn archive_stats_fail_closed_on_counter_overflow() {
+        let path = Path::new("staged/overflow-fixture");
+
+        let mut count_overflow = TreeSnapshot {
+            file_count: u64::MAX,
+            ..TreeSnapshot::default()
+        };
+        let error = add_archive_entry_stats(&mut count_overflow, path, 0)
+            .expect_err("archive-entry counter overflow must be explicit");
+        assert!(error
+            .to_string()
+            .contains("archive-entry counter overflowed"));
+        assert_eq!(count_overflow.file_count, u64::MAX);
+        assert_eq!(count_overflow.uncompressed_bytes, 0);
+
+        let mut byte_overflow = TreeSnapshot {
+            uncompressed_bytes: u64::MAX,
+            ..TreeSnapshot::default()
+        };
+        let error = add_archive_entry_stats(&mut byte_overflow, path, 1)
+            .expect_err("uncompressed-byte counter overflow must be explicit");
+        assert!(error
+            .to_string()
+            .contains("uncompressed-byte counter overflowed"));
+        assert_eq!(byte_overflow.file_count, 0);
+        assert_eq!(byte_overflow.uncompressed_bytes, u64::MAX);
+    }
+
+    #[test]
+    fn snapshot_and_tar_preserve_symlinks_as_links_without_reading_their_targets() {
+        let root = std::env::temp_dir().join(format!(
+            "qwen38-bundle-links-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        let session = root.join("session");
+        let extracted = root.join("extracted");
+        for directory in ["staged", "artifacts", "control", "output"] {
+            std::fs::create_dir_all(session.join(directory)).expect("create bundle fixture");
+        }
+        for (relative, bytes) in [
+            ("control/prompt.txt", b"prompt\n".as_slice()),
+            (
+                "control/history-policy.json",
+                b"{\"preserve_thinking\":false}\n".as_slice(),
+            ),
+            ("output/ready.json", b"{}\n".as_slice()),
+            ("output/events.jsonl", b"{}\n".as_slice()),
+            ("output/qwen.stderr", b"".as_slice()),
+            ("output/qwen-exit-code", b"0\n".as_slice()),
+            ("output/response.txt", b"done\n".as_slice()),
+        ] {
+            std::fs::write(session.join(relative), bytes).expect("write required bundle file");
+        }
+        let outside = root.join("outside-secret.txt");
+        std::fs::write(&outside, b"must-not-be-archived-as-link-content")
+            .expect("write outside target");
+        symlink(&outside, session.join("staged/absolute-outside"))
+            .expect("create absolute outside link");
+        symlink("missing-target", session.join("staged/dangling")).expect("create dangling link");
+        let non_utf8_target = OsString::from_vec(vec![b'n', b'o', b'n', b'-', 0xff]);
+        symlink(&non_utf8_target, session.join("staged/non-utf8"))
+            .expect("create non-UTF8 target link");
+        symlink("../staged/dangling", session.join("artifacts/link-chain"))
+            .expect("create link chain");
+        let snapshot = snapshot_selected(&session).expect("snapshot accepts opaque links");
+        assert_eq!(snapshot.file_count, 11);
+        assert_eq!(snapshot.artifacts_file_count, 1);
+        assert!(snapshot.uncompressed_bytes >= 3);
+
+        // The Rust compiler stage deliberately contains GNU tar but not the
+        // production service image's pinned zstd binary. Compression is
+        // orthogonal to link traversal, so this focused unit uses the same
+        // recursive tar semantics without compression. The accepted runtime
+        // path separately exercises create_bundle and its zstd dependency.
+        let archive = root.join("bundle.tar");
+        let creation = std::process::Command::new("tar")
+            .args([
+                "--sort=name",
+                "--mtime=@0",
+                "--owner=0",
+                "--group=0",
+                "--numeric-owner",
+                "--format=posix",
+                "--pax-option=delete=atime,delete=ctime",
+                "-cf",
+                archive.to_str().expect("UTF-8 archive fixture"),
+                "-C",
+                session.to_str().expect("UTF-8 session fixture"),
+                "staged",
+                "artifacts",
+                "control",
+                "output",
+            ])
+            .env("TAR_OPTIONS", "--dereference")
+            .env_remove("TAR_OPTIONS")
+            .output()
+            .expect("run pinned tar for fixture creation");
+        assert!(
+            creation.status.success(),
+            "fixture archive creation failed: {}",
+            String::from_utf8_lossy(&creation.stderr)
+        );
+
+        std::fs::create_dir(&extracted).expect("create extraction root");
+        let output = std::process::Command::new("tar")
+            .args([
+                "--extract",
+                "--file",
+                archive.to_str().expect("UTF-8 archive fixture"),
+                "--directory",
+                extracted.to_str().expect("UTF-8 extraction fixture"),
+            ])
+            .output()
+            .expect("run pinned tar for fixture extraction");
+        assert!(
+            output.status.success(),
+            "fixture extraction failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        for (relative, expected) in [
+            (
+                "staged/absolute-outside",
+                outside.as_os_str().to_os_string(),
+            ),
+            ("staged/dangling", OsString::from("missing-target")),
+            ("staged/non-utf8", non_utf8_target),
+            ("artifacts/link-chain", OsString::from("../staged/dangling")),
+        ] {
+            let link = extracted.join(relative);
+            assert!(std::fs::symlink_metadata(&link)
+                .expect("stat extracted link")
+                .file_type()
+                .is_symlink());
+            assert_eq!(
+                std::fs::read_link(&link)
+                    .expect("read extracted target")
+                    .into_os_string(),
+                expected
+            );
+        }
+        assert_eq!(
+            std::fs::read(&outside).expect("read untouched outside target"),
+            b"must-not-be-archived-as-link-content"
+        );
+
+        std::fs::remove_dir_all(&root).expect("remove bundle-link fixture");
     }
 }

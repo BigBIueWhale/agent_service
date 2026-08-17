@@ -21,18 +21,20 @@
 //!
 //! We deliberately copy rather than bind-mounting the user's source folder
 //! directly: that gives the agent a workspace it can mutate without affecting
-//! the user's working tree, and it stops a buggy / hostile agent from
-//! reaching outside the staged tree via symlink shenanigans (we already
-//! reject symlinks while descriptor-walking in `validation.rs`, and the
-//! staged tree contains none).
+//! the user's working tree. Symbolic links are copied as opaque link-target
+//! bytes and are never followed, flattened, rewritten, or used as traversal
+//! roots by this service. Resolution happens later inside the agent's isolated
+//! mount namespace, where Landlock still governs the resolved write target.
 
+use std::ffi::{CStr, CString, OsString};
 use std::fs::{File, Metadata, OpenOptions};
 use std::io::Write;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use crate::config::{MAX_STAGED_BYTES, MAX_STAGED_FILES};
+use crate::config::{MAX_STAGED_BYTES, MAX_STAGED_ENTRIES, MAX_STAGED_FILES};
 use crate::error::{io_msg, ServiceError, ServiceResult};
 
 #[derive(Debug, Clone)]
@@ -308,15 +310,26 @@ fn validate_existing_session_directory(path: &Path, mode: u32) -> ServiceResult<
 
 /// Descriptor-based recursive copy with permission normalisation. Every source
 /// object is opened with `O_NOFOLLOW`; its device/inode/type/mode/size/mtime/
-/// ctime snapshot is compared before and after use. Directory traversal is
-/// anchored to the already-open descriptor through `/proc/self/fd`, so a
-/// concurrent path replacement cannot redirect the copy outside the requested
-/// tree. Any observed mutation is an explicit staging failure.
+/// ctime snapshot is compared before and after use. A symbolic link is opened
+/// itself with `O_PATH | O_NOFOLLOW` and read through that descriptor, never
+/// through its target. Directory traversal is anchored to the already-open
+/// descriptor through `/proc/self/fd`, so a concurrent path replacement cannot
+/// redirect the copy outside the requested tree. Any observed mutation is an
+/// explicit staging failure. The returned count includes every non-root source
+/// entry (directories, regular files, and symbolic links).
 pub fn copy_into_staged(source: &File, from: &Path, to: &Path) -> ServiceResult<(u64, u64)> {
     let mut copied_bytes = 0u64;
-    let mut copied_files = 0u64;
-    copy_open_directory(source, from, to, &mut copied_bytes, &mut copied_files)?;
-    Ok((copied_bytes, copied_files))
+    let mut copied_entries = 0u64;
+    let mut copied_regular_files = 0u64;
+    copy_open_directory(
+        source,
+        from,
+        to,
+        &mut copied_bytes,
+        &mut copied_entries,
+        &mut copied_regular_files,
+    )?;
+    Ok((copied_bytes, copied_entries))
 }
 
 fn copy_open_directory(
@@ -324,7 +337,8 @@ fn copy_open_directory(
     logical_source: &Path,
     to: &Path,
     copied_bytes: &mut u64,
-    copied_files: &mut u64,
+    copied_entries: &mut u64,
+    copied_regular_files: &mut u64,
 ) -> ServiceResult<()> {
     let before = source.metadata().map_err(|error| {
         ServiceError::Staging(io_msg(
@@ -354,13 +368,69 @@ fn copy_open_directory(
         let meta = std::fs::symlink_metadata(&src_path)
             .map_err(|error| source_access_error("stat source entry", &logical_path, error))?;
 
+        *copied_entries = copied_entries
+            .checked_add(1)
+            .ok_or_else(|| ServiceError::Staging("staged entry counter overflowed u64".into()))?;
+        require_staging_caps(*copied_bytes, *copied_entries, *copied_regular_files)?;
+
         if meta.file_type().is_symlink() {
-            return Err(ServiceError::InvalidRequest(format!(
-                "refusing to copy symbolic link at {}",
-                logical_path.display()
-            )));
-        }
-        if meta.is_dir() {
+            let link = open_source_symlink(&src_path, "open source symbolic link")?;
+            let opened_meta = link.metadata().map_err(|error| {
+                ServiceError::Staging(io_msg(
+                    "stat opened source symbolic link",
+                    &logical_path,
+                    &error,
+                ))
+            })?;
+            require_same_snapshot(
+                &meta,
+                &opened_meta,
+                &logical_path,
+                "symbolic link changed between directory-entry inspection and no-follow open",
+            )?;
+            if !opened_meta.file_type().is_symlink() {
+                return Err(ServiceError::SourceChanged(format!(
+                    "source entry stopped being a symbolic link during staging: {}",
+                    logical_path.display()
+                )));
+            }
+            let target = read_open_symlink_target(&link, &logical_path)?;
+            require_same_snapshot(
+                &opened_meta,
+                &link.metadata().map_err(|error| {
+                    ServiceError::Staging(io_msg(
+                        "restat opened source symbolic link after reading target",
+                        &logical_path,
+                        &error,
+                    ))
+                })?,
+                &logical_path,
+                "source symbolic link changed while its target was being read",
+            )?;
+            std::os::unix::fs::symlink(&target, &dst_path).map_err(|error| {
+                ServiceError::Staging(io_msg("create staged symbolic link", &dst_path, &error))
+            })?;
+            let staged_meta = std::fs::symlink_metadata(&dst_path).map_err(|error| {
+                ServiceError::Staging(io_msg("stat staged symbolic link", &dst_path, &error))
+            })?;
+            if !staged_meta.file_type().is_symlink() {
+                return Err(ServiceError::Staging(format!(
+                    "staged symbolic-link publication changed type at {}",
+                    dst_path.display()
+                )));
+            }
+            let staged_target = std::fs::read_link(&dst_path).map_err(|error| {
+                ServiceError::Staging(io_msg("read staged symbolic link", &dst_path, &error))
+            })?;
+            if staged_target.as_os_str() != target.as_os_str() {
+                return Err(ServiceError::Staging(format!(
+                    "staged symbolic-link target mismatch at {}: expected {:?}, observed {:?}",
+                    dst_path.display(),
+                    target,
+                    staged_target
+                )));
+            }
+        } else if meta.is_dir() {
             let child = open_source_directory(&src_path, "open child source directory")?;
             require_same_snapshot(
                 &meta,
@@ -379,8 +449,19 @@ fn copy_open_directory(
             })?;
             std::fs::set_permissions(&dst_path, std::fs::Permissions::from_mode(0o755))
                 .map_err(|e| ServiceError::Staging(io_msg("chmod 0755", &dst_path, &e)))?;
-            copy_open_directory(&child, &logical_path, &dst_path, copied_bytes, copied_files)?;
+            copy_open_directory(
+                &child,
+                &logical_path,
+                &dst_path,
+                copied_bytes,
+                copied_entries,
+                copied_regular_files,
+            )?;
         } else if meta.is_file() {
+            *copied_regular_files = copied_regular_files.checked_add(1).ok_or_else(|| {
+                ServiceError::Staging("staged regular-file counter overflowed u64".into())
+            })?;
+            require_staging_caps(*copied_bytes, *copied_entries, *copied_regular_files)?;
             let mut input = open_source_file(&src_path, "open source file")?;
             let opened_meta = input.metadata().map_err(|error| {
                 ServiceError::Staging(io_msg("stat opened source file", &logical_path, &error))
@@ -391,6 +472,13 @@ fn copy_open_directory(
                 &logical_path,
                 "file changed between directory-entry inspection and no-follow open",
             )?;
+            let projected_bytes = copied_bytes.checked_add(opened_meta.len()).ok_or_else(|| {
+                ServiceError::Staging(format!(
+                    "staged byte counter would overflow u64 before copying {}",
+                    logical_path.display()
+                ))
+            })?;
+            require_staging_caps(projected_bytes, *copied_entries, *copied_regular_files)?;
             let source_mode = opened_meta.permissions().mode();
             let target_mode = if source_mode & 0o111 != 0 {
                 0o755
@@ -434,18 +522,10 @@ fn copy_open_directory(
                 &logical_path,
                 "source file changed while it was being copied",
             )?;
-            *copied_files = copied_files.checked_add(1).ok_or_else(|| {
-                ServiceError::Staging("staged file counter overflowed u64".into())
-            })?;
             *copied_bytes = copied_bytes.checked_add(bytes).ok_or_else(|| {
                 ServiceError::Staging("staged byte counter overflowed u64".into())
             })?;
-            if *copied_files > MAX_STAGED_FILES || *copied_bytes > MAX_STAGED_BYTES {
-                return Err(ServiceError::InvalidRequest(format!(
-                    "source exceeded the staging cap while being copied: files={} (max={MAX_STAGED_FILES}), bytes={} (max={MAX_STAGED_BYTES})",
-                    *copied_files, *copied_bytes
-                )));
-            }
+            require_staging_caps(*copied_bytes, *copied_entries, *copied_regular_files)?;
             std::fs::set_permissions(&dst_path, std::fs::Permissions::from_mode(target_mode))
                 .map_err(|e| {
                     ServiceError::Staging(io_msg("normalize staged file mode", &dst_path, &e))
@@ -473,6 +553,22 @@ fn copy_open_directory(
     Ok(())
 }
 
+fn require_staging_caps(
+    copied_bytes: u64,
+    copied_entries: u64,
+    copied_regular_files: u64,
+) -> ServiceResult<()> {
+    if copied_entries > MAX_STAGED_ENTRIES
+        || copied_regular_files > MAX_STAGED_FILES
+        || copied_bytes > MAX_STAGED_BYTES
+    {
+        return Err(ServiceError::InvalidRequest(format!(
+            "source exceeded a staging cap while being copied: entries={copied_entries} (max={MAX_STAGED_ENTRIES}), regular_files={copied_regular_files} (max={MAX_STAGED_FILES}), regular_file_bytes={copied_bytes} (max={MAX_STAGED_BYTES})"
+        )));
+    }
+    Ok(())
+}
+
 fn open_source_directory(path: &Path, operation: &str) -> ServiceResult<File> {
     OpenOptions::new()
         .read(true)
@@ -487,6 +583,103 @@ fn open_source_file(path: &Path, operation: &str) -> ServiceResult<File> {
         .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
         .open(path)
         .map_err(|error| source_access_error(operation, path, error))
+}
+
+fn open_source_symlink(path: &Path, operation: &str) -> ServiceResult<File> {
+    let path_bytes = path.as_os_str().as_bytes();
+    let path_c = CString::new(path_bytes).map_err(|_| {
+        ServiceError::InvalidRequest(format!(
+            "{operation}: source path contains a NUL byte: {}",
+            path.display()
+        ))
+    })?;
+    let descriptor = unsafe {
+        libc::open(
+            path_c.as_ptr(),
+            libc::O_PATH | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+        )
+    };
+    if descriptor < 0 {
+        return Err(source_access_error(
+            operation,
+            path,
+            std::io::Error::last_os_error(),
+        ));
+    }
+    // SAFETY: libc::open returned a new owned descriptor on the success path.
+    Ok(unsafe { File::from_raw_fd(descriptor) })
+}
+
+fn read_open_symlink_target(link: &File, logical_path: &Path) -> ServiceResult<PathBuf> {
+    const MAX_TARGET_BYTES: usize = 1024 * 1024;
+    let metadata = link.metadata().map_err(|error| {
+        ServiceError::Staging(io_msg(
+            "stat opened source symbolic link before reading target",
+            logical_path,
+            &error,
+        ))
+    })?;
+    let reported = usize::try_from(metadata.len()).map_err(|_| {
+        ServiceError::InvalidRequest(format!(
+            "symbolic-link target length does not fit usize at {}: {} bytes",
+            logical_path.display(),
+            metadata.len()
+        ))
+    })?;
+    if reported > MAX_TARGET_BYTES {
+        return Err(ServiceError::InvalidRequest(format!(
+            "symbolic-link target exceeds the {MAX_TARGET_BYTES}-byte staging limit at {}: {reported} bytes",
+            logical_path.display()
+        )));
+    }
+
+    let mut capacity = reported.saturating_add(1).max(256);
+    capacity = capacity.min(MAX_TARGET_BYTES);
+    let empty_path = CStr::from_bytes_with_nul(b"\0").expect("static empty C string");
+    loop {
+        let mut target = vec![0u8; capacity];
+        let length = unsafe {
+            libc::readlinkat(
+                link.as_raw_fd(),
+                empty_path.as_ptr(),
+                target.as_mut_ptr().cast(),
+                target.len(),
+            )
+        };
+        if length < 0 {
+            return Err(source_access_error(
+                "read opened source symbolic-link target",
+                logical_path,
+                std::io::Error::last_os_error(),
+            ));
+        }
+        let length = usize::try_from(length).map_err(|_| {
+            ServiceError::Staging(format!(
+                "readlinkat returned a negative or overflowing length for {}",
+                logical_path.display()
+            ))
+        })?;
+        if length < target.len() {
+            if length == 0 {
+                return Err(ServiceError::SourceChanged(format!(
+                    "opened source symbolic link has an empty target at {}",
+                    logical_path.display()
+                )));
+            }
+            target.truncate(length);
+            return Ok(PathBuf::from(OsString::from_vec(target)));
+        }
+        if capacity == MAX_TARGET_BYTES {
+            return Err(ServiceError::InvalidRequest(format!(
+                "symbolic-link target reaches or exceeds the {MAX_TARGET_BYTES}-byte staging limit at {}",
+                logical_path.display()
+            )));
+        }
+        capacity = capacity
+            .checked_mul(2)
+            .unwrap_or(MAX_TARGET_BYTES)
+            .min(MAX_TARGET_BYTES);
+    }
 }
 
 fn require_same_snapshot(
@@ -546,10 +739,16 @@ fn source_access_error(operation: &str, path: &Path, error: std::io::Error) -> S
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
     use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
     use std::os::unix::net::UnixListener;
 
-    use super::{copy_into_staged, open_source_directory, SessionPaths};
+    use super::{
+        copy_into_staged, open_source_directory, open_source_symlink, read_open_symlink_target,
+        require_same_snapshot, require_staging_caps, SessionPaths,
+    };
+    use crate::config::{MAX_STAGED_BYTES, MAX_STAGED_ENTRIES, MAX_STAGED_FILES};
     use crate::error::ServiceError;
 
     #[test]
@@ -719,7 +918,7 @@ mod tests {
     }
 
     #[test]
-    fn descriptor_copy_preserves_content_and_exec_but_refuses_symlinks() {
+    fn descriptor_copy_preserves_content_exec_and_opaque_symlink_targets() {
         let root = std::env::temp_dir().join(format!(
             "qwen38-descriptor-copy-{}",
             uuid::Uuid::new_v4().simple()
@@ -742,7 +941,7 @@ mod tests {
                 &destination,
             )
             .expect("descriptor copy succeeds"),
-            (44, 2)
+            (44, 3)
         );
         assert_eq!(
             std::fs::read(destination.join("nested/data.bin")).expect("read staged data"),
@@ -757,20 +956,53 @@ mod tests {
             0o755
         );
 
-        let source_with_link = root.join("source-with-link");
-        let destination_with_link = root.join("destination-with-link");
-        std::fs::create_dir(&source_with_link).expect("create linked source fixture");
-        std::fs::create_dir(&destination_with_link).expect("create linked destination fixture");
-        symlink(&executable, source_with_link.join("escape"))
-            .expect("create source symlink fixture");
-        let symlink_error = copy_into_staged(
-            &open_source_directory(&source_with_link, "open linked test source")
-                .expect("open source containing link"),
-            &source_with_link,
-            &destination_with_link,
+        let source_with_links = root.join("source-with-links");
+        let destination_with_links = root.join("destination-with-links");
+        std::fs::create_dir(&source_with_links).expect("create linked source fixture");
+        std::fs::create_dir(&destination_with_links).expect("create linked destination fixture");
+        symlink(
+            "missing-relative-target",
+            source_with_links.join("dangling"),
         )
-        .expect_err("source symlink must fail");
-        assert!(matches!(symlink_error, ServiceError::InvalidRequest(_)));
+        .expect("create dangling source symlink fixture");
+        symlink("../outside-tree", source_with_links.join("relative-escape"))
+            .expect("create relative-escape source symlink fixture");
+        symlink(
+            "/usr/local/bin/python3.13",
+            source_with_links.join("absolute"),
+        )
+        .expect("create absolute source symlink fixture");
+        let non_utf8_target = OsString::from_vec(vec![b'n', b'o', b'n', b'-', 0xff]);
+        symlink(&non_utf8_target, source_with_links.join("non-utf8"))
+            .expect("create non-UTF8 source symlink fixture");
+        assert_eq!(
+            copy_into_staged(
+                &open_source_directory(&source_with_links, "open linked test source")
+                    .expect("open source containing links"),
+                &source_with_links,
+                &destination_with_links,
+            )
+            .expect("opaque source links are preserved without resolution"),
+            (0, 4)
+        );
+        for (name, expected) in [
+            ("dangling", OsString::from("missing-relative-target")),
+            ("relative-escape", OsString::from("../outside-tree")),
+            ("absolute", OsString::from("/usr/local/bin/python3.13")),
+            ("non-utf8", non_utf8_target),
+        ] {
+            let staged = destination_with_links.join(name);
+            assert!(std::fs::symlink_metadata(&staged)
+                .expect("stat staged link")
+                .file_type()
+                .is_symlink());
+            assert_eq!(
+                std::fs::read_link(&staged)
+                    .expect("read staged link")
+                    .into_os_string(),
+                expected
+            );
+        }
 
         let source_with_socket = root.join("source-with-socket");
         let destination_with_socket = root.join("destination-with-socket");
@@ -792,5 +1024,125 @@ mod tests {
         assert!(open_source_directory(&source_link, "open root symlink").is_err());
 
         std::fs::remove_dir_all(&root).expect("remove descriptor-copy fixture");
+    }
+
+    #[test]
+    fn opened_symlink_descriptor_keeps_exact_target_and_parent_detects_replacement() {
+        let root = std::env::temp_dir().join(format!(
+            "qwen38-symlink-race-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir(&root).expect("create symlink-race fixture");
+        let parent =
+            open_source_directory(&root, "open symlink-race parent").expect("open fixture parent");
+        let path = root.join("link");
+        symlink("selected-target", &path).expect("create selected source link");
+        let parent_before = parent
+            .metadata()
+            .expect("snapshot parent before replacement");
+        let link_before = std::fs::symlink_metadata(&path).expect("lstat selected link");
+        let selected = open_source_symlink(&path, "open selected source link")
+            .expect("open source link itself");
+        require_same_snapshot(
+            &link_before,
+            &selected.metadata().expect("fstat selected link"),
+            &path,
+            "test link selection",
+        )
+        .expect("descriptor selects exact lstat link");
+
+        let replacement = root.join("replacement");
+        symlink("replacement-target", &replacement).expect("create replacement link");
+        std::fs::rename(&replacement, &path).expect("replace source directory entry");
+        assert_eq!(
+            read_open_symlink_target(&selected, &path)
+                .expect("read target from selected descriptor"),
+            std::path::PathBuf::from("selected-target")
+        );
+        assert_eq!(
+            std::fs::read_link(&path).expect("read replacement path target"),
+            std::path::PathBuf::from("replacement-target")
+        );
+        assert!(
+            require_same_snapshot(
+                &parent_before,
+                &parent.metadata().expect("restat parent after replacement"),
+                &root,
+                "source directory changed while traversed",
+            )
+            .is_err(),
+            "parent descriptor did not expose the namespace replacement"
+        );
+
+        std::fs::remove_dir_all(&root).expect("remove symlink-race fixture");
+    }
+
+    #[test]
+    fn regular_file_byte_cap_is_rejected_before_destination_creation() {
+        let root = std::env::temp_dir().join(format!(
+            "qwen38-precopy-byte-cap-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        let source = root.join("source");
+        let destination = root.join("destination");
+        std::fs::create_dir_all(&source).expect("create over-cap source fixture");
+        std::fs::create_dir(&destination).expect("create over-cap destination fixture");
+        let oversized = source.join("oversized-sparse.bin");
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&oversized)
+            .expect("create sparse over-cap source file");
+        file.set_len(MAX_STAGED_BYTES + 1)
+            .expect("extend sparse source beyond byte cap");
+        drop(file);
+
+        let error = copy_into_staged(
+            &open_source_directory(&source, "open over-cap source").expect("open source"),
+            &source,
+            &destination,
+        )
+        .expect_err("over-cap file must fail before copying");
+        assert!(matches!(error, ServiceError::InvalidRequest(_)));
+        assert!(error.to_string().contains("regular_file_bytes"));
+        let staged_oversized = destination.join("oversized-sparse.bin");
+        match std::fs::symlink_metadata(&staged_oversized) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            other => {
+                panic!("over-cap source created a destination entry before rejection: {other:?}")
+            }
+        }
+
+        std::fs::remove_dir_all(&root).expect("remove over-cap fixture");
+    }
+
+    #[test]
+    fn staging_caps_bound_regular_files_bytes_and_all_entry_types_independently() {
+        require_staging_caps(MAX_STAGED_BYTES, MAX_STAGED_ENTRIES, MAX_STAGED_FILES)
+            .expect("every exact cap value is accepted");
+        for (bytes, entries, regular_files, expected_field) in [
+            (
+                MAX_STAGED_BYTES + 1,
+                MAX_STAGED_ENTRIES,
+                MAX_STAGED_FILES,
+                "regular_file_bytes",
+            ),
+            (
+                MAX_STAGED_BYTES,
+                MAX_STAGED_ENTRIES + 1,
+                MAX_STAGED_FILES,
+                "entries",
+            ),
+            (
+                MAX_STAGED_BYTES,
+                MAX_STAGED_ENTRIES,
+                MAX_STAGED_FILES + 1,
+                "regular_files",
+            ),
+        ] {
+            let error = require_staging_caps(bytes, entries, regular_files)
+                .expect_err("one over any independent cap must fail closed");
+            assert!(error.to_string().contains(expected_field));
+        }
     }
 }

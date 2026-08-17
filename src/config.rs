@@ -24,6 +24,7 @@ pub const QWEN_CODE_VERSION: &str = "0.21.12";
 pub const MAX_PROMPT_BYTES: usize = 1024 * 1024;
 pub const MAX_STAGED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 pub const MAX_STAGED_FILES: u64 = 200_000;
+pub const MAX_STAGED_ENTRIES: u64 = 250_000;
 
 #[derive(Clone, Debug)]
 pub struct Config {
