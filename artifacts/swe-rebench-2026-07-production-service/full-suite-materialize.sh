@@ -225,6 +225,7 @@ write_image_regular_manifest() {
   local env_id="$1" output="$2"
   docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
     --read-only --memory 1g --pids-limit 128 --env LC_ALL=C \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
     --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
     'find . -type f -print0 | sort -z | xargs -0 -r sha256sum --zero --' >"${output}"
@@ -234,6 +235,7 @@ write_image_mode_manifest() {
   local env_id="$1" output="$2"
   docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
     --read-only --memory 1g --pids-limit 128 --env LC_ALL=C \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
     --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
     'find . -mindepth 1 -printf "%y %m %P -> %l\0" | sort -z' >"${output}"
@@ -243,6 +245,7 @@ write_image_symlink_manifest() {
   local env_id="$1" output="$2"
   docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
     --read-only --memory 1g --pids-limit 128 --env LC_ALL=C \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
     --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
     'find . -type l -printf "%P -> %l\0" | sort -z' >"${output}"
