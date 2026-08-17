@@ -218,10 +218,11 @@ pub struct RunningSnapshot {
 #[serde(deny_unknown_fields)]
 pub struct AcceptanceRecord {
     /// Version 2 records the streamed-archive commitment. Version 1 recorded
-    /// a shared-filesystem `folder` path; that transport no longer exists,
-    /// and acceptance records only live between acceptance and terminal
-    /// publication, so no live v1 record can survive a release upgrade that
-    /// stops the service first.
+    /// a shared-filesystem `folder` path, but that transport predates durable
+    /// acceptance records in result directories, so version 2 is the only
+    /// version that can exist on disk. The record persists for the resource's
+    /// whole lifetime: terminal reads of current 256-bit handles cross-check
+    /// it against the published terminal body.
     pub schema_version: u32,
     pub session_id: String,
     pub accepted_at_unix: u64,
@@ -990,7 +991,11 @@ impl Manager {
         // A transport retry with the same caller-known handle is a pure
         // lookup, not a second operation.  Byte-identical semantic inputs
         // recover the existing resource; any mismatch is an explicit 409.
-        if let Some(entry) = self.inner.lock().await.running.get(&session_id).cloned() {
+        // Bound before `if let` so the map guard cannot outlive the lookup;
+        // an `if let` scrutinee guard would survive the whole success block
+        // in edition 2021 and re-locking `inner` there would self-deadlock.
+        let replayed_entry = self.inner.lock().await.running.get(&session_id).cloned();
+        if let Some(entry) = replayed_entry {
             require_matching_acceptance(
                 &entry.acceptance,
                 &prompt,
@@ -1290,7 +1295,13 @@ impl Manager {
         // accepted.json-visible/map-not-yet-inserted window and resolve
         // whether a disk resource exists. Reading a potentially large
         // terminal body never holds that global lifecycle mutex.
-        if let Some(entry) = self.inner.lock().await.running.get(session_id).cloned() {
+        // Bind the lookup so the map guard drops at this statement's end.
+        // In edition 2021 an `if let` scrutinee temporary lives through the
+        // success block, and `running_or_terminal_snapshot` locks `inner`
+        // again — an extended guard self-deadlocks every read of a running
+        // session until its connection is abandoned.
+        let running_entry = self.inner.lock().await.running.get(session_id).cloned();
+        if let Some(entry) = running_entry {
             return self.running_or_terminal_snapshot(session_id, entry).await;
         }
         let resolved: ServiceResult<SessionResolution> = {
@@ -2297,7 +2308,11 @@ fn read_acceptance_file(
             path.display()
         ))
     })?;
-    if record.schema_version != 1 || record.session_id != session_id {
+    // Durable acceptance records were introduced together with the 256-bit
+    // caller-known-handle wire protocol, and that protocol has only ever
+    // written schema version 2. No version-1 record can legitimately exist
+    // on disk, so anything else here is drift, not compatibility.
+    if record.schema_version != 2 || record.session_id != session_id {
         return Err(ServiceError::Internal(format!(
             "{role} {} has identity/schema drift",
             path.display()
@@ -4118,6 +4133,162 @@ mod tests {
             vllm_endpoint: lock.backend.endpoint.clone(),
             lock,
         }
+    }
+
+    /// Reading a live running session must not re-enter the running-map
+    /// mutex while the lookup's guard is still alive. Before the bind-first
+    /// fix in `Manager::get`, the edition-2021 `if let` scrutinee guard
+    /// survived the whole success block, so the second `inner` lock in
+    /// `running_or_terminal_snapshot` self-deadlocked every read of a
+    /// running session until its HTTP peer disconnected.
+    #[tokio::test]
+    async fn get_of_running_session_does_not_self_deadlock() {
+        let tree = TestTree::new("running-read-deadlock");
+        let state_dir = tree.0.join("state");
+        let results_dir = tree.0.join("results");
+        std::fs::create_dir(&state_dir).expect("create state root");
+        std::fs::create_dir(&results_dir).expect("create results root");
+        let cfg = Arc::new(test_config(state_dir.clone(), results_dir));
+        let manager = super::Manager::new(Arc::clone(&cfg));
+
+        let session_id =
+            "s-1111111111111111111111111111111111111111111111111111111111111111".to_string();
+        let progress = crate::progress::ProgressReporter::create(
+            &state_dir.join("progress.json"),
+            &session_id,
+            "accepted for the running-read deadlock regression fixture",
+        )
+        .expect("create progress fixture");
+        let entry = Arc::new(super::RunningEntry {
+            snapshot: super::RunningSnapshot {
+                session_id: session_id.clone(),
+                started_at_unix: 1,
+                prompt_preview: "running-read deadlock regression fixture".to_string(),
+                model: cfg.vllm_model_name.clone(),
+                context_window: 262_144,
+                preserve_thinking: false,
+                archive_bytes: 22,
+                archive_sha256: "0".repeat(64),
+            },
+            acceptance: AcceptanceRecord {
+                schema_version: 2,
+                session_id: session_id.clone(),
+                accepted_at_unix: 1,
+                archive_bytes: 22,
+                archive_sha256: "0".repeat(64),
+                prompt: "running-read deadlock regression fixture".to_string(),
+                preserve_thinking: false,
+            },
+            progress,
+            cancel: tokio_util::sync::CancellationToken::new(),
+            launch_decision: Arc::new(tokio::sync::Mutex::new(())),
+            terminal_decision: tokio::sync::Mutex::new(super::TerminalDecision::Open),
+        });
+        manager
+            .inner
+            .lock()
+            .await
+            .running
+            .insert(session_id.clone(), entry);
+
+        let body = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            manager.get(&session_id),
+        )
+        .await
+        .expect("running-session read must complete instead of self-deadlocking")
+        .expect("running-session read returns the live body");
+        assert_eq!(body.status, SessionStatus::Running);
+        assert_eq!(body.session_id, session_id);
+        assert_eq!(body.progress_revision, 1);
+    }
+
+    /// Current 256-bit handles keep their durable acceptance and progress
+    /// documents for the resource's whole lifetime, and every terminal read
+    /// cross-checks them. This round trip would have caught the reader that
+    /// pinned acceptance records to schema version 1 while the wire protocol
+    /// has only ever written version 2.
+    #[tokio::test]
+    async fn current_handle_terminal_read_accepts_persistent_v2_acceptance() {
+        let tree = TestTree::new("current-terminal-read");
+        let state = tree.0.join("state");
+        let results = tree.0.join("results");
+        std::fs::create_dir(&state).expect("create state root");
+        std::fs::create_dir(&results).expect("create results root");
+        let session_id =
+            "s-2222222222222222222222222222222222222222222222222222222222222222";
+        let result_dir = results.join(session_id);
+        std::fs::create_dir(&result_dir).expect("create result dir");
+
+        let progress = crate::progress::ProgressReporter::create(
+            &result_dir.join("progress.json"),
+            session_id,
+            "accepted for the current-handle terminal fixture",
+        )
+        .expect("create durable progress fixture");
+        let events = progress.events().expect("read progress fixture events");
+        let latest = events
+            .last()
+            .expect("progress fixture has its initial event")
+            .clone();
+
+        let mut terminal = body(session_id);
+        terminal.progress_events = events;
+        terminal.progress_revision = latest.revision;
+        terminal.progress_at_unix_ms = latest.at_unix_ms;
+        terminal.progress_phase = latest.phase;
+        terminal.progress_message = latest.message.clone();
+        let acceptance = AcceptanceRecord {
+            schema_version: 2,
+            session_id: session_id.to_string(),
+            accepted_at_unix: terminal.started_at_unix,
+            archive_bytes: 22,
+            archive_sha256: "3".repeat(64),
+            prompt: terminal.prompt_preview.clone(),
+            preserve_thinking: terminal.preserve_thinking,
+        };
+        private_write(
+            &result_dir.join("accepted.json"),
+            &serde_json::to_vec_pretty(&acceptance).expect("serialize acceptance fixture"),
+        );
+        private_write(
+            &result_dir.join("finished.json"),
+            &serde_json::to_vec_pretty(&terminal).expect("serialize terminal fixture"),
+        );
+        for path in [
+            &result_dir,
+            &result_dir.join("accepted.json"),
+            &result_dir.join("progress.json"),
+            &result_dir.join("finished.json"),
+        ] {
+            make_service_owned(path);
+        }
+
+        let cfg = test_config(state, results.clone());
+        let recovered = read_terminal(&cfg, session_id)
+            .await
+            .expect("terminal read must accept the persistent schema-2 acceptance record");
+        assert_eq!(recovered.session_id, session_id);
+        assert_eq!(recovered.status, SessionStatus::Completed);
+
+        // No version-1 acceptance record can legitimately exist on disk, so
+        // the strict reader must reject one instead of trusting it.
+        let mut downgraded = acceptance;
+        downgraded.schema_version = 1;
+        std::fs::remove_file(result_dir.join("accepted.json"))
+            .expect("remove schema-2 fixture");
+        private_write(
+            &result_dir.join("accepted.json"),
+            &serde_json::to_vec_pretty(&downgraded).expect("serialize downgraded fixture"),
+        );
+        make_service_owned(&result_dir.join("accepted.json"));
+        let error = read_terminal(&cfg, session_id)
+            .await
+            .expect_err("schema-version-1 acceptance record must be rejected");
+        assert!(
+            error.to_string().contains("identity/schema drift"),
+            "unexpected rejection: {error}"
+        );
     }
 
     #[tokio::test]
