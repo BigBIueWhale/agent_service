@@ -39,8 +39,8 @@
     "image_tag": "qwen38-docker-broker:1.1.0",
     "image_id": "sha256:c4b0db46b3d9f4bb0ec1478dd9ccfa1eb983a49342ff2bbcfe6dc760abe2e22a",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
-    "policy_sha256": "2cf521057829deab77a9d5f82962a6b10384266877f527da8ee97933ee9e8bd6",
-    "source_sha256": "378cbb708fcfe5390ce6baaae484c7dac3bc1390cd40cb54d1274ce35440aa98",
+    "policy_sha256": "56bb68c1cc6ccf67a0f1d70dd9e9cf67e0515fe65d79e8d0c90acf0281ad181f",
+    "source_sha256": "a2b9d6e60e15a616f3cfc0f09d84f702d732e25299e880e98bb07dd304f23a59",
     "memory": "64m",
     "memory_swap": "64m",
     "pids_limit": 64
@@ -265,18 +265,6 @@
     ]
   },
   "host": {
-    "docker_version": "29.7.2",
-    "docker_buildx_version": "v0.36.1",
-    "buildkit_version": "v0.32.2",
-    "git_version": "2.43.0",
-    "jq_version": "jq-1.7",
-    "coreutils_version": "9.4",
-    "nvidia_container_cli_version": "1.19.1",
-    "gpu_name": "NVIDIA GeForce RTX 5090",
-    "gpu_memory_mib": 32607,
-    "driver_version": "595.71.05",
-    "dockerd_path": "/usr/bin/dockerd",
-    "dockerd_sha256": "e14a01198315d279c8615db9aa7edeb755caf46db925dba46f80c92115093c01",
     "docker_security_options": [
       "name=apparmor",
       "name=seccomp,profile=builtin",

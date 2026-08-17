@@ -2,7 +2,6 @@
   "schema_version": 1,
   "policy_id": "qwen38-docker-broker-v1",
   "profile": "qwen38-agent-service-v3",
-  "docker_server_version": "29.7.2",
   "broker_container_name": "qwen38-docker-broker",
   "broker": {
     "image_tag": "qwen38-docker-broker:1.1.0",
@@ -37,7 +36,7 @@
   },
   "relay": {
     "image_tag": "qwen38-fixed-relay:1.0.0",
-    "image_id": "sha256:8b3aa7c098e5a9c757302340bf5554b9bd36c7c30640c1ce07d5cd1fc38417d1",
+    "image_id": "sha256:5153a46bc03fa920b0d09000eca1848af255010bda99cc50e8a6110ebcd02690",
     "sandbox": "landlock-net-v4+seccomp-socket-v2",
     "memory": "32m",
     "memory_swap": "32m",
@@ -46,7 +45,7 @@
   },
   "capture": {
     "image_tag": "qwen38-session-capture:1.0.0",
-    "image_id": "sha256:d87f39d60370eb5190e7ec166807131b90d545d6da20929a1e6fa7ccf7c186de",
+    "image_id": "sha256:2d38ea4ae0f33894740a1a067c7fa8e3e3d864ff58ef439d6d432fd4739b9aef",
     "capture_id": "unix-stream-capture-v1",
     "memory": "32m",
     "memory_swap": "32m",

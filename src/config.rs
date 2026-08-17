@@ -252,19 +252,12 @@ pub struct AgentDefaultsLock {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+/// Functional host requirements only: the isolation features the containers
+/// genuinely depend on, and the Docker control-socket wiring. Exact host
+/// software versions, binary hashes, and GPU identity are deliberately not
+/// recorded here — pinning them would tie the deployment to one specific
+/// computer without making it more correct anywhere.
 pub struct HostLock {
-    pub docker_version: String,
-    pub docker_buildx_version: String,
-    pub buildkit_version: String,
-    pub git_version: String,
-    pub jq_version: String,
-    pub coreutils_version: String,
-    pub nvidia_container_cli_version: String,
-    pub gpu_name: String,
-    pub gpu_memory_mib: u64,
-    pub driver_version: String,
-    pub dockerd_path: String,
-    pub dockerd_sha256: String,
     pub docker_security_options: Vec<String>,
     pub container_apparmor_profile: String,
     pub docker_socket: String,
@@ -277,7 +270,6 @@ struct BrokerPolicy {
     schema_version: u32,
     policy_id: String,
     profile: String,
-    docker_server_version: String,
     broker_container_name: String,
     broker: BrokerPolicyBroker,
     broker_socket_path: String,
@@ -783,32 +775,26 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     if lock.backend.command.is_empty() {
         return fail("backend.command may not be empty".into());
     }
-    if lock.host.nvidia_container_cli_version != "1.19.1"
-        || lock.host.docker_buildx_version != "v0.36.1"
-        || lock.host.buildkit_version != "v0.32.2"
-        || lock.host.git_version != "2.43.0"
-        || lock.host.jq_version != "jq-1.7"
-        || lock.host.coreutils_version != "9.4"
-        || lock.host.gpu_name != "NVIDIA GeForce RTX 5090"
-        || lock.host.gpu_memory_mib != 32_607
-        || lock.host.driver_version != "595.71.05"
-        || lock.host.dockerd_path != "/usr/bin/dockerd"
-        || lock.host.dockerd_sha256
-            != "e14a01198315d279c8615db9aa7edeb755caf46db925dba46f80c92115093c01"
-        || lock.host.docker_security_options
-            != [
-                "name=apparmor",
-                "name=seccomp,profile=builtin",
-                "name=cgroupns",
-            ]
+    // Only the isolation features the containers depend on are asserted.
+    // Host software versions, binary hashes, and GPU identity are
+    // deliberately not validated: they tie the deployment to one specific
+    // computer without making it more correct anywhere. The Docker socket
+    // path and group id are wiring configuration, not identity assertions.
+    if lock.host.docker_security_options
+        != [
+            "name=apparmor",
+            "name=seccomp,profile=builtin",
+            "name=cgroupns",
+        ]
         || lock.host.container_apparmor_profile != "docker-default"
-        || lock.host.docker_socket != "/var/run/docker.sock"
-        || lock.host.docker_socket_gid != 984
     {
         return fail(
-            "host GPU/driver/container-runtime/socket contract differs from the reviewed machine"
+            "host container-isolation contract (apparmor/seccomp/cgroupns) is not satisfied"
                 .into(),
         );
+    }
+    if !lock.host.docker_socket.starts_with('/') {
+        return fail("host.docker_socket must be an absolute path".into());
     }
     validate_embedded_broker_policy(lock)?;
     Ok(())
@@ -833,11 +819,6 @@ fn validate_embedded_broker_policy(lock: &StackLock) -> ServiceResult<()> {
     same!("schema_version", policy.schema_version, lock.schema_version);
     same!("policy_id", policy.policy_id.as_str(), lock.broker.policy_id.as_str());
     same!("profile", policy.profile.as_str(), lock.profile.as_str());
-    same!(
-        "docker_server_version",
-        policy.docker_server_version.as_str(),
-        lock.host.docker_version.as_str()
-    );
     same!(
         "broker_container_name",
         policy.broker_container_name.as_str(),

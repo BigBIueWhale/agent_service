@@ -59,47 +59,23 @@ require_equal() {
 }
 
 check_host_tools_and_versions() {
+  # Functional requirements only. The tools this project actually invokes
+  # must exist, Docker must respond, and the container-isolation features
+  # the deployment depends on must be active. Exact host software versions,
+  # binary hashes, and GPU identity are deliberately not asserted: they tie
+  # the deployment to one specific computer without making anything more
+  # correct.
   local tool
-  for tool in docker dockerd git jq sha256sum nvidia-smi nvidia-container-cli curl ss; do
-    command -v "${tool}" >/dev/null 2>&1 || die "Required host diagnostic/control tool is missing: ${tool}"
+  for tool in docker git jq sha256sum curl ss zip unzip; do
+    command -v "${tool}" >/dev/null 2>&1 || die "Required host tool is missing: ${tool}"
   done
   jq -e . "${STACK_LOCK}" >/dev/null || die "Stack lock is not valid JSON"
   jq -e . "${RELEASE_LOCK}" >/dev/null || die "Release lock is not valid JSON"
-  require_equal "Docker server version" \
-    "$(docker version --format '{{.Server.Version}}')" \
-    "$(lock_value '.host.docker_version')"
-  require_equal "dockerd path" "$(command -v dockerd)" "$(lock_value '.host.dockerd_path')"
-  require_equal "dockerd binary SHA256" \
-    "$(sha256_file "$(lock_value '.host.dockerd_path')")" \
-    "$(lock_value '.host.dockerd_sha256')"
+  docker version --format '{{.Server.Version}}' >/dev/null ||
+    die "Docker server is not responding"
   require_equal "Docker security options" \
     "$(docker info --format '{{json .SecurityOptions}}')" \
     "$(jq -c '.host.docker_security_options' "${STACK_LOCK}")"
-  require_equal "Docker Buildx version" \
-    "$(docker buildx version | awk '{print $2}')" \
-    "$(lock_value '.host.docker_buildx_version')"
-  require_equal "BuildKit version" \
-    "$(docker buildx inspect --bootstrap | awk -F': *' '/BuildKit version:/ {print $2; exit}')" \
-    "$(lock_value '.host.buildkit_version')"
-  require_equal "Git version" "$(git --version | awk '{print $3}')" "$(lock_value '.host.git_version')"
-  require_equal "jq version" "$(jq --version)" "$(lock_value '.host.jq_version')"
-  require_equal "coreutils version" \
-    "$(sha256sum --version | awk 'NR==1 {print $NF}')" \
-    "$(lock_value '.host.coreutils_version')"
-  require_equal "NVIDIA container CLI version" \
-    "$(nvidia-container-cli --version 2>&1 | awk -F': ' '/cli-version:/ {print $2; exit}')" \
-    "$(lock_value '.host.nvidia_container_cli_version')"
-
-  local gpu_line gpu_name gpu_memory gpu_driver
-  gpu_line="$(nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits)"
-  [[ "$(wc -l <<<"${gpu_line}")" == 1 ]] || die "Exactly one GPU is required; observed: ${gpu_line}"
-  IFS=',' read -r gpu_name gpu_memory gpu_driver <<<"${gpu_line}"
-  gpu_name="${gpu_name#"${gpu_name%%[![:space:]]*}"}"
-  gpu_memory="${gpu_memory#"${gpu_memory%%[![:space:]]*}"}"
-  gpu_driver="${gpu_driver#"${gpu_driver%%[![:space:]]*}"}"
-  require_equal "GPU name" "${gpu_name}" "$(lock_value '.host.gpu_name')"
-  require_equal "GPU memory MiB" "${gpu_memory}" "$(lock_value '.host.gpu_memory_mib | tostring')"
-  require_equal "NVIDIA driver" "${gpu_driver}" "$(lock_value '.host.driver_version')"
 }
 
 check_pinned_inputs() {

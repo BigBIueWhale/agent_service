@@ -612,7 +612,7 @@ boundary and preserved Apache-2.0 text are in
 [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt).
 
 Putting a version string in a README is not considered a pin. The scripts require a
-clean repository and validate host tool versions, GPU/driver, file hashes, image IDs,
+clean repository and validate required host tools, isolation features, file hashes, image IDs,
 labels, Docker modes, listener addresses, backend command, endpoint identities, real
 tokenizer, model manifest, and health before reporting ready. Unexpected environment
 variables beginning with `AGENT_SERVICE_` or `OPENAI_` are rejected rather than

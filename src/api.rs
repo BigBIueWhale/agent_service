@@ -622,11 +622,6 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
         &cfg.lock.broker.policy_id,
     )?;
     require_equal("broker profile", &evidence.profile, &cfg.lock.profile)?;
-    require_equal(
-        "Docker server version",
-        &evidence.docker_version,
-        &cfg.lock.host.docker_version,
-    )?;
     verify_agent_image_labels(cfg, single_inspect(&evidence.agent_image, "agent image")?)?;
     verify_relay_image(cfg, single_inspect(&evidence.relay_image, "relay image")?)?;
     verify_capture_image(
@@ -652,7 +647,6 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
         single_inspect(&evidence.model_bridge, "model bridge")?,
         single_inspect(&evidence.model_ingress, "model ingress")?,
     )?;
-    verify_host_contract(cfg, &evidence.gpu_record)?;
     verify_model_manifest(cfg).await?;
     verify_model_socket(cfg)?;
     verify_backend_http(cfg).await?;
@@ -1053,33 +1047,6 @@ async fn verify_service_container(cfg: &Config, value: &serde_json::Value) -> Se
         &mounted_cargo_sha,
     )?;
     Ok(())
-}
-
-fn verify_host_contract(cfg: &Config, query: &str) -> ServiceResult<()> {
-    let fields = query.trim().split(',').map(str::trim).collect::<Vec<_>>();
-    if fields.len() != 3 {
-        return Err(ServiceError::Internal(format!(
-            "unexpected nvidia-smi record: {query:?}"
-        )));
-    }
-    require_equal("GPU name", fields[0], &cfg.lock.host.gpu_name)?;
-    let memory = fields[1].parse::<u64>().map_err(|error| {
-        ServiceError::Internal(format!(
-            "GPU memory field {:?} is invalid: {error}",
-            fields[1]
-        ))
-    })?;
-    if memory != cfg.lock.host.gpu_memory_mib {
-        return Err(ServiceError::Internal(format!(
-            "GPU memory drift: expected {} MiB, observed {memory} MiB",
-            cfg.lock.host.gpu_memory_mib
-        )));
-    }
-    require_equal(
-        "NVIDIA driver version",
-        fields[2],
-        &cfg.lock.host.driver_version,
-    )
 }
 
 async fn verify_model_manifest(cfg: &Config) -> ServiceResult<()> {

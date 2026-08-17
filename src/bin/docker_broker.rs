@@ -35,7 +35,6 @@ struct Policy {
     schema_version: u32,
     policy_id: String,
     profile: String,
-    docker_server_version: String,
     broker_container_name: String,
     broker: BrokerPolicy,
     broker_socket_path: String,
@@ -273,7 +272,6 @@ fn validate_policy(policy: &Policy) -> Result<(), String> {
     if policy.schema_version != 1
         || policy.policy_id != "qwen38-docker-broker-v1"
         || policy.profile != "qwen38-agent-service-v3"
-        || policy.docker_server_version != "29.7.2"
         || policy.broker_container_name != "qwen38-docker-broker"
         || policy.service_container_name != "qwen38-agent-service"
         || policy.backend_container_name != "qwen38-agent-native"
@@ -747,19 +745,15 @@ async fn execute(request: Request, policy: &Policy) -> Result<Value, String> {
 }
 
 async fn preflight(policy: &Policy) -> Result<Value, String> {
+    // The Docker server version is reported as evidence but deliberately
+    // not asserted: an exact host-software pin ties the deployment to one
+    // specific computer without making any operation more correct.
     let version = docker(
         ["version", "--format", "{{.Server.Version}}"],
         "docker_version",
         Some(DOCKER_TIMEOUT),
     )
     .await?;
-    if version.trim() != policy.docker_server_version {
-        return Err(format!(
-            "Docker server drift: expected {}, observed {:?}",
-            policy.docker_server_version,
-            version.trim()
-        ));
-    }
     let agent_image = inspect_json(&policy.agent.image_tag, "agent_image").await?;
     let relay_image = inspect_json(&policy.relay.image_tag, "relay_image").await?;
     let capture_image = inspect_json(&policy.capture.image_tag, "capture_image").await?;
@@ -932,19 +926,12 @@ fn require_image_id(value: &Value, expected: &str, label: &str) -> Result<(), St
 }
 
 async fn verify_self(policy: &Policy) -> Result<(), String> {
-    let version = docker(
+    docker(
         ["version", "--format", "{{.Server.Version}}"],
         "self_docker_version",
         Some(DOCKER_TIMEOUT),
     )
     .await?;
-    if version.trim() != policy.docker_server_version {
-        return Err(format!(
-            "Docker version drift: expected {}, observed {:?}",
-            policy.docker_server_version,
-            version.trim()
-        ));
-    }
     let value = inspect_single(&policy.broker_container_name, "broker_self").await?;
     require_bool(&value, "/State/Running", true, "broker running state")?;
     let image_id = value
