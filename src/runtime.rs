@@ -4255,10 +4255,14 @@ mod tests {
             &result_dir.join("finished.json"),
             &serde_json::to_vec_pretty(&terminal).expect("serialize terminal fixture"),
         );
+        // The acceptance and terminal readers pin the exact service owner
+        // 1000:1000, while the durable progress reader validates against the
+        // effective process identity — so progress.json must keep the
+        // creating euid (1000 in development, 0 in the hermetic build stage)
+        // and is deliberately absent from this ownership normalization.
         for path in [
             &result_dir,
             &result_dir.join("accepted.json"),
-            &result_dir.join("progress.json"),
             &result_dir.join("finished.json"),
         ] {
             make_service_owned(path);
