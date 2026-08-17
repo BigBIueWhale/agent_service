@@ -19,6 +19,11 @@ use tokio::process::Command;
 
 const POLICY_JSON: &str = include_str!("../../config/broker-policy-v1.json");
 const DOCKER: &str = "/docker";
+// Docker parses `0s` as a relative duration beginning at the instant the
+// follower attaches. Capture completion can race ahead of that attachment,
+// so every typed event wait must replay from the absolute Unix epoch (`0`)
+// before following future records.
+const DOCKER_LOG_REPLAY_FROM_EPOCH: &str = "0";
 const REQUEST_LIMIT: u64 = 65_536;
 const OUTPUT_LIMIT: usize = 4 * 1024 * 1024;
 const RESPONSE_LIMIT: usize = 4 * 1024 * 1024;
@@ -1283,7 +1288,7 @@ async fn wait_for_log_match(
     exact: bool,
 ) -> Result<String, String> {
     let mut child = Command::new(DOCKER)
-        .args(["logs", "--follow", "--since", "0s", name])
+        .args(docker_log_follow_args(name))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -1342,6 +1347,16 @@ async fn wait_for_log_match(
         ));
     }
     result
+}
+
+fn docker_log_follow_args(name: &str) -> [&str; 5] {
+    [
+        "logs",
+        "--follow",
+        "--since",
+        DOCKER_LOG_REPLAY_FROM_EPOCH,
+        name,
+    ]
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -2578,14 +2593,29 @@ mod tests {
     use tokio::io::AsyncWriteExt;
 
     use super::{
-        drain_bounded, load_policy, optional_running, parse_agent_ready, parse_capture_complete,
-        parse_request, validate_empty_ipv4_route_table, validate_empty_ipv6_route_table,
-        validate_session_id, Request,
+        docker_log_follow_args, drain_bounded, load_policy, optional_running, parse_agent_ready,
+        parse_capture_complete, parse_request, validate_empty_ipv4_route_table,
+        validate_empty_ipv6_route_table, validate_session_id, Request,
     };
 
     #[test]
     fn compiled_policy_is_exact() {
         load_policy().expect("compiled broker policy must pass exact validation");
+    }
+
+    #[test]
+    fn late_log_subscribers_replay_from_the_unix_epoch() {
+        assert_eq!(
+            docker_log_follow_args("exact-owned-container"),
+            [
+                "logs",
+                "--follow",
+                "--since",
+                "0",
+                "exact-owned-container"
+            ]
+        );
+        assert_ne!(docker_log_follow_args("fixture")[3], "0s");
     }
 
     #[test]
