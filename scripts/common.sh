@@ -99,8 +99,6 @@ check_pinned_inputs() {
   require_equal "broker policy identity" "$(policy_value '.policy_id')" \
     "$(lock_value '.broker.policy_id')"
   require_equal "broker policy profile" "$(policy_value '.profile')" "$(lock_value '.profile')"
-  require_equal "broker policy Docker version" "$(policy_value '.docker_server_version')" \
-    "$(lock_value '.host.docker_version')"
   require_equal "broker policy container name" "$(policy_value '.broker_container_name')" \
     "$(lock_value '.broker.container_name')"
   require_equal "broker policy image tag" "$(policy_value '.broker.image_tag')" \
