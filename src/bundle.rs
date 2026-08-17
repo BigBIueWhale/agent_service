@@ -22,7 +22,9 @@ use crate::error::{io_msg, ServiceError, ServiceResult};
 
 #[derive(Debug, Clone)]
 pub struct BundleStats {
-    pub archive_path: PathBuf,
+    /// SHA-256 of the exact published archive bytes, computed from the
+    /// synced partial file that the no-clobber publication links into place.
+    pub sha256: String,
     pub compressed_bytes: u64,
     pub uncompressed_bytes: u64,
     pub file_count: u64,
@@ -167,6 +169,16 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
             .map_err(|error| {
                 ServiceError::Internal(io_msg("sync partial bundle", &partial, &error))
             })?;
+        let sha256 = {
+            let partial_for_hash = partial.clone();
+            tokio::task::spawn_blocking(move || hash_file_sha256(&partial_for_hash))
+                .await
+                .map_err(|error| {
+                    ServiceError::Internal(format!(
+                        "bundle: blocking hash task terminated unexpectedly: {error}"
+                    ))
+                })??
+        };
         std::fs::hard_link(&partial, archive_path).map_err(|error| {
             ServiceError::Internal(format!(
                 "bundle: no-clobber publication {} -> {} failed: {error}",
@@ -189,7 +201,7 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
             })?;
 
         Ok(BundleStats {
-            archive_path: archive_path.to_path_buf(),
+            sha256,
             compressed_bytes,
             uncompressed_bytes: before.uncompressed_bytes,
             file_count: before.file_count,
@@ -516,6 +528,31 @@ fn utf8_path<'a>(path: &'a Path, role: &str) -> ServiceResult<&'a str> {
     path.to_str().ok_or_else(|| {
         ServiceError::Internal(format!("{role} path is not UTF-8: {}", path.display()))
     })
+}
+
+/// Streamed SHA-256 of one regular file's exact bytes.
+pub(crate) fn hash_file_sha256(path: &Path) -> ServiceResult<String> {
+    use sha2::{Digest, Sha256};
+
+    let mut file = std::fs::File::open(path)
+        .map_err(|error| ServiceError::Internal(io_msg("open file for hashing", path, &error)))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0u8; 1024 * 1024];
+    loop {
+        let read = std::io::Read::read(&mut file, &mut buffer)
+            .map_err(|error| ServiceError::Internal(io_msg("read file for hashing", path, &error)))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    let digest = hasher.finalize();
+    let mut rendered = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write;
+        write!(rendered, "{byte:02x}").expect("writing hex to a String cannot fail");
+    }
+    Ok(rendered)
 }
 
 pub async fn check_host_dependencies() -> ServiceResult<()> {

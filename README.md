@@ -73,6 +73,12 @@ An uncorrected Unsloth mount cannot satisfy this lock.
 The backend repository remains authoritative for the server patches, model-file
 manifest, VRAM accounting, native-context proof, prompt template, parser tests,
 and cache benchmarks: [`../Qwen_best_model_ever/README.md`](../Qwen_best_model_ever/README.md).
+Its ordered remaining-work record also makes the final post-release task an
+end-to-end mathematical comparison of contextual execution under the deployed
+mixed NVFP4/FP8 weights versus the exact official BF16 reference. That audit must
+separately attribute weight-quantization error and the additional TurboQuant K8V4
+cache error; it is not satisfied by the already completed tensor, isolated matmul,
+MRoPE, or cache-kernel checks.
 
 ## Why native 262K, not a nominal one million
 
@@ -307,9 +313,9 @@ server, package bootstrap script, or runtime installer.
 
 ## Full-quality images and exact chronology
 
-Images enter the agent only through `read_file` in the copied `/workspace`. The
-creation API remains deliberately small—folder plus text prompt—so there is no
-second upload protocol or alternate history renderer. The model calls `read_file`
+Images enter the agent only through `read_file` in the staged `/workspace`. The
+creation API remains deliberately small—one workspace archive plus text prompt—so
+there is no second upload protocol or alternate history renderer. The model calls `read_file`
 at the point where it needs an image, and that tool result stays at that exact point
 in the ongoing conversation.
 
@@ -441,14 +447,19 @@ are non-root, read-only, capability-free, `no-new-privileges`, and bounded by ex
 memory and PID limits.
 
 The service is also `--network none`, read-only, uid 1000, and has no Docker socket.
-It mounts `/home/user` read-only and the single project `.runtime` subtree at its
-exact writable path. The separate network-none broker is the only component with
-the raw Docker socket; its typed policy accepts only fixed session and topology
-operations and validates every image, name, label, mount, namespace, and lifecycle
-transition. Every requested source folder must be a strict descendant of the pinned
-`/home/user` input root and may not overlap service state. Symlinks, special files,
-system roots, more than 200,000 files, or more than 4 GiB are rejected before the
-agent starts.
+It mounts no host input tree at all: the workspace arrives over the connection
+as a hash-committed zip, so the service container sees only the single project
+`.runtime` subtree at its exact writable path, its read-only control socket, and
+the model relay socket. The separate network-none broker is the only component
+with the raw Docker socket; its typed policy accepts only fixed session and
+topology operations and validates every image, name, label, mount, namespace,
+and lifecycle transition. The submitted archive is structurally proved before
+durable acceptance: canonical relative UTF-8 entry names only, directory /
+regular-file / symbolic-link entries only, no duplicate or shadowed names, no
+entry outside the staging root, and declared totals within the exact caps —
+more than 200,000 regular files, 250,000 entries, or 4 GiB of content is
+rejected before anything stages. Only the outermost archive is extracted; an
+archive inside the workspace stays an ordinary staged file.
 
 The copied repository may still contain ordinary `QWEN.md` and `AGENTS.md` files;
 those remain task-level project guidance. They cannot create a second runtime
@@ -466,8 +477,10 @@ xhigh thinking, sampling tuple, tokenizer path, tool allowlist, or network bound
 Source-level tests cover these isolation invariants; live acceptance also uses a
 deliberately contradictory workspace configuration.
 
-The source folder is copied. The original is never mutated. Executable semantics are
-preserved while dangerous mode bits are stripped. The agent modifies `/workspace`;
+The submitted archive is extracted; the caller's original tree is never seen,
+let alone mutated. Executable semantics are preserved while dangerous mode bits
+are stripped, and symbolic-link entries stage as opaque links that resolve only
+inside the agent's isolated mount namespace. The agent modifies `/workspace`;
 the final workspace, `/artifacts`, prompt record, ready record, complete events,
 stderr, exit code, and final response are placed in a deterministic `bundle.tar.zst`.
 Missing bundle entries, symlinks, read races, or tar errors are process failures.
@@ -657,17 +670,28 @@ All endpoints listen only on `127.0.0.1:8090`:
 | Method | Path | Meaning |
 |---|---|---|
 | `GET` | `/healthz` | Process and startup preflight succeeded |
-| `POST` | `/v1/agent/sessions` | Validate, stage, start, and return after exact model/tokenizer readiness |
+| `POST` | `/v1/agent/sessions` | Stream the workspace archive, prove its commitment, durably accept, return immediately |
 | `GET` | `/v1/agent/sessions` | List running and durable terminal sessions |
-| `GET` | `/v1/agent/sessions/{id}` | Pure state read |
-| `GET` | `/v1/agent/sessions/{id}/wait` | Wait by notification until terminal; no polling timeout |
-| `POST` | `/v1/agent/sessions/{id}/cancel` | Explicit cancellation and awaited teardown |
+| `GET` | `/v1/agent/sessions/{id}` | Pure state read: status, archive commitment, complete progress history |
+| `GET` | `/v1/agent/sessions/{id}/bundle` | Stream the exact terminal `bundle.tar.zst` with declared length and `X-Bundle-SHA256` |
+| `POST` | `/v1/agent/sessions/{id}/cancel` | Durably record cancellation; teardown continues under the supervisor |
 | `DELETE` | `/v1/agent/sessions/{id}` | Delete one terminal record and bundle |
 
-The creation body is `{ "folder": "/absolute/path", "prompt": "..." }`. The HTTP
-body cap is 2 MiB; the prompt cap is 1 MiB. Prompt bytes enter Qwen through text stdin,
-not a shell argument, so Linux's per-argument limit does not invalidate the API
-contract or expose the prompt in a process listing.
+The creation body is exactly two ordered `multipart/form-data` parts: part 1
+`request` (`application/json` — `{"prompt", "preserve_thinking"?,
+"archive_bytes", "archive_sha256"}`, at most 2 MiB) and part 2 `archive`
+(`application/zip` — the exact workspace bytes, streamed to a disk spool while
+hashed, bounded only by the explicit 4 GiB + container-overhead archive cap).
+A required caller-generated 256-bit `Idempotency-Key` names the operation.
+Acceptance requires the streamed bytes to equal the declared count and SHA-256
+exactly, so a reset or truncation can never masquerade as success; replaying
+the identical receipt is a pure lookup, and every session read echoes the
+accepted archive commitment. There is no waiting endpoint: the operation never
+belongs to a connection, and callers poll the monotonic `progress_revision` /
+`progress_events` on the ordinary session read. The prompt cap is 1 MiB;
+prompt bytes enter Qwen through text stdin, not a shell argument, so Linux's
+per-argument limit does not invalidate the API contract or expose the prompt
+in a process listing.
 
 Terminal persistence is atomic and no-clobber (`create_new`, write, `fsync`,
 same-directory hard-link publication, directory `fsync`). If persistence fails,

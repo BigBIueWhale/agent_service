@@ -11,16 +11,28 @@
 //!
 //! Routes:
 //!
-//! - `POST /v1/agent/sessions` — create. Body
-//!   `{prompt, folder, preserve_thinking?}`. The optional boolean defaults
-//!   to false; no string/profile coercion is accepted. Blocks
-//!   until the isolated agent verifies the pinned model and real tokenizer
-//!   endpoint; returns `201 Created` with the running body.
+//! - `POST /v1/agent/sessions` — idempotently accept. The body is exactly
+//!   two ordered `multipart/form-data` parts: part 1 `request`
+//!   (`application/json` — `{prompt, preserve_thinking?, archive_bytes,
+//!   archive_sha256}`) and part 2 `archive` (`application/zip` — the exact
+//!   workspace bytes, streamed to a disk spool while hashed). A required
+//!   caller-generated 256-bit `Idempotency-Key` names the operation.
+//!   Acceptance requires the streamed bytes to equal the declared count and
+//!   SHA-256 exactly, so a reset or truncation can never masquerade as
+//!   success, and replaying the identical receipt is a pure lookup. Returns
+//!   after the acceptance record is durable; the operation never belongs to
+//!   the HTTP connection.
 //! - `GET /v1/agent/sessions` — list. Combines in-memory running sessions
 //!   with on-disk terminal sessions.
 //! - `GET /v1/agent/sessions/{id}` — pure read; idempotent. 200 / 404.
-//! - `POST /v1/agent/sessions/{id}/cancel` — cancel; idempotent. 200 with
-//!   the current body (running → cancelled, or already terminal).
+//! - `GET /v1/agent/sessions/{id}/bundle` — stream the exact terminal
+//!   `bundle.tar.zst` back over the connection with its declared length and
+//!   `X-Bundle-SHA256`. 200 / 404 (no session, or terminal without an
+//!   accepted bundle) / 409 (still running). The bundle is retrieved over
+//!   the wire, never through a shared filesystem path.
+//! - `POST /v1/agent/sessions/{id}/cancel` — durably record cancellation;
+//!   idempotent and connection-independent. Returns immediately with the
+//!   current body; teardown continues under the session supervisor.
 //! - `DELETE /v1/agent/sessions/{id}` — delete a terminal session from
 //!   disk. 204 / 404 / 409 (still running — `cancel` first).
 //! - `GET /healthz` — plaintext `"ok"`.
@@ -29,10 +41,12 @@
 //! DELETE. Reads never mutate. Cancellation is idempotent; repeated deletion
 //! returns 404 so the caller receives a definite already-gone state.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::extract::multipart::{Field, Multipart, MultipartRejection};
+use axum::extract::{DefaultBodyLimit, Path, State};
+use axum::http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::routing::{get, post};
 use axum::Json;
 use serde::{Deserialize, Serialize};
@@ -41,7 +55,8 @@ use crate::config::Config;
 use crate::error::{ServiceError, ServiceResult};
 use crate::runtime::{Manager, SessionBody};
 use crate::session;
-use crate::validation;
+use crate::staging::SessionPaths;
+use crate::validation::SpooledArchive;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -51,7 +66,6 @@ pub struct AppState {
 }
 
 pub fn router(state: AppState) -> axum::Router {
-    let body_limit = state.cfg.lock.service.request_body_limit_bytes;
     axum::Router::new()
         .route(
             "/v1/agent/sessions",
@@ -61,22 +75,34 @@ pub fn router(state: AppState) -> axum::Router {
             "/v1/agent/sessions/{id}",
             get(get_session).delete(delete_session),
         )
+        .route("/v1/agent/sessions/{id}/bundle", get(download_bundle))
         .route("/v1/agent/sessions/{id}/cancel", post(cancel_session))
-        .route("/v1/agent/sessions/{id}/wait", get(wait_session))
         .route("/healthz", get(healthz))
+        .method_not_allowed_fallback(method_not_allowed)
+        .fallback(endpoint_not_found)
         .with_state(state)
-        .layer(tower_http::limit::RequestBodyLimitLayer::new(body_limit))
+        // The workspace archive streams through the creation body, so no
+        // single whole-body bound is meaningful. Each part is bounded
+        // explicitly in the handler: the JSON request part by the locked
+        // request-part limit, and the archive part by its own declared byte
+        // count, itself bounded by MAX_ARCHIVE_BYTES.
+        .layer(DefaultBodyLimit::disable())
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequest {
     pub prompt: String,
-    pub folder: String,
     /// Non-default history-retention policy. This is deliberately a JSON
     /// boolean rather than a profile name or ambient environment knob.
     #[serde(default)]
     pub preserve_thinking: bool,
+    /// Exact byte count of the archive part that follows. The upload is
+    /// accepted only if the streamed bytes equal this declaration.
+    pub archive_bytes: u64,
+    /// Lowercase-hex SHA-256 of those exact bytes; the streamed upload must
+    /// hash to this value or the submission fails without acceptance.
+    pub archive_sha256: String,
 }
 
 #[derive(Serialize)]
@@ -84,66 +110,478 @@ struct ListResponse {
     sessions: Vec<SessionBody>,
 }
 
-async fn healthz() -> &'static str {
-    "ok"
+async fn healthz() -> (HeaderMap, &'static str) {
+    (collection_response_headers(), "ok")
 }
 
 async fn create_session(
     State(state): State<AppState>,
-    Json(body): Json<CreateRequest>,
-) -> Result<(StatusCode, Json<SessionBody>), ServiceError> {
-    // Synchronous validation; any failure here surfaces as a 4xx with the
-    // standard WireError envelope before we ever take the singleton.
-    let validated = validation::validate(
-        &body.prompt,
-        &body.folder,
-        &state.cfg.host_input_root,
-        &state.cfg.state_dir,
-        &state.cfg.results_dir,
-        body.preserve_thinking,
-    )?;
+    headers: HeaderMap,
+    multipart: Result<Multipart, MultipartRejection>,
+) -> Result<(StatusCode, HeaderMap, Json<SessionBody>), ServiceError> {
+    let session_id = require_idempotency_key(&headers)?;
+    let mut multipart = multipart.map_err(|rejection| {
+        ServiceError::UnsupportedMediaType(format!(
+            "POST /v1/agent/sessions requires a multipart/form-data body with exactly the ordered parts `request` (application/json) and `archive` (application/zip): {}",
+            rejection.body_text()
+        ))
+    })?;
+
+    let request_part = require_next_part(&mut multipart, "request").await?;
+    require_part_content_type(&request_part, "request", "application/json")?;
+    let request_bytes = read_bounded_part(
+        request_part,
+        "request",
+        state.cfg.lock.service.request_body_limit_bytes,
+    )
+    .await?;
+    let body: CreateRequest = serde_json::from_slice(&request_bytes).map_err(|error| {
+        ServiceError::InvalidRequest(format!(
+            "part `request` must be exactly one JSON object with string prompt, optional boolean preserve_thinking, integer archive_bytes, and string archive_sha256: {error}"
+        ))
+    })?;
+    crate::validation::validate_archive_commitment(body.archive_bytes, &body.archive_sha256)?;
     tracing::info!(
+        session_id,
         prompt_chars = body.prompt.chars().count(),
-        folder = %validated.folder.display(),
-        preserve_thinking = validated.preserve_thinking,
-        "POST /v1/agent/sessions: path pre-flight ok; descriptor-based copy validation follows before agent creation"
+        archive_bytes = body.archive_bytes,
+        archive_sha256 = %body.archive_sha256,
+        preserve_thinking = body.preserve_thinking,
+        "POST /v1/agent/sessions: caller-known handle and archive commitment parsed; streaming the archive part to the spool"
     );
-    let running = state.manager.submit(validated).await?;
-    Ok((StatusCode::CREATED, Json(running)))
+
+    let archive_part = require_next_part(&mut multipart, "archive").await?;
+    require_part_content_type(&archive_part, "archive", "application/zip")?;
+    let spool = spool_archive_part(
+        &state.cfg.state_dir,
+        &session_id,
+        archive_part,
+        body.archive_bytes,
+        &body.archive_sha256,
+    )
+    .await?;
+
+    if let Some(extra) = multipart.next_field().await.map_err(|error| {
+        remove_upload_spool_after_failure(
+            &spool.directory,
+            ServiceError::InvalidRequest(format!(
+                "the multipart body did not terminate cleanly after the archive part: {error}"
+            )),
+        )
+    })? {
+        let name = extra.name().unwrap_or("<unnamed>").to_string();
+        return Err(remove_upload_spool_after_failure(
+            &spool.directory,
+            ServiceError::InvalidRequest(format!(
+                "the creation body must contain exactly the two parts `request` and `archive`; unexpected additional part {name:?}"
+            )),
+        ));
+    }
+
+    let outcome = state
+        .manager
+        .submit(
+            session_id,
+            body.prompt,
+            body.preserve_thinking,
+            SpooledArchive {
+                path: spool.archive_path.clone(),
+                bytes: body.archive_bytes,
+                sha256: body.archive_sha256,
+            },
+        )
+        .await
+        .map_err(|error| remove_upload_spool_after_failure(&spool.directory, error))?;
+
+    // A newly accepted operation consumed the spool file by relocating it
+    // into the session tree; a pure replay left it untouched. Either way the
+    // per-request spool directory is now scratch. Its removal failing does
+    // not unaccept a durably accepted operation: the startup sweep is the
+    // documented backstop, and the failure is reported loudly.
+    if let Err(error) = std::fs::remove_dir_all(&spool.directory) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            tracing::error!(
+                session_id = %outcome.body.session_id,
+                spool = %spool.directory.display(),
+                %error,
+                "per-request upload spool could not be removed; the startup spool sweep will reclaim it"
+            );
+        }
+    }
+
+    Ok((
+        if outcome.newly_accepted {
+            StatusCode::ACCEPTED
+        } else {
+            StatusCode::OK
+        },
+        session_response_headers(&outcome.body.session_id)?,
+        Json(outcome.body),
+    ))
 }
 
-async fn list_sessions(State(state): State<AppState>) -> Result<Json<ListResponse>, ServiceError> {
+struct UploadSpool {
+    directory: PathBuf,
+    archive_path: PathBuf,
+}
+
+async fn require_next_part<'a>(
+    multipart: &'a mut Multipart,
+    expected: &str,
+) -> ServiceResult<Field<'a>> {
+    let field = multipart
+        .next_field()
+        .await
+        .map_err(|error| {
+            ServiceError::InvalidRequest(format!(
+                "reading multipart part `{expected}` failed: {error}"
+            ))
+        })?
+        .ok_or_else(|| {
+            ServiceError::InvalidRequest(format!(
+                "the creation body ended before required part `{expected}`; it must contain exactly the ordered parts `request` and `archive`"
+            ))
+        })?;
+    let name = field.name().unwrap_or_default();
+    if name != expected {
+        return Err(ServiceError::InvalidRequest(format!(
+            "multipart part {name:?} arrived where required part `{expected}` was expected; parts must be exactly `request` then `archive`"
+        )));
+    }
+    Ok(field)
+}
+
+fn require_part_content_type(
+    field: &Field<'_>,
+    part: &str,
+    expected: &str,
+) -> ServiceResult<()> {
+    let declared = field
+        .content_type()
+        .map(|value| value.split(';').next().unwrap_or_default().trim().to_ascii_lowercase())
+        .unwrap_or_default();
+    if declared != expected {
+        return Err(ServiceError::UnsupportedMediaType(format!(
+            "multipart part `{part}` must declare Content-Type {expected}; observed {:?}",
+            field.content_type().unwrap_or("<absent>")
+        )));
+    }
+    Ok(())
+}
+
+async fn read_bounded_part(
+    mut field: Field<'_>,
+    part: &str,
+    limit: usize,
+) -> ServiceResult<Vec<u8>> {
+    let mut bytes = Vec::new();
+    while let Some(chunk) = field.chunk().await.map_err(|error| {
+        ServiceError::InvalidRequest(format!(
+            "reading multipart part `{part}` failed mid-stream: {error}"
+        ))
+    })? {
+        if bytes.len() + chunk.len() > limit {
+            return Err(ServiceError::PayloadTooLarge(format!(
+                "multipart part `{part}` exceeds its {limit}-byte bound"
+            )));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
+/// Stream the archive part to a fresh service-owned spool file while hashing
+/// it, and accept it only if the received bytes equal the declared count and
+/// SHA-256 exactly. Any mismatch, transport failure, or spool error removes
+/// the per-request spool before returning, so an interrupted upload leaves
+/// nothing behind and a retry with the same receipt is always safe.
+async fn spool_archive_part(
+    state_dir: &std::path::Path,
+    session_id: &str,
+    mut field: Field<'_>,
+    declared_bytes: u64,
+    declared_sha256: &str,
+) -> ServiceResult<UploadSpool> {
+    use sha2::Digest;
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let spool_root = state_dir.join("spool");
+    let directory = spool_root.join(format!("upload-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir(&directory).map_err(|error| {
+        ServiceError::Internal(format!(
+            "create per-request upload spool {} (the startup sequence owns {}): {error}",
+            directory.display(),
+            spool_root.display()
+        ))
+    })?;
+    let partial_path = directory.join("archive.zip.partial");
+    let archive_path = directory.join("archive.zip");
+
+    let streamed = async {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&partial_path)
+            .map_err(|error| {
+                ServiceError::Internal(format!(
+                    "create spool file {}: {error}",
+                    partial_path.display()
+                ))
+            })?;
+        let mut hasher = sha2::Sha256::new();
+        let mut received: u64 = 0;
+        while let Some(chunk) = field.chunk().await.map_err(|error| {
+            ServiceError::InvalidRequest(format!(
+                "the archive upload for {session_id} failed mid-stream after {received} of the declared {declared_bytes} bytes: {error}; nothing was accepted, and replaying the identical receipt is safe"
+            ))
+        })? {
+            received = received.checked_add(chunk.len() as u64).ok_or_else(|| {
+                ServiceError::InvalidRequest(
+                    "archive upload byte counter overflowed u64".into(),
+                )
+            })?;
+            if received > declared_bytes {
+                return Err(ServiceError::InvalidRequest(format!(
+                    "the archive upload exceeded its declared {declared_bytes}-byte commitment; declare the exact byte count of the exact zip being sent"
+                )));
+            }
+            hasher.update(&chunk);
+            file.write_all(&chunk).map_err(|error| {
+                ServiceError::Internal(format!(
+                    "write spooled archive bytes to {}: {error}",
+                    partial_path.display()
+                ))
+            })?;
+        }
+        if received != declared_bytes {
+            return Err(ServiceError::InvalidRequest(format!(
+                "the archive upload ended after {received} bytes but declared {declared_bytes}; the connection may have been interrupted, and replaying the identical receipt is safe"
+            )));
+        }
+        let digest = hasher.finalize();
+        let mut observed = String::with_capacity(digest.len() * 2);
+        for byte in digest {
+            use std::fmt::Write as _;
+            write!(observed, "{byte:02x}").expect("writing hex to a String cannot fail");
+        }
+        if observed != declared_sha256 {
+            return Err(ServiceError::InvalidRequest(format!(
+                "the received archive hashes to {observed} but the request committed to {declared_sha256}; nothing was accepted"
+            )));
+        }
+        file.sync_all().map_err(|error| {
+            ServiceError::Internal(format!(
+                "sync spooled archive {}: {error}",
+                partial_path.display()
+            ))
+        })?;
+        std::fs::rename(&partial_path, &archive_path).map_err(|error| {
+            ServiceError::Internal(format!(
+                "publish verified spooled archive {}: {error}",
+                archive_path.display()
+            ))
+        })?;
+        sync_dir_for_spool(&directory)?;
+        Ok(())
+    }
+    .await;
+
+    match streamed {
+        Ok(()) => Ok(UploadSpool {
+            directory,
+            archive_path,
+        }),
+        Err(error) => Err(remove_upload_spool_after_failure(&directory, error)),
+    }
+}
+
+fn sync_dir_for_spool(directory: &std::path::Path) -> ServiceResult<()> {
+    std::fs::File::open(directory)
+        .and_then(|handle| handle.sync_all())
+        .map_err(|error| {
+            ServiceError::Internal(format!(
+                "sync upload spool directory {}: {error}",
+                directory.display()
+            ))
+        })
+}
+
+/// Remove the per-request spool after a failure and fold any cleanup failure
+/// into the returned error instead of hiding it.
+fn remove_upload_spool_after_failure(
+    directory: &std::path::Path,
+    error: ServiceError,
+) -> ServiceError {
+    match std::fs::remove_dir_all(directory) {
+        Ok(()) => error,
+        Err(cleanup) if cleanup.kind() == std::io::ErrorKind::NotFound => error,
+        Err(cleanup) => ServiceError::Internal(format!(
+            "{error}; removing the per-request upload spool {} also failed: {cleanup}",
+            directory.display()
+        )),
+    }
+}
+
+async fn download_bundle(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<axum::response::Response, ServiceError> {
+    let body = state.manager.get(&id).await?;
+    if body.status == crate::runtime::SessionStatus::Running {
+        return Err(ServiceError::SessionRunning { session_id: id });
+    }
+    if body.bundle_sha256.is_empty() {
+        return Err(ServiceError::BundleAbsent { session_id: id });
+    }
+    let archive = state.cfg.results_dir.join(&id).join("bundle.tar.zst");
+    let file = tokio::fs::File::open(&archive).await.map_err(|error| {
+        ServiceError::Internal(format!(
+            "terminal {} accepts a bundle but {} cannot be opened: {error}",
+            id,
+            archive.display()
+        ))
+    })?;
+    let metadata = file.metadata().await.map_err(|error| {
+        ServiceError::Internal(format!(
+            "terminal {} bundle at {} cannot be stat'd: {error}",
+            id,
+            archive.display()
+        ))
+    })?;
+    if metadata.len() != body.bundle_compressed_bytes {
+        return Err(ServiceError::Internal(format!(
+            "terminal {} bundle at {} is {} bytes but the terminal record accepted {}",
+            id,
+            archive.display(),
+            metadata.len(),
+            body.bundle_compressed_bytes
+        )));
+    }
+    let mut headers = session_response_headers(&id)?;
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    headers.insert(
+        header::CONTENT_LENGTH,
+        HeaderValue::from_str(&body.bundle_compressed_bytes.to_string()).map_err(|error| {
+            ServiceError::Internal(format!(
+                "construct bundle Content-Length header for {id}: {error}"
+            ))
+        })?,
+    );
+    headers.insert(
+        HeaderName::from_static("x-bundle-sha256"),
+        HeaderValue::from_str(&body.bundle_sha256).map_err(|error| {
+            ServiceError::Internal(format!(
+                "construct bundle hash header for {id}: {error}"
+            ))
+        })?,
+    );
+    let stream = tokio_util::io::ReaderStream::new(file);
+    let mut response = axum::response::Response::new(axum::body::Body::from_stream(stream));
+    *response.status_mut() = StatusCode::OK;
+    response.headers_mut().extend(headers);
+    Ok(response)
+}
+
+async fn method_not_allowed(method: Method, uri: Uri) -> ServiceError {
+    ServiceError::MethodNotAllowed(format!(
+        "HTTP method {method} is not allowed for path {}; use only the one documented lifecycle method for that exact path",
+        uri.path()
+    ))
+}
+
+async fn endpoint_not_found(method: Method, uri: Uri) -> ServiceError {
+    ServiceError::EndpointNotFound(format!(
+        "no agent-service endpoint exists for HTTP method {method} at path {}; use the fixed /healthz or /v1/agent/sessions resource paths",
+        uri.path()
+    ))
+}
+
+fn session_response_headers(session_id: &str) -> ServiceResult<HeaderMap> {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    headers.insert(
+        header::LOCATION,
+        HeaderValue::from_str(&format!("/v1/agent/sessions/{session_id}")).map_err(|error| {
+            ServiceError::Internal(format!(
+                "construct canonical session Location header for {session_id}: {error}"
+            ))
+        })?,
+    );
+    Ok(headers)
+}
+
+fn collection_response_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    headers
+}
+
+fn require_idempotency_key(headers: &HeaderMap) -> ServiceResult<String> {
+    let mut values = headers.get_all("idempotency-key").iter();
+    let value = values.next().ok_or_else(|| {
+        ServiceError::InvalidRequest(
+            "missing required Idempotency-Key header; generate `s-` plus 64 lowercase hex characters from 32 CSPRNG bytes before submitting"
+                .into(),
+        )
+    })?;
+    if values.next().is_some() {
+        return Err(ServiceError::InvalidRequest(
+            "Idempotency-Key must appear exactly once".into(),
+        ));
+    }
+    let value = value.to_str().map_err(|_| {
+        ServiceError::InvalidRequest("Idempotency-Key is not visible ASCII".into())
+    })?;
+    if !crate::runtime::is_current_session_id(value) {
+        return Err(ServiceError::InvalidRequest(format!(
+            "Idempotency-Key {value:?} is not `s-` plus exactly 64 lowercase hexadecimal characters"
+        )));
+    }
+    Ok(value.to_string())
+}
+
+async fn list_sessions(
+    State(state): State<AppState>,
+) -> Result<(HeaderMap, Json<ListResponse>), ServiceError> {
     let sessions = state.manager.list().await?;
-    Ok(Json(ListResponse { sessions }))
+    Ok((collection_response_headers(), Json(ListResponse { sessions })))
 }
 
 async fn get_session(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<SessionBody>, ServiceError> {
-    Ok(Json(state.manager.get(&id).await?))
+) -> Result<(HeaderMap, Json<SessionBody>), ServiceError> {
+    let body = state.manager.get(&id).await?;
+    Ok((session_response_headers(&id)?, Json(body)))
 }
 
 async fn cancel_session(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<SessionBody>, ServiceError> {
-    Ok(Json(state.manager.cancel(&id).await?))
-}
-
-async fn wait_session(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<SessionBody>, ServiceError> {
-    Ok(Json(state.manager.wait_terminal(&id).await?))
+) -> Result<(StatusCode, HeaderMap, Json<SessionBody>), ServiceError> {
+    let body = state.manager.cancel(&id).await?;
+    Ok((
+        if body.status == crate::runtime::SessionStatus::Running {
+            StatusCode::ACCEPTED
+        } else {
+            StatusCode::OK
+        },
+        session_response_headers(&id)?,
+        Json(body),
+    ))
 }
 
 async fn delete_session(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, ServiceError> {
+) -> Result<(StatusCode, HeaderMap), ServiceError> {
     state.manager.delete(&id).await?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok((StatusCode::NO_CONTENT, collection_response_headers()))
 }
 
 /// Used at startup to validate that we can actually serve traffic before
@@ -227,6 +665,7 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
     require_owned_runtime_directory(&cfg.state_dir, 0o700, 1000, 1000, false)?;
     require_owned_runtime_directory(&cfg.results_dir, 0o700, 1000, 1000, false)?;
     require_owned_runtime_directory(&cfg.state_dir.join("sessions"), 0o700, 1000, 1000, true)?;
+    require_owned_runtime_directory(&cfg.state_dir.join("spool"), 0o700, 1000, 1000, true)?;
 
     // Sweep any orphans from a prior crash before announcing ourselves.
     // Docker objects (containers), crash-interrupted result directories (no
@@ -235,7 +674,10 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
     // evidence and is never swept. Sweeps
     // complete (or fail loudly) BEFORE the listener binds, so no incoming
     // request can land while a half-cleaned-up prior session exists.
+    crate::runtime::recover_interrupted_deletions(cfg).await?;
     session::sweep_orphans(cfg).await?;
+    crate::runtime::recover_interrupted_acceptances(cfg).await?;
+    sweep_upload_spool(&cfg.state_dir.join("spool"))?;
     // Reconcile state before result-only leftovers. This ordering preserves
     // both sides of a crash-interrupted terminalization: if a raw-state tree
     // still exists beside an incomplete result directory, state reconciliation
@@ -244,6 +686,54 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
     sweep_state_dir(&cfg.state_dir, &cfg.results_dir, 1000, 1000)?;
     sweep_partial_results(&cfg.results_dir, &cfg.state_dir, 1000, 1000)?;
 
+    Ok(())
+}
+
+/// Remove every entry beneath the upload spool root. Everything here is
+/// pre-acceptance per-request scratch: a durably accepted operation's
+/// archive was atomically relocated into its session tree before its
+/// acceptance record became visible, so nothing beneath the spool root is
+/// ever load-bearing after a crash, and the client's durable receipt makes
+/// replaying any interrupted upload safe.
+fn sweep_upload_spool(spool_root: &std::path::Path) -> ServiceResult<()> {
+    let entries = std::fs::read_dir(spool_root)
+        .map_err(|error| {
+            ServiceError::Internal(format!(
+                "startup spool sweep: read {}: {error}",
+                spool_root.display()
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            ServiceError::Internal(format!(
+                "startup spool sweep: read entry beneath {}: {error}",
+                spool_root.display()
+            ))
+        })?;
+    for entry in entries {
+        let path = entry.path();
+        let metadata = std::fs::symlink_metadata(&path).map_err(|error| {
+            ServiceError::Internal(format!(
+                "startup spool sweep: stat {}: {error}",
+                path.display()
+            ))
+        })?;
+        let removal = if metadata.is_dir() && !metadata.file_type().is_symlink() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        removal.map_err(|error| {
+            ServiceError::Internal(format!(
+                "startup spool sweep: remove abandoned upload scratch {}: {error}",
+                path.display()
+            ))
+        })?;
+        tracing::warn!(
+            removed = %path.display(),
+            "startup spool sweep removed abandoned pre-acceptance upload scratch"
+        );
+    }
     Ok(())
 }
 
@@ -463,11 +953,11 @@ async fn verify_service_container(cfg: &Config, value: &serde_json::Value) -> Se
     let control_dir = control_dir
         .to_str()
         .ok_or_else(|| ServiceError::Internal("broker control directory is not UTF-8".into()))?;
+    // The workspace arrives over the connection as a hash-committed
+    // archive, so the service container mounts no host input tree at all:
+    // only its own runtime state, results, control socket, and model relay
+    // socket directories.
     let expected_mounts = std::collections::BTreeMap::from([
-        (
-            cfg.lock.service.host_input_root.as_str(),
-            (cfg.lock.service.host_input_root.as_str(), false),
-        ),
         (
             cfg.lock.service.state_dir.as_str(),
             (cfg.lock.service.state_dir.as_str(), true),
@@ -1675,7 +2165,13 @@ fn sweep_state_dir(
                     && metadata.uid() == service_uid
                     && metadata.gid() == service_gid =>
             {
-                Some(validate_raw_evidence_marker(&marker, &path)?)
+                Some(validate_raw_evidence_marker(
+                    &marker,
+                    &path,
+                    &metadata,
+                    service_uid,
+                    service_gid,
+                )?)
             }
             Ok(metadata) => {
                 return Err(ServiceError::Internal(format!(
@@ -1755,6 +2251,29 @@ fn sweep_state_dir(
                         )));
                     }
                 }
+
+                // No POST can have returned success without accepted.json,
+                // but that fact alone is not deletion authority for an
+                // arbitrary directory bearing a session-shaped name.  Only
+                // remove the exact, empty pre-acceptance layout created by
+                // our own transaction, including its canonical prompt and
+                // history-policy controls.  Any copied workspace, output,
+                // unexpected entry, mode/owner drift, or partially written
+                // control remains intact and blocks readiness for explicit
+                // recovery instead of being guessed disposable.
+                let uncommitted = SessionPaths::new(state_dir, name);
+                uncommitted.ensure_recovery_dirs().map_err(|error| {
+                    ServiceError::Internal(format!(
+                        "sweep_state_dir: raw state {} without durable acceptance is not the exact service-owned pre-acceptance layout: {error}",
+                        path.display()
+                    ))
+                })?;
+                crate::runtime::validate_exact_uncommitted_state_tree(&uncommitted, None).map_err(|error| {
+                    ServiceError::Internal(format!(
+                        "sweep_state_dir: refusing to delete unaccepted raw state {} because it is not an exact empty pre-acceptance transaction: {error}",
+                        path.display()
+                    ))
+                })?;
             }
         }
         std::fs::remove_dir_all(&path).map_err(|e| {
@@ -1767,6 +2286,10 @@ fn sweep_state_dir(
         tracing::info!(dir = %path.display(), "sweep_state_dir: removed leftover");
     }
     if removed > 0 {
+        sync_directory(
+            &sessions_dir,
+            "sweep_state_dir: sync removed session entries",
+        )?;
         tracing::info!(count = removed, "sweep_state_dir: complete");
     }
     Ok(())
@@ -1880,6 +2403,10 @@ fn sweep_partial_results(
         );
     }
     if removed > 0 {
+        sync_directory(
+            results_dir,
+            "sweep_partial_results: sync removed result entries",
+        )?;
         tracing::info!(
             count = removed,
             "sweep_partial_results: complete (these sessions were interrupted by a server crash)"
@@ -1950,7 +2477,13 @@ fn validate_terminal_state_reconciliation(
         service_gid,
         "raw-evidence marker",
     )?;
-    let cause = validate_raw_evidence_marker(&marker, &state_root)?;
+    let cause = validate_raw_evidence_marker(
+        &marker,
+        &state_root,
+        &marker_metadata,
+        service_uid,
+        service_gid,
+    )?;
     validate_raw_cause_for_terminal(cause, body, "terminal reconciliation")
 }
 
@@ -2003,19 +2536,21 @@ fn committed_terminal_for_sweep(
         )?;
     }
 
-    let terminal_path = if final_meta.is_some() {
-        &finished
-    } else if temporary_meta.is_some() {
-        &temporary
+    let (terminal_path, terminal_metadata) = if let Some(metadata) = &final_meta {
+        (&finished, metadata)
+    } else if let Some(metadata) = &temporary_meta {
+        (&temporary, metadata)
     } else {
         return Ok(None);
     };
-    let bytes = std::fs::read(terminal_path).map_err(|error| {
-        ServiceError::Internal(format!(
-            "terminal sweep: cannot read {}: {error}",
-            terminal_path.display()
-        ))
-    })?;
+    let bytes = read_private_service_file(
+        terminal_path,
+        terminal_metadata,
+        service_uid,
+        service_gid,
+        "terminal record",
+        128 * 1024 * 1024,
+    )?;
     let body: crate::runtime::SessionBody = serde_json::from_slice(&bytes).map_err(|error| {
         ServiceError::Internal(format!(
             "terminal sweep: terminal record {} is malformed: {error}",
@@ -2056,39 +2591,96 @@ fn committed_terminal_for_sweep(
             );
         }
         (None, Some(_)) => {
-            // A private, fully parseable temporary terminal is the durable
-            // prepare phase of no-clobber publication. Validate its referenced
-            // storage before making it visible, then complete the exact
-            // hard-link transaction. A torn/partial file cannot parse and is
-            // preserved as a startup error above.
-            validate_terminal_storage(result_dir, &body, service_uid, service_gid)?;
-            std::fs::hard_link(&temporary, &finished).map_err(|error| {
-                ServiceError::Internal(format!(
-                    "terminal sweep: complete prepared publication {} -> {}: {error}",
-                    temporary.display(),
-                    finished.display()
-                ))
-            })?;
-            std::fs::remove_file(&temporary).map_err(|error| {
-                ServiceError::Internal(format!(
-                    "terminal sweep: remove recovered temporary publication {}: {error}",
-                    temporary.display()
-                ))
-            })?;
-            sync_directory(
-                result_dir,
-                "terminal sweep after prepared-publication recovery",
-            )?;
-            tracing::warn!(
-                session_id,
-                terminal = %finished.display(),
-                "terminal sweep: completed durable prepared terminal publication after crash"
-            );
+            // A parseable `.tmp` is only the durable prepare phase. It is not
+            // publication authority: the runtime recovery pass must first
+            // resume raw-state cleanup or durable retention through the same
+            // transaction as live terminalization. Reaching the generic
+            // sweep means that ordered recovery did not own this draft
+            // (usually because no matching durable acceptance exists), so
+            // preserve it and stop rather than exposing it out of order.
+            return Err(ServiceError::Internal(format!(
+                "terminal sweep: private terminal draft {} has no committed terminal; ordered acceptance recovery must complete cleanup/retention before publication",
+                temporary.display()
+            )));
         }
         (Some(_), None) => {}
         (None, None) => unreachable!("terminal path selection proved one file exists"),
     }
     Ok(Some(body))
+}
+
+fn read_private_service_file(
+    path: &std::path::Path,
+    expected_metadata: &std::fs::Metadata,
+    service_uid: u32,
+    service_gid: u32,
+    role: &str,
+    maximum_bytes: u64,
+) -> ServiceResult<Vec<u8>> {
+    use std::io::Read;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|error| {
+            ServiceError::Internal(format!(
+                "terminal sweep: cannot open {role} {} without following links: {error}",
+                path.display()
+            ))
+        })?;
+    let opened_metadata = file.metadata().map_err(|error| {
+        ServiceError::Internal(format!(
+            "terminal sweep: cannot fstat opened {role} {}: {error}",
+            path.display()
+        ))
+    })?;
+    validate_private_service_file(
+        path,
+        &opened_metadata,
+        service_uid,
+        service_gid,
+        role,
+    )?;
+    if opened_metadata.dev() != expected_metadata.dev()
+        || opened_metadata.ino() != expected_metadata.ino()
+    {
+        return Err(ServiceError::Internal(format!(
+            "terminal sweep: {role} {} changed between validation and descriptor open",
+            path.display()
+        )));
+    }
+    if opened_metadata.len() > maximum_bytes {
+        return Err(ServiceError::Internal(format!(
+            "terminal sweep: {role} {} is {} bytes, above the exact {}-byte bound",
+            path.display(),
+            opened_metadata.len(),
+            maximum_bytes
+        )));
+    }
+    let capacity = usize::try_from(opened_metadata.len()).map_err(|_| {
+        ServiceError::Internal(format!(
+            "terminal sweep: {role} {} is too large to address on this platform",
+            path.display()
+        ))
+    })?;
+    let mut bytes = Vec::with_capacity(capacity);
+    file.read_to_end(&mut bytes).map_err(|error| {
+        ServiceError::Internal(format!(
+            "terminal sweep: cannot read opened {role} {}: {error}",
+            path.display()
+        ))
+    })?;
+    if bytes.len() as u64 != opened_metadata.len() {
+        return Err(ServiceError::Internal(format!(
+            "terminal sweep: {role} {} changed length while its descriptor was open: fstat={} read={}",
+            path.display(),
+            opened_metadata.len(),
+            bytes.len()
+        )));
+    }
+    Ok(bytes)
 }
 
 fn validate_private_service_file(
@@ -2125,17 +2717,30 @@ enum RawEvidenceCause {
     RequiredBundleFailure,
     PanicRecoveryBundleFailure,
     SetupForensicBundleFailure,
+    ServiceRestartBundleFailure,
     ContainerQuiescenceUnproved,
     ContainerTeardownIncomplete,
+    RawStateCleanupFailure,
 }
 
 fn validate_raw_evidence_marker(
     marker: &std::path::Path,
     session_root: &std::path::Path,
+    expected_metadata: &std::fs::Metadata,
+    service_uid: u32,
+    service_gid: u32,
 ) -> ServiceResult<RawEvidenceCause> {
-    let contents = std::fs::read_to_string(marker).map_err(|error| {
+    let bytes = read_private_service_file(
+        marker,
+        expected_metadata,
+        service_uid,
+        service_gid,
+        "raw-evidence marker",
+        4096,
+    )?;
+    let contents = String::from_utf8(bytes).map_err(|error| {
         ServiceError::Internal(format!(
-            "sweep_state_dir: cannot read raw-evidence marker {}: {error}",
+            "sweep_state_dir: raw-evidence marker {} is not UTF-8: {error}",
             marker.display()
         ))
     })?;
@@ -2151,8 +2756,10 @@ fn validate_raw_evidence_marker(
         "cause=required-bundle-failure" => RawEvidenceCause::RequiredBundleFailure,
         "cause=panic-recovery-bundle-failure" => RawEvidenceCause::PanicRecoveryBundleFailure,
         "cause=setup-forensic-bundle-failure" => RawEvidenceCause::SetupForensicBundleFailure,
+        "cause=service-restart-bundle-failure" => RawEvidenceCause::ServiceRestartBundleFailure,
         "cause=container-quiescence-unproved" => RawEvidenceCause::ContainerQuiescenceUnproved,
         "cause=container-teardown-incomplete" => RawEvidenceCause::ContainerTeardownIncomplete,
+        "cause=raw-state-cleanup-failure" => RawEvidenceCause::RawStateCleanupFailure,
         unknown => {
             return Err(ServiceError::Internal(format!(
                 "sweep_state_dir: raw-evidence marker {} has an unknown cause {unknown:?}",
@@ -2176,15 +2783,20 @@ fn validate_raw_cause_for_terminal(
     body: &crate::runtime::SessionBody,
     context: &str,
 ) -> ServiceResult<()> {
-    let accepted_bundle = !body.bundle_archive_path.is_empty();
+    let accepted_bundle = !body.bundle_sha256.is_empty();
     let shape_valid = if accepted_bundle {
-        cause == RawEvidenceCause::ContainerTeardownIncomplete
+        matches!(
+            cause,
+            RawEvidenceCause::ContainerTeardownIncomplete
+                | RawEvidenceCause::RawStateCleanupFailure
+        )
     } else {
         matches!(
             cause,
             RawEvidenceCause::RequiredBundleFailure
-                | RawEvidenceCause::PanicRecoveryBundleFailure
-                | RawEvidenceCause::SetupForensicBundleFailure
+            | RawEvidenceCause::PanicRecoveryBundleFailure
+            | RawEvidenceCause::SetupForensicBundleFailure
+            | RawEvidenceCause::ServiceRestartBundleFailure
                 | RawEvidenceCause::ContainerQuiescenceUnproved
         )
     };
@@ -2285,7 +2897,7 @@ fn sync_directory(path: &std::path::Path, context: &str) -> ServiceResult<()> {
         })
 }
 
-fn validate_terminal_storage(
+pub(crate) fn validate_terminal_storage(
     result_dir: &std::path::Path,
     body: &crate::runtime::SessionBody,
     service_uid: u32,
@@ -2294,7 +2906,7 @@ fn validate_terminal_storage(
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
     let archive = result_dir.join("bundle.tar.zst");
-    if body.raw_session_tree_retained && body.bundle_archive_path.is_empty() {
+    if body.raw_session_tree_retained && body.bundle_sha256.is_empty() {
         if body.bundle_compressed_bytes != 0
             || body.bundle_uncompressed_bytes != 0
             || body.bundle_file_count != 0
@@ -2310,14 +2922,14 @@ fn validate_terminal_storage(
         // terminal counters/path and is never deleted by startup.
         return Ok(());
     }
-    if body.bundle_archive_path.is_empty() {
+    if body.bundle_sha256.is_empty() {
         if body.bundle_compressed_bytes != 0
             || body.bundle_uncompressed_bytes != 0
             || body.bundle_file_count != 0
             || body.bundle_artifacts_file_count != 0
         {
             return Err(ServiceError::Internal(format!(
-                "terminal {} has empty bundle path but nonzero bundle counters",
+                "terminal {} has an empty bundle hash but nonzero bundle counters",
                 body.session_id
             )));
         }
@@ -2340,12 +2952,18 @@ fn validate_terminal_storage(
         }
         return Ok(());
     }
-    if body.bundle_archive_path != archive.display().to_string() {
+    // Deep hash equality is proved once at bundle acceptance from the exact
+    // bytes being published, and any bundle download re-proves it end to
+    // end. Reads only require the recorded commitment to be well-formed.
+    if body.bundle_sha256.len() != 64
+        || !body
+            .bundle_sha256
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
         return Err(ServiceError::Internal(format!(
-            "terminal {} bundle path drift: expected {}, observed {:?}",
-            body.session_id,
-            archive.display(),
-            body.bundle_archive_path
+            "terminal {} bundle hash {:?} is not exactly 64 lowercase hexadecimal characters",
+            body.session_id, body.bundle_sha256
         )));
     }
     let metadata = std::fs::symlink_metadata(&archive).map_err(|error| {
@@ -2382,16 +3000,20 @@ fn validate_terminal_storage(
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::ffi::OsStrExt;
     use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
     use std::path::{Path, PathBuf};
 
     use super::{
         committed_terminal_for_sweep, require_owned_runtime_directory, sweep_partial_results,
         sweep_state_dir, validate_terminal_storage, verify_capture_image, BrokerPreflight,
-        CreateRequest,
+        CreateRequest, require_idempotency_key,
     };
+    use axum::http::{HeaderMap, HeaderValue};
     use crate::config::{Config, StackLock, STACK_LOCK_JSON};
+    use crate::progress::ProgressPhase;
     use crate::runtime::{SessionBody, SessionStatus};
+    use crate::staging::SessionPaths;
 
     struct TestTree(PathBuf);
 
@@ -2439,6 +3061,62 @@ mod tests {
         file.sync_all().expect("sync private fixture");
     }
 
+    fn make_service_owned(path: &Path) {
+        let metadata = std::fs::symlink_metadata(path).expect("stat service-owned fixture");
+        if metadata.uid() == 1000 && metadata.gid() == 1000 {
+            return;
+        }
+        assert_eq!(
+            unsafe { libc::geteuid() },
+            0,
+            "the pinned test environment is either uid 1000 or root so it can construct exact production ownership"
+        );
+        let path_bytes = std::ffi::CString::new(path.as_os_str().as_bytes())
+            .expect("fixture path has no NUL byte");
+        assert_eq!(
+            unsafe { libc::chown(path_bytes.as_ptr(), 1000, 1000) },
+            0,
+            "chown exact service-owned fixture: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+
+    #[test]
+    fn idempotency_key_is_exact_single_and_256_bit_shaped() {
+        let canonical =
+            "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let mut headers = HeaderMap::new();
+        headers.insert("idempotency-key", HeaderValue::from_static(canonical));
+        assert_eq!(
+            require_idempotency_key(&headers).expect("accept exact current handle"),
+            canonical
+        );
+
+        let missing = require_idempotency_key(&HeaderMap::new())
+            .expect_err("missing caller-known handle must fail");
+        assert!(missing.to_string().contains("missing required"));
+
+        headers.append("idempotency-key", HeaderValue::from_static(canonical));
+        let duplicate = require_idempotency_key(&headers)
+            .expect_err("duplicate handle fields are ambiguous and must fail");
+        assert!(duplicate.to_string().contains("exactly once"));
+
+        for invalid in [
+            "s-0123456789abcdef0123456789abcdef",
+            "s-0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+        ] {
+            let mut invalid_headers = HeaderMap::new();
+            invalid_headers.insert(
+                "idempotency-key",
+                HeaderValue::from_str(invalid).expect("fixture is visible ASCII"),
+            );
+            require_idempotency_key(&invalid_headers)
+                .expect_err("noncanonical idempotency key must fail");
+        }
+    }
+
     fn mkdir_0755(path: &Path) {
         std::fs::create_dir_all(path).expect("create fixture directory");
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
@@ -2452,8 +3130,19 @@ mod tests {
             started_at_unix: 1,
             model: "qwen3.8-27b-nvfp4-k8v4".to_string(),
             context_window: 262_144,
+            archive_bytes: 1,
+            archive_sha256: "1".repeat(64),
             preserve_thinking: false,
             prompt_preview: "fixture".to_string(),
+            progress_revision: 1,
+            progress_at_unix_ms: 1,
+            progress_phase: ProgressPhase::Terminal,
+            progress_message: "terminal fixture".to_string(),
+            staged_bytes: 0,
+            staged_entries: 0,
+            staged_regular_files: 0,
+            output_event_bytes: 0,
+            progress_events: Vec::new(),
             num_turns: 0,
             last_event_at_unix: 0,
             finished_at_unix: 2,
@@ -2463,7 +3152,7 @@ mod tests {
             is_process_error: true,
             response: "fixture terminal".to_string(),
             agent_duration_ms: 0,
-            bundle_archive_path: String::new(),
+            bundle_sha256: String::new(),
             bundle_compressed_bytes: 0,
             bundle_uncompressed_bytes: 0,
             bundle_file_count: 0,
@@ -2521,30 +3210,38 @@ mod tests {
     }
 
     #[test]
-    fn create_request_rejects_unknown_fields() {
-        let result = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","folder":"/home/user/project","fallback":true}"#,
-        );
-        let error = result.expect_err("unknown request fields must fail closed");
+    fn create_request_rejects_unknown_and_removed_fields() {
+        let error = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","fallback":true}"#,
+        )
+        .expect_err("unknown request fields must fail closed");
         assert!(error.to_string().contains("unknown field `fallback`"));
+
+        // The retired shared-filesystem transport is a removed field, not a
+        // silently tolerated compatibility alias.
+        let error = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","folder":"/home/user/project","archive_bytes":4,"archive_sha256":"aa"}"#,
+        )
+        .expect_err("the removed folder transport must fail closed");
+        assert!(error.to_string().contains("unknown field `folder`"));
     }
 
     #[test]
     fn create_request_has_one_typed_non_default_history_policy() {
         let default = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","folder":"/home/user/project"}"#,
+            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa"}"#,
         )
         .expect("omission must select the documented false default");
         assert!(!default.preserve_thinking);
 
         let preserved = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","folder":"/home/user/project","preserve_thinking":true}"#,
+            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","preserve_thinking":true}"#,
         )
         .expect("an explicit JSON true must select preserved history");
         assert!(preserved.preserve_thinking);
 
         let error = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","folder":"/home/user/project","preserve_thinking":"true"}"#,
+            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","preserve_thinking":"true"}"#,
         )
         .expect_err("string policy coercion must fail closed");
         assert!(error.to_string().contains("invalid type"));
@@ -2557,7 +3254,6 @@ mod tests {
             listen_addr: lock.service.listen.parse().expect("locked listen address"),
             state_dir: PathBuf::from(&lock.service.state_dir),
             results_dir: PathBuf::from(&lock.service.results_dir),
-            host_input_root: PathBuf::from(&lock.service.host_input_root),
             broker_socket: PathBuf::from(&lock.broker.socket_path),
             model_socket: PathBuf::from(&lock.relay.model_socket_dir).join("relay.sock"),
             agent_image: lock.agent.image_tag.clone(),
@@ -2639,7 +3335,7 @@ mod tests {
     }
 
     #[test]
-    fn prepared_terminal_is_recovered_by_exact_no_clobber_publication() {
+    fn private_terminal_draft_without_ordered_acceptance_recovery_is_preserved() {
         let tree = TestTree::new("prepared-terminal");
         let result_dir = tree.0.join("s-11111111111111111111111111111111");
         mkdir_0755(&result_dir);
@@ -2647,12 +3343,11 @@ mod tests {
         write_terminal(&result_dir.join("finished.json.tmp"), &body);
         let (uid, gid) = owner();
 
-        let recovered = committed_terminal_for_sweep(&result_dir, &body.session_id, uid, gid)
-            .expect("recover prepared terminal")
-            .expect("terminal exists");
-        assert_eq!(recovered.session_id, body.session_id);
-        assert!(result_dir.join("finished.json").is_file());
-        assert!(!result_dir.join("finished.json.tmp").exists());
+        let error = committed_terminal_for_sweep(&result_dir, &body.session_id, uid, gid)
+            .expect_err("generic sweep must not bypass ordered terminal cleanup");
+        assert!(error.to_string().contains("ordered acceptance recovery"));
+        assert!(!result_dir.join("finished.json").exists());
+        assert!(result_dir.join("finished.json.tmp").is_file());
     }
 
     #[test]
@@ -2748,6 +3443,56 @@ mod tests {
     }
 
     #[test]
+    fn raw_state_cleanup_failure_is_valid_only_beside_an_accepted_bundle() {
+        let tree = TestTree::new("cleanup-retained-raw");
+        let state = tree.0.join("state");
+        let results = tree.0.join("results");
+        let session_id = "s-99999999999999999999999999999999";
+        let state_root = state.join("sessions").join(session_id);
+        let control = state_root.join("control");
+        let result_dir = results.join(session_id);
+        mkdir_0755(&control);
+        mkdir_0755(&result_dir);
+        let archive = result_dir.join("bundle.tar.zst");
+        private_write(&archive, b"accepted-bundle");
+        let mut body = terminal(session_id, true);
+        body.bundle_sha256 =
+            crate::bundle::hash_file_sha256(&archive).expect("hash accepted-bundle fixture");
+        body.bundle_compressed_bytes = b"accepted-bundle".len() as u64;
+        body.bundle_uncompressed_bytes = 100;
+        body.bundle_file_count = 2;
+        write_terminal(&result_dir.join("finished.json"), &body);
+        let marker = control.join("raw-evidence-retained.txt");
+        private_write(
+            &marker,
+            format!(
+                "RAW_SESSION_TREE_RETAINED\ncause=raw-state-cleanup-failure\npath={}\n",
+                state_root.display()
+            )
+            .as_bytes(),
+        );
+        let (uid, gid) = owner();
+
+        sweep_state_dir(&state, &results, uid, gid)
+            .expect("accepted bundle permits exact cleanup-failure retention");
+        sweep_partial_results(&results, &state, uid, gid)
+            .expect("accepted retained bundle remains a valid terminal");
+
+        body.bundle_sha256.clear();
+        body.bundle_compressed_bytes = 0;
+        body.bundle_uncompressed_bytes = 0;
+        body.bundle_file_count = 0;
+        std::fs::remove_file(result_dir.join("finished.json"))
+            .expect("replace terminal fixture");
+        write_terminal(&result_dir.join("finished.json"), &body);
+        let error = sweep_state_dir(&state, &results, uid, gid)
+            .expect_err("cleanup-failure cause without an accepted bundle must fail");
+        assert!(error
+            .to_string()
+            .contains("contradicts accepted_bundle=false"));
+    }
+
+    #[test]
     fn nonempty_partial_results_are_preserved_not_swept() {
         let tree = TestTree::new("partial-result");
         let results = tree.0.join("results");
@@ -2763,19 +3508,53 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_unretained_empty_state_is_safely_removed() {
-        let tree = TestTree::new("empty-state");
+    fn exact_uncommitted_state_is_safely_removed() {
+        let tree = TestTree::new("exact-uncommitted-state");
+        let state = tree.0.join("state");
+        let results = tree.0.join("results");
+        let session_id = "s-55555555555555555555555555555555";
+        let paths = SessionPaths::new(&state, session_id);
+        mkdir_0755(&state.join("sessions"));
+        paths.create_dirs().expect("create exact session layout");
+        paths.write_prompt("uncommitted prompt").expect("write exact prompt");
+        paths
+            .write_history_policy(false)
+            .expect("write exact history policy");
+        for path in [
+            &paths.root,
+            &paths.staged,
+            &paths.artifacts,
+            &paths.control,
+            &paths.streams,
+            &paths.output,
+            &paths.control.join("prompt.txt"),
+            &paths.control.join("history-policy.json"),
+        ] {
+            make_service_owned(path);
+        }
+        mkdir_0755(&results);
+
+        sweep_state_dir(&state, &results, 1000, 1000)
+            .expect("remove exact uncommitted state");
+        assert!(!paths.root.exists());
+    }
+
+    #[test]
+    fn session_shaped_state_without_exact_precommit_layout_is_preserved() {
+        let tree = TestTree::new("ambiguous-uncommitted-state");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
         let state_root = state
             .join("sessions")
-            .join("s-55555555555555555555555555555555");
+            .join("s-12121212121212121212121212121212");
         mkdir_0755(&state_root);
         mkdir_0755(&results);
         let (uid, gid) = owner();
 
-        sweep_state_dir(&state, &results, uid, gid).expect("remove ordinary abandoned state");
-        assert!(!state_root.exists());
+        let error = sweep_state_dir(&state, &results, uid, gid)
+            .expect_err("a session-shaped directory is not deletion authority");
+        assert!(error.to_string().contains("pre-acceptance layout"));
+        assert!(state_root.is_dir());
     }
 
     #[test]
@@ -2786,7 +3565,8 @@ mod tests {
         let archive = result_dir.join("bundle.tar.zst");
         private_write(&archive, b"bundle-bytes");
         let mut body = terminal("s-66666666666666666666666666666666", false);
-        body.bundle_archive_path = archive.display().to_string();
+        body.bundle_sha256 =
+            crate::bundle::hash_file_sha256(&archive).expect("hash bundle-bytes fixture");
         body.bundle_compressed_bytes = b"bundle-bytes".len() as u64;
         body.bundle_uncompressed_bytes = 100;
         body.bundle_file_count = 2;

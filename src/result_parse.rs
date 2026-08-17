@@ -6,6 +6,8 @@
 //! rejects partial, duplicated, recovered, or post-terminal output rather
 //! than choosing a convenient-looking last result.
 
+use std::io::{BufRead, BufReader, Read};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
 use crate::error::{io_msg, ServiceError, ServiceResult};
@@ -18,56 +20,110 @@ pub struct AgentResult {
     pub num_turns: u64,
 }
 
+// A session may have indefinitely many records, but one JSON event is a
+// bounded protocol object. 128 MiB is also the maximum durable terminal JSON
+// size: a larger single stream event cannot be represented faithfully in the
+// public terminal resource and is rejected before it can exhaust the 2 GiB
+// service container. This is a per-record bound, never a turn/session bound.
+const MAX_EVENT_RECORD_BYTES: usize = 128 * 1024 * 1024;
+
 pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
-    let text = std::fs::read_to_string(path).map_err(|error| {
-        ServiceError::AgentOutputMissing(io_msg("read events.jsonl", path, &error))
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|error| {
+            ServiceError::AgentOutputMissing(io_msg(
+                "open events.jsonl without following links",
+                path,
+                &error,
+            ))
+        })?;
+    let metadata = file.metadata().map_err(|error| {
+        ServiceError::AgentOutputMissing(io_msg(
+            "fstat opened events.jsonl",
+            path,
+            &error,
+        ))
     })?;
-    let lines = text
-        .lines()
-        .enumerate()
-        .filter_map(|(index, line)| {
-            let trimmed = line.trim();
-            (!trimmed.is_empty()).then_some((index + 1, trimmed))
-        })
-        .collect::<Vec<_>>();
-    if lines.is_empty() {
+    if !metadata.is_file()
+        || metadata.permissions().mode() & 0o777 != 0o600
+        || metadata.uid() != 1000
+        || metadata.gid() != 1000
+    {
         return Err(ServiceError::AgentOutputMissing(format!(
-            "events.jsonl at {} contains no events",
+            "events.jsonl at {} has unsafe opened type/mode/owner",
             path.display()
         )));
     }
+    // Capture has already stopped and supplied an exact byte count, but take
+    // the fstat length as an additional immutable parsing boundary. Any bytes
+    // appended after this descriptor snapshot belong to contradictory state,
+    // not to a moving parse target.
+    let mut reader = BufReader::new(file.take(metadata.len()));
 
     let mut stream_session_id: Option<String> = None;
     let mut result: Option<serde_json::Map<String, serde_json::Value>> = None;
     let mut main_assistant_events = 0u64;
+    let mut physical_line = 0usize;
+    let mut event_count = 0usize;
+    let mut terminal_line = 0usize;
+    let mut record = Vec::new();
 
-    for (position, (line_number, line)) in lines.iter().enumerate() {
-        let value: serde_json::Value = serde_json::from_str(line).map_err(|error| {
+    loop {
+        record.clear();
+        let terminated = read_bounded_record(&mut reader, &mut record, path)?;
+        if record.is_empty() && !terminated {
+            break;
+        }
+        physical_line = physical_line.checked_add(1).ok_or_else(|| {
+            ServiceError::AgentOutputMissing("events.jsonl physical line count overflowed".into())
+        })?;
+        if !terminated {
+            return Err(ServiceError::AgentOutputMissing(format!(
+                "events.jsonl line {physical_line} is not newline-terminated; refusing a possibly torn final record"
+            )));
+        }
+        let line = record
+            .strip_suffix(b"\n")
+            .expect("bounded record reports termination only with a newline");
+        if line.iter().all(|byte| byte.is_ascii_whitespace()) {
+            continue;
+        }
+        if result.is_some() {
+            return Err(ServiceError::AgentOutputMissing(format!(
+                "events.jsonl terminal result at line {terminal_line} is followed by another event at line {physical_line}"
+            )));
+        }
+        event_count = event_count.checked_add(1).ok_or_else(|| {
+            ServiceError::AgentOutputMissing("events.jsonl event count overflowed".into())
+        })?;
+        let value: serde_json::Value = serde_json::from_slice(line).map_err(|error| {
             ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {line_number} is invalid JSON: {error}; content: {}",
-                truncate(line, 512)
+                "events.jsonl line {physical_line} is invalid JSON: {error}; content: {}",
+                truncate_bytes(line, 512)
             ))
         })?;
         let object = value.as_object().ok_or_else(|| {
             ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {line_number} is not a JSON object"
+                "events.jsonl line {physical_line} is not a JSON object"
             ))
         })?;
-        let event_type = required_string(object, "type", *line_number)?;
+        let event_type = required_string(object, "type", physical_line)?;
         if !matches!(event_type, "system" | "user" | "assistant" | "result") {
             return Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {line_number} has unsupported event type {event_type:?}"
+                "events.jsonl line {physical_line} has unsupported event type {event_type:?}"
             )));
         }
-        required_string(object, "uuid", *line_number)?;
-        if position == 0 {
-            validate_init_event(object, *line_number)?;
+        required_string(object, "uuid", physical_line)?;
+        if event_count == 1 {
+            validate_init_event(object, physical_line)?;
         }
-        let value = required_string(object, "session_id", *line_number)?;
+        let value = required_string(object, "session_id", physical_line)?;
         match &stream_session_id {
             Some(expected) if expected != value => {
                 return Err(ServiceError::AgentOutputMissing(format!(
-                    "events.jsonl session_id changed from {expected:?} to {value:?} at line {line_number}"
+                    "events.jsonl session_id changed from {expected:?} to {value:?} at line {physical_line}"
                 )));
             }
             None => stream_session_id = Some(value.to_string()),
@@ -75,28 +131,28 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         }
 
         if is_completed_main_turn(object) {
-            main_assistant_events = main_assistant_events.saturating_add(1);
+            main_assistant_events = main_assistant_events.checked_add(1).ok_or_else(|| {
+                ServiceError::AgentOutputMissing(
+                    "events.jsonl completed main-turn count overflowed".into(),
+                )
+            })?;
         }
         if event_type == "result" {
-            if result.is_some() {
-                return Err(ServiceError::AgentOutputMissing(format!(
-                    "events.jsonl contains more than one terminal result (duplicate at line {line_number})"
-                )));
-            }
-            if position + 1 != lines.len() {
-                return Err(ServiceError::AgentOutputMissing(format!(
-                    "events.jsonl result at line {line_number} is not terminal; {} event(s) follow it",
-                    lines.len() - position - 1
-                )));
-            }
+            terminal_line = physical_line;
             result = Some(object.clone());
         }
     }
 
+    if event_count == 0 {
+        return Err(ServiceError::AgentOutputMissing(format!(
+            "events.jsonl at {} contains no events",
+            path.display()
+        )));
+    }
+
     let result = result.ok_or_else(|| {
         ServiceError::AgentOutputMissing(format!(
-            "events.jsonl has {} event(s) but no terminal result",
-            lines.len()
+            "events.jsonl has {event_count} event(s) but no terminal result"
         ))
     })?;
     let is_error = result
@@ -105,7 +161,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         .ok_or_else(|| {
             ServiceError::AgentOutputMissing("terminal result lacks boolean is_error".into())
         })?;
-    let subtype = required_string(&result, "subtype", lines.last().map(|x| x.0).unwrap_or(0))?;
+    let subtype = required_string(&result, "subtype", terminal_line)?;
     let duration_ms = required_u64(&result, "duration_ms")?;
     let num_turns = required_u64(&result, "num_turns")?;
     required_u64(&result, "duration_api_ms")?;
@@ -173,6 +229,44 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         duration_ms,
         num_turns,
     })
+}
+
+pub(crate) fn read_bounded_record<R: BufRead>(
+    reader: &mut R,
+    record: &mut Vec<u8>,
+    path: &Path,
+) -> ServiceResult<bool> {
+    loop {
+        let available = reader.fill_buf().map_err(|error| {
+            ServiceError::AgentOutputMissing(io_msg(
+                "read opened events.jsonl",
+                path,
+                &error,
+            ))
+        })?;
+        if available.is_empty() {
+            return Ok(false);
+        }
+        let take = available
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(available.len(), |index| index + 1);
+        let next_len = record.len().checked_add(take).ok_or_else(|| {
+            ServiceError::AgentOutputMissing("events.jsonl record length overflowed".into())
+        })?;
+        if next_len > MAX_EVENT_RECORD_BYTES {
+            return Err(ServiceError::AgentOutputMissing(format!(
+                "events.jsonl at {} contains a single record larger than the exact {MAX_EVENT_RECORD_BYTES}-byte protocol bound",
+                path.display()
+            )));
+        }
+        let terminated = available.get(take.saturating_sub(1)) == Some(&b'\n');
+        record.extend_from_slice(&available[..take]);
+        reader.consume(take);
+        if terminated {
+            return Ok(true);
+        }
+    }
 }
 
 fn validate_init_event(
@@ -307,19 +401,23 @@ fn required_u64(
         })
 }
 
-fn truncate(value: &str, max: usize) -> String {
-    if value.chars().count() <= max {
-        value.into()
+fn truncate_bytes(value: &[u8], max: usize) -> String {
+    let lossy = String::from_utf8_lossy(value);
+    if lossy.chars().count() <= max {
+        lossy.into_owned()
     } else {
         format!(
             "{}…(truncated)",
-            value.chars().take(max).collect::<String>()
+            lossy.chars().take(max).collect::<String>()
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
     use super::*;
 
     const INIT: &str = "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n";
@@ -329,7 +427,19 @@ mod tests {
             "agent-service-result-{}.jsonl",
             uuid::Uuid::new_v4().simple()
         ));
-        std::fs::write(&path, text).expect("test writes temp event file");
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+            .expect("test creates private event file");
+        file.write_all(text.as_bytes())
+            .and_then(|_| file.sync_all())
+            .expect("test writes and syncs event file");
+        if unsafe { libc::geteuid() } == 0 {
+            std::os::unix::fs::chown(&path, Some(1000), Some(1000))
+                .expect("construct exact production event owner");
+        }
         let result = parse_events_jsonl(&path);
         std::fs::remove_file(path).expect("test removes temp event file");
         result
@@ -363,6 +473,12 @@ mod tests {
             parse_text("{\"type\":\"stream_event\",\"uuid\":\"u1\",\"session_id\":\"a\"}\n")
                 .is_err()
         );
+        let complete_looking_but_torn = format!(
+            "{INIT}{{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u2\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":0,\"result\":\"ok\",\"usage\":{{}},\"permission_denials\":[]}}"
+        );
+        let error = parse_text(&complete_looking_but_torn)
+            .expect_err("a terminal JSON object without its record delimiter is torn evidence");
+        assert!(error.to_string().contains("not newline-terminated"));
     }
 
     #[test]

@@ -9,6 +9,7 @@ mod bundle;
 mod config;
 mod docker_ops;
 mod error;
+mod progress;
 mod result_parse;
 mod runtime;
 mod session;
@@ -105,11 +106,10 @@ async fn main() -> std::process::ExitCode {
     };
     tokio::pin!(serve_future);
 
-    // A signal broadcasts shutdown to both layers at the same time. This is
-    // essential for a live GET /wait request: cancelling the detached agent
-    // task lets that request reach its terminal body, while Axum keeps the
-    // existing connection alive long enough to drain it. Waiting for HTTP to
-    // drain before cancelling the agent would create a circular wait.
+    // A signal starts graceful HTTP draining and connection-independent
+    // session shutdown together. Manager::shutdown first durably records any
+    // open session's cancellation intent, then interrupts work and awaits
+    // exact teardown. No request connection owns or keeps the operation alive.
     let serve_result;
     let session_shutdown_outcome;
     tokio::select! {

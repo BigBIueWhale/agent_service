@@ -31,7 +31,6 @@
     "runtime_root": "/home/user/Desktop/agent_service/.runtime",
     "state_dir": "/home/user/Desktop/agent_service/.runtime/state",
     "results_dir": "/home/user/Desktop/agent_service/.runtime/results",
-    "host_input_root": "/home/user",
     "request_body_limit_bytes": 2097152
   },
   "broker": {

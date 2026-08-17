@@ -26,13 +26,21 @@ pub const MAX_STAGED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 pub const MAX_STAGED_FILES: u64 = 200_000;
 pub const MAX_STAGED_ENTRIES: u64 = 250_000;
 
+/// Upper bound on the transported workspace archive itself, applied to the
+/// declared and streamed submission bytes. The archive travels over the
+/// connection and is spooled to disk, never buffered in memory, so this is a
+/// deliberate disk-accounting bound rather than a transport artifact: it is
+/// the staged-content cap plus a fixed allowance for zip container overhead
+/// (headers, central directory, stored-entry framing) on an incompressible
+/// maximum-size workspace.
+pub const MAX_ARCHIVE_BYTES: u64 = MAX_STAGED_BYTES + 64 * 1024 * 1024;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub lock: StackLock,
     pub listen_addr: SocketAddr,
     pub state_dir: PathBuf,
     pub results_dir: PathBuf,
-    pub host_input_root: PathBuf,
     pub broker_socket: PathBuf,
     pub model_socket: PathBuf,
     pub agent_image: String,
@@ -135,7 +143,6 @@ pub struct ServiceLock {
     pub runtime_root: String,
     pub state_dir: String,
     pub results_dir: String,
-    pub host_input_root: String,
     pub request_body_limit_bytes: usize,
 }
 
@@ -379,7 +386,6 @@ impl Config {
             listen_addr,
             state_dir: PathBuf::from(&lock.service.state_dir),
             results_dir: PathBuf::from(&lock.service.results_dir),
-            host_input_root: PathBuf::from(&lock.service.host_input_root),
             broker_socket: PathBuf::from(&lock.broker.socket_path),
             model_socket: PathBuf::from(&lock.relay.model_socket_dir).join("relay.sock"),
             agent_image: lock.agent.image_tag.clone(),
@@ -530,7 +536,6 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         ("runtime_root", lock.service.runtime_root.as_str()),
         ("state_dir", lock.service.state_dir.as_str()),
         ("results_dir", lock.service.results_dir.as_str()),
-        ("host_input_root", lock.service.host_input_root.as_str()),
         ("broker.socket_path", lock.broker.socket_path.as_str()),
         (
             "relay.model_socket_dir",
@@ -548,8 +553,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         }
     }
     let runtime_root = PathBuf::from(&lock.service.runtime_root);
-    if lock.service.host_input_root != "/home/user"
-        || lock.service.state_dir != "/home/user/Desktop/agent_service/.runtime/state"
+    if lock.service.state_dir != "/home/user/Desktop/agent_service/.runtime/state"
         || lock.service.results_dir != "/home/user/Desktop/agent_service/.runtime/results"
         || !PathBuf::from(&lock.service.state_dir).starts_with(&runtime_root)
         || !PathBuf::from(&lock.service.results_dir).starts_with(&runtime_root)

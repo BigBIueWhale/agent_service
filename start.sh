@@ -20,7 +20,6 @@ SERVICE_BRIDGE_NAME="$(lock_value '.relay.service_bridge_container')"
 SERVICE_INGRESS_NAME="$(lock_value '.relay.service_ingress_container')"
 BACKEND_NAME="$(lock_value '.backend.container_name')"
 BACKEND_DIR="$(lock_value '.backend.project_dir')"
-HOST_INPUT_ROOT="$(lock_value '.service.host_input_root')"
 RUNTIME_ROOT="$(lock_value '.service.runtime_root')"
 STATE_DIR="$(lock_value '.service.state_dir')"
 RESULTS_DIR="$(lock_value '.service.results_dir')"
@@ -31,7 +30,7 @@ SERVICE_SOCKET_DIR="$(lock_value '.relay.service_socket_dir')"
 SERVICE_SOCKET="${SERVICE_SOCKET_DIR}/relay.sock"
 DOCKER_SOCKET="$(lock_value '.host.docker_socket')"
 readonly PROFILE SERVICE_NAME SERVICE_IMAGE_ID BROKER_NAME BROKER_IMAGE_ID RELAY_IMAGE_ID CAPTURE_IMAGE_ID
-readonly SERVICE_BRIDGE_NAME SERVICE_INGRESS_NAME BACKEND_NAME BACKEND_DIR HOST_INPUT_ROOT RUNTIME_ROOT
+readonly SERVICE_BRIDGE_NAME SERVICE_INGRESS_NAME BACKEND_NAME BACKEND_DIR RUNTIME_ROOT
 readonly STATE_DIR RESULTS_DIR CONTROL_DIR BROKER_SOCKET MODEL_SOCKET_DIR SERVICE_SOCKET_DIR
 readonly SERVICE_SOCKET DOCKER_SOCKET
 
@@ -216,7 +215,6 @@ docker run --detach \
   --memory "$(lock_value '.service.memory')" \
   --memory-swap "$(lock_value '.service.memory_swap')" \
   --pids-limit "$(lock_value '.service.pids_limit')" \
-  --mount "type=bind,src=${HOST_INPUT_ROOT},dst=${HOST_INPUT_ROOT},readonly" \
   --mount "type=bind,src=${STATE_DIR},dst=${STATE_DIR}" \
   --mount "type=bind,src=${RESULTS_DIR},dst=${RESULTS_DIR}" \
   --mount "type=bind,src=${CONTROL_DIR},dst=${CONTROL_DIR},readonly" \

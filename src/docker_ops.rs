@@ -278,13 +278,13 @@ fn validate_session_id(value: &str) -> ServiceResult<()> {
     let suffix = value.strip_prefix("s-").ok_or_else(|| {
         ServiceError::Internal(format!("broker session ID lacks s- prefix: {value:?}"))
     })?;
-    if suffix.len() != 32
+    if !matches!(suffix.len(), 32 | 64)
         || !suffix
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
     {
         return Err(ServiceError::Internal(format!(
-            "broker session ID is not s- plus 32 lowercase hexadecimal characters: {value:?}"
+            "broker session ID is not s- plus 64 lowercase hexadecimal characters (or the readable historical 32-character shape): {value:?}"
         )));
     }
     Ok(())

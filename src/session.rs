@@ -9,18 +9,22 @@
 
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::oneshot;
+use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use crate::bundle;
 use crate::config::Config;
 use crate::docker_ops;
 use crate::error::{ServiceError, ServiceResult};
+use crate::progress::{ProgressCounters, ProgressPhase, ProgressReporter};
 use crate::result_parse;
-use crate::runtime::{RunningSnapshot, SessionBody, SessionStatus};
+use crate::runtime::{
+    apply_progress, merge_progress_counters, AcceptanceRecord, SessionBody, SessionStatus,
+};
 use crate::staging::{self, SessionPaths};
 use crate::validation::ValidatedRequest;
 
@@ -29,6 +33,8 @@ struct FailureContext<'a> {
     session_id: &'a str,
     prompt_preview: &'a str,
     preserve_thinking: bool,
+    archive_bytes: u64,
+    archive_sha256: &'a str,
     started_at_unix: u64,
     wall_start: std::time::Instant,
 }
@@ -44,6 +50,27 @@ enum FinalizationPhase {
     Normal,
     PanicRecovery,
     SetupFailure,
+    ServiceRestart,
+}
+
+enum TopologyCreation {
+    Created,
+    Failed(ServiceError),
+    Cancelled,
+}
+
+/// A setup finalizer must not infer Docker authority from a session ID alone.
+/// `NeverSubmitted` is a control-flow proof that this execution never sent a
+/// create request to the broker, so there is no project-owned topology to log,
+/// stop, or remove. `Submitted` means creation may have committed partially or
+/// completely; ownership-checked removal and an independent quiescence proof
+/// are therefore mandatory. The optional locked start gate is held through
+/// that serialized teardown whenever it still exists.
+enum TopologyFinalization {
+    NeverSubmitted,
+    Submitted {
+        start_gate: Option<std::fs::File>,
+    },
 }
 
 /// Select the sole raw-tree disposition from facts that have already been
@@ -68,6 +95,9 @@ fn raw_retention_decision(
                 FinalizationPhase::SetupFailure => {
                     "setup-failure container quiescence was not proved; bundle was forbidden"
                 }
+                FinalizationPhase::ServiceRestart => {
+                    "service-restart container quiescence was not proved; bundle was forbidden"
+                }
             },
         ))
     } else if !accepted_archive {
@@ -80,6 +110,10 @@ fn raw_retention_decision(
             FinalizationPhase::SetupFailure => (
                 "setup-forensic-bundle-failure",
                 "setup-failure bundle failure",
+            ),
+            FinalizationPhase::ServiceRestart => (
+                "service-restart-bundle-failure",
+                "service-restart forensic bundle failure",
             ),
         })
     } else if !teardown.complete {
@@ -94,6 +128,9 @@ fn raw_retention_decision(
                 }
                 FinalizationPhase::SetupFailure => {
                     "incomplete setup-failure container teardown despite successful bundle creation"
+                }
+                FinalizationPhase::ServiceRestart => {
+                    "incomplete service-restart container teardown despite successful bundle creation"
                 }
             },
         ))
@@ -162,152 +199,375 @@ pub async fn run_one(
     session_id: &str,
     req: ValidatedRequest,
     cancel: CancellationToken,
-    ready_tx: oneshot::Sender<ServiceResult<RunningSnapshot>>,
+    launch_decision: Arc<Mutex<()>>,
     prompt_preview: String,
+    started_at_unix: u64,
+    paths: SessionPaths,
+    progress: ProgressReporter,
 ) -> SessionBody {
     let wall_start = std::time::Instant::now();
-    let started_at_unix = now_unix();
-    let mut ready_tx = Some(ready_tx);
-    let paths = SessionPaths::new(&cfg.state_dir, session_id);
     let failure_context = FailureContext {
         session_id,
         prompt_preview: &prompt_preview,
         preserve_thinking: req.preserve_thinking,
+        archive_bytes: req.archive.bytes,
+        archive_sha256: &req.archive.sha256,
         started_at_unix,
         wall_start,
     };
 
-    if let Err(error) = paths.create_dirs() {
-        return early_failure(
-            &mut ready_tx,
+    let initial_staging = match progress.publish(
+        ProgressPhase::Staging,
+        "workspace-archive extraction into the staging tree started",
+        ProgressCounters::default(),
+    ) {
+        Ok(event) => event,
+        Err(error) => {
+            return finalize_pre_agent_exit(
+                failure_context,
+                cfg,
+                paths,
+                error,
+                SessionStatus::Completed,
+                progress,
+                ProgressCounters::default(),
+            )
+            .await;
+        }
+    };
+    let _ = initial_staging;
+    let input_archive = paths.input_archive();
+    let staged_destination = paths.staged.clone();
+    let staging_cancel = cancel.clone();
+    let staging_progress = progress.clone();
+    let staging_task = tokio::task::spawn_blocking(move || {
+        let mut last_bytes = 0u64;
+        let mut last_entries = 0u64;
+        staging::extract_archive_into_staged_cancellable(
+            &input_archive,
+            &staged_destination,
+            &staging_cancel,
+            |observed| {
+                const BYTE_STEP: u64 = 64 * 1024 * 1024;
+                const ENTRY_STEP: u64 = 1024;
+                let publish = observed.copied_bytes.saturating_sub(last_bytes) >= BYTE_STEP
+                    || observed.copied_entries.saturating_sub(last_entries) >= ENTRY_STEP;
+                if !publish {
+                    return Ok(());
+                }
+                last_bytes = observed.copied_bytes;
+                last_entries = observed.copied_entries;
+                staging_progress
+                    .publish(
+                        ProgressPhase::Staging,
+                        format!(
+                            "staged {} entries ({} regular files, {} bytes)",
+                            observed.copied_entries,
+                            observed.copied_regular_files,
+                            observed.copied_bytes
+                        ),
+                        ProgressCounters {
+                            staged_bytes: observed.copied_bytes,
+                            staged_entries: observed.copied_entries,
+                            staged_regular_files: observed.copied_regular_files,
+                            ..ProgressCounters::default()
+                        },
+                    )
+                    .map(|_| ())
+            },
+        )
+    });
+    let staged = match staging_task.await {
+        Ok(Ok(value)) => value,
+        Ok(Err(error)) => {
+            return finalize_pre_agent_exit(
+                failure_context,
+                cfg,
+                paths,
+                error,
+                if cancel.is_cancelled() {
+                    SessionStatus::Cancelled
+                } else {
+                    SessionStatus::Completed
+                },
+                progress,
+                ProgressCounters::default(),
+            )
+            .await;
+        }
+        Err(error) => {
+            return finalize_pre_agent_exit(
+                failure_context,
+                cfg,
+                paths,
+                ServiceError::Internal(format!(
+                    "descriptor-anchored blocking staging task terminated unexpectedly: {error}"
+                )),
+                if cancel.is_cancelled() {
+                    SessionStatus::Cancelled
+                } else {
+                    SessionStatus::Completed
+                },
+                progress,
+                ProgressCounters::default(),
+            )
+            .await;
+        }
+    };
+    // The accepted archive's bytes now live in the staged tree; the archive
+    // itself is removed immediately so session disk stays bounded and no
+    // consumed upload survives as a leftover. Failure paths leave it inside
+    // the session tree, whose terminal cleanup/retention owns it wholesale.
+    if let Err(error) = std::fs::remove_file(paths.input_archive()) {
+        return finalize_pre_agent_exit(
             failure_context,
-            error,
-            Vec::new(),
+            cfg,
+            paths,
+            ServiceError::Staging(format!(
+                "remove consumed workspace archive after extraction: {error}"
+            )),
             SessionStatus::Completed,
-        );
+            progress,
+            ProgressCounters {
+                staged_bytes: staged.copied_bytes,
+                staged_entries: staged.copied_entries,
+                staged_regular_files: staged.copied_regular_files,
+                ..ProgressCounters::default()
+            },
+        )
+        .await;
     }
-    let (staged_bytes, staged_entries) =
-        match staging::copy_into_staged(&req.source_dir, &req.folder, &paths.staged) {
-            Ok(value) => value,
-            Err(error) => {
-                let diagnostics = paths.remove_all();
-                return early_failure(
-                    &mut ready_tx,
-                    failure_context,
-                    error,
-                    diagnostics,
-                    SessionStatus::Completed,
-                );
-            }
-        };
+    let staged_bytes = staged.copied_bytes;
+    let staged_entries = staged.copied_entries;
+    let staged_regular_files = staged.copied_regular_files;
+    let staged_counters = ProgressCounters {
+        staged_bytes,
+        staged_entries,
+        staged_regular_files,
+        ..ProgressCounters::default()
+    };
+    if let Err(error) = progress.publish(
+        ProgressPhase::PreparingAgent,
+        format!(
+            "workspace-archive extraction complete: {staged_entries} entries, {staged_regular_files} regular files, {staged_bytes} bytes"
+        ),
+        staged_counters,
+    ) {
+        return finalize_pre_agent_exit(
+            failure_context,
+            cfg,
+            paths,
+            error,
+            SessionStatus::Completed,
+            progress,
+            staged_counters,
+        )
+        .await;
+    }
     tracing::info!(
         session_id,
         staged_bytes,
         staged_entries,
         "descriptor-anchored source copy preserved opaque symlinks and passed size, type, and read-race validation"
     );
-    if let Err(error) = paths.write_prompt(&req.prompt) {
-        let diagnostics = paths.remove_all();
-        return early_failure(
-            &mut ready_tx,
-            failure_context,
-            error,
-            diagnostics,
-            SessionStatus::Completed,
-        );
-    }
-    if let Err(error) = paths.write_history_policy(req.preserve_thinking) {
-        let diagnostics = paths.remove_all();
-        return early_failure(
-            &mut ready_tx,
-            failure_context,
-            error,
-            diagnostics,
-            SessionStatus::Completed,
-        );
-    }
     let start_gate = match paths.create_locked_start_gate() {
         Ok(value) => value,
         Err(error) => {
-            let diagnostics = paths.remove_all();
-            return early_failure(
-                &mut ready_tx,
-                failure_context,
-                error,
-                diagnostics,
-                SessionStatus::Completed,
-            );
-        }
-    };
-    if cancel.is_cancelled() {
-        let diagnostics = paths.remove_all();
-        return early_failure(
-            &mut ready_tx,
-            failure_context,
-            ServiceError::Internal("session was cancelled before Docker setup".into()),
-            diagnostics,
-            SessionStatus::Cancelled,
-        );
-    }
-
-    let _names = match docker_ops::create_session(cfg, session_id, req.preserve_thinking).await {
-        Ok(value) => value,
-        Err(error) => {
-            // Release the wrapper gate before forensic finalization. The
-            // broker operation is transactional, but a partial container may
-            // still have emitted useful setup evidence before returning its
-            // explicit error.
-            drop(start_gate);
-            return setup_failure_after_agent(
-                &mut ready_tx,
+            return finalize_pre_agent_exit(
                 failure_context,
                 cfg,
-                session_id,
                 paths,
                 error,
                 SessionStatus::Completed,
+                progress,
+                staged_counters,
             )
             .await;
         }
     };
+    if cancel.is_cancelled() {
+        drop(start_gate);
+        return finalize_pre_agent_exit(
+            failure_context,
+            cfg,
+            paths,
+            ServiceError::Internal("session was cancelled before Docker setup".into()),
+            SessionStatus::Cancelled,
+            progress,
+            staged_counters,
+        )
+        .await;
+    }
+
+    if let Err(error) = progress.publish(
+        ProgressPhase::CreatingTopology,
+        "creating the exact network-none agent, model relay, and trusted capture topology behind the locked start gate",
+        staged_counters,
+    ) {
+        // No broker create request has been submitted. Release the local gate
+        // explicitly before filesystem-only finalization.
+        drop(start_gate);
+        return finalize_pre_agent_exit(
+            failure_context,
+            cfg,
+            paths,
+            error,
+            SessionStatus::Completed,
+            progress,
+            staged_counters,
+        )
+        .await;
+    }
+
+    // The broker serializes every Docker mutation. If cancellation wins this
+    // select, dropping the client connection does not imply that the broker's
+    // create transaction stopped. We therefore keep the start gate locked and
+    // issue remove_session on a second connection; its mutation-lock position
+    // is necessarily after the create transaction, so it removes whatever
+    // exact-owned topology creation committed before any task code can pass
+    // the gate.
+    let creation = {
+        let create = docker_ops::create_session(cfg, session_id, req.preserve_thinking);
+        tokio::pin!(create);
+        tokio::select! {
+            result = &mut create => match result {
+                Ok(_) => TopologyCreation::Created,
+                Err(error) => TopologyCreation::Failed(error),
+            },
+            () = cancel.cancelled() => TopologyCreation::Cancelled,
+        }
+    };
+    match creation {
+        TopologyCreation::Created => {}
+        TopologyCreation::Failed(error) => {
+            return finalize_started_setup_failure(
+                failure_context,
+                cfg,
+                paths,
+                error,
+                SessionStatus::Completed,
+                Vec::new(),
+                progress,
+                staged_counters,
+                Some(start_gate),
+            )
+            .await;
+        }
+        TopologyCreation::Cancelled => {
+            return finalize_started_setup_failure(
+                failure_context,
+                cfg,
+                paths,
+                ServiceError::Internal(
+                    "durable cancellation was requested while the broker was creating the session topology"
+                        .into(),
+                ),
+                SessionStatus::Cancelled,
+                vec![
+                    "durable cancellation became observable while the broker's create transaction was in flight; ownership-checked removal remained serialized behind that transaction while the agent start gate stayed locked"
+                        .into(),
+                ],
+                progress,
+                staged_counters,
+                Some(start_gate),
+            )
+            .await;
+        }
+    }
+    if cancel.is_cancelled() {
+        return finalize_started_setup_failure(
+            failure_context,
+            cfg,
+            paths,
+            ServiceError::Internal(
+                "durable cancellation was requested after topology creation and before the agent start gate was released"
+                    .into(),
+            ),
+            SessionStatus::Cancelled,
+            Vec::new(),
+            progress,
+            staged_counters,
+            Some(start_gate),
+        )
+        .await;
+    }
+    if let Err(error) = progress.publish(
+        ProgressPhase::AwaitingReadiness,
+        "exact topology creation succeeded; releasing the start gate and awaiting the agent's model/tokenizer readiness proof",
+        staged_counters,
+    ) {
+        return finalize_started_setup_failure(
+            failure_context,
+            cfg,
+            paths,
+            error,
+            SessionStatus::Completed,
+            Vec::new(),
+            progress,
+            staged_counters,
+            Some(start_gate),
+        )
+        .await;
+    }
+    // Cancellation and start-gate release require a single linear order.
+    // Merely checking the token immediately before unlock leaves a race in
+    // which a durable cancellation can land between those two operations.
+    // The API and shutdown paths hold this same fence while publishing the
+    // cancellation intent and making the token observable.
+    let launch_guard = launch_decision.lock().await;
+    if cancel.is_cancelled() {
+        drop(launch_guard);
+        return finalize_started_setup_failure(
+            failure_context,
+            cfg,
+            paths,
+            ServiceError::Internal(
+                "durable cancellation won the start-gate release decision".into(),
+            ),
+            SessionStatus::Cancelled,
+            Vec::new(),
+            progress,
+            staged_counters,
+            Some(start_gate),
+        )
+        .await;
+    }
     if let Err(error) = std::fs::File::unlock(&start_gate) {
         // Dropping the descriptor is the only remaining way to release an
         // unexpectedly failed advisory unlock. Finalization stops the agent
         // before reading logs, so it cannot proceed into the task unnoticed.
         drop(start_gate);
+        drop(launch_guard);
         let setup_error = ServiceError::Internal(format!(
             "cannot release the exact agent start gate: {error}"
         ));
-        let mut diagnostics = vec![format!("release agent start gate: {error}")];
-        if let Some(sender) = ready_tx.take() {
-            if sender.send(Err(setup_error.clone())).is_err() {
-                diagnostics.push(
-                    "failed to deliver start-gate setup error because the readiness receiver was dropped"
-                        .into(),
-                );
-            }
-        }
+        let diagnostics = vec![format!("release agent start gate: {error}")];
         return finalize_started_setup_failure(
             failure_context,
             cfg,
-            session_id,
             paths,
             setup_error,
             SessionStatus::Completed,
             diagnostics,
+            progress,
+            staged_counters,
+            None,
         )
         .await;
     }
     drop(start_gate);
+    drop(launch_guard);
     if cancel.is_cancelled() {
-        return setup_failure_after_agent(
-            &mut ready_tx,
+        return finalize_started_setup_failure(
             failure_context,
             cfg,
-            session_id,
             paths,
             ServiceError::Internal("session was cancelled before agent readiness".into()),
             SessionStatus::Cancelled,
+            Vec::new(),
+            progress,
+            staged_counters,
+            None,
         )
         .await;
     }
@@ -323,11 +583,9 @@ pub async fn run_one(
     {
         Ok(value) => value,
         Err(error) => {
-            return setup_failure_after_agent(
-                &mut ready_tx,
+            return finalize_started_setup_failure(
                 failure_context,
                 cfg,
-                session_id,
                 paths,
                 error,
                 if cancel.is_cancelled() {
@@ -335,43 +593,66 @@ pub async fn run_one(
                 } else {
                     SessionStatus::Completed
                 },
+                Vec::new(),
+                progress,
+                staged_counters,
+                None,
             )
             .await;
         }
     };
-    let snapshot = RunningSnapshot {
-        session_id: session_id.to_string(),
-        started_at_unix,
-        prompt_preview: prompt_preview.clone(),
-        model: ready.model,
-        context_window: ready.context_window,
-        preserve_thinking: ready.preserve_thinking,
-    };
-    if let Some(sender) = ready_tx.take() {
-        if sender.send(Ok(snapshot)).is_err() {
-            let diagnostics = vec![
-                "readiness receiver disappeared after successful agent preflight; cancelling the orphaned session".into(),
-            ];
-            return finalize_started_setup_failure(
-                failure_context,
-                cfg,
-                session_id,
-                paths,
-                ServiceError::Internal(
-                    "session requester disappeared before readiness could be delivered".into(),
-                ),
-                SessionStatus::Cancelled,
-                diagnostics,
-            )
-            .await;
-        }
+    if let Err(error) = progress.publish(
+        ProgressPhase::RunningAgent,
+        format!(
+            "agent readiness proved: model={}, context_window={}, tokenizer_probe_tokens={}, preserve_thinking={}",
+            ready.model, ready.context_window, ready.token_count, ready.preserve_thinking
+        ),
+        staged_counters,
+    ) {
+        return finalize_started_setup_failure(
+            failure_context,
+            cfg,
+            paths,
+            error,
+            SessionStatus::Completed,
+            Vec::new(),
+            progress,
+            staged_counters,
+            None,
+        )
+        .await;
     }
 
-    let (status, container_exit_code, mut diagnostics, producer_stopped) =
+    let (mut status, container_exit_code, mut diagnostics, producer_stopped) =
         wait_for_completion_or_cancel(cfg, session_id, &cancel).await;
 
+    if let Err(error) = progress.publish(
+        ProgressPhase::CapturingOutput,
+        if producer_stopped {
+            "agent producer stopped; awaiting the trusted capture component's durable byte-count proof"
+        } else {
+            "agent producer stop could not be proved; capture promotion is forbidden and teardown evidence will record the failure"
+        },
+        staged_counters,
+    ) {
+        diagnostics.push(format!("publish capture progress: {error}"));
+    }
     let capture_result = if producer_stopped {
-        Some(docker_ops::wait_capture_complete(cfg, session_id).await)
+        let capture = docker_ops::wait_capture_complete(cfg, session_id);
+        tokio::pin!(capture);
+        let result = tokio::select! {
+            result = &mut capture => result,
+            () = cancel.cancelled(), if status != SessionStatus::Cancelled => {
+                // The producer is already stopped, so cancellation has no
+                // remaining process work to interrupt. It still wins the
+                // terminal status, but mandatory capture drain must complete
+                // before teardown; abandoning it here would create a
+                // self-inflicted truncated transcript.
+                status = SessionStatus::Cancelled;
+                capture.await
+            }
+        };
+        Some(result)
     } else {
         diagnostics.push(
             "stream-capture completion was not awaited because the Qwen producer could not be proved stopped"
@@ -406,6 +687,25 @@ pub async fn run_one(
             diagnostics.push(format!("read final agent logs: {error}"));
             "<agent logs unavailable>".into()
         });
+    let pre_teardown_observed =
+        crate::runtime::read_running_progress(&paths.events_jsonl()).unwrap_or_else(|error| {
+            diagnostics.push(format!(
+                "read pre-teardown event progress metadata: {error}"
+            ));
+            crate::runtime::RunningOutputProgress::default()
+        });
+    let observed_counters = ProgressCounters {
+        output_event_bytes: pre_teardown_observed.output_event_bytes,
+        num_turns: pre_teardown_observed.num_turns,
+        ..staged_counters
+    };
+    if let Err(error) = progress.publish(
+        ProgressPhase::TearingDown,
+        "removing every exact-owned session container and independently proving filesystem quiescence",
+        observed_counters,
+    ) {
+        diagnostics.push(format!("publish teardown progress: {error}"));
+    }
     let teardown =
         remove_and_prove_quiescent(cfg, session_id, "normal completion", &mut diagnostics).await;
     if let Err(error) =
@@ -455,20 +755,23 @@ pub async fn run_one(
                 )
             }
         };
-    let last_event_at_unix = match crate::runtime::read_running_progress(&paths.events_jsonl()) {
-        Ok((observed_turns, timestamp)) => {
-            if parsed_valid && observed_turns != num_turns {
+    let final_observed = match crate::runtime::read_running_progress(&paths.events_jsonl()) {
+        Ok(observed) => {
+            if parsed_valid && observed.num_turns != num_turns {
                 diagnostics.push(format!(
-                    "live/final turn-count mismatch: live reader observed {observed_turns}, strict terminal parser observed {num_turns}"
+                    "live/final turn-count mismatch: live reader observed {}, strict terminal parser observed {num_turns}",
+                    observed.num_turns
                 ));
             }
-            timestamp
+            observed
         }
         Err(error) => {
             diagnostics.push(format!("read final event progress metadata: {error}"));
-            0
+            pre_teardown_observed
         }
     };
+    let last_event_at_unix = final_observed.last_event_at_unix;
+    let final_num_turns = num_turns.max(final_observed.num_turns);
     if status == SessionStatus::Completed && (container_exit_code != 0 || agent_exit_code != 0) {
         is_process_error = true;
         response = format!(
@@ -487,6 +790,19 @@ pub async fn run_one(
         is_process_error = true;
     }
 
+    let final_counters = ProgressCounters {
+        output_event_bytes: final_observed.output_event_bytes,
+        num_turns: final_num_turns,
+        ..staged_counters
+    };
+    if let Err(error) = progress.publish(
+        ProgressPhase::Bundling,
+        "creating the deterministic no-clobber result bundle from quiescent session state",
+        final_counters,
+    ) {
+        diagnostics.push(format!("publish bundle progress: {error}"));
+        is_process_error = true;
+    }
     let archive = cfg.results_dir.join(session_id).join("bundle.tar.zst");
     let bundle_result = if teardown.quiescent {
         bundle::create_bundle(&paths.root, &archive).await
@@ -496,10 +812,10 @@ pub async fn run_one(
                 .into(),
         ))
     };
-    let (archive_path, compressed, uncompressed, file_count, artifacts_count) = match bundle_result
+    let (bundle_sha256, compressed, uncompressed, file_count, artifacts_count) = match bundle_result
     {
         Ok(stats) => (
-            stats.archive_path.display().to_string(),
+            stats.sha256,
             stats.compressed_bytes,
             stats.uncompressed_bytes,
             stats.file_count,
@@ -513,7 +829,7 @@ pub async fn run_one(
     };
     let raw_session_tree_retained = raw_retention_decision(
         teardown,
-        !archive_path.is_empty(),
+        !bundle_sha256.is_empty(),
         FinalizationPhase::Normal,
     )
     .map(|(cause, context)| retain_raw_evidence(&paths, cause, context, &mut diagnostics))
@@ -522,15 +838,26 @@ pub async fn run_one(
         is_process_error = true;
     }
 
-    SessionBody {
+    let mut body = SessionBody {
         session_id: session_id.to_string(),
         status,
         started_at_unix,
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         preserve_thinking: req.preserve_thinking,
+        archive_bytes: req.archive.bytes,
+        archive_sha256: req.archive.sha256.clone(),
         prompt_preview,
-        num_turns,
+        progress_revision: 0,
+        progress_at_unix_ms: 0,
+        progress_phase: ProgressPhase::Terminal,
+        progress_message: String::new(),
+        staged_bytes,
+        staged_entries,
+        staged_regular_files,
+        output_event_bytes: final_counters.output_event_bytes,
+        progress_events: Vec::new(),
+        num_turns: final_num_turns,
         last_event_at_unix,
         finished_at_unix: now_unix(),
         duration_wall_ms: elapsed_ms(wall_start),
@@ -539,14 +866,16 @@ pub async fn run_one(
         is_process_error,
         response,
         agent_duration_ms,
-        bundle_archive_path: archive_path,
+        bundle_sha256,
         bundle_compressed_bytes: compressed,
         bundle_uncompressed_bytes: uncompressed,
         bundle_file_count: file_count,
         bundle_artifacts_file_count: artifacts_count,
         raw_session_tree_retained,
         teardown_diagnostics: diagnostics,
-    }
+    };
+    apply_reporter_progress(&mut body, &progress);
+    body
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -675,6 +1004,8 @@ pub async fn recover_after_execution_panic(
     full_prompt: &str,
     prompt_preview: &str,
     preserve_thinking: bool,
+    archive_bytes: u64,
+    archive_sha256: &str,
     started_at_unix: u64,
     wall_start: std::time::Instant,
     cancelled: bool,
@@ -738,7 +1069,7 @@ pub async fn recover_after_execution_panic(
     )
     .await;
 
-    let mut archive_path = String::new();
+    let mut bundle_sha256 = String::new();
     let mut compressed = 0;
     let mut uncompressed = 0;
     let mut file_count = 0;
@@ -808,7 +1139,7 @@ pub async fn recover_after_execution_panic(
                     };
                     match bundle_result {
                         Ok(stats) => {
-                            archive_path = stats.archive_path.display().to_string();
+                            bundle_sha256 = stats.sha256;
                             compressed = stats.compressed_bytes;
                             uncompressed = stats.uncompressed_bytes;
                             file_count = stats.file_count;
@@ -831,7 +1162,7 @@ pub async fn recover_after_execution_panic(
     }
     let raw_session_tree_retained = raw_retention_decision(
         teardown,
-        !archive_path.is_empty(),
+        !bundle_sha256.is_empty(),
         FinalizationPhase::PanicRecovery,
     )
     .map(|(cause, context)| retain_raw_evidence(&paths, cause, context, &mut diagnostics))
@@ -844,7 +1175,18 @@ pub async fn recover_after_execution_panic(
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         preserve_thinking,
+        archive_bytes,
+        archive_sha256: archive_sha256.to_string(),
         prompt_preview: prompt_preview.to_string(),
+        progress_revision: 0,
+        progress_at_unix_ms: 0,
+        progress_phase: ProgressPhase::Terminal,
+        progress_message: String::new(),
+        staged_bytes: 0,
+        staged_entries: 0,
+        staged_regular_files: 0,
+        output_event_bytes: 0,
+        progress_events: Vec::new(),
         num_turns: 0,
         last_event_at_unix: 0,
         finished_at_unix: now_unix(),
@@ -854,7 +1196,7 @@ pub async fn recover_after_execution_panic(
         is_process_error: true,
         response,
         agent_duration_ms: 0,
-        bundle_archive_path: archive_path,
+        bundle_sha256,
         bundle_compressed_bytes: compressed,
         bundle_uncompressed_bytes: uncompressed,
         bundle_file_count: file_count,
@@ -862,6 +1204,195 @@ pub async fn recover_after_execution_panic(
         raw_session_tree_retained,
         teardown_diagnostics: diagnostics,
     }
+}
+
+/// Convert a durably accepted session left nonterminal by a service-process
+/// restart into explicit terminal evidence.  The broker orphan sweep runs
+/// first, so no abandoned container is adopted or resumed.  Existing raw
+/// output is preserved, never promoted as a successful result without the
+/// missing live capture/terminal proof, and bundled only after an independent
+/// quiescence check.
+pub async fn recover_after_service_restart(
+    cfg: &Config,
+    acceptance: &AcceptanceRecord,
+    cancellation_was_durable: bool,
+) -> ServiceResult<SessionBody> {
+    let session_id = &acceptance.session_id;
+    let paths = SessionPaths::new(&cfg.state_dir, session_id);
+    paths.ensure_recovery_dirs()?;
+    ensure_prompt_record(&paths, &acceptance.prompt)?;
+    ensure_history_policy_record(&paths, acceptance.preserve_thinking)?;
+
+    let status = if cancellation_was_durable {
+        SessionStatus::Cancelled
+    } else {
+        SessionStatus::Completed
+    };
+    let response = if cancellation_was_durable {
+        "the durable cancellation request survived a service restart; no successful agent result was inferred"
+            .to_string()
+    } else {
+        "the service process restarted after accepting this session but before publishing a terminal record; abandoned work was not adopted and no successful agent result was inferred"
+            .to_string()
+    };
+    let mut diagnostics = vec![
+        "startup found accepted.json without finished.json; the exact session is being terminalized before the listener binds"
+            .to_string(),
+    ];
+
+    let logs = docker_ops::session_logs(cfg, session_id)
+        .await
+        .unwrap_or_else(|error| {
+            diagnostics.push(format!(
+                "collect bounded logs during restart recovery: {error}"
+            ));
+            "<owned session logs unavailable after orphan sweep>\n".to_string()
+        });
+    let teardown = remove_and_prove_quiescent(
+        cfg,
+        session_id,
+        "service-restart recovery",
+        &mut diagnostics,
+    )
+    .await;
+
+    let recovery_record = paths.control.join("service-restart-recovery.txt");
+    ensure_private_forensic_file(
+        &recovery_record,
+        format!(
+            "SERVICE_RESTART_RECOVERY\nsession_id={session_id}\naccepted_at_unix={}\ncancellation_was_durable={cancellation_was_durable}\n",
+            acceptance.accepted_at_unix
+        )
+        .as_bytes(),
+    )?;
+    for (path, contents) in [
+        (
+            paths.output.join("ready.json"),
+            b"{\"ready\":false,\"failure\":\"service restarted before terminal publication\"}\n"
+                .as_slice(),
+        ),
+        (paths.output.join("events.jsonl"), b"".as_slice()),
+        (paths.output.join("qwen.stderr"), b"".as_slice()),
+        (paths.output.join("qwen-exit-code"), b"-1\n".as_slice()),
+        (paths.output.join("response.txt"), response.as_bytes()),
+        (
+            paths.control.join("container-logs.txt"),
+            logs.as_bytes(),
+        ),
+    ] {
+        ensure_private_forensic_file(&path, contents)?;
+    }
+
+    let observed = read_running_progress_for_recovery(&paths, &mut diagnostics);
+    let agent_exit_code = read_required_exit_code(&paths.output.join("qwen-exit-code"))
+        .unwrap_or_else(|error| {
+            diagnostics.push(format!("read restart-recovery exit code: {error}"));
+            -1
+        });
+
+    let archive = cfg.results_dir.join(session_id).join("bundle.tar.zst");
+    let mut bundle_sha256 = String::new();
+    let mut compressed = 0;
+    let mut uncompressed = 0;
+    let mut file_count = 0;
+    let mut artifacts_count = 0;
+    match std::fs::symlink_metadata(&archive) {
+        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
+            diagnostics.push(
+                "a bundle publication survived without its terminal counters; it is retained as unaccepted forensic evidence rather than guessed into the public result"
+                    .to_string(),
+            );
+        }
+        Ok(_) => diagnostics.push(format!(
+            "restart-recovery bundle destination is not a regular non-symlink file: {}",
+            archive.display()
+        )),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            if teardown.quiescent {
+                match bundle::create_bundle(&paths.root, &archive).await {
+                    Ok(stats) => {
+                        bundle_sha256 = stats.sha256;
+                        compressed = stats.compressed_bytes;
+                        uncompressed = stats.uncompressed_bytes;
+                        file_count = stats.file_count;
+                        artifacts_count = stats.artifacts_file_count;
+                    }
+                    Err(bundle_error) => diagnostics.push(format!(
+                        "service-restart forensic bundle failed: {bundle_error}"
+                    )),
+                }
+            } else {
+                diagnostics.push(
+                    "service-restart bundle was forbidden because exact-owned container quiescence was not proved"
+                        .to_string(),
+                );
+            }
+        }
+        Err(error) => diagnostics.push(format!(
+            "stat restart-recovery bundle destination {}: {error}",
+            archive.display()
+        )),
+    }
+    let raw_session_tree_retained = raw_retention_decision(
+        teardown,
+        !bundle_sha256.is_empty(),
+        FinalizationPhase::ServiceRestart,
+    )
+    .map(|(cause, context)| retain_raw_evidence(&paths, cause, context, &mut diagnostics))
+    .unwrap_or(false);
+
+    let finished_at_unix = now_unix();
+    let duration_wall_ms = finished_at_unix
+        .saturating_sub(acceptance.accepted_at_unix)
+        .saturating_mul(1000);
+    Ok(SessionBody {
+        session_id: session_id.to_string(),
+        status,
+        started_at_unix: acceptance.accepted_at_unix,
+        model: cfg.vllm_model_name.clone(),
+        context_window: cfg.lock.backend.max_model_len,
+        preserve_thinking: acceptance.preserve_thinking,
+        archive_bytes: acceptance.archive_bytes,
+        archive_sha256: acceptance.archive_sha256.clone(),
+        prompt_preview: crate::runtime::preview(&acceptance.prompt),
+        progress_revision: 0,
+        progress_at_unix_ms: 0,
+        progress_phase: ProgressPhase::Terminal,
+        progress_message: String::new(),
+        staged_bytes: 0,
+        staged_entries: 0,
+        staged_regular_files: 0,
+        output_event_bytes: observed.output_event_bytes,
+        progress_events: Vec::new(),
+        num_turns: observed.num_turns,
+        last_event_at_unix: observed.last_event_at_unix,
+        finished_at_unix,
+        duration_wall_ms,
+        container_exit_code: -1,
+        agent_exit_code,
+        is_process_error: true,
+        response,
+        agent_duration_ms: 0,
+        bundle_sha256,
+        bundle_compressed_bytes: compressed,
+        bundle_uncompressed_bytes: uncompressed,
+        bundle_file_count: file_count,
+        bundle_artifacts_file_count: artifacts_count,
+        raw_session_tree_retained,
+        teardown_diagnostics: diagnostics,
+    })
+}
+
+fn read_running_progress_for_recovery(
+    paths: &SessionPaths,
+    diagnostics: &mut Vec<String>,
+) -> crate::runtime::RunningOutputProgress {
+    crate::runtime::read_running_progress(&paths.events_jsonl()).unwrap_or_else(|error| {
+        diagnostics.push(format!(
+            "read service-restart event progress metadata: {error}"
+        ));
+        crate::runtime::RunningOutputProgress::default()
+    })
 }
 
 fn ensure_prompt_record(paths: &SessionPaths, prompt: &str) -> ServiceResult<()> {
@@ -874,12 +1405,12 @@ fn ensure_prompt_record(paths: &SessionPaths, prompt: &str) -> ServiceResult<()>
                 && metadata.gid() == 1000
                 && metadata.permissions().mode() & 0o777 == 0o644 =>
         {
-            let existing = std::fs::read(&path).map_err(|error| {
-                ServiceError::Internal(format!(
-                    "read existing panic-recovery prompt record {}: {error}",
-                    path.display()
-                ))
-            })?;
+            let existing = read_exact_owned_regular_file(
+                &path,
+                0o644,
+                crate::config::MAX_PROMPT_BYTES as u64,
+                "panic-recovery prompt record",
+            )?;
             if existing == prompt.as_bytes() {
                 Ok(())
             } else {
@@ -925,12 +1456,12 @@ fn ensure_history_policy_record(
                 && metadata.gid() == 1000
                 && metadata.permissions().mode() & 0o777 == 0o444 =>
         {
-            let existing = std::fs::read(&path).map_err(|error| {
-                ServiceError::Internal(format!(
-                    "read existing panic-recovery history policy {}: {error}",
-                    path.display()
-                ))
-            })?;
+            let existing = read_exact_owned_regular_file(
+                &path,
+                0o444,
+                64,
+                "panic-recovery history policy",
+            )?;
             if existing == expected {
                 Ok(())
             } else {
@@ -958,15 +1489,92 @@ fn ensure_history_policy_record(
     }
 }
 
-fn ensure_private_forensic_file(path: &Path, contents: &[u8]) -> ServiceResult<()> {
-    match std::fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => Ok(()),
-        Ok(_) => Err(ServiceError::Internal(format!(
-            "{} is not a regular non-symlink file",
+fn read_exact_owned_regular_file(
+    path: &Path,
+    mode: u32,
+    max_bytes: u64,
+    role: &str,
+) -> ServiceResult<Vec<u8>> {
+    use std::io::Read;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|error| {
+            ServiceError::Internal(format!(
+                "open existing {role} {} without following links: {error}",
+                path.display()
+            ))
+        })?;
+    let metadata = file.metadata().map_err(|error| {
+        ServiceError::Internal(format!(
+            "fstat opened {role} {}: {error}",
             path.display()
+        ))
+    })?;
+    if !metadata.is_file()
+        || metadata.permissions().mode() & 0o777 != mode
+        || metadata.uid() != 1000
+        || metadata.gid() != 1000
+        || metadata.len() > max_bytes
+    {
+        return Err(ServiceError::Internal(format!(
+            "opened {role} {} has unsafe type/mode/owner/size",
+            path.display()
+        )));
+    }
+    let capacity = usize::try_from(metadata.len()).map_err(|_| {
+        ServiceError::Internal(format!(
+            "opened {role} {} is too large to address on this platform",
+            path.display()
+        ))
+    })?;
+    let mut bytes = Vec::with_capacity(capacity);
+    file.read_to_end(&mut bytes).map_err(|error| {
+        ServiceError::Internal(format!(
+            "read opened {role} {}: {error}",
+            path.display()
+        ))
+    })?;
+    if bytes.len() as u64 != metadata.len() {
+        return Err(ServiceError::Internal(format!(
+            "opened {role} {} changed length while being read",
+            path.display()
+        )));
+    }
+    Ok(bytes)
+}
+
+fn ensure_private_forensic_file(path: &Path, contents: &[u8]) -> ServiceResult<()> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata)
+            if metadata.is_file()
+                && !metadata.file_type().is_symlink()
+                && metadata.uid() == 1000
+                && metadata.gid() == 1000
+                && metadata.permissions().mode() & 0o777 == 0o600 =>
+        {
+            Ok(())
+        }
+        Ok(metadata) => Err(ServiceError::Internal(format!(
+            "forensic sidecar {} has unsafe type/mode/owner: type={:?} mode={:o} uid={} gid={} expected regular 0600 1000:1000",
+            path.display(),
+            metadata.file_type(),
+            metadata.permissions().mode() & 0o777,
+            metadata.uid(),
+            metadata.gid()
         ))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            write_private_file(path, contents)
+            write_private_file(path, contents)?;
+            sync_directory(
+                path.parent()
+                    .expect("forensic sidecar has a containing directory"),
+                "sync forensic-sidecar publication",
+            )
         }
         Err(error) => Err(ServiceError::Internal(format!(
             "stat forensic sidecar {}: {error}",
@@ -1002,8 +1610,16 @@ fn retain_raw_evidence(
     context: &str,
     diagnostics: &mut Vec<String>,
 ) -> bool {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
     match std::fs::symlink_metadata(&paths.root) {
-        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+        Ok(metadata)
+            if metadata.is_dir()
+                && !metadata.file_type().is_symlink()
+                && metadata.uid() == 1000
+                && metadata.gid() == 1000
+                && metadata.permissions().mode() & 0o777 == 0o755 =>
+        {
             diagnostics.push(format!(
                 "raw session tree retained after {context} at {}",
                 paths.root.display()
@@ -1015,7 +1631,7 @@ fn retain_raw_evidence(
         }
         Ok(_) => {
             diagnostics.push(format!(
-                "{context} left no safely retainable ordinary session directory at {}",
+                "{context} left no safely retainable exact 1000:1000 mode-0755 ordinary session directory at {}",
                 paths.root.display()
             ));
             false
@@ -1037,58 +1653,145 @@ fn retain_raw_evidence(
     }
 }
 
-async fn setup_failure_after_agent(
-    ready_tx: &mut Option<oneshot::Sender<ServiceResult<RunningSnapshot>>>,
+async fn finalize_pre_agent_exit(
     context: FailureContext<'_>,
     cfg: &Config,
-    session_id: &str,
     paths: SessionPaths,
     error: ServiceError,
     status: SessionStatus,
+    progress: ProgressReporter,
+    counters: ProgressCounters,
 ) -> SessionBody {
-    let mut diagnostics = Vec::new();
-    if let Some(sender) = ready_tx.take() {
-        // The HTTP caller receives the precise setup failure. The supervisor
-        // still persists the forensic terminal body returned below.
-        if sender.send(Err(error.clone())).is_err() {
-            diagnostics.push(
-                "failed to deliver setup error because the readiness receiver was dropped".into(),
-            );
-        }
-    }
-    finalize_started_setup_failure(context, cfg, session_id, paths, error, status, diagnostics)
-        .await
+    finalize_setup_failure(
+        context,
+        cfg,
+        paths,
+        error,
+        status,
+        Vec::new(),
+        progress,
+        counters,
+        TopologyFinalization::NeverSubmitted,
+    )
+    .await
 }
 
 async fn finalize_started_setup_failure(
     context: FailureContext<'_>,
     cfg: &Config,
-    session_id: &str,
+    paths: SessionPaths,
+    error: ServiceError,
+    status: SessionStatus,
+    diagnostics: Vec<String>,
+    progress: ProgressReporter,
+    counters: ProgressCounters,
+    start_gate: Option<std::fs::File>,
+) -> SessionBody {
+    finalize_setup_failure(
+        context,
+        cfg,
+        paths,
+        error,
+        status,
+        diagnostics,
+        progress,
+        counters,
+        TopologyFinalization::Submitted { start_gate },
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn finalize_setup_failure(
+    context: FailureContext<'_>,
+    cfg: &Config,
     paths: SessionPaths,
     error: ServiceError,
     status: SessionStatus,
     mut diagnostics: Vec<String>,
+    progress: ProgressReporter,
+    counters: ProgressCounters,
+    topology: TopologyFinalization,
 ) -> SessionBody {
-    let response = format!(
-        "agent session failed after its container topology was created; no success was inferred: {error}"
-    );
-    if let Err(stop_error) = docker_ops::stop_session(cfg, session_id).await {
-        diagnostics.push(format!(
-            "stop failed session after setup error: {stop_error}"
-        ));
-    }
-    let mut captured_logs = String::new();
-    match docker_ops::session_logs(cfg, session_id).await {
-        Ok(logs) if !logs.trim().is_empty() => {
-            captured_logs = logs;
-            diagnostics.push(format!("agent logs:\n{captured_logs}"));
+    let session_id = context.session_id;
+    let response = if status == SessionStatus::Cancelled {
+        format!(
+            "session cancellation was durably requested before normal agent execution completed: {error}"
+        )
+    } else {
+        format!(
+            "agent session failed before normal execution completed; no success was inferred: {error}"
+        )
+    };
+    let mut process_error = status != SessionStatus::Cancelled;
+    let counters = match progress.latest() {
+        Ok(latest) => merge_progress_counters(latest.counters, counters),
+        Err(progress_error) => {
+            diagnostics.push(format!(
+                "read latest progress before setup/cancellation teardown: {progress_error}"
+            ));
+            process_error = true;
+            counters
         }
-        Ok(_) => {}
-        Err(log_error) => diagnostics.push(format!("read agent logs: {log_error}")),
+    };
+    let teardown_message = match &topology {
+        TopologyFinalization::NeverSubmitted => {
+            "normal execution did not begin and no Docker topology was submitted; finalizing filesystem evidence"
+        }
+        TopologyFinalization::Submitted { .. } => {
+            "normal execution did not begin or did not reach readiness; removing exact-owned topology and proving quiescence before forensic bundling"
+        }
+    };
+    if let Err(progress_error) = progress.publish(
+        ProgressPhase::TearingDown,
+        teardown_message,
+        counters,
+    ) {
+        diagnostics.push(format!(
+            "publish setup/cancellation teardown progress: {progress_error}"
+        ));
+        process_error = true;
     }
-    let teardown =
-        remove_and_prove_quiescent(cfg, session_id, "setup-failure recovery", &mut diagnostics)
+    let (captured_logs, teardown) = match topology {
+        TopologyFinalization::NeverSubmitted => (
+            "<session topology was never submitted; no owned container logs exist>\n"
+                .to_string(),
+            // This is not an optimistic Docker observation. The only code
+            // that can create a session topology is below the transition to
+            // `Submitted`, so the execution's bind-mounted producers never
+            // existed and the session tree is quiescent by construction.
+            TeardownProof {
+                complete: true,
+                quiescent: true,
+            },
+        ),
+        TopologyFinalization::Submitted { start_gate } => {
+            let logs = match docker_ops::session_logs(cfg, session_id).await {
+                Ok(logs) => logs,
+                Err(log_error) => {
+                    diagnostics.push(format!("read bounded session logs: {log_error}"));
+                    process_error = true;
+                    "<owned session logs unavailable>\n".to_string()
+                }
+            };
+            let teardown = remove_and_prove_quiescent(
+                cfg,
+                session_id,
+                "setup-failure recovery",
+                &mut diagnostics,
+            )
             .await;
+            // Holding this descriptor across the broker's serialized removal
+            // is the proof that a concurrently completing create transaction
+            // could not let Qwen cross into task execution. It is released
+            // only after removal and the independent quiescence observation.
+            drop(start_gate);
+            (logs, teardown)
+        }
+    };
+    if !teardown.complete {
+        process_error = true;
+    }
 
     if let Err(sidecar_error) = write_private_file(
         &paths.control.join("setup-failure.txt"),
@@ -1097,6 +1800,7 @@ async fn finalize_started_setup_failure(
         diagnostics.push(format!(
             "write authoritative setup-failure record: {sidecar_error}"
         ));
+        process_error = true;
     }
     for (path, contents) in [
         (
@@ -1118,24 +1822,42 @@ async fn finalize_started_setup_failure(
                 "preserve setup-failure sidecar {}: {sidecar_error}",
                 path.display()
             ));
+            process_error = true;
         }
     }
 
     let agent_exit_code = read_required_exit_code(&paths.output.join("qwen-exit-code"))
         .unwrap_or_else(|exit_error| {
             diagnostics.push(format!("read setup-failure exit code: {exit_error}"));
+            process_error = true;
             -1
         });
-    let (num_turns, last_event_at_unix) =
-        match crate::runtime::read_running_progress(&paths.events_jsonl()) {
-            Ok(progress) => progress,
-            Err(progress_error) => {
-                diagnostics.push(format!(
-                    "read setup-failure event progress metadata: {progress_error}"
-                ));
-                (0, 0)
-            }
-        };
+    let observed = match crate::runtime::read_running_progress(&paths.events_jsonl()) {
+        Ok(observed) => observed,
+        Err(progress_error) => {
+            diagnostics.push(format!(
+                "read setup-failure event progress metadata: {progress_error}"
+            ));
+            process_error = true;
+            crate::runtime::RunningOutputProgress::default()
+        }
+    };
+
+    let final_counters = merge_progress_counters(counters, ProgressCounters {
+        output_event_bytes: observed.output_event_bytes,
+        num_turns: observed.num_turns,
+        ..ProgressCounters::default()
+    });
+    if let Err(progress_error) = progress.publish(
+        ProgressPhase::Bundling,
+        "creating the deterministic forensic bundle after exact container quiescence",
+        final_counters,
+    ) {
+        diagnostics.push(format!(
+            "publish setup/cancellation bundle progress: {progress_error}"
+        ));
+        process_error = true;
+    }
 
     let archive = cfg.results_dir.join(session_id).join("bundle.tar.zst");
     let bundle_result = if teardown.quiescent {
@@ -1146,10 +1868,10 @@ async fn finalize_started_setup_failure(
                 .into(),
         ))
     };
-    let (archive_path, compressed, uncompressed, file_count, artifacts_count) = match bundle_result
+    let (bundle_sha256, compressed, uncompressed, file_count, artifacts_count) = match bundle_result
     {
         Ok(stats) => (
-            stats.archive_path.display().to_string(),
+            stats.sha256,
             stats.compressed_bytes,
             stats.uncompressed_bytes,
             stats.file_count,
@@ -1159,128 +1881,147 @@ async fn finalize_started_setup_failure(
             diagnostics.push(format!(
                 "setup-failure forensic bundle failed: {bundle_error}"
             ));
+            process_error = true;
             (String::new(), 0, 0, 0, 0)
         }
     };
     let raw_session_tree_retained = raw_retention_decision(
         teardown,
-        !archive_path.is_empty(),
+        !bundle_sha256.is_empty(),
         FinalizationPhase::SetupFailure,
     )
     .map(|(cause, context)| retain_raw_evidence(&paths, cause, context, &mut diagnostics))
     .unwrap_or(false);
 
-    SessionBody {
+    let mut body = SessionBody {
         session_id: session_id.to_string(),
         status,
         started_at_unix: context.started_at_unix,
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         preserve_thinking: context.preserve_thinking,
+        archive_bytes: context.archive_bytes,
+        archive_sha256: context.archive_sha256.to_string(),
         prompt_preview: context.prompt_preview.to_string(),
-        num_turns,
-        last_event_at_unix,
+        progress_revision: 0,
+        progress_at_unix_ms: 0,
+        progress_phase: ProgressPhase::Terminal,
+        progress_message: String::new(),
+        staged_bytes: final_counters.staged_bytes,
+        staged_entries: final_counters.staged_entries,
+        staged_regular_files: final_counters.staged_regular_files,
+        output_event_bytes: final_counters.output_event_bytes,
+        progress_events: Vec::new(),
+        num_turns: observed.num_turns,
+        last_event_at_unix: observed.last_event_at_unix,
         finished_at_unix: now_unix(),
         duration_wall_ms: elapsed_ms(context.wall_start),
         container_exit_code: -1,
         agent_exit_code,
-        is_process_error: true,
+        is_process_error: process_error,
         response,
         agent_duration_ms: 0,
-        bundle_archive_path: archive_path,
+        bundle_sha256,
         bundle_compressed_bytes: compressed,
         bundle_uncompressed_bytes: uncompressed,
         bundle_file_count: file_count,
         bundle_artifacts_file_count: artifacts_count,
         raw_session_tree_retained,
         teardown_diagnostics: diagnostics,
-    }
-}
-
-fn early_failure(
-    sender: &mut Option<oneshot::Sender<ServiceResult<RunningSnapshot>>>,
-    context: FailureContext<'_>,
-    error: ServiceError,
-    mut diagnostics: Vec<String>,
-    status: SessionStatus,
-) -> SessionBody {
-    if let Some(sender) = sender.take() {
-        if sender.send(Err(error.clone())).is_err() {
-            diagnostics.push(
-                "failed to deliver setup error because the readiness receiver was dropped".into(),
-            );
-        }
-    }
-    terminal_error(
-        context.session_id,
-        context.prompt_preview,
-        context.preserve_thinking,
-        context.started_at_unix,
-        context.wall_start,
-        status,
-        error.to_string(),
-        diagnostics,
-    )
-}
-
-fn terminal_error(
-    session_id: &str,
-    prompt_preview: &str,
-    preserve_thinking: bool,
-    started_at_unix: u64,
-    wall_start: std::time::Instant,
-    status: SessionStatus,
-    response: String,
-    diagnostics: Vec<String>,
-) -> SessionBody {
-    SessionBody {
-        session_id: session_id.into(),
-        status,
-        started_at_unix,
-        model: String::new(),
-        context_window: 0,
-        preserve_thinking,
-        prompt_preview: prompt_preview.into(),
-        num_turns: 0,
-        last_event_at_unix: 0,
-        finished_at_unix: now_unix(),
-        duration_wall_ms: elapsed_ms(wall_start),
-        container_exit_code: -1,
-        agent_exit_code: -1,
-        is_process_error: true,
-        response,
-        agent_duration_ms: 0,
-        bundle_archive_path: String::new(),
-        bundle_compressed_bytes: 0,
-        bundle_uncompressed_bytes: 0,
-        bundle_file_count: 0,
-        bundle_artifacts_file_count: 0,
-        raw_session_tree_retained: false,
-        teardown_diagnostics: diagnostics,
-    }
+    };
+    apply_reporter_progress(&mut body, &progress);
+    body
 }
 
 fn read_required_exit_code(path: &Path) -> ServiceResult<i32> {
-    let text = std::fs::read_to_string(path).map_err(|error| {
+    use std::io::Read;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|error| {
+            ServiceError::AgentOutputMissing(format!(
+                "required exit-code file {} is missing or cannot be opened without following links: {error}",
+                path.display()
+            ))
+        })?;
+    let metadata = file.metadata().map_err(|error| {
         ServiceError::AgentOutputMissing(format!(
-            "required exit-code file {} is missing or unreadable: {error}",
+            "required exit-code file {} cannot be fstat'd: {error}",
             path.display()
         ))
     })?;
-    let trimmed = text.trim();
+    if !metadata.is_file()
+        || metadata.permissions().mode() & 0o777 != 0o600
+        || metadata.uid() != 1000
+        || metadata.gid() != 1000
+        || metadata.len() == 0
+        || metadata.len() > 64
+    {
+        return Err(ServiceError::AgentOutputMissing(format!(
+            "required exit-code file {} has unsafe opened type/mode/owner/size",
+            path.display()
+        )));
+    }
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.read_to_end(&mut bytes).map_err(|error| {
+        ServiceError::AgentOutputMissing(format!(
+            "required exit-code file {} is unreadable through its opened descriptor: {error}",
+            path.display()
+        ))
+    })?;
+    if bytes.len() as u64 != metadata.len() {
+        return Err(ServiceError::AgentOutputMissing(format!(
+            "required exit-code file {} changed length while open",
+            path.display()
+        )));
+    }
+    let text = std::str::from_utf8(&bytes).map_err(|error| {
+        ServiceError::AgentOutputMissing(format!(
+            "required exit-code file {} is not UTF-8: {error}",
+            path.display()
+        ))
+    })?;
+    let trimmed = text.strip_suffix('\n').ok_or_else(|| {
+        ServiceError::AgentOutputMissing(format!(
+            "exit-code file {} must be one canonical decimal i32 followed by exactly one newline",
+            path.display()
+        ))
+    })?;
     let value = trimmed.parse::<i32>().map_err(|error| {
         ServiceError::AgentOutputMissing(format!(
             "exit-code file {} contains {trimmed:?}, not an i32: {error}",
             path.display()
         ))
     })?;
-    if trimmed.lines().count() != 1 {
+    if text != format!("{value}\n") {
         return Err(ServiceError::AgentOutputMissing(format!(
-            "exit-code file {} must contain exactly one line",
+            "exit-code file {} is not the canonical decimal representation {value} followed by one newline",
             path.display()
         )));
     }
     Ok(value)
+}
+
+fn apply_reporter_progress(body: &mut SessionBody, progress: &ProgressReporter) {
+    match progress.latest() {
+        Ok(event) => apply_progress(body, &event),
+        Err(error) => {
+            body.is_process_error = true;
+            body.teardown_diagnostics
+                .push(format!("read latest lifecycle progress: {error}"));
+        }
+    }
+    match progress.events() {
+        Ok(events) => body.progress_events = events,
+        Err(error) => {
+            body.is_process_error = true;
+            body.teardown_diagnostics
+                .push(format!("read complete lifecycle progress history: {error}"));
+        }
+    }
 }
 
 fn write_private_file(path: &Path, bytes: &[u8]) -> ServiceResult<()> {
@@ -1382,6 +2123,13 @@ mod tests {
 
         let sidecar = paths.output.join("events.jsonl");
         ensure_private_forensic_file(&sidecar, b"first\n").expect("create sidecar");
+        if unsafe { libc::geteuid() } == 0 {
+            std::os::unix::fs::chown(&sidecar, Some(1000), Some(1000))
+                .expect("assign exact service ownership to sidecar fixture");
+        } else {
+            assert_eq!(unsafe { libc::geteuid() }, 1000);
+            assert_eq!(unsafe { libc::getegid() }, 1000);
+        }
         ensure_private_forensic_file(&sidecar, b"replacement\n")
             .expect("an existing regular sidecar is preserved");
         assert_eq!(
@@ -1442,6 +2190,13 @@ mod tests {
             .expect("create raw-evidence sessions parent");
         let paths = SessionPaths::new(&state, "s-dddddddddddddddddddddddddddddddd");
         paths.create_dirs().expect("create raw-evidence fixture");
+        if unsafe { libc::geteuid() } == 0 {
+            std::os::unix::fs::chown(&paths.root, Some(1000), Some(1000))
+                .expect("assign exact service ownership to retained-tree fixture");
+        } else {
+            assert_eq!(unsafe { libc::geteuid() }, 1000);
+            assert_eq!(unsafe { libc::getegid() }, 1000);
+        }
         let mut diagnostics = Vec::new();
         assert!(retain_raw_evidence(
             &paths,
@@ -1529,6 +2284,11 @@ mod tests {
             raw_retention_decision(possibly_live, false, FinalizationPhase::Normal)
                 .map(|decision| decision.0),
             Some("container-quiescence-unproved")
+        );
+        assert_eq!(
+            raw_retention_decision(complete, false, FinalizationPhase::ServiceRestart)
+                .map(|decision| decision.0),
+            Some("service-restart-bundle-failure")
         );
     }
 

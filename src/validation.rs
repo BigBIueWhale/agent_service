@@ -5,42 +5,45 @@
 //! All checks return `Err(ServiceError::InvalidRequest(...))` with a concrete
 //! message naming the offending field; we never accept-and-log.
 
-use std::fs::{File, OpenOptions};
-use std::os::fd::AsRawFd;
-use std::os::unix::fs::OpenOptionsExt;
-use std::path::{Component, Path, PathBuf};
+use std::path::PathBuf;
 
-use crate::config::MAX_PROMPT_BYTES;
+use crate::config::{MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES};
 use crate::error::{io_msg, ServiceError, ServiceResult};
 
-/// Validated, normalised representation of a `RunRequest` body.
+/// One spooled, hash-committed workspace archive received over the
+/// connection. The archive bytes were streamed to this service-owned regular
+/// file and proved to match the caller's declared byte count and SHA-256
+/// before validation sees them; the workspace never arrives as a shared
+/// filesystem path.
+#[derive(Clone, Debug)]
+pub struct SpooledArchive {
+    pub path: PathBuf,
+    pub bytes: u64,
+    pub sha256: String,
+}
+
+/// Validated, normalised representation of the one session-creation body.
 #[derive(Debug)]
 pub struct ValidatedRequest {
     pub prompt: String,
-    pub folder: PathBuf,
     /// Exact typed history policy selected by the trusted API decoder.
     pub preserve_thinking: bool,
-    /// Directory selected during validation, anchored beneath the pinned
-    /// input-root descriptor. Holding it through staging closes the
-    /// validation-to-copy rename/symlink race.
-    pub source_dir: File,
+    /// The spooled workspace archive whose structure has been proved against
+    /// the archive contract before durable acceptance.
+    pub archive: SpooledArchive,
 }
 
 pub fn validate(
     prompt: &str,
-    folder: &str,
-    host_input_root: &Path,
-    state_dir: &Path,
-    results_dir: &Path,
     preserve_thinking: bool,
+    archive: SpooledArchive,
 ) -> ServiceResult<ValidatedRequest> {
     let prompt = validate_prompt(prompt)?;
-    let (folder, source_dir) = validate_folder(folder, host_input_root, state_dir, results_dir)?;
+    let archive = validate_spooled_archive(archive)?;
     Ok(ValidatedRequest {
         prompt,
-        folder,
         preserve_thinking,
-        source_dir,
+        archive,
     })
 }
 
@@ -65,111 +68,78 @@ fn validate_prompt(prompt: &str) -> ServiceResult<String> {
     Ok(prompt.to_string())
 }
 
-fn validate_folder(
-    folder_str: &str,
-    host_input_root: &Path,
-    state_dir: &Path,
-    results_dir: &Path,
-) -> ServiceResult<(PathBuf, File)> {
-    if folder_str.is_empty() {
-        return Err(ServiceError::InvalidRequest(
-            "field `folder` is empty".into(),
-        ));
-    }
-    if folder_str.contains('\0') {
-        return Err(ServiceError::InvalidRequest(
-            "field `folder` contains a NUL byte".into(),
-        ));
-    }
-    let raw = Path::new(folder_str);
-    if !raw.is_absolute() {
+/// The archive commitment rules shared by the pre-stream API check and the
+/// pre-acceptance request validation: exactly 64 lowercase-hex hash
+/// characters, and a non-zero declared byte count within the explicit
+/// archive bound.
+pub fn validate_archive_commitment(bytes: u64, sha256: &str) -> ServiceResult<()> {
+    if sha256.len() != 64
+        || !sha256
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
         return Err(ServiceError::InvalidRequest(format!(
-            "field `folder` ({folder_str:?}) is not an absolute path"
+            "field `archive_sha256` ({sha256:?}) is not exactly 64 lowercase hexadecimal characters"
         )));
     }
-
-    let relative = raw.strip_prefix(host_input_root).map_err(|_| {
-        ServiceError::InvalidRequest(format!(
-            "field `folder` ({}) must be a strict descendant of the sole mounted input root {}",
-            raw.display(),
-            host_input_root.display()
-        ))
-    })?;
-    let mut normal_components = Vec::new();
-    for component in relative.components() {
-        match component {
-            Component::Normal(value) => normal_components.push(value.to_os_string()),
-            Component::CurDir => {}
-            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                return Err(ServiceError::InvalidRequest(format!(
-                    "field `folder` ({}) contains a non-normal path component ({component:?}); submit one exact descendant path without `..`",
-                    raw.display()
-                )));
-            }
-        }
+    if bytes == 0 {
+        return Err(ServiceError::InvalidRequest(
+            "field `archive_bytes` is zero; an empty upload cannot carry a zip container".into(),
+        ));
     }
-    if normal_components.is_empty() {
+    if bytes > MAX_ARCHIVE_BYTES {
         return Err(ServiceError::InvalidRequest(format!(
-            "field `folder` ({}) must be a strict descendant of the sole mounted input root {}",
-            raw.display(),
-            host_input_root.display()
+            "field `archive_bytes` ({bytes}) exceeds the {MAX_ARCHIVE_BYTES}-byte archive bound"
         )));
     }
-
-    let mut normalized = host_input_root.to_path_buf();
-    for component in &normal_components {
-        normalized.push(component);
-    }
-    for forbidden in [state_dir, results_dir] {
-        if normalized.starts_with(forbidden) || forbidden.starts_with(&normalized) {
-            return Err(ServiceError::InvalidRequest(format!(
-                "field `folder` ({}) overlaps service-owned runtime path {}; refusing recursive/self-modifying staging",
-                normalized.display(), forbidden.display()
-            )));
-        }
-    }
-
-    let mut current = open_pinned_input_root(host_input_root)?;
-    let mut traversed = host_input_root.to_path_buf();
-    for component in &normal_components {
-        traversed.push(component);
-        let descriptor_child =
-            PathBuf::from(format!("/proc/self/fd/{}", current.as_raw_fd())).join(component);
-        current = OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_DIRECTORY)
-            .open(&descriptor_child)
-            .map_err(|error| {
-                ServiceError::InvalidRequest(format!(
-                    "field `folder` cannot be opened as an all-directory, no-symlink path beneath the pinned input root at {}: {error}",
-                    traversed.display()
-                ))
-            })?;
-    }
-    Ok((normalized, current))
+    Ok(())
 }
 
-fn open_pinned_input_root(path: &Path) -> ServiceResult<File> {
-    OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_DIRECTORY)
-        .open(path)
-        .map_err(|error| {
-            ServiceError::Internal(io_msg(
-                "open pinned host_input_root without following symlinks",
-                path,
-                &error,
-            ))
-        })
+/// Cross-check the spooled archive against its own commitment, plus the
+/// spool path itself: an absolute, ordinary, non-symlink service-owned file
+/// of exactly the declared size. The declared-versus-received byte and hash
+/// equality was proved while the upload streamed; this validation refuses to
+/// build a request around a spool that has since drifted from that proof.
+/// The archive's internal structure is proved separately against the staging
+/// contract before durable acceptance.
+fn validate_spooled_archive(archive: SpooledArchive) -> ServiceResult<SpooledArchive> {
+    validate_archive_commitment(archive.bytes, &archive.sha256)?;
+    if !archive.path.is_absolute() {
+        return Err(ServiceError::Internal(format!(
+            "spooled archive path {} is not absolute",
+            archive.path.display()
+        )));
+    }
+    let metadata = std::fs::symlink_metadata(&archive.path).map_err(|error| {
+        ServiceError::Internal(io_msg(
+            "stat spooled archive before acceptance",
+            &archive.path,
+            &error,
+        ))
+    })?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(ServiceError::Internal(format!(
+            "spooled archive at {} is not an ordinary non-symlink file",
+            archive.path.display()
+        )));
+    }
+    if metadata.len() != archive.bytes {
+        return Err(ServiceError::Internal(format!(
+            "spooled archive at {} is {} bytes but the proved upload was {} bytes",
+            archive.path.display(),
+            metadata.len(),
+            archive.bytes
+        )));
+    }
+    Ok(archive)
 }
 
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::symlink;
 
-    use super::{validate_folder, validate_prompt};
-    use crate::config::MAX_PROMPT_BYTES;
-    use crate::staging::copy_into_staged;
+    use super::{validate_prompt, validate_spooled_archive, SpooledArchive};
+    use crate::config::{MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES};
 
     #[test]
     fn prompt_validation_is_exact_and_fail_closed() {
@@ -185,67 +155,81 @@ mod tests {
     }
 
     #[test]
-    fn folder_validation_is_descriptor_anchored_and_never_follows_symlinks() {
+    fn spooled_archive_validation_is_exact_and_fail_closed() {
         let root = std::env::temp_dir().join(format!(
-            "qwen38-validated-folder-{}",
+            "qwen38-validated-archive-{}",
             uuid::Uuid::new_v4().simple()
         ));
-        let source = root.join("source");
-        let moved = root.join("selected-source");
-        let destination = root.join("destination");
-        let state = root.join("service-state");
-        let results = root.join("service-results");
-        std::fs::create_dir_all(&source).expect("create source fixture");
-        std::fs::write(source.join("identity.txt"), b"selected-before-rename")
-            .expect("write selected source");
+        std::fs::create_dir_all(&root).expect("create archive fixture root");
+        let spool = root.join("archive.zip");
+        std::fs::write(&spool, b"exact-spool-bytes").expect("write spool fixture");
+        let exact = SpooledArchive {
+            path: spool.clone(),
+            bytes: 17,
+            sha256: "0".repeat(64),
+        };
 
-        let (logical, selected) = validate_folder(
-            source.to_str().expect("utf8 fixture path"),
-            &root,
-            &state,
-            &results,
-        )
-        .expect("validate ordinary descendant");
+        let accepted =
+            validate_spooled_archive(exact.clone()).expect("exact spool commitment is accepted");
+        assert_eq!(accepted.bytes, 17);
 
-        // Replacing the path after validation must not redirect staging to
-        // the replacement: the selected descriptor remains authoritative.
-        std::fs::rename(&source, &moved).expect("rename selected source");
-        std::fs::create_dir(&source).expect("create path replacement");
-        std::fs::write(source.join("identity.txt"), b"wrong-replacement")
-            .expect("write replacement source");
-        std::fs::create_dir(&destination).expect("create staging destination");
-        copy_into_staged(&selected, &logical, &destination).expect("copy selected descriptor");
-        assert_eq!(
-            std::fs::read(destination.join("identity.txt")).expect("read staged identity"),
-            b"selected-before-rename"
-        );
+        for (label, mutate) in [
+            (
+                "uppercase hash digit",
+                Box::new(|archive: &mut SpooledArchive| {
+                    archive.sha256 = format!("A{}", "0".repeat(63));
+                }) as Box<dyn Fn(&mut SpooledArchive)>,
+            ),
+            (
+                "short hash",
+                Box::new(|archive: &mut SpooledArchive| {
+                    archive.sha256 = "0".repeat(63);
+                }),
+            ),
+            (
+                "zero declared bytes",
+                Box::new(|archive: &mut SpooledArchive| archive.bytes = 0),
+            ),
+            (
+                "declared bytes beyond the archive bound",
+                Box::new(|archive: &mut SpooledArchive| archive.bytes = MAX_ARCHIVE_BYTES + 1),
+            ),
+            (
+                "declared bytes disagreeing with the spool file",
+                Box::new(|archive: &mut SpooledArchive| archive.bytes = 16),
+            ),
+            (
+                "relative spool path",
+                Box::new(|archive: &mut SpooledArchive| {
+                    archive.path = std::path::PathBuf::from("relative/archive.zip");
+                }),
+            ),
+        ] {
+            let mut mutated = exact.clone();
+            mutate(&mut mutated);
+            assert!(
+                validate_spooled_archive(mutated).is_err(),
+                "commitment drift was accepted: {label}"
+            );
+        }
 
-        let alias = root.join("alias");
-        symlink(&moved, &alias).expect("create final-component symlink");
+        let missing = SpooledArchive {
+            path: root.join("absent.zip"),
+            ..exact.clone()
+        };
+        assert!(validate_spooled_archive(missing).is_err());
+
+        let linked = root.join("linked.zip");
+        symlink(&spool, &linked).expect("create spool symlink fixture");
+        let through_link = SpooledArchive {
+            path: linked,
+            ..exact
+        };
         assert!(
-            validate_folder(alias.to_str().expect("utf8 alias"), &root, &state, &results,).is_err()
+            validate_spooled_archive(through_link).is_err(),
+            "a symlinked spool path was accepted"
         );
 
-        let parent_alias = root.join("parent-alias");
-        symlink(&root, &parent_alias).expect("create intermediate symlink");
-        let through_alias = parent_alias.join("selected-source");
-        assert!(validate_folder(
-            through_alias.to_str().expect("utf8 alias descendant"),
-            &root,
-            &state,
-            &results,
-        )
-        .is_err());
-
-        let parent_component = moved.join("..").join("selected-source");
-        assert!(validate_folder(
-            parent_component.to_str().expect("utf8 parent path"),
-            &root,
-            &state,
-            &results,
-        )
-        .is_err());
-
-        std::fs::remove_dir_all(&root).expect("remove validated-folder fixture");
+        std::fs::remove_dir_all(&root).expect("remove archive fixture");
     }
 }

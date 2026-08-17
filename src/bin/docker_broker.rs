@@ -354,13 +354,13 @@ fn validate_session_id(value: &str) -> Result<(), String> {
     let suffix = value
         .strip_prefix("s-")
         .ok_or_else(|| "session ID must start with s-".to_string())?;
-    if suffix.len() != 32
+    if !matches!(suffix.len(), 32 | 64)
         || !suffix
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
     {
         return Err(format!(
-            "session ID must be s- followed by exactly 32 lowercase hexadecimal characters: {value:?}"
+            "session ID must be s- followed by 64 lowercase hexadecimal characters (or the historical 32-character shape): {value:?}"
         ));
     }
     Ok(())
