@@ -30,7 +30,7 @@ The fixed stack is:
 | Corrected model SHA-256 | `5fd70b38b3708e47adc1e9e9ab90f5d688ec01177d0718fdd16678696fdb0988` |
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
-| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, immutable-root v12 profile |
+| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v13 profile |
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
 | Context | Native `262144` tokens |
@@ -41,8 +41,12 @@ The fixed stack is:
 | Thinking | Required, `xhigh` |
 | Historical thinking | `preserve_thinking=false` |
 | Qwen Code | `0.21.12`, commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38` |
-| Agent image | `sha256:b58feacef0a13333d19f701a00ef1774c82a94c19325dd38fc1b5f7ff439d66f` |
-| Service | Rust, one session at a time, Docker-only |
+| Agent image | `sha256:156d67b5626b4d1418dbaa128cdc24bb91080ba6077251011d25cae9338c4f51` |
+| Service | Rust, one session at a time, Docker-only; implementation commit `b8271a608a8df9f35cf24d02ec3a3c62989f971d` |
+| Service image | `sha256:7eb567207cd41a7f045073ea010e1a3f3fd14f9e118663dd69887560787b4e08` |
+| Docker broker image | `sha256:fe91decffbf9e1c92b9d7a6a6159547e0312b76275174932ed35f5c562c083ea` |
+| Fixed-relay image | `sha256:8b3aa7c098e5a9c757302340bf5554b9bd36c7c30640c1ce07d5cd1fc38417d1` |
+| Stream-capture image | `sha256:d87f39d60370eb5190e7ec166807131b90d545d6da20929a1e6fa7ccf7c186de` |
 | Service listener | `127.0.0.1:8090` only |
 | Model listener | `127.0.0.1:8000` only |
 
@@ -58,10 +62,11 @@ container and HTTP endpoints must match it field-for-field.
 The service independently requires `/model` to be the exact corrected directory as
 one read-only bind mount and requires the backend container's source revision,
 official revision, correction recipe, corrected model digest, and manifest digest
-labels. It also requires a read-only backend root, the exact bounded `/root`, `/tmp`,
-and `/run` tmpfs contracts, exactly one labelled v12 vLLM-cache volume, and no other
-mount. Runtime JIT state therefore cannot mutate the container layer. The backend's
-own status performs the complete file-manifest verification.
+labels. It also requires a read-only backend root running as `2000:0`, exact bounded
+`/tmp` and `/run` tmpfs contracts, exactly one labelled v13 vLLM cache volume at
+`/home/vllm/.cache/vllm`, and no other mount. Every persistent JIT/cache path is
+rooted beneath that exact volume; runtime writes cannot mutate the container layer.
+The backend's own status performs the complete file-manifest verification.
 An uncorrected Unsloth mount cannot satisfy this lock.
 
 The backend repository remains authoritative for the server patches, model-file
@@ -214,9 +219,9 @@ second application must be byte-for-byte idempotent.
 is generated review evidence for humans; it is independently hashed and compared
 to the transformer's exact output, but is not a second patching path. Its current
 SHA-256 is
-`77e137c098e29a1b3b28da112fc323777a588e0c23caab8532caeb03eb5c2b79`.
+`d5b35f57467bf50a8bff0a1ad739863d27f84f1b065fbdd7c1cdcc0c1372c3fd`.
 The transformer's manifest SHA-256 is
-`90102ad5fef4531b4a007eac3715bb1e001f9bfa5e090204aa0c5d3a6d50ecc0`.
+`a809f5db500b9bbbba42481f4a04cf85bdfe6422ca2dfbbaa34f5f62b4d5d915`.
 Both identities are locked, checked on the host, checked again inside the Docker
 build, and recorded as image labels.
 
@@ -258,6 +263,10 @@ The local patch provides:
   with ambient, project, CLI, and injected MCP servers all excluded from the
   locked mode while ordinary project `QWEN.md` and `AGENTS.md` task instructions
   remain available;
+- every later authentication revalidation in locked mode reloads settings with
+  workspace trust, workspace settings, and environment loading still disabled;
+  this closes the upstream path that could otherwise load a hostile workspace
+  `.env` after the sealed initial configuration had already passed;
 - an immutable `QWEN_HOME=/opt/agent` containing only the sealed settings and
   instructions, with no writable home-state mount and no host Qwen state;
 - hooks, extensions, skills, `.qwen/rules`, output-language injection, include
@@ -370,65 +379,72 @@ errors. It never chooses a convenient-looking “last result.”
 ## Prefix caching evidence
 
 Prefix caching is enabled in the sole backend command. It is not accepted on faith:
-the accepted v12 corrected backend's final chronological image-history probe measured
-a 6.0440-second cold TTFT with zero prefix/multimodal hits, then a 0.3331-second warm
-Anthropic TTFT with 14,560 prefix-hit tokens and a multimodal-cache hit—an 18.146×
-improvement.
-OpenAI and Anthropic histories rendered to identical token IDs. Changed image bytes
-missed the multimodal cache; moving identical bytes hit the multimodal cache but
-missed the prefix cache, proving the two mechanisms are not being conflated.
+the accepted v13 backend's final text-history probe sent a 65,529-token cold prompt
+with zero prefix hits, then reused 64,480 prefix tokens on the warm continuation.
+An otherwise equivalent fresh-salt control reused zero tokens. Warm time to first
+token was 32.233 times faster than cold, which proves practical reuse rather than
+merely proving that a cache flag appeared in the command.
 
-The real Qwen Code path was also measured from authoritative vLLM counters. Session
-`s-a0def9ef00b8444c82ec0069d5cd3dce` completed four native model turns—text read,
-original-PNG read, shell, and final response—and added 53,867 prompt tokens, of which
-35,360 were prefix-cache hits. Its two image-history queries produced one
-multimodal-cache hit: the first request after the image tool result encoded it, and
-the later request reused the exact image while it remained in its chronological tool
-position.
+The final chronological image-history probe rendered equivalent OpenAI and
+Anthropic histories to exactly the same 16,562 token IDs. A warm continuation reused
+14,560 prefix tokens and hit the multimodal cache; its TTFT was 17.089 times faster
+than the cold request. Changed image bytes missed the multimodal cache. Moving the
+same bytes to another turn retained the multimodal hit but lost the prefix hit,
+proving that byte-keyed image preprocessing reuse and chronological prompt-prefix
+reuse are separate mechanisms.
 
-The identical task was then run as session
-`s-18eb0b39b0f54c13b03c3ba103233859`. All four native turns passed again. It added
-53,592 prompt tokens, of which 45,760 were prefix-cache hits, and both multimodal
-queries were hits. Mean backend TTFT across the four requests fell from 1.129958153
-seconds to 0.279406309 seconds, a 4.044140-times improvement. Qwen process time fell
-from 30.552 seconds to 18.774 seconds. These are sampled agent runs, so the claim is
-cache reuse and measured timing separation—not deterministic output identity.
-
-Qwen Code's compatibility usage field reported zero cache reads in both runs even
-though vLLM's counters proved the hits. The release therefore uses backend counters,
-not that frontend compatibility field, as its cache authority.
+The complete v8 Qwen Code acceptance then added 296,939 real prompt tokens across
+twenty backend requests. Authoritative vLLM metrics recorded 241,280 local prefix
+cache hits, 55,659 locally computed prompt tokens, and three multimodal-cache hits.
+These are sampled live runs, so the claim is measured cache reuse and timing
+separation—not deterministic prose. Qwen Code's compatibility usage field is not
+treated as cache authority; only the backend counters are.
 
 ## Network and filesystem isolation
 
 The host is assumed to be reachable from the public Internet on every non-loopback
-interface. Neither project publishes a port. The only TCP listeners are validated as
-exactly `127.0.0.1:8000` and `127.0.0.1:8090`.
+interface. Neither project uses Docker port publication. The only host TCP listeners
+are validated as exactly `127.0.0.1:8000` and `127.0.0.1:8090`, and the only
+host-network containers are two tiny fixed ingress relays whose compiled roles bind
+those exact addresses and connect to exact Unix sockets.
 
 ```text
-agent container: --network none
-  Qwen -> 127.0.0.1:18000
-              |
-inner socat container: --network container:<agent>
-              |
-       /sock/vllm.sock
-              |
-outer socat container: --network host
-              |
-       127.0.0.1:8000 vLLM
+host 127.0.0.1:8090 -> service ingress -> service Unix socket
+                                              ^
+                                              |
+agent_service: --network none -> service bridge on service-local 127.0.0.1:8090
+  |
+  | typed, bounded Unix protocol (no raw Docker socket)
+  v
+Docker broker: --network none; sole holder of /var/run/docker.sock
+  |
+  +-> agent: --network none; Qwen -> agent-local 127.0.0.1:18000
+        +-> session model relay sharing the agent namespace
+                |
+                v
+           central model Unix socket
+                ^
+                |
+vLLM: --network none <- model bridge on vLLM-local 127.0.0.1:8000
+                         |
+host 127.0.0.1:8000 -> model ingress
 ```
 
-The agent literally has no interface, IPv4 route, DNS, bridge gateway, published
-port, host network, or GPU device. The inner proxy shares only the agent's network
-namespace and binds the agent's own loopback. The outer proxy alone shares the host
-network and connects only to the pinned vLLM loopback listener. They meet through a
-private per-session Unix socket. Both proxies are read-only, uid 1000, cap-drop-all,
-no-new-privileges containers with small memory/PID limits.
+The agent literally has no non-loopback interface, IP route, DNS, bridge gateway,
+published port, host network, or GPU device. Its model relay and stream-capture
+sidecar share only the agent's network namespace. The relay accepts the one
+agent-local model endpoint and reaches only the central model Unix socket; the
+capture sidecar receives only the two exact session streams and owns the output
+mount that is deliberately absent from the agent. All relays and capture containers
+are non-root, read-only, capability-free, `no-new-privileges`, and bounded by exact
+memory and PID limits.
 
-The service container itself uses host networking because it must bind the host
-loopback and control Docker. It has no published ports, is read-only, runs as uid
-1000 with only the Docker-socket group added, and mounts `/home/user` read-only. The
-single project `.runtime` subtree is over-mounted read-write for staging and durable
-results. Every requested source folder must be a strict descendant of the pinned
+The service is also `--network none`, read-only, uid 1000, and has no Docker socket.
+It mounts `/home/user` read-only and the single project `.runtime` subtree at its
+exact writable path. The separate network-none broker is the only component with
+the raw Docker socket; its typed policy accepts only fixed session and topology
+operations and validates every image, name, label, mount, namespace, and lifecycle
+transition. Every requested source folder must be a strict descendant of the pinned
 `/home/user` input root and may not overlap service state. Symlinks, special files,
 system roots, more than 200,000 files, or more than 4 GiB are rejected before the
 agent starts.
@@ -464,6 +480,27 @@ recorded before forwarding, so cancellation cannot silently lose its bundle if a
 descendant delays shutdown. `util-linux=2.39.3-9ubuntu6.5`, which supplies `setsid`,
 is an explicit image input rather than an incidental base-image dependency.
 
+### What temporary means
+
+Temporary is a lifecycle and ownership property, not a storage-medium promise.
+Every session container, staged workspace, scratch tree, runtime tree, and stream is
+freshly created for exactly one session. A name or directory collision is an error;
+the service never adopts stale state or guesses that an earlier tree is safe to
+reuse. Session containers and raw state are removed only after producers are
+quiescent, required streams and sidecars are captured, the deterministic bundle is
+complete, and terminal state is durable. If capture or bundling fails, the raw tree
+and diagnostics are retained as failure evidence instead of being silently erased.
+
+This does not impose a blanket RAM-only filesystem. The bounded `/tmp` and
+`/qwen-runtime` tmpfs mounts remain because they are useful private scratch/runtime
+boundaries, while staged workspaces, service state, terminal records, and bundles
+may use ordinary Docker or host-backed project storage. Docker images are durable,
+immutable, pinned deployment artifacts—not temporary session state. Completed
+result bundles persist until the operator explicitly deletes that one terminal
+record through the API. The security properties come from fresh ownership,
+namespace and mount isolation, explicit retention, and exact teardown; they do not
+depend on pretending that RAM versus SSD determines whether state is temporary.
+
 ## Reproducibility and real version pinning
 
 [`docker/Dockerfile`](docker/Dockerfile) has digest-pinned linux/amd64 Ubuntu, Node,
@@ -493,26 +530,32 @@ build before it is used on the real 121-certificate trust store. Two independent
 `--no-cache` agent builds must produce the exact locked image ID; a cached rebuild
 alone is not accepted as reproducibility evidence.
 
-The service image contains Docker CLI 29.7.2 from the exact official static archive,
-not the host binary. The Rust binary is built by the pinned Rust 1.95.0 image with
+Only the broker image contains Docker CLI 29.7.2 from the exact official static
+archive, not the host binary; the service image contains no Docker client and mounts
+no Docker socket. The Rust binaries are built by the pinned Rust 1.95.0 image with
 `cargo test --locked` and `cargo build --locked --release`. The agent image is sealed
-by exact image ID plus labels for the upstream version/commit/archive/patch and all
-three configuration files. The service image is sealed by committed source, stack
-lock, and Cargo lock labels.
+by exact image ID plus labels for the upstream version/commit/archive/patch and every
+locked runtime/configuration identity. The service image is sealed by committed
+source, build-input, stack-lock, and Cargo-lock labels.
 
 The current agent image is
-`sha256:b58feacef0a13333d19f701a00ef1774c82a94c19325dd38fc1b5f7ff439d66f`.
-Its build reconstructed forty-six changed/new files from pristine upstream and
-passed 2,326 tests in the expanded sixteen-suite focused matrix. The sealed runtime
+`sha256:156d67b5626b4d1418dbaa128cdc24bb91080ba6077251011d25cae9338c4f51`.
+Its build reconstructed exactly sixty-one changed/new files from pristine upstream
+and passed 2,427 tests across twenty-three focused test files. The sealed runtime
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
 review-diff, semantic-manifest, settings, instruction, and wrapper labels. The
 build script treats any other image ID as drift. The image also carries Qwen
 Code's exact upstream Apache-2.0 license plus this repository's Unlicense and
 third-party scope notice; those documentation files do not alter the executable
 client or its locked behavior.
-The pinned Rust 1.95.0 service stage also passed all fourteen service tests and a
-locked release build, including fail-closed tests for default-policy drift,
-semantic-manifest identity, and nonempty slash-command advertisement.
+The pinned Rust 1.95.0 stages passed all fifty-seven tests: forty-two service,
+eight broker, three fixed-relay, two stream-capture, and two agent-exec tests. A
+full clean no-cache release build reproduced the exact locked agent, relay, capture,
+broker, and service image IDs; candidate build directories were absent afterward.
+The release lock pins implementation commit
+`b8271a608a8df9f35cf24d02ec3a3c62989f971d`, the 65-entry build-input manifest
+hash `f2af6fc5bbb637c6c804cc3a53c98e18b89d06eda32bccc87fbaab4e52e07b03`,
+and all five resulting image IDs.
 
 Pinning is not a claim that the upstream dependency graph has no security debt. The
 Qwen `npm ci` build currently reports 66 audit advisories (2 low, 36 moderate, 25
@@ -619,15 +662,18 @@ misleading 404. Shutdown has no arbitrary teardown deadline.
 ## Acceptance gates
 
 A release is not complete merely because the images build. Every required gate below
-passed against the pinned agent image and the exact live v12 corrected backend:
+passed against the pinned v8 agent image and the exact live v13 corrected backend:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
 2. clean Qwen archive extraction, semantic drift/idempotence/rollback checks,
    transactional source transformation, review-diff equivalence, full patched
-   build, and all sixteen focused upstream suites;
-3. agent-image label/hash/version checks and network-none route proof;
-4. exact live backend container/image/labels/command/listener/version/model/tokenizer;
-5. sealed model path from agent loopback, with no route or DNS;
+   build, and all 2,427 assertions in twenty-three focused test files;
+3. independent no-cache reproduction of all five locked images, exact label/hash/
+   version checks, and network-none route proofs;
+4. exact live backend container/image/user/labels/command/mounts/cache/listener/
+   version/model/tokenizer plus bridge and ingress identity;
+5. sealed model path from agent-local loopback through the central Unix socket,
+   with no IP route, DNS, host network, or GPU;
 6. real native tool call and typed tool-result continuation through Qwen Code;
 7. strict stream-JSON result capture and deterministic complete bundle;
 8. malformed/duplicate/post-terminal stream failures;
@@ -639,37 +685,40 @@ passed against the pinned agent image and the exact live v12 corrected backend:
     multimodal cache hits, and materially lower time-to-first-token;
 12. native-context boundary, fifteen-image/full-pixel vision proof, and K8V4 memory
     evidence inherited from the exact live backend image;
-13. graceful cancellation, unlimited-wait shutdown, orphan sweep, listener audit,
-    including immediate cancellation at the published-readiness boundary, and a
-    final clean Git repository under `Ronen Zyroff <rzyroff@gmail.com>`.
+13. typed broker authority, stream-capture isolation, effect journals, PTY sandbox,
+    graceful cancellation, unlimited-wait shutdown, orphan sweep, and exact
+    loopback-listener audit.
 
 The main hostile-workspace acceptance deliberately supplied contradictory `.env`,
 `.qwen/settings.json`, MCP, hook, rule, skill, memory, output-language, and custom
 slash-command fixtures. Init advertised exactly the ten allowed native tools,
 `general-purpose` and `Explore`, no MCP servers, and no slash commands. Ordinary
 project `QWEN.md` and `AGENTS.md` guidance remained active. Native text, original-PNG
-vision, and shell calls all returned correlated typed results; the model read
-`VISION_TOOL_PROOF_7F3C` from the image. No hostile marker was executed or included.
+vision, and shell calls all returned correlated typed results. Session
+`s-f75db8944f10454099d4305a7644e485` completed seven turns, read the exact visual
+code `VISION_AGENT_PTY_4827` from the original 4,096-by-4,096 PNG, emitted the exact
+shell marker `QWEN38_AGENT_ISOLATION_OK`, and proved the hostile environment variable
+was absent after the later authentication-validation path. The five hostile marker
+files remained absent, both project-guidance files remained active, the original
+fixture hashes were unchanged, and the nineteen-file result bundle was complete.
 
-Session `s-db8a64fabf494192b844d174a37ee9d8` then passed a JPEG directly to native
-`read_file`. It returned a typed error naming the missing exact PNG signature; no
-conversion, resize, retry, or alternate tool path occurred. Session
-`s-604472363cb04672a38ae01fc130ac16` invoked exactly one foreground `Explore`
-subagent, retained parent/child tool IDs, returned its native `read_file` result, and
-was verified in the main thread.
+Session `s-541652f64dfc40fc9411f5ddaa4c6a37` separately exercised the real PTY shell
+path in four turns and returned `QWEN38_PTY_SHELL_OK` plus the byte-exact staged
+output. Session `s-93c2a6fd58744f0d8a32f437edefc611` invoked exactly one foreground
+`Explore` subagent, correlated parent/child tool IDs, used native list/read and a
+shell byte check, and returned to an independent main-thread reread. Explore was not
+mechanically made read-only: it retained its real conversion and scratch tools, while
+the trusted workspace/artifact effect journal proved zero effects for this read-only
+assignment.
 
-While that subagent session was live, the agent container exposed only `lo`, had an
-empty IPv4 route table, failed public DNS lookup, had no NVIDIA devices or published
-ports, and reached the sealed model only through `127.0.0.1:18000`. All three session
-containers had read-only roots, all capabilities dropped, and no-new-privileges.
-After completion they were absent.
-
-Finally, session `s-5639d985a0e7465f93277e393348540e` was cancelled immediately
-after readiness while its prompt required a long foreground command. Cancellation
-returned in 0.311 seconds, durably recorded exit 143, archived the two-event partial
-stream without inventing a success/result event, emitted no forbidden final marker,
-and removed all three owned containers. Script argument-rejection probes also proved
-that start, status, stop, and build reject an alternate mode before changing state.
+Finally, session `s-cd0e7f510def456c8f0c2a1eddf36563` was cancelled immediately
+after published readiness. The acknowledgement returned in 785 ms; terminal teardown
+completed in 1,863 ms with zero model turns, exit 143, an empty event stream, and a
+complete nine-file bundle. It reported cancellation before a terminal event instead
+of fabricating success, emitted no forbidden marker, and left no session container.
+All successful sessions likewise left no agent, model-relay, or capture container.
+Script argument-rejection probes also proved that start, status, stop, and build
+reject an alternate mode before changing state.
 
 Any future changed input must rerun the affected gates. There is no fallback
 declaration of success.
