@@ -5,7 +5,7 @@
   "docker_server_version": "29.7.2",
   "broker_container_name": "qwen38-docker-broker",
   "broker": {
-    "image_tag": "qwen38-docker-broker:1.0.0",
+    "image_tag": "qwen38-docker-broker:1.1.0",
     "memory": "64m",
     "memory_swap": "64m",
     "pids_limit": 64,
@@ -25,8 +25,8 @@
   "model_bridge_container_name": "qwen38-model-bridge",
   "model_ingress_container_name": "qwen38-model-ingress",
   "agent": {
-    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v8",
-    "image_id": "sha256:156d67b5626b4d1418dbaa128cdc24bb91080ba6077251011d25cae9338c4f51",
+    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v9",
+    "image_id": "sha256:d2358bd6622463f665354ddf64bbf5d54a329e2e9ec1e165d08e06f285e7de56",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,

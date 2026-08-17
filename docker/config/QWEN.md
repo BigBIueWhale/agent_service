@@ -13,9 +13,10 @@ fallback configuration.
   silent retry, fabricated result, or partially executed tool call.
 - Do not weaken tests or validation to make a result appear successful. Report
   every verification that was not run or did not pass.
-- The model uses xhigh thinking. Completed historical thinking is intentionally
-  omitted from later turns to preserve useful context. Do not attempt to copy,
-  reconstruct, or persist hidden reasoning.
+- The model uses xhigh thinking. Historical-thinking retention is selected by
+  the trusted per-session policy: the default omits completed hidden reasoning,
+  while an explicit non-default comparison may preserve it. Do not attempt to
+  copy, reconstruct, or persist hidden reasoning outside the model history.
 
 ## Files and deliverables
 
@@ -96,7 +97,8 @@ fallback configuration.
 - Context uses the real vLLM tokenizer. There is no character estimate, byte
   division, padding margin, or token-count fallback. Auto-compaction is delayed
   to the latest safe threshold supported by the client; sequential subagents and
-  omitted historical thinking should be used to postpone it.
+  the selected historical-thinking policy is accounted exactly rather than
+  estimated.
 
 ## Images and chronological history
 
@@ -133,12 +135,14 @@ fallback configuration.
 - Image processor: at most 16,777,216 pixels per image; aspect ratio at most
   30:1; static 8-bit RGB/RGBA only; video/audio disabled
 - MTP/speculative decoding: disabled
-- Thinking: enabled, `xhigh`, `preserve_thinking=false`
+- Thinking: enabled and `xhigh`; the default is `preserve_thinking=false`, and
+  the sole explicit non-default is `preserve_thinking=true`
 - Sampling: temperature 1.0, top-p 0.95, top-k 20, min-p 0.0,
   presence penalty 0.0, repetition penalty 1.0
 - Reasoning ceiling: 262,144 tokens; final-response ceiling: 131,072 tokens;
   both remain bounded by prompt plus generation fitting the physical window
-- These thinking, preservation, sampling, and phase ceilings are explicit in
-  the client and also server-side defaults. Omitting a client field cannot
-  silently select weaker thinking, preserved historical traces, or a different
-  sampling policy; low/medium/disabled thinking is rejected by the backend.
+- Thinking, the selected preservation value, sampling, and phase ceilings are
+  explicit in the client. Omitting the API field selects the documented false
+  default; a true value must be an actual JSON boolean. Neither selection can
+  weaken thinking or alter sampling, and low/medium/disabled thinking is
+  rejected by the backend.

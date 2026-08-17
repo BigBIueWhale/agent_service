@@ -149,6 +149,7 @@ pub struct AgentLock {
     pub tmpfs_tmp: String,
     pub tmpfs_qwen_runtime: String,
     pub settings_sha256: String,
+    pub preserved_settings_sha256: String,
     pub instructions_sha256: String,
     pub system_prompt_sha256: String,
     pub deployment_contract_sha256: String,
@@ -423,7 +424,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         return fail(format!("unexpected profile {:?}", lock.profile));
     }
     if lock.service.container_name != "qwen38-agent-service"
-        || lock.service.image_tag != "qwen38-agent-service:3.0.0"
+        || lock.service.image_tag != "qwen38-agent-service:3.1.0"
         || lock.service.user != "1000:1000"
         || lock.service.memory != "2g"
         || lock.service.memory_swap != "2g"
@@ -483,7 +484,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     }
     if lock.broker.policy_id != "qwen38-docker-broker-v1"
         || lock.broker.container_name != "qwen38-docker-broker"
-        || lock.broker.image_tag != "qwen38-docker-broker:1.0.0"
+        || lock.broker.image_tag != "qwen38-docker-broker:1.1.0"
         || lock.broker.memory != "64m"
         || lock.broker.memory_swap != "64m"
         || lock.broker.pids_limit != 64
@@ -584,6 +585,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     }
     if [
         lock.agent.settings_sha256.as_str(),
+        lock.agent.preserved_settings_sha256.as_str(),
         lock.agent.instructions_sha256.as_str(),
         lock.agent.system_prompt_sha256.as_str(),
         lock.agent.deployment_contract_sha256.as_str(),

@@ -23,6 +23,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
         cls.paths = [
             cls.project / "config" / "agent-runtime-contract-v1.json",
             cls.project / "docker" / "config" / "settings.json",
+            cls.project / "docker" / "config" / "settings-preserved.json",
             cls.project / "docker" / "config" / "QWEN.md",
             cls.project / "docker" / "config" / "system.md",
             cls.project / "docker" / "config" / "deployment-contract.md",
@@ -62,7 +63,35 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             contract_path = root / "contract.json"
             contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
             paths = [contract_path, settings_path, *self.paths[2:]]
-            with self.assertRaisesRegex(MODULE.ContractError, "settings reasoning effort drift"):
+            with self.assertRaisesRegex(
+                MODULE.ContractError,
+                "differ only in preserve_thinking|settings reasoning effort drift",
+            ):
+                MODULE.verify(paths)
+
+    def test_rejects_a_second_difference_in_preserved_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            settings = json.loads(self.paths[2].read_text(encoding="utf-8"))
+            settings["modelProviders"]["openai"][0]["generationConfig"][
+                "maxRetries"
+            ] = 1
+            settings_path = root / "settings-preserved.json"
+            settings_path.write_text(
+                json.dumps(settings, indent=2) + "\n", encoding="utf-8"
+            )
+            contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+            contract["components"]["preserved_settings_sha256"] = MODULE.sha256(
+                settings_path.read_bytes()
+            )
+            contract_path = root / "contract.json"
+            contract_path.write_text(
+                json.dumps(contract, indent=2) + "\n", encoding="utf-8"
+            )
+            paths = [contract_path, self.paths[1], settings_path, *self.paths[3:]]
+            with self.assertRaisesRegex(
+                MODULE.ContractError, "differ only in preserve_thinking"
+            ):
                 MODULE.verify(paths)
 
     def test_rejects_extra_native_tool(self) -> None:

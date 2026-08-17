@@ -18,6 +18,8 @@ use crate::error::{io_msg, ServiceError, ServiceResult};
 pub struct ValidatedRequest {
     pub prompt: String,
     pub folder: PathBuf,
+    /// Exact typed history policy selected by the trusted API decoder.
+    pub preserve_thinking: bool,
     /// Directory selected during validation, anchored beneath the pinned
     /// input-root descriptor. Holding it through staging closes the
     /// validation-to-copy rename/symlink race.
@@ -30,12 +32,14 @@ pub fn validate(
     host_input_root: &Path,
     state_dir: &Path,
     results_dir: &Path,
+    preserve_thinking: bool,
 ) -> ServiceResult<ValidatedRequest> {
     let prompt = validate_prompt(prompt)?;
     let (folder, source_dir) = validate_folder(folder, host_input_root, state_dir, results_dir)?;
     Ok(ValidatedRequest {
         prompt,
         folder,
+        preserve_thinking,
         source_dir,
     })
 }

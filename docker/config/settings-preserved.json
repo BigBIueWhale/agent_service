@@ -1,0 +1,137 @@
+{
+  "general": {
+    "enableAutoUpdate": false,
+    "chatRecording": false
+  },
+  "ui": {
+    "enableFollowupSuggestions": false,
+    "enableCacheSharing": false,
+    "enableSpeculation": false,
+    "showWelcomeBackDialog": false,
+    "enableUserFeedback": false
+  },
+  "privacy": {
+    "usageStatisticsEnabled": false
+  },
+  "telemetry": {
+    "enabled": false
+  },
+  "outboundCorrelation": {
+    "propagateTraceContext": false
+  },
+  "security": {
+    "folderTrust": {
+      "enabled": false
+    },
+    "auth": {
+      "selectedType": "openai",
+      "enforcedType": "openai"
+    }
+  },
+  "model": {
+    "name": "qwen3.8-27b-nvfp4-k8v4",
+    "baseUrl": "http://127.0.0.1:18000/v1",
+    "reasoningEffort": "xhigh",
+    "maxSessionTurns": -1,
+    "maxWallTimeSeconds": -1,
+    "maxToolCalls": -1,
+    "maxToolCallsPerTurn": 1000,
+    "maxSubagentDepth": 1,
+    "sessionTokenLimit": -1,
+    "skipNextSpeakerCheck": true,
+    "skipLoopDetection": true,
+    "chatCompression": {
+      "enableScreenshotTrigger": false,
+      "maxRecentImagesToRetain": 0,
+      "maxRecentFilesToRetain": 20
+    }
+  },
+  "modelFallbacks": "",
+  "fastModel": "",
+  "visionModel": "",
+  "compactionModel": "",
+  "imageModel": "",
+  "voiceModel": "",
+  "ide": {
+    "enabled": false
+  },
+  "experimental": {
+    "agentTeam": false,
+    "artifact": false,
+    "emitToolUseSummaries": false
+  },
+  "memory": {
+    "enableManagedAutoMemory": false,
+    "enableManagedAutoDream": false,
+    "enableAutoSkill": false,
+    "autoSkillConfirm": false,
+    "enableTeamMemory": false,
+    "enableTeamMemorySync": false
+  },
+  "tools": {
+    "approvalMode": "yolo",
+    "sandbox": false
+  },
+  "context": {
+    "autoCompactThreshold": 1.0,
+    "clearContextOnIdle": {
+      "toolResultsThresholdMinutes": -1,
+      "toolResultsNumToKeep": 5,
+      "toolResultsTotalCharsThreshold": -1
+    }
+  },
+  "env": {
+    "QWEN38_LOCAL_API_KEY": "local-loopback-only"
+  },
+  "modelProviders": {
+    "openai": [
+      {
+        "id": "qwen3.8-27b-nvfp4-k8v4",
+        "name": "Local Qwen3.8-27B NVFP4 K8V4",
+        "envKey": "QWEN38_LOCAL_API_KEY",
+        "baseUrl": "http://127.0.0.1:18000/v1",
+        "capabilities": {
+          "agent": true,
+          "vision": true
+        },
+        "generationConfig": {
+          "timeout": 86400000,
+          "maxRetries": 0,
+          "thinkingMandatory": true,
+          "strictToolCalling": true,
+          "exactTokenCounting": "vllm",
+          "splitToolMedia": false,
+          "toolResultContentFormat": "parts",
+          "contextWindowSize": 262144,
+          "modalities": {
+            "image": true,
+            "pdf": false,
+            "audio": false,
+            "video": false
+          },
+          "samplingParams": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 20,
+            "min_p": 0.0,
+            "presence_penalty": 0.0,
+            "repetition_penalty": 1.0,
+            "max_tokens": 262144
+          },
+          "extra_body": {
+            "parallel_tool_calls": false,
+            "reasoning_effort": "xhigh",
+            "thinking_token_budget": 262144,
+            "final_response_token_budget": 131072,
+            "chat_template_kwargs": {
+              "enable_thinking": true,
+              "preserve_thinking": true,
+              "reasoning_effort": "xhigh",
+              "add_vision_id": false
+            }
+          }
+        }
+      }
+    ]
+  }
+}

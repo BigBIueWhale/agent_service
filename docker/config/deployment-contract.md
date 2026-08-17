@@ -89,10 +89,13 @@
   rendered request, including tools, typed image history, and template arguments.
   There is no character/byte division, `target // 8`, padding estimate, safety
   margin, local-tokenizer substitute, fabricated minimum output, or fallback.
-- Thinking is always enabled at `xhigh`; high/max aliases resolve to xhigh.
-  Completed historical hidden thinking is omitted (`preserve_thinking=false`) so
-  the single main thread spends context on durable visible/tool state. Do not
-  reconstruct or persist hidden reasoning.
+- Thinking is always enabled at `xhigh`; high/max aliases resolve to xhigh. The
+  default is `preserve_thinking=false`, which omits completed historical hidden
+  reasoning. The explicit non-default is `preserve_thinking=true`, which retains
+  those blocks for controlled comparisons and explicitly requested sessions.
+  The trusted session policy selects exactly one; neither is a weaker-thinking,
+  alternate-model, sampling, or topology mode. Do not reconstruct or persist
+  hidden reasoning outside model history.
 - Sampling is explicit: temperature 1.0, top-p 0.95, top-k 20, min-p 0.0,
   presence penalty 0.0, repetition penalty 1.0, parallel tool calls false.
 - Reasoning ceiling is 262,144 tokens and final-response ceiling is 131,072

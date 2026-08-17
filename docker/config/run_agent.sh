@@ -2,12 +2,17 @@
 set -Eeuo pipefail
 
 readonly PROMPT_FILE=/run/agent/prompt.txt
+readonly HISTORY_POLICY_FILE=/run/agent/history-policy.json
 readonly START_GATE_FILE=/run/agent/start-gate.lock
 readonly STREAMS_DIR=/streams
 readonly AGENT_EXEC=/opt/agent/agent_exec
 readonly AGENT_EXEC_SANDBOX=landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1
-readonly SETTINGS_SOURCE=/opt/agent/settings.json
-readonly INSTRUCTIONS_SOURCE=/opt/agent/QWEN.md
+readonly DEFAULT_QWEN_HOME=/opt/agent
+readonly PRESERVED_QWEN_HOME=/opt/agent-preserved
+readonly DEFAULT_SETTINGS_SOURCE=/opt/agent/settings.json
+readonly PRESERVED_SETTINGS_SOURCE=/opt/agent-preserved/settings.json
+readonly DEFAULT_INSTRUCTIONS_SOURCE=/opt/agent/QWEN.md
+readonly PRESERVED_INSTRUCTIONS_SOURCE=/opt/agent-preserved/QWEN.md
 readonly SYSTEM_PROMPT_SOURCE=/opt/agent/system.md
 readonly DEPLOYMENT_CONTRACT_SOURCE=/opt/agent/deployment-contract.md
 readonly RUNTIME_CONTRACT_SOURCE=/opt/agent/runtime-contract.json
@@ -16,7 +21,6 @@ readonly AGENT_EXEC_SOURCE=/usr/share/agent-service/agent_exec.rs
 readonly TOOLCHAIN_MANIFEST_SOURCE=/opt/agent/toolchain-manifest.json
 readonly TOOLCHAIN_VERIFIER_SOURCE=/opt/agent/verify_toolchain.py
 readonly AGENT_APT_LOCK_SOURCE=/opt/locks/agent-apt-packages.lock
-readonly QWEN_HOME=/opt/agent
 readonly QWEN_RUNTIME_DIR=/qwen-runtime
 readonly MODEL_ID=qwen3.8-27b-nvfp4-k8v4
 readonly MODEL_BASE=http://127.0.0.1:18000
@@ -28,6 +32,10 @@ qwen_pgid=""
 qwen_status=255
 termination_exit=0
 termination_forward_failed=0
+QWEN_HOME=""
+SETTINGS_SOURCE=""
+INSTRUCTIONS_SOURCE=""
+preserve_thinking=""
 
 fatal() {
   local code="$1"
@@ -40,7 +48,7 @@ fatal() {
 }
 
 umask 077
-export QWEN_HOME QWEN_RUNTIME_DIR
+export QWEN_RUNTIME_DIR
 export QWEN38_AGENT_SERVICE_LOCKED=1
 export QWEN_SYSTEM_MD="${SYSTEM_PROMPT_SOURCE}"
 export QWEN_DEPLOYMENT_CONTRACT_MD="${DEPLOYMENT_CONTRACT_SOURCE}"
@@ -62,17 +70,45 @@ export GOPATH=/qwen-runtime/go
   fatal 114 "the isolated Docker devpts/ptmx contract required by run_shell_command is absent"
 [[ -f "${PROMPT_FILE}" && ! -L "${PROMPT_FILE}" ]] || \
   fatal 91 "${PROMPT_FILE} must be a regular, non-symlink file"
+[[ -f "${HISTORY_POLICY_FILE}" && ! -L "${HISTORY_POLICY_FILE}" && \
+   "$(stat -c '%u:%g:%a' "${HISTORY_POLICY_FILE}")" == 1000:1000:444 && \
+   "$(wc -l <"${HISTORY_POLICY_FILE}")" == 1 ]] || \
+  fatal 115 "${HISTORY_POLICY_FILE} must be one canonical regular uid:gid 1000:1000 mode-0444 line"
+history_policy_payload="$(<"${HISTORY_POLICY_FILE}")"
+case "${history_policy_payload}" in
+  '{"preserve_thinking":false}')
+    preserve_thinking=false
+    QWEN_HOME="${DEFAULT_QWEN_HOME}"
+    SETTINGS_SOURCE="${DEFAULT_SETTINGS_SOURCE}"
+    INSTRUCTIONS_SOURCE="${DEFAULT_INSTRUCTIONS_SOURCE}"
+    ;;
+  '{"preserve_thinking":true}')
+    preserve_thinking=true
+    QWEN_HOME="${PRESERVED_QWEN_HOME}"
+    SETTINGS_SOURCE="${PRESERVED_SETTINGS_SOURCE}"
+    INSTRUCTIONS_SOURCE="${PRESERVED_INSTRUCTIONS_SOURCE}"
+    ;;
+  *)
+    fatal 115 "${HISTORY_POLICY_FILE} is not one of the two canonical typed history policies"
+    ;;
+esac
+readonly QWEN_HOME SETTINGS_SOURCE INSTRUCTIONS_SOURCE preserve_thinking
+export QWEN_HOME
 [[ -f "${START_GATE_FILE}" && ! -L "${START_GATE_FILE}" && \
    "$(stat -c '%u:%g:%a' "${START_GATE_FILE}")" == 1000:1000:600 ]] || \
   fatal 108 "${START_GATE_FILE} must be a regular uid:gid 1000:1000 mode-0600 gate"
-[[ -r "${SETTINGS_SOURCE}" && -r "${INSTRUCTIONS_SOURCE}" && \
+[[ -r "${DEFAULT_SETTINGS_SOURCE}" && -r "${PRESERVED_SETTINGS_SOURCE}" && \
+   -r "${DEFAULT_INSTRUCTIONS_SOURCE}" && -r "${PRESERVED_INSTRUCTIONS_SOURCE}" && \
+   -r "${SETTINGS_SOURCE}" && -r "${INSTRUCTIONS_SOURCE}" && \
    -r "${SYSTEM_PROMPT_SOURCE}" && -r "${DEPLOYMENT_CONTRACT_SOURCE}" && \
    -r "${RUNTIME_CONTRACT_SOURCE}" && -x "${RUNTIME_CONTRACT_VERIFIER_SOURCE}" && \
    -r "${AGENT_EXEC_SOURCE}" && \
    -r "${TOOLCHAIN_MANIFEST_SOURCE}" && -x "${TOOLCHAIN_VERIFIER_SOURCE}" && \
    -r "${AGENT_APT_LOCK_SOURCE}" ]] || \
   fatal 92 "pinned Qwen configuration is missing from /opt/agent"
-for sealed_prompt in "${SYSTEM_PROMPT_SOURCE}" "${DEPLOYMENT_CONTRACT_SOURCE}" \
+for sealed_prompt in "${DEFAULT_SETTINGS_SOURCE}" "${PRESERVED_SETTINGS_SOURCE}" \
+  "${DEFAULT_INSTRUCTIONS_SOURCE}" "${PRESERVED_INSTRUCTIONS_SOURCE}" \
+  "${SYSTEM_PROMPT_SOURCE}" "${DEPLOYMENT_CONTRACT_SOURCE}" \
   "${RUNTIME_CONTRACT_SOURCE}" "${RUNTIME_CONTRACT_VERIFIER_SOURCE}" \
   "${TOOLCHAIN_MANIFEST_SOURCE}" "${TOOLCHAIN_VERIFIER_SOURCE}"; do
   [[ -f "${sealed_prompt}" && ! -L "${sealed_prompt}" ]] || \
@@ -93,14 +129,15 @@ mkdir --mode=0700 /tmp/qwen-subagents
   fatal 105 "effect-journal and subagent-scratch roots must have mode 0700"
 [[ "${SETTINGS_SOURCE}" == "${QWEN_HOME}/settings.json" && \
    "${INSTRUCTIONS_SOURCE}" == "${QWEN_HOME}/QWEN.md" && \
-   "${QWEN_SYSTEM_MD}" == "${QWEN_HOME}/system.md" && \
-   "${QWEN_DEPLOYMENT_CONTRACT_MD}" == "${QWEN_HOME}/deployment-contract.md" ]] || \
-  fatal 103 "QWEN_HOME must be the immutable /opt/agent configuration directory"
+   "${QWEN_SYSTEM_MD}" == "${DEFAULT_QWEN_HOME}/system.md" && \
+   "${QWEN_DEPLOYMENT_CONTRACT_MD}" == "${DEFAULT_QWEN_HOME}/deployment-contract.md" ]] || \
+  fatal 103 "QWEN_HOME and the fixed prompt paths do not match the selected immutable history policy"
 
 python3 "${RUNTIME_CONTRACT_VERIFIER_SOURCE}" \
   "${RUNTIME_CONTRACT_SOURCE}" \
-  "${SETTINGS_SOURCE}" \
-  "${INSTRUCTIONS_SOURCE}" \
+  "${DEFAULT_SETTINGS_SOURCE}" \
+  "${PRESERVED_SETTINGS_SOURCE}" \
+  "${DEFAULT_INSTRUCTIONS_SOURCE}" \
   "${SYSTEM_PROMPT_SOURCE}" \
   "${DEPLOYMENT_CONTRACT_SOURCE}" \
   "${TOOLCHAIN_MANIFEST_SOURCE}" \
@@ -232,8 +269,8 @@ if [[ "${attestation}" != "${expected_attestation}" ]]; then
 fi
 
 token_count="$(jq -r '.count' "${tokenize_tmp}")"
-printf 'AGENT_READY model=%s context=262144 network=loopback-only token_count=%s sandbox=%s\n' \
-  "${MODEL_ID}" "${token_count}" "${AGENT_EXEC_SANDBOX}"
+printf 'AGENT_READY model=%s context=262144 network=loopback-only token_count=%s preserve_thinking=%s sandbox=%s\n' \
+  "${MODEL_ID}" "${token_count}" "${preserve_thinking}" "${AGENT_EXEC_SANDBOX}"
 if ! printf 'EXEC\n' >&"${release_fd}"; then
   set -e
   fatal 114 "failed to release the attested agent_exec process"

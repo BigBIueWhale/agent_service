@@ -28,6 +28,7 @@ use crate::validation::ValidatedRequest;
 struct FailureContext<'a> {
     session_id: &'a str,
     prompt_preview: &'a str,
+    preserve_thinking: bool,
     started_at_unix: u64,
     wall_start: std::time::Instant,
 }
@@ -171,6 +172,7 @@ pub async fn run_one(
     let failure_context = FailureContext {
         session_id,
         prompt_preview: &prompt_preview,
+        preserve_thinking: req.preserve_thinking,
         started_at_unix,
         wall_start,
     };
@@ -214,6 +216,16 @@ pub async fn run_one(
             SessionStatus::Completed,
         );
     }
+    if let Err(error) = paths.write_history_policy(req.preserve_thinking) {
+        let diagnostics = paths.remove_all();
+        return early_failure(
+            &mut ready_tx,
+            failure_context,
+            error,
+            diagnostics,
+            SessionStatus::Completed,
+        );
+    }
     let start_gate = match paths.create_locked_start_gate() {
         Ok(value) => value,
         Err(error) => {
@@ -238,7 +250,7 @@ pub async fn run_one(
         );
     }
 
-    let _names = match docker_ops::create_session(cfg, session_id).await {
+    let _names = match docker_ops::create_session(cfg, session_id, req.preserve_thinking).await {
         Ok(value) => value,
         Err(error) => {
             // Release the wrapper gate before forensic finalization. The
@@ -300,7 +312,15 @@ pub async fn run_one(
         .await;
     }
 
-    let ready = match wait_for_agent_ready(cfg, session_id, &paths, &cancel).await {
+    let ready = match wait_for_agent_ready(
+        cfg,
+        session_id,
+        &paths,
+        &cancel,
+        req.preserve_thinking,
+    )
+    .await
+    {
         Ok(value) => value,
         Err(error) => {
             return setup_failure_after_agent(
@@ -325,6 +345,7 @@ pub async fn run_one(
         prompt_preview: prompt_preview.clone(),
         model: ready.model,
         context_window: ready.context_window,
+        preserve_thinking: ready.preserve_thinking,
     };
     if let Some(sender) = ready_tx.take() {
         if sender.send(Ok(snapshot)).is_err() {
@@ -507,6 +528,7 @@ pub async fn run_one(
         started_at_unix,
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
+        preserve_thinking: req.preserve_thinking,
         prompt_preview,
         num_turns,
         last_event_at_unix,
@@ -533,6 +555,7 @@ struct ReadyFile {
     model: String,
     context_window: u64,
     token_count: u64,
+    preserve_thinking: bool,
     sandbox: String,
 }
 
@@ -541,6 +564,7 @@ async fn wait_for_agent_ready(
     session_id: &str,
     paths: &SessionPaths,
     cancel: &CancellationToken,
+    expected_preserve_thinking: bool,
 ) -> ServiceResult<ReadyFile> {
     let event_wait = docker_ops::wait_agent_ready(cfg, session_id);
     tokio::pin!(event_wait);
@@ -556,11 +580,13 @@ async fn wait_for_agent_ready(
         model: broker_ready.model,
         context_window: broker_ready.context_window,
         token_count: broker_ready.token_count,
+        preserve_thinking: broker_ready.preserve_thinking,
         sandbox: broker_ready.sandbox,
     };
     if ready.model != cfg.vllm_model_name
         || ready.context_window != cfg.lock.backend.max_model_len
         || ready.token_count == 0
+        || ready.preserve_thinking != expected_preserve_thinking
         || ready.sandbox
             != "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
     {
@@ -648,6 +674,7 @@ pub async fn recover_after_execution_panic(
     session_id: &str,
     full_prompt: &str,
     prompt_preview: &str,
+    preserve_thinking: bool,
     started_at_unix: u64,
     wall_start: std::time::Instant,
     cancelled: bool,
@@ -721,6 +748,11 @@ pub async fn recover_after_execution_panic(
             if let Err(error) = ensure_prompt_record(&paths, full_prompt) {
                 diagnostics.push(format!(
                     "preserve prompt after execution-task failure: {error}"
+                ));
+            }
+            if let Err(error) = ensure_history_policy_record(&paths, preserve_thinking) {
+                diagnostics.push(format!(
+                    "preserve history policy after execution-task failure: {error}"
                 ));
             }
             for (path, contents) in [
@@ -811,6 +843,7 @@ pub async fn recover_after_execution_panic(
         started_at_unix,
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
+        preserve_thinking,
         prompt_preview: prompt_preview.to_string(),
         num_turns: 0,
         last_event_at_unix: 0,
@@ -869,6 +902,57 @@ fn ensure_prompt_record(paths: &SessionPaths, prompt: &str) -> ServiceResult<()>
         }
         Err(error) => Err(ServiceError::Internal(format!(
             "stat prompt record {}: {error}",
+            path.display()
+        ))),
+    }
+}
+
+fn ensure_history_policy_record(
+    paths: &SessionPaths,
+    preserve_thinking: bool,
+) -> ServiceResult<()> {
+    let path = paths.control.join("history-policy.json");
+    let expected: &[u8] = if preserve_thinking {
+        b"{\"preserve_thinking\":true}\n"
+    } else {
+        b"{\"preserve_thinking\":false}\n"
+    };
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata)
+            if metadata.is_file()
+                && !metadata.file_type().is_symlink()
+                && metadata.uid() == 1000
+                && metadata.gid() == 1000
+                && metadata.permissions().mode() & 0o777 == 0o444 =>
+        {
+            let existing = std::fs::read(&path).map_err(|error| {
+                ServiceError::Internal(format!(
+                    "read existing panic-recovery history policy {}: {error}",
+                    path.display()
+                ))
+            })?;
+            if existing == expected {
+                Ok(())
+            } else {
+                Err(ServiceError::Internal(format!(
+                    "existing panic-recovery history policy {} contradicts the submitted preserve_thinking={preserve_thinking}",
+                    path.display()
+                )))
+            }
+        }
+        Ok(metadata) => Err(ServiceError::Internal(format!(
+            "{} is not the exact regular 1000:1000 mode-0444 history-policy record: type={:?} uid={} gid={} mode={:o}",
+            path.display(),
+            metadata.file_type(),
+            metadata.uid(),
+            metadata.gid(),
+            metadata.permissions().mode() & 0o777
+        ))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            paths.write_history_policy(preserve_thinking).map(|_| ())
+        }
+        Err(error) => Err(ServiceError::Internal(format!(
+            "stat panic-recovery history policy {}: {error}",
             path.display()
         ))),
     }
@@ -1092,6 +1176,7 @@ async fn finalize_started_setup_failure(
         started_at_unix: context.started_at_unix,
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
+        preserve_thinking: context.preserve_thinking,
         prompt_preview: context.prompt_preview.to_string(),
         num_turns,
         last_event_at_unix,
@@ -1129,6 +1214,7 @@ fn early_failure(
     terminal_error(
         context.session_id,
         context.prompt_preview,
+        context.preserve_thinking,
         context.started_at_unix,
         context.wall_start,
         status,
@@ -1140,6 +1226,7 @@ fn early_failure(
 fn terminal_error(
     session_id: &str,
     prompt_preview: &str,
+    preserve_thinking: bool,
     started_at_unix: u64,
     wall_start: std::time::Instant,
     status: SessionStatus,
@@ -1152,6 +1239,7 @@ fn terminal_error(
         started_at_unix,
         model: String::new(),
         context_window: 0,
+        preserve_thinking,
         prompt_preview: prompt_preview.into(),
         num_turns: 0,
         last_event_at_unix: 0,

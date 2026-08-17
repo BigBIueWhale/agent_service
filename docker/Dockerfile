@@ -161,6 +161,7 @@ FROM agent-os AS agent
 ARG AGENT_EXEC_SOURCE_SHA256
 ARG AGENT_EXEC_SANDBOX
 ARG SETTINGS_SHA256
+ARG PRESERVED_SETTINGS_SHA256
 ARG INSTRUCTIONS_SHA256
 ARG SYSTEM_PROMPT_SHA256
 ARG DEPLOYMENT_CONTRACT_SHA256
@@ -183,6 +184,7 @@ LABEL agent_service.profile="qwen38-agent-service-v3" \
       agent_service.qwen.patch.sha256="${QWEN_PATCH_SHA256}" \
       agent_service.qwen.source-patch-manifest.sha256="${QWEN_SOURCE_PATCH_MANIFEST_SHA256}" \
       agent_service.settings.sha256="${SETTINGS_SHA256}" \
+      agent_service.settings-preserved.sha256="${PRESERVED_SETTINGS_SHA256}" \
       agent_service.instructions.sha256="${INSTRUCTIONS_SHA256}" \
       agent_service.system-prompt.sha256="${SYSTEM_PROMPT_SHA256}" \
       agent_service.deployment-contract.sha256="${DEPLOYMENT_CONTRACT_SHA256}" \
@@ -206,7 +208,9 @@ RUN test "$(node /opt/qwen-code/scripts/cli-entry.js --version)" = '0.21.12' \
  && test -x /opt/agent/agent_exec \
  && rm -rf /tmp/node-compile-cache
 COPY docker/config/settings.json /opt/agent/settings.json
+COPY docker/config/settings-preserved.json /opt/agent-preserved/settings.json
 COPY docker/config/QWEN.md /opt/agent/QWEN.md
+COPY docker/config/QWEN.md /opt/agent-preserved/QWEN.md
 COPY docker/config/system.md /opt/agent/system.md
 COPY docker/config/deployment-contract.md /opt/agent/deployment-contract.md
 COPY config/agent-runtime-contract-v1.json /opt/agent/runtime-contract.json
@@ -218,6 +222,7 @@ COPY docker/config/run_agent.sh /opt/agent/run_agent.sh
 COPY docker/tests/run_agent_signal_contract.sh /tmp/run_agent_signal_contract.sh
 COPY config/agent-runtime-contract-v1.json /tmp/runtime-contract-tests/config/agent-runtime-contract-v1.json
 COPY docker/config/settings.json /tmp/runtime-contract-tests/docker/config/settings.json
+COPY docker/config/settings-preserved.json /tmp/runtime-contract-tests/docker/config/settings-preserved.json
 COPY docker/config/QWEN.md /tmp/runtime-contract-tests/docker/config/QWEN.md
 COPY docker/config/system.md /tmp/runtime-contract-tests/docker/config/system.md
 COPY docker/config/deployment-contract.md /tmp/runtime-contract-tests/docker/config/deployment-contract.md
@@ -232,6 +237,8 @@ COPY LICENSE /usr/share/doc/agent_service/UNLICENSE
 COPY THIRD_PARTY_NOTICES.md /usr/share/doc/agent_service/THIRD_PARTY_NOTICES.md
 COPY LICENSES/Apache-2.0.txt /usr/share/doc/agent_service/Apache-2.0.txt
 RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_SHA256}" \
+ && test "$(sha256sum /opt/agent-preserved/settings.json | cut -d' ' -f1)" = "${PRESERVED_SETTINGS_SHA256}" \
+ && cmp /opt/agent/QWEN.md /opt/agent-preserved/QWEN.md \
  && test "$(sha256sum /opt/agent/QWEN.md | cut -d' ' -f1)" = "${INSTRUCTIONS_SHA256}" \
  && test "$(sha256sum /opt/agent/system.md | cut -d' ' -f1)" = "${SYSTEM_PROMPT_SHA256}" \
  && test "$(sha256sum /opt/agent/deployment-contract.md | cut -d' ' -f1)" = "${DEPLOYMENT_CONTRACT_SHA256}" \
@@ -251,7 +258,8 @@ RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_S
  && python3 /tmp/runtime-contract-tests/docker/tests/test_verify_runtime_contract.py -v \
  && python3 /opt/agent/verify_runtime_contract.py \
       /opt/agent/runtime-contract.json \
-      /opt/agent/settings.json /opt/agent/QWEN.md /opt/agent/system.md \
+      /opt/agent/settings.json /opt/agent-preserved/settings.json \
+      /opt/agent/QWEN.md /opt/agent/system.md \
       /opt/agent/deployment-contract.md /opt/agent/toolchain-manifest.json \
       /opt/agent/run_agent.sh /usr/share/agent-service/agent_exec.rs \
  && python3 /tmp/toolchain-tests/docker/tests/test_verify_toolchain.py -v \
@@ -269,7 +277,7 @@ RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_S
       /usr/share/doc/agent_service/UNLICENSE \
       /usr/share/doc/agent_service/THIRD_PARTY_NOTICES.md \
       /usr/share/doc/agent_service/Apache-2.0.txt \
- && chmod -R a-w /opt/agent
+ && chmod -R a-w /opt/agent /opt/agent-preserved
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 USER 1000:1000
 WORKDIR /workspace

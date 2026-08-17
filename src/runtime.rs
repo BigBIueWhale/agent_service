@@ -76,6 +76,10 @@ pub struct SessionBody {
     pub started_at_unix: u64,
     pub model: String,
     pub context_window: u64,
+    /// Exact per-session historical-reasoning policy. False is the default;
+    /// true must have been explicitly requested as a JSON boolean.
+    #[serde(default)]
+    pub preserve_thinking: bool,
     pub prompt_preview: String,
 
     /// Number of distinct LLM invocations the agent has completed so far.
@@ -141,6 +145,7 @@ pub struct RunningSnapshot {
     pub prompt_preview: String,
     pub model: String,
     pub context_window: u64,
+    pub preserve_thinking: bool,
 }
 
 /// In-memory entry for a running session. Removed from the map by the run
@@ -237,6 +242,7 @@ impl Manager {
         let session_cancel = self.shutdown_token.child_token();
         let finished = Arc::new(Notify::new());
         let prompt_preview = preview(&req.prompt);
+        let preserve_thinking = req.preserve_thinking;
 
         // Insert the entry FIRST, with a placeholder snapshot. This
         // guarantees that any concurrent `cancel`/`shutdown` between now
@@ -247,6 +253,7 @@ impl Manager {
             prompt_preview: prompt_preview.clone(),
             model: self.cfg.vllm_model_name.clone(),
             context_window: self.cfg.lock.backend.max_model_len,
+            preserve_thinking,
         };
         let entry = Arc::new(RunningEntry {
             snapshot: Mutex::new(placeholder),
@@ -283,6 +290,7 @@ impl Manager {
         let finished_for_task = Arc::clone(&finished);
         let prompt_preview_for_task = prompt_preview.clone();
         let supervisor_prompt = req.prompt.clone();
+        let supervisor_preserve_thinking = req.preserve_thinking;
         let supervisor_started_at_unix = unix_now();
         let supervisor_wall_start = std::time::Instant::now();
         tokio::spawn(async move {
@@ -311,6 +319,7 @@ impl Manager {
                         &session_id_for_task,
                         &supervisor_prompt,
                         &prompt_preview_for_task,
+                        supervisor_preserve_thinking,
                         supervisor_started_at_unix,
                         supervisor_wall_start,
                         cancel_for_supervisor.is_cancelled(),
@@ -771,6 +780,7 @@ fn running_body(s: &RunningSnapshot, progress: (u64, u64)) -> SessionBody {
         started_at_unix: s.started_at_unix,
         model: s.model.clone(),
         context_window: s.context_window,
+        preserve_thinking: s.preserve_thinking,
         prompt_preview: s.prompt_preview.clone(),
         num_turns,
         last_event_at_unix,
@@ -1341,6 +1351,7 @@ mod tests {
             started_at_unix: 1,
             model: "qwen3.8-27b-nvfp4-k8v4".to_string(),
             context_window: 262_144,
+            preserve_thinking: false,
             prompt_preview: "fixture".to_string(),
             num_turns: 1,
             last_event_at_unix: 1,

@@ -41,6 +41,7 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
     }
     for required in [
         "control/prompt.txt",
+        "control/history-policy.json",
         "output/ready.json",
         "output/events.jsonl",
         "output/qwen.stderr",

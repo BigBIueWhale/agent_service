@@ -11,7 +11,9 @@
 //!
 //! Routes:
 //!
-//! - `POST /v1/agent/sessions` — create. Body `{prompt, folder}`. Blocks
+//! - `POST /v1/agent/sessions` — create. Body
+//!   `{prompt, folder, preserve_thinking?}`. The optional boolean defaults
+//!   to false; no string/profile coercion is accepted. Blocks
 //!   until the isolated agent verifies the pinned model and real tokenizer
 //!   endpoint; returns `201 Created` with the running body.
 //! - `GET /v1/agent/sessions` — list. Combines in-memory running sessions
@@ -71,6 +73,10 @@ pub fn router(state: AppState) -> axum::Router {
 pub struct CreateRequest {
     pub prompt: String,
     pub folder: String,
+    /// Non-default history-retention policy. This is deliberately a JSON
+    /// boolean rather than a profile name or ambient environment knob.
+    #[serde(default)]
+    pub preserve_thinking: bool,
 }
 
 #[derive(Serialize)]
@@ -94,10 +100,12 @@ async fn create_session(
         &state.cfg.host_input_root,
         &state.cfg.state_dir,
         &state.cfg.results_dir,
+        body.preserve_thinking,
     )?;
     tracing::info!(
         prompt_chars = body.prompt.chars().count(),
         folder = %validated.folder.display(),
+        preserve_thinking = validated.preserve_thinking,
         "POST /v1/agent/sessions: path pre-flight ok; descriptor-based copy validation follows before agent creation"
     );
     let running = state.manager.submit(validated).await?;
@@ -2444,6 +2452,7 @@ mod tests {
             started_at_unix: 1,
             model: "qwen3.8-27b-nvfp4-k8v4".to_string(),
             context_window: 262_144,
+            preserve_thinking: false,
             prompt_preview: "fixture".to_string(),
             num_turns: 0,
             last_event_at_unix: 0,
@@ -2518,6 +2527,27 @@ mod tests {
         );
         let error = result.expect_err("unknown request fields must fail closed");
         assert!(error.to_string().contains("unknown field `fallback`"));
+    }
+
+    #[test]
+    fn create_request_has_one_typed_non_default_history_policy() {
+        let default = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","folder":"/home/user/project"}"#,
+        )
+        .expect("omission must select the documented false default");
+        assert!(!default.preserve_thinking);
+
+        let preserved = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","folder":"/home/user/project","preserve_thinking":true}"#,
+        )
+        .expect("an explicit JSON true must select preserved history");
+        assert!(preserved.preserve_thinking);
+
+        let error = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","folder":"/home/user/project","preserve_thinking":"true"}"#,
+        )
+        .expect_err("string policy coercion must fail closed");
+        assert!(error.to_string().contains("invalid type"));
     }
 
     fn test_config() -> Config {
