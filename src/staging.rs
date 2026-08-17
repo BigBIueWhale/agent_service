@@ -1840,6 +1840,33 @@ mod tests {
     }
 
     #[test]
+    fn zip64_archives_with_many_entries_validate_and_count_exactly() {
+        // Real workspaces exceed 65,535 entries, which switches the container
+        // to Zip64 end-of-central-directory records; the independent
+        // shadowed-entry count cross-check must read that path correctly.
+        let root = std::env::temp_dir().join(format!(
+            "qwen38-archive-zip64-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir_all(&root).expect("create zip64 fixture root");
+        const ENTRIES: usize = 70_000;
+        let bytes = build_zip(|writer| {
+            for index in 0..ENTRIES {
+                writer
+                    .start_file(format!("d{}/f{index}.txt", index % 97), stored_options())
+                    .expect("start zip64 entry");
+            }
+        });
+        let archive_path = archive_fixture(&root, &bytes);
+        let (plan, summary) =
+            validate_archive_structure(&archive_path).expect("zip64 structural validation");
+        assert_eq!(plan.len(), ENTRIES);
+        assert_eq!(summary.declared_regular_files, ENTRIES as u64);
+        assert_eq!(summary.declared_entries, ENTRIES as u64 + 97);
+        std::fs::remove_dir_all(&root).expect("remove zip64 fixture");
+    }
+
+    #[test]
     fn archive_extraction_observes_cancellation_and_empty_archives_extract_empty() {
         let root = std::env::temp_dir().join(format!(
             "qwen38-archive-cancel-{}",

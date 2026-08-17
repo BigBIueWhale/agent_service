@@ -110,8 +110,10 @@ submission_validate_receipt() {
 }
 
 submission_create_receipt() {
-  local session_id="$1" folder="$2" prompt_file="$3"
+  local session_id="$1" folder="$2" prompt_file="$3" preserve_thinking="${4-}"
   submission_require_handle "${session_id}" || return
+  [[ -z "${preserve_thinking}" || "${preserve_thinking}" == true || "${preserve_thinking}" == false ]] ||
+    submission_die "preserve_thinking must be omitted, true, or false; got ${preserve_thinking@Q}" || return
   submission_ensure_receipt_root || return
 
   local receipt_dir="${SUBMISSION_RECEIPT_ROOT}/${session_id}"
@@ -152,11 +154,20 @@ submission_create_receipt() {
   archive_sha256="$(sha256sum -- "${archive_file}" | awk '{print $1}')" ||
     submission_die "cannot hash receipt archive for ${session_id}" || return
 
-  jq -n --argjson archive_bytes "${archive_bytes}" \
-    --arg archive_sha256 "${archive_sha256}" \
-    --rawfile prompt "${prompt_file}" \
-    '{prompt:$prompt,archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' >"${request_next}" ||
-    submission_die "cannot serialize exact request receipt for ${session_id}" || return
+  if [[ -z "${preserve_thinking}" ]]; then
+    jq -n --argjson archive_bytes "${archive_bytes}" \
+      --arg archive_sha256 "${archive_sha256}" \
+      --rawfile prompt "${prompt_file}" \
+      '{prompt:$prompt,archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' >"${request_next}" ||
+      submission_die "cannot serialize exact request receipt for ${session_id}" || return
+  else
+    jq -n --argjson archive_bytes "${archive_bytes}" \
+      --arg archive_sha256 "${archive_sha256}" \
+      --argjson preserve_thinking "${preserve_thinking}" \
+      --rawfile prompt "${prompt_file}" \
+      '{prompt:$prompt,preserve_thinking:$preserve_thinking,archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' >"${request_next}" ||
+      submission_die "cannot serialize exact request receipt for ${session_id}" || return
+  fi
   chmod 0600 -- "${request_next}" ||
     submission_die "cannot set private mode on receipt for ${session_id}" || return
   sync -f -- "${request_next}" ||
