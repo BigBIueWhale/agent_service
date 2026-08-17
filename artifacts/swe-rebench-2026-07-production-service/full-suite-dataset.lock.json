@@ -1,0 +1,480 @@
+{
+  "schema_version": 1,
+  "harbor": {
+    "version": "0.21.0",
+    "commit": "64afbbcb62165950301e1a6407c729aa26d844ff",
+    "packager_source": "src/harbor/publisher/packager.py",
+    "packager_source_sha256": "9a1ae0a18575f98798bcfe0d9746ea8a792861430db77605a6106b28c36e1c73",
+    "content_hash_algorithm": "SHA-256 over each selected `relative_posix_path + NUL + file_sha256_hex + LF` record, sorted by relative POSIX path, exactly as pinned Packager.compute_content_hash"
+  },
+  "registry": {
+    "supabase_url": "https://ofhuhcpkvzjlejydnvyd.supabase.co",
+    "dataset_version_id": "574acb72-70aa-46fb-8758-0a814a5eb213",
+    "package_id": "71e13c51-0761-493b-9d62-c90f98ea770c",
+    "revision": 1,
+    "published_at": "2026-07-26T16:08:18.172829+00:00",
+    "yanked_at": null
+  },
+  "dataset": {
+    "name": "ibragim-badertdinov/swe-rebench-07-2026",
+    "selected_reference": "sha256:e2e357045bf03e4900d2506c36562f6eaff7acd37f63780600967ea3aecdcd79",
+    "display_tag": "2026-07",
+    "content_hash": "e2e357045bf03e4900d2506c36562f6eaff7acd37f63780600967ea3aecdcd79",
+    "task_count": 111,
+    "files": [
+      {
+        "path": "README.md",
+        "content_hash": "2cbef204aa1f09c36c62b94b9b72c6abfee38017a534575564f9ceff7ce21cca",
+        "size_bytes": 1756,
+        "storage_path": "packages/ibragim-badertdinov/swe-rebench-07-2026/2cbef204aa1f09c36c62b94b9b72c6abfee38017a534575564f9ceff7ce21cca/README.md"
+      }
+    ],
+    "tasks": [
+      {
+        "task_id": "ArcadeData__arcadedb-4281",
+        "content_hash": "e86f27a30f51100666b895c863cee80c97d8da709ba582ccfafd52e398ed884f"
+      },
+      {
+        "task_id": "ArcadeData__arcadedb-4411",
+        "content_hash": "e296a12c45c2f73b7a1b9258a99d6ec2abbaa6254b908ec78629df35bff41512"
+      },
+      {
+        "task_id": "ArcadeData__arcadedb-4455",
+        "content_hash": "90564a7287720ad90bd9bf9912d74e76067746c02f53587eea02137d0349bc03"
+      },
+      {
+        "task_id": "Gentleman-Programming__gentle-ai-595",
+        "content_hash": "ac8d8cc7da11430deec59921f513d1fcd91a0c36c5d9fa36294baeede8d58fd6"
+      },
+      {
+        "task_id": "HKUDS__nanobot-4048",
+        "content_hash": "e56f838c3431756f1ad00ffa2b210b437b3357a654fbe5c8fb51837e5c04c40a"
+      },
+      {
+        "task_id": "HKUDS__nanobot-4129",
+        "content_hash": "89b3164a09d494befcc59fc32b0d64677f6eb366140fd85f394c40e6d0d58ac3"
+      },
+      {
+        "task_id": "HKUDS__nanobot-4274",
+        "content_hash": "dfebdd2482251f68374c6d38e60ea3c7e7812e1df570b6fbd64cf07ab114a2f2"
+      },
+      {
+        "task_id": "Martian-Engineering__lossless-claw-814",
+        "content_hash": "5904d14189c33a39e30c6a06ba74ea77259ac393036bd2d204990df3f01ea6db"
+      },
+      {
+        "task_id": "PerryTS__perry-3982",
+        "content_hash": "9d7f40794b97badaa0dbed4b2f1f32bd6ae3fa521abb0ae078933b9f9c0cffd1"
+      },
+      {
+        "task_id": "Soju06__codex-lb-744",
+        "content_hash": "93b2eeeac96b0f92782c92b90eef5f00f07b2a8e49780ecb4e1d2e642af58f81"
+      },
+      {
+        "task_id": "agno-agi__agno-8148",
+        "content_hash": "bc76bee2924fe6fb14e1afd7e4b4f771552781b2cb27ef7f1573fe52c8a4a7a5"
+      },
+      {
+        "task_id": "apache__dubbo-go-3357",
+        "content_hash": "d25a8c026f05855252784e4f4f457ea9f768454f5b6219caf5bd58f892369766"
+      },
+      {
+        "task_id": "apache__hugegraph-3037",
+        "content_hash": "918667967ee034ef62abbee775613b156c3d576da96e8b6f3e1856488488a408"
+      },
+      {
+        "task_id": "apache__pulsar-25793",
+        "content_hash": "092adadf27b387d877beb11ae0183b948c88cd01d883793a75e5707745e80fe6"
+      },
+      {
+        "task_id": "apache__pulsar-25865",
+        "content_hash": "a27b543aefab5be27d42fc0e2f0335aff9999ef884ca7c0ee92dda317f0ba319"
+      },
+      {
+        "task_id": "apache__pulsar-25953",
+        "content_hash": "0e2216c0b7a274202fe1d114aabc73275f6b0e70922bce10fac3b6f4141790cf"
+      },
+      {
+        "task_id": "astral-sh__ruff-25414",
+        "content_hash": "4a58ab2186fc1f85eb0a154053535d41b280d58f369b57eea29b765429b4a0d3"
+      },
+      {
+        "task_id": "astral-sh__ruff-25567",
+        "content_hash": "4cdfd37ee91bc782318dc4fd34c9f2082c7c18a3e5b885162a9f40829d8b19d5"
+      },
+      {
+        "task_id": "better-auth__better-auth-10070",
+        "content_hash": "6c540e14671c49bc638b74d9fb83788f6233257d7e030f4573c2427950762e1e"
+      },
+      {
+        "task_id": "better-auth__better-auth-9756",
+        "content_hash": "78f9c845b0ab23e05e30132ba52d573ac2bcb489d137b3395acce632f21c13f5"
+      },
+      {
+        "task_id": "cloudflare__vinext-1371",
+        "content_hash": "97184913e58fe9840fe470adc7800749d6bdba593f4aa69f237c473a5447040e"
+      },
+      {
+        "task_id": "cloudflare__vinext-1574",
+        "content_hash": "fb4cf1ea7aae5b848cb5fc91e2eb99d0f21754d70002a8459e4fdff214a22944"
+      },
+      {
+        "task_id": "cloudflare__vinext-1837",
+        "content_hash": "08440fb709fc255adcb0e156119d69ffa45730c14c5b9e0476ec09fb8691e7d4"
+      },
+      {
+        "task_id": "cloudnative-pg__cloudnative-pg-10747",
+        "content_hash": "2ef5a0f820302c2fe77faca79cc6d5dc8428cc65262bf3a7f04434f7b6822587"
+      },
+      {
+        "task_id": "danny-avila__LibreChat-13166",
+        "content_hash": "788b29ac79d0582203ab3959a9ecab38111adb55da3f7eff9eb95738ebb264e4"
+      },
+      {
+        "task_id": "docker__docker-agent-2992",
+        "content_hash": "252ca366418d857d2c202ddf19f48d01527313c170f75482b0f15ec17a5727a7"
+      },
+      {
+        "task_id": "facebook__lexical-8676",
+        "content_hash": "fcbbc07906bc1c6704e339aacdc359ecae120043c4e2635769b5f9440b0f42d1"
+      },
+      {
+        "task_id": "fallow-rs__fallow-762",
+        "content_hash": "1129f68aa33cdbdc26787d139ac6a5ef71c095bd85a13307ecba1c09a46d7a8a"
+      },
+      {
+        "task_id": "fallow-rs__fallow-821",
+        "content_hash": "b2051080e7599671bbb1967aa4ae5f455036360da88ce46cacc7e827ff2a0efa"
+      },
+      {
+        "task_id": "fallow-rs__fallow-824",
+        "content_hash": "fb8703f74af38fc24a9e049a41679795d670d51ca2bad065ef752b4b1be382ad"
+      },
+      {
+        "task_id": "fallow-rs__fallow-913",
+        "content_hash": "b4845b59fbb03832cc1b39907390e29378db52f96838d59d986621b214339ae6"
+      },
+      {
+        "task_id": "fathah__hermes-desktop-249",
+        "content_hash": "fe363bcc8ca91b4ea03f32a2b0f53cddc010eb6a5fbc8a669efad6d050720012"
+      },
+      {
+        "task_id": "fathah__hermes-desktop-268",
+        "content_hash": "e6cde6ef2c72ec2f8584e0f6536bf2b325be2c9ce8036445c7c12a8023a57ed3"
+      },
+      {
+        "task_id": "floci-io__floci-1021",
+        "content_hash": "ef4495cb7f79c216ef151db5b3a25e82934a4d5e18859a638693ff271bc0358d"
+      },
+      {
+        "task_id": "floci-io__floci-1032",
+        "content_hash": "40b71c61441393aada68ede71592b6f21b07466de4f3af254827637173904269"
+      },
+      {
+        "task_id": "floci-io__floci-1142",
+        "content_hash": "fc784ecf3ad6b4686f10e8765cb65759aaa53fabf277ecfbc69e954a00837d14"
+      },
+      {
+        "task_id": "floci-io__floci-1209",
+        "content_hash": "4f54032ea0d6f7ea78fde6fc44df4714d8c650d655d2418c405b50ac6d9b59c1"
+      },
+      {
+        "task_id": "floci-io__floci-1235",
+        "content_hash": "1b8b6bf8465b5b4101fd3b1cf8d01a7d786a28bec9a1151f669e83a1a97ecb87"
+      },
+      {
+        "task_id": "floci-io__floci-1325",
+        "content_hash": "884111e9a858d3242da9c80a1b42f994bba7f663698bbf0e4de979aea3d9ea56"
+      },
+      {
+        "task_id": "gleam-lang__gleam-5797",
+        "content_hash": "52027b9ebe597de352fb68f55014b48bf978332a49de12717a1969a69086bdb8"
+      },
+      {
+        "task_id": "gleam-lang__gleam-5798",
+        "content_hash": "488f49d113361ed7e46fa93d3ff23601c3914855a3e7dbb689ce16b9d203871d"
+      },
+      {
+        "task_id": "gotd__td-1759",
+        "content_hash": "e555bdae3a1178e9aa4e29d6d6f33abb25d875ac5eaf6a969eb4d4d230da6051"
+      },
+      {
+        "task_id": "harbor-framework__harbor-1764",
+        "content_hash": "946a56fbf81fdaea5a14e0d99e5b39b194dbe7006f33d622b568ea3f0575bf37"
+      },
+      {
+        "task_id": "helidon-io__helidon-11979",
+        "content_hash": "29d6dcc5d91ef57549fd73c5d2c45834441becef62bd699e1ce6a80ab0a942c4"
+      },
+      {
+        "task_id": "intellectronica__ruler-556",
+        "content_hash": "0dd83c99f2a961e8727ce4603f4f6750b8df98b5a2fa07a742e17a2b69fd8e42"
+      },
+      {
+        "task_id": "ivov__lisette-491",
+        "content_hash": "f363770d1d525aca273af55f9656ad429cfc08d5bb059acdf4f1d296886d0d00"
+      },
+      {
+        "task_id": "ivov__lisette-627",
+        "content_hash": "2b4345a98fb12dad848fe9e217a8168f5b2865d7ecfa3d457ddf05893f521f5f"
+      },
+      {
+        "task_id": "ivov__lisette-657",
+        "content_hash": "ee2108ed9df22680379af71dd553397f858a9c003a62d19c4812b305f371a271"
+      },
+      {
+        "task_id": "kenn-io__agentsview-602",
+        "content_hash": "256a8b5a7d58e6fed41ab8701749cf84ff0a90827fb608000862500f958026c4"
+      },
+      {
+        "task_id": "kestra-io__kestra-16067",
+        "content_hash": "4aac8b504898c4832398daa05a5f9db6b0e624968758cbfff19c3b22e0258323"
+      },
+      {
+        "task_id": "kestra-io__kestra-16119",
+        "content_hash": "520a64359a71bc4bb31e4d91b8bc0704dbbae66cdd552bd22119a8bebdf9ac29"
+      },
+      {
+        "task_id": "kestra-io__kestra-16450",
+        "content_hash": "afe4eb929591fb68704b9db35df29007d7587c0b3e85daa4f00cb4c04450c782"
+      },
+      {
+        "task_id": "kubernetes-sigs__kueue-11559",
+        "content_hash": "fc886c070f38efa7b9ba25b4ddfb814894948f63eb3f4740502fed22b0413b99"
+      },
+      {
+        "task_id": "kubernetes-sigs__kueue-11619",
+        "content_hash": "6f2d3d559ce6dfba4e2ba8ff4928b01906b4de3928a33289832dba86ec532c0f"
+      },
+      {
+        "task_id": "langchain-ai__deepagents-3866",
+        "content_hash": "6b0ed4ad2f028b242e69af0d1cbe0fa2ef0c8aadaa9093e7c6dd9cf6246ef6f7"
+      },
+      {
+        "task_id": "langchain4j__langchain4j-5315",
+        "content_hash": "4c7ecec76f179b517886137d61768f094ae9c07d0bbea414585fd3153c2f6759"
+      },
+      {
+        "task_id": "langchain4j__langchain4j-5328",
+        "content_hash": "3e3ac812547d42302f64ce7194b68484ebc04a10995d8c18cb0d237db2706584"
+      },
+      {
+        "task_id": "langchain4j__langchain4j-5367",
+        "content_hash": "7ffde9e89f9a645361b77e526177f67e21bee79553cc3e93e31d303ef5724618"
+      },
+      {
+        "task_id": "livekit__agents-5944",
+        "content_hash": "143ccd913e99918c8ffc0436f524ca8dd5a2a65fd58ff421fac7d0085eb08474"
+      },
+      {
+        "task_id": "ludo-technologies__pyscn-500",
+        "content_hash": "57aec798677c217204039840448ee2b4f5997bb766db3da2c571aebea3b6b4fd"
+      },
+      {
+        "task_id": "ludo-technologies__pyscn-548",
+        "content_hash": "1964a00c7ed423631206a32deccc7657372322fb929dd493559cac2066caf373"
+      },
+      {
+        "task_id": "marimo-team__marimo-9626",
+        "content_hash": "ac24c0e14fc1f08bbcbfb4480651e090181357536ea8ca6e9d1f93dbf7707416"
+      },
+      {
+        "task_id": "marimo-team__marimo-9754",
+        "content_hash": "c18154339a20c4cc1cbd45769b1026b6a64b44e30b05738379f955e55a87277d"
+      },
+      {
+        "task_id": "marimo-team__marimo-9766",
+        "content_hash": "6bc665a56458d94515951a274f9e5ffb27ee2534f0b9b882e13479fee903b9ed"
+      },
+      {
+        "task_id": "matrixorigin__matrixone-24632",
+        "content_hash": "9f16e73c0085de6707e36b9e40d6254b32c578b725d536b483223551b128c00a"
+      },
+      {
+        "task_id": "microsoft__apm-1553",
+        "content_hash": "0987b21d3bb54ee1bdbd16db3f3a090405b7975e27fbe01745a0cf23a2534e69"
+      },
+      {
+        "task_id": "microsoft__typescript-go-4062",
+        "content_hash": "3d7993c72de23b7aa2b41bd9e96c3a9b8ceab62a8e8ab8202c8653fbcdcfe6d0"
+      },
+      {
+        "task_id": "microsoft__typescript-go-4194",
+        "content_hash": "2764fb4df1ba2c3f33d03f6cd386dc40b9094da7d2d750bdbe7da1a4ac2a1d17"
+      },
+      {
+        "task_id": "microsoft__waza-247",
+        "content_hash": "dd5e9d4da8ec80677f6422062efbf0c1cd07d4df52cd90ed3ab8e9baf7e183bd"
+      },
+      {
+        "task_id": "mikro-orm__mikro-orm-7799",
+        "content_hash": "4e7f4d2eb19c75d8e98d3041ea6e4c62570828f9fc4389f2b1ed7f6a5308fc44"
+      },
+      {
+        "task_id": "mozilla-ai__any-llm-1121",
+        "content_hash": "9645bb3f13dd5141d647ffee4bf9c6d214431352bd5d2f8913292a2e15778eab"
+      },
+      {
+        "task_id": "mui__base-ui-4849",
+        "content_hash": "445059d9691fcf4636eb4fc989f323a83b411b62cf468c63ecbbc088a76bb703"
+      },
+      {
+        "task_id": "mui__base-ui-4903",
+        "content_hash": "3b444ac844119273638556625cab178f838a0545f6ad3738faeb17b2f0cdf9da"
+      },
+      {
+        "task_id": "mvanhorn__cli-printing-press-1920",
+        "content_hash": "c2b69eb387100896f02a655c4a1ba67f0d0778b79eb4c191b740f69a572c95c9"
+      },
+      {
+        "task_id": "mvanhorn__cli-printing-press-2002",
+        "content_hash": "d544e5130e5c5648188ad6aecefddf90290eb7cc5b344f48f3f7137de8f3f451"
+      },
+      {
+        "task_id": "mvanhorn__cli-printing-press-2086",
+        "content_hash": "5d814bc1a8e7ec4926a8aba196a2809ad1c5367d508afb407bdc80ff83499782"
+      },
+      {
+        "task_id": "nearai__ironclaw-3694",
+        "content_hash": "aaf3e155840197ce1ea86c927b9b19610fd8561fca8992e0ab7ba9ce7e8519cf"
+      },
+      {
+        "task_id": "nearai__ironclaw-3735",
+        "content_hash": "1428c4b9abc80ee92cf123a0c30fb2047b841a6b7a287cb2588330c95c7056d6"
+      },
+      {
+        "task_id": "nesquena__hermes-webui-3069",
+        "content_hash": "02e585d886205d4732e373b96197df3de25373a5c8571de72dcad7f1ce945e4b"
+      },
+      {
+        "task_id": "open-jarvis__OpenJarvis-465",
+        "content_hash": "ad5dcbcb26246c881faca79e07bebcbaddf6bdb9326ff3c92232bd16595cc154"
+      },
+      {
+        "task_id": "openrewrite__rewrite-7784",
+        "content_hash": "8d7330fad84044c2ee06f1e802b034a10448fc05a9fddaeb58644f4b917b0f4a"
+      },
+      {
+        "task_id": "oxc-project__oxc-22623",
+        "content_hash": "f63330fca247b8a40f9c9cac3d996f519f73d4bab38a966ee15f12eefd5b9c72"
+      },
+      {
+        "task_id": "promptfoo__promptfoo-9313",
+        "content_hash": "96f9a4dbf84f336c2fddd31d967e17802762556555cb32cf9f8a8e59a801602c"
+      },
+      {
+        "task_id": "pydantic__pydantic-ai-5580",
+        "content_hash": "983b92a446e2371854f81f30b441068ad6fd5e49aa9c21586ca0008e2153df4c"
+      },
+      {
+        "task_id": "pydantic__pydantic-ai-5842",
+        "content_hash": "0191a74510022c09f12b6c8934771f7ae02d08a5b1c3771562eacf8f34a1739e"
+      },
+      {
+        "task_id": "raullenchai__Rapid-MLX-426",
+        "content_hash": "1afc0a5210c9470532f8c4cfa39fe358b80bd27bb4bff7d66ae1f71fcaa18f8c"
+      },
+      {
+        "task_id": "react-hook-form__react-hook-form-13464",
+        "content_hash": "28b01395692d8d9dbbe2af24e6c3abcd8ca9dbf68dc7dc72db6f5e3b6dea02db"
+      },
+      {
+        "task_id": "rest-sh__restish-337",
+        "content_hash": "52548ec843fb92a2bc07b8e1fe76d8286ea89f381815f2088dbb31fc8e51ba43"
+      },
+      {
+        "task_id": "rust-lang__rust-analyzer-22397",
+        "content_hash": "1b87100250efe17fcbfdede0fbc804eab11d45391f342eebdb1068468db2358e"
+      },
+      {
+        "task_id": "sipeed__picoclaw-2928",
+        "content_hash": "11a2a05c5fb2af49905748acb220ef06bf2fc1f432f16919cb2056f2723f8eeb"
+      },
+      {
+        "task_id": "stablyai__orca-1934",
+        "content_hash": "42e1323bcb857ef31ccb5612d35aa1ec05c4336c7b25ca998a73526ffc3968d3"
+      },
+      {
+        "task_id": "stablyai__orca-4331",
+        "content_hash": "73209d009ccf08471fd6eecf68ba6057f593adcfea6c7db1bc395610f7f83a09"
+      },
+      {
+        "task_id": "stablyai__orca-5176",
+        "content_hash": "8f4441e2c04f03598b7a2a4c3ad74184903965950ff0c6f41e1b590a59d65c38"
+      },
+      {
+        "task_id": "tailscale__tailscale-19847",
+        "content_hash": "7a83ab8841b80027a41bd016ad27a2c46134dc1a43275fed1adc175c93020f29"
+      },
+      {
+        "task_id": "tashfeenahmed__freellmapi-289",
+        "content_hash": "a047a2b6a8dfe488f2b3708bb81fb5cac492efeccc6153f7bf470270c5b2fb6c"
+      },
+      {
+        "task_id": "teng-lin__notebooklm-py-826",
+        "content_hash": "a5e72b0b2f48f412c2d737749f337ef10ff40779d91c071d732720843176df1d"
+      },
+      {
+        "task_id": "tursodatabase__turso-7117",
+        "content_hash": "a1c64fb58ee91476a9b5916aa088b5c581b2d802e08e5ad347b53f894c54715a"
+      },
+      {
+        "task_id": "ubugeeei-prod__vize-1265",
+        "content_hash": "17406aed871e4c3890c50b83e9a71e0f1664536125aa9efccd7a78e5bbf6a253"
+      },
+      {
+        "task_id": "ubugeeei-prod__vize-1281",
+        "content_hash": "63ea05d7985f5dbd5f766acd49311a018c96ed1516e5f321c828d9e29a546b0c"
+      },
+      {
+        "task_id": "ubugeeei-prod__vize-1508",
+        "content_hash": "106cce5e863579339cf7f15929db9e27615cb5fb405cd1dfb6ba6c69522e7e32"
+      },
+      {
+        "task_id": "ubugeeei-prod__vize-769",
+        "content_hash": "9046080e106c4264fda1038711202f072859662824cc4e30a39adb5f6251b33b"
+      },
+      {
+        "task_id": "ubugeeei-prod__vize-774",
+        "content_hash": "6c3805642ee50a22e16e6ddbf028e2c5b38a11f025c635fa824a3500757d5280"
+      },
+      {
+        "task_id": "ueberdosis__tiptap-7887",
+        "content_hash": "5b4f325bf1c7d08db47048a05d87308dd3ee8fc6c2f8190098fd9e5957e6b9f5"
+      },
+      {
+        "task_id": "ueberdosis__tiptap-7896",
+        "content_hash": "2a05c1cf788f2117f7d5d5f5f9bcaa5fdfbb797707770e466a361d16da681035"
+      },
+      {
+        "task_id": "verl-project__verl-6506",
+        "content_hash": "b0442ab59039f7a2eb30ae39068e307a77353e5ba1b3f49eeb03ae70a3f1763b"
+      },
+      {
+        "task_id": "vuejs__core-14877",
+        "content_hash": "c96f402e439ccdff0717a88a3c523e3682a12ea74cc2f918398329c1f2c2b594"
+      },
+      {
+        "task_id": "vuejs__core-14897",
+        "content_hash": "73137df32ca957b585c3e8938fce36e1a7f015eb0c8edf01e33533dc904375c7"
+      },
+      {
+        "task_id": "withcoral__coral-1143",
+        "content_hash": "4e6826c5dc03151beab9040e10491983ab2f0cf5a5f030e679a03c38b762b24d"
+      },
+      {
+        "task_id": "withcoral__coral-1179",
+        "content_hash": "8eeff82dee6ccf59eeaf0e46adbc17b16c021104d3ab05cdedc1ff06353db251"
+      },
+      {
+        "task_id": "withcoral__coral-1186",
+        "content_hash": "8b42e97c4a03689b4cd1539ba62304ef761bb66ef145dfe22ddd783a25d1ab8b"
+      },
+      {
+        "task_id": "woodpecker-ci__woodpecker-6623",
+        "content_hash": "b651a3cd557e91e833ed5633df9e7dec83c709169aa7ed5b0573c3016c408388"
+      }
+    ]
+  },
+  "integrity_contract": "Every local task must reproduce its registry content hash. The movable display tag is never an integrity authority, and Harbor v0.21.0's unverified archive extraction is not accepted on its own."
+}
