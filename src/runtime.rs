@@ -4,16 +4,19 @@
 //!
 //! - **In-memory map** (`Inner.running`) holds **only running** sessions.
 //!   Terminal sessions live exclusively on disk under
-//!   `<results_dir>/<id>/finished.json`. Memory growth is bounded by the
-//!   strict singleton (≤1 entry); disk growth is bounded by the user (every
-//!   session lives until DELETE, never auto-evicted by time or count).
+//!   `<results_dir>/<id>/finished.json`. Sessions run concurrently: capacity
+//!   governance is deliberately not this service's responsibility — an
+//!   operator, scheduler, or load balancer above it decides placement, and
+//!   this instance cannot know it is the only one. Memory growth is bounded
+//!   by the callers' live sessions; disk growth is bounded by the user
+//!   (every session lives until DELETE, never auto-evicted by time or
+//!   count).
 //!
-//! - **Singleton** is enforced by an `Arc<Semaphore>` with one permit. The
-//!   permit is moved into the spawned supervisor and held through session
-//!   execution, panic cleanup, terminal persistence, map eviction, and
-//!   map eviction; submit `try_acquire`s and translates failure to `Busy`.
-//!   `shutdown` waits for the permit to be released, which is the strongest
-//!   "no in-flight work remains" signal we have.
+//! - **Supervisors** are spawned on a `TaskTracker`. Each session's
+//!   supervisor is tracked through execution, panic cleanup, terminal
+//!   persistence, and map eviction; `shutdown` closes the tracker and waits
+//!   for it to drain, which is the strongest "no in-flight work remains"
+//!   signal we have.
 //!
 //! - **Cancellation** uses a parent `CancellationToken` (`shutdown_token`)
 //!   on the manager. Each session gets a `child_token()` of that parent.
@@ -49,7 +52,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, Notify, Semaphore};
+use tokio::sync::{Mutex, Notify};
+use tokio_util::task::TaskTracker;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::Config;
@@ -321,14 +325,15 @@ pub struct Manager {
     /// retries of the same idempotency key cannot race each other between
     /// the in-memory and durable collision checks.
     admission: Arc<Mutex<()>>,
-    /// One permit. Held by the spawned supervisor through execution, cleanup,
-    /// persistence and map eviction. `submit()` `try_acquire`s;
-    /// `shutdown()` blocks on `acquire()` so a successful return guarantees no
-    /// in-flight session or supervisor-owned cleanup remains.
-    singleton: Arc<Semaphore>,
-    /// Cancelled at the top of `shutdown`. `submit` checks this before
-    /// taking the permit, so post-shutdown submits fail fast. Each session's
-    /// per-session cancel token is a child of this one.
+    /// Every session supervisor is spawned on this tracker and runs through
+    /// execution, cleanup, persistence, and map eviction under it.
+    /// `shutdown()` closes the tracker and waits for it to drain, so a
+    /// successful return guarantees no in-flight session or
+    /// supervisor-owned cleanup remains.
+    supervisors: TaskTracker,
+    /// Cancelled at the top of `shutdown`. `submit` checks this first, so
+    /// post-shutdown submits fail fast. Each session's per-session cancel
+    /// token is a child of this one.
     shutdown_token: CancellationToken,
     /// Counts the short server-owned mutation tasks that outlive their HTTP
     /// transports. Shutdown closes this tracker before taking its lifecycle
@@ -916,7 +921,7 @@ impl Manager {
                 unpersisted_terminal: HashMap::new(),
             })),
             admission: Arc::new(Mutex::new(())),
-            singleton: Arc::new(Semaphore::new(1)),
+            supervisors: TaskTracker::new(),
             shutdown_token: CancellationToken::new(),
             lifecycle: Arc::new(LifecycleTracker::new()),
         }
@@ -930,8 +935,12 @@ impl Manager {
     ///
     /// Errors:
     /// - `Internal("server is shutting down …")` if shutdown has begun.
-    /// - `Busy{running_session_id}` if the singleton is already held.
     /// - Any failure before the durable acceptance boundary.
+    ///
+    /// There is deliberately no serving-capacity gate here: whether more
+    /// than one session should run at once is a placement decision that
+    /// belongs above this service, which cannot know it is not one worker
+    /// behind a load balancer.
     pub async fn submit(
         &self,
         session_id: String,
@@ -1039,26 +1048,6 @@ impl Manager {
             "new operation passed archive-commitment and archive-structure validation"
         );
 
-        let permit = match Arc::clone(&self.singleton).try_acquire_owned() {
-            Ok(p) => p,
-            Err(_) => {
-                // The supervisor releases the permit in the same admission-
-                // fenced transition that removes this map entry. Therefore
-                // an empty map here is an invariant violation, not a reason
-                // to invent an unusable placeholder handle.
-                let inner = self.inner.lock().await;
-                let running_id = inner.running.keys().next().cloned().ok_or_else(|| {
-                    ServiceError::Internal(
-                        "singleton permit is held while the admission-fenced running map is empty"
-                            .into(),
-                    )
-                })?;
-                return Err(ServiceError::Busy {
-                    running_session_id: running_id,
-                });
-            }
-        };
-
         let session_cancel = self.shutdown_token.child_token();
         let prompt_preview = preview(&req.prompt);
         let preserve_thinking = req.preserve_thinking;
@@ -1108,7 +1097,7 @@ impl Manager {
             .insert(session_id.clone(), Arc::clone(&entry));
         drop(inner);
 
-        // Spawn a supervisor that owns the singleton permit through session
+        // Spawn a tracked supervisor that owns this session through
         // execution, panic cleanup, persistence, and map eviction. `run_one`
         // executes in an inner task so a panic becomes
         // an explicit JoinError instead of abandoning the map entry and every
@@ -1127,10 +1116,9 @@ impl Manager {
         let supervisor_archive_sha256 = req.archive.sha256.clone();
         let supervisor_started_at_unix = started_at_unix;
         let supervisor_wall_start = std::time::Instant::now();
-        tokio::spawn(async move {
-            // This outer task is intentionally small and owns the permit. A
-            // panic in the inner task still reaches the cleanup below.
-            let permit = permit;
+        self.supervisors.spawn(async move {
+            // This outer task is intentionally small. A panic in the inner
+            // task still reaches the cleanup below.
             let run_cfg = Arc::clone(&cfg);
             let run_session_id = session_id_for_task.clone();
             let run_prompt_preview = prompt_preview_for_task.clone();
@@ -1264,10 +1252,9 @@ impl Manager {
             // Remove from the map only after the durable transaction above.
             // A concurrent `get` therefore sees either the running entry, a
             // committed on-disk terminal, or the explicit in-memory failure.
-            // Map eviction and permit release are one admission-fenced
-            // transition. New submissions can see either the old running
-            // owner or an available singleton, never an identity-less busy
-            // state between the two.
+            // Map eviction is admission-fenced, so a same-handle retry
+            // sees either the old running owner or the committed terminal
+            // resource, never an identity-less state between the two.
             let _admission = admission_for_supervisor.lock().await;
             let mut inner = inner_for_task.lock().await;
             inner.running.remove(&session_id_for_task);
@@ -1284,8 +1271,6 @@ impl Manager {
                     .insert(session_id_for_task.clone(), retained);
             }
             drop(inner);
-            drop(permit);
-
         });
 
         if let Some(error) = acceptance_response_error {
@@ -1601,9 +1586,9 @@ impl Manager {
     }
 
     /// Server shutdown. Cancels the parent token (cascades to every child),
-    /// then waits for the singleton permit to be free — that is the
-    /// strongest "no in-flight session remains" signal we have, since the
-    /// run task holds the permit until its teardown completes.
+    /// then closes the supervisor tracker and waits for it to drain — that
+    /// is the strongest "no in-flight session remains" signal we have,
+    /// since every run task is tracked until its teardown completes.
     ///
     /// There is deliberately no shutdown deadline: shutdown first cancels
     /// the session, then waits until its fail-closed teardown is genuinely
@@ -1664,42 +1649,23 @@ impl Manager {
         drop(admission);
 
         let in_flight: Vec<String> = entries.into_iter().map(|(id, _)| id).collect();
-        if in_flight.is_empty() && self.singleton.available_permits() == 1 {
-            tracing::info!("shutdown: no in-flight session — clean exit");
-            return if cancellation_errors.is_empty() {
-                Ok(())
-            } else {
-                Err(ServiceError::Internal(cancellation_errors.join("; ")))
-            };
-        }
         tracing::info!(
             sessions = ?in_flight,
-            "shutdown: cancellation cascaded; awaiting teardown"
+            "shutdown: cancellation cascaded; awaiting supervisor drain"
         );
 
-        // Acquiring the permit guarantees the supervisor has completed
-        // execution/panic cleanup, persistence, and map eviction
-        // (it drops the permit at the very end of its closure). Any in-flight
-        // `submit` that was between
-        // "permit acquired" and "map insert" will also have its task
-        // observe the cascade-cancellation and terminate, releasing the
-        // permit.
-        match Arc::clone(&self.singleton).acquire_owned().await {
-            Ok(_permit) => {
-                tracing::info!("shutdown: singleton permit free — all sessions terminal");
-                if cancellation_errors.is_empty() {
-                    Ok(())
-                } else {
-                    Err(ServiceError::Internal(cancellation_errors.join("; ")))
-                }
-            }
-            Err(closed) => {
-                // Semaphore::close() was called somewhere; we do not call
-                // it ourselves, so this path is unexpected.
-                Err(ServiceError::Internal(format!(
-                    "shutdown: semaphore closed unexpectedly: {closed}"
-                )))
-            }
+        // Closing the tracker and waiting for it guarantees every spawned
+        // supervisor has completed execution/panic cleanup, persistence,
+        // and map eviction. Any in-flight `submit` that was between the
+        // shutdown snapshot and its supervisor spawn also has its task
+        // observe the cascade-cancellation and terminate under the tracker.
+        self.supervisors.close();
+        self.supervisors.wait().await;
+        tracing::info!("shutdown: supervisor tracker drained — all sessions terminal");
+        if cancellation_errors.is_empty() {
+            Ok(())
+        } else {
+            Err(ServiceError::Internal(cancellation_errors.join("; ")))
         }
     }
 }
@@ -1835,8 +1801,8 @@ pub struct RunningOutputProgress {
 /// turns. Both fields are 0 only when the file does not exist yet; malformed or
 /// unreadable state is an explicit error.
 ///
-/// Cost: a linear byte scan. The service is a singleton and reads occur only
-/// on explicit API requests, so this favors exactness over a mutable cache.
+/// Cost: a linear byte scan per explicit API read of one session's live
+/// progress, so this favors exactness over a mutable cache.
 pub fn read_running_progress(events_path: &std::path::Path) -> ServiceResult<RunningOutputProgress> {
     use std::io::{BufReader, Read};
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};

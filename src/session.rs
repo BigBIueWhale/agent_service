@@ -994,8 +994,8 @@ async fn wait_for_completion_or_cancel(
 }
 
 /// Convert an unexpected panic/cancellation of the inner execution task into
-/// an explicit terminal process error. The outer runtime supervisor calls this
-/// while it still owns the singleton permit, so no new session can overlap the
+/// an explicit terminal process error. The outer tracked supervisor calls
+/// this for exactly its own session, so no other owner can overlap the
 /// ownership-checked Docker cleanup, forensic bundle attempt, or persistence.
 #[allow(clippy::too_many_arguments)]
 pub async fn recover_after_execution_panic(

@@ -31,9 +31,6 @@ pub enum ServiceError {
     /// terminal resource was explicitly DELETE'd. Accepted resources are
     /// terminalized during restart recovery rather than silently lost.
     NotFound { session_id: String },
-    /// 409 — singleton: another session is already running. Returned by
-    /// `submit` when a second concurrent submission is attempted.
-    Busy { running_session_id: String },
     /// 409 — an idempotency handle already durably owns a different exact
     /// request.  Reinterpreting it would make transport retry unsafe.
     IdempotencyConflict { session_id: String, detail: String },
@@ -92,8 +89,7 @@ impl ServiceError {
             Self::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
             Self::UnsupportedMediaType(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::NotFound { .. } | Self::BundleAbsent { .. } => StatusCode::NOT_FOUND,
-            Self::Busy { .. }
-            | Self::IdempotencyConflict { .. }
+            Self::IdempotencyConflict { .. }
             | Self::SessionFinalizing { .. }
             | Self::SessionRunning { .. }
             | Self::SessionDeleting { .. }
@@ -119,7 +115,6 @@ impl ServiceError {
             Self::PayloadTooLarge(_) => "payload_too_large",
             Self::UnsupportedMediaType(_) => "unsupported_media_type",
             Self::NotFound { .. } => "not_found",
-            Self::Busy { .. } => "busy",
             Self::IdempotencyConflict { .. } => "idempotency_conflict",
             Self::AcceptanceDurabilityFailed { .. } => "acceptance_durability_failed",
             Self::CancellationDurabilityFailed { .. } => "cancellation_durability_failed",
@@ -154,9 +149,6 @@ impl ServiceError {
             | Self::Internal(m) => m.clone(),
             Self::NotFound { session_id } => format!(
                 "session {session_id} is not known to this server — it was never durably accepted or its terminal resource was explicitly DELETE'd; service restarts recover every accepted handle into an explicit terminal result before listening"
-            ),
-            Self::Busy { running_session_id } => format!(
-                "another session ({running_session_id}) is already running; this service is a strict singleton — optionally GET that resource, or POST /v1/agent/sessions/{running_session_id}/cancel to durably request teardown"
             ),
             Self::IdempotencyConflict { detail, .. } => detail.clone(),
             Self::AcceptanceDurabilityFailed { detail, .. } => detail.clone(),
@@ -193,7 +185,6 @@ impl ServiceError {
             | Self::IdempotencyConflict { session_id, .. } => {
                 session_id.as_str()
             }
-            Self::Busy { running_session_id } => running_session_id.as_str(),
             _ => "",
         }
     }

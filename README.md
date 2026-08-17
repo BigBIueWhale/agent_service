@@ -2,10 +2,13 @@
 
 This repository is the one supported local-agent experience for this workstation.
 It runs a pinned, patched Qwen Code client in an offline Docker container against
-the already deployed, corrected Qwen3.8-27B NVFP4 backend. It is intentionally a
-singleton: one long-lived main agent thread, optional sequential foreground
-subagents, one model, one sampling policy, one context policy, one network path,
-and one set of scripts.
+the already deployed, corrected Qwen3.8-27B NVFP4 backend. Each session is
+intentionally one long-lived main agent thread with optional sequential
+foreground subagents, one model, one sampling policy, one context policy, one
+network path, and one set of scripts. How many sessions run at once is
+deliberately not this service's decision: it cannot know it is not one worker
+behind a load balancer, so serving capacity and placement are governed above
+it, and every session is isolated from every other.
 
 There is no Claude mode, Codex mode, Qwen3.6 mode, text-only mode,
 reduced-context mode, alternate port, retry downgrade, heuristic context clamp,
@@ -196,7 +199,7 @@ The audit retained principles, not old hunks:
   patches and direct tests in the backend repository.
 
 The old `agent_service` design also contained good outer-envelope ideas alongside
-obsolete implementation: singleton ownership, copied disposable workspaces,
+obsolete implementation: exclusive per-session ownership, copied disposable workspaces,
 offline/no-GPU agents, explicit cancellation, durable JSONL and bundles, labels,
 orphan recovery, and ordered teardown were kept. Qwen Code 0.15.6, Qwen3.6 AWQ,
 port 8001, ttyd, wildcard bridge plumbing, 152K context, host installation,
@@ -683,6 +686,12 @@ The creation body is exactly two ordered `multipart/form-data` parts: part 1
 (`application/zip` — the exact workspace bytes, streamed to a disk spool while
 hashed, bounded only by the explicit 4 GiB + container-overhead archive cap).
 A required caller-generated 256-bit `Idempotency-Key` names the operation.
+There is no serving-capacity gate: sessions run concurrently, each in its own
+isolated topology, because whether more than one should run at once is a
+placement decision for whatever sits above this service. Concurrent sessions
+against one deployed backend interleave their model turns through its queue
+and compete for its prefix cache; that is a throughput property of the
+chosen backend, not a correctness property of this service.
 Acceptance requires the streamed bytes to equal the declared count and SHA-256
 exactly, so a reset or truncation can never masquerade as success; replaying
 the identical receipt is a pure lookup, and every session read echoes the
