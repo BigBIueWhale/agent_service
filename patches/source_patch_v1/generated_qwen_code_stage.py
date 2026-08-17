@@ -7,8 +7,14 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'a53a7eb2d908290c6209258fa64db76469782f5cddb9e341a3121b83283c1307',
-  'files': ({'path': 'packages/cli/src/config/config.test.ts',
+  'review_sha256': 'd5b35f57467bf50a8bff0a1ad739863d27f84f1b065fbdd7c1cdcc0c1372c3fd',
+  'files': ({'path': 'packages/cli/src/config/auth.test.ts',
+             'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
+             'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
+            {'path': 'packages/cli/src/config/auth.ts',
+             'before_sha256': '9fb9b3b1608306091fc46aa9bf16117b451df69fc09740605abab7c7e66f63cc',
+             'after_sha256': '20b657054160e242265bb79ec2ba739abe8206a085720d3337443eb7f52eb2f9'},
+            {'path': 'packages/cli/src/config/config.test.ts',
              'before_sha256': '5a0f37ca2941cd68f12024c5f49faed04502c501575268319df134951acf3066',
              'after_sha256': '2ba225c1f41417a95189bbe05cb8ebedc85d192c0d5c1a098359a9c17c502259'},
             {'path': 'packages/cli/src/config/config.ts',
@@ -185,7 +191,207 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'scripts/generate-git-commit-info.js',
              'before_sha256': '0a25aad15ff2b569d047df9329af2ae8899b5358455692c95785042649ca9d34',
              'after_sha256': '73ccd206f6e620dd0e47ee678fbcfcc58e10c2e724a7ca5ff57d13212e83ffac'}),
-  'edits': ({'name': 'packages/cli/src/config/config.test.ts:landmark-1',
+  'edits': ({'name': 'packages/cli/src/config/auth.test.ts:landmark-1',
+             'path': 'packages/cli/src/config/auth.test.ts',
+             'before': "describe('validateAuthMethod', () => {\n"
+                       '  beforeEach(() => {\n'
+                       '    vi.resetModules();\n'
+                       '    // Reset mock to default\n'
+                       '    vi.mocked(settings.loadSettings).mockReturnValue({\n'
+                       '      merged: {},\n',
+             'after': "describe('validateAuthMethod', () => {\n"
+                      '  beforeEach(() => {\n'
+                      '    vi.resetModules();\n'
+                      '    vi.clearAllMocks();\n'
+                      '    // Reset mock to default\n'
+                      '    vi.mocked(settings.loadSettings).mockReturnValue({\n'
+                      '      merged: {},\n',
+             'review_before': "describe('validateAuthMethod', () => {\n"
+                              '  beforeEach(() => {\n'
+                              '    vi.resetModules();\n'
+                              '    // Reset mock to default\n'
+                              '    vi.mocked(settings.loadSettings).mockReturnValue({\n'
+                              '      merged: {},\n',
+             'review_after': "describe('validateAuthMethod', () => {\n"
+                             '  beforeEach(() => {\n'
+                             '    vi.resetModules();\n'
+                             '    vi.clearAllMocks();\n'
+                             '    // Reset mock to default\n'
+                             '    vi.mocked(settings.loadSettings).mockReturnValue({\n'
+                             '      merged: {},\n'},
+            {'name': 'packages/cli/src/config/auth.test.ts:landmark-2',
+             'path': 'packages/cli/src/config/auth.test.ts',
+             'before': "    delete process.env['GOOGLE_API_KEY'];\n"
+                       "    delete process.env['IDEALAB_KEY'];\n"
+                       "    delete process.env['TOKEN_PLAN_KEY'];\n"
+                       '  });\n'
+                       '\n'
+                       "  it('should return null for USE_OPENAI with default env key', "
+                       '() => {\n',
+             'after': "    delete process.env['GOOGLE_API_KEY'];\n"
+                      "    delete process.env['IDEALAB_KEY'];\n"
+                      "    delete process.env['TOKEN_PLAN_KEY'];\n"
+                      "    delete process.env['QWEN38_AGENT_SERVICE_LOCKED'];\n"
+                      '  });\n'
+                      '\n'
+                      "  it('keeps locked auth validation inside the sealed settings "
+                      "and environment boundary', () => {\n"
+                      "    process.env['QWEN38_AGENT_SERVICE_LOCKED'] = '1';\n"
+                      "    process.env['OPENAI_API_KEY'] = 'sealed-key';\n"
+                      '\n'
+                      '    '
+                      'expect(validateAuthMethod(AuthType.USE_OPENAI)).toBeNull();\n'
+                      '    '
+                      'expect(settings.loadSettings).toHaveBeenCalledWith(process.cwd(), '
+                      '{\n'
+                      '      skipLoadEnvironment: true,\n'
+                      '      skipWorkspaceSettings: true,\n'
+                      '      workspaceTrusted: false,\n'
+                      '    });\n'
+                      '    expect(settings.loadEnvironment).not.toHaveBeenCalled();\n'
+                      '  });\n'
+                      '\n'
+                      "  it('retains ordinary auth environment loading outside locked "
+                      "mode', () => {\n"
+                      "    process.env['OPENAI_API_KEY'] = 'ordinary-key';\n"
+                      '\n'
+                      '    '
+                      'expect(validateAuthMethod(AuthType.USE_OPENAI)).toBeNull();\n'
+                      '    '
+                      'expect(settings.loadSettings).toHaveBeenCalledWith(process.cwd(), '
+                      'false);\n'
+                      '    expect(settings.loadEnvironment).toHaveBeenCalledWith({});\n'
+                      '  });\n'
+                      '\n'
+                      "  it('should return null for USE_OPENAI with default env key', "
+                      '() => {\n',
+             'review_before': "    delete process.env['GOOGLE_API_KEY'];\n"
+                              "    delete process.env['IDEALAB_KEY'];\n"
+                              "    delete process.env['TOKEN_PLAN_KEY'];\n"
+                              '  });\n'
+                              '\n'
+                              "  it('should return null for USE_OPENAI with default "
+                              "env key', () => {\n",
+             'review_after': "    delete process.env['GOOGLE_API_KEY'];\n"
+                             "    delete process.env['IDEALAB_KEY'];\n"
+                             "    delete process.env['TOKEN_PLAN_KEY'];\n"
+                             "    delete process.env['QWEN38_AGENT_SERVICE_LOCKED'];\n"
+                             '  });\n'
+                             '\n'
+                             "  it('keeps locked auth validation inside the sealed "
+                             "settings and environment boundary', () => {\n"
+                             "    process.env['QWEN38_AGENT_SERVICE_LOCKED'] = '1';\n"
+                             "    process.env['OPENAI_API_KEY'] = 'sealed-key';\n"
+                             '\n'
+                             '    '
+                             'expect(validateAuthMethod(AuthType.USE_OPENAI)).toBeNull();\n'
+                             '    '
+                             'expect(settings.loadSettings).toHaveBeenCalledWith(process.cwd(), '
+                             '{\n'
+                             '      skipLoadEnvironment: true,\n'
+                             '      skipWorkspaceSettings: true,\n'
+                             '      workspaceTrusted: false,\n'
+                             '    });\n'
+                             '    '
+                             'expect(settings.loadEnvironment).not.toHaveBeenCalled();\n'
+                             '  });\n'
+                             '\n'
+                             "  it('retains ordinary auth environment loading outside "
+                             "locked mode', () => {\n"
+                             "    process.env['OPENAI_API_KEY'] = 'ordinary-key';\n"
+                             '\n'
+                             '    '
+                             'expect(validateAuthMethod(AuthType.USE_OPENAI)).toBeNull();\n'
+                             '    '
+                             'expect(settings.loadSettings).toHaveBeenCalledWith(process.cwd(), '
+                             'false);\n'
+                             '    '
+                             'expect(settings.loadEnvironment).toHaveBeenCalledWith({});\n'
+                             '  });\n'
+                             '\n'
+                             "  it('should return null for USE_OPENAI with default env "
+                             "key', () => {\n"},
+            {'name': 'packages/cli/src/config/auth.ts:landmark-1',
+             'path': 'packages/cli/src/config/auth.ts',
+             'before': '  authMethod: string,\n'
+                       '  config?: Config,\n'
+                       '): string | null {\n'
+                       '  const settings = loadSettings(process.cwd(), false);\n'
+                       '  loadEnvironment(settings.merged);\n'
+                       '\n'
+                       '  if (authMethod === AuthType.USE_OPENAI) {\n'
+                       '    const { hasKey, checkedEnvKey, isExplicitEnvKey } = '
+                       'hasApiKeyForAuth(\n',
+             'after': '  authMethod: string,\n'
+                      '  config?: Config,\n'
+                      '): string | null {\n'
+                      '  const lockedAgentServiceMode =\n'
+                      "    process.env['QWEN38_AGENT_SERVICE_LOCKED'] === '1';\n"
+                      '  const settings = loadSettings(\n'
+                      '    process.cwd(),\n'
+                      '    lockedAgentServiceMode\n'
+                      '      ? {\n'
+                      '          // Authentication validation must use the same sealed '
+                      'settings\n'
+                      '          // boundary as initial configuration. Reloading the '
+                      'target\n'
+                      "          // workspace's settings or .env here would mutate "
+                      'process.env after\n'
+                      '          // startup and leak those values into shell tools and '
+                      'subagents.\n'
+                      '          skipLoadEnvironment: true,\n'
+                      '          skipWorkspaceSettings: true,\n'
+                      '          workspaceTrusted: false,\n'
+                      '        }\n'
+                      '      : false,\n'
+                      '  );\n'
+                      '  if (!lockedAgentServiceMode) {\n'
+                      '    loadEnvironment(settings.merged);\n'
+                      '  }\n'
+                      '\n'
+                      '  if (authMethod === AuthType.USE_OPENAI) {\n'
+                      '    const { hasKey, checkedEnvKey, isExplicitEnvKey } = '
+                      'hasApiKeyForAuth(\n',
+             'review_before': '  authMethod: string,\n'
+                              '  config?: Config,\n'
+                              '): string | null {\n'
+                              '  const settings = loadSettings(process.cwd(), false);\n'
+                              '  loadEnvironment(settings.merged);\n'
+                              '\n'
+                              '  if (authMethod === AuthType.USE_OPENAI) {\n'
+                              '    const { hasKey, checkedEnvKey, isExplicitEnvKey } = '
+                              'hasApiKeyForAuth(\n',
+             'review_after': '  authMethod: string,\n'
+                             '  config?: Config,\n'
+                             '): string | null {\n'
+                             '  const lockedAgentServiceMode =\n'
+                             "    process.env['QWEN38_AGENT_SERVICE_LOCKED'] === '1';\n"
+                             '  const settings = loadSettings(\n'
+                             '    process.cwd(),\n'
+                             '    lockedAgentServiceMode\n'
+                             '      ? {\n'
+                             '          // Authentication validation must use the same '
+                             'sealed settings\n'
+                             '          // boundary as initial configuration. '
+                             'Reloading the target\n'
+                             "          // workspace's settings or .env here would "
+                             'mutate process.env after\n'
+                             '          // startup and leak those values into shell '
+                             'tools and subagents.\n'
+                             '          skipLoadEnvironment: true,\n'
+                             '          skipWorkspaceSettings: true,\n'
+                             '          workspaceTrusted: false,\n'
+                             '        }\n'
+                             '      : false,\n'
+                             '  );\n'
+                             '  if (!lockedAgentServiceMode) {\n'
+                             '    loadEnvironment(settings.merged);\n'
+                             '  }\n'
+                             '\n'
+                             '  if (authMethod === AuthType.USE_OPENAI) {\n'
+                             '    const { hasKey, checkedEnvKey, isExplicitEnvKey } = '
+                             'hasApiKeyForAuth(\n'},
+            {'name': 'packages/cli/src/config/config.test.ts:landmark-1',
              'path': 'packages/cli/src/config/config.test.ts',
              'before': "    expect(argv.allowedTools).toEqual(['read_file', "
                        "'ShellTool(git status)']);\n"
@@ -33243,7 +33449,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' */\n'
                              '\n'})},)
 
-FINAL_FILES = {'packages/cli/src/config/config.test.ts': '2ba225c1f41417a95189bbe05cb8ebedc85d192c0d5c1a098359a9c17c502259',
+FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2',
+ 'packages/cli/src/config/auth.ts': '20b657054160e242265bb79ec2ba739abe8206a085720d3337443eb7f52eb2f9',
+ 'packages/cli/src/config/config.test.ts': '2ba225c1f41417a95189bbe05cb8ebedc85d192c0d5c1a098359a9c17c502259',
  'packages/cli/src/config/config.ts': 'c476125a2be618c868e8b38fdce4a77d53c882e8525ce33b20fb35947a38d7c0',
  'packages/cli/src/gemini.test.tsx': '2e547b0eb91c2e1746e3b966511cb286846cbc5495779056d0b1099776795166',
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',

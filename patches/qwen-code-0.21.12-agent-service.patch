@@ -1,3 +1,76 @@
+diff --git a/packages/cli/src/config/auth.test.ts b/packages/cli/src/config/auth.test.ts
+index 276fd5fb96c3d4a511dfdd4aa8dd717e610acfe3..a34ccf72c252b86d795616ae291c7f67add0b615 100644
+--- a/packages/cli/src/config/auth.test.ts
++++ b/packages/cli/src/config/auth.test.ts
+@@ -19,6 +19,7 @@ vi.mock('./settings.js', () => ({
+ describe('validateAuthMethod', () => {
+   beforeEach(() => {
+     vi.resetModules();
++    vi.clearAllMocks();
+     // Reset mock to default
+     vi.mocked(settings.loadSettings).mockReturnValue({
+       merged: {},
+@@ -36,6 +37,28 @@ describe('validateAuthMethod', () => {
+     delete process.env['GOOGLE_API_KEY'];
+     delete process.env['IDEALAB_KEY'];
+     delete process.env['TOKEN_PLAN_KEY'];
++    delete process.env['QWEN38_AGENT_SERVICE_LOCKED'];
++  });
++
++  it('keeps locked auth validation inside the sealed settings and environment boundary', () => {
++    process.env['QWEN38_AGENT_SERVICE_LOCKED'] = '1';
++    process.env['OPENAI_API_KEY'] = 'sealed-key';
++
++    expect(validateAuthMethod(AuthType.USE_OPENAI)).toBeNull();
++    expect(settings.loadSettings).toHaveBeenCalledWith(process.cwd(), {
++      skipLoadEnvironment: true,
++      skipWorkspaceSettings: true,
++      workspaceTrusted: false,
++    });
++    expect(settings.loadEnvironment).not.toHaveBeenCalled();
++  });
++
++  it('retains ordinary auth environment loading outside locked mode', () => {
++    process.env['OPENAI_API_KEY'] = 'ordinary-key';
++
++    expect(validateAuthMethod(AuthType.USE_OPENAI)).toBeNull();
++    expect(settings.loadSettings).toHaveBeenCalledWith(process.cwd(), false);
++    expect(settings.loadEnvironment).toHaveBeenCalledWith({});
+   });
+ 
+   it('should return null for USE_OPENAI with default env key', () => {
+diff --git a/packages/cli/src/config/auth.ts b/packages/cli/src/config/auth.ts
+index 3e0abcebf4671f03bbc5d9b3cd7f937a06977809..6f9ff00818a8fc0503634318cd31a0a5effd0a30 100644
+--- a/packages/cli/src/config/auth.ts
++++ b/packages/cli/src/config/auth.ts
+@@ -230,8 +230,25 @@ export function validateAuthMethod(
+   authMethod: string,
+   config?: Config,
+ ): string | null {
+-  const settings = loadSettings(process.cwd(), false);
+-  loadEnvironment(settings.merged);
++  const lockedAgentServiceMode =
++    process.env['QWEN38_AGENT_SERVICE_LOCKED'] === '1';
++  const settings = loadSettings(
++    process.cwd(),
++    lockedAgentServiceMode
++      ? {
++          // Authentication validation must use the same sealed settings
++          // boundary as initial configuration. Reloading the target
++          // workspace's settings or .env here would mutate process.env after
++          // startup and leak those values into shell tools and subagents.
++          skipLoadEnvironment: true,
++          skipWorkspaceSettings: true,
++          workspaceTrusted: false,
++        }
++      : false,
++  );
++  if (!lockedAgentServiceMode) {
++    loadEnvironment(settings.merged);
++  }
+ 
+   if (authMethod === AuthType.USE_OPENAI) {
+     const { hasKey, checkedEnvKey, isExplicitEnvKey } = hasApiKeyForAuth(
 diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/config.test.ts
 index 2022b3156efcfd5bc3523e49fd2e1e3bdc54c3e5..a4b98023651a9eb4239f40d1672ac3d238858bc6 100644
 --- a/packages/cli/src/config/config.test.ts

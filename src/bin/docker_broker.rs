@@ -299,7 +299,7 @@ fn validate_policy(policy: &Policy) -> Result<(), String> {
         || policy.broker.uid != 1000
         || policy.broker.gid != 984
         || policy.broker.docker_socket != "/var/run/docker.sock"
-        || policy.agent.image_tag != "qwen38-agent:0.21.12-b965d5f8-v7"
+        || policy.agent.image_tag != "qwen38-agent:0.21.12-b965d5f8-v8"
         || policy.relay.image_tag != "qwen38-fixed-relay:1.0.0"
         || policy.capture.image_tag != "qwen38-session-capture:1.0.0"
         || !is_image_id(&policy.agent.image_id)

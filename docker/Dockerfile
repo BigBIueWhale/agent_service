@@ -120,6 +120,7 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && DEV=true node esbuild.config.js \
  && node scripts/copy_bundle_assets.js \
  && npx --no-install vitest run \
+      packages/cli/src/config/auth.test.ts \
       packages/core/src/core/geminiChat.test.ts \
       packages/core/src/core/baseLlmClient.test.ts \
       packages/core/src/core/coreToolScheduler.test.ts \

@@ -38,10 +38,10 @@
     "policy_id": "qwen38-docker-broker-v1",
     "container_name": "qwen38-docker-broker",
     "image_tag": "qwen38-docker-broker:1.0.0",
-    "image_id": "sha256:ee9eea3db124ccc3b55b5f57dca33500eb33c00aa263caa90fb228b1e4bb685d",
+    "image_id": "sha256:fe91decffbf9e1c92b9d7a6a6159547e0312b76275174932ed35f5c562c083ea",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
-    "policy_sha256": "aa7d302f72675ac1c61cd05010a099b63207f9b75e4583b0805b4f8079f25a81",
-    "source_sha256": "44ec5475a5e7ac82d70f84cfee83c67a3a78309d0ef6f0d96664bb0de4bc2ad2",
+    "policy_sha256": "ed2c1463ac19364224b15ea83d80a264e888c5a16b76ae4eab34983217009d63",
+    "source_sha256": "0de30bde46b6f6489aaf6b87cfcf19b9617fcd7c96c93f3c3f4902db9c3351a6",
     "memory": "64m",
     "memory_swap": "64m",
     "pids_limit": 64
@@ -71,8 +71,8 @@
     "pids_limit": 32
   },
   "agent": {
-    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v7",
-    "image_id": "sha256:8acee296759ee23f291a06766dba4f917d07bb79ab6b12cc8b87263bc0b52bf4",
+    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v8",
+    "image_id": "sha256:156d67b5626b4d1418dbaa128cdc24bb91080ba6077251011d25cae9338c4f51",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
@@ -107,8 +107,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "a53a7eb2d908290c6209258fa64db76469782f5cddb9e341a3121b83283c1307",
-      "source_patch_manifest_sha256": "0f9d64580854a5db912e4e1a8fd028c90e97fba27606916ece7c61efe08b1a78"
+      "patch_sha256": "d5b35f57467bf50a8bff0a1ad739863d27f84f1b065fbdd7c1cdcc0c1372c3fd",
+      "source_patch_manifest_sha256": "a809f5db500b9bbbba42481f4a04cf85bdfe6422ca2dfbbaa34f5f62b4d5d915"
     }
   },
   "backend": {

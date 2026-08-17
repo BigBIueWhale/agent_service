@@ -89,6 +89,8 @@ def _require_ordered(
 def _validate_locked_boundary_before(state: State) -> None:
     label = "locked configuration boundary precondition"
     cli = "packages/cli/src/config/config.ts"
+    auth = "packages/cli/src/config/auth.ts"
+    auth_test = "packages/cli/src/config/auth.test.ts"
     core = "packages/core/src/config/config.ts"
     metadata = "scripts/generate-git-commit-info.js"
     _require_all(
@@ -103,6 +105,28 @@ def _validate_locked_boundary_before(state: State) -> None:
     )
     forbid_text(state, cli, ".option('strict-tools'", label=label)
     forbid_text(state, cli, "lockedAgentServiceMode", label=label)
+    _require_all(
+        state,
+        auth,
+        (
+            "const settings = loadSettings(process.cwd(), false);",
+            "loadEnvironment(settings.merged);",
+        ),
+        label=label,
+    )
+    forbid_text(state, auth, "lockedAgentServiceMode", label=label)
+    _require_all(
+        state,
+        auth_test,
+        ("vi.mock('./settings.js'", "describe('validateAuthMethod'"),
+        label=label,
+    )
+    forbid_text(
+        state,
+        auth_test,
+        "keeps locked auth validation inside the sealed settings and environment boundary",
+        label=label,
+    )
     forbid_text(state, core, "getForegroundAgentsOnly()", label=label)
     _require_all(
         state,
@@ -115,6 +139,8 @@ def _validate_locked_boundary_before(state: State) -> None:
 def _validate_locked_boundary_after(state: State) -> None:
     label = "locked configuration boundary result"
     cli = "packages/cli/src/config/config.ts"
+    auth = "packages/cli/src/config/auth.ts"
+    auth_test = "packages/cli/src/config/auth.test.ts"
     entry = "packages/cli/src/gemini.tsx"
     core = "packages/core/src/config/config.ts"
     helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
@@ -147,6 +173,48 @@ def _validate_locked_boundary_after(state: State) -> None:
             "skipWorkspaceSettings: true",
             "workspaceTrusted: false",
             "!isBareMode(argv.bare) && !argv.foregroundAgentsOnly",
+        ),
+        label=label,
+    )
+    auth_source = _require_all(
+        state,
+        auth,
+        (
+            "process.env['QWEN38_AGENT_SERVICE_LOCKED'] === '1'",
+            "skipLoadEnvironment: true",
+            "skipWorkspaceSettings: true",
+            "workspaceTrusted: false",
+            "if (!lockedAgentServiceMode) {",
+            "loadEnvironment(settings.merged);",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        auth_source,
+        (
+            "const lockedAgentServiceMode =",
+            "const settings = loadSettings(",
+            "skipLoadEnvironment: true",
+            "skipWorkspaceSettings: true",
+            "workspaceTrusted: false",
+            "if (!lockedAgentServiceMode) {",
+            "loadEnvironment(settings.merged);",
+        ),
+        label=label,
+        location=auth,
+    )
+    _require_all(
+        state,
+        auth_test,
+        (
+            "keeps locked auth validation inside the sealed settings and environment boundary",
+            "process.env['QWEN38_AGENT_SERVICE_LOCKED'] = '1';",
+            "skipLoadEnvironment: true",
+            "skipWorkspaceSettings: true",
+            "workspaceTrusted: false",
+            "expect(settings.loadEnvironment).not.toHaveBeenCalled();",
+            "retains ordinary auth environment loading outside locked mode",
+            "expect(settings.loadEnvironment).toHaveBeenCalledWith({});",
         ),
         label=label,
     )
