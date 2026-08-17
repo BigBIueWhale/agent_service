@@ -561,7 +561,8 @@ async fn wait_for_agent_ready(
     if ready.model != cfg.vllm_model_name
         || ready.context_window != cfg.lock.backend.max_model_len
         || ready.token_count == 0
-        || ready.sandbox != "landlock-fs-v4-write-roots-v1+output-unmounted-v1"
+        || ready.sandbox
+            != "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
     {
         return Err(ServiceError::Internal(format!(
             "broker returned a drifted agent readiness contract: {ready:?}"

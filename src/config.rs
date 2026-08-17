@@ -605,7 +605,9 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
                 .into(),
         );
     }
-    if lock.agent.agent_exec_sandbox != "landlock-fs-v4-write-roots-v1+output-unmounted-v1" {
+    if lock.agent.agent_exec_sandbox
+        != "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
+    {
         return fail("agent_exec sandbox identity drift".into());
     }
     let expected_tools = [

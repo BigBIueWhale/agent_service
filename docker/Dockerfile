@@ -201,7 +201,7 @@ COPY --from=agent-runtime-build /build/target/release/agent_exec /opt/agent/agen
 RUN test "$(node /opt/qwen-code/scripts/cli-entry.js --version)" = '0.21.12' \
  && test -n "${AGENT_EXEC_SOURCE_SHA256}" \
  && test "${AGENT_EXEC_SANDBOX}" = \
-      'landlock-fs-v4-write-roots-v1+output-unmounted-v1' \
+      'landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1' \
  && test -x /opt/agent/agent_exec \
  && rm -rf /tmp/node-compile-cache
 COPY docker/config/settings.json /opt/agent/settings.json

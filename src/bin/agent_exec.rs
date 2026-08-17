@@ -4,7 +4,9 @@
 //! already-open control descriptors: fd 3 receives one exact sandbox
 //! attestation and fd 4 releases execution. Qwen stdout/stderr are connected
 //! to the fixed capture sockets before the launcher enters a Landlock domain
-//! that permits writes only in the four documented mutable roots. `/output`
+//! that permits ordinary filesystem writes only in the four documented mutable
+//! roots. It separately permits write-open access to the container's private
+//! devpts instance so Qwen Code's native shell tool can allocate a PTY. `/output`
 //! is not mounted in this container at all.
 
 use std::ffi::CString;
@@ -14,7 +16,8 @@ use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::process::{Command, ExitCode};
 
-const SANDBOX_ID: &str = "landlock-fs-v4-write-roots-v1+output-unmounted-v1";
+const SANDBOX_ID: &str =
+    "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1";
 const EVENTS_SOCKET: &str = "/streams/events.sock";
 const STDERR_SOCKET: &str = "/streams/stderr.sock";
 const NODE: &str = "/usr/local/bin/node";
@@ -49,6 +52,7 @@ const DIRECTORY_WRITE_ACCESS: u64 = LANDLOCK_ACCESS_FS_WRITE_FILE
     | LANDLOCK_ACCESS_FS_REFER
     | LANDLOCK_ACCESS_FS_TRUNCATE;
 const FILE_WRITE_ACCESS: u64 = LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_TRUNCATE;
+const DEVICE_WRITE_ACCESS: u64 = LANDLOCK_ACCESS_FS_WRITE_FILE;
 
 const STRICT_TOOLS: &str =
     "agent,edit,glob,grep_search,list_directory,notebook_edit,read_file,run_shell_command,todo_write,write_file";
@@ -213,6 +217,22 @@ fn read_exact_fd(fd: RawFd, mut bytes: &mut [u8], label: &str) -> Result<(), Str
 }
 
 fn install_filesystem_sandbox() -> Result<(), String> {
+    install_filesystem_sandbox_with_rules(&[
+        ("/workspace", DIRECTORY_WRITE_ACCESS),
+        ("/artifacts", DIRECTORY_WRITE_ACCESS),
+        ("/tmp", DIRECTORY_WRITE_ACCESS),
+        ("/qwen-runtime", DIRECTORY_WRITE_ACCESS),
+        ("/dev/null", FILE_WRITE_ACCESS),
+        // Docker gives the agent its own PID namespace and private devpts
+        // instance. forkpty(3), used by Qwen Code's run_shell_command tool,
+        // must write-open both ptmx and the resulting slave under /dev/pts.
+        // WRITE_FILE is sufficient; creation, removal, rename, and truncation
+        // remain denied throughout this device filesystem.
+        ("/dev/pts", DEVICE_WRITE_ACCESS),
+    ])
+}
+
+fn install_filesystem_sandbox_with_rules(rules: &[(&str, u64)]) -> Result<(), String> {
     let abi = unsafe {
         libc::syscall(
             libc::SYS_landlock_create_ruleset,
@@ -252,13 +272,7 @@ fn install_filesystem_sandbox() -> Result<(), String> {
     }
     let ruleset_fd = ruleset_fd as RawFd;
     let mut result = Ok(());
-    for (path, access) in [
-        ("/workspace", DIRECTORY_WRITE_ACCESS),
-        ("/artifacts", DIRECTORY_WRITE_ACCESS),
-        ("/tmp", DIRECTORY_WRITE_ACCESS),
-        ("/qwen-runtime", DIRECTORY_WRITE_ACCESS),
-        ("/dev/null", FILE_WRITE_ACCESS),
-    ] {
+    for &(path, access) in rules {
         if let Err(error) = add_path_rule(ruleset_fd, path, access) {
             result = Err(error);
             break;
@@ -324,10 +338,69 @@ mod tests {
     use super::*;
 
     #[test]
+    fn private_devpts_remains_usable_after_landlock() {
+        // Landlock confinement is irreversible for the calling thread. Run the
+        // real ruleset and PTY allocation in a child so the Rust test harness
+        // remains unaffected, then require an exact clean exit.
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0, "fork PTY sandbox test: {}", io::Error::last_os_error());
+        if child == 0 {
+            let exit_code = match install_filesystem_sandbox_with_rules(&[(
+                "/dev/pts",
+                DEVICE_WRITE_ACCESS,
+            )]) {
+                Ok(()) => {
+                    let mut master = -1;
+                    let mut slave = -1;
+                    let opened = unsafe {
+                        libc::openpty(
+                            &mut master,
+                            &mut slave,
+                            std::ptr::null_mut(),
+                            std::ptr::null(),
+                            std::ptr::null(),
+                        )
+                    };
+                    if opened == 0 {
+                        unsafe {
+                            libc::close(master);
+                            libc::close(slave);
+                        }
+                        0
+                    } else {
+                        82
+                    }
+                }
+                Err(_) => 81,
+            };
+            unsafe { libc::_exit(exit_code) };
+        }
+
+        let mut status = 0;
+        loop {
+            let waited = unsafe { libc::waitpid(child, &mut status, 0) };
+            if waited == child {
+                break;
+            }
+            assert_eq!(waited, -1, "waitpid returned an unexpected child");
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::Interrupted {
+                panic!("wait for PTY sandbox test: {error}");
+            }
+        }
+        assert!(libc::WIFEXITED(status), "PTY sandbox child status={status}");
+        assert_eq!(
+            libc::WEXITSTATUS(status),
+            0,
+            "PTY allocation failed after Landlock; child status={status}"
+        );
+    }
+
+    #[test]
     fn fixed_command_and_sandbox_identity_are_exact() {
         assert_eq!(
             SANDBOX_ID,
-            "landlock-fs-v4-write-roots-v1+output-unmounted-v1"
+            "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
         );
         assert_eq!(NODE, "/usr/local/bin/node");
         assert_eq!(CLI, "/opt/qwen-code/scripts/cli-entry.js");
@@ -335,6 +408,7 @@ mod tests {
         assert_eq!(CONTROL_RELEASE_FD, 4);
         assert_eq!(DIRECTORY_WRITE_ACCESS, 0x7ff2);
         assert_eq!(FILE_WRITE_ACCESS, 0x4002);
+        assert_eq!(DEVICE_WRITE_ACCESS, 0x2);
         assert_eq!(
             LandlockRulesetAttr {
                 handled_access_fs: 0,

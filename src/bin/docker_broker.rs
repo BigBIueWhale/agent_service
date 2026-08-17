@@ -299,7 +299,7 @@ fn validate_policy(policy: &Policy) -> Result<(), String> {
         || policy.broker.uid != 1000
         || policy.broker.gid != 984
         || policy.broker.docker_socket != "/var/run/docker.sock"
-        || policy.agent.image_tag != "qwen38-agent:0.21.12-b965d5f8-v6"
+        || policy.agent.image_tag != "qwen38-agent:0.21.12-b965d5f8-v7"
         || policy.relay.image_tag != "qwen38-fixed-relay:1.0.0"
         || policy.capture.image_tag != "qwen38-session-capture:1.0.0"
         || !is_image_id(&policy.agent.image_id)
@@ -313,7 +313,8 @@ fn validate_policy(policy: &Policy) -> Result<(), String> {
             != "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700"
         || policy.agent.ready_event_prefix
             != "AGENT_READY model=qwen3.8-27b-nvfp4-k8v4 context=262144 network=loopback-only token_count="
-        || policy.agent.sandbox != "landlock-fs-v4-write-roots-v1+output-unmounted-v1"
+        || policy.agent.sandbox
+            != "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
         || policy.relay.memory != "32m"
         || policy.relay.memory_swap != "32m"
         || policy.relay.pids_limit != 32

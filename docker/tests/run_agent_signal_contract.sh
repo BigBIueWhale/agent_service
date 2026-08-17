@@ -29,6 +29,7 @@ EFFECT_ROOT_LINE="$(line_of 'mkdir --mode=0700 /qwen-runtime/effects')"
 SCRATCH_ROOT_LINE="$(line_of 'mkdir --mode=0700 /tmp/qwen-subagents')"
 # shellcheck disable=SC2016
 START_GATE_LINE="$(line_of 'flock --exclusive "${START_GATE_FILE}" true')"
+DEVPTS_LINE="$(line_of 'devpts rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666')"
 # shellcheck disable=SC2016
 AGENT_EXEC_LINE="$(line_of 'setsid "${AGENT_EXEC}"')"
 # shellcheck disable=SC2016
@@ -38,6 +39,7 @@ readonly TERM_TRAP_LINE READY_LINE AGENT_EXEC_LINE ATTEST_LINE RELEASE_LINE
 readonly TOOLCHAIN_VERIFY_LINE EFFECT_ROOT_LINE SCRATCH_ROOT_LINE
 readonly RUNTIME_CONTRACT_VERIFY_LINE
 readonly START_GATE_LINE
+readonly DEVPTS_LINE
 
 (( TERM_TRAP_LINE < READY_LINE )) || {
   printf 'TERM trap must be installed before readiness is published\n' >&2
@@ -59,6 +61,10 @@ readonly START_GATE_LINE
   printf 'the termination handler must cover the start gate and the gate must precede readiness\n' >&2
   exit 1
 }
+(( DEVPTS_LINE < AGENT_EXEC_LINE )) || {
+  printf 'the exact isolated devpts contract must be proven before agent_exec starts\n' >&2
+  exit 1
+}
 (( AGENT_EXEC_LINE < ATTEST_LINE && ATTEST_LINE < READY_LINE && READY_LINE < RELEASE_LINE )) || {
   printf 'Qwen must be sandbox-attested before readiness and released only afterward\n' >&2
   exit 1
@@ -70,6 +76,10 @@ fi
 
 line_of '[[ ! -e /output ]]' >/dev/null
 line_of 'readonly AGENT_EXEC=/opt/agent/agent_exec' >/dev/null
+# This deliberately searches for a literal source landmark.
+# shellcheck disable=SC2016
+line_of '$(readlink /dev/ptmx)' >/dev/null
+line_of "'character special file:5:2:666:0:0'" >/dev/null
 line_of "kill -TERM -- \"-\${qwen_pgid}\"" >/dev/null
 if grep -Eq -- '/output/(events|qwen|ready|response)|setsid node|tee ' "${WRAPPER}"; then
   printf 'Qwen wrapper must not hold the service output mount or capture files\n' >&2

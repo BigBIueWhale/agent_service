@@ -31,6 +31,9 @@ fallback configuration.
   final response, bundles, and terminal state are produced outside this process.
 - Changes never write back to the operator's original source directory. State
   this clearly when the final result depends on files changed in `/workspace`.
+- `run_shell_command` has a working pseudoterminal inside this container's
+  isolated devpts instance. Treat PTY failure as a deployment failure and report
+  it; do not pretend a shell-dependent check succeeded through another tool.
 
 ## Network and dependencies
 

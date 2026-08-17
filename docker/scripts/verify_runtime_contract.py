@@ -318,6 +318,8 @@ def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:
         "subagent_scratch_root",
         "tmpfs_tmp",
         "tmpfs_runtime",
+        "private_devpts",
+        "private_devpts_write_access",
         "operator_source_writable",
         "agent_exec_sandbox",
     }
@@ -326,10 +328,16 @@ def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:
     require_equal("agent stream mount", filesystem["streams"], "/streams")
     require_equal("agent output mount absence", filesystem["output_mounted_in_agent"], False)
     require_equal("output owner", filesystem["output_owner_component"], "session-capture")
+    require_equal("private devpts path", filesystem["private_devpts"], "/dev/pts")
+    require_equal(
+        "private devpts Landlock access",
+        filesystem["private_devpts_write_access"],
+        "write-file-only",
+    )
     require_equal(
         "agent exec sandbox",
         filesystem["agent_exec_sandbox"],
-        "landlock-fs-v4-write-roots-v1+output-unmounted-v1",
+        "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
     )
     require_fragments(
         "agent wrapper",
@@ -382,6 +390,7 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             '("/artifacts", DIRECTORY_WRITE_ACCESS)',
             '("/tmp", DIRECTORY_WRITE_ACCESS)',
             '("/qwen-runtime", DIRECTORY_WRITE_ACCESS)',
+            '("/dev/pts", DEVICE_WRITE_ACCESS)',
             'libc::SYS_landlock_restrict_self',
             'libc::close_range(3, u32::MAX, 0)',
             '.arg("--foreground-agents-only")',

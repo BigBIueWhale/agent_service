@@ -5,7 +5,7 @@ readonly PROMPT_FILE=/run/agent/prompt.txt
 readonly START_GATE_FILE=/run/agent/start-gate.lock
 readonly STREAMS_DIR=/streams
 readonly AGENT_EXEC=/opt/agent/agent_exec
-readonly AGENT_EXEC_SANDBOX=landlock-fs-v4-write-roots-v1+output-unmounted-v1
+readonly AGENT_EXEC_SANDBOX=landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1
 readonly SETTINGS_SOURCE=/opt/agent/settings.json
 readonly INSTRUCTIONS_SOURCE=/opt/agent/QWEN.md
 readonly SYSTEM_PROMPT_SOURCE=/opt/agent/system.md
@@ -54,6 +54,12 @@ export CARGO_HOME=/qwen-runtime/cargo
 export GOPATH=/qwen-runtime/go
 [[ "$(id -u)" == 1000 && "$(id -g)" == 1000 ]] || \
   fatal 90 "agent must run as uid:gid 1000:1000"
+[[ "$(findmnt --noheadings --output FSTYPE,OPTIONS --target /dev/pts)" == \
+   'devpts rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666' && \
+   "$(readlink /dev/ptmx)" == 'pts/ptmx' && \
+   "$(stat -c '%F:%t:%T:%a:%u:%g' /dev/pts/ptmx)" == \
+   'character special file:5:2:666:0:0' && /dev/ptmx -ef /dev/pts/ptmx ]] || \
+  fatal 114 "the isolated Docker devpts/ptmx contract required by run_shell_command is absent"
 [[ -f "${PROMPT_FILE}" && ! -L "${PROMPT_FILE}" ]] || \
   fatal 91 "${PROMPT_FILE} must be a regular, non-symlink file"
 [[ -f "${START_GATE_FILE}" && ! -L "${START_GATE_FILE}" && \

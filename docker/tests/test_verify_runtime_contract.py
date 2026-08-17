@@ -74,6 +74,20 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.ContractError, "deployment native tools drift"):
                 MODULE.verify(paths)
 
+    def test_rejects_broader_devpts_write_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.mutated_contract(
+                root,
+                lambda value: value["filesystem"].__setitem__(
+                    "private_devpts_write_access", "directory-write"
+                ),
+            )
+            with self.assertRaisesRegex(
+                MODULE.ContractError, "private devpts Landlock access drift"
+            ):
+                MODULE.verify(paths)
+
     def test_rejects_additional_agent_interface(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

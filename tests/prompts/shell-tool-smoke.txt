@@ -1,0 +1,11 @@
+Perform this acceptance task entirely inside /workspace.
+
+1. Use run_shell_command exactly once with a shell program that fails unless all of these are true:
+   - the current directory is exactly /workspace;
+   - the process identity is exactly uid:gid 1000:1000;
+   - /workspace/input.txt contains exactly `agent-service-native-tool-smoke-input` followed by one LF byte;
+   - it can create /workspace/shell-verified.txt containing exactly `shell-tool-round-trip-ok` followed by one LF byte;
+   - byte-for-byte comparison against that required output succeeds.
+2. Require that shell invocation to print exactly `QWEN38_PTY_SHELL_OK` followed by one LF byte on success.
+3. Then use read_file to read /workspace/shell-verified.txt and verify its exact text.
+4. Do not modify input.txt. In the final answer, report the exact run_shell_command output and whether every byte-level check and read-back succeeded. Do not claim success if the shell tool, its PTY, or any check failed.

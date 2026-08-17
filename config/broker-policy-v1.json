@@ -25,15 +25,15 @@
   "model_bridge_container_name": "qwen38-model-bridge",
   "model_ingress_container_name": "qwen38-model-ingress",
   "agent": {
-    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v6",
-    "image_id": "sha256:692bf22c9e15b67145b3997d9d46c5cbf2e3a534c2fcbabf2e97a66c23455b92",
+    "image_tag": "qwen38-agent:0.21.12-b965d5f8-v7",
+    "image_id": "sha256:8acee296759ee23f291a06766dba4f917d07bb79ab6b12cc8b87263bc0b52bf4",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
     "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
     "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
     "ready_event_prefix": "AGENT_READY model=qwen3.8-27b-nvfp4-k8v4 context=262144 network=loopback-only token_count=",
-    "sandbox": "landlock-fs-v4-write-roots-v1+output-unmounted-v1"
+    "sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
   },
   "relay": {
     "image_tag": "qwen38-fixed-relay:1.0.0",

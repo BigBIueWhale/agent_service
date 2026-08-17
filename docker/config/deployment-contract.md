@@ -22,6 +22,11 @@
   state are produced by trusted components outside Qwen and its descendants.
 - The agent runs as uid:gid 1000:1000 with a read-only container root. It has no
   GPU, Docker socket, host Qwen/Claude/Codex state, or writeable operator source.
+- Docker supplies the agent's isolated PID namespace and devpts instance. The
+  Landlock policy grants `/dev/pts` only `WRITE_FILE`, solely so the native
+  `run_shell_command` implementation can allocate and use its pseudoterminal;
+  device creation, removal, rename, and truncation remain denied. The wrapper
+  verifies the exact devpts mount and ptmx device before Qwen starts.
 
 ## Network and dependencies
 
