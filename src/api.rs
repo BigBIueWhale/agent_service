@@ -1044,17 +1044,51 @@ async fn verify_service_container(cfg: &Config, value: &serde_json::Value) -> Se
             .unwrap_or("<missing>"),
         &mounted_lock_sha,
     )?;
-    let mounted_cargo_sha = sha256_path(std::path::Path::new(
-        "/home/user/Desktop/agent_service/Cargo.lock",
-    ))
-    .await?;
+    // The read-only config mount carries the canonical build-input
+    // manifest. Prove the mounted manifest is the exact one this image was
+    // built from, then read Cargo.lock's recorded hash from it — every
+    // runtime source cross-check stays inside the narrow config mount.
+    let manifest_path =
+        std::path::Path::new("/home/user/Desktop/agent_service/config/build-inputs.sha256");
+    let mounted_manifest_sha = sha256_path(manifest_path).await?;
+    require_equal(
+        "service build-inputs label",
+        labels
+            .get("agent_service.build-inputs.sha256")
+            .map(String::as_str)
+            .unwrap_or("<missing>"),
+        &mounted_manifest_sha,
+    )?;
+    let manifest = tokio::fs::read_to_string(manifest_path).await.map_err(|error| {
+        ServiceError::Internal(format!(
+            "read mounted build-input manifest {}: {error}",
+            manifest_path.display()
+        ))
+    })?;
+    let cargo_line = manifest
+        .lines()
+        .find(|line| line.ends_with("  Cargo.lock"))
+        .ok_or_else(|| {
+            ServiceError::Internal(
+                "the mounted build-input manifest does not record Cargo.lock".into(),
+            )
+        })?;
+    let recorded_cargo_sha = cargo_line
+        .split_whitespace()
+        .next()
+        .filter(|hash| hash.len() == 64)
+        .ok_or_else(|| {
+            ServiceError::Internal(format!(
+                "malformed Cargo.lock manifest line: {cargo_line:?}"
+            ))
+        })?;
     require_equal(
         "service Cargo-lock label",
         labels
             .get("agent_service.cargo-lock.sha256")
             .map(String::as_str)
             .unwrap_or("<missing>"),
-        &mounted_cargo_sha,
+        recorded_cargo_sha,
     )?;
     Ok(())
 }
