@@ -41,10 +41,11 @@ The fixed stack is:
 | Thinking | Required, `xhigh` |
 | Historical thinking | `preserve_thinking=false` |
 | Qwen Code | `0.21.12`, commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38` |
-| Agent image | `sha256:156d67b5626b4d1418dbaa128cdc24bb91080ba6077251011d25cae9338c4f51` |
-| Service | Rust, one session at a time, Docker-only; implementation commit `b8271a608a8df9f35cf24d02ec3a3c62989f971d` |
-| Service image | `sha256:7eb567207cd41a7f045073ea010e1a3f3fd14f9e118663dd69887560787b4e08` |
-| Docker broker image | `sha256:fe91decffbf9e1c92b9d7a6a6159547e0312b76275174932ed35f5c562c083ea` |
+| Agent image | `sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec` |
+| Service | Rust, one session at a time, Docker-only; implementation commit `bc67dae720894cbbcd62122a2a9ff6b56b042168` |
+| Release lock commit | `7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc` |
+| Service image | `sha256:8f8d4b2e68bf47c9d92c6c5c0f77fdbf60d0056ef32155a34ecc96357dfd41f4` |
+| Docker broker image | `sha256:f9d3b77ed2e10d69648c2e443fa5e49ff06fca7eedf6fc580f9d8762d9bfb054` |
 | Fixed-relay image | `sha256:8b3aa7c098e5a9c757302340bf5554b9bd36c7c30640c1ce07d5cd1fc38417d1` |
 | Stream-capture image | `sha256:d87f39d60370eb5190e7ec166807131b90d545d6da20929a1e6fa7ccf7c186de` |
 | Service listener | `127.0.0.1:8090` only |
@@ -480,6 +481,17 @@ recorded before forwarding, so cancellation cannot silently lose its bundle if a
 descendant delays shutdown. `util-linux=2.39.3-9ubuntu6.5`, which supplies `setsid`,
 is an explicit image input rather than an incidental base-image dependency.
 
+Production benchmarking exposed and repaired a separate late-subscriber race at
+the capture boundary. The broker formerly followed Docker logs with `--since 0s`.
+Docker interprets that spelling as relative "from now", so a fast capture sidecar
+could emit `CAPTURE_COMPLETE` before the follower attached and the completion event
+would never be replayed. The service correctly refused to promote output whose
+capture completion was unproved, but the session could wait indefinitely. The sole
+release now follows from exact Unix epoch `--since 0`; a unit test freezes that
+argument and proves that late subscribers replay already-emitted completion events.
+A real five-turn production smoke and both long production benchmark sessions then
+completed with clean bundles and no session-container leftovers.
+
 ### What temporary means
 
 Temporary is a lifecycle and ownership property, not a storage-medium promise.
@@ -539,7 +551,7 @@ locked runtime/configuration identity. The service image is sealed by committed
 source, build-input, stack-lock, and Cargo-lock labels.
 
 The current agent image is
-`sha256:156d67b5626b4d1418dbaa128cdc24bb91080ba6077251011d25cae9338c4f51`.
+`sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec`.
 Its build reconstructed exactly sixty-one changed/new files from pristine upstream
 and passed 2,427 tests across twenty-three focused test files. The sealed runtime
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
@@ -548,14 +560,18 @@ build script treats any other image ID as drift. The image also carries Qwen
 Code's exact upstream Apache-2.0 license plus this repository's Unlicense and
 third-party scope notice; those documentation files do not alter the executable
 client or its locked behavior.
-The pinned Rust 1.95.0 stages passed all fifty-seven tests: forty-two service,
-eight broker, three fixed-relay, two stream-capture, and two agent-exec tests. A
+The pinned Rust 1.95.0 stages passed all sixty tests: forty-four service,
+nine broker, three fixed-relay, two stream-capture, and two agent-exec tests. A
 full clean no-cache release build reproduced the exact locked agent, relay, capture,
 broker, and service image IDs; candidate build directories were absent afterward.
 The release lock pins implementation commit
-`b8271a608a8df9f35cf24d02ec3a3c62989f971d`, the 65-entry build-input manifest
-hash `f2af6fc5bbb637c6c804cc3a53c98e18b89d06eda32bccc87fbaab4e52e07b03`,
-and all five resulting image IDs.
+`bc67dae720894cbbcd62122a2a9ff6b56b042168`, the 66-entry build-input manifest
+hash `949edcada0c09591b416335d9418f02dcfd69a0a2ba3352b3f417af9a7b3b435`,
+stack-lock hash `de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3`,
+and all five resulting image IDs. Release-lock commit
+`7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc` freezes that complete set; the
+release-lock file itself hashes to
+`a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4`.
 
 Pinning is not a claim that the upstream dependency graph has no security debt. The
 Qwen `npm ci` build currently reports 66 audit advisories (2 low, 36 moderate, 25
@@ -662,7 +678,8 @@ misleading 404. Shutdown has no arbitrary teardown deadline.
 ## Acceptance gates
 
 A release is not complete merely because the images build. Every required gate below
-passed against the pinned v8 agent image and the exact live v13 corrected backend:
+passed against the current pinned agent release and the exact live v13 corrected
+backend; unchanged historical cache measurements are identified as such:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
 2. clean Qwen archive extraction, semantic drift/idempotence/rollback checks,
@@ -719,6 +736,34 @@ of fabricating success, emitted no forbidden marker, and left no session contain
 All successful sessions likewise left no agent, model-relay, or capture container.
 Script argument-rejection probes also proved that start, status, stop, and build
 reject an alternate mode before changing state.
+
+## Production SWE-rebench pilot
+
+The final paired pilot ran through this production service itself. It did not use a
+Harbor/Qwen model adapter and did not call vLLM directly: the harness submitted each
+task with `POST /v1/agent/sessions`, awaited the production `/wait` notification,
+required the clean terminal bundle, and only then ran the pinned SWE-rebench
+evaluator with no network.
+
+On task `Gentleman-Programming__gentle-ai-595`, the supported
+`preserve_thinking=false` policy resolved all 11 evaluator checks in 61 turns. The
+explicit `preserve_thinking=true` diagnostic also resolved all 11 checks, in 83
+turns. The diagnostic consumed 1,636,513 more aggregate Qwen Code input tokens
+(48.0% more) and 22 more tool/model turns (36.1% more), while wall durations were
+within 0.8%. This one paired sampled task supports the selected default's context
+efficiency; it does not prove a population-level quality or latency difference.
+
+The first two attempts are retained and classified as infrastructure failures, not
+model scores. The second is the run that exposed the `--since 0s` capture race above.
+The accepted pair used release commit
+`7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc`, agent image
+`sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec`,
+broker image
+`sha256:f9d3b77ed2e10d69648c2e443fa5e49ff06fca7eedf6fc580f9d8762d9bfb054`,
+and service image
+`sha256:8f8d4b2e68bf47c9d92c6c5c0f77fdbf60d0056ef32155a34ecc96357dfd41f4`.
+Exact methodology, limitations, hashes, results, and replay instructions are in
+[`docs/production-swe-rebench-pilot.md`](docs/production-swe-rebench-pilot.md).
 
 Any future changed input must rerun the affected gates. There is no fallback
 declaration of success.

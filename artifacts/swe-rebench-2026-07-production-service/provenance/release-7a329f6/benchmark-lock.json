@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "methodology": "production-agent-service-post-session-swe-rebench-evaluator-v1",
+  "production_boundary": "All model and agent execution uses POST /v1/agent/sessions on the accepted production agent_service. Harbor supplies only pinned task/evaluator inputs; it is not a model adapter.",
+  "dataset": {
+    "name": "ibragim-badertdinov/swe-rebench-07-2026@2026-07",
+    "oci_digest": "sha256:e2e357045bf03e4900d2506c36562f6eaff7acd37f63780600967ea3aecdcd79"
+  },
+  "harbor": {
+    "version": "0.21.0",
+    "commit": "64afbbcb62165950301e1a6407c729aa26d844ff"
+  },
+  "task": {
+    "id": "Gentleman-Programming__gentle-ai-595",
+    "base_image": "sha256:4714a9461b2e40cfb122afa32c2c7ad6b154f59e0f9239ae1610018e05fa2029",
+    "realized_environment_image": "sha256:8abec1b1eb1f496fe1762f74f7b0cc535ac287683b8b81316c1e35ef34c819c2",
+    "environment_materialization": {
+      "source": "exact dataset environment/Dockerfile",
+      "network_fetch": "https://astral.sh/uv/0.7.13/install.sh",
+      "installer_observation": "uv installer reported: no checksums to verify",
+      "rerun_authority": "the preserved realized Docker image archive, not a repeat network fetch",
+      "archive_sha256": "2dd8689b6568f5b8742a41dbf050f8dd2aeb48ff40b42c6624c98e985a85e069",
+      "archive_bytes": 445108736
+    },
+    "base_commit": "36051a1b41d879b1bf76f4aa9aa984d74e54c26d",
+    "instruction_sha256": "ed30f7bcf909ca5ba322c67ebe1d3268eeff84d95aa398a1999729d51b0aa07e",
+    "task_toml_sha256": "f43c9704c1b8f61622482b208b1760b396904cf3a19805ac8310e751878c31fc",
+    "environment_dockerfile_sha256": "4d043435cced3194f43eb194934e80cae11c159535e4b1eedfa363c6b2844334",
+    "test_sh_sha256": "b476376ea874e772e03db5905681b23bd125242b5695395ba30e95494a92de65",
+    "test_config_sha256": "b57b74ca95373f3c8b41e6e1df5b48ac632107923b30ea96600d5f6a19e2c732",
+    "test_parser_sha256": "3bd13777a0e303178e76fc3a135e7ccd303b6496e59a973c4503fefd6a0dd114",
+    "agent_timeout_sec": 3000,
+    "verifier_timeout_sec": 3000,
+    "cpus": 1,
+    "memory_mb": 4096,
+    "network_mode": "public"
+  },
+  "production_release": {
+    "release_commit": "7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc",
+    "implementation_commit": "bc67dae720894cbbcd62122a2a9ff6b56b042168",
+    "release_lock_sha256": "a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4",
+    "stack_lock_sha256": "de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3",
+    "images": {
+      "vllm": "sha256:587e8710c6630edd249f19b46837c12ebe5b5dcdc98486e215ac48a66644dc7f",
+      "agent": "sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec",
+      "broker": "sha256:f9d3b77ed2e10d69648c2e443fa5e49ff06fca7eedf6fc580f9d8762d9bfb054",
+      "service": "sha256:8f8d4b2e68bf47c9d92c6c5c0f77fdbf60d0056ef32155a34ecc96357dfd41f4"
+    }
+  },
+  "comparison": {
+    "order": [
+      false,
+      true
+    ],
+    "sole_changed_request_field": "preserve_thinking",
+    "invariant_settings": "same production service, model, Qwen Code, xhigh reasoning, sampling, tools, source, instruction, evaluator, and time limits"
+  }
+}

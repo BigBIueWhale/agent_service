@@ -1,0 +1,339 @@
+{
+  "schema_version": 1,
+  "task_id": "Gentleman-Programming__gentle-ai-595",
+  "methodology": "both variants ran through the accepted production agent_service; SWE-rebench evaluated only captured post-session workspaces",
+  "runs": [
+    {
+      "schema_version": 1,
+      "benchmark_lock": {
+        "schema_version": 1,
+        "methodology": "production-agent-service-post-session-swe-rebench-evaluator-v1",
+        "production_boundary": "All model and agent execution uses POST /v1/agent/sessions on the accepted production agent_service. Harbor supplies only pinned task/evaluator inputs; it is not a model adapter.",
+        "dataset": {
+          "name": "ibragim-badertdinov/swe-rebench-07-2026@2026-07",
+          "oci_digest": "sha256:e2e357045bf03e4900d2506c36562f6eaff7acd37f63780600967ea3aecdcd79"
+        },
+        "harbor": {
+          "version": "0.21.0",
+          "commit": "64afbbcb62165950301e1a6407c729aa26d844ff"
+        },
+        "task": {
+          "id": "Gentleman-Programming__gentle-ai-595",
+          "base_image": "sha256:4714a9461b2e40cfb122afa32c2c7ad6b154f59e0f9239ae1610018e05fa2029",
+          "realized_environment_image": "sha256:8abec1b1eb1f496fe1762f74f7b0cc535ac287683b8b81316c1e35ef34c819c2",
+          "environment_materialization": {
+            "source": "exact dataset environment/Dockerfile",
+            "network_fetch": "https://astral.sh/uv/0.7.13/install.sh",
+            "installer_observation": "uv installer reported: no checksums to verify",
+            "rerun_authority": "the preserved realized Docker image archive, not a repeat network fetch",
+            "archive_sha256": "2dd8689b6568f5b8742a41dbf050f8dd2aeb48ff40b42c6624c98e985a85e069",
+            "archive_bytes": 445108736
+          },
+          "base_commit": "36051a1b41d879b1bf76f4aa9aa984d74e54c26d",
+          "instruction_sha256": "ed30f7bcf909ca5ba322c67ebe1d3268eeff84d95aa398a1999729d51b0aa07e",
+          "task_toml_sha256": "f43c9704c1b8f61622482b208b1760b396904cf3a19805ac8310e751878c31fc",
+          "environment_dockerfile_sha256": "4d043435cced3194f43eb194934e80cae11c159535e4b1eedfa363c6b2844334",
+          "test_sh_sha256": "b476376ea874e772e03db5905681b23bd125242b5695395ba30e95494a92de65",
+          "test_config_sha256": "b57b74ca95373f3c8b41e6e1df5b48ac632107923b30ea96600d5f6a19e2c732",
+          "test_parser_sha256": "3bd13777a0e303178e76fc3a135e7ccd303b6496e59a973c4503fefd6a0dd114",
+          "agent_timeout_sec": 3000,
+          "verifier_timeout_sec": 3000,
+          "cpus": 1,
+          "memory_mb": 4096,
+          "network_mode": "public"
+        },
+        "production_release": {
+          "release_commit": "7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc",
+          "implementation_commit": "bc67dae720894cbbcd62122a2a9ff6b56b042168",
+          "release_lock_sha256": "a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4",
+          "stack_lock_sha256": "de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3",
+          "images": {
+            "vllm": "sha256:587e8710c6630edd249f19b46837c12ebe5b5dcdc98486e215ac48a66644dc7f",
+            "agent": "sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec",
+            "broker": "sha256:f9d3b77ed2e10d69648c2e443fa5e49ff06fca7eedf6fc580f9d8762d9bfb054",
+            "service": "sha256:8f8d4b2e68bf47c9d92c6c5c0f77fdbf60d0056ef32155a34ecc96357dfd41f4"
+          }
+        },
+        "comparison": {
+          "order": [
+            false,
+            true
+          ],
+          "sole_changed_request_field": "preserve_thinking",
+          "invariant_settings": "same production service, model, Qwen Code, xhigh reasoning, sampling, tools, source, instruction, evaluator, and time limits"
+        }
+      },
+      "run_order": 3,
+      "sole_variant": {
+        "preserve_thinking": false
+      },
+      "production": {
+        "created": {
+          "session_id": "s-133dfd0c3b2643fa8291ab45c9508116",
+          "status": "running",
+          "started_at_unix": 1786961300,
+          "model": "qwen3.8-27b-nvfp4-k8v4",
+          "context_window": 262144,
+          "preserve_thinking": false,
+          "prompt_preview": "fix(installer): back navigation from Pi-only install shows unrelated Gentle AI configuration\n### Pre-flight Checklist\n\n- [x] I have searched…",
+          "num_turns": 0,
+          "last_event_at_unix": 1786961304,
+          "finished_at_unix": 0,
+          "duration_wall_ms": 0,
+          "container_exit_code": 0,
+          "agent_exit_code": 0,
+          "is_process_error": false,
+          "response": "",
+          "agent_duration_ms": 0,
+          "bundle_archive_path": "",
+          "bundle_compressed_bytes": 0,
+          "bundle_uncompressed_bytes": 0,
+          "bundle_file_count": 0,
+          "bundle_artifacts_file_count": 0,
+          "raw_session_tree_retained": false,
+          "teardown_diagnostics": []
+        },
+        "terminal": {
+          "session_id": "s-133dfd0c3b2643fa8291ab45c9508116",
+          "status": "completed",
+          "started_at_unix": 1786961300,
+          "model": "qwen3.8-27b-nvfp4-k8v4",
+          "context_window": 262144,
+          "preserve_thinking": false,
+          "prompt_preview": "fix(installer): back navigation from Pi-only install shows unrelated Gentle AI configuration\n### Pre-flight Checklist\n\n- [x] I have searched…",
+          "num_turns": 61,
+          "last_event_at_unix": 1786962390,
+          "finished_at_unix": 1786962391,
+          "duration_wall_ms": 1090658,
+          "container_exit_code": 0,
+          "agent_exit_code": 0,
+          "is_process_error": false,
+          "response": "\n\nDone. The fix is committed as `8aaaa63` on the detached HEAD.\n\n## Outcome\n\n**Root cause:** For a Pi-only install, the forward path skips the Persona, Preset, and Strict TDD prompts (`gentle-pi` owns those choices) and goes `Agents → DependencyTree` (install plan) directly. But the back navigation from the install plan had no Pi-only case, so both the **Back row** (Enter) and **Esc** fell through to `ScreenPreset` — reopening the full Gentle AI configuration flow (preset → SDD mode → strict TDD → model pickers → plugins), exactly the unrelated screens the issue describes.\n\n**Fix** (`internal/tui/model.go`, +11 lines, both back paths kept in sync per the existing \"keep in sync\" convention):\n- `goBack()` (Esc): in the `ScreenDependencyTree` non-custom branch, `isPiOnlyAgents(m.Selection.Agents)` now returns to `ScreenAgents` first.\n- `confirmSelection()` (Enter on \"Back\"): same Pi-only check added before the existing StrictTDD/SDDMode/ClaudeModelPicker/Preset fallthrough.\n\nThe check is placed inside the non-custom preset branch on purpose: a Pi-only user who *did* walk through Persona/Preset (e.g. picked Custom) correctly keeps returning to `ScreenPreset`. Multi-agent selections are unaffected.\n\n**Tests** (`internal/tui/model_test.go`, +81 lines, committed with the fix per the work-unit skill):\n- `TestPiOnlyDependencyTreeBackReturnsToAgents` — Enter on Back row → Agents\n- `TestPiOnlyDependencyTreeEscBackReturnsToAgents` — Esc → Agents\n- `TestPiOnlyBackWalkFromReviewReturnsToAgents` — full walk Review → DependencyTree → Agents\n- `TestMultiAgentDependencyTreeBackStillReturnsToPreset` — regression guard for the generic flow\n\n## Verification — honest status\n\n- ✅ `gofmt -e` parse + format check passed on both edited files; identifiers cross-checked against the package.\n- ❌ **`go test` / `go vet` / `go build` could not be run in this container.** The only installed toolchain is Go 1.22.2, `go.mod` requires Go 1.25.10 (bumped in `07c62a0`), the module cache is empty (no vendored deps), and the container is network-isolated, so the toolchain/module downloads fail. The new tests were written RED-first by logic tracing but were **not executed**. Please run `go test ./internal/tui/` in a networked environment (CI) before merging — that is the outstanding risk.\n\n## Notes\n\n- No docs or e2e expectations asserted the buggy behavior, so no other files needed changes.\n- All changes are in the `/workspace` staged copy; they are not written back to your original folder automatically. Commit author was set repo-locally to match the existing history (no global config changed).",
+          "agent_duration_ms": 1084315,
+          "bundle_archive_path": "/home/user/Desktop/agent_service/.runtime/results/s-133dfd0c3b2643fa8291ab45c9508116/bundle.tar.zst",
+          "bundle_compressed_bytes": 8886231,
+          "bundle_uncompressed_bytes": 13270017,
+          "bundle_file_count": 701,
+          "bundle_artifacts_file_count": 0,
+          "raw_session_tree_retained": false,
+          "teardown_diagnostics": []
+        },
+        "session_id": "s-133dfd0c3b2643fa8291ab45c9508116",
+        "agent_timed_out": false
+      },
+      "evidence": {
+        "bundle_sha256": "4ac6f5729017a111cb5dde1c30110a7d5520af1059c7e529234073d42c519f3a",
+        "candidate_patch_sha256": "d4e69c838e9349ff20189893def6e5c1d3e5301efd07c822cacbf74dac08fe36",
+        "candidate_patch_bytes": 5301
+      },
+      "verifier": {
+        "exit_code": 0,
+        "reward": 1,
+        "report": {
+          "log_parser": "parse_log_gotest",
+          "parsed_counts": {
+            "PASSED": 11,
+            "FAILED": 0,
+            "SKIPPED": 0,
+            "ERROR": 0
+          },
+          "fail_to_pass": {
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/Pi-only_agents_fast_path_returns_to_agent_selection": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestPiOnlyDependencyTreeBackRowReturnsToAgentSelection": "PASSED"
+          },
+          "pass_to_pass": {
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/OpenCode_SDD_multi_with_model_cache_returns_through_plugins_strict_TDD_model_picker_and_SDD_mode": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/OpenCode_SDD_single_returns_through_plugins_strict_TDD_and_SDD_mode_to_preset": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/custom_Engram_only_returns_from_review_to_component_selector": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/custom_OpenCode_SDD_skills_returns_from_skill_picker_through_strict_TDD_and_SDD_mode_to_component_selector": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/custom_SDD_skills_returns_from_skill_picker_through_strict_TDD_to_component_selector": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/non-OpenCode_SDD_returns_through_strict_TDD_to_preset": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/non-custom_minimal_with_OpenCode_returns_through_plugins_to_preset": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/non-custom_minimal_without_OpenCode_returns_from_dependency_plan_to_preset": "PASSED"
+          },
+          "fail_to_pass_ok": true,
+          "pass_to_pass_ok": true,
+          "resolved": true
+        }
+      },
+      "outcome": {
+        "classification": "resolved",
+        "resolved": true
+      }
+    },
+    {
+      "schema_version": 1,
+      "benchmark_lock": {
+        "schema_version": 1,
+        "methodology": "production-agent-service-post-session-swe-rebench-evaluator-v1",
+        "production_boundary": "All model and agent execution uses POST /v1/agent/sessions on the accepted production agent_service. Harbor supplies only pinned task/evaluator inputs; it is not a model adapter.",
+        "dataset": {
+          "name": "ibragim-badertdinov/swe-rebench-07-2026@2026-07",
+          "oci_digest": "sha256:e2e357045bf03e4900d2506c36562f6eaff7acd37f63780600967ea3aecdcd79"
+        },
+        "harbor": {
+          "version": "0.21.0",
+          "commit": "64afbbcb62165950301e1a6407c729aa26d844ff"
+        },
+        "task": {
+          "id": "Gentleman-Programming__gentle-ai-595",
+          "base_image": "sha256:4714a9461b2e40cfb122afa32c2c7ad6b154f59e0f9239ae1610018e05fa2029",
+          "realized_environment_image": "sha256:8abec1b1eb1f496fe1762f74f7b0cc535ac287683b8b81316c1e35ef34c819c2",
+          "environment_materialization": {
+            "source": "exact dataset environment/Dockerfile",
+            "network_fetch": "https://astral.sh/uv/0.7.13/install.sh",
+            "installer_observation": "uv installer reported: no checksums to verify",
+            "rerun_authority": "the preserved realized Docker image archive, not a repeat network fetch",
+            "archive_sha256": "2dd8689b6568f5b8742a41dbf050f8dd2aeb48ff40b42c6624c98e985a85e069",
+            "archive_bytes": 445108736
+          },
+          "base_commit": "36051a1b41d879b1bf76f4aa9aa984d74e54c26d",
+          "instruction_sha256": "ed30f7bcf909ca5ba322c67ebe1d3268eeff84d95aa398a1999729d51b0aa07e",
+          "task_toml_sha256": "f43c9704c1b8f61622482b208b1760b396904cf3a19805ac8310e751878c31fc",
+          "environment_dockerfile_sha256": "4d043435cced3194f43eb194934e80cae11c159535e4b1eedfa363c6b2844334",
+          "test_sh_sha256": "b476376ea874e772e03db5905681b23bd125242b5695395ba30e95494a92de65",
+          "test_config_sha256": "b57b74ca95373f3c8b41e6e1df5b48ac632107923b30ea96600d5f6a19e2c732",
+          "test_parser_sha256": "3bd13777a0e303178e76fc3a135e7ccd303b6496e59a973c4503fefd6a0dd114",
+          "agent_timeout_sec": 3000,
+          "verifier_timeout_sec": 3000,
+          "cpus": 1,
+          "memory_mb": 4096,
+          "network_mode": "public"
+        },
+        "production_release": {
+          "release_commit": "7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc",
+          "implementation_commit": "bc67dae720894cbbcd62122a2a9ff6b56b042168",
+          "release_lock_sha256": "a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4",
+          "stack_lock_sha256": "de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3",
+          "images": {
+            "vllm": "sha256:587e8710c6630edd249f19b46837c12ebe5b5dcdc98486e215ac48a66644dc7f",
+            "agent": "sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec",
+            "broker": "sha256:f9d3b77ed2e10d69648c2e443fa5e49ff06fca7eedf6fc580f9d8762d9bfb054",
+            "service": "sha256:8f8d4b2e68bf47c9d92c6c5c0f77fdbf60d0056ef32155a34ecc96357dfd41f4"
+          }
+        },
+        "comparison": {
+          "order": [
+            false,
+            true
+          ],
+          "sole_changed_request_field": "preserve_thinking",
+          "invariant_settings": "same production service, model, Qwen Code, xhigh reasoning, sampling, tools, source, instruction, evaluator, and time limits"
+        }
+      },
+      "run_order": 4,
+      "sole_variant": {
+        "preserve_thinking": true
+      },
+      "production": {
+        "created": {
+          "session_id": "s-c7dad910a01847ecad7833599d9ade69",
+          "status": "running",
+          "started_at_unix": 1786962407,
+          "model": "qwen3.8-27b-nvfp4-k8v4",
+          "context_window": 262144,
+          "preserve_thinking": true,
+          "prompt_preview": "fix(installer): back navigation from Pi-only install shows unrelated Gentle AI configuration\n### Pre-flight Checklist\n\n- [x] I have searched…",
+          "num_turns": 0,
+          "last_event_at_unix": 1786962411,
+          "finished_at_unix": 0,
+          "duration_wall_ms": 0,
+          "container_exit_code": 0,
+          "agent_exit_code": 0,
+          "is_process_error": false,
+          "response": "",
+          "agent_duration_ms": 0,
+          "bundle_archive_path": "",
+          "bundle_compressed_bytes": 0,
+          "bundle_uncompressed_bytes": 0,
+          "bundle_file_count": 0,
+          "bundle_artifacts_file_count": 0,
+          "raw_session_tree_retained": false,
+          "teardown_diagnostics": []
+        },
+        "terminal": {
+          "session_id": "s-c7dad910a01847ecad7833599d9ade69",
+          "status": "completed",
+          "started_at_unix": 1786962407,
+          "model": "qwen3.8-27b-nvfp4-k8v4",
+          "context_window": 262144,
+          "preserve_thinking": true,
+          "prompt_preview": "fix(installer): back navigation from Pi-only install shows unrelated Gentle AI configuration\n### Pre-flight Checklist\n\n- [x] I have searched…",
+          "num_turns": 83,
+          "last_event_at_unix": 1786963488,
+          "finished_at_unix": 1786963488,
+          "duration_wall_ms": 1081835,
+          "container_exit_code": 0,
+          "agent_exit_code": 0,
+          "is_process_error": false,
+          "response": "\n\n## Result\n\nFixed. Back navigation from the install plan in a Pi-only install now returns to the **Select AI Agents** screen instead of falling into the unrelated Gentle AI configuration flow (ecosystem preset, persona, TDD/multi-agent screens).\n\n**Root cause** — When only `Pi` is selected, `ScreenAgents` confirm skips persona/preset/configuration screens and jumps straight to the install plan (`ScreenDependencyTree`) with `piOnlyComponents()`. But the Back handlers had no Pi-only case: since no SDD component/Claude/OpenCode agent was selected, every `shouldShow*` check was false and both Back paths fell through to `ScreenPreset` — the \"Select Ecosystem Preset\" screen (whose Back chain leads to persona/communication-style and the other setup screens). Both the Enter-on-\"Back\" path (`confirmSelection`) and the Esc path (`goBack`) were affected.\n\n**Changes**\n- `internal/tui/model.go`\n  - `confirmSelection()` → `ScreenDependencyTree` case: added a `isPiOnlyAgents(m.Selection.Agents)` guard before the `shouldShow*` Back chain → `ScreenAgents`.\n  - `goBack()`: added the matching guard (`Screen == ScreenDependencyTree && isPiOnlyAgents(...)`) before the non-custom DependencyTree block → `ScreenAgents`.\n  - The guard is safe: agent selection is immutable after leaving the agents screen, so Pi-only at the install plan can only have happened via the Pi-only fast path (which forces a non-custom preset and Engram-only components). Every other `setScreen(ScreenPreset)` site was audited and is unreachable from the Pi-only path.\n- `internal/tui/model_test.go` — 4 regression tests in the existing style: Enter-Back and Esc from the Pi-only install plan return to agents (both failed before the fix), an end-to-end repro of the reported steps (Agents → Continue → Install Plan → Back → Agents), and a guard test that non-Pi-only Esc from the install plan still falls back to the preset screen.\n- `docs/pi.md` — one sentence documenting the Pi-only back-navigation behavior.\n\n**Verification**\n- `gofmt` clean on both modified Go files (syntax + formatting).\n- `go build`/`go test` **could not be run in this container**: system Go is 1.22 while `go.mod` requires 1.25.10 (toolchain download blocked — no network), and the Go module cache is empty, so the charmbracelet dependencies are unavailable offline. This is an environment limitation, not a check I skipped silently.\n- As a substitute, I compiled and ran a standalone Go harness (built with the available toolchain, no external deps) that transcribes both Back-navigation chains verbatim — pre-fix and post-fix. All 16 scenario checks passed: pre-fix reproduces the bug (Pi-only Back → `ScreenPreset`); post-fix Pi-only Back → `ScreenAgents` for both Enter and Esc; and OpenCode/SDD, Claude, Cursor/Engram-only, Pi+other-agents, and custom-preset outcomes are all unchanged and match the real code's check order (verified against `TestDependencyTreeEnterBackNavigatesToStrictTDD` and the existing `goBack` code).\n\n**Unresolved risk**: the new unit tests are unexecuted (offline toolchain gap above); they will run in the project's normal CI. Scratch verification artifacts were removed; the final bundle contains only the three changed files.",
+          "agent_duration_ms": 1075932,
+          "bundle_archive_path": "/home/user/Desktop/agent_service/.runtime/results/s-c7dad910a01847ecad7833599d9ade69/bundle.tar.zst",
+          "bundle_compressed_bytes": 8921304,
+          "bundle_uncompressed_bytes": 13224468,
+          "bundle_file_count": 694,
+          "bundle_artifacts_file_count": 0,
+          "raw_session_tree_retained": false,
+          "teardown_diagnostics": []
+        },
+        "session_id": "s-c7dad910a01847ecad7833599d9ade69",
+        "agent_timed_out": false
+      },
+      "evidence": {
+        "bundle_sha256": "c38bc7e71c6badddfdb40eeda92ba0fb0e5ed0dec48f618a62fbfca2e80a7265",
+        "candidate_patch_sha256": "11391d08400bb5de4ebc2cc181ba009944d0240916e3becc312db6a93064e75d",
+        "candidate_patch_bytes": 7164
+      },
+      "verifier": {
+        "exit_code": 0,
+        "reward": 1,
+        "report": {
+          "log_parser": "parse_log_gotest",
+          "parsed_counts": {
+            "PASSED": 11,
+            "FAILED": 0,
+            "SKIPPED": 0,
+            "ERROR": 0
+          },
+          "fail_to_pass": {
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/Pi-only_agents_fast_path_returns_to_agent_selection": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestPiOnlyDependencyTreeBackRowReturnsToAgentSelection": "PASSED"
+          },
+          "pass_to_pass": {
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/OpenCode_SDD_multi_with_model_cache_returns_through_plugins_strict_TDD_model_picker_and_SDD_mode": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/OpenCode_SDD_single_returns_through_plugins_strict_TDD_and_SDD_mode_to_preset": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/custom_Engram_only_returns_from_review_to_component_selector": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/custom_OpenCode_SDD_skills_returns_from_skill_picker_through_strict_TDD_and_SDD_mode_to_component_selector": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/custom_SDD_skills_returns_from_skill_picker_through_strict_TDD_to_component_selector": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/non-OpenCode_SDD_returns_through_strict_TDD_to_preset": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/non-custom_minimal_with_OpenCode_returns_through_plugins_to_preset": "PASSED",
+            "github.com/gentleman-programming/gentle-ai/internal/tui::TestInstallNavigationRoundTrips/non-custom_minimal_without_OpenCode_returns_from_dependency_plan_to_preset": "PASSED"
+          },
+          "fail_to_pass_ok": true,
+          "pass_to_pass_ok": true,
+          "resolved": true
+        }
+      },
+      "outcome": {
+        "classification": "resolved",
+        "resolved": true
+      }
+    }
+  ],
+  "comparison": {
+    "resolved": {
+      "unpreserved": true,
+      "preserved": true
+    },
+    "turns": {
+      "unpreserved": 61,
+      "preserved": 83
+    },
+    "duration_wall_ms": {
+      "unpreserved": 1090658,
+      "preserved": 1081835
+    }
+  }
+}
