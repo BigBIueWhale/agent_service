@@ -33,6 +33,18 @@ def require_regular_file(path: Path, label: str) -> None:
         raise ContractError(f"{label} must be a regular, non-symlink file: {path}")
 
 
+def require_canonical_directory(path: Path, label: str) -> None:
+    metadata = path.lstat()
+    if not stat.S_ISDIR(metadata.st_mode) or path.is_symlink():
+        raise ContractError(f"{label} must be a real, non-symlink directory: {path}")
+    resolved = path.resolve(strict=True)
+    if resolved != path:
+        raise ContractError(
+            f"{label} must be an absolute canonical directory: "
+            f"observed {path}, resolved {resolved}"
+        )
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -60,6 +72,13 @@ def load_manifest(path: Path) -> dict[str, object]:
 
 def verify(manifest_path: Path, apt_lock_path: Path) -> None:
     manifest = load_manifest(manifest_path)
+    # Version probes validate the sealed image, not the submitted project.
+    # Several tools inspect their current directory even for a version command
+    # (notably Go's automatic toolchain selection when a workspace go.mod asks
+    # for a newer version). Anchor every probe beside the already verified
+    # manifest so an untrusted /workspace cannot change probe semantics.
+    probe_cwd = manifest_path.parent
+    require_canonical_directory(probe_cwd, "toolchain probe directory")
     if manifest["schema_version"] != 1:
         raise ContractError("toolchain manifest schema_version must equal 1")
     expected_apt = manifest["apt_lock_sha256"]
@@ -127,6 +146,7 @@ def verify(manifest_path: Path, apt_lock_path: Path) -> None:
         try:
             completed = subprocess.run(
                 argv,
+                cwd=probe_cwd,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,

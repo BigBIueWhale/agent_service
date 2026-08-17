@@ -56,6 +56,42 @@ class VerifyToolchainTests(unittest.TestCase):
                 else:
                     os.environ["PATH"] = old_path
 
+    def test_version_probes_ignore_callers_hostile_working_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sealed = root / "sealed"
+            hostile = root / "submitted-project"
+            sealed.mkdir()
+            hostile.mkdir()
+            manifest, apt = self.fixture(sealed)
+            probe = sealed / "probe"
+            probe.write_text(
+                "#!/bin/sh\n"
+                "if test -e ./go.mod; then\n"
+                "  printf 'hostile workspace affected version probe\\n'\n"
+                "  exit 86\n"
+                "fi\n"
+                "printf 'probe 1\\n'\n",
+                encoding="utf-8",
+            )
+            probe.chmod(0o755)
+            (hostile / "go.mod").write_text(
+                "module hostile.example/probe\n\ngo 1.99.0\n",
+                encoding="utf-8",
+            )
+            old_path = os.environ.get("PATH")
+            old_cwd = Path.cwd()
+            os.environ["PATH"] = str(sealed)
+            os.chdir(hostile)
+            try:
+                MODULE.verify(manifest, apt)
+            finally:
+                os.chdir(old_cwd)
+                if old_path is None:
+                    os.environ.pop("PATH", None)
+                else:
+                    os.environ["PATH"] = old_path
+
     def test_rejects_apt_lock_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -87,6 +123,17 @@ class VerifyToolchainTests(unittest.TestCase):
             link.symlink_to(manifest)
             with self.assertRaisesRegex(MODULE.ContractError, "non-symlink"):
                 MODULE.load_manifest(link)
+
+    def test_rejects_manifest_reached_through_symlinked_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sealed = root / "sealed"
+            sealed.mkdir()
+            manifest, apt = self.fixture(sealed)
+            alias = root / "alias"
+            alias.symlink_to(sealed, target_is_directory=True)
+            with self.assertRaisesRegex(MODULE.ContractError, "toolchain probe directory"):
+                MODULE.verify(alias / manifest.name, apt)
 
     def test_rejects_non_executable_promised_command(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
