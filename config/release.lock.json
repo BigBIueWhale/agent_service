@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
   "profile": "qwen38-agent-service-v3",
-  "implementation_commit": "7e4325489bbc14076c45e92f6fb784088c01fdf8",
-  "build_inputs_manifest_sha256": "3ac27f4001e8c163454edef35c533224fa88e38327cdd988a8d3178aa1b5a557",
-  "stack_lock_sha256": "a795bce7d66beb9162e0a2e4adc21f91a084c4fd9a8a1f713a0d97e8a467e40d",
+  "implementation_commit": "bc67dae720894cbbcd62122a2a9ff6b56b042168",
+  "build_inputs_manifest_sha256": "949edcada0c09591b416335d9418f02dcfd69a0a2ba3352b3f417af9a7b3b435",
+  "stack_lock_sha256": "de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3",
   "images": {
     "agent": "sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec",
     "capture": "sha256:d87f39d60370eb5190e7ec166807131b90d545d6da20929a1e6fa7ccf7c186de",
     "relay": "sha256:8b3aa7c098e5a9c757302340bf5554b9bd36c7c30640c1ce07d5cd1fc38417d1",
-    "broker": "sha256:1b966cff0d067fc1b9b607877ae5044b8ebc00efd16efca5083cd24ef305f3ea",
-    "service": "sha256:4c6c3560face3c60c1fe5ff83f84cb17a3dc66a014353284064e7ed99448f6e5"
+    "broker": "sha256:f9d3b77ed2e10d69648c2e443fa5e49ff06fca7eedf6fc580f9d8762d9bfb054",
+    "service": "sha256:8f8d4b2e68bf47c9d92c6c5c0f77fdbf60d0056ef32155a34ecc96357dfd41f4"
   }
 }
