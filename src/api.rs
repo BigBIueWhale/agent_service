@@ -622,6 +622,14 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
         &cfg.lock.broker.policy_id,
     )?;
     require_equal("broker profile", &evidence.profile, &cfg.lock.profile)?;
+    // Observed host facts are recorded as evidence, deliberately without
+    // assertions: exact host software and GPU identity are not this
+    // deployment's contract.
+    tracing::info!(
+        docker_version = %evidence.docker_version,
+        gpu_record = %evidence.gpu_record,
+        "broker preflight reported the observed host environment"
+    );
     verify_agent_image_labels(cfg, single_inspect(&evidence.agent_image, "agent image")?)?;
     verify_relay_image(cfg, single_inspect(&evidence.relay_image, "relay image")?)?;
     verify_capture_image(
