@@ -209,6 +209,43 @@ write_symlink_manifest() {
   ) >"${output}"
 }
 
+write_environment_git_status() {
+  local env_id="$1" expected_base_commit="$2" output="$3"
+  docker run --rm --network none --cap-drop ALL \
+    --security-opt no-new-privileges --read-only --memory 1g --pids-limit 128 \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
+    --env EXPECTED_BASE_COMMIT="${expected_base_commit}" \
+    --env GIT_CONFIG_NOSYSTEM=1 --env GIT_OPTIONAL_LOCKS=0 --env HOME=/tmp/no-home \
+    --env LC_ALL=C \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'test -d .git && test ! -L .git;
+     git_bin="$(command -v git)"; test -n "$git_bin"; test -x "$git_bin";
+     test "$PWD" = "$(pwd -P)";
+     test "$PWD" = "$("$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --show-toplevel)";
+     test "$("$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD)" = "$EXPECTED_BASE_COMMIT";
+     "$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null status \
+       --porcelain=v1 -z --untracked-files=all --ignore-submodules=none' >"${output}"
+}
+
+write_copied_git_status() {
+  local env_id="$1" expected_base_commit="$2" source_root="$3" output="$4"
+  docker run --rm --network none --cap-drop ALL \
+    --security-opt no-new-privileges --read-only --memory 1g --pids-limit 128 \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
+    --env EXPECTED_BASE_COMMIT="${expected_base_commit}" \
+    --env GIT_CONFIG_NOSYSTEM=1 --env GIT_OPTIONAL_LOCKS=0 --env HOME=/tmp/no-home \
+    --env LC_ALL=C \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    --mount "type=bind,src=${source_root},dst=/source,readonly" \
+    --workdir /source --user 1000:1000 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'test -d .git && test ! -L .git;
+     git_bin="$(command -v git)"; test -n "$git_bin"; test -x "$git_bin";
+     test "$("$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null -c safe.directory=/source rev-parse HEAD)" = "$EXPECTED_BASE_COMMIT";
+     "$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null -c safe.directory=/source status \
+       --porcelain=v1 -z --untracked-files=all --ignore-submodules=none' >"${output}"
+}
+
 verify_source_manifests() {
   local task_dir="$1"
   local source_root="${task_dir}/source" scratch
@@ -226,24 +263,91 @@ verify_source_manifests() {
 }
 
 verify_materialized_repository() {
-  local task_dir="$1" env_id base_commit output
+  local task_dir="$1" env_id base_commit status_path scratch environment_status copied_status
+  local status_sha status_bytes status_clean manifest_has_status_fields migration_partial
   env_id="$(jq -er '.environment.image_id' "${task_dir}/manifest.json")"
   base_commit="$(jq -er '.source.base_commit' "${task_dir}/manifest.json")"
-  output="$(docker run --rm --network none --cap-drop ALL \
-    --security-opt no-new-privileges --read-only --memory 512m --pids-limit 128 \
-    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
-    --env EXPECTED_BASE_COMMIT="${base_commit}" \
-    --env GIT_CONFIG_NOSYSTEM=1 --env GIT_OPTIONAL_LOCKS=0 --env HOME=/tmp/no-home \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    --mount "type=bind,src=${task_dir}/source,dst=/source,readonly" \
-    --workdir /source --user 1000:1000 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
-    'test -d .git && test ! -L .git;
-     git_bin="$(command -v git)"; test -n "$git_bin"; test -x "$git_bin";
-     test "$("$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null -c safe.directory=/source rev-parse HEAD)" = "$EXPECTED_BASE_COMMIT";
-     test -z "$("$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null -c safe.directory=/source status --porcelain=v1 --untracked-files=all)";
-     printf "%s\n" "$EXPECTED_BASE_COMMIT"')"
-  require_equal "isolated copied-repository proof for $(basename "${task_dir}")" \
-    "${base_commit}" "${output}"
+  status_path="${task_dir}/initial-git-status.z"
+  scratch="$(mktemp -d "${SUITE_ROOT}/.verify-git-status.XXXXXXXX")"
+  environment_status="${scratch}/environment.z"
+  copied_status="${scratch}/copied.z"
+  write_environment_git_status "${env_id}" "${base_commit}" "${environment_status}"
+  write_copied_git_status "${env_id}" "${base_commit}" "${task_dir}/source" "${copied_status}"
+  cmp -- "${environment_status}" "${copied_status}" ||
+    die "copied repository Git status differs from the exact environment image: $(basename "${task_dir}")"
+
+  status_sha="$(sha256sum -- "${environment_status}" | awk '{print $1}')"
+  status_bytes="$(stat -c '%s' -- "${environment_status}")"
+  status_clean=false
+  (( status_bytes != 0 )) || status_clean=true
+  manifest_has_status_fields="$(jq -r \
+    'if (.source.initial_git_status_sha256 | type) == "string" and
+        (.source.initial_git_status_bytes | type) == "number" and
+        (.source.initial_worktree_clean | type) == "boolean"
+     then "complete"
+     elif .source.initial_git_status_sha256 == null and
+          .source.initial_git_status_bytes == null and
+          .source.initial_worktree_clean == null
+     then "absent"
+     else "partial"
+     end' "${task_dir}/manifest.json")"
+  [[ "${manifest_has_status_fields}" != partial ]] ||
+    die "initial Git-status fields are only partially present: $(basename "${task_dir}")"
+
+  if [[ -e "${status_path}" ]]; then
+    [[ -f "${status_path}" && ! -L "${status_path}" ]] ||
+      die "initial Git-status evidence is not a regular file: ${status_path}"
+    [[ ! -e "${status_path}.partial" ]] ||
+      die "initial Git-status evidence has an unexpected partial sibling: ${status_path}.partial"
+    cmp -- "${status_path}" "${environment_status}" ||
+      die "initial Git-status evidence differs from the exact environment image: $(basename "${task_dir}")"
+  else
+    if [[ -e "${status_path}.partial" ]]; then
+      [[ -f "${status_path}.partial" && ! -L "${status_path}.partial" ]] ||
+        die "partial initial Git-status evidence is not a regular file: ${status_path}.partial"
+      cmp -- "${status_path}.partial" "${environment_status}" ||
+        die "partial initial Git-status evidence differs from the exact environment image: $(basename "${task_dir}")"
+    else
+      cp -- "${environment_status}" "${status_path}.partial"
+    fi
+    sync -f "${status_path}.partial"
+    mv -- "${status_path}.partial" "${status_path}"
+    sync -f "${task_dir}"
+  fi
+
+  if [[ "${manifest_has_status_fields}" == absent ]]; then
+    migration_partial="${task_dir}/manifest.json.git-status-migration.partial"
+    jq --arg status_sha "${status_sha}" --argjson status_bytes "${status_bytes}" \
+      --argjson status_clean "${status_clean}" \
+      '.source.initial_git_status_sha256 = $status_sha |
+       .source.initial_git_status_bytes = $status_bytes |
+       .source.initial_worktree_clean = $status_clean' \
+      "${task_dir}/manifest.json" >"${scratch}/migrated-manifest.json"
+    if [[ -e "${migration_partial}" ]]; then
+      [[ -f "${migration_partial}" && ! -L "${migration_partial}" ]] ||
+        die "partial Git-status manifest migration is not a regular file: ${migration_partial}"
+      cmp -- "${migration_partial}" "${scratch}/migrated-manifest.json" ||
+        die "partial Git-status manifest migration differs from the exact regenerated form: $(basename "${task_dir}")"
+    else
+      cp -- "${scratch}/migrated-manifest.json" "${migration_partial}"
+    fi
+    sync -f "${migration_partial}"
+    mv -- "${migration_partial}" "${task_dir}/manifest.json"
+    sync -f "${task_dir}"
+  else
+    [[ ! -e "${task_dir}/manifest.json.git-status-migration.partial" ]] ||
+      die "completed Git-status manifest has an unexpected partial migration sibling: $(basename "${task_dir}")"
+  fi
+
+  jq -e --arg status_sha "${status_sha}" --argjson status_bytes "${status_bytes}" \
+    --argjson status_clean "${status_clean}" \
+    '.source.initial_git_status_sha256 == $status_sha and
+     .source.initial_git_status_bytes == $status_bytes and
+     .source.initial_worktree_clean == $status_clean' \
+    "${task_dir}/manifest.json" >/dev/null ||
+    die "initial Git-status manifest evidence mismatch: $(basename "${task_dir}")"
+  require_sha256 "${status_path}" "${status_sha}"
+  rm -rf -- "${scratch}"
 }
 
 restore_environment_image_if_needed() {
@@ -322,6 +426,8 @@ validate_completed_task() {
   [[ -d "${task_dir}/source/.git" && ! -L "${task_dir}/source/.git" ]] ||
     die "materialized source has no real .git directory: ${task_id}"
   verify_materialized_repository "${task_dir}"
+  [[ -f "${task_dir}/initial-git-status.z" && ! -L "${task_dir}/initial-git-status.z" ]] ||
+    die "completed task Git-status evidence is absent or a symlink: ${task_id}"
   verify_source_manifests "${task_dir}"
 }
 
@@ -365,6 +471,7 @@ materialize_task() {
   local language log_parser instruction_bytes file_count source_bytes symlink_count special_count
   local classification=eligible exclusion_reason='' policy_first=false policy_second=true
   local archive_sha archive_bytes regular_sha modes_sha symlinks_sha container_name
+  local initial_git_status_sha initial_git_status_bytes initial_worktree_clean copied_git_status
   local registry_content_hash network_policy_source
   local -a docker_lines
 
@@ -475,12 +582,13 @@ materialize_task() {
     --entrypoint bash "${env_id}" -Eeuo pipefail -c \
     'test "$PWD" = "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --show-toplevel)";
      test "$PWD" = "$(pwd -P)";
-     test -z "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain=v1 --untracked-files=all)";
      test "$(uv --version)" = "uv 0.7.13";
      test -d /logs;
      git -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD' >"${partial_dir}/environment-probe.txt"
   require_equal "environment repository HEAD for ${task_id}" "${base_commit}" \
     "$(tr -d '[:space:]' <"${partial_dir}/environment-probe.txt")"
+  write_environment_git_status "${env_id}" "${base_commit}" \
+    "${partial_dir}/initial-git-status.z"
 
   mkdir -- "${source_root}"
   container_name="qwen38-swe-materialize-$(printf '%s' "${task_id}" | sha256sum | cut -c1-20)"
@@ -497,6 +605,16 @@ materialize_task() {
     die "materialized source lacks a real .git directory: ${task_id}"
   [[ -z "$(find "${source_root}" \! -user 1000 -print -quit)" ]] ||
     die "materialized source contains a file not owned by uid 1000: ${task_id}"
+  copied_git_status="${partial_dir}/copied-git-status.verify"
+  write_copied_git_status "${env_id}" "${base_commit}" "${source_root}" \
+    "${copied_git_status}"
+  cmp -- "${partial_dir}/initial-git-status.z" "${copied_git_status}" ||
+    die "copied repository Git status differs from the exact environment image: ${task_id}"
+  rm -- "${copied_git_status}"
+  initial_git_status_sha="$(sha256sum -- "${partial_dir}/initial-git-status.z" | awk '{print $1}')"
+  initial_git_status_bytes="$(stat -c '%s' -- "${partial_dir}/initial-git-status.z")"
+  initial_worktree_clean=false
+  (( initial_git_status_bytes != 0 )) || initial_worktree_clean=true
 
   file_count="$(find "${source_root}" -type f -printf '.\n' | wc -l)"
   source_bytes="$(find "${source_root}" -type f -printf '%s\n' | awk '{sum += $1} END {print sum + 0}')"
@@ -567,6 +685,9 @@ materialize_task() {
     --arg regular_sha "${regular_sha}" \
     --arg modes_sha "${modes_sha}" \
     --arg symlinks_sha "${symlinks_sha}" \
+    --arg initial_git_status_sha "${initial_git_status_sha}" \
+    --argjson initial_git_status_bytes "${initial_git_status_bytes}" \
+    --argjson initial_worktree_clean "${initial_worktree_clean}" \
     --argjson instruction_bytes "${instruction_bytes}" \
     --argjson file_count "${file_count}" \
     --argjson source_bytes "${source_bytes}" \
@@ -620,7 +741,10 @@ materialize_task() {
         symlink_count:$symlink_count,special_file_count:$special_count,
         regular_manifest_sha256:$regular_sha,
         mode_manifest_sha256:$modes_sha,
-        symlink_manifest_sha256:$symlinks_sha
+        symlink_manifest_sha256:$symlinks_sha,
+        initial_git_status_sha256:$initial_git_status_sha,
+        initial_git_status_bytes:$initial_git_status_bytes,
+        initial_worktree_clean:$initial_worktree_clean
       }
     }' >"${partial_dir}/manifest.json.partial"
   jq -e --arg task "${task_id}" --arg classification "${classification}" \
