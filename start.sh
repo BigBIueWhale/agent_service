@@ -216,6 +216,7 @@ docker run --detach \
   --memory-swap "$(lock_value '.service.memory_swap')" \
   --pids-limit "$(lock_value '.service.pids_limit')" \
   --mount "type=bind,src=${PROJECT_DIR}/config,dst=${PROJECT_DIR}/config,readonly" \
+  --mount "type=bind,src=${BACKEND_DIR}/manifests,dst=${BACKEND_DIR}/manifests,readonly" \
   --mount "type=bind,src=${STATE_DIR},dst=${STATE_DIR}" \
   --mount "type=bind,src=${RESULTS_DIR},dst=${RESULTS_DIR}" \
   --mount "type=bind,src=${CONTROL_DIR},dst=${CONTROL_DIR},readonly" \

@@ -960,8 +960,11 @@ async fn verify_service_container(cfg: &Config, value: &serde_json::Value) -> Se
     // only its own runtime state, results, control socket, and model relay
     // socket directories.
     let config_dir = "/home/user/Desktop/agent_service/config";
+    let backend_manifests = format!("{}/manifests", cfg.lock.backend.project_dir);
+    let backend_manifests = backend_manifests.as_str();
     let expected_mounts = std::collections::BTreeMap::from([
         (config_dir, (config_dir, false)),
+        (backend_manifests, (backend_manifests, false)),
         (
             cfg.lock.service.state_dir.as_str(),
             (cfg.lock.service.state_dir.as_str(), true),
