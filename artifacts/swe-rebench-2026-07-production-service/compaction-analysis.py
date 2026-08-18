@@ -21,7 +21,16 @@ import pathlib
 import sys
 
 CONTEXT_WINDOW = 262144
-COMPACTION_RATIO = 0.9  # a drop below 90% of the previous turn is a compaction
+
+def classify(variant: str, result: dict) -> dict:
+    """Preserved histories are append-only, so every drop there is a true
+    compaction. Unpreserved histories legitimately shed prior thinking, so
+    their drops are the mode's own history-thinning dynamics; the near-limit
+    compressor has never been observed to fire and is claimed only for a
+    preserved-mode drop."""
+    key = "compactions" if "-preserved" in variant else "history_drops"
+    result[key] = result.pop("drops")
+    return result
 
 def analyze_events(path: pathlib.Path) -> dict:
     trajectory = []
@@ -37,31 +46,19 @@ def analyze_events(path: pathlib.Path) -> dict:
             tokens = usage.get("input_tokens") or 0
             if tokens > 0:
                 trajectory.append(tokens)
-    compactions = []
-    thinking_strips = []
-    minor_drops = []
+    drops = []
     cumulative = 0
     for index, tokens in enumerate(trajectory):
         previous = trajectory[index - 1] if index >= 1 else None
         if previous is not None and tokens < previous:
-            record = {
+            drops.append({
                 "usage_index": index,
                 "input_tokens_before": previous,
                 "input_tokens_after": tokens,
+                "dropped_tokens": previous - tokens,
                 "cumulative_input_tokens_before": cumulative,
                 "window_fraction_before": round(previous / CONTEXT_WINDOW, 4),
-            }
-            if tokens >= previous * COMPACTION_RATIO:
-                minor_drops.append(record)
-            elif index >= 2 and tokens >= trajectory[index - 2] * 0.98:
-                # With preserve_thinking=false the previous turn's thinking
-                # is stripped from history, so context legitimately falls
-                # back toward — but not below — where it stood before that
-                # turn. A true compaction cuts deeper than the pre-turn
-                # level; this one did not.
-                thinking_strips.append(record)
-            else:
-                compactions.append(record)
+            })
         cumulative += tokens
     peak = max(trajectory, default=0)
     return {
@@ -70,9 +67,7 @@ def analyze_events(path: pathlib.Path) -> dict:
         "peak_window_fraction": round(peak / CONTEXT_WINDOW, 4),
         "final_input_tokens": trajectory[-1] if trajectory else 0,
         "cumulative_input_tokens": cumulative,
-        "compactions": compactions,
-        "thinking_strips": thinking_strips,
-        "minor_drops": minor_drops,
+        "drops": drops,
     }
 
 def main() -> int:
@@ -83,13 +78,15 @@ def main() -> int:
         rows.append({
             "task": variant_dir.parent.name,
             "variant": variant_dir.name,
-            **analyze_events(events),
+            **classify(variant_dir.name, analyze_events(events)),
         })
     json.dump({"context_window": CONTEXT_WINDOW, "variants": rows},
               sys.stdout, indent=2)
     print()
-    total = sum(len(r["compactions"]) for r in rows)
-    print(f"variants={len(rows)} total_compactions={total}", file=sys.stderr)
+    compactions = sum(len(r.get("compactions", [])) for r in rows)
+    thinning = sum(len(r.get("history_drops", [])) for r in rows)
+    print(f"variants={len(rows)} true_compactions={compactions} "
+          f"unpreserved_history_drops={thinning}", file=sys.stderr)
     return 0
 
 if __name__ == "__main__":
