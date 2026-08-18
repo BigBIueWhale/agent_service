@@ -13,8 +13,8 @@ For every variant this reports: number of graded turns carrying usage,
 peak and final context size (absolute and as a fraction of the 262144
 window), and each compaction as
 ``{usage_index, input_tokens_before, input_tokens_after,
-cumulative_input_tokens_before}``. Drops of less than 10% are still
-listed (as ``minor_drops``) so nothing is silently classified away.
+cumulative_input_tokens_before}``. Every drop is listed regardless of
+size, so nothing is silently classified away.
 """
 import json
 import pathlib
