@@ -250,9 +250,16 @@ run_variant() {
      .model == "qwen3.8-27b-nvfp4-k8v4" and .context_window == 262144 and
      .preserve_thinking == $policy and .finished_at_unix > 0 and
      (.bundle_sha256 | test("^[0-9a-f]{64}$")) and .bundle_compressed_bytes > 0 and
-     .bundle_file_count > 0 and .raw_session_tree_retained == false and
-     .teardown_diagnostics == []' \
+     .bundle_file_count > 0 and .raw_session_tree_retained == false' \
     "${terminal}" >/dev/null || die 'production terminal body or required bundle contract failed'
+  # Recorded agent failure (is_process_error / non-empty teardown_diagnostics,
+  # e.g. Qwen's loop-detection halt) is classifiable evidence for
+  # production_agent_process_failure, never a reason to kill the pass.
+  # Infrastructure teardown truth is observed directly instead: no container
+  # owned by this session may survive its terminal record.
+  if docker ps --all --format '{{.Names}}' | grep -qF -- "${session_id}"; then
+    die "session containers survived teardown for ${session_id}"
+  fi
   if [[ "${agent_timed_out}" == false ]]; then
     jq -e '.status == "completed"' "${terminal}" >/dev/null || die 'non-timeout session did not complete'
   fi

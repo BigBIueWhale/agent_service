@@ -69,3 +69,40 @@ Both incidents were surfaced by the suite driver's first fail-closed poll
 cycle — before any benchmark variant completed — and were invisible to the
 81-test suite because both defects live exactly on the running-session and
 current-handle read paths that only a live production session exercises.
+
+## Incident 3 — agent loop-detection halt killed the whole pass instead of one variant
+
+- **Observed** (task `ArcadeData__arcadedb-4455`, `preserve_thinking=true`,
+  session
+  `s-bb316d9fc3c2e4e23a56c9c9068fc504640e191e4fd1759f7f427b7784674e8a`):
+  the suite driver died with
+  `production terminal body or required bundle contract failed` after 28
+  turns of a healthy run.
+- **What actually happened**: the model got stuck re-issuing an identical
+  invalid tool call (`pages: "677"` to the file reader) and Qwen Code's
+  always-on `consecutive_identical_tool_calls` loop guard halted the run
+  as `error_during_execution` (agent exit 1). The terminal result event
+  claimed 29 turns while only 28 main assistant events completed, so the
+  service's strict event parse refused to infer success and honestly
+  published a `completed` terminal with `is_process_error=true` and one
+  teardown diagnostic. The service behaved correctly end to end — the
+  bundle commitment, teardown, and terminal record were all intact.
+- **Root cause of the pass death**: the driver's terminal gate required
+  `teardown_diagnostics == []`, which conflates recorded agent failure
+  with infrastructure failure. The driver's own
+  `production_agent_process_failure` classification exists precisely for
+  this outcome but was unreachable behind the gate. (Timeout variants
+  passed the gate only because durable cancellation produces a clean
+  terminal with empty diagnostics.)
+- **Fix**: the gate now enforces only infrastructure invariants
+  (identity, terminal status, bundle commitment, no retained raw tree)
+  plus a directly observed teardown truth — no container owned by the
+  session may survive. Recorded agent failure flows to
+  `production_agent_process_failure` and the pass continues. The partial
+  variant evidence is archived at
+  `runs/ArcadeData__arcadedb-4455/02-preserved.incident3-loop-halt-archived/`
+  and the variant reruns fresh.
+- **Benchmark note**: the loop-halt itself is a legitimate
+  model-behavior data point for the preserved-thinking comparison — the
+  agent's own final thinking read "I'm repeatedly making the same
+  mistake by including a `pages` pa…" while the guard fired.
