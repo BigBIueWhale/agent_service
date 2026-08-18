@@ -69,7 +69,7 @@ warm_one() {
   set +e
   docker run --detach --name "${name}" \
     --network bridge \
-    --cpus 4 --memory 8192m --pids-limit 4096 \
+    --cpus 4 --memory 16384m --pids-limit 4096 \
     --security-opt no-new-privileges \
     --env TASK_WORKING_DIR="${working_dir}" \
     --mount "type=bind,src=${DATASET_ROOT}/${task_id}/tests,dst=/benchmark-tests,readonly" \
@@ -138,9 +138,9 @@ fi
 export PATH
 ENVEOF'
 
-  # Harvest: existing directories only (recorded as /-relative names into
-  # /harvest.list inside the container), one gzip tar streamed out of the
-  # same filesystem the warm phase populated. env.sh rides at tar root.
+  # Harvest with docker cp and a host-side tar: several task images ship
+  # no tar/gzip at all, so nothing may be assumed about in-container
+  # tooling beyond sh. env.sh rides at tar root.
   local dirs
   dirs="$(docker exec "${name}" sh -c '
     printf "env.sh\n" > /harvest.list
@@ -148,10 +148,21 @@ ENVEOF'
       [ -e "$d" ] && printf "%s\n" "${d#/}" >> /harvest.list
     done
     cat /harvest.list')"
-  [[ -n "${dirs}" ]] || { docker rm -f "${name}" >/dev/null; printf 'ERROR %s: nothing to harvest\n' "${task_id}" >&2; return 1; }
-  docker exec "${name}" sh -c 'cd / && tar -czf - -T /harvest.list' \
-    > "${out_dir}/task-env.tar.gz.partial"
+  [[ -n "${dirs}" ]] || { docker rm -f "${name}" >/dev/null; printf 'ERROR %s: nothing to harvest (container dead?)\n' "${task_id}" >&2; return 1; }
+  local stage rel
+  stage="$(mktemp -d /tmp/qwen38-taskenv-stage.XXXXXX)"
+  local harvest_ok=true
+  while IFS= read -r rel; do
+    [[ -n "${rel}" ]] || continue
+    mkdir -p -- "${stage}/$(dirname "${rel}")"
+    docker cp "${name}:/${rel}" "${stage}/$(dirname "${rel}")/" >/dev/null 2>&1 ||
+      { printf 'WARN %s: docker cp failed for /%s\n' "${task_id}" "${rel}" >&2; harvest_ok=false; }
+  done <<<"${dirs}"
   docker rm -f "${name}" >/dev/null
+  [[ "${harvest_ok}" == true ]] ||
+    { rm -rf -- "${stage}"; printf 'ERROR %s: harvest copy incomplete\n' "${task_id}" >&2; return 1; }
+  tar -czf "${out_dir}/task-env.tar.gz.partial" -C "${stage}" .
+  rm -rf -- "${stage}"
 
   local bytes sha
   bytes="$(stat -c '%s' "${out_dir}/task-env.tar.gz.partial")"
