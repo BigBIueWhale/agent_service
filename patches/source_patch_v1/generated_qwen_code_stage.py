@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '08c0f280e086d1eb2f11fe1aca7498d943e2efb06cf1046d590c22ed5d3900f6',
+  'review_sha256': '043e8a44c7ff0c60681ab004267ec2c3e4835a0a4065f65c781d5cf7b6b44dc4',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -26,6 +26,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/cli/src/gemini.tsx',
              'before_sha256': '88e31ff4c737cbdfdd95f8a217a051ae8206100a113c257f07a6e9b4d2df2088',
              'after_sha256': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286'},
+            {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before_sha256': '17e660b5b946d5647814af611bc5b6aaf43c597e7b329e4926d90b8bf7fa72e8',
+             'after_sha256': '60644ab60158d63603c05454a2fd5da550fa033001c46209497fae8e0a153fd1'},
+            {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before_sha256': 'd389950daa67e5b2578ed5da8e340e417d7f696486c81ed78f3aca735e22c0bd',
+             'after_sha256': 'ea3a7911c2ef9624d28eb039770d934b2db29a295c9144167ddbadad75f13a18'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
              'after_sha256': '02233e6614397b85a2ab9fffbf5c1ab660e95eb4b92870dc86a45cd20e6ffb7e'},
@@ -1782,6 +1788,252 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        : new ExtensionFileWatcher(config, undefined, '
                              'extensionRefreshState);\n'
                              '    extensionFileWatcher?.startWatching();\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-1',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before': "        expect(result).toBe('Tool result');\n"
+                       '      });\n'
+                       '\n'
+                       "      it('includes the vision bridge disclosure with tool "
+                       "content', () => {\n"
+                       '        const response = {\n'
+                       "          callId: 'pdf-success',\n",
+             'after': "        expect(result).toBe('Tool result');\n"
+                      '      });\n'
+                      '\n'
+                      "      it('[stream-evidence] prefers model-facing parts over the "
+                      "display banner', () => {\n"
+                      '        const response = {\n'
+                      "          callId: 'tool-ranged-read',\n"
+                      "          resultDisplay: 'Read lines 86-155 of 213 from "
+                      "src/MessageIdImpl.java',\n"
+                      '          responseParts: [\n'
+                      '            {\n'
+                      '              functionResponse: {\n'
+                      "                response: { output: 'public static MessageId "
+                      "fromByteArray(...) {' },\n"
+                      '              },\n'
+                      '            },\n'
+                      '          ],\n'
+                      '          error: undefined,\n'
+                      '          errorType: undefined,\n'
+                      '        };\n'
+                      '\n'
+                      '        expect(toolResultContent(response)).toBe(\n'
+                      "          'public static MessageId fromByteArray(...) {',\n"
+                      '        );\n'
+                      '      });\n'
+                      '\n'
+                      "      it('[stream-evidence] falls back to the display when no "
+                      "parts exist', () => {\n"
+                      '        const response = {\n'
+                      "          callId: 'tool-display-only',\n"
+                      "          resultDisplay: 'operation summary',\n"
+                      '          responseParts: [],\n'
+                      '          error: undefined,\n'
+                      '          errorType: undefined,\n'
+                      '        };\n'
+                      '\n'
+                      "        expect(toolResultContent(response)).toBe('operation "
+                      "summary');\n"
+                      '      });\n'
+                      '\n'
+                      "      it('includes the vision bridge disclosure with tool "
+                      "content', () => {\n"
+                      '        const response = {\n'
+                      "          callId: 'pdf-success',\n",
+             'review_before': "        expect(result).toBe('Tool result');\n"
+                              '      });\n'
+                              '\n'
+                              "      it('includes the vision bridge disclosure with "
+                              "tool content', () => {\n"
+                              '        const response = {\n'
+                              "          callId: 'pdf-success',\n",
+             'review_after': "        expect(result).toBe('Tool result');\n"
+                             '      });\n'
+                             '\n'
+                             "      it('[stream-evidence] prefers model-facing parts "
+                             "over the display banner', () => {\n"
+                             '        const response = {\n'
+                             "          callId: 'tool-ranged-read',\n"
+                             "          resultDisplay: 'Read lines 86-155 of 213 from "
+                             "src/MessageIdImpl.java',\n"
+                             '          responseParts: [\n'
+                             '            {\n'
+                             '              functionResponse: {\n'
+                             "                response: { output: 'public static "
+                             "MessageId fromByteArray(...) {' },\n"
+                             '              },\n'
+                             '            },\n'
+                             '          ],\n'
+                             '          error: undefined,\n'
+                             '          errorType: undefined,\n'
+                             '        };\n'
+                             '\n'
+                             '        expect(toolResultContent(response)).toBe(\n'
+                             "          'public static MessageId fromByteArray(...) "
+                             "{',\n"
+                             '        );\n'
+                             '      });\n'
+                             '\n'
+                             "      it('[stream-evidence] falls back to the display "
+                             "when no parts exist', () => {\n"
+                             '        const response = {\n'
+                             "          callId: 'tool-display-only',\n"
+                             "          resultDisplay: 'operation summary',\n"
+                             '          responseParts: [],\n'
+                             '          error: undefined,\n'
+                             '          errorType: undefined,\n'
+                             '        };\n'
+                             '\n'
+                             '        '
+                             "expect(toolResultContent(response)).toBe('operation "
+                             "summary');\n"
+                             '      });\n'
+                             '\n'
+                             "      it('includes the vision bridge disclosure with "
+                             "tool content', () => {\n"
+                             '        const response = {\n'
+                             "          callId: 'pdf-success',\n"},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-2',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before': '\n'
+                       '        expect(toolResultContent(response)).toBe(\n'
+                       "          'Converted 1 image via qwen3-vl-plus "
+                       "(dashscope.aliyuncs.com).\\n' +\n"
+                       "            'captured screen',\n"
+                       '        );\n'
+                       '      });\n'
+                       '\n',
+             'after': '\n'
+                      '        expect(toolResultContent(response)).toBe(\n'
+                      "          'Converted 1 image via qwen3-vl-plus "
+                      "(dashscope.aliyuncs.com).\\n' +\n"
+                      "            'Screen says READY',\n"
+                      '        );\n'
+                      '      });\n'
+                      '\n',
+             'review_before': '\n'
+                              '        expect(toolResultContent(response)).toBe(\n'
+                              "          'Converted 1 image via qwen3-vl-plus "
+                              "(dashscope.aliyuncs.com).\\n' +\n"
+                              "            'captured screen',\n"
+                              '        );\n'
+                              '      });\n'
+                              '\n',
+             'review_after': '\n'
+                             '        expect(toolResultContent(response)).toBe(\n'
+                             "          'Converted 1 image via qwen3-vl-plus "
+                             "(dashscope.aliyuncs.com).\\n' +\n"
+                             "            'Screen says READY',\n"
+                             '        );\n'
+                             '      });\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-1',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': '  if (response.error) {\n'
+                       '    return response.error.message;\n'
+                       '  }\n'
+                       '  if (\n'
+                       "    typeof response.resultDisplay === 'string' &&\n"
+                       '    response.resultDisplay.trim().length > 0\n'
+                       '  ) {\n'
+                       '    return response.resultDisplay;\n'
+                       '  }\n'
+                       '  if (response.responseParts && response.responseParts.length '
+                       '> 0) {\n'
+                       '    // Always use functionResponsePartsToString to properly '
+                       'handle\n'
+                       '    // functionResponse parts that contain output content\n'
+                       '    return '
+                       'functionResponsePartsToString(response.responseParts);\n'
+                       '  }\n'
+                       '  return undefined;\n'
+                       '}\n'
+                       '\n',
+             'after': '  if (response.error) {\n'
+                      '    return response.error.message;\n'
+                      '  }\n'
+                      '  // The emitted stream is the evidentiary record of the '
+                      'session, so it\n'
+                      '  // must carry what the model actually received. responseParts '
+                      'is the\n'
+                      '  // model-facing content; resultDisplay is a short '
+                      'human-facing summary\n'
+                      '  // (for ranged file reads, only a "Read lines X-Y of Z" '
+                      'banner). Prefer\n'
+                      '  // the model-facing content and fall back to the display '
+                      'summary only\n'
+                      '  // when no parts exist.\n'
+                      '  if (response.responseParts && response.responseParts.length > '
+                      '0) {\n'
+                      '    // Always use functionResponsePartsToString to properly '
+                      'handle\n'
+                      '    // functionResponse parts that contain output content\n'
+                      '    return '
+                      'functionResponsePartsToString(response.responseParts);\n'
+                      '  }\n'
+                      '  if (\n'
+                      "    typeof response.resultDisplay === 'string' &&\n"
+                      '    response.resultDisplay.trim().length > 0\n'
+                      '  ) {\n'
+                      '    return response.resultDisplay;\n'
+                      '  }\n'
+                      '  return undefined;\n'
+                      '}\n'
+                      '\n',
+             'review_before': '  if (response.error) {\n'
+                              '    return response.error.message;\n'
+                              '  }\n'
+                              '  if (\n'
+                              "    typeof response.resultDisplay === 'string' &&\n"
+                              '    response.resultDisplay.trim().length > 0\n'
+                              '  ) {\n'
+                              '    return response.resultDisplay;\n'
+                              '  }\n'
+                              '  if (response.responseParts && '
+                              'response.responseParts.length > 0) {\n'
+                              '    // Always use functionResponsePartsToString to '
+                              'properly handle\n'
+                              '    // functionResponse parts that contain output '
+                              'content\n'
+                              '    return '
+                              'functionResponsePartsToString(response.responseParts);\n'
+                              '  }\n'
+                              '  return undefined;\n'
+                              '}\n'
+                              '\n',
+             'review_after': '  if (response.error) {\n'
+                             '    return response.error.message;\n'
+                             '  }\n'
+                             '  // The emitted stream is the evidentiary record of the '
+                             'session, so it\n'
+                             '  // must carry what the model actually received. '
+                             'responseParts is the\n'
+                             '  // model-facing content; resultDisplay is a short '
+                             'human-facing summary\n'
+                             '  // (for ranged file reads, only a "Read lines X-Y of '
+                             'Z" banner). Prefer\n'
+                             '  // the model-facing content and fall back to the '
+                             'display summary only\n'
+                             '  // when no parts exist.\n'
+                             '  if (response.responseParts && '
+                             'response.responseParts.length > 0) {\n'
+                             '    // Always use functionResponsePartsToString to '
+                             'properly handle\n'
+                             '    // functionResponse parts that contain output '
+                             'content\n'
+                             '    return '
+                             'functionResponsePartsToString(response.responseParts);\n'
+                             '  }\n'
+                             '  if (\n'
+                             "    typeof response.resultDisplay === 'string' &&\n"
+                             '    response.resultDisplay.trim().length > 0\n'
+                             '  ) {\n'
+                             '    return response.resultDisplay;\n'
+                             '  }\n'
+                             '  return undefined;\n'
+                             '}\n'
+                             '\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-1',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '\n'
@@ -33706,6 +33958,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/config/config.ts': 'c476125a2be618c868e8b38fdce4a77d53c882e8525ce33b20fb35947a38d7c0',
  'packages/cli/src/gemini.test.tsx': '2e547b0eb91c2e1746e3b966511cb286846cbc5495779056d0b1099776795166',
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '60644ab60158d63603c05454a2fd5da550fa033001c46209497fae8e0a153fd1',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'ea3a7911c2ef9624d28eb039770d934b2db29a295c9144167ddbadad75f13a18',
  'packages/cli/src/nonInteractiveCli.ts': '02233e6614397b85a2ab9fffbf5c1ab660e95eb4b92870dc86a45cd20e6ffb7e',
  'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'f33feccda131157f509ecabcd77a47d53e85413719af23edc1a4f28448e1fb1a',
  'packages/cli/src/utils/nonInteractiveHelpers.ts': '7d818a669ee036bf8e8b935b47613d074c51f959e77832f6fcc6c289e398a2c8',

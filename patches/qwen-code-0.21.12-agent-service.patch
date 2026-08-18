@@ -502,6 +502,91 @@ index 72409fd..aced76c 100644
          ? undefined
          : new ExtensionFileWatcher(config, undefined, extensionRefreshState);
      extensionFileWatcher?.startWatching();
+diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
+index e687181..ff19974 100644
+--- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
++++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
+@@ -1767,6 +1767,38 @@ describe('BaseJsonOutputAdapter', () => {
+         expect(result).toBe('Tool result');
+       });
+ 
++      it('[stream-evidence] prefers model-facing parts over the display banner', () => {
++        const response = {
++          callId: 'tool-ranged-read',
++          resultDisplay: 'Read lines 86-155 of 213 from src/MessageIdImpl.java',
++          responseParts: [
++            {
++              functionResponse: {
++                response: { output: 'public static MessageId fromByteArray(...) {' },
++              },
++            },
++          ],
++          error: undefined,
++          errorType: undefined,
++        };
++
++        expect(toolResultContent(response)).toBe(
++          'public static MessageId fromByteArray(...) {',
++        );
++      });
++
++      it('[stream-evidence] falls back to the display when no parts exist', () => {
++        const response = {
++          callId: 'tool-display-only',
++          resultDisplay: 'operation summary',
++          responseParts: [],
++          error: undefined,
++          errorType: undefined,
++        };
++
++        expect(toolResultContent(response)).toBe('operation summary');
++      });
++
+       it('includes the vision bridge disclosure with tool content', () => {
+         const response = {
+           callId: 'pdf-success',
+@@ -1813,7 +1845,7 @@ describe('BaseJsonOutputAdapter', () => {
+ 
+         expect(toolResultContent(response)).toBe(
+           'Converted 1 image via qwen3-vl-plus (dashscope.aliyuncs.com).\n' +
+-            'captured screen',
++            'Screen says READY',
+         );
+       });
+ 
+diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
+index 0b15577..b38cbe5 100644
+--- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
++++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
+@@ -1439,17 +1439,23 @@ export function toolResultContent(
+   if (response.error) {
+     return response.error.message;
+   }
++  // The emitted stream is the evidentiary record of the session, so it
++  // must carry what the model actually received. responseParts is the
++  // model-facing content; resultDisplay is a short human-facing summary
++  // (for ranged file reads, only a "Read lines X-Y of Z" banner). Prefer
++  // the model-facing content and fall back to the display summary only
++  // when no parts exist.
++  if (response.responseParts && response.responseParts.length > 0) {
++    // Always use functionResponsePartsToString to properly handle
++    // functionResponse parts that contain output content
++    return functionResponsePartsToString(response.responseParts);
++  }
+   if (
+     typeof response.resultDisplay === 'string' &&
+     response.resultDisplay.trim().length > 0
+   ) {
+     return response.resultDisplay;
+   }
+-  if (response.responseParts && response.responseParts.length > 0) {
+-    // Always use functionResponsePartsToString to properly handle
+-    // functionResponse parts that contain output content
+-    return functionResponsePartsToString(response.responseParts);
+-  }
+   return undefined;
+ }
+ 
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
 index 6dfe8f8..aca1ab1 100644
 --- a/packages/cli/src/nonInteractiveCli.ts

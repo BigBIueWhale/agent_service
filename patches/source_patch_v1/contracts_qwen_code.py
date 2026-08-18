@@ -977,6 +977,46 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         _require_all(state, path, needles, label=label)
 
 
+def _validate_stream_evidence_before(state: State) -> None:
+    label = "headless stream-evidence precondition"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    forbid_text(
+        state, adapter, "must carry what the model actually received", label=label
+    )
+
+
+def _validate_stream_evidence_after(state: State) -> None:
+    label = "headless stream-evidence result"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
+    # The emitted stream is the session's evidentiary record: the
+    # tool_result content must be the model-facing responseParts, with the
+    # short human-facing display string only as a fallback.
+    adapter_source = _source(state, adapter, label=label)
+    _require_ordered(
+        adapter_source,
+        (
+            "must carry what the model actually received",
+            "return functionResponsePartsToString(response.responseParts);",
+            "return response.resultDisplay;",
+        ),
+        label=label,
+        location=adapter,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "[stream-evidence] prefers model-facing parts over the display banner",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "[stream-evidence] falls back to the display when no parts exist",
+        label=label,
+    )
+
+
 def _validate_nonpdf_pages_before(state: State) -> None:
     label = "non-PDF pages rejection precondition"
     tool = "packages/core/src/tools/read-file.ts"
@@ -1218,6 +1258,25 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_nonpdf_pages_before,
         validate_after=_validate_nonpdf_pages_after,
+    ),
+    SemanticConcern(
+        name="headless-stream-evidence",
+        rationale=(
+            "The headless stream-json output is captured as the session's "
+            "evidentiary record. Upstream serialized tool results from the "
+            "human-facing display string, so ranged file reads were recorded "
+            "as a bare 'Read lines X-Y of Z' banner while the model received "
+            "the full content — forensic analysis of production sessions "
+            "misattributed model failures to information blackouts. The "
+            "record must prefer the model-facing responseParts and fall back "
+            "to the display only when no parts exist."
+        ),
+        removal_condition=(
+            "Remove only when upstream stream-json emits the model-facing "
+            "tool-result content for every tool by default."
+        ),
+        validate_before=_validate_stream_evidence_before,
+        validate_after=_validate_stream_evidence_after,
     ),
 )
 

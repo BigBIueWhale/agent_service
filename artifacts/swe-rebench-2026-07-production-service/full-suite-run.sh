@@ -25,17 +25,19 @@ done
 
 readonly API='http://127.0.0.1:8090'
 readonly SUITE_ROOT="${BENCH_ROOT}/full-suite-v1"
-readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v4"
+# Pass v5 is the corrected-conditions pass: every variant's prompt is the
+# committed harness preamble (time budget, grading mechanics, environment)
+# plus the untouched task statement, and every workspace carries the task's
+# warmed toolchain and dependency caches (.task-env.tar.gz, produced by
+# warm-task-env.sh) so the agent can actually build and run tests offline.
+# Earlier passes (v3 under the misleading read_file pages tool, v4 briefly
+# under the pages fix alone) are retained as historical evidence; v5 runs
+# all 41 pairs fresh under the final conditions.
+readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v5"
 readonly RUNS_ROOT="${PASS_ROOT}/runs"
 readonly PROVENANCE_ROOT="${PASS_ROOT}/release-provenance"
-# Pass v3 ran under the release whose read_file tool misled agents about the
-# PDF-only pages parameter (INCIDENTS.md, loop-halt forensics). Pairs fully
-# accepted there under one release remain valid single-release pairs and are
-# not repeated; the two pairs whose recorded results contain a
-# production_agent_process_failure caused by that tool trap are superseded
-# and rerun here in full, keeping every pair internally single-release.
-readonly PRIOR_PASS_ROOT="${BENCH_ROOT}/full-suite-v3"
-readonly SUPERSEDED_TASKS='HKUDS__nanobot-4048 cloudnative-pg__cloudnative-pg-10747'
+readonly PREAMBLE_FILE="${BENCH_ROOT}/prompt-preamble.md"
+readonly TASK_ENV_ROOT="${BENCH_ROOT}/full-suite-v1/task-env"
 readonly DATASET_ROOT="${BENCH_ROOT}/evaluator-dataset"
 readonly PLAN_FILE="${SUITE_ROOT}/suite-plan.json"
 readonly AGENT_TIMEOUT_SEC=3000
@@ -238,8 +240,31 @@ run_variant() {
   [[ "${handle_hex}" =~ ^[0-9a-f]{64}$ ]] || die 'CSPRNG did not produce 32 bytes'
   session_id="s-${handle_hex}"
   printf '%s\n' "${session_id}" >"${run_dir}/session-id.txt"
-  request_file="$(submission_create_receipt "${session_id}" "${task_dir}/source" "${dataset_dir}/instruction.md" "${policy}")" ||
-    die "receipt construction failed for ${task_id} ${label}"
+  # Corrected-conditions submission: the prompt is the committed harness
+  # preamble plus the untouched task statement, and the workspace is the
+  # verified materialized source plus the task's warmed toolchain tarball
+  # (hardlink copy of the source keeps this cheap; the composed tree is
+  # only needed while the receipt zip is built).
+  local env_dir="${TASK_ENV_ROOT}/${task_id}"
+  [[ -f "${env_dir}/task-env.tar.gz" && -f "${env_dir}/env-manifest.json" ]] ||
+    die "task environment is not warmed for ${task_id}; run ./warm-task-env.sh first"
+  require_equal "task-env tarball hash for ${task_id}" \
+    "$(sha256sum -- "${env_dir}/task-env.tar.gz" | awk '{print $1}')" \
+    "$(jq -er '.tar_sha256' "${env_dir}/env-manifest.json")"
+  cp -- "${env_dir}/env-manifest.json" "${run_dir}/task-env-manifest.json"
+
+  local composed_prompt="${run_dir}/prompt.txt" composed_ws
+  cat -- "${PREAMBLE_FILE}" "${dataset_dir}/instruction.md" >"${composed_prompt}"
+  local prompt_sha
+  prompt_sha="$(sha256sum -- "${composed_prompt}" | awk '{print $1}')"
+
+  composed_ws="$(mktemp -d /tmp/qwen38-suite-ws.XXXXXX)"
+  cp -al -- "${task_dir}/source/." "${composed_ws}/" ||
+    { rm -rf -- "${composed_ws}"; die "workspace hardlink copy failed for ${task_id}"; }
+  cp -- "${env_dir}/task-env.tar.gz" "${composed_ws}/.task-env.tar.gz"
+  request_file="$(submission_create_receipt "${session_id}" "${composed_ws}" "${composed_prompt}" "${policy}")" ||
+    { rm -rf -- "${composed_ws}"; die "receipt construction failed for ${task_id} ${label}"; }
+  rm -rf -- "${composed_ws}"
   created="${run_dir}/created.json"
   submission_post_receipt "${session_id}" "${request_file}" >"${created}" ||
     die "submission failed for ${task_id} ${label}"
@@ -283,8 +308,8 @@ run_variant() {
   tar --zstd --extract --no-same-owner --file "${run_dir}/production-bundle.tar.zst" \
     --directory "${run_dir}/bundle"
   [[ -d "${run_dir}/bundle/staged" && ! -L "${run_dir}/bundle/staged" ]] || die 'bundle lacks a real staged workspace'
-  cmp -- "${dataset_dir}/instruction.md" "${run_dir}/bundle/control/prompt.txt" ||
-    die 'bundle prompt differs from task instruction'
+  cmp -- "${composed_prompt}" "${run_dir}/bundle/control/prompt.txt" ||
+    die 'bundle prompt differs from the composed preamble+instruction prompt'
   jq -e --argjson policy "${policy}" '.preserve_thinking == $policy and (keys == ["preserve_thinking"])' \
     "${run_dir}/bundle/control/history-policy.json" >/dev/null || die 'bundle history policy mismatch'
   jq -e --argjson policy "${policy}" --arg sandbox "${AGENT_SANDBOX}" \
@@ -311,7 +336,7 @@ run_variant() {
       git status --porcelain=v1 --untracked-files=all > /out/baseline.status
       git clean -ffdqx
       find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
-      tar -C /candidate --exclude=./.git --exclude=.git -cf - . |
+      tar -C /candidate --exclude=./.git --exclude=.git --exclude=./.task-env.tar.gz --exclude=.task-env.tar.gz -cf - . |
         tar -C "$TASK_WORKING_DIR" --no-same-owner --no-overwrite-dir -xf -
       git add --all -- .
       git diff --cached --binary --full-index "$TASK_BASE_COMMIT" -- > /out/candidate.patch
@@ -418,10 +443,14 @@ run_variant() {
     --argjson reward "${reward}" \
     --arg classification "${classification}" \
     --argjson agent_timed_out "${agent_timed_out}" \
+    --arg prompt_sha256 "${prompt_sha}" \
+    --slurpfile task_env "${run_dir}/task-env-manifest.json" \
     '{
-      schema_version:2,
+      schema_version:3,
       task_id:$task_id,
       release:$release[0],
+      prompt_sha256:$prompt_sha256,
+      task_env:$task_env[0],
       run_order:($ordinal|tonumber),
       variant:{preserve_thinking:$preserve_thinking},
       production:{created:$created[0],terminal:$terminal[0],session_id:$session_id,agent_timed_out:$agent_timed_out},
@@ -444,19 +473,6 @@ run_task() {
   if [[ -f "${target}/pair-summary.json" ]]; then
     printf 'Task %s already has an accepted pair summary; skipping.\n' "${task_id}" >&2
     return 0
-  fi
-  local superseded=false candidate
-  for candidate in ${SUPERSEDED_TASKS}; do
-    [[ "${candidate}" == "${task_id}" ]] && superseded=true
-  done
-  if [[ "${superseded}" == false && -f "${PRIOR_PASS_ROOT}/runs/${task_id}/pair-summary.json" ]]; then
-    printf 'Task %s pair was accepted in %s under its recorded release and is not superseded; skipping.\n' \
-      "${task_id}" "${PRIOR_PASS_ROOT##*/}" >&2
-    return 0
-  fi
-  if [[ "${superseded}" == true ]]; then
-    printf 'Task %s pair from %s is superseded by the read_file pages fix; rerunning both variants.\n' \
-      "${task_id}" "${PRIOR_PASS_ROOT##*/}" >&2
   fi
   mkdir -p -- "${target}"
   chmod 0700 -- "${target}"
@@ -502,28 +518,12 @@ run_task() {
 # ---------------------------------------------------------------------------
 # The pass: plan order, resumable, one task pair at a time.
 # ---------------------------------------------------------------------------
-in_scope=0
-while read -r task_id; do
-  keep=true
-  if [[ -f "${PRIOR_PASS_ROOT}/runs/${task_id}/pair-summary.json" ]]; then
-    keep=false
-    for candidate in ${SUPERSEDED_TASKS}; do
-      [[ "${candidate}" == "${task_id}" ]] && keep=true
-    done
-  fi
-  [[ "${keep}" == true ]] && in_scope=$((in_scope + 1))
-done < <(jq -er '.runs[].task_id' "${PLAN_FILE}")
-readonly in_scope
-printf 'This pass owns %s of 41 task pairs; the rest stay accepted in %s.\n' \
-  "${in_scope}" "${PRIOR_PASS_ROOT##*/}" >&2
-
 completed=0
 while read -r task_id; do
   run_task "${task_id}"
   completed=$((completed + 1))
-  printf '=== Suite progress: %s of %s task pairs have accepted summaries in this pass ===\n' \
-    "$(find "${RUNS_ROOT}" -mindepth 2 -maxdepth 2 -name pair-summary.json | wc -l)" \
-    "${in_scope}" >&2
+  printf '=== Suite progress: %s of 41 task pairs have accepted summaries ===\n' \
+    "$(find "${RUNS_ROOT}" -mindepth 2 -maxdepth 2 -name pair-summary.json | wc -l)" >&2
 done < <(jq -er '.runs[].task_id' "${PLAN_FILE}")
 
 printf 'SUITE_PASS_COMPLETE tasks=%s runs_root=%s\n' "${completed}" "${RUNS_ROOT}"

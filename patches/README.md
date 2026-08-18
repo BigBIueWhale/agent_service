@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `08c0f280e086d1eb2f11fe1aca7498d943e2efb06cf1046d590c22ed5d3900f6`
+- Review-diff SHA-256: `043e8a44c7ff0c60681ab004267ec2c3e4835a0a4065f65c781d5cf7b6b44dc4`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `f9b0a75a013e664372407a1e8cefb9f45122a70178fe79eb28e3066ce44c38f5`
+- Transformer-manifest SHA-256: `fcaa02a2f0c1aca268e4f25c12f8f41e0606521b165ea496053cb911e8d076d8`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -49,7 +49,12 @@ provide as one fail-closed mode:
   validation and consumption layers, with an error that names `offset`/`limit`
   as the text-file remedy — production forensics showed upstream's
   syntax-first errors and silent ignore steering agents into identical-call
-  loops (three `[pages-contract]` tests execute this boundary in the build).
+  loops (three `[pages-contract]` tests execute this boundary in the build);
+- evidentiary stream-json tool results: the emitted record prefers the
+  model-facing responseParts over the short human-facing display string, so
+  captured event streams carry what the model actually received (two
+  `[stream-evidence]` tests plus the full output-adapter suite execute this
+  in the build).
 
 Verification performed in the pinned Node image:
 
