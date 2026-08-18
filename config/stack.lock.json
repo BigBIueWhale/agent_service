@@ -84,7 +84,7 @@
     "instructions_sha256": "2f28657dca2c69cb77c96a8dc6cded7bb0ad4bc0c9367069fff17cc47d7b71e4",
     "system_prompt_sha256": "7bbcb01682b7725bfb5f7aea5645516d939f06577940f8b6bf234a8dd3e25679",
     "deployment_contract_sha256": "0d2c6fd9b7da1a7347407a19b168ff14d4b8c5395e68f93702d7347242c554ae",
-    "toolchain_manifest_sha256": "5a4106c147bfa51cd7c04962f529a068330a4b2d8b6dde84a164cb1e56667060",
+    "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
     "runtime_contract_sha256": "177eb1cfedf1d5e75f51fcfbd7cee1a3783d5b9ec880402372fd0ea5dcabd131",
     "wrapper_sha256": "c5d75b49d9f4b689999d2ec570e715b28a70c9a64e2418083b504e199c726b5e",
     "agent_exec_source_sha256": "70bf73cd95e38d26bdd18288ff0a84c9300a10ddd728e45874bdd1ecf11da98b",
