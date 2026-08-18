@@ -1,5 +1,5 @@
 diff --git a/packages/cli/src/config/auth.test.ts b/packages/cli/src/config/auth.test.ts
-index 276fd5fb96c3d4a511dfdd4aa8dd717e610acfe3..a34ccf72c252b86d795616ae291c7f67add0b615 100644
+index 276fd5f..a34ccf7 100644
 --- a/packages/cli/src/config/auth.test.ts
 +++ b/packages/cli/src/config/auth.test.ts
 @@ -19,6 +19,7 @@ vi.mock('./settings.js', () => ({
@@ -40,7 +40,7 @@ index 276fd5fb96c3d4a511dfdd4aa8dd717e610acfe3..a34ccf72c252b86d795616ae291c7f67
  
    it('should return null for USE_OPENAI with default env key', () => {
 diff --git a/packages/cli/src/config/auth.ts b/packages/cli/src/config/auth.ts
-index 3e0abcebf4671f03bbc5d9b3cd7f937a06977809..6f9ff00818a8fc0503634318cd31a0a5effd0a30 100644
+index 3e0abce..6f9ff00 100644
 --- a/packages/cli/src/config/auth.ts
 +++ b/packages/cli/src/config/auth.ts
 @@ -230,8 +230,25 @@ export function validateAuthMethod(
@@ -72,7 +72,7 @@ index 3e0abcebf4671f03bbc5d9b3cd7f937a06977809..6f9ff00818a8fc0503634318cd31a0a5
    if (authMethod === AuthType.USE_OPENAI) {
      const { hasKey, checkedEnvKey, isExplicitEnvKey } = hasApiKeyForAuth(
 diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/config.test.ts
-index 2022b3156efcfd5bc3523e49fd2e1e3bdc54c3e5..a4b98023651a9eb4239f40d1672ac3d238858bc6 100644
+index 2022b31..a4b9802 100644
 --- a/packages/cli/src/config/config.test.ts
 +++ b/packages/cli/src/config/config.test.ts
 @@ -1015,6 +1015,23 @@ describe('parseArguments', () => {
@@ -161,7 +161,7 @@ index 2022b3156efcfd5bc3523e49fd2e1e3bdc54c3e5..a4b98023651a9eb4239f40d1672ac3d2
      process.argv = [
        'node',
 diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.ts
-index bf538d25955bdacc664352d5beeba66d54c41c7a..662388f90d9f70217c76cad884dba9bb62483597 100755
+index bf538d2..662388f 100755
 --- a/packages/cli/src/config/config.ts
 +++ b/packages/cli/src/config/config.ts
 @@ -221,6 +221,8 @@ export interface CliArgs {
@@ -389,7 +389,7 @@ index bf538d25955bdacc664352d5beeba66d54c41c7a..662388f90d9f70217c76cad884dba9bb
          : (settings.memory?.autoSkillConfirm ?? true),
      memoryAgentTimeoutMinutes: settings.memory?.agentTimeoutMinutes,
 diff --git a/packages/cli/src/gemini.test.tsx b/packages/cli/src/gemini.test.tsx
-index 09f7820792dd53bdb8ef28c280428834d2346723..daaef5fc879674db81eedfe5999927a55172072c 100644
+index 09f7820..daaef5f 100644
 --- a/packages/cli/src/gemini.test.tsx
 +++ b/packages/cli/src/gemini.test.tsx
 @@ -14,6 +14,7 @@ import {
@@ -448,7 +448,7 @@ index 09f7820792dd53bdb8ef28c280428834d2346723..daaef5fc879674db81eedfe5999927a5
  });
  
 diff --git a/packages/cli/src/gemini.tsx b/packages/cli/src/gemini.tsx
-index 72409fdd80ae54d84ee30f170408aa423d463906..aced76c3c497896f488dade645cd1af7a1e66c62 100644
+index 72409fd..aced76c 100644
 --- a/packages/cli/src/gemini.tsx
 +++ b/packages/cli/src/gemini.tsx
 @@ -430,7 +430,21 @@ export async function main() {
@@ -503,7 +503,7 @@ index 72409fdd80ae54d84ee30f170408aa423d463906..aced76c3c497896f488dade645cd1af7
          : new ExtensionFileWatcher(config, undefined, extensionRefreshState);
      extensionFileWatcher?.startWatching();
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
-index 6dfe8f8a93518e147715f534c56f16989e2281f0..aca1ab1d2676d94cd7282bc3703cde3bcdc57eea 100644
+index 6dfe8f8..aca1ab1 100644
 --- a/packages/cli/src/nonInteractiveCli.ts
 +++ b/packages/cli/src/nonInteractiveCli.ts
 @@ -150,6 +150,7 @@ function suppressedOutputBody(structuredCaptured: boolean): string {
@@ -533,7 +533,7 @@ index 6dfe8f8a93518e147715f534c56f16989e2281f0..aca1ab1d2676d94cd7282bc3703cde3b
            : null;
        if (recoveredAgentsNotice) {
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
-index d0bb98988061f4f31178cec7569a2dd299a289f9..dc8c34285c38ee6f13978d2709db40b828087d3f 100644
+index d0bb989..dc8c342 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 @@ -24,6 +24,7 @@ import type {
@@ -606,7 +606,7 @@ index d0bb98988061f4f31178cec7569a2dd299a289f9..dc8c34285c38ee6f13978d2709db40b8
      const result = await buildSystemMessage(
        mockConfig,
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/utils/nonInteractiveHelpers.ts
-index b17b1a73a26992ec8a97226931984785a31e24b1..b60acb96ca152f91a759c145f226f179fe95cbf6 100644
+index b17b1a7..b60acb9 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.ts
 @@ -64,6 +64,15 @@ export function normalizePartList(parts: PartListUnion | null): Part[] {
@@ -652,7 +652,7 @@ index b17b1a73a26992ec8a97226931984785a31e24b1..b60acb96ca152f91a759c145f226f179
      debugLogger.error('[buildSystemMessage] Failed to load subagents:', error);
    }
 diff --git a/packages/core/src/agents/runtime/agent-context.test.ts b/packages/core/src/agents/runtime/agent-context.test.ts
-index 71e11a419c180037c0a22c8fb9cf982b1dd2c67a..5212b234311c8b379a4976c9d8cdd96466f6165d 100644
+index 71e11a4..5212b23 100644
 --- a/packages/core/src/agents/runtime/agent-context.test.ts
 +++ b/packages/core/src/agents/runtime/agent-context.test.ts
 @@ -10,6 +10,7 @@ import {
@@ -707,7 +707,7 @@ index 71e11a419c180037c0a22c8fb9cf982b1dd2c67a..5212b234311c8b379a4976c9d8cdd964
    it('returns undefined outside any frame', () => {
      expect(getRuntimeContentGenerator()).toBeUndefined();
 diff --git a/packages/core/src/agents/runtime/agent-context.ts b/packages/core/src/agents/runtime/agent-context.ts
-index 433be1ba66d0cd0c021594a7c92a62f533357d35..c5e89d44f12e7e14034dad63e0f8d415c5de094f 100644
+index 433be1b..c5e89d4 100644
 --- a/packages/core/src/agents/runtime/agent-context.ts
 +++ b/packages/core/src/agents/runtime/agent-context.ts
 @@ -31,9 +31,15 @@ export interface RuntimeContentGeneratorView {
@@ -765,7 +765,7 @@ index 433be1ba66d0cd0c021594a7c92a62f533357d35..c5e89d44f12e7e14034dad63e0f8d415
   * Returns the depth of the current agent context frame. 0 means we're
   * inside a top-level subagent (or no subagent at all — but in that case
 diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/agents/runtime/agent-core.ts
-index 191b5abdc09e2cc89778aa05b1a4a95e239a4d91..c9946bf0ddc58ec55336b539c97b1a644a088bd7 100644
+index 191b5ab..c9946bf 100644
 --- a/packages/core/src/agents/runtime/agent-core.ts
 +++ b/packages/core/src/agents/runtime/agent-core.ts
 @@ -25,6 +25,7 @@ import type { Config } from '../../config/config.js';
@@ -802,7 +802,7 @@ index 191b5abdc09e2cc89778aa05b1a4a95e239a4d91..c9946bf0ddc58ec55336b539c97b1a64
        autoMemory: this.runtimeContext.getAutoMemoryPrompt(),
      });
 diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/config.ts
-index 9698a8e478ac5c03d4873c5a67333849ca779b09..7a3529c99ec2a2250e3bafa102cb3026fe7f91be 100644
+index 9698a8e..7a3529c 100644
 --- a/packages/core/src/config/config.ts
 +++ b/packages/core/src/config/config.ts
 @@ -962,6 +962,8 @@ export interface ConfigParameters {
@@ -992,7 +992,7 @@ index 9698a8e478ac5c03d4873c5a67333849ca779b09..7a3529c99ec2a2250e3bafa102cb3026
    /**
 diff --git a/packages/core/src/config/qwen38-agent-service-contract.test.ts b/packages/core/src/config/qwen38-agent-service-contract.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..a97bb32ada8faa59310ead25374bf2c95570ff6e
+index 0000000..a97bb32
 --- /dev/null
 +++ b/packages/core/src/config/qwen38-agent-service-contract.test.ts
 @@ -0,0 +1,49 @@
@@ -1046,7 +1046,7 @@ index 0000000000000000000000000000000000000000..a97bb32ada8faa59310ead25374bf2c9
 +  });
 +});
 diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/core/baseLlmClient.test.ts
-index b40857d7e9e836abd10b8ff00f858582c9c37fb3..1fbbc168b11dd6500b8d4000d1c01c26ad8c06a7 100644
+index b40857d..1fbbc16 100644
 --- a/packages/core/src/core/baseLlmClient.test.ts
 +++ b/packages/core/src/core/baseLlmClient.test.ts
 @@ -14,7 +14,7 @@ import {
@@ -1234,7 +1234,7 @@ index b40857d7e9e836abd10b8ff00f858582c9c37fb3..1fbbc168b11dd6500b8d4000d1c01c26
      const fastModel = 'fast-model';
      const fastGenerateContent = vi.fn();
 diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/baseLlmClient.ts
-index df74cec0b7fbe7a992948eb7f591fca6dc2bfc64..b33902f11dbcaa66c6983f2b25b1485354f9b7bb 100644
+index df74cec..b33902f 100644
 --- a/packages/core/src/core/baseLlmClient.ts
 +++ b/packages/core/src/core/baseLlmClient.ts
 @@ -19,6 +19,7 @@ import type { Config } from '../config/config.js';
@@ -1364,7 +1364,7 @@ index df74cec0b7fbe7a992948eb7f591fca6dc2bfc64..b33902f11dbcaa66c6983f2b25b14853
      } catch (error) {
        if (abortSignal.aborted) {
 diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core/contentGenerator.ts
-index 7216c26e3886929d382e7ab9039eb0c2d9feb86c..3c92b3f260e9ac0493f5be0dd993e67ff172bae9 100644
+index 7216c26..3c92b3f 100644
 --- a/packages/core/src/core/contentGenerator.ts
 +++ b/packages/core/src/core/contentGenerator.ts
 @@ -48,11 +48,27 @@ export interface ContentGenerator {
@@ -1447,7 +1447,7 @@ index 7216c26e3886929d382e7ab9039eb0c2d9feb86c..3c92b3f260e9ac0493f5be0dd993e67f
      request: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
 diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/src/core/coreToolScheduler.test.ts
-index 98d83dd1f0047053b82a522fde649d1215e05d1d..52b9963c7399ee0307de3efeb9f8c1f7affe2da2 100644
+index 98d83dd..52b9963 100644
 --- a/packages/core/src/core/coreToolScheduler.test.ts
 +++ b/packages/core/src/core/coreToolScheduler.test.ts
 @@ -11623,12 +11623,11 @@ describe('CoreToolScheduler telemetry spans', () => {
@@ -1496,7 +1496,7 @@ index 98d83dd1f0047053b82a522fde649d1215e05d1d..52b9963c7399ee0307de3efeb9f8c1f7
  
    // A post-execution cancellation drops the model-visible output, but the
 diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/core/coreToolScheduler.ts
-index c224235f03d0f2835d6f80a4cf28031c0e94f432..86ecf793864114dc3f06e631425ddf1414d7a2ca 100644
+index c224235..86ecf79 100644
 --- a/packages/core/src/core/coreToolScheduler.ts
 +++ b/packages/core/src/core/coreToolScheduler.ts
 @@ -130,6 +130,11 @@ import {
@@ -1560,7 +1560,7 @@ index c224235f03d0f2835d6f80a4cf28031c0e94f432..86ecf793864114dc3f06e631425ddf14
            ),
          );
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
-index 5ae502915f145ed3fd21191f5ed6791d33cad21d..1d1439bd7fb2c6855ffa28425c81ea9652f63139 100644
+index 5ae5029..1d1439b 100644
 --- a/packages/core/src/core/geminiChat.test.ts
 +++ b/packages/core/src/core/geminiChat.test.ts
 @@ -44,7 +44,6 @@ import {
@@ -2038,7 +2038,7 @@ index 5ae502915f145ed3fd21191f5ed6791d33cad21d..1d1439bd7fb2c6855ffa28425c81ea96
        const xml =
          '<invoke name="read_file"><parameter name="file_path">a.ts</parameter></invoke>';
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
-index 80512921e716a98465ebb4685d99df52c0330940..bb0a12c7c8f98df7058b34c314491376cf3df319 100644
+index 8051292..bb0a12c 100644
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
 @@ -46,8 +46,13 @@ import {
@@ -2489,7 +2489,7 @@ index 80512921e716a98465ebb4685d99df52c0330940..bb0a12c7c8f98df7058b34c314491376
        !hasToolCall &&
        hasFinishReason &&
 diff --git a/packages/core/src/core/genai-compat.ts b/packages/core/src/core/genai-compat.ts
-index b22b365f1bc146f10c2919f736b3ff21477c4503..06b9f95059449d10cb2ed634a65d17444cf40e67 100644
+index b22b365..06b9f95 100644
 --- a/packages/core/src/core/genai-compat.ts
 +++ b/packages/core/src/core/genai-compat.ts
 @@ -22,6 +22,7 @@ export const FinishReason = {
@@ -2501,7 +2501,7 @@ index b22b365f1bc146f10c2919f736b3ff21477c4503..06b9f95059449d10cb2ed634a65d1744
  
  // Content conversion is adapted from @google/genai 2.6.0's `_isPart` and
 diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts b/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
-index 6383d97e70eb302de3c8d9d1f500e73e281546ce..a2e866ffb1402c500d326ad50a4f3cbf81e2d444 100644
+index 6383d97..a2e866f 100644
 --- a/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
 +++ b/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
 @@ -37,6 +37,7 @@ import { subagentNameContext } from '../../utils/subagentNameContext.js';
@@ -2532,7 +2532,7 @@ index 6383d97e70eb302de3c8d9d1f500e73e281546ce..a2e866ffb1402c500d326ad50a4f3cbf
      req: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
 diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/packages/core/src/core/openaiContentGenerator/converter.test.ts
-index 9c65b8532081bf40ba6bfb99f1b00e7e7460726a..e7f565cfbd1ab53ab3726116d9c8755d3d5b49d3 100644
+index 9c65b85..e7f565c 100644
 --- a/packages/core/src/core/openaiContentGenerator/converter.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/converter.test.ts
 @@ -1994,7 +1994,90 @@ describe('OpenAIContentConverter', () => {
@@ -2912,7 +2912,7 @@ index 9c65b8532081bf40ba6bfb99f1b00e7e7460726a..e7f565cfbd1ab53ab3726116d9c8755d
  
    it('replaces PDF with placeholder when pdf modality is disabled', () => {
 diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packages/core/src/core/openaiContentGenerator/converter.ts
-index ffd8dfcfd611ee3eedcb9d272bdcd6a6e95aba02..01455bc0456698a2b7050d3fbf0ee1bd7997d6ff 100644
+index ffd8dfc..01455bc 100644
 --- a/packages/core/src/core/openaiContentGenerator/converter.ts
 +++ b/packages/core/src/core/openaiContentGenerator/converter.ts
 @@ -882,6 +882,11 @@ function createMediaContentPart(
@@ -3063,7 +3063,7 @@ index ffd8dfcfd611ee3eedcb9d272bdcd6a6e95aba02..01455bc0456698a2b7050d3fbf0ee1bd
            completedToolCalls.length === 0))
      ) {
 diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
-index f4166d4acf86580baff7cb8c1542d9055cbbf854..c5ee9a37138067d089a5da116e83ec06d7d8bde0 100644
+index f4166d4..c5ee9a3 100644
 --- a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
 +++ b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
 @@ -1,4 +1,7 @@
@@ -3090,7 +3090,7 @@ index f4166d4acf86580baff7cb8c1542d9055cbbf854..c5ee9a37138067d089a5da116e83ec06
      request: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
-index fc0c21cbe610c4c04dbdbacf08bc40adcb659e29..e5c5cab2629501dfe9cf691f26340e95818e720e 100644
+index fc0c21c..e5c5cab 100644
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 @@ -26,7 +26,11 @@ import { OpenAIContentConverter } from './converter.js';
@@ -3239,7 +3239,7 @@ index fc0c21cbe610c4c04dbdbacf08bc40adcb659e29..e5c5cab2629501dfe9cf691f26340e95
    describe('createRequestContext', () => {
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..9e8125a785a73374088ffbdf7665c840a9414823
+index 0000000..9e8125a
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts
 @@ -0,0 +1,64 @@
@@ -3308,7 +3308,7 @@ index 0000000000000000000000000000000000000000..9e8125a785a73374088ffbdf7665c840
 +  });
 +});
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-index a7aaf90244b6df047db5c37b2ee5b5d4bb30be99..7cc67358f971f0fae271071be5deceac17ac327b 100644
+index a7aaf90..7cc6735 100644
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 @@ -11,6 +11,7 @@ import {
@@ -3538,7 +3538,7 @@ index a7aaf90244b6df047db5c37b2ee5b5d4bb30be99..7cc67358f971f0fae271071be5deceac
          providerOverrides.splitToolMedia ??
          this.contentGeneratorConfig.splitToolMedia ??
 diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/core/src/core/openaiContentGenerator/types.ts
-index 134ecd700ea51a17aa922f835261bd6848141d99..1cc33ffccdf72130df49831d44af96201682c39b 100644
+index 134ecd7..1cc33ff 100644
 --- a/packages/core/src/core/openaiContentGenerator/types.ts
 +++ b/packages/core/src/core/openaiContentGenerator/types.ts
 @@ -43,6 +43,7 @@ export interface RequestContext {
@@ -3550,7 +3550,7 @@ index 134ecd700ea51a17aa922f835261bd6848141d99..1cc33ffccdf72130df49831d44af9620
    responseParsingOptions?: OpenAIResponseParsingOptions;
    taggedThinkingParser?: TaggedThinkingParser;
 diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.ts
-index 72d1aa58f0a1f1a780bb190b90cb1609fa50e1a5..5e25a12c4607ef37c144a00316721b62031a44c7 100644
+index 72d1aa5..5e25a12 100644
 --- a/packages/core/src/core/prompts.ts
 +++ b/packages/core/src/core/prompts.ts
 @@ -14,6 +14,7 @@ import { QWEN_DIR } from '../config/storage.js';
@@ -3595,7 +3595,7 @@ index 72d1aa58f0a1f1a780bb190b90cb1609fa50e1a5..5e25a12c4607ef37c144a00316721b62
  
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..d6aa1e8147d7efb64cefb69d67d2789b77543765
+index 0000000..d6aa1e8
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 @@ -0,0 +1,99 @@
@@ -3700,7 +3700,7 @@ index 0000000000000000000000000000000000000000..d6aa1e8147d7efb64cefb69d67d2789b
 +});
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..31ca49dbdac91dbee8d1b51a34e552c6e49663d7
+index 0000000..31ca49d
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.ts
 @@ -0,0 +1,78 @@
@@ -3783,7 +3783,7 @@ index 0000000000000000000000000000000000000000..31ca49dbdac91dbee8d1b51a34e552c6
 +  return `${base.trim()}\n\n## This foreground invocation\n\n- Role: ${execution.subagentType}\n- Private scratch root: ${execution.scratchDir}\n- TMPDIR, language caches, and build caches are routed beneath that exact scratch root.\n- Scratch is not a deliverable and is not automatically bundled. Deliberately promote anything that must survive to /workspace or /artifacts.\n- The scratch tree remains available to the parent until session teardown; cleanup errors are teardown diagnostics, never silent success.`;
 +}
 diff --git a/packages/core/src/core/session-recovery.ts b/packages/core/src/core/session-recovery.ts
-index f87557c07ac3fd0c647600d93ebdb776e3058b38..3b115b2ee6698600974bc993f240738439979266 100644
+index f87557c..3b115b2 100644
 --- a/packages/core/src/core/session-recovery.ts
 +++ b/packages/core/src/core/session-recovery.ts
 @@ -99,7 +99,9 @@ function buildVisibleNotice(
@@ -3798,7 +3798,7 @@ index f87557c07ac3fd0c647600d93ebdb776e3058b38..3b115b2ee6698600974bc993f2407384
    }
  
 diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core/tokenLimits.test.ts
-index 6d72689d858ee621c5e26ea60c9ac2df12ba835b..c148861cf010e52ad6bfa5b9ac22ed05d08f53f5 100644
+index 6d72689..c148861 100644
 --- a/packages/core/src/core/tokenLimits.test.ts
 +++ b/packages/core/src/core/tokenLimits.test.ts
 @@ -4,6 +4,7 @@ import {
@@ -3837,7 +3837,7 @@ index 6d72689d858ee621c5e26ea60c9ac2df12ba835b..c148861cf010e52ad6bfa5b9ac22ed05
    it('clips a model advertising more than the ceiling down to it', () => {
      // deepseek-v4 advertises 384K output → clipped to OUTPUT_TOKEN_CEILING.
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
-index 4b7c7f6232bc38eac507f453234e3a77136b0cef..d246909ddd1985f8fab69013ee5b131708874df2 100644
+index 4b7c7f6..d246909 100644
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
 @@ -75,6 +75,36 @@ export function clampOutputTokensToWindow(
@@ -3879,7 +3879,7 @@ index 4b7c7f6232bc38eac507f453234e3a77136b0cef..d246909ddd1985f8fab69013ee5b1317
  ): number | undefined {
 diff --git a/packages/core/src/core/toolOutcome.ts b/packages/core/src/core/toolOutcome.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..0e8e43ddc0d225f22c212a1919925ebb337fe1ab
+index 0000000..0e8e43d
 --- /dev/null
 +++ b/packages/core/src/core/toolOutcome.ts
 @@ -0,0 +1,34 @@
@@ -3918,7 +3918,7 @@ index 0000000000000000000000000000000000000000..0e8e43ddc0d225f22c212a1919925ebb
 +  'persisted artifacts before deciding what to do next; do not blindly repeat ' +
 +  'a non-idempotent operation.';
 diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
-index d2801d0c84cb143b98e546c3a2c6c543401aee2f..58c3e5b5ed796504b34dbe9c408a4b50b91f274d 100644
+index d2801d0..58c3e5b 100644
 --- a/packages/core/src/core/turn.ts
 +++ b/packages/core/src/core/turn.ts
 @@ -359,6 +359,13 @@ export enum CompressionStatus {
@@ -3936,7 +3936,7 @@ index d2801d0c84cb143b98e546c3a2c6c543401aee2f..58c3e5b5ed796504b34dbe9c408a4b50
  
  /**
 diff --git a/packages/core/src/models/constants.ts b/packages/core/src/models/constants.ts
-index 4f55526cdfd16cba68c84e7ee78fd89b0d87d2af..0280a42b9ec91643064f8ba5f1703de6937b6a80 100644
+index 4f55526..0280a42 100644
 --- a/packages/core/src/models/constants.ts
 +++ b/packages/core/src/models/constants.ts
 @@ -35,6 +35,8 @@ export const MODEL_GENERATION_CONFIG_FIELDS = [
@@ -3949,7 +3949,7 @@ index 4f55526cdfd16cba68c84e7ee78fd89b0d87d2af..0280a42b9ec91643064f8ba5f1703de6
    'splitToolMedia',
    'toolResultContentFormat',
 diff --git a/packages/core/src/models/content-generator-config.ts b/packages/core/src/models/content-generator-config.ts
-index 751d7aa7e1307e9980e6820271826b2927379d22..af2b7c731a946f28d7e54f057b833d89f3cd5dc9 100644
+index 751d7aa..af2b7c7 100644
 --- a/packages/core/src/models/content-generator-config.ts
 +++ b/packages/core/src/models/content-generator-config.ts
 @@ -89,6 +89,8 @@ export function buildAgentContentGeneratorConfig(
@@ -3976,7 +3976,7 @@ index 751d7aa7e1307e9980e6820271826b2927379d22..af2b7c731a946f28d7e54f057b833d89
        (targetConfig as any)[field] = registryValue;
      }
 diff --git a/packages/core/src/models/types.ts b/packages/core/src/models/types.ts
-index dd84b360dd2ed672db1ff829948284a9a645019d..eebbb8266e3491f1c887d47de3d3d4c89392bc49 100644
+index dd84b36..eebbb82 100644
 --- a/packages/core/src/models/types.ts
 +++ b/packages/core/src/models/types.ts
 @@ -44,6 +44,8 @@ export type ModelGenerationConfig = Pick<
@@ -3989,7 +3989,7 @@ index dd84b360dd2ed672db1ff829948284a9a645019d..eebbb8266e3491f1c887d47de3d3d4c8
    | 'modalities'
    | 'splitToolMedia'
 diff --git a/packages/core/src/permissions/permission-manager.test.ts b/packages/core/src/permissions/permission-manager.test.ts
-index 15964b89746e1e733b324b6db919f72c007d04ab..e3f20c665282e3b2da0f81bbf0d02a00645788c1 100644
+index 15964b8..e3f20c6 100644
 --- a/packages/core/src/permissions/permission-manager.test.ts
 +++ b/packages/core/src/permissions/permission-manager.test.ts
 @@ -1627,6 +1627,7 @@ function makeConfig(
@@ -4030,7 +4030,7 @@ index 15964b89746e1e733b324b6db919f72c007d04ab..e3f20c665282e3b2da0f81bbf0d02a00
  
    describe('session rules', () => {
 diff --git a/packages/core/src/permissions/permission-manager.ts b/packages/core/src/permissions/permission-manager.ts
-index 8e53833e0995b3bf164b12792d0f533c513da344..bfc063a8a79cf081b27a88e001011c5de948d8ab 100644
+index 8e53833..bfc063a 100644
 --- a/packages/core/src/permissions/permission-manager.ts
 +++ b/packages/core/src/permissions/permission-manager.ts
 @@ -88,6 +88,8 @@ export interface PermissionManagerConfig {
@@ -4078,7 +4078,7 @@ index 8e53833e0995b3bf164b12792d0f533c513da344..bfc063a8a79cf081b27a88e001011c5d
      if (!this.isCoreTool(canonicalName)) {
        const decision = await this.evaluate({ toolName: canonicalName });
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
-index 59b9c51e0e53247c6ed0aa4ecdce67a8d9d70887..4a79ef9532909a66da35c9c2caf417c5672bd6f1 100644
+index 59b9c51..4a79ef9 100644
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
 @@ -4,4402 +4,671 @@
@@ -9066,7 +9066,7 @@ index 59b9c51e0e53247c6ed0aa4ecdce67a8d9d70887..4a79ef9532909a66da35c9c2caf417c5
    });
  });
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
-index 9a37b9b3e192534f76d3e9f8e15038d79985a969..725f2c917156e717afb30a79865d97e0134a6b85 100644
+index 9a37b9b..725f2c9 100644
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
 @@ -9,6 +9,10 @@ import type { Config } from '../config/config.js';
@@ -10266,7 +10266,7 @@ index 9a37b9b3e192534f76d3e9f8e15038d79985a969..725f2c917156e717afb30a79865d97e0
    }
  }
 diff --git a/packages/core/src/subagents/builtin-agents.test.ts b/packages/core/src/subagents/builtin-agents.test.ts
-index 69485029501e26d26f35ef9de3d52564f7e63271..30cf243ff98107f6dedb83cf2bf3f300b89e12a4 100644
+index 6948502..30cf243 100644
 --- a/packages/core/src/subagents/builtin-agents.test.ts
 +++ b/packages/core/src/subagents/builtin-agents.test.ts
 @@ -60,20 +60,29 @@ describe('BuiltinAgentRegistry', () => {
@@ -10305,7 +10305,7 @@ index 69485029501e26d26f35ef9de3d52564f7e63271..30cf243ff98107f6dedb83cf2bf3f300
      it('should not give the Explore agent the interactive question tool', () => {
        const exploreAgent = BuiltinAgentRegistry.getBuiltinAgent('Explore');
 diff --git a/packages/core/src/subagents/builtin-agents.ts b/packages/core/src/subagents/builtin-agents.ts
-index 8be015325f52b18d01ad4f3ea140be2c18724385..d025223565e57c4ada9a128f539fce74411a0d76 100644
+index 8be0153..d025223 100644
 --- a/packages/core/src/subagents/builtin-agents.ts
 +++ b/packages/core/src/subagents/builtin-agents.ts
 @@ -4,7 +4,7 @@
@@ -10399,7 +10399,7 @@ index 8be015325f52b18d01ad4f3ea140be2c18724385..d025223565e57c4ada9a128f539fce74
      },
      {
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50ffbd2178e70b30b7bd221e40aacee875f..ab4e9b8d81b9c58bce29daf2657e8615a16ee435 100644
+index 6d3fb50..ab4e9b8 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
 @@ -205,6 +205,7 @@ describe('AgentTool', () => {
@@ -10463,7 +10463,7 @@ index 6d3fb50ffbd2178e70b30b7bd221e40aacee875f..ab4e9b8d81b9c58bce29daf2657e8615
        const schema = agentTool.schema;
        const properties = schema.parametersJsonSchema as {
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69016900455ceac4840a9cef2f19c615372..8929512dbc1473398ef1ace2717d7c4c746b4a12 100644
+index 4bcea69..8929512 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -130,6 +130,12 @@ import type {
@@ -10719,7 +10719,7 @@ index 4bcea69016900455ceac4840a9cef2f19c615372..8929512dbc1473398ef1ace2717d7c4c
      }
 diff --git a/packages/core/src/tools/agent/qwen38-effect-journal.test.ts b/packages/core/src/tools/agent/qwen38-effect-journal.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..82df63eba0809dcdf50ce475aa4df5b9c95c268a
+index 0000000..82df63e
 --- /dev/null
 +++ b/packages/core/src/tools/agent/qwen38-effect-journal.test.ts
 @@ -0,0 +1,119 @@
@@ -10844,7 +10844,7 @@ index 0000000000000000000000000000000000000000..82df63eba0809dcdf50ce475aa4df5b9
 +});
 diff --git a/packages/core/src/tools/agent/qwen38-effect-journal.ts b/packages/core/src/tools/agent/qwen38-effect-journal.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..26ce26b683bde990ec7d80b2528333268c0b774e
+index 0000000..26ce26b
 --- /dev/null
 +++ b/packages/core/src/tools/agent/qwen38-effect-journal.ts
 @@ -0,0 +1,389 @@
@@ -11239,7 +11239,7 @@ index 0000000000000000000000000000000000000000..26ce26b683bde990ec7d80b252833326
 +}
 diff --git a/packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts b/packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..12d2d8da8ac6d6169c90358c53786eddcb14b6f4
+index 0000000..12d2d8d
 --- /dev/null
 +++ b/packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts
 @@ -0,0 +1,61 @@
@@ -11306,7 +11306,7 @@ index 0000000000000000000000000000000000000000..12d2d8da8ac6d6169c90358c53786edd
 +});
 diff --git a/packages/core/src/tools/agent/qwen38-subagent-scratch.ts b/packages/core/src/tools/agent/qwen38-subagent-scratch.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..7c9c492f57f0671a099b8f89b4b62bb372f4990e
+index 0000000..7c9c492
 --- /dev/null
 +++ b/packages/core/src/tools/agent/qwen38-subagent-scratch.ts
 @@ -0,0 +1,81 @@
@@ -11391,8 +11391,37 @@ index 0000000000000000000000000000000000000000..7c9c492f57f0671a099b8f89b4b62bb3
 +  fs.chmodSync(root, 0o700);
 +  return root;
 +}
+diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools/read-file.test.ts
+index 4cbf249..a4edea5 100644
+--- a/packages/core/src/tools/read-file.test.ts
++++ b/packages/core/src/tools/read-file.test.ts
+@@ -1050,6 +1050,24 @@ describe('ReadFileTool', () => {
+       }
+     });
+ 
++    it('[pages-contract] rejects pages on a non-PDF file before any syntax validation', () => {
++      const params: ReadFileToolParams = {
++        file_path: '/tmp/Example.java',
++        pages: '600-721',
++      };
++      expect(() => tool.build(params)).toThrow(
++        "The 'pages' parameter applies only to PDF files",
++      );
++    });
++
++    it('[pages-contract] still accepts a bounded pages range on a PDF', () => {
++      const params: ReadFileToolParams = {
++        file_path: '/tmp/test.pdf',
++        pages: '1-2',
++      };
++      expect(() => tool.build(params)).not.toThrow();
++    });
++
+     it('should reject invalid pages parameter', () => {
+       const params: ReadFileToolParams = {
+         file_path: '/tmp/test.pdf',
 diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read-file.ts
-index ab8f8f0137e5f1685f405c607690ac122f713430..ee052a59dcf32deeee1b9fbc10107cce29c6242e 100644
+index ab8f8f0..e3f2881 100644
 --- a/packages/core/src/tools/read-file.ts
 +++ b/packages/core/src/tools/read-file.ts
 @@ -540,7 +540,7 @@ export class ReadFileTool extends BaseDeclarativeTool<
@@ -11404,8 +11433,48 @@ index ab8f8f0137e5f1685f405c607690ac122f713430..ee052a59dcf32deeee1b9fbc10107cce
        Kind.Read,
        {
          properties: {
+@@ -616,6 +616,10 @@ export class ReadFileTool extends BaseDeclarativeTool<
+       return 'pages is not supported for Jupyter notebook (.ipynb) files. Notebooks are always read in full with structured cell output.';
+     }
+ 
++    if (params.pages !== undefined && ext !== '.pdf') {
++      return `The 'pages' parameter applies only to PDF files; '${path.basename(filePath)}' is not a PDF. For text files, use 'offset' and 'limit' instead.`;
++    }
++
+     if (params.pages) {
+       const parsed = parsePDFPageRange(params.pages);
+       if (!parsed) {
+diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils/fileUtils.test.ts
+index 4987635..ca0d047 100644
+--- a/packages/core/src/utils/fileUtils.test.ts
++++ b/packages/core/src/utils/fileUtils.test.ts
+@@ -1747,6 +1747,24 @@ describe('fileUtils', () => {
+       expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');
+     });
+ 
++    it('[pages-contract] rejects a pages parameter on a non-PDF file instead of ignoring it', async () => {
++      actualNodeFs.writeFileSync(testTextFilePath, 'line one\nline two\n');
++      mockMimeGetType.mockReturnValue('text/plain');
++
++      const result = await processSingleFileContent(
++        testTextFilePath,
++        mockConfig,
++        { pages: '770' },
++      );
++
++      expect(result.errorType).toBe(ToolErrorType.INVALID_TOOL_PARAMS);
++      expect(result.llmContent).toContain(
++        "The 'pages' parameter applies only to PDF files",
++      );
++      expect(result.llmContent).toContain("use 'offset' and 'limit'");
++      expect(mockExecFile).not.toHaveBeenCalled();
++    });
++
+     it('keeps explicit pages reads on the pdftotext path', async () => {
+       actualNodeFs.writeFileSync(
+         testPdfFilePath,
 diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/fileUtils.ts
-index 211be6ca6c6ab86d1a43d4242e38c6e2a3ed1214..daca71422149b1e0c29d8d853ec4b0ae3ad16364 100644
+index 211be6c..2c302bf 100644
 --- a/packages/core/src/utils/fileUtils.ts
 +++ b/packages/core/src/utils/fileUtils.ts
 @@ -53,11 +53,6 @@ import {
@@ -11452,7 +11521,23 @@ index 211be6ca6c6ab86d1a43d4242e38c6e2a3ed1214..daca71422149b1e0c29d8d853ec4b0ae
      // Text-only main model on a bridge-capable path: prepare bounded PDF page
      // images for the caller to transcribe. `preserveUnsupportedImage` also
      // keeps ordinary images available to a bridge-capable caller, while
-@@ -1461,77 +1453,59 @@ export async function processSingleFileContent(
+@@ -1144,6 +1136,15 @@ export async function processSingleFileContent(
+ 
+     const fileSizeInMB = stats.size / (1024 * 1024);
+     const normalizedPages = pages?.trim();
++    if (normalizedPages !== undefined && fileType !== 'pdf') {
++      const nonPdfPagesMessage = `The 'pages' parameter applies only to PDF files; ${relativePathForDisplay} is not a PDF. For text files, use 'offset' and 'limit' instead.`;
++      return {
++        llmContent: nonPdfPagesMessage,
++        returnDisplay: `Rejected non-PDF pages parameter: ${relativePathForDisplay}`,
++        error: nonPdfPagesMessage,
++        errorType: ToolErrorType.INVALID_TOOL_PARAMS,
++      };
++    }
+     let pageRange:
+       | NonNullable<ReturnType<typeof parsePDFPageRange>>
+       | undefined;
+@@ -1461,77 +1462,59 @@ export async function processSingleFileContent(
          };
        }
        case 'image': {
@@ -11580,7 +11665,7 @@ index 211be6ca6c6ab86d1a43d4242e38c6e2a3ed1214..daca71422149b1e0c29d8d853ec4b0ae
        case 'audio':
        case 'video': {
 diff --git a/packages/core/src/utils/image-view.test.ts b/packages/core/src/utils/image-view.test.ts
-index fa1aa32ac68f49e12bafa32c2ddb2719d7072066..a251cc04d2aa5ec46715e4fc0de734078c3e8071 100644
+index fa1aa32..a251cc0 100644
 --- a/packages/core/src/utils/image-view.test.ts
 +++ b/packages/core/src/utils/image-view.test.ts
 @@ -26,7 +26,7 @@ describe('image views', () => {
@@ -11804,7 +11889,7 @@ index fa1aa32ac68f49e12bafa32c2ddb2719d7072066..a251cc04d2aa5ec46715e4fc0de73407
    });
  });
 diff --git a/packages/core/src/utils/image-view.ts b/packages/core/src/utils/image-view.ts
-index ba3d14d56315663da1dd0d1f8bf08c61d682f24e..cd4d3ccb4712b6c2056c97c2def29310b7ecf923 100644
+index ba3d14d..cd4d3cc 100644
 --- a/packages/core/src/utils/image-view.ts
 +++ b/packages/core/src/utils/image-view.ts
 @@ -15,6 +15,9 @@ const IMAGE_JPEG_QUALITY = 92;
@@ -12073,7 +12158,7 @@ index ba3d14d56315663da1dd0d1f8bf08c61d682f24e..cd4d3ccb4712b6c2056c97c2def29310
  export async function renderNormalizedImageCrop(
 diff --git a/packages/core/src/utils/qwen38-image-contract.test.ts b/packages/core/src/utils/qwen38-image-contract.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..132eec8f49da3d69796a8f0c41584413eea2e4c4
+index 0000000..132eec8
 --- /dev/null
 +++ b/packages/core/src/utils/qwen38-image-contract.test.ts
 @@ -0,0 +1,119 @@
@@ -12197,7 +12282,7 @@ index 0000000000000000000000000000000000000000..132eec8f49da3d69796a8f0c41584413
 +  });
 +});
 diff --git a/packages/core/src/utils/shellContextEnv.test.ts b/packages/core/src/utils/shellContextEnv.test.ts
-index b1b558fcb2cb67badafff625453a6b75c26bc48d..ef9fe8002f9e9a4da99b64da69c9b5e4cf0ee519 100644
+index b1b558f..ef9fe80 100644
 --- a/packages/core/src/utils/shellContextEnv.test.ts
 +++ b/packages/core/src/utils/shellContextEnv.test.ts
 @@ -220,6 +220,29 @@ describe('getShellContextEnvVars', () => {
@@ -12231,7 +12316,7 @@ index b1b558fcb2cb67badafff625453a6b75c26bc48d..ef9fe8002f9e9a4da99b64da69c9b5e4
      const env = promptIdContext.run('prompt-abc', () =>
        getShellContextEnvVars(),
 diff --git a/packages/core/src/utils/shellContextEnv.ts b/packages/core/src/utils/shellContextEnv.ts
-index 1d7dc09cad4819c3eedf3e1323c4efb26c6e4baa..b9e81e60dc492493645602e5521c9e121d85ee8a 100644
+index 1d7dc09..b9e81e6 100644
 --- a/packages/core/src/utils/shellContextEnv.ts
 +++ b/packages/core/src/utils/shellContextEnv.ts
 @@ -24,7 +24,10 @@
@@ -12269,7 +12354,7 @@ index 1d7dc09cad4819c3eedf3e1323c4efb26c6e4baa..b9e81e60dc492493645602e5521c9e12
    env['QWEN_CODE_PROMPT_ID'] = promptId ?? '';
  
 diff --git a/scripts/generate-git-commit-info.js b/scripts/generate-git-commit-info.js
-index 75c8bb97ba3588bb15dc6305dfa4a19c6c4dba6b..f948e688d40fff6edba9be50a00b8091c72d39bd 100644
+index 75c8bb9..f948e68 100644
 --- a/scripts/generate-git-commit-info.js
 +++ b/scripts/generate-git-commit-info.js
 @@ -17,7 +17,6 @@

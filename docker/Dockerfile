@@ -143,6 +143,9 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
       packages/cli/src/config/config.test.ts \
       packages/cli/src/gemini.test.tsx \
       packages/cli/src/utils/nonInteractiveHelpers.test.ts \
+ && npx --no-install vitest run -t 'pages-contract' \
+      packages/core/src/utils/fileUtils.test.ts \
+      packages/core/src/tools/read-file.test.ts \
  && test "$(node scripts/cli-entry.js --version)" = '0.21.12' \
  && rm -rf node_modules/.vite /tmp/node-compile-cache
 

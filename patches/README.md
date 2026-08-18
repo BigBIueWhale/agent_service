@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `d5b35f57467bf50a8bff0a1ad739863d27f84f1b065fbdd7c1cdcc0c1372c3fd`
+- Review-diff SHA-256: `08c0f280e086d1eb2f11fe1aca7498d943e2efb06cf1046d590c22ed5d3900f6`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `a809f5db500b9bbbba42481f4a04cf85bdfe6422ca2dfbbaa34f5f62b4d5d915`
+- Transformer-manifest SHA-256: `f9b0a75a013e664372407a1e8cefb9f45122a70178fe79eb28e3066ce44c38f5`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -44,7 +44,12 @@ provide as one fail-closed mode:
 - complete source-PNG validation and decoding with static 8-bit RGB/RGBA,
   16,777,216-pixel, 30:1, and 100-MiB limits; no resize/transcode fallback;
 - chronological text-image-text tool results with `splitToolMedia=false`, plus
-  fail-closed rejection of non-PNG and file/remote image transports.
+  fail-closed rejection of non-PNG and file/remote image transports;
+- rejection of the PDF-only `pages` parameter on non-PDF files at both the
+  validation and consumption layers, with an error that names `offset`/`limit`
+  as the text-file remedy — production forensics showed upstream's
+  syntax-first errors and silent ignore steering agents into identical-call
+  loops (three `[pages-contract]` tests execute this boundary in the build).
 
 Verification performed in the pinned Node image:
 

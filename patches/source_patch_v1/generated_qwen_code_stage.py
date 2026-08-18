@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'd5b35f57467bf50a8bff0a1ad739863d27f84f1b065fbdd7c1cdcc0c1372c3fd',
+  'review_sha256': '08c0f280e086d1eb2f11fe1aca7498d943e2efb06cf1046d590c22ed5d3900f6',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -167,12 +167,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/tools/agent/qwen38-subagent-scratch.ts',
              'before_sha256': None,
              'after_sha256': '6f901a5cda41071d4237acdc3f3bfd9ba8cf92ef1db93d73ae1aabb038d53e46'},
+            {'path': 'packages/core/src/tools/read-file.test.ts',
+             'before_sha256': '03e21f96d35d1c07c9d7532e7b8340b7aca2707c3ac920e349655148cd965fc8',
+             'after_sha256': '3d8e74099403f77cd72fe749e547f8c2bec627b8c846f46ae41f1f97d9d7525b'},
             {'path': 'packages/core/src/tools/read-file.ts',
              'before_sha256': '2aad58d97ebc1ba94b3f0020d690b46d7409c9dba4103eb5dfb01ece38f9049b',
-             'after_sha256': 'fac6bc4581ba7a283f4e14b00d2ad83c8cdea62541b579d9480b334ea736e0fd'},
+             'after_sha256': 'b2023049f4b50a1581ce502523c7c9aef8968c5eff05d363c158905d3d6aca8d'},
+            {'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before_sha256': '88bf6740ee046a7a75116659df85ece80338247c88f5fc48833fd4053e3d19b1',
+             'after_sha256': '9f191c0db8201be82d3242e35855052f911684ef53569776f53175170b5584e8'},
             {'path': 'packages/core/src/utils/fileUtils.ts',
              'before_sha256': '2199d050fa06f801f8da8947b3768dd517c9b14abc9d0d015244475b2139e016',
-             'after_sha256': 'b6000b887f9cdcd14630153d7cb8d883754d4939647e75b67f89a378d80ed8b3'},
+             'after_sha256': '1012d14b04390f147d46df13ebc8f578bcde0f9ebf60e5e93da3edeb7ac491e5'},
             {'path': 'packages/core/src/utils/image-view.test.ts',
              'before_sha256': 'b2bdc3799926ccc1c3ce56ca62b6b2154031a97e59be151c10b0781f2c6b5dd9',
              'after_sha256': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d'},
@@ -30885,6 +30891,74 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  fs.chmodSync(root, 0o700);\n'
                              '  return root;\n'
                              '}\n'},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-1',
+             'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': '      }\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should reject invalid pages parameter', () => {\n"
+                       '      const params: ReadFileToolParams = {\n'
+                       "        file_path: '/tmp/test.pdf',\n",
+             'after': '      }\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[pages-contract] rejects pages on a non-PDF file before "
+                      "any syntax validation', () => {\n"
+                      '      const params: ReadFileToolParams = {\n'
+                      "        file_path: '/tmp/Example.java',\n"
+                      "        pages: '600-721',\n"
+                      '      };\n'
+                      '      expect(() => tool.build(params)).toThrow(\n'
+                      '        "The \'pages\' parameter applies only to PDF files",\n'
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[pages-contract] still accepts a bounded pages range on "
+                      "a PDF', () => {\n"
+                      '      const params: ReadFileToolParams = {\n'
+                      "        file_path: '/tmp/test.pdf',\n"
+                      "        pages: '1-2',\n"
+                      '      };\n'
+                      '      expect(() => tool.build(params)).not.toThrow();\n'
+                      '    });\n'
+                      '\n'
+                      "    it('should reject invalid pages parameter', () => {\n"
+                      '      const params: ReadFileToolParams = {\n'
+                      "        file_path: '/tmp/test.pdf',\n",
+             'review_before': '      }\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should reject invalid pages parameter', () => "
+                              '{\n'
+                              '      const params: ReadFileToolParams = {\n'
+                              "        file_path: '/tmp/test.pdf',\n",
+             'review_after': '      }\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[pages-contract] rejects pages on a non-PDF file "
+                             "before any syntax validation', () => {\n"
+                             '      const params: ReadFileToolParams = {\n'
+                             "        file_path: '/tmp/Example.java',\n"
+                             "        pages: '600-721',\n"
+                             '      };\n'
+                             '      expect(() => tool.build(params)).toThrow(\n'
+                             '        "The \'pages\' parameter applies only to PDF '
+                             'files",\n'
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[pages-contract] still accepts a bounded pages "
+                             "range on a PDF', () => {\n"
+                             '      const params: ReadFileToolParams = {\n'
+                             "        file_path: '/tmp/test.pdf',\n"
+                             "        pages: '1-2',\n"
+                             '      };\n'
+                             '      expect(() => tool.build(params)).not.toThrow();\n'
+                             '    });\n'
+                             '\n'
+                             "    it('should reject invalid pages parameter', () => {\n"
+                             '      const params: ReadFileToolParams = {\n'
+                             "        file_path: '/tmp/test.pdf',\n"},
             {'name': 'packages/core/src/tools/read-file.ts:landmark-1',
              'path': 'packages/core/src/tools/read-file.ts',
              'before': '    super(\n'
@@ -31007,6 +31081,129 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      Kind.Read,\n'
                              '      {\n'
                              '        properties: {\n'},
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-2',
+             'path': 'packages/core/src/tools/read-file.ts',
+             'before': "      return 'pages is not supported for Jupyter notebook "
+                       '(.ipynb) files. Notebooks are always read in full with '
+                       "structured cell output.';\n"
+                       '    }\n'
+                       '\n'
+                       '    if (params.pages) {\n'
+                       '      const parsed = parsePDFPageRange(params.pages);\n'
+                       '      if (!parsed) {\n',
+             'after': "      return 'pages is not supported for Jupyter notebook "
+                      '(.ipynb) files. Notebooks are always read in full with '
+                      "structured cell output.';\n"
+                      '    }\n'
+                      '\n'
+                      "    if (params.pages !== undefined && ext !== '.pdf') {\n"
+                      "      return `The 'pages' parameter applies only to PDF files; "
+                      "'${path.basename(filePath)}' is not a PDF. For text files, use "
+                      "'offset' and 'limit' instead.`;\n"
+                      '    }\n'
+                      '\n'
+                      '    if (params.pages) {\n'
+                      '      const parsed = parsePDFPageRange(params.pages);\n'
+                      '      if (!parsed) {\n',
+             'review_before': "      return 'pages is not supported for Jupyter "
+                              'notebook (.ipynb) files. Notebooks are always read in '
+                              "full with structured cell output.';\n"
+                              '    }\n'
+                              '\n'
+                              '    if (params.pages) {\n'
+                              '      const parsed = parsePDFPageRange(params.pages);\n'
+                              '      if (!parsed) {\n',
+             'review_after': "      return 'pages is not supported for Jupyter "
+                             'notebook (.ipynb) files. Notebooks are always read in '
+                             "full with structured cell output.';\n"
+                             '    }\n'
+                             '\n'
+                             "    if (params.pages !== undefined && ext !== '.pdf') {\n"
+                             "      return `The 'pages' parameter applies only to PDF "
+                             "files; '${path.basename(filePath)}' is not a PDF. For "
+                             "text files, use 'offset' and 'limit' instead.`;\n"
+                             '    }\n'
+                             '\n'
+                             '    if (params.pages) {\n'
+                             '      const parsed = parsePDFPageRange(params.pages);\n'
+                             '      if (!parsed) {\n'},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-1',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': "      expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('keeps explicit pages reads on the pdftotext path', "
+                       'async () => {\n'
+                       '      actualNodeFs.writeFileSync(\n'
+                       '        testPdfFilePath,\n',
+             'after': "      expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('[pages-contract] rejects a pages parameter on a non-PDF "
+                      "file instead of ignoring it', async () => {\n"
+                      "      actualNodeFs.writeFileSync(testTextFilePath, 'line "
+                      "one\\nline two\\n');\n"
+                      "      mockMimeGetType.mockReturnValue('text/plain');\n"
+                      '\n'
+                      '      const result = await processSingleFileContent(\n'
+                      '        testTextFilePath,\n'
+                      '        mockConfig,\n'
+                      "        { pages: '770' },\n"
+                      '      );\n'
+                      '\n'
+                      '      '
+                      'expect(result.errorType).toBe(ToolErrorType.INVALID_TOOL_PARAMS);\n'
+                      '      expect(result.llmContent).toContain(\n'
+                      '        "The \'pages\' parameter applies only to PDF files",\n'
+                      '      );\n'
+                      '      expect(result.llmContent).toContain("use \'offset\' and '
+                      '\'limit\'");\n'
+                      '      expect(mockExecFile).not.toHaveBeenCalled();\n'
+                      '    });\n'
+                      '\n'
+                      "    it('keeps explicit pages reads on the pdftotext path', "
+                      'async () => {\n'
+                      '      actualNodeFs.writeFileSync(\n'
+                      '        testPdfFilePath,\n',
+             'review_before': '      '
+                              "expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('keeps explicit pages reads on the pdftotext "
+                              "path', async () => {\n"
+                              '      actualNodeFs.writeFileSync(\n'
+                              '        testPdfFilePath,\n',
+             'review_after': '      '
+                             "expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('[pages-contract] rejects a pages parameter on a "
+                             "non-PDF file instead of ignoring it', async () => {\n"
+                             "      actualNodeFs.writeFileSync(testTextFilePath, 'line "
+                             "one\\nline two\\n');\n"
+                             "      mockMimeGetType.mockReturnValue('text/plain');\n"
+                             '\n'
+                             '      const result = await processSingleFileContent(\n'
+                             '        testTextFilePath,\n'
+                             '        mockConfig,\n'
+                             "        { pages: '770' },\n"
+                             '      );\n'
+                             '\n'
+                             '      '
+                             'expect(result.errorType).toBe(ToolErrorType.INVALID_TOOL_PARAMS);\n'
+                             '      expect(result.llmContent).toContain(\n'
+                             '        "The \'pages\' parameter applies only to PDF '
+                             'files",\n'
+                             '      );\n'
+                             '      expect(result.llmContent).toContain("use '
+                             '\'offset\' and \'limit\'");\n'
+                             '      expect(mockExecFile).not.toHaveBeenCalled();\n'
+                             '    });\n'
+                             '\n'
+                             "    it('keeps explicit pages reads on the pdftotext "
+                             "path', async () => {\n"
+                             '      actualNodeFs.writeFileSync(\n'
+                             '        testPdfFilePath,\n'},
             {'name': 'packages/core/src/utils/fileUtils.ts:landmark-1',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': "} from './image-view.js';\n"
@@ -31187,6 +31384,60 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // keeps ordinary images available to a '
                              'bridge-capable caller, while\n'},
             {'name': 'packages/core/src/utils/fileUtils.ts:landmark-3',
+             'path': 'packages/core/src/utils/fileUtils.ts',
+             'before': '\n'
+                       '    const fileSizeInMB = stats.size / (1024 * 1024);\n'
+                       '    const normalizedPages = pages?.trim();\n'
+                       '    let pageRange:\n'
+                       '      | NonNullable<ReturnType<typeof parsePDFPageRange>>\n'
+                       '      | undefined;\n',
+             'after': '\n'
+                      '    const fileSizeInMB = stats.size / (1024 * 1024);\n'
+                      '    const normalizedPages = pages?.trim();\n'
+                      "    if (normalizedPages !== undefined && fileType !== 'pdf') {\n"
+                      "      const nonPdfPagesMessage = `The 'pages' parameter applies "
+                      'only to PDF files; ${relativePathForDisplay} is not a PDF. For '
+                      "text files, use 'offset' and 'limit' instead.`;\n"
+                      '      return {\n'
+                      '        llmContent: nonPdfPagesMessage,\n'
+                      '        returnDisplay: `Rejected non-PDF pages parameter: '
+                      '${relativePathForDisplay}`,\n'
+                      '        error: nonPdfPagesMessage,\n'
+                      '        errorType: ToolErrorType.INVALID_TOOL_PARAMS,\n'
+                      '      };\n'
+                      '    }\n'
+                      '    let pageRange:\n'
+                      '      | NonNullable<ReturnType<typeof parsePDFPageRange>>\n'
+                      '      | undefined;\n',
+             'review_before': '\n'
+                              '    const fileSizeInMB = stats.size / (1024 * 1024);\n'
+                              '    const normalizedPages = pages?.trim();\n'
+                              '    let pageRange:\n'
+                              '      | NonNullable<ReturnType<typeof '
+                              'parsePDFPageRange>>\n'
+                              '      | undefined;\n',
+             'review_after': '\n'
+                             '    const fileSizeInMB = stats.size / (1024 * 1024);\n'
+                             '    const normalizedPages = pages?.trim();\n'
+                             '    if (normalizedPages !== undefined && fileType !== '
+                             "'pdf') {\n"
+                             "      const nonPdfPagesMessage = `The 'pages' parameter "
+                             'applies only to PDF files; ${relativePathForDisplay} is '
+                             "not a PDF. For text files, use 'offset' and 'limit' "
+                             'instead.`;\n'
+                             '      return {\n'
+                             '        llmContent: nonPdfPagesMessage,\n'
+                             '        returnDisplay: `Rejected non-PDF pages '
+                             'parameter: ${relativePathForDisplay}`,\n'
+                             '        error: nonPdfPagesMessage,\n'
+                             '        errorType: ToolErrorType.INVALID_TOOL_PARAMS,\n'
+                             '      };\n'
+                             '    }\n'
+                             '    let pageRange:\n'
+                             '      | NonNullable<ReturnType<typeof '
+                             'parsePDFPageRange>>\n'
+                             '      | undefined;\n'},
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-4',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '        };\n'
                        '      }\n'
@@ -33502,8 +33753,10 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.ts': '6f901a5cda41071d4237acdc3f3bfd9ba8cf92ef1db93d73ae1aabb038d53e46',
- 'packages/core/src/tools/read-file.ts': 'fac6bc4581ba7a283f4e14b00d2ad83c8cdea62541b579d9480b334ea736e0fd',
- 'packages/core/src/utils/fileUtils.ts': 'b6000b887f9cdcd14630153d7cb8d883754d4939647e75b67f89a378d80ed8b3',
+ 'packages/core/src/tools/read-file.test.ts': '3d8e74099403f77cd72fe749e547f8c2bec627b8c846f46ae41f1f97d9d7525b',
+ 'packages/core/src/tools/read-file.ts': 'b2023049f4b50a1581ce502523c7c9aef8968c5eff05d363c158905d3d6aca8d',
+ 'packages/core/src/utils/fileUtils.test.ts': '9f191c0db8201be82d3242e35855052f911684ef53569776f53175170b5584e8',
+ 'packages/core/src/utils/fileUtils.ts': '1012d14b04390f147d46df13ebc8f578bcde0f9ebf60e5e93da3edeb7ac491e5',
  'packages/core/src/utils/image-view.test.ts': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d',
  'packages/core/src/utils/image-view.ts': '82383711baeb81895042e6fd865f2f509ca29756ff22b02378dc89c0b2c5e9ea',
  'packages/core/src/utils/qwen38-image-contract.test.ts': '57972bb126651812bbd508ff26d87f3c7d5aab94603900b773e88a3e90a234c9',

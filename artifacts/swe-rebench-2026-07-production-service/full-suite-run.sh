@@ -25,9 +25,17 @@ done
 
 readonly API='http://127.0.0.1:8090'
 readonly SUITE_ROOT="${BENCH_ROOT}/full-suite-v1"
-readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v3"
+readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v4"
 readonly RUNS_ROOT="${PASS_ROOT}/runs"
 readonly PROVENANCE_ROOT="${PASS_ROOT}/release-provenance"
+# Pass v3 ran under the release whose read_file tool misled agents about the
+# PDF-only pages parameter (INCIDENTS.md, loop-halt forensics). Pairs fully
+# accepted there under one release remain valid single-release pairs and are
+# not repeated; the two pairs whose recorded results contain a
+# production_agent_process_failure caused by that tool trap are superseded
+# and rerun here in full, keeping every pair internally single-release.
+readonly PRIOR_PASS_ROOT="${BENCH_ROOT}/full-suite-v3"
+readonly SUPERSEDED_TASKS='HKUDS__nanobot-4048 cloudnative-pg__cloudnative-pg-10747'
 readonly DATASET_ROOT="${BENCH_ROOT}/evaluator-dataset"
 readonly PLAN_FILE="${SUITE_ROOT}/suite-plan.json"
 readonly AGENT_TIMEOUT_SEC=3000
@@ -437,6 +445,19 @@ run_task() {
     printf 'Task %s already has an accepted pair summary; skipping.\n' "${task_id}" >&2
     return 0
   fi
+  local superseded=false candidate
+  for candidate in ${SUPERSEDED_TASKS}; do
+    [[ "${candidate}" == "${task_id}" ]] && superseded=true
+  done
+  if [[ "${superseded}" == false && -f "${PRIOR_PASS_ROOT}/runs/${task_id}/pair-summary.json" ]]; then
+    printf 'Task %s pair was accepted in %s under its recorded release and is not superseded; skipping.\n' \
+      "${task_id}" "${PRIOR_PASS_ROOT##*/}" >&2
+    return 0
+  fi
+  if [[ "${superseded}" == true ]]; then
+    printf 'Task %s pair from %s is superseded by the read_file pages fix; rerunning both variants.\n' \
+      "${task_id}" "${PRIOR_PASS_ROOT##*/}" >&2
+  fi
   mkdir -p -- "${target}"
   chmod 0700 -- "${target}"
   verify_task_source "${task_id}" "${task_dir}" "${target}/source-verified.txt"
@@ -481,12 +502,28 @@ run_task() {
 # ---------------------------------------------------------------------------
 # The pass: plan order, resumable, one task pair at a time.
 # ---------------------------------------------------------------------------
+in_scope=0
+while read -r task_id; do
+  keep=true
+  if [[ -f "${PRIOR_PASS_ROOT}/runs/${task_id}/pair-summary.json" ]]; then
+    keep=false
+    for candidate in ${SUPERSEDED_TASKS}; do
+      [[ "${candidate}" == "${task_id}" ]] && keep=true
+    done
+  fi
+  [[ "${keep}" == true ]] && in_scope=$((in_scope + 1))
+done < <(jq -er '.runs[].task_id' "${PLAN_FILE}")
+readonly in_scope
+printf 'This pass owns %s of 41 task pairs; the rest stay accepted in %s.\n' \
+  "${in_scope}" "${PRIOR_PASS_ROOT##*/}" >&2
+
 completed=0
 while read -r task_id; do
   run_task "${task_id}"
   completed=$((completed + 1))
-  printf '=== Suite progress: %s of 41 task pairs have accepted summaries ===\n' \
-    "$(find "${RUNS_ROOT}" -mindepth 2 -maxdepth 2 -name pair-summary.json | wc -l)" >&2
+  printf '=== Suite progress: %s of %s task pairs have accepted summaries in this pass ===\n' \
+    "$(find "${RUNS_ROOT}" -mindepth 2 -maxdepth 2 -name pair-summary.json | wc -l)" \
+    "${in_scope}" >&2
 done < <(jq -er '.runs[].task_id' "${PLAN_FILE}")
 
 printf 'SUITE_PASS_COMPLETE tasks=%s runs_root=%s\n' "${completed}" "${RUNS_ROOT}"

@@ -977,6 +977,86 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         _require_all(state, path, needles, label=label)
 
 
+def _validate_nonpdf_pages_before(state: State) -> None:
+    label = "non-PDF pages rejection precondition"
+    tool = "packages/core/src/tools/read-file.ts"
+    files = "packages/core/src/utils/fileUtils.ts"
+    forbid_text(
+        state, tool, "applies only to PDF files", label=label
+    )
+    forbid_text(
+        state, files, "applies only to PDF files", label=label
+    )
+    require_text(
+        state,
+        files,
+        "if (fileType === 'pdf' && normalizedPages !== undefined) {",
+        label=label,
+    )
+
+
+def _validate_nonpdf_pages_after(state: State) -> None:
+    label = "non-PDF pages rejection result"
+    tool = "packages/core/src/tools/read-file.ts"
+    files = "packages/core/src/utils/fileUtils.ts"
+    tool_test = "packages/core/src/tools/read-file.test.ts"
+    files_test = "packages/core/src/utils/fileUtils.test.ts"
+    # The file-type decision precedes every pages syntax check, names the
+    # real remedy, and exists at both the validation and consumption layers
+    # so no caller can silently drop a supplied pages parameter.
+    require_text(
+        state,
+        tool,
+        "if (params.pages !== undefined && ext !== '.pdf') {",
+        label=label,
+    )
+    require_text(
+        state,
+        tool,
+        "applies only to PDF files; '${path.basename(filePath)}' is not a PDF."
+        " For text files, use 'offset' and 'limit' instead.",
+        label=label,
+    )
+    require_text(
+        state,
+        files,
+        "if (normalizedPages !== undefined && fileType !== 'pdf') {",
+        label=label,
+    )
+    require_text(
+        state,
+        files,
+        "errorType: ToolErrorType.INVALID_TOOL_PARAMS,",
+        count=2,
+        label=label,
+    )
+    # PDF behavior is byte-for-byte untouched.
+    require_text(
+        state,
+        files,
+        "if (fileType === 'pdf' && normalizedPages !== undefined) {",
+        label=label,
+    )
+    require_text(
+        state,
+        tool_test,
+        "[pages-contract] rejects pages on a non-PDF file before any syntax validation",
+        label=label,
+    )
+    require_text(
+        state,
+        tool_test,
+        "[pages-contract] still accepts a bounded pages range on a PDF",
+        label=label,
+    )
+    require_text(
+        state,
+        files_test,
+        "[pages-contract] rejects a pages parameter on a non-PDF file instead of ignoring it",
+        label=label,
+    )
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="locked-config-and-literal-cli",
@@ -1117,6 +1197,27 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_behavioral_evidence_before,
         validate_after=_validate_behavioral_evidence_after,
+    ),
+    SemanticConcern(
+        name="non-pdf-pages-rejection",
+        rationale=(
+            "Production benchmark forensics showed three agent runs dying in "
+            "identical read_file loops: the PDF-only pages parameter used as a "
+            "line range on source files. Upstream validated pages syntax before "
+            "knowing the file type, reported a PDF capacity error on text files, "
+            "and silently ignored pages small enough to pass, so the model's "
+            "only feedback pointed away from the real fix. The file-type "
+            "decision must come first, the error must name the remedy "
+            "(offset/limit), and a supplied parameter must never be silently "
+            "dropped at the consumption layer."
+        ),
+        removal_condition=(
+            "Remove only when upstream read_file rejects pages on non-PDF "
+            "inputs at both the validation and consumption layers with an "
+            "error that names offset/limit as the text-file remedy."
+        ),
+        validate_before=_validate_nonpdf_pages_before,
+        validate_after=_validate_nonpdf_pages_after,
     ),
 )
 

@@ -169,3 +169,28 @@ current-handle read paths that only a live production session exercises.
   the variant reruns fresh.
 - **Benchmark note**: the collision itself is informative — the model
   independently chose the exact test path the maintainers used.
+
+## Remediation — read_file pages fix and pass v4
+
+The loop-halt forensics (loop-halt-forensics.md) established that all three
+guard kills shared one harness trap: `read_file`'s PDF-only `pages`
+parameter was syntax-checked before the file type was known, produced a PDF
+capacity error on text files, and was silently ignored when small enough to
+pass — never once naming the real remedy. The agent image now rejects
+`pages` on non-PDF files at both the validation layer (before any syntax
+check) and the consumption layer (no supplied parameter is ever silently
+dropped), with an error that names `offset`/`limit`. The change is carried
+by the landmark transformer (`patches/source_patch_v1`, new concern
+`non-pdf-pages-rejection`) and three `[pages-contract]` tests execute the
+boundary inside the hermetic image build. PDF behavior is byte-for-byte
+unchanged, and no other read_many_files/pathReader caller can pass `pages`,
+so nothing else changes.
+
+Pass consequences: pairs fully accepted in `full-suite-v3` under its
+recorded release remain valid single-release pairs. The two pairs whose
+recorded results contain a `production_agent_process_failure` caused by the
+trap (`HKUDS__nanobot-4048`, `cloudnative-pg__cloudnative-pg-10747`) are
+superseded and rerun in full in `full-suite-v4` under the fixed release,
+together with every task not yet accepted. Every pair therefore remains
+internally single-release, and the final report will pool within-pair
+deltas across both passes with this split disclosed.
