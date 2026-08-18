@@ -106,3 +106,39 @@ current-handle read paths that only a live production session exercises.
   model-behavior data point for the preserved-thinking comparison — the
   agent's own final thinking read "I'm repeatedly making the same
   mistake by including a `pages` pa…" while the guard fired.
+
+## Incident 4 — dataset images with baked-dirty worktrees killed the pass silently
+
+- **Observed** (task `apache__hugegraph-3037`, `preserve_thinking=false`,
+  session
+  `s-3a2ba23e9e3a388da594922e2b8060d043401ba340f4a23bd69578fcfece972f`):
+  after a healthy timeout run and a verified 2.9 GB bundle download, the
+  driver died with no error message at the patch-construction step.
+- **Root cause, silent death**: the patch-construction `docker run` had
+  no explicit failure handler, so `set -e` killed the driver without a
+  diagnostic when the container script failed.
+- **Root cause, the failure itself**: the container script required a
+  pristine baked worktree
+  (`test -z "$(git status --porcelain …)"`), but this dataset image
+  deliberately ships `pom.xml` modified out of the box (offline-build
+  version bumps: lombok 1.18.30→1.18.38, plugin 3.1→3.13.0). The
+  materializer had already recorded exactly that in
+  `initial-git-status.z`, and the agent's input source was materialized
+  from the baked worktree, so the driver's pristine assumption
+  contradicted its own recorded evidence. Five of the 41 tasks ship
+  dirty baselines (hugegraph-3037, LibreChat-13166, OpenJarvis-465,
+  rewrite-7784, react-hook-form-13464); each would have silently killed
+  the pass.
+- **Why grading stays exact**: the grader reconstructs pristine base
+  (`git reset --hard` + `git clean`) and applies `candidate.patch`,
+  which is diffed against the base commit — so the baked fixes flow
+  through the patch and the reconstructed tree equals the agent's final
+  workspace byte for byte.
+- **Fix**: both container scripts stop requiring pristine worktrees; the
+  patch step records the observed baked baseline as
+  `patch/baseline.status` and the driver byte-compares it against the
+  materializer's `initial-git-status.z` (working-tree drift dies
+  loudly); both docker invocations now fail with explicit diagnostics.
+  The healthy-but-unfinished variant evidence is archived at
+  `runs/apache__hugegraph-3037/01-unpreserved.incident4-archived/` and
+  the variant reruns fresh.

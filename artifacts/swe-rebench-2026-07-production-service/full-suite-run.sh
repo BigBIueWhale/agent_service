@@ -295,7 +295,12 @@ run_variant() {
     --entrypoint bash "${task_env_image}" -Eeuo pipefail -c '
       cd "$TASK_WORKING_DIR"
       test "$(git rev-parse HEAD)" = "$TASK_BASE_COMMIT"
-      test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      # Some dataset images deliberately ship a dirty baked worktree (for
+      # example offline-build pom fixes). That baseline is recorded as
+      # evidence and cross-checked against the materializer'"'"'s own
+      # recording below; the grader reconstructs base + candidate.patch, so
+      # the baked fixes flow through the patch and grading stays exact.
+      git status --porcelain=v1 --untracked-files=all > /out/baseline.status
       git clean -ffdqx
       find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
       tar -C /candidate --exclude=./.git --exclude=.git -cf - . |
@@ -304,10 +309,14 @@ run_variant() {
       git diff --cached --binary --full-index "$TASK_BASE_COMMIT" -- > /out/candidate.patch
       git diff --cached --stat -- > /out/candidate.stat
       git diff --cached --name-status -- > /out/candidate.name-status
-      chmod 0644 /out/candidate.patch /out/candidate.stat /out/candidate.name-status
-    '
+      chmod 0644 /out/baseline.status /out/candidate.patch /out/candidate.stat /out/candidate.name-status
+    ' || die "candidate patch construction failed for ${task_id} ${label}"
   [[ -f "${run_dir}/patch/candidate.patch" && ! -L "${run_dir}/patch/candidate.patch" ]] ||
     die 'trusted patch construction failed'
+  # The observed baked baseline must byte-match what materialization
+  # recorded from this exact image; anything else is working-tree drift.
+  tr '\0' '\n' <"${task_dir}/initial-git-status.z" | cmp -s - "${run_dir}/patch/baseline.status" ||
+    die "environment image working-tree drift for ${task_id}: observed baseline differs from materialized initial-git-status"
   local patch_sha patch_bytes
   patch_sha="$(sha256sum -- "${run_dir}/patch/candidate.patch" | awk '{print $1}')"
   patch_bytes="$(stat -c '%s' -- "${run_dir}/patch/candidate.patch")"
@@ -334,7 +343,9 @@ run_variant() {
     --entrypoint bash "${task_env_image}" -Eeuo pipefail -c '
       cd "$TASK_WORKING_DIR"
       test "$(git rev-parse HEAD)" = "$TASK_BASE_COMMIT"
-      test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      # A baked-dirty worktree is legitimate dataset state; the reset and
+      # clean below reconstruct pristine base, and the candidate patch
+      # carries every intended deviation (baked fixes plus agent work).
       git reset --hard "$TASK_BASE_COMMIT"
       git clean -ffdqx
       if test -s /candidate.patch; then
@@ -344,7 +355,7 @@ run_variant() {
       rm -rf /tests
       cp -a /benchmark-tests /tests
       exec bash /tests/test.sh
-    ' >/dev/null
+    ' >/dev/null || die "grader container creation failed for ${task_id} ${label}"
   printf 'Grading %s session %s in the preserved evaluator image.\n' "${task_id}" "${session_id}" >&2
   set +e
   timeout --signal=TERM --kill-after=10s "${VERIFIER_TIMEOUT_SEC}s" \
