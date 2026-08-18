@@ -67,6 +67,10 @@ RUN test "$(sha256sum /opt/locks/agent-apt-packages.lock | cut -d' ' -f1)" = \
       /var/log/alternatives.log /var/cache/ldconfig/aux-cache
 ARG GO_ARCHIVE
 ARG GO_ARCHIVE_SHA256
+# Telemetry is pointless in a network-none runtime and its dated counter
+# files are the one nondeterministic byte source a `go` invocation adds
+# to an otherwise reproducible layer.
+ENV GOTELEMETRY=off
 ADD --checksum=sha256:${GO_ARCHIVE_SHA256} ${GO_ARCHIVE} /tmp/go.tar.gz
 RUN test "$(sha256sum /tmp/go.tar.gz | cut -d' ' -f1)" = "${GO_ARCHIVE_SHA256}" \
  && tar -C /usr/local -xzf /tmp/go.tar.gz \
@@ -75,7 +79,8 @@ RUN test "$(sha256sum /tmp/go.tar.gz | cut -d' ' -f1)" = "${GO_ARCHIVE_SHA256}" 
  && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
  && test "$(/usr/local/bin/go version)" = 'go version go1.25.13 linux/amd64' \
  && mvn -version >/dev/null \
- && python3 -m pytest --version >/dev/null
+ && python3 -m pytest --version >/dev/null \
+ && rm -rf /root/.config/go /root/.m2 /tmp/hsperfdata_*
 COPY --from=node-pin /usr/local/ /usr/local/
 RUN test "$(node --version)" = 'v22.23.2' \
  && test "$(npm --version)" = '10.9.8' \
