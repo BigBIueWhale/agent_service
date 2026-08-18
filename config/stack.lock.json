@@ -111,7 +111,8 @@
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
       "patch_sha256": "78682767c538c83e8820b8010a854cc5072a03c2db640b39840bf4f85134426d",
       "source_patch_manifest_sha256": "9d297e2e0e1a0295218a4a3aa49a4138b22fd48365bd342e26ef1bee1cab8af6"
-    }
+    },
+    "apt_lock_sha256": "b653bee65b0d55f999b96a73102bdd3de03d72a4136a62810b9c89f091997770"
   },
   "backend": {
     "project_dir": "/home/user/Desktop/Qwen_best_model_ever",
