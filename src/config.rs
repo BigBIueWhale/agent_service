@@ -118,6 +118,8 @@ pub struct BuildLock {
     pub rust_amd64_image: String,
     pub docker_cli_archive: String,
     pub docker_cli_archive_sha256: String,
+    pub go_archive: String,
+    pub go_archive_sha256: String,
     pub agent_apt_lock_sha256: String,
     pub toolchain_verifier_sha256: String,
     pub toolchain_verifier_test_sha256: String,
@@ -468,6 +470,9 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.build.docker_cli_archive
             != "https://download.docker.com/linux/static/stable/x86_64/docker-29.7.2.tgz"
         || !is_sha256(&lock.build.docker_cli_archive_sha256)
+        || lock.build.go_archive
+            != "https://dl.google.com/go/go1.25.13.linux-amd64.tar.gz"
+        || !is_sha256(&lock.build.go_archive_sha256)
         || !is_sha256(&lock.build.agent_apt_lock_sha256)
         || !is_sha256(&lock.build.jks_normalizer_sha256)
         || !is_sha256(&lock.build.jks_normalizer_test_sha256)
