@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '043e8a44c7ff0c60681ab004267ec2c3e4835a0a4065f65c781d5cf7b6b44dc4',
+  'review_sha256': '78682767c538c83e8820b8010a854cc5072a03c2db640b39840bf4f85134426d',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -109,10 +109,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'e988432bc5c2f2746cec2f1600d5adf0f70a348f716e8857ecef3319ace4425f'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.test.ts',
              'before_sha256': None,
-             'after_sha256': '97056857faa85506b0a4a2059361553d53d8e02784f7791989ac4672ac3a3e96'},
+             'after_sha256': '7ca5a32ae04cb9703e4e84f72a885424f71919c8346e9f2e79d05bf48b6ac8d5'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.ts',
              'before_sha256': None,
-             'after_sha256': '1a689989343bee29721fcec32696ccf5a482faeab1c958b9d2fcd0b19e2b942a'},
+             'after_sha256': 'a209b511d4c6a0665a0a345667034b93e49170c8a530d3d269f6de1c60c88d9f'},
             {'path': 'packages/core/src/core/session-recovery.ts',
              'before_sha256': '65e3c71d4fc1661976daaab2add6dbcb6ae6a740f85c88f47ca0106c863186a6',
              'after_sha256': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513'},
@@ -11253,9 +11253,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    );\n'
                       '\n'
                       "    expect(appendQwen38DeploymentContract('role "
-                      "prompt')).toBe(\n"
-                      "      'role "
-                      "prompt\\n\\n---\\n\\nLOCKED_DEPLOYMENT_CONTRACT_V1',\n"
+                      "prompt')).toMatch(\n"
+                      '      /^role '
+                      'prompt\\n\\n---\\n\\nLOCKED_DEPLOYMENT_CONTRACT_V1\\n\\nSession '
+                      'started: '
+                      '\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/,\n'
                       '    );\n'
                       '  });\n'
                       '\n'
@@ -11373,9 +11375,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    );\n'
                              '\n'
                              "    expect(appendQwen38DeploymentContract('role "
-                             "prompt')).toBe(\n"
-                             "      'role "
-                             "prompt\\n\\n---\\n\\nLOCKED_DEPLOYMENT_CONTRACT_V1',\n"
+                             "prompt')).toMatch(\n"
+                             '      /^role '
+                             'prompt\\n\\n---\\n\\nLOCKED_DEPLOYMENT_CONTRACT_V1\\n\\nSession '
+                             'started: '
+                             '\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/,\n'
                              '    );\n'
                              '  });\n'
                              '\n'
@@ -11491,11 +11495,21 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "contract');\n"
                       '}\n'
                       '\n'
+                      '// Computed once at process start so the system prompt is '
+                      'byte-stable for\n'
+                      '// the whole session (prefix-cache friendly) while anchoring '
+                      'the model to\n'
+                      '// absolute time; live time stays observable through the `date` '
+                      'command.\n'
+                      'const QWEN38_SESSION_STARTED_AT_UTC = new '
+                      'Date().toISOString();\n'
+                      '\n'
                       'export function appendQwen38DeploymentContract(base: string): '
                       'string {\n'
                       '  const contract = getQwen38DeploymentContract();\n'
-                      '  return contract ? `${base.trim()}\\n\\n---\\n\\n${contract}` '
-                      ': base;\n'
+                      '  if (!contract) return base;\n'
+                      '  return `${base.trim()}\\n\\n---\\n\\n${contract}\\n\\nSession '
+                      'started: ${QWEN38_SESSION_STARTED_AT_UTC}`;\n'
                       '}\n'
                       '\n'
                       'export function appendQwen38SubagentInvocation(\n'
@@ -11597,11 +11611,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'deployment contract');\n"
                              '}\n'
                              '\n'
+                             '// Computed once at process start so the system prompt '
+                             'is byte-stable for\n'
+                             '// the whole session (prefix-cache friendly) while '
+                             'anchoring the model to\n'
+                             '// absolute time; live time stays observable through the '
+                             '`date` command.\n'
+                             'const QWEN38_SESSION_STARTED_AT_UTC = new '
+                             'Date().toISOString();\n'
+                             '\n'
                              'export function appendQwen38DeploymentContract(base: '
                              'string): string {\n'
                              '  const contract = getQwen38DeploymentContract();\n'
-                             '  return contract ? '
-                             '`${base.trim()}\\n\\n---\\n\\n${contract}` : base;\n'
+                             '  if (!contract) return base;\n'
+                             '  return '
+                             '`${base.trim()}\\n\\n---\\n\\n${contract}\\n\\nSession '
+                             'started: ${QWEN38_SESSION_STARTED_AT_UTC}`;\n'
                              '}\n'
                              '\n'
                              'export function appendQwen38SubagentInvocation(\n'
@@ -33985,8 +34010,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/openaiContentGenerator/pipeline.ts': '5c9d2127e4e1abbad35fabb93cf4f7997c876669edfaa82798e5bae57a0c03bb',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
  'packages/core/src/core/prompts.ts': 'e988432bc5c2f2746cec2f1600d5adf0f70a348f716e8857ecef3319ace4425f',
- 'packages/core/src/core/qwen38-deployment-prompt.test.ts': '97056857faa85506b0a4a2059361553d53d8e02784f7791989ac4672ac3a3e96',
- 'packages/core/src/core/qwen38-deployment-prompt.ts': '1a689989343bee29721fcec32696ccf5a482faeab1c958b9d2fcd0b19e2b942a',
+ 'packages/core/src/core/qwen38-deployment-prompt.test.ts': '7ca5a32ae04cb9703e4e84f72a885424f71919c8346e9f2e79d05bf48b6ac8d5',
+ 'packages/core/src/core/qwen38-deployment-prompt.ts': 'a209b511d4c6a0665a0a345667034b93e49170c8a530d3d269f6de1c60c88d9f',
  'packages/core/src/core/session-recovery.ts': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513',
  'packages/core/src/core/tokenLimits.test.ts': '0f4775ebb4abb3b3a7a38a2369b3c44995b97b2f256b04c56609c1ef0c01823c',
  'packages/core/src/core/tokenLimits.ts': '9a3bda80d944c61cae61197c018a10e4606a47187686f0a34b5ccf5624f978cb',

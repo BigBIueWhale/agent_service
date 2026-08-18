@@ -3680,7 +3680,7 @@ index 72d1aa5..5e25a12 100644
  
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 new file mode 100644
-index 0000000..d6aa1e8
+index 0000000..75ec30c
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 @@ -0,0 +1,99 @@
@@ -3747,8 +3747,8 @@ index 0000000..d6aa1e8
 +      'LOCKED_DEPLOYMENT_CONTRACT_V1\n',
 +    );
 +
-+    expect(appendQwen38DeploymentContract('role prompt')).toBe(
-+      'role prompt\n\n---\n\nLOCKED_DEPLOYMENT_CONTRACT_V1',
++    expect(appendQwen38DeploymentContract('role prompt')).toMatch(
++      /^role prompt\n\n---\n\nLOCKED_DEPLOYMENT_CONTRACT_V1\n\nSession started: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
 +    );
 +  });
 +
@@ -3785,10 +3785,10 @@ index 0000000..d6aa1e8
 +});
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
 new file mode 100644
-index 0000000..31ca49d
+index 0000000..e8e256c
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.ts
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,84 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -3845,9 +3845,15 @@ index 0000000..31ca49d
 +  return readRequiredRegularFile(contractPath, 'deployment contract');
 +}
 +
++// Computed once at process start so the system prompt is byte-stable for
++// the whole session (prefix-cache friendly) while anchoring the model to
++// absolute time; live time stays observable through the `date` command.
++const QWEN38_SESSION_STARTED_AT_UTC = new Date().toISOString();
++
 +export function appendQwen38DeploymentContract(base: string): string {
 +  const contract = getQwen38DeploymentContract();
-+  return contract ? `${base.trim()}\n\n---\n\n${contract}` : base;
++  if (!contract) return base;
++  return `${base.trim()}\n\n---\n\n${contract}\n\nSession started: ${QWEN38_SESSION_STARTED_AT_UTC}`;
 +}
 +
 +export function appendQwen38SubagentInvocation(

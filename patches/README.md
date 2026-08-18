@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `043e8a44c7ff0c60681ab004267ec2c3e4835a0a4065f65c781d5cf7b6b44dc4`
+- Review-diff SHA-256: `78682767c538c83e8820b8010a854cc5072a03c2db640b39840bf4f85134426d`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `fcaa02a2f0c1aca268e4f25c12f8f41e0606521b165ea496053cb911e8d076d8`
+- Transformer-manifest SHA-256: `9d297e2e0e1a0295218a4a3aa49a4138b22fd48365bd342e26ef1bee1cab8af6`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -54,7 +54,11 @@ provide as one fail-closed mode:
   model-facing responseParts over the short human-facing display string, so
   captured event streams carry what the model actually received (two
   `[stream-evidence]` tests plus the full output-adapter suite execute this
-  in the build).
+  in the build);
+- a session-start time anchor: the deployment contract ends with one
+  timestamp computed once at process start, keeping the system prompt
+  byte-stable for the session (prefix-cache safe) while giving the model
+  absolute time; live time stays observable via `date`.
 
 Verification performed in the pinned Node image:
 

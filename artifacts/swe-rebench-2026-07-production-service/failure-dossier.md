@@ -149,10 +149,12 @@ model-level priors, not sampling noise.
   zero a run on a compile error the agent could never reproduce (4411).
 - Fail-fast amplification: one failed test aborts the suite and records
   dozens of unrelated tests NOT_FOUND (both pulsars).
-- Environment-image traps: AGENTS.md documenting absent tooling; a
-  javac wrapper that dumps `javac.*.args` argfiles into the workspace
-  cwd (4455-B's entire "patch" is six such junk files); baked-dirty
-  worktrees (fixed as incident 4).
+- Environment-image traps: AGENTS.md documenting absent tooling;
+  baked-dirty worktrees (fixed as incident 4). (Correction: the
+  `javac.*.args` files in 4455-B's patch were first attributed to an
+  environment-side javac wrapper; `/usr/bin/javac` in the agent image
+  is a plain ELF binary and nothing in the stack writes argfiles — the
+  model's own probe scripting left them in the workspace.)
 
 ## 7. Evidence-stream limitation discovered during this investigation
 

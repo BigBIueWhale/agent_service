@@ -65,6 +65,17 @@ RUN test "$(sha256sum /opt/locks/agent-apt-packages.lock | cut -d' ' -f1)" = \
  && fc-cache --force \
  && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log \
       /var/log/alternatives.log /var/cache/ldconfig/aux-cache
+ARG GO_ARCHIVE
+ARG GO_ARCHIVE_SHA256
+ADD --checksum=sha256:${GO_ARCHIVE_SHA256} ${GO_ARCHIVE} /tmp/go.tar.gz
+RUN test "$(sha256sum /tmp/go.tar.gz | cut -d' ' -f1)" = "${GO_ARCHIVE_SHA256}" \
+ && tar -C /usr/local -xzf /tmp/go.tar.gz \
+ && rm /tmp/go.tar.gz \
+ && ln -s /usr/local/go/bin/go /usr/local/bin/go \
+ && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
+ && test "$(/usr/local/bin/go version)" = 'go version go1.25.13 linux/amd64' \
+ && mvn -version >/dev/null \
+ && python3 -m pytest --version >/dev/null
 COPY --from=node-pin /usr/local/ /usr/local/
 RUN test "$(node --version)" = 'v22.23.2' \
  && test "$(npm --version)" = '10.9.8' \

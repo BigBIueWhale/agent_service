@@ -17,7 +17,9 @@
     "wrapper_contract_test_sha256": "7b03231c0e17f181581b2cc4b10e08eeb4782942f2943e7b06c51d4ba77029c2",
     "jks_normalizer_sha256": "309570025cc08c1ea865d67607e357d92cbb32ce2afe9af5e17c2cd7af8c3d6a",
     "jks_normalizer_test_sha256": "9e9060b44eee4132a78a9a523d8525a0b53c8665f61b16f4b5cc5e3d2e03fcb1",
-    "service_apt_lock_sha256": "faf20a1900aebde3893b4b5e28025aeb83f23620fce6f729979c0a4607d5dd4f"
+    "service_apt_lock_sha256": "faf20a1900aebde3893b4b5e28025aeb83f23620fce6f729979c0a4607d5dd4f",
+    "go_archive": "https://dl.google.com/go/go1.25.13.linux-amd64.tar.gz",
+    "go_archive_sha256": "39042a078ea9ceebe3ecda4a7188f0f5b96e14a071d27923ba7f40b456e85ae3"
   },
   "service": {
     "listen": "127.0.0.1:8090",
@@ -107,8 +109,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "043e8a44c7ff0c60681ab004267ec2c3e4835a0a4065f65c781d5cf7b6b44dc4",
-      "source_patch_manifest_sha256": "fcaa02a2f0c1aca268e4f25c12f8f41e0606521b165ea496053cb911e8d076d8"
+      "patch_sha256": "78682767c538c83e8820b8010a854cc5072a03c2db640b39840bf4f85134426d",
+      "source_patch_manifest_sha256": "9d297e2e0e1a0295218a4a3aa49a4138b22fd48365bd342e26ef1bee1cab8af6"
     }
   },
   "backend": {

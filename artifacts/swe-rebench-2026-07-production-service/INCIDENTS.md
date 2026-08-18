@@ -194,3 +194,39 @@ superseded and rerun in full in `full-suite-v4` under the fixed release,
 together with every task not yet accepted. Every pair therefore remains
 internally single-release, and the final report will pool within-pair
 deltas across both passes with this split disclosed.
+
+## Corrected conditions — pass v5
+
+The failure dossier established that no agent session could compile or
+run anything, knew what time it was, or left a fully faithful evidence
+stream. Pass v5 corrects each at its proper layer, still on Qwen Code:
+
+- **Task toolchains and caches** (`warm-task-env.sh`): each task's own
+  `tests/test.sh` runs once with network at materialization time —
+  exactly the grader's posture — and the toolchain plus dependency
+  caches are harvested into a per-task `task-env.tar.gz` with a
+  relocation-aware `env.sh`. The v5 driver ships it inside the
+  workspace archive over the existing wire contract; agents remain
+  network-none.
+- **Prompt layer** (`prompt-preamble.md`): reduced to the one
+  mechanically necessary fact — the tarball exists and how to load it.
+  An earlier draft also injected time-budget and grading-mechanics
+  coaching; that was wrong (teaching-to-the-test, and noise in every
+  prompt) and was removed before any v5 run.
+- **Time** (agent image, `session-time-anchor` concern): the deployment
+  contract now ends with one session-start timestamp computed once at
+  process start — an absolute anchor that keeps the system prompt
+  byte-stable for the session, so prefix caching is unaffected; live
+  time stays observable via `date`.
+- **Evidence stream** (agent image, `headless-stream-evidence`
+  concern): stream-json tool results now carry the model-facing
+  responseParts instead of the human-facing display banner, so captured
+  event streams record what the model actually received.
+- **Baseline toolchains** (agent image): Maven 3.8.7 and pytest 7.4.4
+  from the pinned Ubuntu snapshot, Go 1.25.13 from a checksum-pinned
+  upstream archive — permanent, versioned parts of the agent image
+  rather than benchmark-only shims.
+
+Passes v3 and v4 are retained as historical evidence; v5 runs all 41
+pairs fresh under the corrected conditions with composed-prompt and
+task-env hashes recorded per run (result schema 3).

@@ -977,6 +977,35 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         _require_all(state, path, needles, label=label)
 
 
+def _validate_session_time_before(state: State) -> None:
+    label = "session time-anchor precondition"
+    prompt = "packages/core/src/core/qwen38-deployment-prompt.ts"
+    # The deployment-prompt module is created by this patch set; in the
+    # pristine tree there is nothing to check.
+    if prompt in state:
+        forbid_text(state, prompt, "QWEN38_SESSION_STARTED_AT_UTC", label=label)
+
+
+def _validate_session_time_after(state: State) -> None:
+    label = "session time-anchor result"
+    prompt = "packages/core/src/core/qwen38-deployment-prompt.ts"
+    # One timestamp computed at process start keeps the system prompt
+    # byte-stable for the session (prefix-cache friendly) while giving the
+    # model an absolute time anchor.
+    require_text(
+        state,
+        prompt,
+        "const QWEN38_SESSION_STARTED_AT_UTC = new Date().toISOString();",
+        label=label,
+    )
+    require_text(
+        state,
+        prompt,
+        "Session started: ${QWEN38_SESSION_STARTED_AT_UTC}",
+        label=label,
+    )
+
+
 def _validate_stream_evidence_before(state: State) -> None:
     label = "headless stream-evidence precondition"
     adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
@@ -1277,6 +1306,23 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_stream_evidence_before,
         validate_after=_validate_stream_evidence_after,
+    ),
+    SemanticConcern(
+        name="session-time-anchor",
+        rationale=(
+            "Benchmark forensics found zero time awareness across every "
+            "session: agents never knew when they started. The deployment "
+            "contract now ends with one session-start timestamp computed "
+            "once at process start — an absolute anchor that keeps the "
+            "system prompt byte-stable for the whole session, preserving "
+            "prefix caching; live time remains observable via `date`."
+        ),
+        removal_condition=(
+            "Remove only when upstream injects an equivalent stable "
+            "session-start time into the system prompt by default."
+        ),
+        validate_before=_validate_session_time_before,
+        validate_after=_validate_session_time_after,
     ),
 )
 
