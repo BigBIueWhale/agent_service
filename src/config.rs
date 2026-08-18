@@ -22,7 +22,10 @@ pub const QWEN_CODE_VERSION: &str = "0.21.12";
 /// messages useful when a syntactically valid JSON body contains an
 /// unexpectedly enormous prompt.
 pub const MAX_PROMPT_BYTES: usize = 1024 * 1024;
-pub const MAX_STAGED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+// 8 GiB: a corrected-conditions benchmark workspace carries the repository
+// plus its warmed toolchain-and-cache tarball; the largest legitimate
+// combination observed (apache__hugegraph-3037) stages ~4.8 GiB.
+pub const MAX_STAGED_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 pub const MAX_STAGED_FILES: u64 = 200_000;
 pub const MAX_STAGED_ENTRIES: u64 = 250_000;
 

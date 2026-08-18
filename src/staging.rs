@@ -1605,7 +1605,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&root).expect("create declared-cap fixture root");
         let mut bytes = build_zip(|writer| {
-            for name in ["oversized-a.bin", "oversized-b.bin"] {
+            for name in ["oversized-a.bin", "oversized-b.bin", "oversized-c.bin"] {
                 writer
                     .start_file(name, stored_options())
                     .expect("start oversized entry");
@@ -1614,10 +1614,11 @@ mod tests {
         });
         // The declared central-directory sizes are the structural authority
         // the caps consult; no content is decompressed to discover the lie.
-        // One 32-bit field cannot exceed the byte cap alone, so two declared
-        // near-4-GiB entries prove the aggregate bound.
+        // One 32-bit field cannot exceed the byte cap alone, so three
+        // declared near-4-GiB entries prove the 8-GiB aggregate bound.
         patch_declared_sizes(&mut bytes, "oversized-a.bin", u32::MAX, false);
         patch_declared_sizes(&mut bytes, "oversized-b.bin", u32::MAX, false);
+        patch_declared_sizes(&mut bytes, "oversized-c.bin", u32::MAX, false);
         let error = validate_archive_structure(&archive_fixture(&root, &bytes))
             .expect_err("declared over-cap size must fail structurally");
         assert!(matches!(error, ServiceError::InvalidRequest(_)));
