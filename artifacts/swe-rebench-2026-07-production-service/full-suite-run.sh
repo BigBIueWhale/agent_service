@@ -349,8 +349,12 @@ run_variant() {
       git reset --hard "$TASK_BASE_COMMIT"
       git clean -ffdqx
       if test -s /candidate.patch; then
-        git apply --binary --index --check /candidate.patch
-        git apply --binary --index /candidate.patch
+        # Worktree-only apply, never --index: the dataset'"'"'s test.sh guards
+        # expect candidate-created files to be untracked (it removes a
+        # colliding test path only when untracked before applying its own
+        # test patch). Rewards read worktree bytes, so grading is identical.
+        git apply --binary --check /candidate.patch
+        git apply --binary /candidate.patch
       fi
       rm -rf /tests
       cp -a /benchmark-tests /tests

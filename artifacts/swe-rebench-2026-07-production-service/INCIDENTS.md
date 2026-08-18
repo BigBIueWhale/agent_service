@@ -142,3 +142,30 @@ current-handle read paths that only a live production session exercises.
   The healthy-but-unfinished variant evidence is archived at
   `runs/apache__hugegraph-3037/01-unpreserved.incident4-archived/` and
   the variant reruns fresh.
+
+## Incident 5 — indexing the candidate patch defeated the dataset's test-collision guard
+
+- **Observed** (task `docker__docker-agent-2992`, `preserve_thinking=true`,
+  session
+  `s-56e5f62d4cc1df716743c83c621be613338347e0fd3e6baef08f37d9632f7bb6`):
+  the grader ran but the official verifier wrote no reward
+  (`official verifier did not write its reward and report`); its log
+  ends with `error: pkg/runtime/streaming_test.go: already exists in
+  working directory`.
+- **What actually happened**: the agent worked test-first and created a
+  test at the canonical Go path `pkg/runtime/streaming_test.go` — the
+  same path the benchmark's hidden test patch creates. SWE-rebench
+  anticipates exactly this: `test.sh` removes a colliding path before
+  applying its test patch, but only when the path is **untracked**,
+  because the protocol applies candidate patches to the worktree. Our
+  grader applied `candidate.patch` with `git apply --index`, making the
+  agent's file tracked, so the guard declined to remove it and the
+  official test patch could not apply.
+- **Fix**: the grader applies the candidate worktree-only (no
+  `--index`), restoring the dataset's assumed state. Rewards read
+  worktree bytes, so the 26 previously graded variants are unaffected.
+  The partial variant evidence is archived at
+  `runs/docker__docker-agent-2992/01-preserved.incident5-archived/` and
+  the variant reruns fresh.
+- **Benchmark note**: the collision itself is informative — the model
+  independently chose the exact test path the maintainers used.
