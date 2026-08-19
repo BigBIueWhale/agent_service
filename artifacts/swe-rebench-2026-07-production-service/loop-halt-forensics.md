@@ -138,3 +138,64 @@ prefix-cache queries hit (96.8%) with mean prefill 0.63 s per request, so
 prompt reprocessing was in fact almost entirely cache-served; Qwen Code's
 stream-json usage simply does not propagate vLLM's cached-token accounting.
 The token totals above are nominal API input, not recompute cost.
+
+## Post-fix confirmation — v6 on the v14 release (arcadedb-4455, unpreserved)
+
+The `non-pdf-pages-rejection` contract (qwen-code source patch, baked into the
+v14 agent runtime) is live and behaves exactly as designed. In the v6 rerun,
+`full-suite-v6/runs/ArcadeData__arcadedb-4455/01-unpreserved` (num_turns=59,
+187 events), every terminal-streak `read_file` on
+`.../database/DatabaseInternal.java` with `{limit:60, pages:"40"}` returned the
+new, accurate tool_result:
+
+> The 'pages' parameter applies only to PDF files; 'DatabaseInternal.java' is
+> not a PDF. For text files, use 'offset' and 'limit' instead.
+
+This is the one true thing cross-case synthesis (3) said no prior error ever
+stated: names the file type, states `pages` is PDF-only, redirects to
+`offset`/`limit`. The file-type check now runs first; nothing is silently
+dropped; no contradictory capacity error appears.
+
+**And the model looped anyway.** It kept `pages:"40"` across the streak,
+varying only `limit` (80→50→60→60→60→60), and Qwen Code's guard halted the run
+(`error_during_execution`, "consecutive_identical_tool_calls"). This is the
+decisive post-fix datapoint: with the harness giving the exact correct redirect,
+fault collapses onto the model — synthesis (2)'s thinking-vs-action / decode
+copy-attractor is the residual cause, plausibly NVFP4-aggravated. Harness fault
+here is ~5% (residual: `pages` remains schema-exposed on `read_file` for text
+files; a schema-level rejection is a possible further hardening, weighed against
+never silently degrading a real capability). The clear-error fix was necessary
+and correct; it is not, by itself, sufficient to stop a model that will not act
+on its own correct diagnosis.
+
+## Separate harness defect — acceptance reader masks the valid loop terminal
+
+Independent of the loop itself, the service's strict terminal parser
+(`agent_service/src/result_parse.rs`) mis-reports these halts. It requires
+`num_turns == main_assistant_events` (line 184) and returns
+`AgentOutputMissing("terminal num_turns=59 does not match 58 main assistant
+event(s)")` **before** it ever inspects `is_error`/`subtype` (line 190+). But a
+loop-detection halt is a *complete, valid* `error_during_execution` terminal:
+the run stops mid-turn, so Qwen counts the halted in-flight turn
+(`num_turns = completed_turns + 1`) while only the completed turns carry a
+usage-bearing assistant record. Proven from the event tail: 58 usage>0 assistant
+records, then a final `input_tokens:0` fragment (turn 59 begun, halted), then the
+`result`. `num_turns − main_assistant_events = 1` is the *expected* relationship
+for a mid-turn halt, not a lost/truncated stream.
+
+Consequences: the durable service summary blames `agent_output_missing`
+(output missing/malformed) when the output is neither; the true reason (loop
+detection) survives only in `bundle/output/events.jsonl`. The benchmark
+*bucket* is unaffected — `agent_exit_code=1` classifies it
+`production_agent_process_failure` either way (full-suite-run.sh:423) — so this
+is a reporting-accuracy defect, incidence 3 across v1–v6, no pass/fail or retry
+impact.
+
+Correct fix (deferred: needs a service rebuild + release-lock bump + redeploy,
+which must not interrupt the running v6): treat a terminal with `is_error=true`
+and `subtype∈{error_during_execution,error_max_turns}` as valid when
+`num_turns − main_assistant_events ∈ {0,1}` (`==0` still required for
+`subtype=success`), keep `main_assistant_events ≤ num_turns` fail-closed against
+real stream loss, and surface the terminal's own `error.message` as the response
+instead of the num_turns text. Because the 3 bundles are durable, correct
+labels can be re-derived from stored evidence without rerunning the model.
