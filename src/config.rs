@@ -641,10 +641,10 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     }
     if lock.backend.container_name != "qwen38-agent-native"
         || lock.backend.endpoint != "http://127.0.0.1:8000"
-        || lock.backend.profile_label != "socket-isolated-nonroot-vision-k8v4-agent-v13"
-        || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v13"
+        || lock.backend.profile_label != "socket-isolated-nonroot-vision-k8v4-agent-v14"
+        || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v14"
         || lock.backend.image_id
-            != "sha256:587e8710c6630edd249f19b46837c12ebe5b5dcdc98486e215ac48a66644dc7f"
+            != "sha256:dd70ee4a13f89ecaba05fcf627414f6e35489923155e4d7356d2c730b3baee44"
         || lock.backend.served_model != "qwen3.8-27b-nvfp4-k8v4"
         || lock.backend.max_model_len != 262_144
         || lock.backend.kv_cache_dtype != "turboquant_k8v4"
@@ -667,7 +667,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     if lock.backend.user != "2000:0"
         || !lock.backend.rootfs_read_only
         || lock.backend.tmpfs != expected_backend_tmpfs
-        || lock.backend.cache_volume != "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v13"
+        || lock.backend.cache_volume != "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v14"
         || lock.backend.cache_mount != "/home/vllm/.cache/vllm"
         || lock.backend.cache_owner_mode != "2000:0:770"
     {
@@ -745,7 +745,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         != required_environment
     {
         return fail(
-            "backend environment differs from the strict non-root v13 runtime contract".into(),
+            "backend environment differs from the strict non-root v14 runtime contract".into(),
         );
     }
     if lock.backend.model_repository != "unsloth/Qwen3.8-27B-NVFP4"
