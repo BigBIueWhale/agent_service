@@ -30,10 +30,11 @@ readonly SUITE_ROOT="${BENCH_ROOT}/full-suite-v1"
 # plus the untouched task statement, and every workspace carries the task's
 # warmed toolchain and dependency caches (.task-env.tar.gz, produced by
 # warm-task-env.sh) so the agent can actually build and run tests offline.
-# Earlier passes (v3 under the misleading read_file pages tool, v4 briefly
-# under the pages fix alone) are retained as historical evidence; v5 runs
-# all 41 pairs fresh under the final conditions.
-readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v5"
+# Earlier passes are retained as historical evidence: v3 (misleading
+# read_file pages tool), v4 (pages fix alone), v5 (corrected conditions
+# but the pre-guards backend). v6 runs all 41 pairs fresh under the final
+# v14 release whose backend carries the turboquant fail-closed guards.
+readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v6"
 readonly RUNS_ROOT="${PASS_ROOT}/runs"
 readonly PROVENANCE_ROOT="${PASS_ROOT}/release-provenance"
 readonly PREAMBLE_FILE="${BENCH_ROOT}/prompt-preamble.md"
