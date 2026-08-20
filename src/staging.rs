@@ -1604,21 +1604,28 @@ mod tests {
             uuid::Uuid::new_v4().simple()
         ));
         std::fs::create_dir_all(&root).expect("create declared-cap fixture root");
+        // Enough near-4-GiB entries that their declared aggregate exceeds the
+        // staging byte cap. The count derives from MAX_STAGED_BYTES so the test
+        // scales with the cap instead of hard-coding one deployment's size, and
+        // stays far below the file/entry caps so only the byte bound trips.
+        let entry_count = (crate::config::MAX_STAGED_BYTES / u32::MAX as u64 + 1) as usize;
+        let names: Vec<String> =
+            (0..entry_count).map(|i| format!("oversized-{i}.bin")).collect();
         let mut bytes = build_zip(|writer| {
-            for name in ["oversized-a.bin", "oversized-b.bin", "oversized-c.bin"] {
+            for name in &names {
                 writer
                     .start_file(name, stored_options())
                     .expect("start oversized entry");
                 std::io::Write::write_all(writer, b"small").expect("write oversized entry");
             }
         });
-        // The declared central-directory sizes are the structural authority
-        // the caps consult; no content is decompressed to discover the lie.
-        // One 32-bit field cannot exceed the byte cap alone, so three
-        // declared near-4-GiB entries prove the 8-GiB aggregate bound.
-        patch_declared_sizes(&mut bytes, "oversized-a.bin", u32::MAX, false);
-        patch_declared_sizes(&mut bytes, "oversized-b.bin", u32::MAX, false);
-        patch_declared_sizes(&mut bytes, "oversized-c.bin", u32::MAX, false);
+        // The declared central-directory sizes are the structural authority the
+        // caps consult; no content is decompressed to discover the lie. One
+        // 32-bit field cannot exceed the byte cap alone, so enough declared
+        // near-4-GiB entries prove the aggregate regular-file-bytes bound.
+        for name in &names {
+            patch_declared_sizes(&mut bytes, name, u32::MAX, false);
+        }
         let error = validate_archive_structure(&archive_fixture(&root, &bytes))
             .expect_err("declared over-cap size must fail structurally");
         assert!(matches!(error, ServiceError::InvalidRequest(_)));

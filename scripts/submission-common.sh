@@ -63,6 +63,13 @@ SUBMISSION_MAX_REQUEST_BYTES="$(jq -er '.service.request_body_limit_bytes | numb
 SUBMISSION_MAX_PROMPT_BYTES="$(jq -er '.limits.max_prompt_bytes | numbers' "${SCRIPT_DIR}/config/stack.lock.json")" \
   || { printf 'FATAL: stack lock .limits.max_prompt_bytes is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
 readonly SUBMISSION_MAX_ARCHIVE_BYTES SUBMISSION_MAX_REQUEST_BYTES SUBMISSION_MAX_PROMPT_BYTES
+# Total transfer deadline scales with the archive cap so the one submission path
+# stays a single mode from an 8 KiB workspace to a 200 GiB one: a 100 MiB/s
+# sustained floor plus a fixed 300 s allowance for the server's spool-hash-
+# validate-fsync tail after the last body byte. A fixed --max-time would either
+# strand huge-but-progressing uploads or be absurdly loose for tiny ones.
+# --connect-timeout still bounds the connect phase independently.
+readonly SUBMISSION_MAX_TIME_SECONDS=$((300 + SUBMISSION_MAX_ARCHIVE_BYTES / (100 * 1024 * 1024)))
 
 submission_validate_receipt() {
   local session_id="$1"
@@ -162,7 +169,7 @@ submission_create_receipt() {
     printf 'PK\x05\x06\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' >"${archive_next}" ||
       submission_die "cannot write empty-workspace archive for ${session_id}" || return
   else
-    (cd -- "${folder}" && zip -ryq "${archive_next}" .) ||
+    (cd -- "${folder}" && zip -0 -ryq "${archive_next}" .) ||
       submission_die "cannot serialize workspace folder ${folder} into the receipt archive for ${session_id}" || return
   fi
   chmod 0600 -- "${archive_next}" ||
@@ -276,7 +283,7 @@ submission_post_receipt() {
     # The workspace archive itself streams through the connection as the
     # second multipart part; nothing is referenced by filesystem path.
     http_status="$(curl --noproxy '*' --silent --show-error \
-      --connect-timeout 5 --max-time 900 \
+      --connect-timeout 5 --max-time "${SUBMISSION_MAX_TIME_SECONDS}" \
       --output "${response_file}" --dump-header "${header_file}" \
       --write-out '%{http_code}' \
       --header "Idempotency-Key: ${session_id}" \

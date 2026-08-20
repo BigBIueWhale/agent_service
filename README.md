@@ -460,7 +460,7 @@ and lifecycle transition. The submitted archive is structurally proved before
 durable acceptance: canonical relative UTF-8 entry names only, directory /
 regular-file / symbolic-link entries only, no duplicate or shadowed names, no
 entry outside the staging root, and declared totals within the exact caps —
-more than 200,000 regular files, 250,000 entries, or 8 GiB of content is
+more than 200,000 regular files, 250,000 entries, or 200 GiB of content is
 rejected before anything stages. Only the outermost archive is extracted; an
 archive inside the workspace stays an ordinary staged file.
 
@@ -684,7 +684,7 @@ The creation body is exactly two ordered `multipart/form-data` parts: part 1
 `request` (`application/json` — `{"prompt", "preserve_thinking"?,
 "archive_bytes", "archive_sha256"}`, at most 2 MiB) and part 2 `archive`
 (`application/zip` — the exact workspace bytes, streamed to a disk spool while
-hashed, bounded only by the explicit 8 GiB + container-overhead archive cap).
+hashed, bounded only by the explicit 200 GiB + container-overhead archive cap).
 A required caller-generated 256-bit `Idempotency-Key` names the operation.
 There is no serving-capacity gate: sessions run concurrently, each in its own
 isolated topology, because whether more than one should run at once is a

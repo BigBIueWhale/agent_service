@@ -278,9 +278,9 @@
   },
   "limits": {
     "max_prompt_bytes": 1048576,
-    "max_staged_bytes": 8589934592,
+    "max_staged_bytes": 214748364800,
     "max_staged_files": 200000,
     "max_staged_entries": 250000,
-    "max_archive_bytes": 8657043456
+    "max_archive_bytes": 214815473664
   }
 }

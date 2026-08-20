@@ -22,10 +22,14 @@ pub const QWEN_CODE_VERSION: &str = "0.21.12";
 /// messages useful when a syntactically valid JSON body contains an
 /// unexpectedly enormous prompt.
 pub const MAX_PROMPT_BYTES: usize = 1024 * 1024;
-// 8 GiB: a corrected-conditions benchmark workspace carries the repository
-// plus its warmed toolchain-and-cache tarball; the largest legitimate
-// combination observed (apache__hugegraph-3037) stages ~4.8 GiB.
-pub const MAX_STAGED_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+// 200 GiB: the workspace-staging bound is disk accounting, not memory. The
+// archive is streamed to a disk spool and never buffered in RAM, and the staged
+// tree lives on ordinary disk-backed storage, so this caps the disk a single
+// session may consume -- not any model or agent memory. The largest legitimate
+// benchmark workspace observed (apache__hugegraph-3037) stages ~4.8 GiB; this
+// deliberately admits far larger workspaces, with the whole path proven to
+// stream, bound, and fail closed at this size.
+pub const MAX_STAGED_BYTES: u64 = 200 * 1024 * 1024 * 1024;
 pub const MAX_STAGED_FILES: u64 = 200_000;
 pub const MAX_STAGED_ENTRIES: u64 = 250_000;
 
