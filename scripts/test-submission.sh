@@ -16,6 +16,11 @@ trap cleanup EXIT
 SCRIPT_DIR="${TEST_DIR}"
 readonly SCRIPT_DIR
 mkdir --mode=0700 -- "${SCRIPT_DIR}/.runtime"
+# submission-common.sh reads every numeric cap from the stack lock at source
+# time (relative to SCRIPT_DIR), so the test root must carry that exact lock or
+# the source below dies before a single assertion runs.
+mkdir --mode=0700 -- "${SCRIPT_DIR}/config"
+cp -- "${SOURCE_DIR}/config/stack.lock.json" "${SCRIPT_DIR}/config/stack.lock.json"
 # shellcheck source=scripts/submission-common.sh
 source "${SOURCE_DIR}/scripts/submission-common.sh"
 

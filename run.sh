@@ -29,8 +29,8 @@ readonly CANONICAL_FOLDER="$(realpath -e -- "${FOLDER}")"
 }
 PROMPT_BYTES="$(wc -c <"${PROMPT_FILE}")"
 readonly PROMPT_BYTES
-(( PROMPT_BYTES > 0 && PROMPT_BYTES <= 1048576 )) || {
-  printf 'ERROR: prompt file is %s bytes; required range is 1..1048576 bytes.\n' "${PROMPT_BYTES}" >&2
+(( PROMPT_BYTES > 0 && PROMPT_BYTES <= SUBMISSION_MAX_PROMPT_BYTES )) || {
+  printf 'ERROR: prompt file is %s bytes; required range is 1..%s bytes.\n' "${PROMPT_BYTES}" "${SUBMISSION_MAX_PROMPT_BYTES}" >&2
   exit 2
 }
 

@@ -1107,6 +1107,32 @@ mod tests {
     }
 
     #[test]
+    fn limits_drift_is_rejected() {
+        // Every numeric workspace/transport cap the shell harness reads from the
+        // lock must equal the constant this binary compiled against. A single
+        // field off by one must fail closed, so a client mirror can never
+        // quietly admit or reject a task the service would not.
+        let mutations: [fn(&mut StackLock); 5] = [
+            |lock: &mut StackLock| lock.limits.max_prompt_bytes += 1,
+            |lock: &mut StackLock| lock.limits.max_staged_bytes += 1,
+            |lock: &mut StackLock| lock.limits.max_staged_files += 1,
+            |lock: &mut StackLock| lock.limits.max_staged_entries += 1,
+            |lock: &mut StackLock| lock.limits.max_archive_bytes += 1,
+        ];
+        for mutate in mutations {
+            let mut lock = checked_in_lock();
+            mutate(&mut lock);
+            let error = validate_lock(&lock).expect_err("limits drift must fail closed");
+            assert!(
+                error
+                    .to_string()
+                    .contains("limits in the lock disagree with the compiled constants"),
+                "unexpected validation error: {error}"
+            );
+        }
+    }
+
+    #[test]
     fn weaker_thinking_or_preserved_history_is_rejected() {
         let mut lock = checked_in_lock();
         lock.backend.agent_defaults.enable_thinking = false;

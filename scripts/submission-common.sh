@@ -44,16 +44,25 @@ submission_require_handle() {
     submission_die "session handle must be s- followed by exactly 64 lowercase hexadecimal characters"
 }
 
-# Maximum accepted archive bytes: the staged-content cap plus a fixed zip
-# container-overhead allowance. The single source of truth is the stack lock,
-# which the service validates against its compiled constant (config.rs
+# Every numeric workspace/transport limit this client enforces comes only from
+# the stack lock the service validates against its compiled constants (config.rs
 # LimitsLock), so client and service are provably one value and cannot drift --
 # the defect that made a stale 4 GiB client mirror reject a task the 8 GiB
-# service admits.
-SUBMISSION_MAX_ARCHIVE_BYTES="$(jq -er '.limits.max_archive_bytes' "${SCRIPT_DIR}/config/stack.lock.json")"
-[[ "${SUBMISSION_MAX_ARCHIVE_BYTES}" =~ ^[0-9]+$ ]] \
-  || { printf 'FATAL: stack lock .limits.max_archive_bytes is missing or non-numeric\n' >&2; exit 1; }
-readonly SUBMISSION_MAX_ARCHIVE_BYTES
+# service admits. There is no hand-copied mirror of any cap below.
+#
+# Each field is read fail-closed and names itself on failure. jq's `numbers`
+# filter emits output only for a JSON number, so a missing key, an explicit
+# null, or a quoted string of digits each makes `jq -e` produce no output and
+# exit non-zero. The `|| { ...; exit 1; }` binds to the assignment, turning that
+# into a named FATAL; a bare `x="$(jq ...)"` would instead die silently under
+# the `set -e` that every script sourcing this file runs with.
+SUBMISSION_MAX_ARCHIVE_BYTES="$(jq -er '.limits.max_archive_bytes | numbers' "${SCRIPT_DIR}/config/stack.lock.json")" \
+  || { printf 'FATAL: stack lock .limits.max_archive_bytes is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
+SUBMISSION_MAX_REQUEST_BYTES="$(jq -er '.service.request_body_limit_bytes | numbers' "${SCRIPT_DIR}/config/stack.lock.json")" \
+  || { printf 'FATAL: stack lock .service.request_body_limit_bytes is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
+SUBMISSION_MAX_PROMPT_BYTES="$(jq -er '.limits.max_prompt_bytes | numbers' "${SCRIPT_DIR}/config/stack.lock.json")" \
+  || { printf 'FATAL: stack lock .limits.max_prompt_bytes is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
+readonly SUBMISSION_MAX_ARCHIVE_BYTES SUBMISSION_MAX_REQUEST_BYTES SUBMISSION_MAX_PROMPT_BYTES
 
 submission_validate_receipt() {
   local session_id="$1"
@@ -83,8 +92,8 @@ submission_validate_receipt() {
   local request_bytes archive_bytes
   request_bytes="$(stat -c '%s' -- "${request_file}")" ||
     submission_die "cannot read receipt size ${request_file}" || return
-  ((request_bytes > 0 && request_bytes <= 2097152)) ||
-    submission_die "receipt request is ${request_bytes} bytes; required range is 1..2097152" || return
+  ((request_bytes > 0 && request_bytes <= SUBMISSION_MAX_REQUEST_BYTES)) ||
+    submission_die "receipt request is ${request_bytes} bytes; required range is 1..${SUBMISSION_MAX_REQUEST_BYTES}" || return
   archive_bytes="$(stat -c '%s' -- "${archive_file}")" ||
     submission_die "cannot read receipt archive size ${archive_file}" || return
   ((archive_bytes > 0 && archive_bytes <= SUBMISSION_MAX_ARCHIVE_BYTES)) ||
