@@ -18,6 +18,21 @@ readonly BENCH_ROOT SERVICE_ROOT
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 require_equal() { [[ "$2" == "$3" ]] || die "$1 mismatch: expected ${3@Q}, observed ${2@Q}"; }
 
+# Remove a composed workspace that may contain read-only cache directories.
+# Go's module cache marks its directories mode 0555, so a plain `rm -rf` cannot
+# unlink their contents and fails mid-pass. Only directories are made writable:
+# the files inside are hardlinks (cp -al) into the shared materialized
+# source/task-env, so chmod'ing a file would mutate that shared inode, whereas
+# cp -al always creates fresh directories unique to this workspace. Cleanup is
+# best-effort -- a leftover temp workspace is a bounded /tmp leak, never a
+# reason to abort the pass.
+discard_workspace() {
+  local ws="$1"
+  [[ -n "${ws}" && -d "${ws}" ]] || return 0
+  find "${ws}" -type d ! -perm -u+w -exec chmod u+w {} + 2>/dev/null || true
+  rm -rf -- "${ws}" 2>/dev/null || true
+}
+
 (($# == 0)) || die 'no arguments are supported. Usage: ./full-suite-run.sh'
 for command in awk cmp cp curl date docker find git grep jq mkdir mv rm sha256sum sort stat sync tar timeout tr unzip wc xargs zip; do
   command -v "${command}" >/dev/null || die "required command is missing: ${command}"
@@ -261,11 +276,11 @@ run_variant() {
 
   composed_ws="$(mktemp -d /tmp/qwen38-suite-ws.XXXXXX)"
   cp -al -- "${task_dir}/source/." "${composed_ws}/" ||
-    { rm -rf -- "${composed_ws}"; die "workspace hardlink copy failed for ${task_id}"; }
+    { discard_workspace "${composed_ws}"; die "workspace hardlink copy failed for ${task_id}"; }
   cp -- "${env_dir}/task-env.tar.gz" "${composed_ws}/.task-env.tar.gz"
   request_file="$(submission_create_receipt "${session_id}" "${composed_ws}" "${composed_prompt}" "${policy}")" ||
-    { rm -rf -- "${composed_ws}"; die "receipt construction failed for ${task_id} ${label}"; }
-  rm -rf -- "${composed_ws}"
+    { discard_workspace "${composed_ws}"; die "receipt construction failed for ${task_id} ${label}"; }
+  discard_workspace "${composed_ws}"
   created="${run_dir}/created.json"
   submission_post_receipt "${session_id}" "${request_file}" >"${created}" ||
     die "submission failed for ${task_id} ${label}"
@@ -477,6 +492,34 @@ run_task() {
   fi
   mkdir -p -- "${target}"
   chmod 0700 -- "${target}"
+
+  # Fail-closed transport-cap guard. The workspace travels as one zip bounded by
+  # SUBMISSION_MAX_ARCHIVE_BYTES on both the client and the service; a task whose
+  # materialized source plus warmed task-env cannot fit that bound cannot be
+  # submitted at all. Rather than abort the whole pass on such a task, record it
+  # once as an infrastructure exclusion and continue. The estimate is the raw
+  # byte sum: the task-env is already gzip-compressed and zip -y barely
+  # compresses the source, so this is a tight lower bound on the real archive and
+  # only flags a task that provably exceeds the receipt limit.
+  local src_bytes env_bytes est_bytes
+  src_bytes="$(du -sb -- "${task_dir}/source" | awk '{print $1}')"
+  env_bytes="$(stat -c '%s' -- "${TASK_ENV_ROOT}/${task_id}/task-env.tar.gz")"
+  est_bytes=$((src_bytes + env_bytes))
+  if (( est_bytes > SUBMISSION_MAX_ARCHIVE_BYTES )); then
+    printf 'EXCLUDING %s: composed workspace ~%s bytes exceeds the %s-byte transport cap; recording an infrastructure exclusion.\n' \
+      "${task_id}" "${est_bytes}" "${SUBMISSION_MAX_ARCHIVE_BYTES}" >&2
+    jq -n --arg task "${task_id}" --argjson est "${est_bytes}" \
+      --argjson cap "${SUBMISSION_MAX_ARCHIVE_BYTES}" \
+      '{schema_version:2, task_id:$task, excluded:true,
+        exclusion:{reason:"composed_workspace_exceeds_transport_cap",
+                   estimated_archive_bytes:$est, transport_cap_bytes:$cap},
+        runs:[], paired:null}' >"${target}/pair-summary.json.partial"
+    sync -f -- "${target}/pair-summary.json.partial"
+    mv -- "${target}/pair-summary.json.partial" "${target}/pair-summary.json"
+    sync -f -- "${target}"
+    return 0
+  fi
+
   verify_task_source "${task_id}" "${task_dir}" "${target}/source-verified.txt"
   verify_dataset_inputs "${task_id}" "${task_dir}"
   ensure_environment_image "${task_id}" "${task_dir}"
