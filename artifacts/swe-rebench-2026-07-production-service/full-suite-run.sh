@@ -33,7 +33,14 @@ discard_workspace() {
   rm -rf -- "${ws}" 2>/dev/null || true
 }
 
-(($# == 0)) || die 'no arguments are supported. Usage: ./full-suite-run.sh'
+if (($# != 2)); then
+  die 'usage: ./full-suite-run.sh <shard_index> <shard_count>. This instance runs exactly the tasks whose 0-based plan position mod <shard_count> equals <shard_index>; the machines run disjoint shards with no shared runs tree and no cross-instance coordination. Use "0 1" for the whole suite on one machine.'
+fi
+[[ "$1" =~ ^[0-9]+$ && "$2" =~ ^[1-9][0-9]*$ ]] ||
+  die "shard index and count must be integers with count >= 1; got ${1@Q} ${2@Q}"
+readonly SHARD_INDEX="$1" SHARD_COUNT="$2"
+(( SHARD_INDEX < SHARD_COUNT )) ||
+  die "shard index ${SHARD_INDEX} must be strictly less than shard count ${SHARD_COUNT}"
 for command in awk cmp cp curl date docker find git grep jq mkdir mv rm sha256sum sort stat sync tar timeout tr unzip wc xargs zip; do
   command -v "${command}" >/dev/null || die "required command is missing: ${command}"
 done
@@ -71,8 +78,12 @@ readonly SCRIPT_DIR
 source "${SERVICE_ROOT}/scripts/submission-common.sh"
 
 [[ -f "${PLAN_FILE}" ]] || die "suite plan is missing: ${PLAN_FILE}"
-jq -e '.eligible_count == 41 and (.runs | length) == 41' "${PLAN_FILE}" >/dev/null ||
-  die 'suite plan does not carry the exact expected 41 eligible runs'
+jq -e '(.runs | length) > 0 and .eligible_count == (.runs | length)' "${PLAN_FILE}" >/dev/null ||
+  die 'suite plan is inconsistent: eligible_count must equal the number of runs, and at least one run is required'
+# Number of tasks this shard owns (0-based plan position mod count == index).
+SHARD_TASK_COUNT="$(jq -er --argjson i "${SHARD_INDEX}" --argjson n "${SHARD_COUNT}" \
+  '[.runs | keys[] | select(. % $n == $i)] | length' "${PLAN_FILE}")"
+readonly SHARD_TASK_COUNT
 
 # ---------------------------------------------------------------------------
 # Release provenance: recorded once when this pass starts; every later
@@ -202,12 +213,23 @@ poll_until_terminal() {
   local cancelled=false
   while :; do
     body="$(mktemp /tmp/qwen38-suite-poll.XXXXXX)"
-    local http
-    http="$(curl --noproxy '*' --silent --show-error --connect-timeout 5 --max-time 30 \
-      --output "${body}" --write-out '%{http_code}' \
-      "${API}/v1/agent/sessions/${session_id}")" ||
-      { rm -f -- "${body}"; die "session poll transport failed for ${session_id}"; }
-    [[ "${http}" == 200 ]] || { rm -f -- "${body}"; die "session poll returned HTTP ${http} for ${session_id}"; }
+    # The GET is idempotent; a transient transport error or non-200 must not
+    # kill a pass that may have run for hours. Retry with backoff; die only when
+    # the connection-independent resource is persistently unreachable.
+    local http poll_attempt=0
+    while :; do
+      http="$(curl --noproxy '*' --silent --show-error --connect-timeout 5 --max-time 30 \
+        --output "${body}" --write-out '%{http_code}' \
+        "${API}/v1/agent/sessions/${session_id}")" && [[ "${http}" == 200 ]] && break
+      poll_attempt=$((poll_attempt + 1))
+      if (( poll_attempt >= 5 )); then
+        rm -f -- "${body}"
+        die "session poll for ${session_id} failed after 5 attempts (last: HTTP ${http:-transport-error})"
+      fi
+      printf 'WARN: session poll for %s attempt %s failed (HTTP %s); retrying.\n' "${session_id}" "${poll_attempt}" "${http:-transport-error}" >&2
+      sleep $((poll_attempt * 3))
+      : > "${body}"
+    done
     status="$(jq -er '.status' "${body}")"
     if [[ "${status}" != running ]]; then
       mv -- "${body}" "${terminal_file}"
@@ -218,10 +240,15 @@ poll_until_terminal() {
     now="$(date +%s)"
     if [[ "${cancelled}" == false && "${now}" -ge "${deadline}" ]]; then
       printf 'Agent deadline reached for %s; requesting durable cancellation.\n' "${session_id}" >&2
-      curl --noproxy '*' --silent --show-error --connect-timeout 5 --max-time 30 \
+      local cancel_attempt=0
+      until curl --noproxy '*' --silent --show-error --connect-timeout 5 --max-time 30 \
         --request POST --output /dev/null --write-out '' \
-        "${API}/v1/agent/sessions/${session_id}/cancel" ||
-        die "cancellation transport failed for ${session_id}"
+        "${API}/v1/agent/sessions/${session_id}/cancel"; do
+        cancel_attempt=$((cancel_attempt + 1))
+        (( cancel_attempt < 5 )) || die "cancellation transport failed for ${session_id} after 5 attempts"
+        printf 'WARN: cancel for %s attempt %s failed; retrying.\n' "${session_id}" "${cancel_attempt}" >&2
+        sleep $((cancel_attempt * 3))
+      done
       cancelled=true
       deadline=$((now + TEARDOWN_TIMEOUT_SEC))
     elif [[ "${cancelled}" == true && "${now}" -ge "${deadline}" ]]; then
@@ -264,6 +291,15 @@ run_variant() {
   local env_dir="${TASK_ENV_ROOT}/${task_id}"
   [[ -f "${env_dir}/task-env.tar.gz" && -f "${env_dir}/env-manifest.json" ]] ||
     die "task environment is not warmed for ${task_id}; run ./warm-task-env.sh first"
+  # Prove the archive is a valid, extractable tarball -- the exact property the
+  # agent relies on (it runs 'tar -xzf .task-env.tar.gz'). The sha-vs-manifest
+  # check below only proves the bytes equal what the manifest committed to,
+  # which is NOT integrity: a manifest can faithfully hash a truncated archive
+  # (this is how 11 corrupt task-envs shipped). This gate rejects that class.
+  gzip -t -- "${env_dir}/task-env.tar.gz" 2>/dev/null ||
+    die "task-env archive for ${task_id} fails gzip integrity (gzip -t); re-warm it -- shipping a corrupt cache wastes the agent's entire budget on recovery"
+  tar -tzf "${env_dir}/task-env.tar.gz" >/dev/null 2>&1 ||
+    die "task-env archive for ${task_id} is not a listable tar (tar -tzf); re-warm it"
   require_equal "task-env tarball hash for ${task_id}" \
     "$(sha256sum -- "${env_dir}/task-env.tar.gz" | awk '{print $1}')" \
     "$(jq -er '.tar_sha256' "${env_dir}/env-manifest.json")"
@@ -526,17 +562,23 @@ run_task() {
 
   local order ordinal label policy
   order="$(jq -cer '.policy_order' "${task_dir}/manifest.json")"
-  local index=0
+  local index=0 first_result="" second_result=""
   for policy in $(jq -er '.[]' <<<"${order}"); do
     index=$((index + 1))
     ordinal="$(printf '%02d' "${index}")"
     if [[ "${policy}" == false ]]; then label=unpreserved; else label=preserved; fi
     run_variant "${task_id}" "${task_dir}" "${ordinal}" "${policy}" "${label}"
+    # Aggregate from the exact variant directory this loop produced, never a
+    # glob that could also match an archived sibling (e.g. 01-*.archived).
+    if (( index == 1 )); then first_result="${target}/${ordinal}-${label}/result.json"
+    else second_result="${target}/${ordinal}-${label}/result.json"; fi
   done
+  [[ -f "${first_result}" && -f "${second_result}" ]] ||
+    die "pair aggregation for ${task_id} is missing an exact variant result.json"
 
   jq -n \
-    --slurpfile first "${target}/01-"*/result.json \
-    --slurpfile second "${target}/02-"*/result.json \
+    --slurpfile first "${first_result}" \
+    --slurpfile second "${second_result}" \
     --arg task_id "${task_id}" \
     '{
       schema_version:2,
@@ -563,11 +605,15 @@ run_task() {
 # The pass: plan order, resumable, one task pair at a time.
 # ---------------------------------------------------------------------------
 completed=0
+plan_index=0
 while read -r task_id; do
-  run_task "${task_id}"
-  completed=$((completed + 1))
-  printf '=== Suite progress: %s of 41 task pairs have accepted summaries ===\n' \
-    "$(find "${RUNS_ROOT}" -mindepth 2 -maxdepth 2 -name pair-summary.json | wc -l)" >&2
+  if (( plan_index % SHARD_COUNT == SHARD_INDEX )); then
+    run_task "${task_id}"
+    completed=$((completed + 1))
+    printf '=== Suite progress (shard %s/%s): %s of %s shard task pairs done ===\n' \
+      "${SHARD_INDEX}" "${SHARD_COUNT}" "${completed}" "${SHARD_TASK_COUNT}" >&2
+  fi
+  plan_index=$((plan_index + 1))
 done < <(jq -er '.runs[].task_id' "${PLAN_FILE}")
 
-printf 'SUITE_PASS_COMPLETE tasks=%s runs_root=%s\n' "${completed}" "${RUNS_ROOT}"
+printf 'SUITE_PASS_COMPLETE shard=%s/%s tasks=%s runs_root=%s\n' "${SHARD_INDEX}" "${SHARD_COUNT}" "${completed}" "${RUNS_ROOT}"
