@@ -73,7 +73,7 @@ CURRENT_STAGE=""
 CURRENT_TMP=""
 cleanup_current() {
   [[ -n "${CURRENT_CONTAINER}" ]] && docker rm -f "${CURRENT_CONTAINER}" >/dev/null 2>&1
-  [[ -n "${CURRENT_STAGE}" ]] && rm -rf -- "${CURRENT_STAGE}" 2>/dev/null
+  [[ -n "${CURRENT_STAGE}" ]] && remove_stage "${CURRENT_STAGE}"
   [[ -n "${CURRENT_TMP}" ]] && rm -f -- "${CURRENT_TMP}" 2>/dev/null
   return 0
 }
@@ -81,6 +81,16 @@ trap 'cleanup_current; trap - INT; kill -INT $$' INT
 trap 'cleanup_current; exit 143' TERM
 
 sync_path() { sync -f -- "$1"; }
+
+# Remove a harvest stage that may contain read-only (0555) toolchain-cache
+# directories (a Go module cache, etc.). An unprivileged rm -rf cannot unlink
+# entries inside a mode-0555 directory, so grant owner write across the tree
+# first. Only ever called on stage temporaries, never the published archive.
+remove_stage() {
+  [[ -e "$1" ]] || return 0
+  chmod -R u+w -- "$1" 2>/dev/null
+  rm -rf -- "$1"
+}
 
 # Does the gzip'd tar list an env.sh at its root? SIGPIPE-safe: the listing is
 # captured whole, so `grep -q` never closes the pipe under tar and trips
@@ -145,7 +155,7 @@ warm_one() {
   # published archive/manifest are deliberately preserved.
   cleanup_warm() {
     [[ -n "${CURRENT_CONTAINER}" ]] && docker rm -f "${CURRENT_CONTAINER}" >/dev/null 2>&1
-    [[ -n "${CURRENT_STAGE}" ]] && rm -rf -- "${CURRENT_STAGE}"
+    [[ -n "${CURRENT_STAGE}" ]] && remove_stage "${CURRENT_STAGE}"
     [[ -n "${CURRENT_TMP}" ]] && rm -f -- "${CURRENT_TMP}"
     CURRENT_CONTAINER=""; CURRENT_STAGE=""; CURRENT_TMP=""
     exec {lockfd}>&-
@@ -259,8 +269,15 @@ ENVEOF' \
     [[ -n "${rel}" ]] || continue
     mkdir -p -- "${stage}/$(dirname "${rel}")" \
       || { printf 'ERROR %s: could not create stage subdir for /%s\n' "${task_id}" "${rel}" >&2; cleanup_warm; return 1; }
-    docker cp "${name}:/${rel}" "${stage}/$(dirname "${rel}")/" >/dev/null 2>&1 \
-      || { printf 'ERROR %s: docker cp failed for /%s\n' "${task_id}" "${rel}" >&2; cleanup_warm; return 1; }
+    # Stream the daemon's tar and extract with host GNU tar: -p preserves modes
+    # and tar delays directory-permission restore, so read-only toolchain-cache
+    # trees (e.g. Go's 0555 module directories) copy correctly as an
+    # unprivileged user. A CLI-side `docker cp ... DEST/` extracts each directory
+    # at its archived mode immediately and then cannot create files inside a
+    # 0555 directory without root's DAC-override -- the defect that failed every
+    # Go task once the warmer no longer accidentally ran as root.
+    docker cp "${name}:/${rel}" - | tar -xp -C "${stage}/$(dirname "${rel}")/" \
+      || { printf 'ERROR %s: docker cp | tar -x failed for /%s\n' "${task_id}" "${rel}" >&2; cleanup_warm; return 1; }
   done <<<"${dirs}"
   [[ -f "${stage}/env.sh" ]] || { printf 'ERROR %s: harvested stage is missing env.sh\n' "${task_id}" >&2; cleanup_warm; return 1; }
   docker rm -f "${name}" >/dev/null 2>&1 || true
@@ -273,7 +290,7 @@ ENVEOF' \
   local tmp="${CURRENT_TMP}"
   tar -czf "${tmp}" -C "${stage}" . \
     || { printf 'ERROR %s: tar -czf failed\n' "${task_id}" >&2; cleanup_warm; return 1; }
-  rm -rf -- "${stage}"; CURRENT_STAGE=""
+  remove_stage "${stage}"; CURRENT_STAGE=""
 
   gzip -t -- "${tmp}" \
     || { printf 'ERROR %s: archive failed gzip integrity (gzip -t); refusing to publish\n' "${task_id}" >&2; cleanup_warm; return 1; }
