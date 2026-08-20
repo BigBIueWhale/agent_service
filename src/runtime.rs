@@ -3549,6 +3549,51 @@ async fn commit_prepared_terminal(results_dir: &Path, session_id: &str) -> Servi
     sync_directory(&dir, "commit_prepared_terminal: sync tmp-link removal")
 }
 
+/// Grant owner-write on every directory in `root`'s subtree so a subsequent
+/// recursive removal can unlink their contents. A session workspace can hold
+/// tool-created read-only directory trees -- most importantly Go's module
+/// cache, whose directories are mode 0555 -- and a directory's entries cannot
+/// be unlinked unless the directory itself is writable, so `remove_dir_all`
+/// otherwise fails with EPERM and strands the raw session tree. Only
+/// directories are modified and symlinks are never traversed; the caller has
+/// already proved `root` is the exact service-owned session tree, so nothing
+/// outside it is touched. Best-effort: any per-entry error is left for the
+/// real removal to surface with its precise context. The walk is iterative so
+/// a deep cache tree cannot overflow the stack.
+fn grant_owner_write_recursively(root: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let meta = match std::fs::symlink_metadata(&dir) {
+            Ok(meta) => meta,
+            Err(_) => continue,
+        };
+        if meta.file_type().is_symlink() || !meta.is_dir() {
+            continue;
+        }
+        let mode = meta.permissions().mode();
+        if mode & 0o200 == 0 {
+            let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode | 0o700));
+        }
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let child = entry.path();
+            match std::fs::symlink_metadata(&child) {
+                Ok(child_meta)
+                    if child_meta.is_dir() && !child_meta.file_type().is_symlink() =>
+                {
+                    stack.push(child);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 fn remove_terminalized_state(
     state_dir: &Path,
     session_id: &str,
@@ -3581,6 +3626,11 @@ fn remove_terminalized_state(
             path.display(), service_uid, service_gid
         )];
     }
+    // The agent may have created read-only directory trees inside its workspace
+    // (Go's module cache marks directories mode 0555); make every directory in
+    // this exact, validated, service-owned tree owner-writable so the recursive
+    // removal below can unlink their contents instead of stranding the tree.
+    grant_owner_write_recursively(&path);
     if let Err(error) = std::fs::remove_dir_all(&path) {
         return vec![io_msg(
             "terminalization: remove raw session tree",
@@ -3999,7 +4049,8 @@ mod tests {
     use super::{
         apply_progress, await_connection_independent, cancel_intent_next_path,
         cancel_intent_path, commit_prepared_terminal, delete_intent_next_path,
-        delete_intent_path, finish_delete_intent, is_current_session_id, is_safe_session_id,
+        delete_intent_path, finish_delete_intent, grant_owner_write_recursively,
+        is_current_session_id, is_safe_session_id,
         persist_cancel_intent, persist_delete_intent, persist_terminal_transaction,
         prepare_durable_acceptance, prepare_terminal, read_cancel_intent, read_delete_intent,
         read_running_progress, read_terminal, reconcile_unpublished_cancel_intent,
@@ -4047,6 +4098,37 @@ mod tests {
             .expect("create private runtime fixture");
         file.write_all(bytes).expect("write private runtime fixture");
         file.sync_all().expect("sync private runtime fixture");
+    }
+
+    #[test]
+    fn grant_owner_write_recursively_makes_readonly_dirs_removable() {
+        let tree = TestTree::new("grant-write");
+        // A Go-module-cache-shaped subtree: nested directories mode 0555 with a
+        // read-only file at the bottom -- exactly what strands terminalization.
+        let sub = tree.0.join("go-mod");
+        std::fs::create_dir(&sub).expect("create sub");
+        let leaf = sub.join("libc@v1.72.3");
+        std::fs::create_dir(&leaf).expect("create leaf");
+        let file = leaf.join("libc.go");
+        std::fs::write(&file, b"package libc\n").expect("write leaf file");
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o444)).unwrap();
+        std::fs::set_permissions(&leaf, std::fs::Permissions::from_mode(0o555)).unwrap();
+        std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        grant_owner_write_recursively(&tree.0);
+
+        for dir in [tree.0.as_path(), sub.as_path(), leaf.as_path()] {
+            let mode = std::fs::symlink_metadata(dir).unwrap().permissions().mode();
+            assert!(
+                mode & 0o200 != 0,
+                "directory {} is still not owner-writable: {:o}",
+                dir.display(),
+                mode
+            );
+        }
+        std::fs::remove_dir_all(&tree.0)
+            .expect("a read-only Go-cache-shaped subtree must be removable after granting write");
+        assert!(!tree.0.exists(), "tree must be gone after removal");
     }
 
     fn make_service_owned(path: &Path) {
