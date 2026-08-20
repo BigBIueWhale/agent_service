@@ -21,22 +21,33 @@ readonly DATASET_CONTENT_DIGEST=sha256:e2e357045bf03e4900d2506c36562f6eaff7acd37
 readonly HARBOR_VERSION=0.21.0
 readonly HARBOR_COMMIT=64afbbcb62165950301e1a6407c729aa26d844ff
 readonly DATASET_LOCK_SHA256=f994d9f7638f5b9f9ef29ca7a1385b25e61824641c05ef5b87a09231e52be1b2
-readonly SERVICE_RELEASE_COMMIT=7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc
-readonly SERVICE_IMPLEMENTATION_COMMIT=bc67dae720894cbbcd62122a2a9ff6b56b042168
-readonly SERVICE_RELEASE_LOCK_SHA256=a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4
+readonly SERVICE_RELEASE_COMMIT=ee9bb51fe8c6b68e08cabdb2cbef26a54558ad40
+readonly SERVICE_IMPLEMENTATION_COMMIT=d24f4892eae4a2ea39915b2474ee7bf772351e2c
+readonly SERVICE_RELEASE_LOCK_SHA256=175725b625b0afd9c35edf0f80671a12c50bb6fea9dd9022bded0468a40ea757
 readonly STACK_LOCK_SHA256=a4a63cb7627f2e97ee48c5b5bb363e30eaf8947f34c610e93e6ad348bb5fb374
+# Reuse validation accepts any provenance tuple a reviewed release legitimately
+# produced -- not only today's -- because a manifest's production_release is an
+# immutable fact about materialization time, not a mirror of the current
+# contract. All 111 existing manifests were materialized under the original
+# accepted release; fresh materializations now stamp the re-released one. An
+# unknown tuple fails closed, admitted only by a reviewed commit extending this
+# list. Field order is release:implementation:release_lock_sha:stack_lock_sha.
+readonly -a ACCEPTED_PROVENANCE=(
+  "7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc:bc67dae720894cbbcd62122a2a9ff6b56b042168:a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4:de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3"
+  "${SERVICE_RELEASE_COMMIT}:${SERVICE_IMPLEMENTATION_COMMIT}:${SERVICE_RELEASE_LOCK_SHA256}:${STACK_LOCK_SHA256}"
+)
 readonly SOURCE_EXTRACTOR_IMAGE_ID=sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec
 readonly SOURCE_EXTRACTOR_TAR_VERSION='tar (GNU tar) 1.35'
 readonly EXPECTED_TASKS=111
 # Single source of truth: the stack lock (validated by the service against its
 # compiled constants, config.rs LimitsLock). A stale mirror here silently
 # wrong-sized the suite (this was a stale 4 GiB copy of the 8 GiB service cap).
-MAX_STAGED_FILES="$(jq -er '.limits.max_staged_files' "${SERVICE_ROOT}/config/stack.lock.json")"
-MAX_STAGED_BYTES="$(jq -er '.limits.max_staged_bytes' "${SERVICE_ROOT}/config/stack.lock.json")"
-MAX_PROMPT_BYTES="$(jq -er '.limits.max_prompt_bytes' "${SERVICE_ROOT}/config/stack.lock.json")"
-for _lim in MAX_STAGED_FILES MAX_STAGED_BYTES MAX_PROMPT_BYTES; do
-  [[ "${!_lim}" =~ ^[0-9]+$ ]] || { printf 'FATAL: stack lock has no numeric .limits value for %s\n' "${_lim}" >&2; exit 1; }
-done
+MAX_STAGED_FILES="$(jq -er '.limits.max_staged_files | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
+  { printf 'FATAL: stack lock .limits.max_staged_files is absent or not a number\n' >&2; exit 1; }
+MAX_STAGED_BYTES="$(jq -er '.limits.max_staged_bytes | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
+  { printf 'FATAL: stack lock .limits.max_staged_bytes is absent or not a number\n' >&2; exit 1; }
+MAX_PROMPT_BYTES="$(jq -er '.limits.max_prompt_bytes | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
+  { printf 'FATAL: stack lock .limits.max_prompt_bytes is absent or not a number\n' >&2; exit 1; }
 readonly MAX_STAGED_FILES MAX_STAGED_BYTES MAX_PROMPT_BYTES
 readonly ENV_REPOSITORY=qwen38-swerebench-full-v1
 readonly UV_INSTALL='RUN curl -LsSf https://astral.sh/uv/0.7.13/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh'
@@ -104,6 +115,12 @@ for committed_input in "${MATERIALIZER_RELATIVE}" "${DATASET_LOCK_RELATIVE}"; do
     <(git -C "${SERVICE_ROOT}" show "HEAD:${committed_input}") ||
     die "benchmark input differs from committed HEAD: ${committed_input}"
 done
+# Fingerprint the exact committed derivation code, proven above to equal HEAD.
+# The summary/plan record this so that a same-contract regeneration must be
+# byte-identical (else it is corruption), while a code change is an explicit,
+# archived supersession rather than a silent overwrite.
+MATERIALIZER_GIT_BLOB="$(git -C "${SERVICE_ROOT}" rev-parse "HEAD:${MATERIALIZER_RELATIVE}")"
+readonly MATERIALIZER_GIT_BLOB
 git -C "${SERVICE_ROOT}" merge-base --is-ancestor "${SERVICE_RELEASE_COMMIT}" HEAD ||
   die 'benchmark tooling commit does not descend from the accepted production release'
 require_sha256 "${SERVICE_ROOT}/config/release.lock.json" "${SERVICE_RELEASE_LOCK_SHA256}"
@@ -202,6 +219,13 @@ mkdir -p -- "${SUITE_ROOT}" "${MATERIALIZATION_ROOT}"
 chmod 0700 -- "${SUITE_ROOT}" "${MATERIALIZATION_ROOT}"
 exec 9>"${SUITE_ROOT}/materialize.lock"
 flock -n 9 || die 'another full-suite materializer already holds the suite lock'
+
+# Per-run derived-classification ledger: exactly one JSON row per task, the
+# current contract applied to re-verified evidence, written under the exclusive
+# suite lock. The summary and plan are built from this ledger, never from the
+# manifests' stored (materialization-time) classification.
+readonly DERIVED_LEDGER="${SUITE_ROOT}/.derived-classification.jsonl"
+: >"${DERIVED_LEDGER}"
 
 write_regular_manifest() {
   local root="$1" output="$2"
@@ -456,19 +480,28 @@ validate_completed_task() {
     --arg dataset_digest "${DATASET_CONTENT_DIGEST}" \
     --arg dataset_lock_sha "${DATASET_LOCK_SHA256}" \
     --arg registry_content_hash "${registry_content_hash}" \
-    --arg release_commit "${SERVICE_RELEASE_COMMIT}" \
-    --arg release_lock_sha "${SERVICE_RELEASE_LOCK_SHA256}" \
-    --arg stack_lock_sha "${STACK_LOCK_SHA256}" \
     '.schema_version == 1 and .task_id == $task and
      .dataset.content_digest == $dataset_digest and
      .dataset.lock_sha256 == $dataset_lock_sha and
      .inputs.harbor_content_hash == $registry_content_hash and
-     .production_release.release_commit == $release_commit and
-     .production_release.release_lock_sha256 == $release_lock_sha and
-     .production_release.stack_lock_sha256 == $stack_lock_sha and
      (.classification == "eligible" or .classification == "production-input-contract-exclusion") and
      (.policy_order == [false,true] or .policy_order == [true,false])' \
     "${manifest}" >/dev/null || die "completed task manifest semantic mismatch: ${task_id}"
+  # Provenance is an immutable materialization-time fact, so accept any reviewed
+  # release tuple, not only the current one -- a re-release must not invalidate
+  # correctly materialized evidence. An unknown tuple fails closed. This is
+  # strictly stricter on one axis than before: it also pins implementation_commit,
+  # which the old per-manifest check never validated.
+  local manifest_provenance accepted provenance_ok=false
+  manifest_provenance="$(jq -er '[.production_release.release_commit,
+    .production_release.implementation_commit,
+    .production_release.release_lock_sha256,
+    .production_release.stack_lock_sha256] | join(":")' "${manifest}")"
+  for accepted in "${ACCEPTED_PROVENANCE[@]}"; do
+    [[ "${manifest_provenance}" != "${accepted}" ]] || provenance_ok=true
+  done
+  [[ "${provenance_ok}" == true ]] ||
+    die "completed task manifest provenance is not an accepted materialization contract: ${task_id}: ${manifest_provenance}"
   materialization_method="$(jq -r '.source.materialization_method // "legacy Docker direct destination copy"' \
     "${manifest}")"
   if [[ "${materialization_method}" == \
@@ -504,6 +537,77 @@ validate_completed_task() {
   [[ -f "${task_dir}/initial-git-status.z" && ! -L "${task_dir}/initial-git-status.z" ]] ||
     die "completed task Git-status evidence is absent or a symlink: ${task_id}"
   verify_source_manifests "${task_dir}"
+}
+
+# The one production input-contract classification rule, applied to a single
+# task's derived inputs. Prints "<classification>\t<reason-or-empty>". Fresh
+# materialization and reuse re-derivation both call this exact function, so the
+# eligibility contract lives in one place and cannot drift between them.
+classify_task_inputs() {
+  local instruction_bytes="$1" special_count="$2" file_count="$3" source_bytes="$4"
+  if (( instruction_bytes > MAX_PROMPT_BYTES )); then
+    printf 'production-input-contract-exclusion\tprompt_bytes_exceed_service_limit\n'
+  elif (( special_count > 0 )); then
+    printf 'production-input-contract-exclusion\tsource_contains_special_files\n'
+  elif (( file_count > MAX_STAGED_FILES )); then
+    printf 'production-input-contract-exclusion\tsource_file_count_exceeds_service_limit\n'
+  elif (( source_bytes > MAX_STAGED_BYTES )); then
+    printf 'production-input-contract-exclusion\tsource_bytes_exceed_service_limit\n'
+  else
+    printf 'eligible\t\n'
+  fi
+}
+
+# One JSON row per task appended to the per-run ledger the summary/plan build from.
+append_derived_classification() {
+  local task_id="$1" classification="$2" exclusion_reason="$3"
+  jq -cn --arg task_id "${task_id}" --arg classification "${classification}" \
+    --arg exclusion_reason "${exclusion_reason}" \
+    '{task_id:$task_id, classification:$classification,
+      exclusion_reason:(if $exclusion_reason == "" then null else $exclusion_reason end)}' \
+    >>"${DERIVED_LEDGER}"
+}
+
+# Re-derive eligibility for an already-materialized task against the CURRENT
+# contract, from re-verified evidence only. Must run strictly after
+# validate_completed_task has proven source/ == recorded evidence == the exact
+# environment image, and after startup proved the dataset equals the pinned
+# registry. Recorded counts are never trusted as inputs: they are recomputed and
+# any divergence from the manifest fails closed.
+rederive_task_classification() {
+  local task_id="$1" outvar="$2"
+  local task_dir="${MATERIALIZATION_ROOT}/${task_id}"
+  local manifest="${task_dir}/manifest.json"
+  local instruction="${DATASET_ROOT}/${task_id}/instruction.md"
+  local instruction_bytes file_count source_bytes symlink_count special_count
+  local classification exclusion_reason
+  [[ -f "${instruction}" && ! -L "${instruction}" ]] ||
+    die "dataset instruction is absent or a symlink: ${task_id}"
+  require_equal "manifest instruction identity for ${task_id}" \
+    "$(jq -er '.inputs.instruction_sha256' "${manifest}")" \
+    "$(sha256sum -- "${instruction}" | awk '{print $1}')"
+  instruction_bytes="$(stat -c '%s' -- "${instruction}")"
+  file_count="$(find "${task_dir}/source" -type f -printf '.\n' | wc -l)"
+  source_bytes="$(find "${task_dir}/source" -type f -printf '%s\n' | awk '{sum += $1} END {print sum + 0}')"
+  symlink_count="$(find "${task_dir}/source" -type l -printf '.\n' | wc -l)"
+  special_count="$(find "${task_dir}/source" \! -type d \! -type f \! -type l -printf '.\n' | wc -l)"
+  jq -e \
+    --argjson instruction_bytes "${instruction_bytes}" \
+    --argjson file_count "${file_count}" \
+    --argjson source_bytes "${source_bytes}" \
+    --argjson symlink_count "${symlink_count}" \
+    --argjson special_count "${special_count}" \
+    '.inputs.instruction_bytes == $instruction_bytes and
+     .source.regular_file_count == $file_count and
+     .source.regular_file_bytes == $source_bytes and
+     .source.symlink_count == $symlink_count and
+     .source.special_file_count == $special_count' "${manifest}" >/dev/null ||
+    die "recorded classification inputs diverge from re-derived evidence: ${task_id}"
+  IFS=$'\t' read -r classification exclusion_reason < <(classify_task_inputs \
+    "${instruction_bytes}" "${special_count}" "${file_count}" "${source_bytes}")
+  [[ -n "${classification}" ]] || die "classification derivation failed: ${task_id}"
+  append_derived_classification "${task_id}" "${classification}" "${exclusion_reason}"
+  printf -v "${outvar}" '%s' "${classification}"
 }
 
 readonly DATASET_REGULAR_MANIFEST="${SUITE_ROOT}/dataset-regular.sha256z"
@@ -553,8 +657,11 @@ materialize_task() {
   if [[ -e "${final_dir}" ]]; then
     [[ ! -e "${partial_dir}" ]] || die "both final and partial task states exist: ${task_id}"
     validate_completed_task "${task_id}"
-    printf 'MATERIALIZATION_REUSED task=%s index=%s classification=%s\n' \
-      "${task_id}" "${task_index}" "$(jq -er '.classification' "${final_dir}/manifest.json")"
+    local derived_classification
+    rederive_task_classification "${task_id}" derived_classification
+    printf 'MATERIALIZATION_REUSED task=%s index=%s classification=%s recorded_at_materialization=%s\n' \
+      "${task_id}" "${task_index}" "${derived_classification}" \
+      "$(jq -er '.classification' "${final_dir}/manifest.json")"
     return
   fi
   [[ ! -e "${partial_dir}" ]] ||
@@ -729,26 +836,17 @@ materialize_task() {
   modes_sha="$(sha256sum -- "${partial_dir}/source-modes.z" | awk '{print $1}')"
   symlinks_sha="$(sha256sum -- "${partial_dir}/source-symlinks.z" | awk '{print $1}')"
 
-  if (( instruction_bytes > MAX_PROMPT_BYTES )); then
-    classification=production-input-contract-exclusion
-    exclusion_reason=prompt_bytes_exceed_service_limit
-  # Symbolic links in the source are no longer an exclusion: the shipped service
-  # provides opaque-symlink staging (zip -y receipts, link-preserving extraction
-  # and bundling), and this materializer already verifies each source symlink
-  # against its exact environment image. Excluding them was a stale contract
-  # from before that capability existed, and it silently dropped ~63% of tasks.
-  # Special files remain excluded -- staging has no meaning for a device, fifo,
-  # or socket.
-  elif (( special_count > 0 )); then
-    classification=production-input-contract-exclusion
-    exclusion_reason=source_contains_special_files
-  elif (( file_count > MAX_STAGED_FILES )); then
-    classification=production-input-contract-exclusion
-    exclusion_reason=source_file_count_exceeds_service_limit
-  elif (( source_bytes > MAX_STAGED_BYTES )); then
-    classification=production-input-contract-exclusion
-    exclusion_reason=source_bytes_exceed_service_limit
-  fi
+  # Classify against the current production input contract. The identical rule
+  # (classify_task_inputs) runs on reuse re-derivation, so a fresh and a reused
+  # task can never disagree. Symbolic links are eligible -- the shipped service
+  # stages them opaquely (zip -y receipts, link-preserving staging and bundling)
+  # and this materializer verifies each against its exact environment image;
+  # excluding them was a stale contract that silently dropped ~63% of tasks.
+  # Special files stay excluded: staging has no meaning for a device, fifo, or
+  # socket.
+  IFS=$'\t' read -r classification exclusion_reason < <(classify_task_inputs \
+    "${instruction_bytes}" "${special_count}" "${file_count}" "${source_bytes}")
+  [[ -n "${classification}" ]] || die "classification derivation failed: ${task_id}"
   if (( task_index % 2 == 1 )); then
     policy_first=true
     policy_second=false
@@ -869,6 +967,7 @@ materialize_task() {
   mv -- "${partial_dir}" "${final_dir}"
   sync -f "${MATERIALIZATION_ROOT}"
   validate_completed_task "${task_id}"
+  append_derived_classification "${task_id}" "${classification}" "${exclusion_reason}"
   printf 'MATERIALIZED task=%s index=%s classification=%s language=%s image=%s\n' \
     "${task_id}" "${task_index}" "${classification}" "${language}" "${env_id}"
 }
@@ -879,6 +978,7 @@ while IFS= read -r -d '' task_id; do
   task_index=$((task_index + 1))
 done < <(find "${DATASET_ROOT}" -mindepth 1 -maxdepth 1 -type d -printf '%f\0' | LC_ALL=C sort -z)
 require_equal 'materialized task iteration count' "${EXPECTED_TASKS}" "${task_index}"
+require_equal 'derived-classification ledger rows' "${EXPECTED_TASKS}" "$(wc -l <"${DERIVED_LEDGER}")"
 
 readonly SUMMARY_PATH="${SUITE_ROOT}/materialization-summary.json"
 readonly PLAN_PATH="${SUITE_ROOT}/suite-plan.json"
@@ -896,8 +996,18 @@ find "${MATERIALIZATION_ROOT}" -mindepth 2 -maxdepth 2 -name manifest.json -type
   --arg implementation_commit "${SERVICE_IMPLEMENTATION_COMMIT}" \
   --arg release_lock_sha256 "${SERVICE_RELEASE_LOCK_SHA256}" \
   --arg stack_lock_sha256 "${STACK_LOCK_SHA256}" \
-  '{
-    schema_version:1,
+  --arg materializer_blob "${MATERIALIZER_GIT_BLOB}" \
+  --slurpfile derived_rows "${DERIVED_LEDGER}" \
+  '($derived_rows | map({key:.task_id, value:.}) | from_entries) as $derived |
+   if (length != ($derived_rows | length)) or any(.[]; $derived[.task_id] == null)
+   then error("derived-classification ledger does not cover the manifest set exactly") else . end |
+   map(. + {classification: $derived[.task_id].classification,
+            exclusion_reason: $derived[.task_id].exclusion_reason,
+            classification_at_materialization: .classification,
+            exclusion_reason_at_materialization: .exclusion_reason}) |
+  {
+    schema_version:2,
+    derivation:{stack_lock_sha256:$stack_lock_sha256,materializer_git_blob:$materializer_blob},
     dataset:{name:$dataset_name,content_digest:$dataset_digest,
       lock_sha256:$dataset_lock_sha256,
       regular_manifest_sha256:$dataset_regular_manifest_sha256,
@@ -913,12 +1023,13 @@ find "${MATERIALIZATION_ROOT}" -mindepth 2 -maxdepth 2 -name manifest.json -type
     tasks:sort_by(.task_id)
   }' >"${SUMMARY_PARTIAL}"
 jq -e --argjson expected "${EXPECTED_TASKS}" \
-  '.schema_version == 1 and .task_count == $expected and
+  '.schema_version == 2 and .task_count == $expected and
    (.eligible_count + .exclusion_count == .task_count)' \
   "${SUMMARY_PARTIAL}" >/dev/null || die 'materialization summary failed its semantic assertion'
 jq '{
-  schema_version:1,
-  methodology:"one paired full-suite pass through production agent_service; policy order alternates by sorted dataset index",
+  schema_version:2,
+  methodology:"one paired full-suite pass through production agent_service; policy order alternates by sorted dataset index; eligibility re-derived from verified evidence against the current release contract at plan generation",
+  derivation:.derivation,
   eligible_count:.eligible_count,
   excluded:[.tasks[]|select(.classification != "eligible")|{task_id,reason:.exclusion_reason}],
   runs:[.tasks[]|select(.classification == "eligible")|{task_id,task_index,language,policy_order}]
@@ -927,14 +1038,35 @@ sync -f "${SUMMARY_PARTIAL}"
 sync -f "${PLAN_PARTIAL}"
 if [[ -e "${SUMMARY_PATH}" || -e "${PLAN_PATH}" ]]; then
   [[ -f "${SUMMARY_PATH}" && -f "${PLAN_PATH}" ]] || die 'existing suite summary/plan pair is incomplete'
-  cmp -- "${SUMMARY_PATH}" "${SUMMARY_PARTIAL}" || die 'existing materialization summary differs from regenerated summary'
-  cmp -- "${PLAN_PATH}" "${PLAN_PARTIAL}" || die 'existing suite plan differs from regenerated plan'
-  rm -f -- "${SUMMARY_PARTIAL}" "${PLAN_PARTIAL}"
+  if cmp -s -- "${SUMMARY_PATH}" "${SUMMARY_PARTIAL}" && cmp -s -- "${PLAN_PATH}" "${PLAN_PARTIAL}"; then
+    rm -f -- "${SUMMARY_PARTIAL}" "${PLAN_PARTIAL}"
+  else
+    # A derived artifact may change only because the derivation contract changed;
+    # same-contract drift is corruption and fails closed. The old plan is
+    # archived, never destroyed.
+    prior_contract="$(jq -r '[(.derivation.stack_lock_sha256 // .production_release.stack_lock_sha256 // ""),
+      (.derivation.materializer_git_blob // "")] | join(":")' "${SUMMARY_PATH}")" ||
+      die 'existing materialization summary is unreadable; investigate before regeneration'
+    current_contract="${STACK_LOCK_SHA256}:${MATERIALIZER_GIT_BLOB}"
+    [[ "${prior_contract}" != "${current_contract}" ]] ||
+      die 'summary/plan drifted under an unchanged derivation contract'
+    superseded_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    [[ ! -e "${SUMMARY_PATH}.superseded-${superseded_stamp}" && ! -e "${PLAN_PATH}.superseded-${superseded_stamp}" ]] ||
+      die 'supersession archive collision; investigate'
+    mv -- "${SUMMARY_PATH}" "${SUMMARY_PATH}.superseded-${superseded_stamp}"
+    mv -- "${PLAN_PATH}" "${PLAN_PATH}.superseded-${superseded_stamp}"
+    mv -- "${SUMMARY_PARTIAL}" "${SUMMARY_PATH}"
+    mv -- "${PLAN_PARTIAL}" "${PLAN_PATH}"
+    sync -f "${SUITE_ROOT}"
+    printf 'PLAN_SUPERSEDED prior_contract=%s current_contract=%s archive_suffix=superseded-%s\n' \
+      "${prior_contract}" "${current_contract}" "${superseded_stamp}"
+  fi
 else
   mv -- "${SUMMARY_PARTIAL}" "${SUMMARY_PATH}"
   mv -- "${PLAN_PARTIAL}" "${PLAN_PATH}"
   sync -f "${SUITE_ROOT}"
 fi
+rm -f -- "${DERIVED_LEDGER}"
 
 printf 'FULL_SUITE_MATERIALIZATION_COMPLETE tasks=%s eligible=%s excluded=%s plan=%s\n' \
   "${EXPECTED_TASKS}" "$(jq -er '.eligible_count' "${SUMMARY_PATH}")" \

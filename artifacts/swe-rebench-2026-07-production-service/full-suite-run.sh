@@ -58,9 +58,12 @@ readonly SUITE_ROOT="${BENCH_ROOT}/full-suite-v1"
 # warm-task-env.sh) so the agent can actually build and run tests offline.
 # Earlier passes are retained as historical evidence: v3 (misleading
 # read_file pages tool), v4 (pages fix alone), v5 (corrected conditions
-# but the pre-guards backend). v6 runs all 41 pairs fresh under the final
-# v14 release whose backend carries the turboquant fail-closed guards.
-readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v6"
+# but the pre-guards backend), v6 (41 pairs under the v14-guarded backend).
+# v7 is the first pass under the LimitsLock re-release (service image
+# f1b33630, implementation d24f489, stack lock a4a63cb7): the eligibility
+# contract was re-derived from verified evidence -- symbolic-link sources are
+# now stageable -- so the plan grew from 41 to 109 paired tasks.
+readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v7"
 readonly RUNS_ROOT="${PASS_ROOT}/runs"
 readonly PROVENANCE_ROOT="${PASS_ROOT}/release-provenance"
 readonly PREAMBLE_FILE="${BENCH_ROOT}/prompt-preamble.md"
