@@ -64,6 +64,22 @@ pub struct StackLock {
     pub agent: AgentLock,
     pub backend: BackendLock,
     pub host: HostLock,
+    pub limits: LimitsLock,
+}
+
+/// Workspace/transport limits carried in the lock so the shell harness and the
+/// service read exactly one value. validate_lock proves the lock's numbers
+/// equal the constants this binary was compiled against, so the two can never
+/// silently drift -- the defect that shrank the benchmark when a stale 4 GiB
+/// shell mirror rejected a task the 8 GiB service admits.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LimitsLock {
+    pub max_prompt_bytes: usize,
+    pub max_staged_bytes: u64,
+    pub max_staged_files: u64,
+    pub max_staged_entries: u64,
+    pub max_archive_bytes: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -426,6 +442,29 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     }
     if lock.profile != "qwen38-agent-service-v3" {
         return fail(format!("unexpected profile {:?}", lock.profile));
+    }
+    if lock.limits.max_prompt_bytes != MAX_PROMPT_BYTES
+        || lock.limits.max_staged_bytes != MAX_STAGED_BYTES
+        || lock.limits.max_staged_files != MAX_STAGED_FILES
+        || lock.limits.max_staged_entries != MAX_STAGED_ENTRIES
+        || lock.limits.max_archive_bytes != MAX_ARCHIVE_BYTES
+    {
+        return fail(format!(
+            "limits in the lock disagree with the compiled constants \
+             (lock: prompt={} staged={} files={} entries={} archive={}; \
+             compiled: prompt={} staged={} files={} entries={} archive={}); \
+             the shell harness reads these from the lock, so they must match exactly",
+            lock.limits.max_prompt_bytes,
+            lock.limits.max_staged_bytes,
+            lock.limits.max_staged_files,
+            lock.limits.max_staged_entries,
+            lock.limits.max_archive_bytes,
+            MAX_PROMPT_BYTES,
+            MAX_STAGED_BYTES,
+            MAX_STAGED_FILES,
+            MAX_STAGED_ENTRIES,
+            MAX_ARCHIVE_BYTES,
+        ));
     }
     if lock.service.container_name != "qwen38-agent-service"
         || lock.service.image_tag != "qwen38-agent-service:3.1.0"

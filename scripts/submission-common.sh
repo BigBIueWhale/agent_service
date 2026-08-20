@@ -44,9 +44,16 @@ submission_require_handle() {
     submission_die "session handle must be s- followed by exactly 64 lowercase hexadecimal characters"
 }
 
-# Maximum accepted archive bytes: the server's staged-content cap plus its
-# fixed zip container-overhead allowance (4 GiB + 64 MiB).
-readonly SUBMISSION_MAX_ARCHIVE_BYTES=4362076160
+# Maximum accepted archive bytes: the staged-content cap plus a fixed zip
+# container-overhead allowance. The single source of truth is the stack lock,
+# which the service validates against its compiled constant (config.rs
+# LimitsLock), so client and service are provably one value and cannot drift --
+# the defect that made a stale 4 GiB client mirror reject a task the 8 GiB
+# service admits.
+SUBMISSION_MAX_ARCHIVE_BYTES="$(jq -er '.limits.max_archive_bytes' "${SCRIPT_DIR}/config/stack.lock.json")"
+[[ "${SUBMISSION_MAX_ARCHIVE_BYTES}" =~ ^[0-9]+$ ]] \
+  || { printf 'FATAL: stack lock .limits.max_archive_bytes is missing or non-numeric\n' >&2; exit 1; }
+readonly SUBMISSION_MAX_ARCHIVE_BYTES
 
 submission_validate_receipt() {
   local session_id="$1"
@@ -132,8 +139,16 @@ submission_create_receipt() {
   # frozen into the receipt now, so a later replay resends bit-identical
   # content no matter what happens to the original folder. `zip -y` stores
   # symbolic links as links, matching the service's opaque-symlink staging.
-  if [[ -z "$(find "${folder}" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
-    # Info-ZIP refuses to write an archive with no entries; an empty
+  # Enumerate the workspace with find's exit status checked separately from its
+  # output: a read/IO failure must never be mistaken for an empty workspace and
+  # silently published as the canonical empty zip.
+  local folder_first_entry find_rc
+  folder_first_entry="$(find "${folder}" -mindepth 1 -maxdepth 1 -print -quit)"
+  find_rc=$?
+  (( find_rc == 0 )) ||
+    submission_die "cannot enumerate workspace folder ${folder} for ${session_id} (find exited ${find_rc}); refusing to publish an ambiguous archive" || return
+  if [[ -z "${folder_first_entry}" ]]; then
+    # Info-ZIP refuses to write an archive with no entries; a provably empty
     # workspace is the canonical 22-byte empty zip container.
     printf 'PK\x05\x06\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' >"${archive_next}" ||
       submission_die "cannot write empty-workspace archive for ${session_id}" || return
