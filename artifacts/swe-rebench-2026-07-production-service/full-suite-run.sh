@@ -36,12 +36,16 @@ discard_workspace() {
 if (($# != 2)); then
   die 'usage: ./full-suite-run.sh <shard_index> <shard_count>. This instance runs exactly the tasks whose 0-based plan position mod <shard_count> equals <shard_index>; the machines run disjoint shards with no shared runs tree and no cross-instance coordination. Use "0 1" for the whole suite on one machine.'
 fi
-[[ "$1" =~ ^[0-9]+$ && "$2" =~ ^[1-9][0-9]*$ ]] ||
-  die "shard index and count must be integers with count >= 1; got ${1@Q} ${2@Q}"
+# No leading zeros: bash arithmetic reads a zero-padded value as octal while jq
+# --argjson reads it as decimal, so "010" would run one shard while the plan
+# denominator and completion line describe another -- silently breaking the
+# partition. Accept only 0 or an unpadded positive integer.
+[[ "$1" =~ ^(0|[1-9][0-9]*)$ && "$2" =~ ^[1-9][0-9]*$ ]] ||
+  die "shard index must be 0 or a positive integer with no leading zero, and count must be a positive integer with no leading zero; got ${1@Q} ${2@Q}"
 readonly SHARD_INDEX="$1" SHARD_COUNT="$2"
 (( SHARD_INDEX < SHARD_COUNT )) ||
   die "shard index ${SHARD_INDEX} must be strictly less than shard count ${SHARD_COUNT}"
-for command in awk cmp cp curl date docker find git grep jq mkdir mv rm sha256sum sort stat sync tar timeout tr unzip wc xargs zip; do
+for command in awk cmp cp curl date docker du find flock git grep gzip jq mkdir mktemp mv od rm sha256sum sleep sort stat sync tar timeout tr unzip wc xargs zip zstd; do
   command -v "${command}" >/dev/null || die "required command is missing: ${command}"
 done
 
@@ -77,13 +81,28 @@ readonly SCRIPT_DIR
 # shellcheck source=../../scripts/submission-common.sh
 source "${SERVICE_ROOT}/scripts/submission-common.sh"
 
+# Staging caps the server enforces beyond the client transport cap. The
+# graceful-exclusion guard in run_task needs them too; read fail-closed from the
+# same lock the service validates against its compiled LimitsLock.
+MAX_STAGED_BYTES="$(jq -er '.limits.max_staged_bytes | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
+  die 'stack lock .limits.max_staged_bytes is absent or not a number'
+MAX_STAGED_FILES="$(jq -er '.limits.max_staged_files | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
+  die 'stack lock .limits.max_staged_files is absent or not a number'
+MAX_STAGED_ENTRIES="$(jq -er '.limits.max_staged_entries | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
+  die 'stack lock .limits.max_staged_entries is absent or not a number'
+readonly MAX_STAGED_BYTES MAX_STAGED_FILES MAX_STAGED_ENTRIES
+
 [[ -f "${PLAN_FILE}" ]] || die "suite plan is missing: ${PLAN_FILE}"
-jq -e '(.runs | length) > 0 and .eligible_count == (.runs | length)' "${PLAN_FILE}" >/dev/null ||
-  die 'suite plan is inconsistent: eligible_count must equal the number of runs, and at least one run is required'
+jq -e '(.runs | length) > 0 and .eligible_count == (.runs | length)
+       and all(.runs[]; (.task_id | type == "string") and (.task_id | length > 0))' "${PLAN_FILE}" >/dev/null ||
+  die 'suite plan is inconsistent: eligible_count must equal the run count, at least one run is required, and every run must carry a non-empty string task_id'
 # Number of tasks this shard owns (0-based plan position mod count == index).
 SHARD_TASK_COUNT="$(jq -er --argjson i "${SHARD_INDEX}" --argjson n "${SHARD_COUNT}" \
   '[.runs | keys[] | select(. % $n == $i)] | length' "${PLAN_FILE}")"
 readonly SHARD_TASK_COUNT
+(( SHARD_TASK_COUNT > 0 )) ||
+  printf 'NOTE: shard %s/%s owns no tasks (shard count exceeds the plan length); this pass completes with zero task pairs.\n' \
+    "${SHARD_INDEX}" "${SHARD_COUNT}" >&2
 
 # ---------------------------------------------------------------------------
 # Release provenance: recorded once when this pass starts; every later
@@ -93,30 +112,49 @@ readonly SHARD_TASK_COUNT
 mkdir -p -- "${PASS_ROOT}" "${RUNS_ROOT}"
 chmod 0700 -- "${PASS_ROOT}" "${RUNS_ROOT}"
 
+# One instance per shard per machine. Two instances of the same shard started
+# near-simultaneously would both clear the "already has a running session" gate
+# during a long grading window and interleave writes into one run_dir. A
+# per-shard advisory lock, held open for the whole pass, makes same-shard
+# concurrency impossible; disjoint shards take disjoint locks and run freely.
+exec 9>"${PASS_ROOT}/.shard-${SHARD_INDEX}-of-${SHARD_COUNT}.lock"
+flock -n 9 ||
+  die "another instance of shard ${SHARD_INDEX}/${SHARD_COUNT} is already running against ${PASS_ROOT}"
+
 RELEASE_LOCK_SHA="$(sha256sum -- "${SERVICE_ROOT}/config/release.lock.json" | awk '{print $1}')"
 STACK_LOCK_SHA="$(sha256sum -- "${SERVICE_ROOT}/config/stack.lock.json" | awk '{print $1}')"
+# The plan is untracked/unpinned by git; pin its exact bytes into this pass's
+# provenance so a resumed or sibling-machine invocation cannot silently run a
+# different task sequence (which would drop or duplicate tasks across the suite).
+PLAN_SHA="$(sha256sum -- "${PLAN_FILE}" | awk '{print $1}')"
 IMPLEMENTATION_COMMIT="$(jq -er '.implementation_commit' "${SERVICE_ROOT}/config/release.lock.json")"
 SERVICE_IMAGE_ID="$(jq -er '.images.service' "${SERVICE_ROOT}/config/release.lock.json")"
 AGENT_SANDBOX="$(jq -er '.agent.agent_exec_sandbox' "${SERVICE_ROOT}/config/stack.lock.json")"
-readonly RELEASE_LOCK_SHA STACK_LOCK_SHA IMPLEMENTATION_COMMIT SERVICE_IMAGE_ID AGENT_SANDBOX
+readonly RELEASE_LOCK_SHA STACK_LOCK_SHA PLAN_SHA IMPLEMENTATION_COMMIT SERVICE_IMAGE_ID AGENT_SANDBOX
 [[ -z "$(git -C "${SERVICE_ROOT}" status --porcelain=v1 --untracked-files=all)" ]] ||
   die 'agent_service worktree must be clean before a suite pass'
 
 if [[ -e "${PROVENANCE_ROOT}/release.json" ]]; then
   jq -e --arg release "${RELEASE_LOCK_SHA}" --arg stack "${STACK_LOCK_SHA}" \
-    --arg commit "${IMPLEMENTATION_COMMIT}" \
-    '.release_lock_sha256 == $release and .stack_lock_sha256 == $stack and .implementation_commit == $commit' \
+    --arg commit "${IMPLEMENTATION_COMMIT}" --arg plan "${PLAN_SHA}" \
+    '.release_lock_sha256 == $release and .stack_lock_sha256 == $stack
+     and .implementation_commit == $commit and .plan_sha256 == $plan' \
     "${PROVENANCE_ROOT}/release.json" >/dev/null ||
-    die "this pass was started on a different release; refusing to mix releases in ${PASS_ROOT}"
+    die "this pass was started on a different release or suite plan; refusing to mix them in ${PASS_ROOT}"
 else
   mkdir -p -- "${PROVENANCE_ROOT}"
   chmod 0700 -- "${PROVENANCE_ROOT}"
+  # Atomic publish: a crash mid-write must never leave a corrupt release.json
+  # that wedges every future invocation at the check above.
   jq -n --arg release "${RELEASE_LOCK_SHA}" --arg stack "${STACK_LOCK_SHA}" \
     --arg commit "${IMPLEMENTATION_COMMIT}" --arg service_image "${SERVICE_IMAGE_ID}" \
-    '{schema_version:1,release_lock_sha256:$release,stack_lock_sha256:$stack,
-      implementation_commit:$commit,service_image:$service_image}' \
-    >"${PROVENANCE_ROOT}/release.json"
-  sync -f -- "${PROVENANCE_ROOT}/release.json"
+    --arg plan "${PLAN_SHA}" \
+    '{schema_version:2,release_lock_sha256:$release,stack_lock_sha256:$stack,
+      implementation_commit:$commit,service_image:$service_image,plan_sha256:$plan}' \
+    >"${PROVENANCE_ROOT}/release.json.partial"
+  sync -f -- "${PROVENANCE_ROOT}/release.json.partial"
+  mv -- "${PROVENANCE_ROOT}/release.json.partial" "${PROVENANCE_ROOT}/release.json"
+  sync -f -- "${PROVENANCE_ROOT}"
 fi
 
 printf 'Validating the live production release before touching any task...\n' >&2
@@ -129,7 +167,7 @@ mv -- "${STATUS_SNAPSHOT}" "${PROVENANCE_ROOT}/status-latest.txt"
 require_equal 'live service image' \
   "$(docker inspect --format '{{.Image}}' "$(jq -er '.service.container_name' "${SERVICE_ROOT}/config/stack.lock.json")")" \
   "${SERVICE_IMAGE_ID}"
-curl --fail-with-body --silent --show-error "${API}/v1/agent/sessions" |
+curl --noproxy '*' --fail-with-body --silent --show-error "${API}/v1/agent/sessions" |
   jq -e '.sessions | map(select(.status == "running")) | length == 0' >/dev/null ||
   die 'production service already has a running session'
 
@@ -139,7 +177,13 @@ curl --fail-with-body --silent --show-error "${API}/v1/agent/sessions" |
 
 verify_task_source() {
   local task_id="$1" task_dir="$2" marker="$3"
-  [[ ! -f "${marker}" ]] || { printf 'source already verified for %s\n' "${task_id}" >&2; return 0; }
+  # Test the marker's content, not just its existence: a crash between creating
+  # the file and writing "verified" would otherwise let an empty marker skip
+  # verification forever. A missing or torn marker re-verifies from scratch.
+  if [[ -f "${marker}" && "$(cat -- "${marker}" 2>/dev/null)" == verified ]]; then
+    printf 'source already verified for %s\n' "${task_id}" >&2
+    return 0
+  fi
   printf 'Verifying materialized source integrity for %s...\n' "${task_id}" >&2
   local scratch
   scratch="$(mktemp -d /tmp/qwen38-suite-verify.XXXXXX)"
@@ -165,8 +209,10 @@ verify_task_source() {
   require_equal "task base commit for ${task_id}" \
     "$(git -C "${task_dir}/source" rev-parse HEAD)" \
     "$(jq -er '.source.base_commit' "${task_dir}/manifest.json")"
-  printf 'verified\n' >"${marker}"
-  sync -f -- "${marker}"
+  printf 'verified\n' >"${marker}.partial"
+  sync -f -- "${marker}.partial"
+  mv -- "${marker}.partial" "${marker}"
+  sync -f -- "${marker%/*}"
 }
 
 ensure_environment_image() {
@@ -240,13 +286,26 @@ poll_until_terminal() {
     now="$(date +%s)"
     if [[ "${cancelled}" == false && "${now}" -ge "${deadline}" ]]; then
       printf 'Agent deadline reached for %s; requesting durable cancellation.\n' "${session_id}" >&2
-      local cancel_attempt=0
-      until curl --noproxy '*' --silent --show-error --connect-timeout 5 --max-time 30 \
-        --request POST --output /dev/null --write-out '' \
-        "${API}/v1/agent/sessions/${session_id}/cancel"; do
+      local cancel_attempt=0 cancel_http
+      while :; do
+        # Capture the HTTP status. Without it, curl reports success on a 500
+        # (e.g. a failed persist_cancel_intent that returns before the cancel
+        # token fires), and the session would keep running until the teardown
+        # deadline. 200/202 are accepted; 409 session_finalizing means teardown
+        # is already durably under way -- also success. A 4xx other than 409
+        # will never self-resolve, so fail fast; transport errors and 5xx retry.
+        cancel_http="$(curl --noproxy '*' --silent --show-error --connect-timeout 5 --max-time 30 \
+          --request POST --output /dev/null --write-out '%{http_code}' \
+          "${API}/v1/agent/sessions/${session_id}/cancel")" &&
+          [[ "${cancel_http}" == 200 || "${cancel_http}" == 202 || "${cancel_http}" == 409 ]] && break
+        if [[ "${cancel_http}" =~ ^4[0-9][0-9]$ && "${cancel_http}" != 409 ]]; then
+          die "durable cancellation for ${session_id} was rejected with HTTP ${cancel_http}; the service does not consider this a cancellable session"
+        fi
         cancel_attempt=$((cancel_attempt + 1))
-        (( cancel_attempt < 5 )) || die "cancellation transport failed for ${session_id} after 5 attempts"
-        printf 'WARN: cancel for %s attempt %s failed; retrying.\n' "${session_id}" "${cancel_attempt}" >&2
+        (( cancel_attempt < 5 )) ||
+          die "durable cancellation for ${session_id} failed after 5 attempts (last: HTTP ${cancel_http:-transport-error})"
+        printf 'WARN: cancel for %s attempt %s did not durably confirm (HTTP %s); retrying.\n' \
+          "${session_id}" "${cancel_attempt}" "${cancel_http:-transport-error}" >&2
         sleep $((cancel_attempt * 3))
       done
       cancelled=true
@@ -268,7 +327,10 @@ run_variant() {
   fi
   [[ ! -e "${run_dir}" ]] ||
     die "partial variant evidence already exists at ${run_dir}; archive it explicitly before rerunning"
-  mkdir -p -- "${run_dir}"
+  # Non-recursive mkdir is the atomic mutual exclusion: the parent (the task's
+  # runs dir) already exists from run_task, and a plain mkdir fails closed if the
+  # run_dir appeared between the check above and here.
+  mkdir -- "${run_dir}"
   chmod 0700 -- "${run_dir}"
 
   local task_env_image task_base_commit task_working_dir
@@ -342,7 +404,12 @@ run_variant() {
   # production_agent_process_failure, never a reason to kill the pass.
   # Infrastructure teardown truth is observed directly instead: no container
   # owned by this session may survive its terminal record.
-  if docker ps --all --format '{{.Names}}' | grep -qF -- "${session_id}"; then
+  # Capture the listing, then grep the string. `docker ps | grep -q` lets grep
+  # close the pipe on first match; under pipefail the resulting SIGPIPE (141) on
+  # docker would make this leak check silently pass despite a surviving container.
+  local live_container_names
+  live_container_names="$(docker ps --all --format '{{.Names}}')"
+  if grep -qF -- "${session_id}" <<<"${live_container_names}"; then
     die "session containers survived teardown for ${session_id}"
   fi
   if [[ "${agent_timed_out}" == false ]]; then
@@ -350,7 +417,19 @@ run_variant() {
   fi
 
   # --- bundle over the connection -----------------------------------------
-  "${SERVICE_ROOT}/bundle.sh" "${session_id}" "${run_dir}/production-bundle.tar.zst" >&2
+  # The bundle is the longest single transfer (bundle.sh uses --max-time 900);
+  # one transient reset after hours of work must not kill the pass. bundle.sh is
+  # idempotent -- it verifies the sha against the resource and its header and
+  # publishes with `mv --no-clobber`, so a failed attempt publishes nothing and
+  # repeating the identical download is safe.
+  local bundle_attempt=0
+  until "${SERVICE_ROOT}/bundle.sh" "${session_id}" "${run_dir}/production-bundle.tar.zst" >&2; do
+    bundle_attempt=$((bundle_attempt + 1))
+    (( bundle_attempt < 5 )) ||
+      die "bundle download for ${session_id} failed after 5 attempts"
+    printf 'WARN: bundle download for %s attempt %s failed; retrying.\n' "${session_id}" "${bundle_attempt}" >&2
+    sleep $((bundle_attempt * 3))
+  done
   local bundle_sha
   bundle_sha="$(sha256sum -- "${run_dir}/production-bundle.tar.zst" | awk '{print $1}')"
   require_equal 'downloaded bundle hash' "${bundle_sha}" "$(jq -er '.bundle_sha256' "${terminal}")"
@@ -510,6 +589,8 @@ run_variant() {
       verifier:{exit_code:$grader_exit_code,reward:$reward,report:$verifier[0]},
       outcome:{classification:$classification,resolved:($reward == 1)}
     }' >"${run_dir}/result.json.partial"
+  [[ -s "${run_dir}/result.json.partial" ]] ||
+    die "result summary for ${task_id} ${label} serialized to an empty file"
   sync -f -- "${run_dir}/result.json.partial"
   mv -- "${run_dir}/result.json.partial" "${run_dir}/result.json"
   sync -f -- "${run_dir}"
@@ -529,27 +610,51 @@ run_task() {
   mkdir -p -- "${target}"
   chmod 0700 -- "${target}"
 
-  # Fail-closed transport-cap guard. The workspace travels as one zip bounded by
-  # SUBMISSION_MAX_ARCHIVE_BYTES on both the client and the service; a task whose
-  # materialized source plus warmed task-env cannot fit that bound cannot be
-  # submitted at all. Rather than abort the whole pass on such a task, record it
-  # once as an infrastructure exclusion and continue. The estimate is the raw
-  # byte sum: the task-env is already gzip-compressed and zip -y barely
-  # compresses the source, so this is a tight lower bound on the real archive and
-  # only flags a task that provably exceeds the receipt limit.
-  local src_bytes env_bytes est_bytes
+  # Fail-closed staging/transport guard. The composed workspace the service
+  # stages is the materialized source tree plus exactly one extra file,
+  # .task-env.tar.gz, so it must satisfy every service cap -- not only the
+  # archive-byte cap. The binding byte cap is max_staged_bytes (smaller than the
+  # archive cap), and the service also caps staged file and entry counts. du -sb
+  # reports directory-apparent size, an upper bound on the regular-file bytes the
+  # service counts, so any task that passes here provably fits; one that fails is
+  # recorded once as an infrastructure exclusion instead of aborting the whole
+  # pass when the service later rejects the receipt.
+  local env_file="${TASK_ENV_ROOT}/${task_id}/task-env.tar.gz"
+  [[ -f "${env_file}" ]] ||
+    die "task environment is not warmed for ${task_id}; run ./warm-task-env.sh first"
+  local src_bytes env_bytes staged_bytes src_files src_entries staged_files staged_entries
+  local exclusion_reason=""
   src_bytes="$(du -sb -- "${task_dir}/source" | awk '{print $1}')"
-  env_bytes="$(stat -c '%s' -- "${TASK_ENV_ROOT}/${task_id}/task-env.tar.gz")"
-  est_bytes=$((src_bytes + env_bytes))
-  if (( est_bytes > SUBMISSION_MAX_ARCHIVE_BYTES )); then
-    printf 'EXCLUDING %s: composed workspace ~%s bytes exceeds the %s-byte transport cap; recording an infrastructure exclusion.\n' \
-      "${task_id}" "${est_bytes}" "${SUBMISSION_MAX_ARCHIVE_BYTES}" >&2
-    jq -n --arg task "${task_id}" --argjson est "${est_bytes}" \
-      --argjson cap "${SUBMISSION_MAX_ARCHIVE_BYTES}" \
+  env_bytes="$(stat -c '%s' -- "${env_file}")"
+  src_files="$(find "${task_dir}/source" -type f -printf '.' | wc -c)"
+  src_entries="$(find "${task_dir}/source" -mindepth 1 -printf '.' | wc -c)"
+  staged_bytes=$((src_bytes + env_bytes))
+  staged_files=$((src_files + 1))
+  staged_entries=$((src_entries + 1))
+  if (( staged_bytes > MAX_STAGED_BYTES )); then
+    exclusion_reason="staged bytes ~${staged_bytes} exceed max_staged_bytes ${MAX_STAGED_BYTES}"
+  elif (( staged_bytes > SUBMISSION_MAX_ARCHIVE_BYTES )); then
+    exclusion_reason="estimated archive bytes ~${staged_bytes} exceed max_archive_bytes ${SUBMISSION_MAX_ARCHIVE_BYTES}"
+  elif (( staged_files > MAX_STAGED_FILES )); then
+    exclusion_reason="staged files ${staged_files} exceed max_staged_files ${MAX_STAGED_FILES}"
+  elif (( staged_entries > MAX_STAGED_ENTRIES )); then
+    exclusion_reason="staged entries ${staged_entries} exceed max_staged_entries ${MAX_STAGED_ENTRIES}"
+  fi
+  if [[ -n "${exclusion_reason}" ]]; then
+    printf 'EXCLUDING %s: %s; recording an infrastructure exclusion.\n' "${task_id}" "${exclusion_reason}" >&2
+    jq -n --arg task "${task_id}" --arg reason "${exclusion_reason}" \
+      --argjson staged_bytes "${staged_bytes}" --argjson staged_files "${staged_files}" \
+      --argjson staged_entries "${staged_entries}" \
+      --argjson max_staged_bytes "${MAX_STAGED_BYTES}" --argjson max_archive_bytes "${SUBMISSION_MAX_ARCHIVE_BYTES}" \
+      --argjson max_staged_files "${MAX_STAGED_FILES}" --argjson max_staged_entries "${MAX_STAGED_ENTRIES}" \
       '{schema_version:2, task_id:$task, excluded:true,
-        exclusion:{reason:"composed_workspace_exceeds_transport_cap",
-                   estimated_archive_bytes:$est, transport_cap_bytes:$cap},
+        exclusion:{reason:"composed_workspace_exceeds_service_staging_cap", detail:$reason,
+                   estimated:{staged_bytes:$staged_bytes, staged_files:$staged_files, staged_entries:$staged_entries},
+                   caps:{max_staged_bytes:$max_staged_bytes, max_archive_bytes:$max_archive_bytes,
+                         max_staged_files:$max_staged_files, max_staged_entries:$max_staged_entries}},
         runs:[], paired:null}' >"${target}/pair-summary.json.partial"
+    [[ -s "${target}/pair-summary.json.partial" ]] ||
+      die "exclusion summary for ${task_id} serialized to an empty file"
     sync -f -- "${target}/pair-summary.json.partial"
     mv -- "${target}/pair-summary.json.partial" "${target}/pair-summary.json"
     sync -f -- "${target}"
@@ -562,8 +667,15 @@ run_task() {
 
   local order ordinal label policy
   order="$(jq -cer '.policy_order' "${task_dir}/manifest.json")"
+  # The pair aggregation below pivots on exactly one false and one true variant.
+  # A policy_order that is not a permutation of [false, true] would make the
+  # paired select()s empty, and jq -n would then write a zero-byte pair-summary
+  # (proven: `jq -n '{a:(empty)}'` emits nothing and exits 0), marking the task
+  # complete forever with no result. Reject anything else fail-closed.
+  jq -e 'type == "array" and length == 2 and sort == [false, true]' <<<"${order}" >/dev/null ||
+    die "policy_order for ${task_id} is not a permutation of [false, true]: ${order}"
   local index=0 first_result="" second_result=""
-  for policy in $(jq -er '.[]' <<<"${order}"); do
+  for policy in $(jq -r '.[]' <<<"${order}"); do
     index=$((index + 1))
     ordinal="$(printf '%02d' "${index}")"
     if [[ "${policy}" == false ]]; then label=unpreserved; else label=preserved; fi
@@ -595,6 +707,8 @@ run_task() {
         }
       }
     }' >"${target}/pair-summary.json.partial"
+  [[ -s "${target}/pair-summary.json.partial" ]] ||
+    die "pair summary for ${task_id} serialized to an empty file"
   sync -f -- "${target}/pair-summary.json.partial"
   mv -- "${target}/pair-summary.json.partial" "${target}/pair-summary.json"
   sync -f -- "${target}"
@@ -615,5 +729,16 @@ while read -r task_id; do
   fi
   plan_index=$((plan_index + 1))
 done < <(jq -er '.runs[].task_id' "${PLAN_FILE}")
+
+# A failure inside the process substitution above (a jq/IO error mid-stream)
+# cannot be seen by set -e, so the loop could consume only a prefix and still
+# reach here. Prove conservation both ways before declaring the pass complete:
+# every plan row was streamed, and every task this shard owns was processed.
+PLAN_ROW_COUNT="$(jq -er '.runs | length' "${PLAN_FILE}")"
+readonly PLAN_ROW_COUNT
+(( plan_index == PLAN_ROW_COUNT )) ||
+  die "the plan stream yielded ${plan_index} of ${PLAN_ROW_COUNT} rows; refusing to report a truncated pass as complete"
+(( completed == SHARD_TASK_COUNT )) ||
+  die "shard ${SHARD_INDEX}/${SHARD_COUNT} processed ${completed} of ${SHARD_TASK_COUNT} owned task pairs; the plan stream ended early"
 
 printf 'SUITE_PASS_COMPLETE shard=%s/%s tasks=%s runs_root=%s\n' "${SHARD_INDEX}" "${SHARD_COUNT}" "${completed}" "${RUNS_ROOT}"
