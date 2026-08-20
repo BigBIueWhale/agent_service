@@ -24,13 +24,20 @@ readonly DATASET_LOCK_SHA256=f994d9f7638f5b9f9ef29ca7a1385b25e61824641c05ef5b87a
 readonly SERVICE_RELEASE_COMMIT=7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc
 readonly SERVICE_IMPLEMENTATION_COMMIT=bc67dae720894cbbcd62122a2a9ff6b56b042168
 readonly SERVICE_RELEASE_LOCK_SHA256=a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4
-readonly STACK_LOCK_SHA256=de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3
+readonly STACK_LOCK_SHA256=a4a63cb7627f2e97ee48c5b5bb363e30eaf8947f34c610e93e6ad348bb5fb374
 readonly SOURCE_EXTRACTOR_IMAGE_ID=sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec
 readonly SOURCE_EXTRACTOR_TAR_VERSION='tar (GNU tar) 1.35'
 readonly EXPECTED_TASKS=111
-readonly MAX_STAGED_FILES=200000
-readonly MAX_STAGED_BYTES=4294967296
-readonly MAX_PROMPT_BYTES=1048576
+# Single source of truth: the stack lock (validated by the service against its
+# compiled constants, config.rs LimitsLock). A stale mirror here silently
+# wrong-sized the suite (this was a stale 4 GiB copy of the 8 GiB service cap).
+MAX_STAGED_FILES="$(jq -er '.limits.max_staged_files' "${SERVICE_ROOT}/config/stack.lock.json")"
+MAX_STAGED_BYTES="$(jq -er '.limits.max_staged_bytes' "${SERVICE_ROOT}/config/stack.lock.json")"
+MAX_PROMPT_BYTES="$(jq -er '.limits.max_prompt_bytes' "${SERVICE_ROOT}/config/stack.lock.json")"
+for _lim in MAX_STAGED_FILES MAX_STAGED_BYTES MAX_PROMPT_BYTES; do
+  [[ "${!_lim}" =~ ^[0-9]+$ ]] || { printf 'FATAL: stack lock has no numeric .limits value for %s\n' "${_lim}" >&2; exit 1; }
+done
+readonly MAX_STAGED_FILES MAX_STAGED_BYTES MAX_PROMPT_BYTES
 readonly ENV_REPOSITORY=qwen38-swerebench-full-v1
 readonly UV_INSTALL='RUN curl -LsSf https://astral.sh/uv/0.7.13/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh'
 readonly LOGS_INSTALL='RUN mkdir -p /logs'
@@ -725,9 +732,13 @@ materialize_task() {
   if (( instruction_bytes > MAX_PROMPT_BYTES )); then
     classification=production-input-contract-exclusion
     exclusion_reason=prompt_bytes_exceed_service_limit
-  elif (( symlink_count > 0 )); then
-    classification=production-input-contract-exclusion
-    exclusion_reason=source_contains_symbolic_links
+  # Symbolic links in the source are no longer an exclusion: the shipped service
+  # provides opaque-symlink staging (zip -y receipts, link-preserving extraction
+  # and bundling), and this materializer already verifies each source symlink
+  # against its exact environment image. Excluding them was a stale contract
+  # from before that capability existed, and it silently dropped ~63% of tasks.
+  # Special files remain excluded -- staging has no meaning for a device, fifo,
+  # or socket.
   elif (( special_count > 0 )); then
     classification=production-input-contract-exclusion
     exclusion_reason=source_contains_special_files
