@@ -36,7 +36,16 @@ readonly -a ACCEPTED_PROVENANCE=(
   "7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc:bc67dae720894cbbcd62122a2a9ff6b56b042168:a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4:de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3"
   "${SERVICE_RELEASE_COMMIT}:${SERVICE_IMPLEMENTATION_COMMIT}:${SERVICE_RELEASE_LOCK_SHA256}:${STACK_LOCK_SHA256}"
 )
-readonly SOURCE_EXTRACTOR_IMAGE_ID=sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec
+# The agent image doubles as the source extractor for fresh materialization, so
+# the current extractor must be the stack lock's agent image. It has been rebuilt
+# since the original suite (1dc84a6f -> 9393fe2c, both GNU tar 1.35), so a reused
+# manifest may record either; the source is independently re-verified against its
+# exact env image, so a historical extractor is accepted for validation.
+readonly SOURCE_EXTRACTOR_IMAGE_ID=sha256:9393fe2c53b34ba220ef86a930ab6ea2c6c7ad23a439af85f6c98cc446fe2f15
+readonly -a ACCEPTED_EXTRACTOR_IMAGES=(
+  sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec
+  "${SOURCE_EXTRACTOR_IMAGE_ID}"
+)
 readonly SOURCE_EXTRACTOR_TAR_VERSION='tar (GNU tar) 1.35'
 readonly EXPECTED_TASKS=111
 # Single source of truth: the stack lock (validated by the service against its
@@ -506,8 +515,13 @@ validate_completed_task() {
     "${manifest}")"
   if [[ "${materialization_method}" == \
     'Docker archive stream plus pinned non-root GNU tar delayed-directory restoration' ]]; then
-    require_equal "source extractor image for ${task_id}" "${SOURCE_EXTRACTOR_IMAGE_ID}" \
-      "$(jq -er '.source.extractor_image_id' "${manifest}")"
+    local recorded_extractor accepted_extractor extractor_ok=false
+    recorded_extractor="$(jq -er '.source.extractor_image_id' "${manifest}")"
+    for accepted_extractor in "${ACCEPTED_EXTRACTOR_IMAGES[@]}"; do
+      [[ "${recorded_extractor}" != "${accepted_extractor}" ]] || extractor_ok=true
+    done
+    [[ "${extractor_ok}" == true ]] ||
+      die "source extractor image for ${task_id} is not an accepted extractor: ${recorded_extractor}"
     require_equal "source extractor tar version for ${task_id}" "${SOURCE_EXTRACTOR_TAR_VERSION}" \
       "$(jq -er '.source.extractor_tar_version' "${manifest}")"
     for evidence in source-archive.log source-extract.log; do
