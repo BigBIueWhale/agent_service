@@ -42,6 +42,26 @@ pub const MAX_STAGED_ENTRIES: u64 = 250_000;
 /// maximum-size workspace.
 pub const MAX_ARCHIVE_BYTES: u64 = MAX_STAGED_BYTES + 64 * 1024 * 1024;
 
+/// The one bound on how long a session may work: model turns, never wall time.
+///
+/// A wall-clock budget measures how fast this GPU generates, not how capably the
+/// agent reasons -- the same trajectory that fits an hour on a fast backend is
+/// guillotined on a slow one, so identical work scores differently for reasons
+/// that have nothing to do with the agent. Turns are the hardware-independent
+/// unit of agent progress, so this is what the deployment bounds.
+///
+/// 400 is a degenerate-loop circuit breaker, not a performance budget, derived
+/// from what one repository-level task legitimately needs: orient and locate
+/// (~15-30 turns), establish the offline build and a baseline test run (~5-15),
+/// diagnose across the implicated code (~20-40), implement (~10-25), iterate the
+/// verify loop (~20-60), then regression-check and finalise (~10-20) -- about
+/// 80-190 for a clean pass. Doubling that admits one complete recovery pass
+/// after a wrong hypothesis, so an agent that reaches 400 is looping rather than
+/// converging. Qwen Code stops itself at this count and exits 53, which is an
+/// ordinary terminal outcome graded on the work done, never an infrastructure
+/// failure. `max_wall_time_seconds` stays disabled everywhere by design.
+pub const MAX_SESSION_TURNS: u32 = 400;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub lock: StackLock,
@@ -84,6 +104,7 @@ pub struct LimitsLock {
     pub max_staged_files: u64,
     pub max_staged_entries: u64,
     pub max_archive_bytes: u64,
+    pub max_session_turns: u32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -452,22 +473,25 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.limits.max_staged_files != MAX_STAGED_FILES
         || lock.limits.max_staged_entries != MAX_STAGED_ENTRIES
         || lock.limits.max_archive_bytes != MAX_ARCHIVE_BYTES
+        || lock.limits.max_session_turns != MAX_SESSION_TURNS
     {
         return fail(format!(
             "limits in the lock disagree with the compiled constants \
-             (lock: prompt={} staged={} files={} entries={} archive={}; \
-             compiled: prompt={} staged={} files={} entries={} archive={}); \
+             (lock: prompt={} staged={} files={} entries={} archive={} turns={}; \
+             compiled: prompt={} staged={} files={} entries={} archive={} turns={}); \
              the shell harness reads these from the lock, so they must match exactly",
             lock.limits.max_prompt_bytes,
             lock.limits.max_staged_bytes,
             lock.limits.max_staged_files,
             lock.limits.max_staged_entries,
             lock.limits.max_archive_bytes,
+            lock.limits.max_session_turns,
             MAX_PROMPT_BYTES,
             MAX_STAGED_BYTES,
             MAX_STAGED_FILES,
             MAX_STAGED_ENTRIES,
             MAX_ARCHIVE_BYTES,
+            MAX_SESSION_TURNS,
         ));
     }
     if lock.service.container_name != "qwen38-agent-service"
@@ -1116,12 +1140,13 @@ mod tests {
         // lock must equal the constant this binary compiled against. A single
         // field off by one must fail closed, so a client mirror can never
         // quietly admit or reject a task the service would not.
-        let mutations: [fn(&mut StackLock); 5] = [
+        let mutations: [fn(&mut StackLock); 6] = [
             |lock: &mut StackLock| lock.limits.max_prompt_bytes += 1,
             |lock: &mut StackLock| lock.limits.max_staged_bytes += 1,
             |lock: &mut StackLock| lock.limits.max_staged_files += 1,
             |lock: &mut StackLock| lock.limits.max_staged_entries += 1,
             |lock: &mut StackLock| lock.limits.max_archive_bytes += 1,
+            |lock: &mut StackLock| lock.limits.max_session_turns += 1,
         ];
         for mutate in mutations {
             let mut lock = checked_in_lock();

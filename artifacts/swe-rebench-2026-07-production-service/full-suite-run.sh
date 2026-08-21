@@ -76,8 +76,10 @@ readonly PREAMBLE_FILE="${BENCH_ROOT}/prompt-preamble.md"
 readonly TASK_ENV_ROOT="${BENCH_ROOT}/full-suite-v1/task-env"
 readonly DATASET_ROOT="${BENCH_ROOT}/evaluator-dataset"
 readonly PLAN_FILE="${SUITE_ROOT}/suite-plan.json"
-readonly AGENT_TIMEOUT_SEC=3000
-readonly TEARDOWN_TIMEOUT_SEC=900
+# The agent's working budget is its turn count, enforced by the agent itself from
+# the locked limits.max_session_turns; this harness imposes no wall-clock bound on
+# a session. VERIFIER_TIMEOUT_SEC below bounds the deterministic evaluator
+# container, which is ordinary offline test execution and not agent work.
 readonly VERIFIER_TIMEOUT_SEC=3000
 readonly TASK_CPUS=1
 readonly TASK_MEMORY_MB=4096
@@ -260,12 +262,14 @@ verify_dataset_inputs() {
     "$(jq -er '.inputs.test_parser_sha256' "${task_dir}/manifest.json")"
 }
 
+# Wait for the session to reach its own terminal state. There is deliberately no
+# deadline here: a session is bounded by its turn budget (limits.max_session_turns
+# in the stack lock, enforced by the agent itself), which is a hardware-independent
+# measure of agent progress, whereas a wall-clock cap would score the same
+# trajectory differently depending on how fast the backend happens to generate.
 poll_until_terminal() {
-  local session_id="$1" terminal_file="$2" timed_out_var="$3"
-  local started deadline now body status
-  started="$(date +%s)"
-  deadline=$((started + AGENT_TIMEOUT_SEC))
-  local cancelled=false
+  local session_id="$1" terminal_file="$2"
+  local body status
   while :; do
     body="$(mktemp /tmp/qwen38-suite-poll.XXXXXX)"
     # The GET is idempotent; a transient transport error or non-200 must not
@@ -288,40 +292,9 @@ poll_until_terminal() {
     status="$(jq -er '.status' "${body}")"
     if [[ "${status}" != running ]]; then
       mv -- "${body}" "${terminal_file}"
-      printf -v "${timed_out_var}" '%s' "${cancelled}"
       return 0
     fi
     rm -f -- "${body}"
-    now="$(date +%s)"
-    if [[ "${cancelled}" == false && "${now}" -ge "${deadline}" ]]; then
-      printf 'Agent deadline reached for %s; requesting durable cancellation.\n' "${session_id}" >&2
-      local cancel_attempt=0 cancel_http
-      while :; do
-        # Capture the HTTP status. Without it, curl reports success on a 500
-        # (e.g. a failed persist_cancel_intent that returns before the cancel
-        # token fires), and the session would keep running until the teardown
-        # deadline. 200/202 are accepted; 409 session_finalizing means teardown
-        # is already durably under way -- also success. A 4xx other than 409
-        # will never self-resolve, so fail fast; transport errors and 5xx retry.
-        cancel_http="$(curl --noproxy '*' --silent --show-error --connect-timeout 5 --max-time 30 \
-          --request POST --output /dev/null --write-out '%{http_code}' \
-          "${API}/v1/agent/sessions/${session_id}/cancel")" &&
-          [[ "${cancel_http}" == 200 || "${cancel_http}" == 202 || "${cancel_http}" == 409 ]] && break
-        if [[ "${cancel_http}" =~ ^4[0-9][0-9]$ && "${cancel_http}" != 409 ]]; then
-          die "durable cancellation for ${session_id} was rejected with HTTP ${cancel_http}; the service does not consider this a cancellable session"
-        fi
-        cancel_attempt=$((cancel_attempt + 1))
-        (( cancel_attempt < 5 )) ||
-          die "durable cancellation for ${session_id} failed after 5 attempts (last: HTTP ${cancel_http:-transport-error})"
-        printf 'WARN: cancel for %s attempt %s did not durably confirm (HTTP %s); retrying.\n' \
-          "${session_id}" "${cancel_attempt}" "${cancel_http:-transport-error}" >&2
-        sleep $((cancel_attempt * 3))
-      done
-      cancelled=true
-      deadline=$((now + TEARDOWN_TIMEOUT_SEC))
-    elif [[ "${cancelled}" == true && "${now}" -ge "${deadline}" ]]; then
-      die "session ${session_id} did not reach a terminal state within ${TEARDOWN_TIMEOUT_SEC}s of durable cancellation"
-    fi
     sleep "${POLL_INTERVAL_SEC}"
   done
 }
@@ -399,10 +372,10 @@ run_variant() {
     "${session_id}" "${task_id}" "${policy}" >&2
 
   # --- terminal ------------------------------------------------------------
-  local terminal="${run_dir}/terminal.json" agent_timed_out=false
-  poll_until_terminal "${session_id}" "${terminal}" agent_timed_out
+  local terminal="${run_dir}/terminal.json"
+  poll_until_terminal "${session_id}" "${terminal}"
   jq -e --arg id "${session_id}" --argjson policy "${policy}" \
-    '.session_id == $id and (.status == "completed" or .status == "cancelled") and
+    '.session_id == $id and .status == "completed" and
      .model == "qwen3.8-27b-nvfp4-k8v4" and .context_window == 262144 and
      .preserve_thinking == $policy and .finished_at_unix > 0 and
      (.bundle_sha256 | test("^[0-9a-f]{64}$")) and .bundle_compressed_bytes > 0 and
@@ -420,9 +393,6 @@ run_variant() {
   live_container_names="$(docker ps --all --format '{{.Names}}')"
   if grep -qF -- "${session_id}" <<<"${live_container_names}"; then
     die "session containers survived teardown for ${session_id}"
-  fi
-  if [[ "${agent_timed_out}" == false ]]; then
-    jq -e '.status == "completed"' "${terminal}" >/dev/null || die 'non-timeout session did not complete'
   fi
 
   # --- bundle over the connection -----------------------------------------
@@ -595,12 +565,20 @@ run_variant() {
   jq -e --argjson resolved "${reward}" '.resolved == ($resolved == 1)' \
     "${run_dir}/grader-logs/verifier/report.json" >/dev/null || die 'verifier reward/report mismatch'
 
-  if [[ "${agent_timed_out}" == true ]]; then
-    classification=agent_timeout
-  elif jq -e '.is_process_error == true or .agent_exit_code != 0 or .container_exit_code != 0' "${terminal}" >/dev/null; then
+  # Exit 53 is qwen-code reporting that the session reached its locked turn
+  # budget. That is an ordinary terminal outcome, graded on the work actually
+  # done, never an infrastructure failure -- so it is not a process error, and a
+  # budget-exhausted session whose patch resolves the task is recorded resolved.
+  local turn_budget_exhausted=false
+  jq -e '.agent_exit_code == 53' "${terminal}" >/dev/null && turn_budget_exhausted=true
+  if jq -e '.is_process_error == true
+            or (.agent_exit_code != 0 and .agent_exit_code != 53)
+            or (.container_exit_code != 0 and .container_exit_code != 53)' "${terminal}" >/dev/null; then
     classification=production_agent_process_failure
   elif [[ "${reward}" == 1 ]]; then
     classification=resolved
+  elif [[ "${turn_budget_exhausted}" == true ]]; then
+    classification=turn_budget_exhausted
   else
     classification=unresolved
   fi
@@ -620,7 +598,7 @@ run_variant() {
     --argjson grader_exit_code "${grader_rc}" \
     --argjson reward "${reward}" \
     --arg classification "${classification}" \
-    --argjson agent_timed_out "${agent_timed_out}" \
+    --argjson turn_budget_exhausted "${turn_budget_exhausted}" \
     --arg prompt_sha256 "${prompt_sha}" \
     --slurpfile task_env "${run_dir}/task-env-manifest.json" \
     '{
@@ -631,7 +609,7 @@ run_variant() {
       task_env:$task_env[0],
       run_order:($ordinal|tonumber),
       variant:{preserve_thinking:$preserve_thinking},
-      production:{created:$created[0],terminal:$terminal[0],session_id:$session_id,agent_timed_out:$agent_timed_out},
+      production:{created:$created[0],terminal:$terminal[0],session_id:$session_id,turn_budget_exhausted:$turn_budget_exhausted},
       evidence:{bundle_sha256:$bundle_sha256,candidate_patch_sha256:$patch_sha256,candidate_patch_bytes:$patch_bytes},
       verifier:{exit_code:$grader_exit_code,reward:$reward,report:$verifier[0]},
       outcome:{classification:$classification,resolved:($reward == 1)}

@@ -58,6 +58,16 @@ Also installed: `rg` (ripgrep), `fd`, `jq`, `yq`, `sqlite3`, `psql`,
 Nothing else can be installed. If a tool you want is absent, solve the task
 with what is listed here.
 
+## Your budget
+
+You have **400 model turns** for this task. There is no time limit: work at
+whatever pace the task needs, and never rush or skip verification because of
+elapsed time. The turn budget is generous for a single repository fix, so spend
+turns deliberately rather than re-reading files you have already read or
+re-running a check whose result has not changed. If you reach the budget the
+session ends and whatever is in `/workspace` at that moment is what gets graded,
+so land a coherent change rather than leaving the tree mid-edit.
+
 ## Approach
 
 Establish a working build-and-test loop early — extract the task

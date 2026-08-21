@@ -168,8 +168,18 @@ tokenizer, or tokenizer fallback in the compaction trigger or outbound clamp. If
 the tokenizer is missing, malformed, or reports another model window, the turn
 fails before generation.
 
-Session turns and cumulative tool calls have no arbitrary cutoff. One model turn
-has a 1,000-tool-call circuit breaker for degenerate output. Auto-compaction is
+A session is bounded by model turns, never by wall-clock time: the locked budget
+is 400 turns (`limits.max_session_turns`), enforced by the client itself, and
+`max_wall_time_seconds` is disabled everywhere. Turns are the hardware-independent
+measure of agent progress, so the same trajectory is judged identically whatever
+the backend's generation speed; a wall-clock budget would instead score how fast
+this GPU happens to run. Reaching the budget is an ordinary terminal outcome —
+the client exits 53 and the work done up to that point stands — not an error.
+The budget is a degenerate-loop circuit breaker: a repository-level fix needs
+roughly 80-190 turns to orient, build, diagnose, implement, and verify, so 400
+admits a complete second attempt after a wrong hypothesis. Cumulative tool calls
+have no separate cutoff, and one model turn still has a 1,000-tool-call circuit
+breaker for degenerate output. Auto-compaction is
 delayed to the latest safe threshold supported by the pinned client. Subagents run
 sequentially in the foreground and return concise findings to the same main thread;
 there are no background branches, teams, worktrees, alternate models, or nested

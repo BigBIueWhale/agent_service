@@ -20,6 +20,15 @@ const SANDBOX_ID: &str =
     "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1";
 const EVENTS_SOCKET: &str = "/streams/events.sock";
 const STDERR_SOCKET: &str = "/streams/stderr.sock";
+/// Session turn budget: the one bound on how long a session may work. Turns,
+/// never wall time -- a wall-clock budget would measure backend generation speed
+/// rather than agent progress. Qwen Code stops itself here and exits 53, an
+/// ordinary terminal outcome. This value must equal `limits.max_session_turns`
+/// in the stack lock, `execution.max_session_turns` in the agent runtime
+/// contract, and `model.maxSessionTurns` in both sealed settings files; the
+/// in-image runtime-contract verifier proves the contract and settings agree,
+/// and the service proves the lock equals its own compiled constant.
+const MAX_SESSION_TURNS: u32 = 400;
 const NODE: &str = "/usr/local/bin/node";
 const CLI: &str = "/opt/qwen-code/scripts/cli-entry.js";
 const CONTROL_ATTEST_FD: RawFd = 3;
@@ -152,7 +161,7 @@ fn run() -> Result<std::convert::Infallible, String> {
             .arg(format!("--strict-tools={STRICT_TOOLS}"))
             .arg("--foreground-agents-only")
             .arg("--max-subagent-depth=1")
-            .arg("--max-session-turns=-1")
+            .arg(format!("--max-session-turns={MAX_SESSION_TURNS}"))
             .arg("--max-tool-calls=-1")
             .arg("--no-chat-recording"),
     );

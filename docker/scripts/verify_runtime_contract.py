@@ -407,9 +407,20 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             'libc::close_range(3, u32::MAX, 0)',
             '.arg("--foreground-agents-only")',
             '.arg("--max-subagent-depth=1")',
-            '.arg("--max-session-turns=-1")',
+            '.arg(format!("--max-session-turns={MAX_SESSION_TURNS}"))',
             '.arg("--max-tool-calls=-1")',
         ],
+    )
+    # The turn budget is the one bound on session length, so prove the value the
+    # agent actually passes equals the contract's, rather than only proving the
+    # flag is present. A literal fragment could not catch a resealed constant.
+    match = re.search(r"const MAX_SESSION_TURNS: u32 = (\d+);", source)
+    if not match:
+        raise ContractError("agent_exec session turn-budget declaration is missing")
+    require_equal(
+        "agent_exec max session turns",
+        int(match.group(1)),
+        contract["execution"]["max_session_turns"],
     )
     match = re.search(r'const STRICT_TOOLS: &str =\s*"([^"]+)";', source)
     if not match:
