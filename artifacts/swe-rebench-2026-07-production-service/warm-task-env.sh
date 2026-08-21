@@ -48,12 +48,23 @@ mkdir -p -- "${OUT_ROOT}" || { printf 'ERROR: cannot create task-env output root
 # Directories harvested when present. Covers the suite's ecosystems: Maven
 # (+wrapped dists), Gradle, Go, JDKs, CPython prefixes, Node. env.sh maps them
 # into the agent's environment.
+# Only paths that exist in a given task image are harvested, so this list is the
+# union across ecosystems. The Rust entries matter as much as the rest: these
+# images carry the pinned toolchain in /usr/local/rustup and set CARGO_HOME to
+# /workspace/.cargo, so the dependency cache lands inside the repo checkout.
+# Without all three, every Rust task shipped a ~17 MB environment with no
+# registry and no toolchain, and the offline agent could not build at all.
 readonly HARVEST_DIRS='
 /root/.m2
 /root/.gradle
 /root/go
 /root/.npm
 /root/.cache
+/root/.cargo
+/root/.rustup
+/usr/local/cargo
+/usr/local/rustup
+/workspace/.cargo
 /usr/local/go
 /usr/share/maven
 /usr/bin/mvn
@@ -215,7 +226,7 @@ elif [ -d "$TASK_ENV/usr/lib/jvm" ]; then
     [ -x "$j" ] && export JAVA_HOME="${j%/bin/java}" && break
   done
 fi
-[ -n "$JAVA_HOME" ] && PATH="$JAVA_HOME/bin:$PATH"
+[ -n "${JAVA_HOME:-}" ] && PATH="$JAVA_HOME/bin:$PATH"
 if [ -d "$TASK_ENV/usr/local/go" ]; then
   export GOROOT="$TASK_ENV/usr/local/go"
   PATH="$GOROOT/bin:$PATH"
@@ -224,6 +235,34 @@ if [ -d "$TASK_ENV/root/go" ]; then
   export GOPATH="$TASK_ENV/root/go"
   export GOMODCACHE="$TASK_ENV/root/go/pkg/mod"
 fi
+# Rust. These images pin the toolchain under rustup and point CARGO_HOME at the
+# repo checkout, so prefer whichever harvested cargo home actually carries the
+# downloaded registry; fall back to one that at least carries the cargo config.
+for _c in "$TASK_ENV/workspace/.cargo" "$TASK_ENV/root/.cargo" "$TASK_ENV/usr/local/cargo"; do
+  [ -d "$_c/registry" ] || continue
+  export CARGO_HOME="$_c"
+  break
+done
+if [ -z "${CARGO_HOME:-}" ]; then
+  for _c in "$TASK_ENV/usr/local/cargo" "$TASK_ENV/root/.cargo" "$TASK_ENV/workspace/.cargo"; do
+    [ -d "$_c" ] || continue
+    export CARGO_HOME="$_c"
+    break
+  done
+fi
+for _r in "$TASK_ENV/usr/local/rustup" "$TASK_ENV/root/.rustup"; do
+  [ -d "$_r" ] || continue
+  export RUSTUP_HOME="$_r"
+  break
+done
+[ -d "$TASK_ENV/usr/local/cargo/bin" ] && PATH="$TASK_ENV/usr/local/cargo/bin:$PATH"
+if [ -n "${CARGO_HOME:-}" ]; then
+  [ -d "$CARGO_HOME/bin" ] && PATH="$CARGO_HOME/bin:$PATH"
+  # There is no network here: fail fast with the clear cargo offline error
+  # rather than stalling on a registry update that can never succeed.
+  export CARGO_NET_OFFLINE=true
+fi
+unset _c _r
 if [ -d "$TASK_ENV/usr/share/maven/bin" ]; then
   export M2_HOME="$TASK_ENV/usr/share/maven"
   PATH="$M2_HOME/bin:$PATH"

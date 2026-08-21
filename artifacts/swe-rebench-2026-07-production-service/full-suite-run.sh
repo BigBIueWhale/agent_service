@@ -59,10 +59,16 @@ readonly SUITE_ROOT="${BENCH_ROOT}/full-suite-v1"
 # Earlier passes are retained as historical evidence: v3 (misleading
 # read_file pages tool), v4 (pages fix alone), v5 (corrected conditions
 # but the pre-guards backend), v6 (41 pairs under the v14-guarded backend).
-# v7 is the first pass under the LimitsLock re-release (service image
-# f1b33630, implementation d24f489, stack lock a4a63cb7): the eligibility
-# contract was re-derived from verified evidence -- symbolic-link sources are
-# now stageable -- so the plan grew from 41 to 109 paired tasks.
+# v7 is the first pass under the 200 GiB re-release, run with corrected task
+# conditions. Eligibility was re-derived from verified evidence (symbolic-link
+# sources are stageable, and the 200 GiB staging cap admits the two largest
+# repositories), so the plan covers all 111 paired tasks. An initial v7 attempt
+# was discarded rather than reported: forensics on its timed-out sessions showed
+# every Rust task shipped an empty task environment (no cargo registry, no
+# toolchain -- those agents could never build), the preamble did not say which
+# tools exist or that extracting inside the workspace pollutes the graded patch,
+# and three sessions did exactly that. All three are fixed here and in the
+# warmer, so this pass measures the model rather than the harness.
 readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v7"
 readonly RUNS_ROOT="${PASS_ROOT}/runs"
 readonly PROVENANCE_ROOT="${PASS_ROOT}/release-provenance"
@@ -452,11 +458,44 @@ run_variant() {
     "${run_dir}/bundle/output/ready.json" >/dev/null || die 'bundle readiness record mismatch'
 
   # --- trusted candidate patch --------------------------------------------
+  # Defensive de-pollution. The prompt tells the agent to extract
+  # .task-env.tar.gz under /tmp, but an agent can still unpack it inside the
+  # workspace -- including at the workspace root, by running tar without -C.
+  # Those files are the environment this harness shipped, not the agent's work,
+  # and must never enter the candidate patch: earlier runs carried ~22,800 extra
+  # files and up to 300 MB of environment noise in patches whose real change was
+  # a handful of source files. Exclude only trees proven to be an extraction of
+  # THIS task's environment, identified by an env.sh byte-identical to the one
+  # inside its archive; nothing is excluded on the basis of its name alone.
+  local staged_root="${run_dir}/bundle/staged"
+  local env_sh_sha task_env_excludes="" candidate_env rel member
+  env_sh_sha="$(tar -xzOf "${env_dir}/task-env.tar.gz" --occurrence=1 ./env.sh | sha256sum | awk '{print $1}')" ||
+    die "cannot read env.sh from the task-env archive for ${task_id}"
+  while IFS= read -r -d '' candidate_env; do
+    [[ "$(sha256sum -- "${candidate_env}" | awk '{print $1}')" == "${env_sh_sha}" ]] || continue
+    rel="${candidate_env#"${staged_root}/"}"
+    rel="${rel%/env.sh}"
+    if [[ "${rel}" == env.sh ]]; then
+      # Extracted directly onto the workspace root: exclude exactly the
+      # archive's own top-level members, and nothing else.
+      while IFS= read -r member; do
+        [[ -n "${member}" ]] || continue
+        task_env_excludes+="./${member}"$'\n'
+      done < <(tar -tzf "${env_dir}/task-env.tar.gz" | sed -e 's|^\./||' -e 's|/.*$||' | LC_ALL=C sort -u)
+    else
+      task_env_excludes+="./${rel}"$'\n'
+    fi
+  done < <(find "${staged_root}" -type f -name env.sh -print0)
+  [[ -z "${task_env_excludes}" ]] ||
+    printf 'NOTE: %s %s extracted the task environment inside the workspace; excluding it from the candidate patch:\n%s' \
+      "${task_id}" "${label}" "${task_env_excludes}" >&2
+
   mkdir -- "${run_dir}/patch"
   docker run --rm --network none --security-opt no-new-privileges \
     --cpus "${TASK_CPUS}" --memory 2048m --memory-swap 2048m --pids-limit 512 \
     --env TASK_BASE_COMMIT="${task_base_commit}" \
     --env TASK_WORKING_DIR="${task_working_dir}" \
+    --env TASK_ENV_EXCLUDES="${task_env_excludes}" \
     --mount "type=bind,src=${run_dir}/bundle/staged,dst=/candidate,readonly" \
     --mount "type=bind,src=${run_dir}/patch,dst=/out" \
     --entrypoint bash "${task_env_image}" -Eeuo pipefail -c '
@@ -470,7 +509,12 @@ run_variant() {
       git status --porcelain=v1 --untracked-files=all > /out/baseline.status
       git clean -ffdqx
       find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
-      tar -C /candidate --exclude=./.git --exclude=.git --exclude=./.task-env.tar.gz --exclude=.task-env.tar.gz -cf - . |
+      excludes=(--exclude=./.git --exclude=.git --exclude=./.task-env.tar.gz --exclude=.task-env.tar.gz)
+      while IFS= read -r excluded_path; do
+        [ -n "$excluded_path" ] || continue
+        excludes+=("--exclude=$excluded_path")
+      done <<< "$TASK_ENV_EXCLUDES"
+      tar -C /candidate "${excludes[@]}" -cf - . |
         tar -C "$TASK_WORKING_DIR" --no-same-owner --no-overwrite-dir -xf -
       git add --all -- .
       git diff --cached --binary --full-index "$TASK_BASE_COMMIT" -- > /out/candidate.patch
