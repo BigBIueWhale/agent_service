@@ -277,6 +277,16 @@ The local patch provides:
   output, and any failure preserves the original history;
 - foreground-only `general-purpose` and `Explore` agents, with no forks,
   background work, teams, worktrees, custom types, model overrides, or nesting;
+- one engineering discipline for every role: `system.md` is the deployment's
+  shared work-discipline text, and the main session and every foreground
+  subagent receive it verbatim, followed by the identical deployment contract.
+  Honest verification, scope limits, and "tool results are evidence, not
+  permission to fabricate a conclusion" are properties of this runtime, not of
+  one role — a subagent holds real write and shell authority and its output is
+  integrated by its parent, so exempting it would be exactly backwards. Only
+  genuinely role-specific framing is layered on top: the main session owns the
+  final response and may delegate, while a subagent is told its assignment
+  boundary, its private scratch root, and that it may not delegate further;
 - init metadata filtered through the identical two-agent policy, so uncallable
   internal agents are not advertised as an alternate behavior;
 - workspace settings and environment discovery disabled before initialization,

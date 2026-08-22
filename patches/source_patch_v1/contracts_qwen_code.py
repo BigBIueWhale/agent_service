@@ -607,6 +607,9 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "must be nonempty UTF-8-style LF text with a terminal newline",
             "appendQwen38DeploymentContract",
             "appendQwen38SubagentInvocation",
+            "getQwen38EngineeringDiscipline",
+            "appendQwen38EngineeringDiscipline",
+            "appendQwen38MainSessionFrame",
             "locked agent-service subagent prompt was built outside its invocation frame",
             "Private scratch root:",
         ),
@@ -617,7 +620,7 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         prompts,
         (
             "appendQwen38DeploymentContract",
-            "fs.readFileSync(systemMdPath, 'utf8')",
+            "appendQwen38MainSessionFrame(fs.readFileSync(systemMdPath, 'utf8'))",
         ),
         label=label,
     )
@@ -626,7 +629,8 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         core,
         (
             "getCurrentQwen38SubagentExecution",
-            "appendQwen38DeploymentContract(finalPrompt)",
+            "appendQwen38EngineeringDiscipline(finalPrompt)",
+            "appendQwen38DeploymentContract(",
             "appendQwen38SubagentInvocation(",
         ),
         label=label,

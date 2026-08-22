@@ -222,9 +222,16 @@ def verify_prompts(
         "system prompt",
         system,
         [
-            "one long-lived, non-interactive local engineering session",
+            # system.md is the deployment's shared engineering discipline: the
+            # main session and every foreground subagent are given this exact
+            # text, so the integrity rules cannot apply to one and not the
+            # other. Session-specific framing lives in the runtime's own
+            # main-session frame, deliberately not here.
+            "They apply\nidentically to the main session and to every foreground subagent",
+            "Do not weaken a test, invariant, security boundary, or validation",
+            "not permission to fabricate a conclusion",
+            "is not successful. Report what happened and what state may remain",
             "Tool calls are sequential.",
-            "foreground `general-purpose` or `Explore` subagent",
             "deployment-contract section",
         ],
     )

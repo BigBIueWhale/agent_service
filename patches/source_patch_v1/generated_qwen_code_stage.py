@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '78682767c538c83e8820b8010a854cc5072a03c2db640b39840bf4f85134426d',
+  'review_sha256': 'e175ea05cbe732c0edddc895b9d7f76f81cdf0e5168dd26b227c8a8337a6cc24',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -49,7 +49,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6'},
             {'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before_sha256': '79dd902bfd3af29fff89a1886f4076e64019681261f9550e446eda0df0ab9464',
-             'after_sha256': '356af8cf1e259ec54b586300bdabc344f6746c8339522e8767d8ee387fc2741b'},
+             'after_sha256': '35a2d0b3f45533e5e63fc705725a6a831978776bf81b8d65d6dfc8e005c86034'},
             {'path': 'packages/core/src/config/config.ts',
              'before_sha256': 'e784e48248ab4258e83393996691c85a10e3ea3ab906a88e1cceb683baa1b6f5',
              'after_sha256': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49'},
@@ -106,13 +106,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c'},
             {'path': 'packages/core/src/core/prompts.ts',
              'before_sha256': '239516527b43809f5889d62ac28260abe6262de16b2225aff30a9e32d90b57e1',
-             'after_sha256': 'e988432bc5c2f2746cec2f1600d5adf0f70a348f716e8857ecef3319ace4425f'},
+             'after_sha256': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.test.ts',
              'before_sha256': None,
              'after_sha256': '7ca5a32ae04cb9703e4e84f72a885424f71919c8346e9f2e79d05bf48b6ac8d5'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.ts',
              'before_sha256': None,
-             'after_sha256': 'a209b511d4c6a0665a0a345667034b93e49170c8a530d3d269f6de1c60c88d9f'},
+             'after_sha256': '3d1617daec21d73b119839ec3a1c579ea00eaa390ca20eac7e6347d68dfd6652'},
             {'path': 'packages/core/src/core/session-recovery.ts',
              'before_sha256': '65e3c71d4fc1661976daaab2add6dbcb6ae6a740f85c88f47ca0106c863186a6',
              'after_sha256': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513'},
@@ -154,7 +154,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '922fd36fca80118facac7aae203d6de1004d8aa37ea2277a836685d4146dbc74'},
             {'path': 'packages/core/src/subagents/builtin-agents.ts',
              'before_sha256': '45a3d85fe166cda3f8e165582c37defdcc004b0e74898c9669f9baa5559fc7d7',
-             'after_sha256': '2c246c47863290f8778539585ff694e671a9b51062b00c4df1ed9336881d37ef'},
+             'after_sha256': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
              'after_sha256': '8c45f5ac169af9e280c9773f33d89ee61bb3faa885eba89ab078e4a392f0f915'},
@@ -2853,6 +2853,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "import { assembleSystemPrompt } from '../../core/prompts.js';\n"
                       'import {\n'
                       '  appendQwen38DeploymentContract,\n'
+                      '  appendQwen38EngineeringDiscipline,\n'
                       '  appendQwen38SubagentInvocation,\n'
                       "} from '../../core/qwen38-deployment-prompt.js';\n"
                       'import {\n'
@@ -2871,6 +2872,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'../../core/prompts.js';\n"
                              'import {\n'
                              '  appendQwen38DeploymentContract,\n'
+                             '  appendQwen38EngineeringDiscipline,\n'
                              '  appendQwen38SubagentInvocation,\n'
                              "} from '../../core/qwen38-deployment-prompt.js';\n"
                              'import {\n'
@@ -2893,8 +2895,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'subagent aligned\n'
                       '    // with project conventions; the volatile auto-memory '
                       'section stays last.\n'
-                      '    const deploymentPrompt = '
-                      'appendQwen38DeploymentContract(finalPrompt);\n'
+                      '    const deploymentPrompt = appendQwen38DeploymentContract(\n'
+                      '      appendQwen38EngineeringDiscipline(finalPrompt),\n'
+                      '    );\n'
                       '    return assembleSystemPrompt({\n'
                       '      base: appendQwen38SubagentInvocation(\n'
                       '        deploymentPrompt,\n'
@@ -2921,7 +2924,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // with project conventions; the volatile '
                              'auto-memory section stays last.\n'
                              '    const deploymentPrompt = '
-                             'appendQwen38DeploymentContract(finalPrompt);\n'
+                             'appendQwen38DeploymentContract(\n'
+                             '      appendQwen38EngineeringDiscipline(finalPrompt),\n'
+                             '    );\n'
                              '    return assembleSystemPrompt({\n'
                              '      base: appendQwen38SubagentInvocation(\n'
                              '        deploymentPrompt,\n'
@@ -10961,8 +10966,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after': "import type { GenerateContentConfig } from '@google/genai';\n"
                       "import { InputFormat } from '../output/types.js';\n"
                       "import { createDebugLogger } from '../utils/debugLogger.js';\n"
-                      'import { appendQwen38DeploymentContract } from '
-                      "'./qwen38-deployment-prompt.js';\n"
+                      'import {\n'
+                      '  appendQwen38DeploymentContract,\n'
+                      '  appendQwen38MainSessionFrame,\n'
+                      "} from './qwen38-deployment-prompt.js';\n"
                       '\n'
                       "const debugLogger = createDebugLogger('PROMPTS');\n"
                       '\n',
@@ -10979,8 +10986,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "import { InputFormat } from '../output/types.js';\n"
                              'import { createDebugLogger } from '
                              "'../utils/debugLogger.js';\n"
-                             'import { appendQwen38DeploymentContract } from '
-                             "'./qwen38-deployment-prompt.js';\n"
+                             'import {\n'
+                             '  appendQwen38DeploymentContract,\n'
+                             '  appendQwen38MainSessionFrame,\n'
+                             "} from './qwen38-deployment-prompt.js';\n"
                              '\n'
                              "const debugLogger = createDebugLogger('PROMPTS');\n"
                              '\n'},
@@ -10999,7 +11008,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  let basePrompt: string;\n'
                       '  if (systemMdEnabled) {\n'
                       '    basePrompt = appendQwen38DeploymentContract(\n'
-                      "      fs.readFileSync(systemMdPath, 'utf8'),\n"
+                      '      '
+                      'appendQwen38MainSessionFrame(fs.readFileSync(systemMdPath, '
+                      "'utf8')),\n"
                       '    );\n'
                       '  } else {\n'
                       '    const coreIdentity =\n'
@@ -11018,7 +11029,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  let basePrompt: string;\n'
                              '  if (systemMdEnabled) {\n'
                              '    basePrompt = appendQwen38DeploymentContract(\n'
-                             "      fs.readFileSync(systemMdPath, 'utf8'),\n"
+                             '      '
+                             'appendQwen38MainSessionFrame(fs.readFileSync(systemMdPath, '
+                             "'utf8')),\n"
                              '    );\n'
                              '  } else {\n'
                              '    const coreIdentity =\n'
@@ -11504,6 +11517,66 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'const QWEN38_SESSION_STARTED_AT_UTC = new '
                       'Date().toISOString();\n'
                       '\n'
+                      '/**\n'
+                      " * The deployment's engineering discipline. This is the same "
+                      'sealed text for the\n'
+                      ' * main session and for every foreground subagent: honest '
+                      'verification, scope,\n'
+                      ' * and tool-result integrity are properties of this runtime, '
+                      'not of one role.\n'
+                      ' * Only genuinely role-specific framing is layered on top of '
+                      'it.\n'
+                      ' */\n'
+                      'export function getQwen38EngineeringDiscipline(): string {\n'
+                      "  if (!isQwen38LockedAgentServiceRuntime()) return '';\n"
+                      '\n'
+                      "  const systemPath = process.env['QWEN_SYSTEM_MD'];\n"
+                      '  if (systemPath !== QWEN38_LOCKED_SYSTEM_PROMPT_PATH) {\n'
+                      '    throw new Error(\n'
+                      '      `locked agent-service requires '
+                      'QWEN_SYSTEM_MD=${QWEN38_LOCKED_SYSTEM_PROMPT_PATH}`,\n'
+                      '    );\n'
+                      '  }\n'
+                      '\n'
+                      "  return readRequiredRegularFile(systemPath, 'engineering "
+                      "discipline');\n"
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * Give a subagent the identical engineering discipline the '
+                      'main session runs\n'
+                      ' * under. Without this a subagent would inherit only the '
+                      'environment facts and\n'
+                      " * none of the deployment's integrity rules, while still "
+                      'holding write and shell\n'
+                      ' * authority whose output the parent integrates.\n'
+                      ' */\n'
+                      'export function appendQwen38EngineeringDiscipline(base: '
+                      'string): string {\n'
+                      '  const discipline = getQwen38EngineeringDiscipline();\n'
+                      '  if (!discipline) return base;\n'
+                      '  return `${base.trim()}\\n\\n---\\n\\n${discipline}`;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * The only framing that is genuinely specific to the owning '
+                      'session, layered on\n'
+                      ' * top of the shared discipline.\n'
+                      ' */\n'
+                      'export function appendQwen38MainSessionFrame(base: string): '
+                      'string {\n'
+                      '  if (!isQwen38LockedAgentServiceRuntime()) return base;\n'
+                      '  return `${base.trim()}\\n\\n## This session\\n\\n- You are '
+                      'the main agent in one long-lived, non-interactive local '
+                      'engineering session, and you own the final response.\\n- Use '
+                      'the foreground \\`general-purpose\\` or \\`Explore\\` subagent '
+                      'only for a concrete, bounded assignment whose concise result '
+                      "protects the main thread's context. Integrate and verify its "
+                      'result yourself.\\n- Communicate briefly while work is ongoing. '
+                      'In the final response, lead with the outcome and include the '
+                      'material files, verification, and unresolved risks.`;\n'
+                      '}\n'
+                      '\n'
                       'export function appendQwen38DeploymentContract(base: string): '
                       'string {\n'
                       '  const contract = getQwen38DeploymentContract();\n'
@@ -11619,6 +11692,71 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`date` command.\n'
                              'const QWEN38_SESSION_STARTED_AT_UTC = new '
                              'Date().toISOString();\n'
+                             '\n'
+                             '/**\n'
+                             " * The deployment's engineering discipline. This is the "
+                             'same sealed text for the\n'
+                             ' * main session and for every foreground subagent: '
+                             'honest verification, scope,\n'
+                             ' * and tool-result integrity are properties of this '
+                             'runtime, not of one role.\n'
+                             ' * Only genuinely role-specific framing is layered on '
+                             'top of it.\n'
+                             ' */\n'
+                             'export function getQwen38EngineeringDiscipline(): string '
+                             '{\n'
+                             "  if (!isQwen38LockedAgentServiceRuntime()) return '';\n"
+                             '\n'
+                             "  const systemPath = process.env['QWEN_SYSTEM_MD'];\n"
+                             '  if (systemPath !== QWEN38_LOCKED_SYSTEM_PROMPT_PATH) '
+                             '{\n'
+                             '    throw new Error(\n'
+                             '      `locked agent-service requires '
+                             'QWEN_SYSTEM_MD=${QWEN38_LOCKED_SYSTEM_PROMPT_PATH}`,\n'
+                             '    );\n'
+                             '  }\n'
+                             '\n'
+                             '  return readRequiredRegularFile(systemPath, '
+                             "'engineering discipline');\n"
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * Give a subagent the identical engineering discipline '
+                             'the main session runs\n'
+                             ' * under. Without this a subagent would inherit only the '
+                             'environment facts and\n'
+                             " * none of the deployment's integrity rules, while still "
+                             'holding write and shell\n'
+                             ' * authority whose output the parent integrates.\n'
+                             ' */\n'
+                             'export function appendQwen38EngineeringDiscipline(base: '
+                             'string): string {\n'
+                             '  const discipline = getQwen38EngineeringDiscipline();\n'
+                             '  if (!discipline) return base;\n'
+                             '  return `${base.trim()}\\n\\n---\\n\\n${discipline}`;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * The only framing that is genuinely specific to the '
+                             'owning session, layered on\n'
+                             ' * top of the shared discipline.\n'
+                             ' */\n'
+                             'export function appendQwen38MainSessionFrame(base: '
+                             'string): string {\n'
+                             '  if (!isQwen38LockedAgentServiceRuntime()) return '
+                             'base;\n'
+                             '  return `${base.trim()}\\n\\n## This session\\n\\n- You '
+                             'are the main agent in one long-lived, non-interactive '
+                             'local engineering session, and you own the final '
+                             'response.\\n- Use the foreground \\`general-purpose\\` '
+                             'or \\`Explore\\` subagent only for a concrete, bounded '
+                             'assignment whose concise result protects the main '
+                             "thread's context. Integrate and verify its result "
+                             'yourself.\\n- Communicate briefly while work is ongoing. '
+                             'In the final response, lead with the outcome and include '
+                             'the material files, verification, and unresolved '
+                             'risks.`;\n'
+                             '}\n'
                              '\n'
                              'export function appendQwen38DeploymentContract(base: '
                              'string): string {\n'
@@ -28389,7 +28527,49 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '/**\n'},
             {'name': 'packages/core/src/subagents/builtin-agents.ts:landmark-2',
              'path': 'packages/core/src/subagents/builtin-agents.ts',
-             'before': '    {\n'
+             'before': '      name: DEFAULT_BUILTIN_SUBAGENT_TYPE,\n'
+                       '      description:\n'
+                       "        'General-purpose agent for researching complex "
+                       'questions, searching for code, and executing multi-step tasks. '
+                       'When you are searching for a keyword or file and are not '
+                       'confident that you will find the right match in the first few '
+                       "tries use this agent to perform the search for you.',\n"
+                       '      systemPrompt: `You are a general-purpose subagent '
+                       'working for a parent agent. Complete only the assigned task, '
+                       'using the available tools as needed. Do not expand the scope '
+                       'or perform adjacent work unless it is necessary to complete '
+                       'the task.\n'
+                       '\n'
+                       'Guidelines:\n'
+                       '- Inspect the relevant code and existing state before making '
+                       'changes.\n'
+                       '- Preserve unrelated user changes.\n'
+                       "- For file searches: search broadly when you don't know where "
+                       'something lives. Use ${ToolNames.READ_FILE} when you know the '
+                       'specific file path.\n'
+                       '- For analysis: start broad and narrow down. Use multiple '
+                       "search strategies if the first doesn't yield results.\n"
+                       '- Prefer editing existing files. Do not create files unless '
+                       'they are necessary to complete the task. Do not create '
+                       'documentation files (*.md) or README files unless explicitly '
+                       'requested.\n'
+                       '- Verify factual claims before reporting. When making changes, '
+                       'run the smallest relevant checks.\n'
+                       '- Do not guess when evidence is unavailable. Report '
+                       'uncertainty or blockers.\n'
+                       '\n'
+                       'Notes:\n'
+                       '- Agent threads always have their cwd reset between bash '
+                       'calls, as a result please only use absolute file paths.\n'
+                       '- Return a concise report to the parent agent containing, as '
+                       'applicable: the result and key evidence, files changed, '
+                       'verification performed and its outcome, and remaining issues '
+                       'or blockers.\n'
+                       '- Include code snippets only when the exact text is '
+                       'load-bearing (e.g., a bug you found or a function signature '
+                       'the caller asked for); do not recap code you merely read.`,\n'
+                       '    },\n'
+                       '    {\n'
                        "      name: 'Explore',\n"
                        '      description:\n'
                        "        'Fast agent specialized for exploring codebases. Use "
@@ -28487,7 +28667,31 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '      ],\n'
                        '    },\n'
                        '    {\n',
-             'after': '    {\n'
+             'after': '      name: DEFAULT_BUILTIN_SUBAGENT_TYPE,\n'
+                      '      description:\n'
+                      "        'General-purpose agent for researching complex "
+                      'questions, searching for code, and executing multi-step tasks. '
+                      'When you are searching for a keyword or file and are not '
+                      'confident that you will find the right match in the first few '
+                      "tries use this agent to perform the search for you.',\n"
+                      '      systemPrompt: `You are a general-purpose subagent working '
+                      'for a parent agent. Complete only the assigned task and return '
+                      'a concise report the parent can integrate.\n'
+                      '\n'
+                      '- Do not expand the assignment or perform adjacent work unless '
+                      'it is necessary to complete it.\n'
+                      '- For file searches, search broadly when you do not know where '
+                      'something lives; read the exact path directly when you do.\n'
+                      '- Prefer editing existing files. Do not create files, '
+                      'documentation, or README files unless they are necessary to '
+                      'complete the task or were explicitly requested.\n'
+                      '- Do not launch another agent or ask an interactive question.\n'
+                      '- Return, as applicable: the result and key evidence, files '
+                      'changed, verification performed and its outcome, and remaining '
+                      'issues or blockers. Include code excerpts only when their exact '
+                      'text is load-bearing; do not recap code you merely read.`,\n'
+                      '    },\n'
+                      '    {\n'
                       "      name: 'Explore',\n"
                       '      description:\n'
                       "        'Investigative foreground agent for code, documents, "
@@ -28516,16 +28720,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'durable, or attempt to edit the journal.\n'
                       "- The operator's original source is not mounted read-write. "
                       'Never confuse the staged /workspace with the original folder.\n'
-                      '- Use the installed offline toolchain through '
-                      'run_shell_command. Network installation, remote fetch, package '
-                      'registries, and alternate services are unavailable.\n'
-                      '- Use absolute paths because shell working directories reset '
-                      'between calls.\n'
-                      '- Inspect broadly, then narrow. Verify important claims and '
-                      'report exact paths, commands, results, uncertainties, and '
-                      'blockers.\n'
-                      '- Do not launch another agent, ask the user an interactive '
-                      'question, or expand the assignment.\n'
+                      '- Inspect broadly, then narrow. Report exact paths, commands, '
+                      'results, uncertainties, and blockers.\n'
+                      '- Do not launch another agent, ask an interactive question, or '
+                      'expand the assignment.\n'
                       '\n'
                       'Return the result as a normal response to the parent. Include '
                       'code excerpts only when their exact text is load-bearing.`,\n'
@@ -28549,7 +28747,53 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      ],\n'
                       '    },\n'
                       '    {\n',
-             'review_before': '    {\n'
+             'review_before': '      name: DEFAULT_BUILTIN_SUBAGENT_TYPE,\n'
+                              '      description:\n'
+                              "        'General-purpose agent for researching complex "
+                              'questions, searching for code, and executing multi-step '
+                              'tasks. When you are searching for a keyword or file and '
+                              'are not confident that you will find the right match in '
+                              'the first few tries use this agent to perform the '
+                              "search for you.',\n"
+                              '      systemPrompt: `You are a general-purpose subagent '
+                              'working for a parent agent. Complete only the assigned '
+                              'task, using the available tools as needed. Do not '
+                              'expand the scope or perform adjacent work unless it is '
+                              'necessary to complete the task.\n'
+                              '\n'
+                              'Guidelines:\n'
+                              '- Inspect the relevant code and existing state before '
+                              'making changes.\n'
+                              '- Preserve unrelated user changes.\n'
+                              "- For file searches: search broadly when you don't know "
+                              'where something lives. Use ${ToolNames.READ_FILE} when '
+                              'you know the specific file path.\n'
+                              '- For analysis: start broad and narrow down. Use '
+                              "multiple search strategies if the first doesn't yield "
+                              'results.\n'
+                              '- Prefer editing existing files. Do not create files '
+                              'unless they are necessary to complete the task. Do not '
+                              'create documentation files (*.md) or README files '
+                              'unless explicitly requested.\n'
+                              '- Verify factual claims before reporting. When making '
+                              'changes, run the smallest relevant checks.\n'
+                              '- Do not guess when evidence is unavailable. Report '
+                              'uncertainty or blockers.\n'
+                              '\n'
+                              'Notes:\n'
+                              '- Agent threads always have their cwd reset between '
+                              'bash calls, as a result please only use absolute file '
+                              'paths.\n'
+                              '- Return a concise report to the parent agent '
+                              'containing, as applicable: the result and key evidence, '
+                              'files changed, verification performed and its outcome, '
+                              'and remaining issues or blockers.\n'
+                              '- Include code snippets only when the exact text is '
+                              'load-bearing (e.g., a bug you found or a function '
+                              'signature the caller asked for); do not recap code you '
+                              'merely read.`,\n'
+                              '    },\n'
+                              '    {\n'
                               "      name: 'Explore',\n"
                               '      description:\n'
                               "        'Fast agent specialized for exploring "
@@ -28656,7 +28900,36 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '      ],\n'
                               '    },\n'
                               '    {\n',
-             'review_after': '    {\n'
+             'review_after': '      name: DEFAULT_BUILTIN_SUBAGENT_TYPE,\n'
+                             '      description:\n'
+                             "        'General-purpose agent for researching complex "
+                             'questions, searching for code, and executing multi-step '
+                             'tasks. When you are searching for a keyword or file and '
+                             'are not confident that you will find the right match in '
+                             'the first few tries use this agent to perform the search '
+                             "for you.',\n"
+                             '      systemPrompt: `You are a general-purpose subagent '
+                             'working for a parent agent. Complete only the assigned '
+                             'task and return a concise report the parent can '
+                             'integrate.\n'
+                             '\n'
+                             '- Do not expand the assignment or perform adjacent work '
+                             'unless it is necessary to complete it.\n'
+                             '- For file searches, search broadly when you do not know '
+                             'where something lives; read the exact path directly when '
+                             'you do.\n'
+                             '- Prefer editing existing files. Do not create files, '
+                             'documentation, or README files unless they are necessary '
+                             'to complete the task or were explicitly requested.\n'
+                             '- Do not launch another agent or ask an interactive '
+                             'question.\n'
+                             '- Return, as applicable: the result and key evidence, '
+                             'files changed, verification performed and its outcome, '
+                             'and remaining issues or blockers. Include code excerpts '
+                             'only when their exact text is load-bearing; do not recap '
+                             'code you merely read.`,\n'
+                             '    },\n'
+                             '    {\n'
                              "      name: 'Explore',\n"
                              '      description:\n'
                              "        'Investigative foreground agent for code, "
@@ -28690,17 +28963,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "- The operator's original source is not mounted "
                              'read-write. Never confuse the staged /workspace with the '
                              'original folder.\n'
-                             '- Use the installed offline toolchain through '
-                             'run_shell_command. Network installation, remote fetch, '
-                             'package registries, and alternate services are '
-                             'unavailable.\n'
-                             '- Use absolute paths because shell working directories '
-                             'reset between calls.\n'
-                             '- Inspect broadly, then narrow. Verify important claims '
-                             'and report exact paths, commands, results, '
-                             'uncertainties, and blockers.\n'
-                             '- Do not launch another agent, ask the user an '
-                             'interactive question, or expand the assignment.\n'
+                             '- Inspect broadly, then narrow. Report exact paths, '
+                             'commands, results, uncertainties, and blockers.\n'
+                             '- Do not launch another agent, ask an interactive '
+                             'question, or expand the assignment.\n'
                              '\n'
                              'Return the result as a normal response to the parent. '
                              'Include code excerpts only when their exact text is '
@@ -33990,7 +34256,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/utils/nonInteractiveHelpers.ts': '7d818a669ee036bf8e8b935b47613d074c51f959e77832f6fcc6c289e398a2c8',
  'packages/core/src/agents/runtime/agent-context.test.ts': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a',
  'packages/core/src/agents/runtime/agent-context.ts': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6',
- 'packages/core/src/agents/runtime/agent-core.ts': '356af8cf1e259ec54b586300bdabc344f6746c8339522e8767d8ee387fc2741b',
+ 'packages/core/src/agents/runtime/agent-core.ts': '35a2d0b3f45533e5e63fc705725a6a831978776bf81b8d65d6dfc8e005c86034',
  'packages/core/src/config/config.ts': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49',
  'packages/core/src/config/qwen38-agent-service-contract.test.ts': 'aacc0d3b15582dacc02c2d4e1291ed15a1f3a47460b09edc195ba8b1beac6417',
  'packages/core/src/core/baseLlmClient.test.ts': '3473d53774ef2b86869cf5af03bf2faf3433171e7630c4b4652a398ec6fc5d0d',
@@ -34009,9 +34275,9 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888',
  'packages/core/src/core/openaiContentGenerator/pipeline.ts': '5c9d2127e4e1abbad35fabb93cf4f7997c876669edfaa82798e5bae57a0c03bb',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
- 'packages/core/src/core/prompts.ts': 'e988432bc5c2f2746cec2f1600d5adf0f70a348f716e8857ecef3319ace4425f',
+ 'packages/core/src/core/prompts.ts': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c',
  'packages/core/src/core/qwen38-deployment-prompt.test.ts': '7ca5a32ae04cb9703e4e84f72a885424f71919c8346e9f2e79d05bf48b6ac8d5',
- 'packages/core/src/core/qwen38-deployment-prompt.ts': 'a209b511d4c6a0665a0a345667034b93e49170c8a530d3d269f6de1c60c88d9f',
+ 'packages/core/src/core/qwen38-deployment-prompt.ts': '3d1617daec21d73b119839ec3a1c579ea00eaa390ca20eac7e6347d68dfd6652',
  'packages/core/src/core/session-recovery.ts': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513',
  'packages/core/src/core/tokenLimits.test.ts': '0f4775ebb4abb3b3a7a38a2369b3c44995b97b2f256b04c56609c1ef0c01823c',
  'packages/core/src/core/tokenLimits.ts': '9a3bda80d944c61cae61197c018a10e4606a47187686f0a34b5ccf5624f978cb',
@@ -34025,7 +34291,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/services/chatCompressionService.test.ts': '3a2cdee1b9fed150ada600d7c3005f5d89030e0c7514ddbf28559689e027757b',
  'packages/core/src/services/chatCompressionService.ts': '75e64be7a5e28544fc9eba43b11346811a18fe66b0a186830707682533217523',
  'packages/core/src/subagents/builtin-agents.test.ts': '922fd36fca80118facac7aae203d6de1004d8aa37ea2277a836685d4146dbc74',
- 'packages/core/src/subagents/builtin-agents.ts': '2c246c47863290f8778539585ff694e671a9b51062b00c4df1ed9336881d37ef',
+ 'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
  'packages/core/src/tools/agent/agent.test.ts': '8c45f5ac169af9e280c9773f33d89ee61bb3faa885eba89ab078e4a392f0f915',
  'packages/core/src/tools/agent/agent.ts': 'f0bcfec2d1b4792a97449008848f8d72dc329d506b44d160d6565e7045665d18',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',

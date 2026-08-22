@@ -169,7 +169,7 @@
     "settings_sha256": "06f59c309dcf82507ae9a00fb81d071eb00ad3c495bf973e39ba3421b95298ac",
     "preserved_settings_sha256": "ab5a1bad16aea6c712a46b258c13ac3dcb3a040dcabd6e00c2f3883c48cf39f0",
     "instructions_sha256": "2f28657dca2c69cb77c96a8dc6cded7bb0ad4bc0c9367069fff17cc47d7b71e4",
-    "system_prompt_sha256": "7bbcb01682b7725bfb5f7aea5645516d939f06577940f8b6bf234a8dd3e25679",
+    "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "0d2c6fd9b7da1a7347407a19b168ff14d4b8c5395e68f93702d7347242c554ae",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
     "wrapper_sha256": "c5d75b49d9f4b689999d2ec570e715b28a70c9a64e2418083b504e199c726b5e",

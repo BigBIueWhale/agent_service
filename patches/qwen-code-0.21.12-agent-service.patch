@@ -850,7 +850,7 @@ index 433be1b..c5e89d4 100644
   * Returns the depth of the current agent context frame. 0 means we're
   * inside a top-level subagent (or no subagent at all — but in that case
 diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/agents/runtime/agent-core.ts
-index 191b5ab..c9946bf 100644
+index 191b5ab..176809f 100644
 --- a/packages/core/src/agents/runtime/agent-core.ts
 +++ b/packages/core/src/agents/runtime/agent-core.ts
 @@ -25,6 +25,7 @@ import type { Config } from '../../config/config.js';
@@ -861,22 +861,25 @@ index 191b5ab..c9946bf 100644
    getRuntimeContentGenerator,
    isTopLevelSession,
    runWithAgentContext,
-@@ -69,6 +70,10 @@ import type {
+@@ -69,6 +70,11 @@ import type {
  } from '@google/genai';
  import { GeminiChat } from '../../core/geminiChat.js';
  import { assembleSystemPrompt } from '../../core/prompts.js';
 +import {
 +  appendQwen38DeploymentContract,
++  appendQwen38EngineeringDiscipline,
 +  appendQwen38SubagentInvocation,
 +} from '../../core/qwen38-deployment-prompt.js';
  import {
    dedupeToolCallsById,
    getProviderToolCallId,
-@@ -2304,8 +2309,12 @@ Important Rules:
+@@ -2304,8 +2310,14 @@ Important Rules:
  
      // Context files (QWEN.md + output-language.md) keep the subagent aligned
      // with project conventions; the volatile auto-memory section stays last.
-+    const deploymentPrompt = appendQwen38DeploymentContract(finalPrompt);
++    const deploymentPrompt = appendQwen38DeploymentContract(
++      appendQwen38EngineeringDiscipline(finalPrompt),
++    );
      return assembleSystemPrompt({
 -      base: finalPrompt,
 +      base: appendQwen38SubagentInvocation(
@@ -3635,29 +3638,32 @@ index 134ecd7..1cc33ff 100644
    responseParsingOptions?: OpenAIResponseParsingOptions;
    taggedThinkingParser?: TaggedThinkingParser;
 diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.ts
-index 72d1aa5..5e25a12 100644
+index 72d1aa5..c16d183 100644
 --- a/packages/core/src/core/prompts.ts
 +++ b/packages/core/src/core/prompts.ts
-@@ -14,6 +14,7 @@ import { QWEN_DIR } from '../config/storage.js';
+@@ -14,6 +14,10 @@ import { QWEN_DIR } from '../config/storage.js';
  import type { GenerateContentConfig } from '@google/genai';
  import { InputFormat } from '../output/types.js';
  import { createDebugLogger } from '../utils/debugLogger.js';
-+import { appendQwen38DeploymentContract } from './qwen38-deployment-prompt.js';
++import {
++  appendQwen38DeploymentContract,
++  appendQwen38MainSessionFrame,
++} from './qwen38-deployment-prompt.js';
  
  const debugLogger = createDebugLogger('PROMPTS');
  
-@@ -289,7 +290,9 @@ export function getCoreSystemPrompt(
+@@ -289,7 +293,9 @@ export function getCoreSystemPrompt(
    // ignored whenever `QWEN_SYSTEM_MD` is in effect (including empty-file clear).
    let basePrompt: string;
    if (systemMdEnabled) {
 -    basePrompt = fs.readFileSync(systemMdPath, 'utf8');
 +    basePrompt = appendQwen38DeploymentContract(
-+      fs.readFileSync(systemMdPath, 'utf8'),
++      appendQwen38MainSessionFrame(fs.readFileSync(systemMdPath, 'utf8')),
 +    );
    } else {
      const coreIdentity =
        resolveCoreIdentityOverride() ??
-@@ -543,9 +546,8 @@ When you encounter an obstacle, do not use destructive actions as a shortcut to
+@@ -543,9 +549,8 @@ When you encounter an obstacle, do not use destructive actions as a shortcut to
  /**
   * Provides the system prompt for the history compression process.
   *
@@ -3669,7 +3675,7 @@ index 72d1aa5..5e25a12 100644
   * claude-code's compaction format: primary_request_and_intent,
   * key_technical_concepts, files_and_code_sections, errors_and_fixes,
   * problem_solving, all_user_messages, pending_tasks, current_work,
-@@ -560,7 +562,7 @@ export function getCompressionPrompt(): string {
+@@ -560,7 +565,7 @@ export function getCompressionPrompt(): string {
    return `
  You are the component that summarizes a conversation when its context window is about to overflow. The summary you produce will become the agent's ONLY memory of everything that happened before this point. The agent will resume its work based solely on this summary plus a small number of restored file / image attachments that follow.
  
@@ -3785,10 +3791,10 @@ index 0000000..75ec30c
 +});
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
 new file mode 100644
-index 0000000..e8e256c
+index 0000000..934f16c
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.ts
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,124 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -3849,6 +3855,46 @@ index 0000000..e8e256c
 +// the whole session (prefix-cache friendly) while anchoring the model to
 +// absolute time; live time stays observable through the `date` command.
 +const QWEN38_SESSION_STARTED_AT_UTC = new Date().toISOString();
++
++/**
++ * The deployment's engineering discipline. This is the same sealed text for the
++ * main session and for every foreground subagent: honest verification, scope,
++ * and tool-result integrity are properties of this runtime, not of one role.
++ * Only genuinely role-specific framing is layered on top of it.
++ */
++export function getQwen38EngineeringDiscipline(): string {
++  if (!isQwen38LockedAgentServiceRuntime()) return '';
++
++  const systemPath = process.env['QWEN_SYSTEM_MD'];
++  if (systemPath !== QWEN38_LOCKED_SYSTEM_PROMPT_PATH) {
++    throw new Error(
++      `locked agent-service requires QWEN_SYSTEM_MD=${QWEN38_LOCKED_SYSTEM_PROMPT_PATH}`,
++    );
++  }
++
++  return readRequiredRegularFile(systemPath, 'engineering discipline');
++}
++
++/**
++ * Give a subagent the identical engineering discipline the main session runs
++ * under. Without this a subagent would inherit only the environment facts and
++ * none of the deployment's integrity rules, while still holding write and shell
++ * authority whose output the parent integrates.
++ */
++export function appendQwen38EngineeringDiscipline(base: string): string {
++  const discipline = getQwen38EngineeringDiscipline();
++  if (!discipline) return base;
++  return `${base.trim()}\n\n---\n\n${discipline}`;
++}
++
++/**
++ * The only framing that is genuinely specific to the owning session, layered on
++ * top of the shared discipline.
++ */
++export function appendQwen38MainSessionFrame(base: string): string {
++  if (!isQwen38LockedAgentServiceRuntime()) return base;
++  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived, non-interactive local engineering session, and you own the final response.\n- Use the foreground \`general-purpose\` or \`Explore\` subagent only for a concrete, bounded assignment whose concise result protects the main thread's context. Integrate and verify its result yourself.\n- Communicate briefly while work is ongoing. In the final response, lead with the outcome and include the material files, verification, and unresolved risks.`;
++}
 +
 +export function appendQwen38DeploymentContract(base: string): string {
 +  const contract = getQwen38DeploymentContract();
@@ -10396,7 +10442,7 @@ index 6948502..30cf243 100644
      it('should not give the Explore agent the interactive question tool', () => {
        const exploreAgent = BuiltinAgentRegistry.getBuiltinAgent('Explore');
 diff --git a/packages/core/src/subagents/builtin-agents.ts b/packages/core/src/subagents/builtin-agents.ts
-index 8be0153..d025223 100644
+index 8be0153..00aa6af 100644
 --- a/packages/core/src/subagents/builtin-agents.ts
 +++ b/packages/core/src/subagents/builtin-agents.ts
 @@ -4,7 +4,7 @@
@@ -10408,7 +10454,32 @@ index 8be0153..d025223 100644
  import type { SubagentConfig } from './types.js';
  
  /**
-@@ -47,59 +47,33 @@ Notes:
+@@ -28,78 +28,42 @@ export class BuiltinAgentRegistry {
+       name: DEFAULT_BUILTIN_SUBAGENT_TYPE,
+       description:
+         'General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. When you are searching for a keyword or file and are not confident that you will find the right match in the first few tries use this agent to perform the search for you.',
+-      systemPrompt: `You are a general-purpose subagent working for a parent agent. Complete only the assigned task, using the available tools as needed. Do not expand the scope or perform adjacent work unless it is necessary to complete the task.
++      systemPrompt: `You are a general-purpose subagent working for a parent agent. Complete only the assigned task and return a concise report the parent can integrate.
+ 
+-Guidelines:
+-- Inspect the relevant code and existing state before making changes.
+-- Preserve unrelated user changes.
+-- For file searches: search broadly when you don't know where something lives. Use ${ToolNames.READ_FILE} when you know the specific file path.
+-- For analysis: start broad and narrow down. Use multiple search strategies if the first doesn't yield results.
+-- Prefer editing existing files. Do not create files unless they are necessary to complete the task. Do not create documentation files (*.md) or README files unless explicitly requested.
+-- Verify factual claims before reporting. When making changes, run the smallest relevant checks.
+-- Do not guess when evidence is unavailable. Report uncertainty or blockers.
+-
+-Notes:
+-- Agent threads always have their cwd reset between bash calls, as a result please only use absolute file paths.
+-- Return a concise report to the parent agent containing, as applicable: the result and key evidence, files changed, verification performed and its outcome, and remaining issues or blockers.
+-- Include code snippets only when the exact text is load-bearing (e.g., a bug you found or a function signature the caller asked for); do not recap code you merely read.`,
++- Do not expand the assignment or perform adjacent work unless it is necessary to complete it.
++- For file searches, search broadly when you do not know where something lives; read the exact path directly when you do.
++- Prefer editing existing files. Do not create files, documentation, or README files unless they are necessary to complete the task or were explicitly requested.
++- Do not launch another agent or ask an interactive question.
++- Return, as applicable: the result and key evidence, files changed, verification performed and its outcome, and remaining issues or blockers. Include code excerpts only when their exact text is load-bearing; do not recap code you merely read.`,
+     },
      {
        name: 'Explore',
        description:
@@ -10461,10 +10532,8 @@ index 8be0153..d025223 100644
 +- You may create or modify files in the staged /workspace when that is genuinely required by the investigation. You may create explicit durable deliverables in /artifacts when the assignment requests them.
 +- Workspace and artifact effects are hashed before and after your run and appended to your result as trusted runtime metadata. Do not hide effects, claim that scratch files are durable, or attempt to edit the journal.
 +- The operator's original source is not mounted read-write. Never confuse the staged /workspace with the original folder.
-+- Use the installed offline toolchain through run_shell_command. Network installation, remote fetch, package registries, and alternate services are unavailable.
-+- Use absolute paths because shell working directories reset between calls.
-+- Inspect broadly, then narrow. Verify important claims and report exact paths, commands, results, uncertainties, and blockers.
-+- Do not launch another agent, ask the user an interactive question, or expand the assignment.
++- Inspect broadly, then narrow. Report exact paths, commands, results, uncertainties, and blockers.
++- Do not launch another agent, ask an interactive question, or expand the assignment.
 +
 +Return the result as a normal response to the parent. Include code excerpts only when their exact text is load-bearing.`,
        tools: [
