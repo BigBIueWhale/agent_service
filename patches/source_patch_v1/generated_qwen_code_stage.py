@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'e175ea05cbe732c0edddc895b9d7f76f81cdf0e5168dd26b227c8a8337a6cc24',
+  'review_sha256': 'f491926c02819f6076681ed9b67d9ac6e4529a2cec68947757494bb11b9e3a48',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -109,7 +109,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.test.ts',
              'before_sha256': None,
-             'after_sha256': '7ca5a32ae04cb9703e4e84f72a885424f71919c8346e9f2e79d05bf48b6ac8d5'},
+             'after_sha256': '5da99e4b47fe307ceb842b6c66593e9babbf4095eec50c855a1aead9755ceb4f'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.ts',
              'before_sha256': None,
              'after_sha256': '3d1617daec21d73b119839ec3a1c579ea00eaa390ca20eac7e6347d68dfd6652'},
@@ -151,7 +151,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '75e64be7a5e28544fc9eba43b11346811a18fe66b0a186830707682533217523'},
             {'path': 'packages/core/src/subagents/builtin-agents.test.ts',
              'before_sha256': 'a60a774878f4158db2e5553a0defcabae5bda0f7d54c0c6752b094adf00c43e7',
-             'after_sha256': '922fd36fca80118facac7aae203d6de1004d8aa37ea2277a836685d4146dbc74'},
+             'after_sha256': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95'},
             {'path': 'packages/core/src/subagents/builtin-agents.ts',
              'before_sha256': '45a3d85fe166cda3f8e165582c37defdcc004b0e74898c9669f9baa5559fc7d7',
              'after_sha256': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7'},
@@ -11210,8 +11210,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  QWEN38_LOCKED_RUNTIME_ENV,\n'
                       '  QWEN38_LOCKED_SYSTEM_PROMPT_PATH,\n'
                       '  appendQwen38DeploymentContract,\n'
+                      '  appendQwen38EngineeringDiscipline,\n'
+                      '  appendQwen38MainSessionFrame,\n'
                       '  appendQwen38SubagentInvocation,\n'
                       '  getQwen38DeploymentContract,\n'
+                      '  getQwen38EngineeringDiscipline,\n'
                       "} from './qwen38-deployment-prompt.js';\n"
                       '\n'
                       "describe('Qwen3.8 deployment prompt', () => {\n"
@@ -11274,6 +11277,58 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    );\n'
                       '  });\n'
                       '\n'
+                      "  it('gives a subagent the identical sealed engineering "
+                      "discipline', () => {\n"
+                      "    expect(getQwen38EngineeringDiscipline()).toBe('');\n"
+                      "    expect(appendQwen38EngineeringDiscipline('role "
+                      "prompt')).toBe(\n"
+                      "      'role prompt',\n"
+                      '    );\n'
+                      '\n'
+                      "    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');\n"
+                      "    vi.stubEnv('QWEN_SYSTEM_MD', "
+                      'QWEN38_LOCKED_SYSTEM_PROMPT_PATH);\n'
+                      "    vi.spyOn(fs, 'lstatSync').mockReturnValue({\n"
+                      '      isFile: () => true,\n'
+                      '      isSymbolicLink: () => false,\n'
+                      '    } as fs.Stats);\n'
+                      '    vi.spyOn(fs, '
+                      "'readFileSync').mockReturnValue('SEALED_WORK_DISCIPLINE\\n');\n"
+                      '\n'
+                      '    // The discipline is read from the same sealed system.md '
+                      'the main session\n'
+                      '    // uses, so no role can run under a weaker set of rules.\n'
+                      '    '
+                      "expect(getQwen38EngineeringDiscipline()).toBe('SEALED_WORK_DISCIPLINE');\n"
+                      "    expect(appendQwen38EngineeringDiscipline('role "
+                      "prompt')).toBe(\n"
+                      "      'role prompt\\n\\n---\\n\\nSEALED_WORK_DISCIPLINE',\n"
+                      '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('rejects a discipline read outside the sealed "
+                      "system-prompt path', () => {\n"
+                      "    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');\n"
+                      "    vi.stubEnv('QWEN_SYSTEM_MD', "
+                      "'/tmp/not-the-sealed-prompt');\n"
+                      '    expect(() => getQwen38EngineeringDiscipline()).toThrow(\n'
+                      '      `QWEN_SYSTEM_MD=${QWEN38_LOCKED_SYSTEM_PROMPT_PATH}`,\n'
+                      '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('layers only session-specific framing on top of the shared "
+                      "discipline', () => {\n"
+                      '    '
+                      "expect(appendQwen38MainSessionFrame('discipline')).toBe('discipline');\n"
+                      '\n'
+                      "    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');\n"
+                      "    const framed = appendQwen38MainSessionFrame('discipline');\n"
+                      "    expect(framed).toContain('## This session');\n"
+                      "    expect(framed).toContain('you own the final response');\n"
+                      "    expect(framed).toContain('Integrate and verify its result "
+                      "yourself');\n"
+                      '  });\n'
+                      '\n'
                       "  it('requires and appends the unique invocation scratch in "
                       "locked subagents', () => {\n"
                       "    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');\n"
@@ -11328,8 +11383,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  QWEN38_LOCKED_RUNTIME_ENV,\n'
                              '  QWEN38_LOCKED_SYSTEM_PROMPT_PATH,\n'
                              '  appendQwen38DeploymentContract,\n'
+                             '  appendQwen38EngineeringDiscipline,\n'
+                             '  appendQwen38MainSessionFrame,\n'
                              '  appendQwen38SubagentInvocation,\n'
                              '  getQwen38DeploymentContract,\n'
+                             '  getQwen38EngineeringDiscipline,\n'
                              "} from './qwen38-deployment-prompt.js';\n"
                              '\n'
                              "describe('Qwen3.8 deployment prompt', () => {\n"
@@ -11394,6 +11452,64 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'started: '
                              '\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/,\n'
                              '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('gives a subagent the identical sealed engineering "
+                             "discipline', () => {\n"
+                             "    expect(getQwen38EngineeringDiscipline()).toBe('');\n"
+                             "    expect(appendQwen38EngineeringDiscipline('role "
+                             "prompt')).toBe(\n"
+                             "      'role prompt',\n"
+                             '    );\n'
+                             '\n'
+                             "    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');\n"
+                             "    vi.stubEnv('QWEN_SYSTEM_MD', "
+                             'QWEN38_LOCKED_SYSTEM_PROMPT_PATH);\n'
+                             "    vi.spyOn(fs, 'lstatSync').mockReturnValue({\n"
+                             '      isFile: () => true,\n'
+                             '      isSymbolicLink: () => false,\n'
+                             '    } as fs.Stats);\n'
+                             '    vi.spyOn(fs, '
+                             "'readFileSync').mockReturnValue('SEALED_WORK_DISCIPLINE\\n');\n"
+                             '\n'
+                             '    // The discipline is read from the same sealed '
+                             'system.md the main session\n'
+                             '    // uses, so no role can run under a weaker set of '
+                             'rules.\n'
+                             '    '
+                             "expect(getQwen38EngineeringDiscipline()).toBe('SEALED_WORK_DISCIPLINE');\n"
+                             "    expect(appendQwen38EngineeringDiscipline('role "
+                             "prompt')).toBe(\n"
+                             "      'role "
+                             "prompt\\n\\n---\\n\\nSEALED_WORK_DISCIPLINE',\n"
+                             '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('rejects a discipline read outside the sealed "
+                             "system-prompt path', () => {\n"
+                             "    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');\n"
+                             "    vi.stubEnv('QWEN_SYSTEM_MD', "
+                             "'/tmp/not-the-sealed-prompt');\n"
+                             '    expect(() => '
+                             'getQwen38EngineeringDiscipline()).toThrow(\n'
+                             '      '
+                             '`QWEN_SYSTEM_MD=${QWEN38_LOCKED_SYSTEM_PROMPT_PATH}`,\n'
+                             '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('layers only session-specific framing on top of the "
+                             "shared discipline', () => {\n"
+                             '    '
+                             "expect(appendQwen38MainSessionFrame('discipline')).toBe('discipline');\n"
+                             '\n'
+                             "    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');\n"
+                             '    const framed = '
+                             "appendQwen38MainSessionFrame('discipline');\n"
+                             "    expect(framed).toContain('## This session');\n"
+                             "    expect(framed).toContain('you own the final "
+                             "response');\n"
+                             "    expect(framed).toContain('Integrate and verify its "
+                             "result yourself');\n"
                              '  });\n'
                              '\n'
                              "  it('requires and appends the unique invocation scratch "
@@ -28333,6 +28449,93 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '}\n'},
             {'name': 'packages/core/src/subagents/builtin-agents.test.ts:landmark-1',
              'path': 'packages/core/src/subagents/builtin-agents.test.ts',
+             'before': "        'general-purpose subagent working for a parent "
+                       "agent',\n"
+                       '      );\n'
+                       '      expect(generalAgent?.systemPrompt).toContain(\n'
+                       "        'Preserve unrelated user changes',\n"
+                       '      );\n'
+                       '      expect(generalAgent?.systemPrompt).toContain(\n'
+                       "        'Verify factual claims before reporting',\n"
+                       '      );\n'
+                       '      expect(generalAgent?.systemPrompt).toContain(\n'
+                       "        'run the smallest relevant checks',\n"
+                       '      );\n'
+                       '      expect(generalAgent?.systemPrompt).toContain(\n'
+                       "        'Report uncertainty or blockers',\n"
+                       '      );\n'
+                       '    });\n'
+                       '\n',
+             'after': "        'general-purpose subagent working for a parent agent',\n"
+                      '      );\n'
+                      '      expect(generalAgent?.systemPrompt).toContain(\n'
+                      "        'Do not expand the assignment',\n"
+                      '      );\n'
+                      '      expect(generalAgent?.systemPrompt).toContain(\n'
+                      "        'Do not launch another agent',\n"
+                      '      );\n'
+                      '      expect(generalAgent?.systemPrompt).toContain(\n'
+                      "        'files changed, verification performed and its "
+                      "outcome',\n"
+                      '      );\n'
+                      '      // The engineering discipline is one sealed text '
+                      'delivered to every role\n'
+                      '      // from system.md, so a role prompt must carry only its '
+                      'own mechanics and\n'
+                      '      // must not restate the shared rules.\n'
+                      '      expect(generalAgent?.systemPrompt).not.toContain(\n'
+                      "        'Preserve unrelated user changes',\n"
+                      '      );\n'
+                      '      expect(generalAgent?.systemPrompt).not.toContain(\n'
+                      "        'Verify factual claims before reporting',\n"
+                      '      );\n'
+                      '    });\n'
+                      '\n',
+             'review_before': "        'general-purpose subagent working for a parent "
+                              "agent',\n"
+                              '      );\n'
+                              '      expect(generalAgent?.systemPrompt).toContain(\n'
+                              "        'Preserve unrelated user changes',\n"
+                              '      );\n'
+                              '      expect(generalAgent?.systemPrompt).toContain(\n'
+                              "        'Verify factual claims before reporting',\n"
+                              '      );\n'
+                              '      expect(generalAgent?.systemPrompt).toContain(\n'
+                              "        'run the smallest relevant checks',\n"
+                              '      );\n'
+                              '      expect(generalAgent?.systemPrompt).toContain(\n'
+                              "        'Report uncertainty or blockers',\n"
+                              '      );\n'
+                              '    });\n'
+                              '\n',
+             'review_after': "        'general-purpose subagent working for a parent "
+                             "agent',\n"
+                             '      );\n'
+                             '      expect(generalAgent?.systemPrompt).toContain(\n'
+                             "        'Do not expand the assignment',\n"
+                             '      );\n'
+                             '      expect(generalAgent?.systemPrompt).toContain(\n'
+                             "        'Do not launch another agent',\n"
+                             '      );\n'
+                             '      expect(generalAgent?.systemPrompt).toContain(\n'
+                             "        'files changed, verification performed and its "
+                             "outcome',\n"
+                             '      );\n'
+                             '      // The engineering discipline is one sealed text '
+                             'delivered to every role\n'
+                             '      // from system.md, so a role prompt must carry '
+                             'only its own mechanics and\n'
+                             '      // must not restate the shared rules.\n'
+                             '      expect(generalAgent?.systemPrompt).not.toContain(\n'
+                             "        'Preserve unrelated user changes',\n"
+                             '      );\n'
+                             '      expect(generalAgent?.systemPrompt).not.toContain(\n'
+                             "        'Verify factual claims before reporting',\n"
+                             '      );\n'
+                             '    });\n'
+                             '\n'},
+            {'name': 'packages/core/src/subagents/builtin-agents.test.ts:landmark-2',
+             'path': 'packages/core/src/subagents/builtin-agents.test.ts',
              'before': '      expect(exploreAgent?.model).toBeUndefined();\n'
                        '    });\n'
                        '\n'
@@ -34276,7 +34479,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/openaiContentGenerator/pipeline.ts': '5c9d2127e4e1abbad35fabb93cf4f7997c876669edfaa82798e5bae57a0c03bb',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
  'packages/core/src/core/prompts.ts': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c',
- 'packages/core/src/core/qwen38-deployment-prompt.test.ts': '7ca5a32ae04cb9703e4e84f72a885424f71919c8346e9f2e79d05bf48b6ac8d5',
+ 'packages/core/src/core/qwen38-deployment-prompt.test.ts': '5da99e4b47fe307ceb842b6c66593e9babbf4095eec50c855a1aead9755ceb4f',
  'packages/core/src/core/qwen38-deployment-prompt.ts': '3d1617daec21d73b119839ec3a1c579ea00eaa390ca20eac7e6347d68dfd6652',
  'packages/core/src/core/session-recovery.ts': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513',
  'packages/core/src/core/tokenLimits.test.ts': '0f4775ebb4abb3b3a7a38a2369b3c44995b97b2f256b04c56609c1ef0c01823c',
@@ -34290,7 +34493,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/permissions/permission-manager.ts': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779',
  'packages/core/src/services/chatCompressionService.test.ts': '3a2cdee1b9fed150ada600d7c3005f5d89030e0c7514ddbf28559689e027757b',
  'packages/core/src/services/chatCompressionService.ts': '75e64be7a5e28544fc9eba43b11346811a18fe66b0a186830707682533217523',
- 'packages/core/src/subagents/builtin-agents.test.ts': '922fd36fca80118facac7aae203d6de1004d8aa37ea2277a836685d4146dbc74',
+ 'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
  'packages/core/src/tools/agent/agent.test.ts': '8c45f5ac169af9e280c9773f33d89ee61bb3faa885eba89ab078e4a392f0f915',
  'packages/core/src/tools/agent/agent.ts': 'f0bcfec2d1b4792a97449008848f8d72dc329d506b44d160d6565e7045665d18',

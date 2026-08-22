@@ -3686,10 +3686,10 @@ index 72d1aa5..c16d183 100644
  
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 new file mode 100644
-index 0000000..75ec30c
+index 0000000..2472772
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,142 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -3703,8 +3703,11 @@ index 0000000..75ec30c
 +  QWEN38_LOCKED_RUNTIME_ENV,
 +  QWEN38_LOCKED_SYSTEM_PROMPT_PATH,
 +  appendQwen38DeploymentContract,
++  appendQwen38EngineeringDiscipline,
++  appendQwen38MainSessionFrame,
 +  appendQwen38SubagentInvocation,
 +  getQwen38DeploymentContract,
++  getQwen38EngineeringDiscipline,
 +} from './qwen38-deployment-prompt.js';
 +
 +describe('Qwen3.8 deployment prompt', () => {
@@ -3756,6 +3759,46 @@ index 0000000..75ec30c
 +    expect(appendQwen38DeploymentContract('role prompt')).toMatch(
 +      /^role prompt\n\n---\n\nLOCKED_DEPLOYMENT_CONTRACT_V1\n\nSession started: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
 +    );
++  });
++
++  it('gives a subagent the identical sealed engineering discipline', () => {
++    expect(getQwen38EngineeringDiscipline()).toBe('');
++    expect(appendQwen38EngineeringDiscipline('role prompt')).toBe(
++      'role prompt',
++    );
++
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    vi.stubEnv('QWEN_SYSTEM_MD', QWEN38_LOCKED_SYSTEM_PROMPT_PATH);
++    vi.spyOn(fs, 'lstatSync').mockReturnValue({
++      isFile: () => true,
++      isSymbolicLink: () => false,
++    } as fs.Stats);
++    vi.spyOn(fs, 'readFileSync').mockReturnValue('SEALED_WORK_DISCIPLINE\n');
++
++    // The discipline is read from the same sealed system.md the main session
++    // uses, so no role can run under a weaker set of rules.
++    expect(getQwen38EngineeringDiscipline()).toBe('SEALED_WORK_DISCIPLINE');
++    expect(appendQwen38EngineeringDiscipline('role prompt')).toBe(
++      'role prompt\n\n---\n\nSEALED_WORK_DISCIPLINE',
++    );
++  });
++
++  it('rejects a discipline read outside the sealed system-prompt path', () => {
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    vi.stubEnv('QWEN_SYSTEM_MD', '/tmp/not-the-sealed-prompt');
++    expect(() => getQwen38EngineeringDiscipline()).toThrow(
++      `QWEN_SYSTEM_MD=${QWEN38_LOCKED_SYSTEM_PROMPT_PATH}`,
++    );
++  });
++
++  it('layers only session-specific framing on top of the shared discipline', () => {
++    expect(appendQwen38MainSessionFrame('discipline')).toBe('discipline');
++
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    const framed = appendQwen38MainSessionFrame('discipline');
++    expect(framed).toContain('## This session');
++    expect(framed).toContain('you own the final response');
++    expect(framed).toContain('Integrate and verify its result yourself');
 +  });
 +
 +  it('requires and appends the unique invocation scratch in locked subagents', () => {
@@ -10403,10 +10446,38 @@ index 9a37b9b..725f2c9 100644
    }
  }
 diff --git a/packages/core/src/subagents/builtin-agents.test.ts b/packages/core/src/subagents/builtin-agents.test.ts
-index 6948502..30cf243 100644
+index 6948502..0895c5b 100644
 --- a/packages/core/src/subagents/builtin-agents.test.ts
 +++ b/packages/core/src/subagents/builtin-agents.test.ts
-@@ -60,20 +60,29 @@ describe('BuiltinAgentRegistry', () => {
+@@ -40,16 +40,22 @@ describe('BuiltinAgentRegistry', () => {
+         'general-purpose subagent working for a parent agent',
+       );
+       expect(generalAgent?.systemPrompt).toContain(
+-        'Preserve unrelated user changes',
++        'Do not expand the assignment',
+       );
+       expect(generalAgent?.systemPrompt).toContain(
+-        'Verify factual claims before reporting',
++        'Do not launch another agent',
+       );
+       expect(generalAgent?.systemPrompt).toContain(
+-        'run the smallest relevant checks',
++        'files changed, verification performed and its outcome',
+       );
+-      expect(generalAgent?.systemPrompt).toContain(
+-        'Report uncertainty or blockers',
++      // The engineering discipline is one sealed text delivered to every role
++      // from system.md, so a role prompt must carry only its own mechanics and
++      // must not restate the shared rules.
++      expect(generalAgent?.systemPrompt).not.toContain(
++        'Preserve unrelated user changes',
++      );
++      expect(generalAgent?.systemPrompt).not.toContain(
++        'Verify factual claims before reporting',
+       );
+     });
+ 
+@@ -60,20 +66,29 @@ describe('BuiltinAgentRegistry', () => {
        expect(exploreAgent?.model).toBeUndefined();
      });
  
@@ -10423,15 +10494,15 @@ index 6948502..30cf243 100644
 +      expect(exploreAgent?.tools).toContain(ToolNames.WRITE_FILE);
 +      expect(exploreAgent?.tools).toContain(ToolNames.EDIT);
 +      expect(exploreAgent?.tools).toContain(ToolNames.NOTEBOOK_EDIT);
++      expect(exploreAgent?.systemPrompt).toContain(
++        'Exploration is a role, not a mechanical read-only permission profile',
++      );
++      expect(exploreAgent?.systemPrompt).toContain('PDF extraction/rendering');
        expect(exploreAgent?.systemPrompt).toContain(
 -        'pipelines are allowed when every command is read-only',
-+        'Exploration is a role, not a mechanical read-only permission profile',
++        'hashed before and after your run',
        );
 -      expect(exploreAgent?.systemPrompt).not.toContain('(>, >>, |)');
-+      expect(exploreAgent?.systemPrompt).toContain('PDF extraction/rendering');
-+      expect(exploreAgent?.systemPrompt).toContain(
-+        'hashed before and after your run',
-+      );
 +      expect(exploreAgent?.systemPrompt).not.toContain('CRITICAL: READ-ONLY');
      });
  
