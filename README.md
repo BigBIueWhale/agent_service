@@ -170,7 +170,14 @@ fails before generation.
 
 A session is bounded by model turns, never by wall-clock time: the locked budget
 is 400 turns (`limits.max_session_turns`), enforced by the client itself, and
-`max_wall_time_seconds` is disabled everywhere. Turns are the hardware-independent
+`max_wall_time_seconds` is disabled everywhere. The budget counts the owning
+session's own turns, so a foreground subagent that spends sixty turns costs its
+parent one; a subagent is bounded by the same budget in its own right, and if it
+exhausts it the parent is told so explicitly, with the turn count, and treats the
+assignment as unfinished rather than concluding from a partial report. Delegation
+is therefore how the main thread stays on trajectory rather than a way to escape
+the budget, and the backend keeps an evicted context in host RAM so returning
+from a subagent restores it by DMA instead of re-prefilling it. Turns are the hardware-independent
 measure of agent progress, so the same trajectory is judged identically whatever
 the backend's generation speed; a wall-clock budget would instead score how fast
 this GPU happens to run. Reaching the budget is an ordinary terminal outcome —

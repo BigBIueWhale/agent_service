@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'f491926c02819f6076681ed9b67d9ac6e4529a2cec68947757494bb11b9e3a48',
+  'review_sha256': 'ef3c9eca1a7e4f29e720082833c3348760ab87a9db74831168f2df822b6e420a',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -50,6 +50,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before_sha256': '79dd902bfd3af29fff89a1886f4076e64019681261f9550e446eda0df0ab9464',
              'after_sha256': '35a2d0b3f45533e5e63fc705725a6a831978776bf81b8d65d6dfc8e005c86034'},
+            {'path': 'packages/core/src/agents/runtime/agent-headless.ts',
+             'before_sha256': 'db6d8ed8f7714a83483fb9f22c860a3f2e7e38cf53171e79c5fc49a363d3c3ce',
+             'after_sha256': '566427c59d72b3bc5f2e582e6b83a43388e5bb2d66642026d35951dd5b017f5c'},
+            {'path': 'packages/core/src/agents/subagent-result.ts',
+             'before_sha256': 'e82b58889f3c2349c5db5858581a45f0348d6c315b4807ea4b3357b56dcac8df',
+             'after_sha256': '3a950d84ad4118335f7b13cd3bea5449420be1bd1e8a07e46389472a271a90f4'},
             {'path': 'packages/core/src/config/config.ts',
              'before_sha256': 'e784e48248ab4258e83393996691c85a10e3ea3ab906a88e1cceb683baa1b6f5',
              'after_sha256': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49'},
@@ -112,7 +118,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '5da99e4b47fe307ceb842b6c66593e9babbf4095eec50c855a1aead9755ceb4f'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.ts',
              'before_sha256': None,
-             'after_sha256': '3d1617daec21d73b119839ec3a1c579ea00eaa390ca20eac7e6347d68dfd6652'},
+             'after_sha256': '351df1feec2b54dd886c05feae0bed2b31bd7442c5b37617f319ac22557f333d'},
             {'path': 'packages/core/src/core/session-recovery.ts',
              'before_sha256': '65e3c71d4fc1661976daaab2add6dbcb6ae6a740f85c88f47ca0106c863186a6',
              'after_sha256': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513'},
@@ -160,7 +166,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '8c45f5ac169af9e280c9773f33d89ee61bb3faa885eba89ab078e4a392f0f915'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': 'f0bcfec2d1b4792a97449008848f8d72dc329d506b44d160d6565e7045665d18'},
+             'after_sha256': '915eddfa8c1c1d1de08406631bd0a360d888624fa3d901a1468c167c27f1099f'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -2937,6 +2943,280 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      autoMemory: '
                              'this.runtimeContext.getAutoMemoryPrompt(),\n'
                              '    });\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-1',
+             'path': 'packages/core/src/agents/runtime/agent-headless.ts',
+             'before': '  private readonly core: AgentCore;\n'
+                       "  private finalText: string = '';\n"
+                       '  private terminateMode: AgentTerminateMode = '
+                       'AgentTerminateMode.ERROR;\n'
+                       '  private chat?: GeminiChat;\n'
+                       '  private toolsList?: FunctionDeclaration[];\n'
+                       '  private executing = false;\n',
+             'after': '  private readonly core: AgentCore;\n'
+                      "  private finalText: string = '';\n"
+                      '  private terminateMode: AgentTerminateMode = '
+                      'AgentTerminateMode.ERROR;\n'
+                      '  private turnsUsed: number = 0;\n'
+                      '  private chat?: GeminiChat;\n'
+                      '  private toolsList?: FunctionDeclaration[];\n'
+                      '  private executing = false;\n',
+             'review_before': '  private readonly core: AgentCore;\n'
+                              "  private finalText: string = '';\n"
+                              '  private terminateMode: AgentTerminateMode = '
+                              'AgentTerminateMode.ERROR;\n'
+                              '  private chat?: GeminiChat;\n'
+                              '  private toolsList?: FunctionDeclaration[];\n'
+                              '  private executing = false;\n',
+             'review_after': '  private readonly core: AgentCore;\n'
+                             "  private finalText: string = '';\n"
+                             '  private terminateMode: AgentTerminateMode = '
+                             'AgentTerminateMode.ERROR;\n'
+                             '  private turnsUsed: number = 0;\n'
+                             '  private chat?: GeminiChat;\n'
+                             '  private toolsList?: FunctionDeclaration[];\n'
+                             '  private executing = false;\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-2',
+             'path': 'packages/core/src/agents/runtime/agent-headless.ts',
+             'before': '    this.executing = true;\n'
+                       "    this.finalText = '';\n"
+                       '    this.terminateMode = AgentTerminateMode.ERROR;\n'
+                       '    const resetStats = options.resetStats !== false;\n'
+                       '    if (resetStats) {\n'
+                       '      this.core.resetExecutionStats();\n',
+             'after': '    this.executing = true;\n'
+                      "    this.finalText = '';\n"
+                      '    this.terminateMode = AgentTerminateMode.ERROR;\n'
+                      '    this.turnsUsed = 0;\n'
+                      '    const resetStats = options.resetStats !== false;\n'
+                      '    if (resetStats) {\n'
+                      '      this.core.resetExecutionStats();\n',
+             'review_before': '    this.executing = true;\n'
+                              "    this.finalText = '';\n"
+                              '    this.terminateMode = AgentTerminateMode.ERROR;\n'
+                              '    const resetStats = options.resetStats !== false;\n'
+                              '    if (resetStats) {\n'
+                              '      this.core.resetExecutionStats();\n',
+             'review_after': '    this.executing = true;\n'
+                             "    this.finalText = '';\n"
+                             '    this.terminateMode = AgentTerminateMode.ERROR;\n'
+                             '    this.turnsUsed = 0;\n'
+                             '    const resetStats = options.resetStats !== false;\n'
+                             '    if (resetStats) {\n'
+                             '      this.core.resetExecutionStats();\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-3',
+             'path': 'packages/core/src/agents/runtime/agent-headless.ts',
+             'before': '\n'
+                       '        this.finalText = result.text;\n'
+                       '        this.terminateMode = result.terminateMode ?? '
+                       'AgentTerminateMode.GOAL;\n'
+                       '      } catch (error) {\n'
+                       "        debugLogger.error('Error during subagent execution:', "
+                       'error);\n'
+                       '        this.terminateMode = AgentTerminateMode.ERROR;\n',
+             'after': '\n'
+                      '        this.finalText = result.text;\n'
+                      '        this.terminateMode = result.terminateMode ?? '
+                      'AgentTerminateMode.GOAL;\n'
+                      '        this.turnsUsed = result.turnsUsed;\n'
+                      '      } catch (error) {\n'
+                      "        debugLogger.error('Error during subagent execution:', "
+                      'error);\n'
+                      '        this.terminateMode = AgentTerminateMode.ERROR;\n',
+             'review_before': '\n'
+                              '        this.finalText = result.text;\n'
+                              '        this.terminateMode = result.terminateMode ?? '
+                              'AgentTerminateMode.GOAL;\n'
+                              '      } catch (error) {\n'
+                              "        debugLogger.error('Error during subagent "
+                              "execution:', error);\n"
+                              '        this.terminateMode = '
+                              'AgentTerminateMode.ERROR;\n',
+             'review_after': '\n'
+                             '        this.finalText = result.text;\n'
+                             '        this.terminateMode = result.terminateMode ?? '
+                             'AgentTerminateMode.GOAL;\n'
+                             '        this.turnsUsed = result.turnsUsed;\n'
+                             '      } catch (error) {\n'
+                             "        debugLogger.error('Error during subagent "
+                             "execution:', error);\n"
+                             '        this.terminateMode = '
+                             'AgentTerminateMode.ERROR;\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-4',
+             'path': 'packages/core/src/agents/runtime/agent-headless.ts',
+             'before': '    return this.terminateMode;\n'
+                       '  }\n'
+                       '\n'
+                       '  /**\n'
+                       '   * Sets a callback that the reasoning loop calls between '
+                       'tool rounds\n'
+                       '   * to drain external messages (e.g. from SendMessage '
+                       'tool).\n',
+             'after': '    return this.terminateMode;\n'
+                      '  }\n'
+                      '\n'
+                      '  /**\n'
+                      '   * Model round-trips this agent actually completed. Reported '
+                      'to the parent\n'
+                      '   * when the agent stopped for any reason other than reaching '
+                      'its goal, so the\n'
+                      '   * parent can tell an unfinished assignment from a finished '
+                      'one.\n'
+                      '   */\n'
+                      '  getTurnsUsed(): number {\n'
+                      '    return this.turnsUsed;\n'
+                      '  }\n'
+                      '\n'
+                      '  /**\n'
+                      '   * Sets a callback that the reasoning loop calls between tool '
+                      'rounds\n'
+                      '   * to drain external messages (e.g. from SendMessage tool).\n',
+             'review_before': '    return this.terminateMode;\n'
+                              '  }\n'
+                              '\n'
+                              '  /**\n'
+                              '   * Sets a callback that the reasoning loop calls '
+                              'between tool rounds\n'
+                              '   * to drain external messages (e.g. from SendMessage '
+                              'tool).\n',
+             'review_after': '    return this.terminateMode;\n'
+                             '  }\n'
+                             '\n'
+                             '  /**\n'
+                             '   * Model round-trips this agent actually completed. '
+                             'Reported to the parent\n'
+                             '   * when the agent stopped for any reason other than '
+                             'reaching its goal, so the\n'
+                             '   * parent can tell an unfinished assignment from a '
+                             'finished one.\n'
+                             '   */\n'
+                             '  getTurnsUsed(): number {\n'
+                             '    return this.turnsUsed;\n'
+                             '  }\n'
+                             '\n'
+                             '  /**\n'
+                             '   * Sets a callback that the reasoning loop calls '
+                             'between tool rounds\n'
+                             '   * to drain external messages (e.g. from SendMessage '
+                             'tool).\n'},
+            {'name': 'packages/core/src/agents/subagent-result.ts:landmark-1',
+             'path': 'packages/core/src/agents/subagent-result.ts',
+             'before': 'export function toModelVisibleSubagentResult(\n'
+                       '  text: string,\n'
+                       '  terminateMode = AgentTerminateMode.GOAL,\n'
+                       '): string {\n'
+                       '  if (terminateMode !== AgentTerminateMode.GOAL) {\n'
+                       '    return text;\n'
+                       '  }\n'
+                       '\n'
+                       '  return '
+                       'stripVisibleTags(stripAnalysisOutsideSummary(text).trim()).trim();\n',
+             'after': 'export function toModelVisibleSubagentResult(\n'
+                      '  text: string,\n'
+                      '  terminateMode = AgentTerminateMode.GOAL,\n'
+                      '  turnsUsed?: number,\n'
+                      '): string {\n'
+                      '  if (terminateMode !== AgentTerminateMode.GOAL) {\n'
+                      '    // A subagent that stopped for any reason other than '
+                      'reaching its goal must\n'
+                      '    // say so in the text the parent model reads. Returning '
+                      'only the partial\n'
+                      '    // transcript -- or an empty string -- leaves the parent '
+                      'unable to tell\n'
+                      '    // "finished and reported nothing" from "was cut off '
+                      'mid-investigation",\n'
+                      '    // and it would integrate a truncated result as though it '
+                      'were a\n'
+                      '    // conclusion. The turn count is included because the '
+                      'budget is the one\n'
+                      '    // bound on a session here, so "how far did it get" is the '
+                      'actionable fact.\n'
+                      '    const turns =\n'
+                      "      typeof turnsUsed === 'number' && turnsUsed > 0\n"
+                      "        ? ` after ${turnsUsed} turn${turnsUsed === 1 ? '' : "
+                      "'s'}`\n"
+                      "        : '';\n"
+                      '    let reason: string;\n'
+                      '    if (terminateMode === AgentTerminateMode.MAX_TURNS) {\n'
+                      '      reason = `exhausted its turn budget${turns}`;\n'
+                      '    } else if (terminateMode === AgentTerminateMode.TIMEOUT) {\n'
+                      '      reason = `hit its time limit${turns}`;\n'
+                      '    } else if (terminateMode === AgentTerminateMode.CANCELLED) '
+                      '{\n'
+                      '      reason = `was cancelled${turns}`;\n'
+                      '    } else {\n'
+                      '      reason = `stopped as '
+                      '${String(terminateMode).toLowerCase()}${turns}`;\n'
+                      '    }\n'
+                      '    const partial = text.trim();\n'
+                      '    return partial\n'
+                      '      ? `[subagent ${reason}; its assignment is unfinished and '
+                      'the report below is partial]\\n\\n${partial}`\n'
+                      '      : `[subagent ${reason} and produced no report; its '
+                      'assignment is unfinished]`;\n'
+                      '  }\n'
+                      '\n'
+                      '  return '
+                      'stripVisibleTags(stripAnalysisOutsideSummary(text).trim()).trim();\n',
+             'review_before': 'export function toModelVisibleSubagentResult(\n'
+                              '  text: string,\n'
+                              '  terminateMode = AgentTerminateMode.GOAL,\n'
+                              '): string {\n'
+                              '  if (terminateMode !== AgentTerminateMode.GOAL) {\n'
+                              '    return text;\n'
+                              '  }\n'
+                              '\n'
+                              '  return '
+                              'stripVisibleTags(stripAnalysisOutsideSummary(text).trim()).trim();\n',
+             'review_after': 'export function toModelVisibleSubagentResult(\n'
+                             '  text: string,\n'
+                             '  terminateMode = AgentTerminateMode.GOAL,\n'
+                             '  turnsUsed?: number,\n'
+                             '): string {\n'
+                             '  if (terminateMode !== AgentTerminateMode.GOAL) {\n'
+                             '    // A subagent that stopped for any reason other than '
+                             'reaching its goal must\n'
+                             '    // say so in the text the parent model reads. '
+                             'Returning only the partial\n'
+                             '    // transcript -- or an empty string -- leaves the '
+                             'parent unable to tell\n'
+                             '    // "finished and reported nothing" from "was cut off '
+                             'mid-investigation",\n'
+                             '    // and it would integrate a truncated result as '
+                             'though it were a\n'
+                             '    // conclusion. The turn count is included because '
+                             'the budget is the one\n'
+                             '    // bound on a session here, so "how far did it get" '
+                             'is the actionable fact.\n'
+                             '    const turns =\n'
+                             "      typeof turnsUsed === 'number' && turnsUsed > 0\n"
+                             '        ? ` after ${turnsUsed} turn${turnsUsed === 1 ? '
+                             "'' : 's'}`\n"
+                             "        : '';\n"
+                             '    let reason: string;\n'
+                             '    if (terminateMode === AgentTerminateMode.MAX_TURNS) '
+                             '{\n'
+                             '      reason = `exhausted its turn budget${turns}`;\n'
+                             '    } else if (terminateMode === '
+                             'AgentTerminateMode.TIMEOUT) {\n'
+                             '      reason = `hit its time limit${turns}`;\n'
+                             '    } else if (terminateMode === '
+                             'AgentTerminateMode.CANCELLED) {\n'
+                             '      reason = `was cancelled${turns}`;\n'
+                             '    } else {\n'
+                             '      reason = `stopped as '
+                             '${String(terminateMode).toLowerCase()}${turns}`;\n'
+                             '    }\n'
+                             '    const partial = text.trim();\n'
+                             '    return partial\n'
+                             '      ? `[subagent ${reason}; its assignment is '
+                             'unfinished and the report below is '
+                             'partial]\\n\\n${partial}`\n'
+                             '      : `[subagent ${reason} and produced no report; its '
+                             'assignment is unfinished]`;\n'
+                             '  }\n'
+                             '\n'
+                             '  return '
+                             'stripVisibleTags(stripAnalysisOutsideSummary(text).trim()).trim();\n'},
             {'name': 'packages/core/src/config/config.ts:landmark-1',
              'path': 'packages/core/src/config/config.ts',
              'before': '  systemPrompt?: string;\n'
@@ -11683,14 +11963,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'string {\n'
                       '  if (!isQwen38LockedAgentServiceRuntime()) return base;\n'
                       '  return `${base.trim()}\\n\\n## This session\\n\\n- You are '
-                      'the main agent in one long-lived, non-interactive local '
-                      'engineering session, and you own the final response.\\n- Use '
-                      'the foreground \\`general-purpose\\` or \\`Explore\\` subagent '
-                      'only for a concrete, bounded assignment whose concise result '
-                      "protects the main thread's context. Integrate and verify its "
-                      'result yourself.\\n- Communicate briefly while work is ongoing. '
-                      'In the final response, lead with the outcome and include the '
-                      'material files, verification, and unresolved risks.`;\n'
+                      'the main agent in one long-lived, non-interactive session, and '
+                      'you own the final response.\\n- Delegate generously to a '
+                      'foreground \\`general-purpose\\` or \\`Explore\\` subagent: '
+                      'broad searches, surveying unfamiliar code, reproducing a '
+                      'failure, converting documents -- any bounded work whose useful '
+                      'output is short but takes a lot of reading. Its reading stays '
+                      'out of your context and only its report returns, so a subagent '
+                      'that spends sixty turns costs you one.\\n- Give it a '
+                      'self-contained assignment; it cannot see this conversation. '
+                      'Treat its report as evidence to verify, not a conclusion.\\n- '
+                      'Keep the design decisions, the edits, and the final '
+                      'verification yourself.\\n- Lead the final response with the '
+                      'outcome, then the material files, verification, and unresolved '
+                      'risks.`;\n'
                       '}\n'
                       '\n'
                       'export function appendQwen38DeploymentContract(base: string): '
@@ -11863,15 +12149,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'base;\n'
                              '  return `${base.trim()}\\n\\n## This session\\n\\n- You '
                              'are the main agent in one long-lived, non-interactive '
-                             'local engineering session, and you own the final '
-                             'response.\\n- Use the foreground \\`general-purpose\\` '
-                             'or \\`Explore\\` subagent only for a concrete, bounded '
-                             'assignment whose concise result protects the main '
-                             "thread's context. Integrate and verify its result "
-                             'yourself.\\n- Communicate briefly while work is ongoing. '
-                             'In the final response, lead with the outcome and include '
-                             'the material files, verification, and unresolved '
-                             'risks.`;\n'
+                             'session, and you own the final response.\\n- Delegate '
+                             'generously to a foreground \\`general-purpose\\` or '
+                             '\\`Explore\\` subagent: broad searches, surveying '
+                             'unfamiliar code, reproducing a failure, converting '
+                             'documents -- any bounded work whose useful output is '
+                             'short but takes a lot of reading. Its reading stays out '
+                             'of your context and only its report returns, so a '
+                             'subagent that spends sixty turns costs you one.\\n- Give '
+                             'it a self-contained assignment; it cannot see this '
+                             'conversation. Treat its report as evidence to verify, '
+                             'not a conclusion.\\n- Keep the design decisions, the '
+                             'edits, and the final verification yourself.\\n- Lead the '
+                             'final response with the outcome, then the material '
+                             'files, verification, and unresolved risks.`;\n'
                              '}\n'
                              '\n'
                              'export function appendQwen38DeploymentContract(base: '
@@ -29436,25 +29727,27 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after': '</example>\n'
                       '`;\n'
                       '\n'
-                      '    const foregroundOnlyDescription = `Launch one built-in '
-                      'subagent and wait for it to finish before the parent '
-                      'continues.\n'
+                      '    const foregroundOnlyDescription = `Delegate a bounded piece '
+                      'of work to one built-in subagent and wait for its report.\n'
                       '\n'
-                      'This installation deliberately permits only sequential, '
-                      'foreground delegation. The child result is returned inline, '
-                      'keeping noisy exploration out of the parent context without '
-                      'creating concurrent model requests or orphaned work.\n'
+                      "Use liberally: the subagent's reading and dead ends stay out of "
+                      'your context and only its report returns, so one that spends '
+                      'sixty turns costs you a single turn. Good for locating code '
+                      'across many files, surveying an unfamiliar subsystem, '
+                      'reproducing a failure, and converting or extracting documents.\n'
                       '\n'
-                      'Available subagent types:\n'
-                      '- **general-purpose**: bounded multi-step research or '
-                      'implementation using the inherited local tool surface.\n'
+                      '- **general-purpose**: bounded research or implementation with '
+                      'the inherited tool surface.\n'
                       '- **Explore**: evidence-oriented investigation with private '
-                      'scratch and visible, journaled staged-workspace effects.\n'
+                      'scratch and journaled workspace effects.\n'
                       '\n'
-                      'Use a detailed, self-contained prompt. Treat the child result '
-                      'as evidence and verify it before relying on it. Background '
-                      'execution, forks, teams, worktrees, custom agent definitions, '
-                      'and model overrides are unavailable in this installation.`;\n'
+                      'Give a detailed, self-contained prompt -- the subagent cannot '
+                      'see your conversation -- and verify anything load-bearing in '
+                      'its report. It runs under the same turn budget you do; '
+                      'exhausting that budget returns a partial report. Sequential and '
+                      'foreground only: background execution, forks, teams, worktrees, '
+                      'custom agent definitions, and model overrides are '
+                      'unavailable.`;\n'
                       '\n'
                       '    // Update description using object property assignment '
                       "since it's readonly.\n"
@@ -29509,28 +29802,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'review_after': '</example>\n'
                              '`;\n'
                              '\n'
-                             '    const foregroundOnlyDescription = `Launch one '
-                             'built-in subagent and wait for it to finish before the '
-                             'parent continues.\n'
+                             '    const foregroundOnlyDescription = `Delegate a '
+                             'bounded piece of work to one built-in subagent and wait '
+                             'for its report.\n'
                              '\n'
-                             'This installation deliberately permits only sequential, '
-                             'foreground delegation. The child result is returned '
-                             'inline, keeping noisy exploration out of the parent '
-                             'context without creating concurrent model requests or '
-                             'orphaned work.\n'
+                             "Use liberally: the subagent's reading and dead ends stay "
+                             'out of your context and only its report returns, so one '
+                             'that spends sixty turns costs you a single turn. Good '
+                             'for locating code across many files, surveying an '
+                             'unfamiliar subsystem, reproducing a failure, and '
+                             'converting or extracting documents.\n'
                              '\n'
-                             'Available subagent types:\n'
-                             '- **general-purpose**: bounded multi-step research or '
-                             'implementation using the inherited local tool surface.\n'
+                             '- **general-purpose**: bounded research or '
+                             'implementation with the inherited tool surface.\n'
                              '- **Explore**: evidence-oriented investigation with '
-                             'private scratch and visible, journaled staged-workspace '
-                             'effects.\n'
+                             'private scratch and journaled workspace effects.\n'
                              '\n'
-                             'Use a detailed, self-contained prompt. Treat the child '
-                             'result as evidence and verify it before relying on it. '
-                             'Background execution, forks, teams, worktrees, custom '
-                             'agent definitions, and model overrides are unavailable '
-                             'in this installation.`;\n'
+                             'Give a detailed, self-contained prompt -- the subagent '
+                             'cannot see your conversation -- and verify anything '
+                             'load-bearing in its report. It runs under the same turn '
+                             'budget you do; exhausting that budget returns a partial '
+                             'report. Sequential and foreground only: background '
+                             'execution, forks, teams, worktrees, custom agent '
+                             'definitions, and model overrides are unavailable.`;\n'
                              '\n'
                              '    // Update description using object property '
                              "assignment since it's readonly.\n"
@@ -29710,6 +30004,54 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "        typeof params.subagent_type !== 'string' ||\n"},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-5',
              'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '      const subagentRawText = subagent.getFinalText();\n'
+                       '      const terminateMode = subagent.getTerminateMode();\n'
+                       '      const finalText = appendStopHookBlockingCapWarning(\n'
+                       '        toModelVisibleSubagentResult(subagentRawText, '
+                       'terminateMode),\n'
+                       '        stopHookWarning,\n'
+                       '      );\n'
+                       '      const success = terminateMode === '
+                       'AgentTerminateMode.GOAL;\n',
+             'after': '      const subagentRawText = subagent.getFinalText();\n'
+                      '      const terminateMode = subagent.getTerminateMode();\n'
+                      '      const finalText = appendStopHookBlockingCapWarning(\n'
+                      '        toModelVisibleSubagentResult(\n'
+                      '          subagentRawText,\n'
+                      '          terminateMode,\n'
+                      '          subagent.getTurnsUsed(),\n'
+                      '        ),\n'
+                      '        stopHookWarning,\n'
+                      '      );\n'
+                      '      const success = terminateMode === '
+                      'AgentTerminateMode.GOAL;\n',
+             'review_before': '      const subagentRawText = subagent.getFinalText();\n'
+                              '      const terminateMode = '
+                              'subagent.getTerminateMode();\n'
+                              '      const finalText = '
+                              'appendStopHookBlockingCapWarning(\n'
+                              '        toModelVisibleSubagentResult(subagentRawText, '
+                              'terminateMode),\n'
+                              '        stopHookWarning,\n'
+                              '      );\n'
+                              '      const success = terminateMode === '
+                              'AgentTerminateMode.GOAL;\n',
+             'review_after': '      const subagentRawText = subagent.getFinalText();\n'
+                             '      const terminateMode = '
+                             'subagent.getTerminateMode();\n'
+                             '      const finalText = '
+                             'appendStopHookBlockingCapWarning(\n'
+                             '        toModelVisibleSubagentResult(\n'
+                             '          subagentRawText,\n'
+                             '          terminateMode,\n'
+                             '          subagent.getTurnsUsed(),\n'
+                             '        ),\n'
+                             '        stopHookWarning,\n'
+                             '      );\n'
+                             '      const success = terminateMode === '
+                             'AgentTerminateMode.GOAL;\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-6',
+             'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '    // background-agent concurrency caps '
                        '(agents.maxParallelAgentsByModel).\n'
                        '    let subagentModelId: string | undefined;\n'
@@ -29748,7 +30090,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      if (backgroundSlotReservation && '
                              '!backgroundSlotReservationConsumed) {\n'
                              '        this.config\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-6',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-7',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      // Implicit background requests downgrade to an awaited '
                        'foreground run\n'
@@ -29798,7 +30140,81 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ? true\n'
                              '          : (this.params.run_in_background ??\n'
                              '            (subagentConfig.background === true ||\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-7',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-8',
+             'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '          subagentRuntimeConfig as Config,\n'
+                       '          {\n'
+                       '            eventEmitter: backgroundEventEmitter ?? '
+                       'this.eventEmitter,\n'
+                       '            ...(shouldRunInBackground && subagentModelId\n'
+                       '              ? { modelConfigOverrides: { model: '
+                       'subagentModelId } }\n'
+                       '              : {}),\n',
+             'after': '          subagentRuntimeConfig as Config,\n'
+                      '          {\n'
+                      '            eventEmitter: backgroundEventEmitter ?? '
+                      'this.eventEmitter,\n'
+                      '            // A subagent is bounded by the same session turn '
+                      'budget as the\n'
+                      '            // agent that launched it. The built-in agents '
+                      'declare no runConfig,\n'
+                      '            // so without this they would run unbounded -- and '
+                      'this deployment\n'
+                      '            // has no wall-clock limit to stop them. `> 0` '
+                      "preserves upstream's\n"
+                      '            // "unlimited" sentinel (-1), which must not be '
+                      'forwarded as a\n'
+                      '            // literal cap.\n'
+                      '            ...(this.config.getMaxSessionTurns() > 0\n'
+                      '              ? {\n'
+                      '                  runConfigOverrides: {\n'
+                      '                    max_turns: '
+                      'this.config.getMaxSessionTurns(),\n'
+                      '                  },\n'
+                      '                }\n'
+                      '              : {}),\n'
+                      '            ...(shouldRunInBackground && subagentModelId\n'
+                      '              ? { modelConfigOverrides: { model: '
+                      'subagentModelId } }\n'
+                      '              : {}),\n',
+             'review_before': '          subagentRuntimeConfig as Config,\n'
+                              '          {\n'
+                              '            eventEmitter: backgroundEventEmitter ?? '
+                              'this.eventEmitter,\n'
+                              '            ...(shouldRunInBackground && '
+                              'subagentModelId\n'
+                              '              ? { modelConfigOverrides: { model: '
+                              'subagentModelId } }\n'
+                              '              : {}),\n',
+             'review_after': '          subagentRuntimeConfig as Config,\n'
+                             '          {\n'
+                             '            eventEmitter: backgroundEventEmitter ?? '
+                             'this.eventEmitter,\n'
+                             '            // A subagent is bounded by the same session '
+                             'turn budget as the\n'
+                             '            // agent that launched it. The built-in '
+                             'agents declare no runConfig,\n'
+                             '            // so without this they would run unbounded '
+                             '-- and this deployment\n'
+                             '            // has no wall-clock limit to stop them. `> '
+                             "0` preserves upstream's\n"
+                             '            // "unlimited" sentinel (-1), which must not '
+                             'be forwarded as a\n'
+                             '            // literal cap.\n'
+                             '            ...(this.config.getMaxSessionTurns() > 0\n'
+                             '              ? {\n'
+                             '                  runConfigOverrides: {\n'
+                             '                    max_turns: '
+                             'this.config.getMaxSessionTurns(),\n'
+                             '                  },\n'
+                             '                }\n'
+                             '              : {}),\n'
+                             '            ...(shouldRunInBackground && '
+                             'subagentModelId\n'
+                             '              ? { modelConfigOverrides: { model: '
+                             'subagentModelId } }\n'
+                             '              : {}),\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '\n'
@@ -29907,7 +30323,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`qwen-code.tool`\n'
                              '      // span, inheriting its traceId so the trace tree '
                              'stays unified.\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-8',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          this.buildSubagentSpanSpec(hookOpts, subagentConfig, '
                        "'foreground'),\n"
@@ -29970,7 +30386,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            ),\n'
                              '        );\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          depth: launchDepth,\n'
                        '        });\n'
@@ -30102,7 +30518,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        if (terminateMode === AgentTerminateMode.ERROR) '
                              '{\n'
                              '          return {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        terminateReason: `Failed to run subagent: '
                        '${errorMessage}`,\n'
@@ -34460,6 +34876,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/agents/runtime/agent-context.test.ts': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a',
  'packages/core/src/agents/runtime/agent-context.ts': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6',
  'packages/core/src/agents/runtime/agent-core.ts': '35a2d0b3f45533e5e63fc705725a6a831978776bf81b8d65d6dfc8e005c86034',
+ 'packages/core/src/agents/runtime/agent-headless.ts': '566427c59d72b3bc5f2e582e6b83a43388e5bb2d66642026d35951dd5b017f5c',
+ 'packages/core/src/agents/subagent-result.ts': '3a950d84ad4118335f7b13cd3bea5449420be1bd1e8a07e46389472a271a90f4',
  'packages/core/src/config/config.ts': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49',
  'packages/core/src/config/qwen38-agent-service-contract.test.ts': 'aacc0d3b15582dacc02c2d4e1291ed15a1f3a47460b09edc195ba8b1beac6417',
  'packages/core/src/core/baseLlmClient.test.ts': '3473d53774ef2b86869cf5af03bf2faf3433171e7630c4b4652a398ec6fc5d0d',
@@ -34480,7 +34898,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
  'packages/core/src/core/prompts.ts': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c',
  'packages/core/src/core/qwen38-deployment-prompt.test.ts': '5da99e4b47fe307ceb842b6c66593e9babbf4095eec50c855a1aead9755ceb4f',
- 'packages/core/src/core/qwen38-deployment-prompt.ts': '3d1617daec21d73b119839ec3a1c579ea00eaa390ca20eac7e6347d68dfd6652',
+ 'packages/core/src/core/qwen38-deployment-prompt.ts': '351df1feec2b54dd886c05feae0bed2b31bd7442c5b37617f319ac22557f333d',
  'packages/core/src/core/session-recovery.ts': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513',
  'packages/core/src/core/tokenLimits.test.ts': '0f4775ebb4abb3b3a7a38a2369b3c44995b97b2f256b04c56609c1ef0c01823c',
  'packages/core/src/core/tokenLimits.ts': '9a3bda80d944c61cae61197c018a10e4606a47187686f0a34b5ccf5624f978cb',
@@ -34496,7 +34914,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
  'packages/core/src/tools/agent/agent.test.ts': '8c45f5ac169af9e280c9773f33d89ee61bb3faa885eba89ab078e4a392f0f915',
- 'packages/core/src/tools/agent/agent.ts': 'f0bcfec2d1b4792a97449008848f8d72dc329d506b44d160d6565e7045665d18',
+ 'packages/core/src/tools/agent/agent.ts': '915eddfa8c1c1d1de08406631bd0a360d888624fa3d901a1468c167c27f1099f',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',

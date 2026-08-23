@@ -889,6 +889,90 @@ index 191b5ab..176809f 100644
        contextFiles: this.runtimeContext.getUserMemory(),
        autoMemory: this.runtimeContext.getAutoMemoryPrompt(),
      });
+diff --git a/packages/core/src/agents/runtime/agent-headless.ts b/packages/core/src/agents/runtime/agent-headless.ts
+index 2870d4b..e325807 100644
+--- a/packages/core/src/agents/runtime/agent-headless.ts
++++ b/packages/core/src/agents/runtime/agent-headless.ts
+@@ -139,6 +139,7 @@ export class AgentHeadless {
+   private readonly core: AgentCore;
+   private finalText: string = '';
+   private terminateMode: AgentTerminateMode = AgentTerminateMode.ERROR;
++  private turnsUsed: number = 0;
+   private chat?: GeminiChat;
+   private toolsList?: FunctionDeclaration[];
+   private executing = false;
+@@ -217,6 +218,7 @@ export class AgentHeadless {
+     this.executing = true;
+     this.finalText = '';
+     this.terminateMode = AgentTerminateMode.ERROR;
++    this.turnsUsed = 0;
+     const resetStats = options.resetStats !== false;
+     if (resetStats) {
+       this.core.resetExecutionStats();
+@@ -377,6 +379,7 @@ export class AgentHeadless {
+ 
+         this.finalText = result.text;
+         this.terminateMode = result.terminateMode ?? AgentTerminateMode.GOAL;
++        this.turnsUsed = result.turnsUsed;
+       } catch (error) {
+         debugLogger.error('Error during subagent execution:', error);
+         this.terminateMode = AgentTerminateMode.ERROR;
+@@ -474,6 +477,15 @@ export class AgentHeadless {
+     return this.terminateMode;
+   }
+ 
++  /**
++   * Model round-trips this agent actually completed. Reported to the parent
++   * when the agent stopped for any reason other than reaching its goal, so the
++   * parent can tell an unfinished assignment from a finished one.
++   */
++  getTurnsUsed(): number {
++    return this.turnsUsed;
++  }
++
+   /**
+    * Sets a callback that the reasoning loop calls between tool rounds
+    * to drain external messages (e.g. from SendMessage tool).
+diff --git a/packages/core/src/agents/subagent-result.ts b/packages/core/src/agents/subagent-result.ts
+index 588c7e6..1288e8a 100644
+--- a/packages/core/src/agents/subagent-result.ts
++++ b/packages/core/src/agents/subagent-result.ts
+@@ -145,9 +145,34 @@ function stripAnalysisOutsideSummary(text: string): string {
+ export function toModelVisibleSubagentResult(
+   text: string,
+   terminateMode = AgentTerminateMode.GOAL,
++  turnsUsed?: number,
+ ): string {
+   if (terminateMode !== AgentTerminateMode.GOAL) {
+-    return text;
++    // A subagent that stopped for any reason other than reaching its goal must
++    // say so in the text the parent model reads. Returning only the partial
++    // transcript -- or an empty string -- leaves the parent unable to tell
++    // "finished and reported nothing" from "was cut off mid-investigation",
++    // and it would integrate a truncated result as though it were a
++    // conclusion. The turn count is included because the budget is the one
++    // bound on a session here, so "how far did it get" is the actionable fact.
++    const turns =
++      typeof turnsUsed === 'number' && turnsUsed > 0
++        ? ` after ${turnsUsed} turn${turnsUsed === 1 ? '' : 's'}`
++        : '';
++    let reason: string;
++    if (terminateMode === AgentTerminateMode.MAX_TURNS) {
++      reason = `exhausted its turn budget${turns}`;
++    } else if (terminateMode === AgentTerminateMode.TIMEOUT) {
++      reason = `hit its time limit${turns}`;
++    } else if (terminateMode === AgentTerminateMode.CANCELLED) {
++      reason = `was cancelled${turns}`;
++    } else {
++      reason = `stopped as ${String(terminateMode).toLowerCase()}${turns}`;
++    }
++    const partial = text.trim();
++    return partial
++      ? `[subagent ${reason}; its assignment is unfinished and the report below is partial]\n\n${partial}`
++      : `[subagent ${reason} and produced no report; its assignment is unfinished]`;
+   }
+ 
+   return stripVisibleTags(stripAnalysisOutsideSummary(text).trim()).trim();
 diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/config.ts
 index 9698a8e..7a3529c 100644
 --- a/packages/core/src/config/config.ts
@@ -3834,7 +3918,7 @@ index 0000000..2472772
 +});
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
 new file mode 100644
-index 0000000..934f16c
+index 0000000..366499a
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.ts
 @@ -0,0 +1,124 @@
@@ -3936,7 +4020,7 @@ index 0000000..934f16c
 + */
 +export function appendQwen38MainSessionFrame(base: string): string {
 +  if (!isQwen38LockedAgentServiceRuntime()) return base;
-+  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived, non-interactive local engineering session, and you own the final response.\n- Use the foreground \`general-purpose\` or \`Explore\` subagent only for a concrete, bounded assignment whose concise result protects the main thread's context. Integrate and verify its result yourself.\n- Communicate briefly while work is ongoing. In the final response, lead with the outcome and include the material files, verification, and unresolved risks.`;
++  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived, non-interactive session, and you own the final response.\n- Delegate generously to a foreground \`general-purpose\` or \`Explore\` subagent: broad searches, surveying unfamiliar code, reproducing a failure, converting documents -- any bounded work whose useful output is short but takes a lot of reading. Its reading stays out of your context and only its report returns, so a subagent that spends sixty turns costs you one.\n- Give it a self-contained assignment; it cannot see this conversation. Treat its report as evidence to verify, not a conclusion.\n- Keep the design decisions, the edits, and the final verification yourself.\n- Lead the final response with the outcome, then the material files, verification, and unresolved risks.`;
 +}
 +
 +export function appendQwen38DeploymentContract(base: string): string {
@@ -10694,7 +10778,7 @@ index 6d3fb50..ab4e9b8 100644
        const schema = agentTool.schema;
        const properties = schema.parametersJsonSchema as {
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..8929512 100644
+index 4bcea69..5b826b0 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -130,6 +130,12 @@ import type {
@@ -10710,21 +10794,20 @@ index 4bcea69..8929512 100644
  
  function persistBackgroundCancellation(
    metaPath: string,
-@@ -1004,8 +1010,49 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1004,8 +1010,48 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
  </example>
  `;
  
 -    // Update description using object property assignment since it's readonly
 -    (this as { description: string }).description = baseDescription;
-+    const foregroundOnlyDescription = `Launch one built-in subagent and wait for it to finish before the parent continues.
++    const foregroundOnlyDescription = `Delegate a bounded piece of work to one built-in subagent and wait for its report.
 +
-+This installation deliberately permits only sequential, foreground delegation. The child result is returned inline, keeping noisy exploration out of the parent context without creating concurrent model requests or orphaned work.
++Use liberally: the subagent's reading and dead ends stay out of your context and only its report returns, so one that spends sixty turns costs you a single turn. Good for locating code across many files, surveying an unfamiliar subsystem, reproducing a failure, and converting or extracting documents.
 +
-+Available subagent types:
-+- **general-purpose**: bounded multi-step research or implementation using the inherited local tool surface.
-+- **Explore**: evidence-oriented investigation with private scratch and visible, journaled staged-workspace effects.
++- **general-purpose**: bounded research or implementation with the inherited tool surface.
++- **Explore**: evidence-oriented investigation with private scratch and journaled workspace effects.
 +
-+Use a detailed, self-contained prompt. Treat the child result as evidence and verify it before relying on it. Background execution, forks, teams, worktrees, custom agent definitions, and model overrides are unavailable in this installation.`;
++Give a detailed, self-contained prompt -- the subagent cannot see your conversation -- and verify anything load-bearing in its report. It runs under the same turn budget you do; exhausting that budget returns a partial report. Sequential and foreground only: background execution, forks, teams, worktrees, custom agent definitions, and model overrides are unavailable.`;
 +
 +    // Update description using object property assignment since it's readonly.
 +    (this as { description: string }).description =
@@ -10762,7 +10845,7 @@ index 4bcea69..8929512 100644
  
      // Update the parameter schema by modifying the existing object
      const schema = this.parameterSchema as {
-@@ -1035,7 +1082,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1035,7 +1081,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        const availableGrades = [
          ...this.subagentManager.getAvailableModelGrades().keys(),
        ];
@@ -10774,7 +10857,7 @@ index 4bcea69..8929512 100644
          schema.properties.model = {
            type: 'string',
            enum: availableGrades,
-@@ -1075,6 +1125,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1075,6 +1124,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        return 'Parameter "todo_id" must be a non-empty string of at most 500 characters.';
      }
  
@@ -10809,7 +10892,20 @@ index 4bcea69..8929512 100644
      if (params.subagent_type !== undefined) {
        if (
          typeof params.subagent_type !== 'string' ||
-@@ -2567,6 +2645,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2174,7 +2251,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+       const subagentRawText = subagent.getFinalText();
+       const terminateMode = subagent.getTerminateMode();
+       const finalText = appendStopHookBlockingCapWarning(
+-        toModelVisibleSubagentResult(subagentRawText, terminateMode),
++        toModelVisibleSubagentResult(
++          subagentRawText,
++          terminateMode,
++          subagent.getTurnsUsed(),
++        ),
+         stopHookWarning,
+       );
+       const success = terminateMode === AgentTerminateMode.GOAL;
+@@ -2567,6 +2648,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      // background-agent concurrency caps (agents.maxParallelAgentsByModel).
      let subagentModelId: string | undefined;
      let subagentRuntimeAuthOverrides: AuthOverrides | undefined;
@@ -10817,7 +10913,7 @@ index 4bcea69..8929512 100644
      const releaseBackgroundSlotReservation = () => {
        if (backgroundSlotReservation && !backgroundSlotReservationConsumed) {
          this.config
-@@ -2696,8 +2775,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2696,8 +2778,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // Implicit background requests downgrade to an awaited foreground run
        // instead of orphaning the child's results. The runtime spawn guard
        // above rejects an explicit run_in_background: true request.
@@ -10829,7 +10925,27 @@ index 4bcea69..8929512 100644
            ? true
            : (this.params.run_in_background ??
              (subagentConfig.background === true ||
-@@ -3944,6 +4024,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3077,6 +3160,19 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+           subagentRuntimeConfig as Config,
+           {
+             eventEmitter: backgroundEventEmitter ?? this.eventEmitter,
++            // A subagent is bounded by the same session turn budget as the
++            // agent that launched it. The built-in agents declare no runConfig,
++            // so without this they would run unbounded -- and this deployment
++            // has no wall-clock limit to stop them. `> 0` preserves upstream's
++            // "unlimited" sentinel (-1), which must not be forwarded as a
++            // literal cap.
++            ...(this.config.getMaxSessionTurns() > 0
++              ? {
++                  runConfigOverrides: {
++                    max_turns: this.config.getMaxSessionTurns(),
++                  },
++                }
++              : {}),
+             ...(shouldRunInBackground && subagentModelId
+               ? { modelConfigOverrides: { model: subagentModelId } }
+               : {}),
+@@ -3944,6 +4040,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
  
        const fgHookOpts = { ...hookOpts, signal: fgAbortController.signal };
@@ -10863,7 +10979,7 @@ index 4bcea69..8929512 100644
        // Wrap in qwen-code.subagent span (#3731 Phase 3). Foreground
        // invocations are child spans of the AGENT tool's `qwen-code.tool`
        // span, inheriting its traceId so the trace tree stays unified.
-@@ -3952,11 +4059,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3952,11 +4075,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            this.buildSubagentSpanSpec(hookOpts, subagentConfig, 'foreground'),
            fgAbortController.signal,
            (recordSpanOutcome) =>
@@ -10884,7 +11000,7 @@ index 4bcea69..8929512 100644
              ),
          );
  
-@@ -4112,12 +4223,45 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4112,12 +4239,45 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            depth: launchDepth,
          });
  
@@ -10935,7 +11051,7 @@ index 4bcea69..8929512 100644
          const wtSuffix = formatWorktreeSuffix(await cleanupWorktreeIsolation());
          if (terminateMode === AgentTerminateMode.ERROR) {
            return {
-@@ -4266,8 +4410,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4266,8 +4426,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          terminateReason: `Failed to run subagent: ${errorMessage}`,
        };
  

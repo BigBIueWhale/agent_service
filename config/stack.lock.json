@@ -109,8 +109,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "f491926c02819f6076681ed9b67d9ac6e4529a2cec68947757494bb11b9e3a48",
-      "source_patch_manifest_sha256": "2bdf7a6a484e37fd2a96ca0f4627211e79ac8866f1909edf0964f3ca5a3b900d"
+      "patch_sha256": "ef3c9eca1a7e4f29e720082833c3348760ab87a9db74831168f2df822b6e420a",
+      "source_patch_manifest_sha256": "8b7ab9bc426279edf023a7717ead763a13d79a5bc6a0d27a9a8b72782333a2fd"
     }
   },
   "backend": {
@@ -235,6 +235,8 @@
       "6925634765",
       "--cpu-offload-gb",
       "0",
+      "--kv-transfer-config",
+      "{\"kv_connector\":\"OffloadingConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use\":7747584000,\"eviction_policy\":\"arc\"}}",
       "--enable-prefix-caching",
       "--enable-chunked-prefill",
       "--attention-config.flash_attn_version=2",
