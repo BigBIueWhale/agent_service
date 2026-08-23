@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'ef3c9eca1a7e4f29e720082833c3348760ab87a9db74831168f2df822b6e420a',
+  'review_sha256': 'a90ee561f30c40673d02bda642c05adb81337de8ff6b38933252a86175872975',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -53,6 +53,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before_sha256': 'db6d8ed8f7714a83483fb9f22c860a3f2e7e38cf53171e79c5fc49a363d3c3ce',
              'after_sha256': '566427c59d72b3bc5f2e582e6b83a43388e5bb2d66642026d35951dd5b017f5c'},
+            {'path': 'packages/core/src/agents/subagent-result.test.ts',
+             'before_sha256': '044cd3646709a861e488f473d015f4238405dc37dd5c8d26ce8ab010a391ba6d',
+             'after_sha256': 'b0ff2c8c306c52b336b2382a6e70ef7f520a2b777908997966967056f5c7aa00'},
             {'path': 'packages/core/src/agents/subagent-result.ts',
              'before_sha256': 'e82b58889f3c2349c5db5858581a45f0348d6c315b4807ea4b3357b56dcac8df',
              'after_sha256': '3a950d84ad4118335f7b13cd3bea5449420be1bd1e8a07e46389472a271a90f4'},
@@ -115,7 +118,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.test.ts',
              'before_sha256': None,
-             'after_sha256': '5da99e4b47fe307ceb842b6c66593e9babbf4095eec50c855a1aead9755ceb4f'},
+             'after_sha256': '2194e034e19ea42035bbb4631155e1c4358b1f68f487f449012d7774b32eb532'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.ts',
              'before_sha256': None,
              'after_sha256': '351df1feec2b54dd886c05feae0bed2b31bd7442c5b37617f319ac22557f333d'},
@@ -163,7 +166,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
-             'after_sha256': '8c45f5ac169af9e280c9773f33d89ee61bb3faa885eba89ab078e4a392f0f915'},
+             'after_sha256': '7c321dbbd47db96c034190278000b24b7605a6ff22dcfcd1c05a14097ee15148'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
              'after_sha256': '915eddfa8c1c1d1de08406631bd0a360d888624fa3d901a1468c167c27f1099f'},
@@ -3098,6 +3101,109 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'between tool rounds\n'
                              '   * to drain external messages (e.g. from SendMessage '
                              'tool).\n'},
+            {'name': 'packages/core/src/agents/subagent-result.test.ts:landmark-1',
+             'path': 'packages/core/src/agents/subagent-result.test.ts',
+             'before': "  it('preserves raw diagnostics for non-goal terminations', () "
+                       '=> {\n'
+                       '    const raw = '
+                       "'<analysis>debug</analysis><summary>partial</summary>';\n"
+                       '\n'
+                       '    expect(toModelVisibleSubagentResult(raw, '
+                       'AgentTerminateMode.ERROR)).toBe(\n'
+                       '      raw,\n'
+                       '    );\n'
+                       '  });\n'
+                       '});\n',
+             'after': "  it('preserves raw diagnostics for non-goal terminations', () "
+                      '=> {\n'
+                      '    const raw = '
+                      "'<analysis>debug</analysis><summary>partial</summary>';\n"
+                      '\n'
+                      '    const text = toModelVisibleSubagentResult(raw, '
+                      'AgentTerminateMode.ERROR);\n'
+                      '    expect(text).toContain(raw);\n'
+                      "    expect(text).toContain('its assignment is unfinished');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('reports an exhausted turn budget with the turn count', () "
+                      '=> {\n'
+                      '    const text = toModelVisibleSubagentResult(\n'
+                      "      'partial findings',\n"
+                      '      AgentTerminateMode.MAX_TURNS,\n'
+                      '      400,\n'
+                      '    );\n'
+                      '\n'
+                      "    expect(text).toContain('exhausted its turn budget after 400 "
+                      "turns');\n"
+                      "    expect(text).toContain('partial findings');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('says so when a stopped subagent produced nothing at all', "
+                      '() => {\n'
+                      '    const text = toModelVisibleSubagentResult(\n'
+                      "      '   ',\n"
+                      '      AgentTerminateMode.MAX_TURNS,\n'
+                      '      1,\n'
+                      '    );\n'
+                      '\n'
+                      '    // Singular, and unmistakably not a conclusion the parent '
+                      'can build on.\n'
+                      "    expect(text).toContain('after 1 turn and produced no "
+                      "report');\n"
+                      "    expect(text).not.toContain('1 turns');\n"
+                      '  });\n'
+                      '});\n',
+             'review_before': "  it('preserves raw diagnostics for non-goal "
+                              "terminations', () => {\n"
+                              '    const raw = '
+                              "'<analysis>debug</analysis><summary>partial</summary>';\n"
+                              '\n'
+                              '    expect(toModelVisibleSubagentResult(raw, '
+                              'AgentTerminateMode.ERROR)).toBe(\n'
+                              '      raw,\n'
+                              '    );\n'
+                              '  });\n'
+                              '});\n',
+             'review_after': "  it('preserves raw diagnostics for non-goal "
+                             "terminations', () => {\n"
+                             '    const raw = '
+                             "'<analysis>debug</analysis><summary>partial</summary>';\n"
+                             '\n'
+                             '    const text = toModelVisibleSubagentResult(raw, '
+                             'AgentTerminateMode.ERROR);\n'
+                             '    expect(text).toContain(raw);\n'
+                             "    expect(text).toContain('its assignment is "
+                             "unfinished');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('reports an exhausted turn budget with the turn "
+                             "count', () => {\n"
+                             '    const text = toModelVisibleSubagentResult(\n'
+                             "      'partial findings',\n"
+                             '      AgentTerminateMode.MAX_TURNS,\n'
+                             '      400,\n'
+                             '    );\n'
+                             '\n'
+                             "    expect(text).toContain('exhausted its turn budget "
+                             "after 400 turns');\n"
+                             "    expect(text).toContain('partial findings');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('says so when a stopped subagent produced nothing "
+                             "at all', () => {\n"
+                             '    const text = toModelVisibleSubagentResult(\n'
+                             "      '   ',\n"
+                             '      AgentTerminateMode.MAX_TURNS,\n'
+                             '      1,\n'
+                             '    );\n'
+                             '\n'
+                             '    // Singular, and unmistakably not a conclusion the '
+                             'parent can build on.\n'
+                             "    expect(text).toContain('after 1 turn and produced no "
+                             "report');\n"
+                             "    expect(text).not.toContain('1 turns');\n"
+                             '  });\n'
+                             '});\n'},
             {'name': 'packages/core/src/agents/subagent-result.ts:landmark-1',
              'path': 'packages/core/src/agents/subagent-result.ts',
              'before': 'export function toModelVisibleSubagentResult(\n'
@@ -11605,8 +11711,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    const framed = appendQwen38MainSessionFrame('discipline');\n"
                       "    expect(framed).toContain('## This session');\n"
                       "    expect(framed).toContain('you own the final response');\n"
-                      "    expect(framed).toContain('Integrate and verify its result "
-                      "yourself');\n"
+                      "    expect(framed).toContain('Delegate generously');\n"
                       '  });\n'
                       '\n'
                       "  it('requires and appends the unique invocation scratch in "
@@ -11788,8 +11893,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    expect(framed).toContain('## This session');\n"
                              "    expect(framed).toContain('you own the final "
                              "response');\n"
-                             "    expect(framed).toContain('Integrate and verify its "
-                             "result yourself');\n"
+                             "    expect(framed).toContain('Delegate generously');\n"
                              '  });\n'
                              '\n'
                              "  it('requires and appends the unique invocation scratch "
@@ -29561,7 +29665,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "        'Explore',\n"
                       '      ]);\n'
                       '      expect(strictTool.description).toContain(\n'
-                      "        'only sequential, foreground delegation',\n"
+                      "        'Sequential and foreground only',\n"
                       '      );\n'
                       "      expect(strictTool.description).not.toContain('background "
                       "by default');\n"
@@ -29628,7 +29732,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "        'Explore',\n"
                              '      ]);\n'
                              '      expect(strictTool.description).toContain(\n'
-                             "        'only sequential, foreground delegation',\n"
+                             "        'Sequential and foreground only',\n"
                              '      );\n'
                              '      '
                              "expect(strictTool.description).not.toContain('background "
@@ -29661,6 +29765,92 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const schema = agentTool.schema;\n'
                              '      const properties = schema.parametersJsonSchema as '
                              '{\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-3',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '          successfulToolCalls: 3,\n'
+                       '          failedToolCalls: 0,\n'
+                       '        }),\n'
+                       '        getTerminateMode: '
+                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                       '      } as unknown as AgentHeadless;\n'
+                       '\n'
+                       '      mockContextState = {\n'
+                       '        set: vi.fn(),\n',
+             'after': '          successfulToolCalls: 3,\n'
+                      '          failedToolCalls: 0,\n'
+                      '        }),\n'
+                      '        getTerminateMode: '
+                      'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                      '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '      } as unknown as AgentHeadless;\n'
+                      '\n'
+                      '      mockContextState = {\n'
+                      '        set: vi.fn(),\n',
+             'review_before': '          failedToolCalls: 0,\n'
+                              '        }),\n'
+                              '        getTerminateMode: '
+                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                              '      } as unknown as AgentHeadless;\n'
+                              '\n'
+                              '      mockContextState = {\n',
+             'review_after': '          failedToolCalls: 0,\n'
+                             '        }),\n'
+                             '        getTerminateMode: '
+                             'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                             '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '      } as unknown as AgentHeadless;\n'
+                             '\n'
+                             '      mockContextState = {\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-4',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '      ).createInvocation(params);\n'
+                       '      const result = await invocation.execute();\n'
+                       '\n'
+                       '      expect(partToString(result.llmContent)).toBe(raw);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('explains successful subagents with no model-visible "
+                       "output', async () => {\n",
+             'after': '      ).createInvocation(params);\n'
+                      '      const result = await invocation.execute();\n'
+                      '\n'
+                      '      // Diagnostics survive verbatim, but the parent is also '
+                      'told the\n'
+                      '      // assignment did not finish -- otherwise a partial '
+                      'investigation reads\n'
+                      '      // like a conclusion.\n'
+                      '      const text = partToString(result.llmContent);\n'
+                      '      expect(text).toContain(raw);\n'
+                      "      expect(text).toContain('its assignment is unfinished');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('explains successful subagents with no model-visible "
+                      "output', async () => {\n",
+             'review_before': '      ).createInvocation(params);\n'
+                              '      const result = await invocation.execute();\n'
+                              '\n'
+                              '      '
+                              'expect(partToString(result.llmContent)).toBe(raw);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('explains successful subagents with no "
+                              "model-visible output', async () => {\n",
+             'review_after': '      ).createInvocation(params);\n'
+                             '      const result = await invocation.execute();\n'
+                             '\n'
+                             '      // Diagnostics survive verbatim, but the parent is '
+                             'also told the\n'
+                             '      // assignment did not finish -- otherwise a '
+                             'partial investigation reads\n'
+                             '      // like a conclusion.\n'
+                             '      const text = partToString(result.llmContent);\n'
+                             '      expect(text).toContain(raw);\n'
+                             "      expect(text).toContain('its assignment is "
+                             "unfinished');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('explains successful subagents with no "
+                             "model-visible output', async () => {\n"},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-1',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': "} from '../../agents/background-tasks.js';\n"
@@ -34877,6 +35067,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/agents/runtime/agent-context.ts': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6',
  'packages/core/src/agents/runtime/agent-core.ts': '35a2d0b3f45533e5e63fc705725a6a831978776bf81b8d65d6dfc8e005c86034',
  'packages/core/src/agents/runtime/agent-headless.ts': '566427c59d72b3bc5f2e582e6b83a43388e5bb2d66642026d35951dd5b017f5c',
+ 'packages/core/src/agents/subagent-result.test.ts': 'b0ff2c8c306c52b336b2382a6e70ef7f520a2b777908997966967056f5c7aa00',
  'packages/core/src/agents/subagent-result.ts': '3a950d84ad4118335f7b13cd3bea5449420be1bd1e8a07e46389472a271a90f4',
  'packages/core/src/config/config.ts': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49',
  'packages/core/src/config/qwen38-agent-service-contract.test.ts': 'aacc0d3b15582dacc02c2d4e1291ed15a1f3a47460b09edc195ba8b1beac6417',
@@ -34897,7 +35088,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/openaiContentGenerator/pipeline.ts': '5c9d2127e4e1abbad35fabb93cf4f7997c876669edfaa82798e5bae57a0c03bb',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
  'packages/core/src/core/prompts.ts': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c',
- 'packages/core/src/core/qwen38-deployment-prompt.test.ts': '5da99e4b47fe307ceb842b6c66593e9babbf4095eec50c855a1aead9755ceb4f',
+ 'packages/core/src/core/qwen38-deployment-prompt.test.ts': '2194e034e19ea42035bbb4631155e1c4358b1f68f487f449012d7774b32eb532',
  'packages/core/src/core/qwen38-deployment-prompt.ts': '351df1feec2b54dd886c05feae0bed2b31bd7442c5b37617f319ac22557f333d',
  'packages/core/src/core/session-recovery.ts': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513',
  'packages/core/src/core/tokenLimits.test.ts': '0f4775ebb4abb3b3a7a38a2369b3c44995b97b2f256b04c56609c1ef0c01823c',
@@ -34913,7 +35104,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/services/chatCompressionService.ts': '75e64be7a5e28544fc9eba43b11346811a18fe66b0a186830707682533217523',
  'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
- 'packages/core/src/tools/agent/agent.test.ts': '8c45f5ac169af9e280c9773f33d89ee61bb3faa885eba89ab078e4a392f0f915',
+ 'packages/core/src/tools/agent/agent.test.ts': '7c321dbbd47db96c034190278000b24b7605a6ff22dcfcd1c05a14097ee15148',
  'packages/core/src/tools/agent/agent.ts': '915eddfa8c1c1d1de08406631bd0a360d888624fa3d901a1468c167c27f1099f',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',

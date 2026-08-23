@@ -933,6 +933,44 @@ index 2870d4b..e325807 100644
    /**
     * Sets a callback that the reasoning loop calls between tool rounds
     * to drain external messages (e.g. from SendMessage tool).
+diff --git a/packages/core/src/agents/subagent-result.test.ts b/packages/core/src/agents/subagent-result.test.ts
+index 691da33..2dbc8b9 100644
+--- a/packages/core/src/agents/subagent-result.test.ts
++++ b/packages/core/src/agents/subagent-result.test.ts
+@@ -55,8 +55,31 @@ describe('toModelVisibleSubagentResult', () => {
+   it('preserves raw diagnostics for non-goal terminations', () => {
+     const raw = '<analysis>debug</analysis><summary>partial</summary>';
+ 
+-    expect(toModelVisibleSubagentResult(raw, AgentTerminateMode.ERROR)).toBe(
+-      raw,
++    const text = toModelVisibleSubagentResult(raw, AgentTerminateMode.ERROR);
++    expect(text).toContain(raw);
++    expect(text).toContain('its assignment is unfinished');
++  });
++
++  it('reports an exhausted turn budget with the turn count', () => {
++    const text = toModelVisibleSubagentResult(
++      'partial findings',
++      AgentTerminateMode.MAX_TURNS,
++      400,
+     );
++
++    expect(text).toContain('exhausted its turn budget after 400 turns');
++    expect(text).toContain('partial findings');
++  });
++
++  it('says so when a stopped subagent produced nothing at all', () => {
++    const text = toModelVisibleSubagentResult(
++      '   ',
++      AgentTerminateMode.MAX_TURNS,
++      1,
++    );
++
++    // Singular, and unmistakably not a conclusion the parent can build on.
++    expect(text).toContain('after 1 turn and produced no report');
++    expect(text).not.toContain('1 turns');
+   });
+ });
 diff --git a/packages/core/src/agents/subagent-result.ts b/packages/core/src/agents/subagent-result.ts
 index 588c7e6..1288e8a 100644
 --- a/packages/core/src/agents/subagent-result.ts
@@ -3770,7 +3808,7 @@ index 72d1aa5..c16d183 100644
  
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 new file mode 100644
-index 0000000..2472772
+index 0000000..0399083
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 @@ -0,0 +1,142 @@
@@ -3882,7 +3920,7 @@ index 0000000..2472772
 +    const framed = appendQwen38MainSessionFrame('discipline');
 +    expect(framed).toContain('## This session');
 +    expect(framed).toContain('you own the final response');
-+    expect(framed).toContain('Integrate and verify its result yourself');
++    expect(framed).toContain('Delegate generously');
 +  });
 +
 +  it('requires and appends the unique invocation scratch in locked subagents', () => {
@@ -10714,7 +10752,7 @@ index 8be0153..00aa6af 100644
      },
      {
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..ab4e9b8 100644
+index 6d3fb50..6619454 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
 @@ -205,6 +205,7 @@ describe('AgentTool', () => {
@@ -10748,7 +10786,7 @@ index 6d3fb50..ab4e9b8 100644
 +        'Explore',
 +      ]);
 +      expect(strictTool.description).toContain(
-+        'only sequential, foreground delegation',
++        'Sequential and foreground only',
 +      );
 +      expect(strictTool.description).not.toContain('background by default');
 +      expect(
@@ -10777,6 +10815,28 @@ index 6d3fb50..ab4e9b8 100644
      it('keeps subagent_type open when named subagents are available', () => {
        const schema = agentTool.schema;
        const properties = schema.parametersJsonSchema as {
+@@ -2045,6 +2091,7 @@ describe('AgentTool', () => {
+           failedToolCalls: 0,
+         }),
+         getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
++        getTurnsUsed: vi.fn().mockReturnValue(2),
+       } as unknown as AgentHeadless;
+ 
+       mockContextState = {
+@@ -2224,7 +2271,12 @@ describe('AgentTool', () => {
+       ).createInvocation(params);
+       const result = await invocation.execute();
+ 
+-      expect(partToString(result.llmContent)).toBe(raw);
++      // Diagnostics survive verbatim, but the parent is also told the
++      // assignment did not finish -- otherwise a partial investigation reads
++      // like a conclusion.
++      const text = partToString(result.llmContent);
++      expect(text).toContain(raw);
++      expect(text).toContain('its assignment is unfinished');
+     });
+ 
+     it('explains successful subagents with no model-visible output', async () => {
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
 index 4bcea69..5b826b0 100644
 --- a/packages/core/src/tools/agent/agent.ts
