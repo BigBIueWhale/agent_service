@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'a90ee561f30c40673d02bda642c05adb81337de8ff6b38933252a86175872975',
+  'review_sha256': 'd1a3d3f0bf32a37cd1a5212688442af8e6b4b47f77cdc325b8d8b529aa33d9b4',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -166,7 +166,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
-             'after_sha256': '7c321dbbd47db96c034190278000b24b7605a6ff22dcfcd1c05a14097ee15148'},
+             'after_sha256': '00778f0d215607bdfe3f4e23e4762de1b6df9e3621f75a5f216fe406dc79a76a'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
              'after_sha256': '915eddfa8c1c1d1de08406631bd0a360d888624fa3d901a1468c167c27f1099f'},
@@ -29851,6 +29851,465 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              "    it('explains successful subagents with no "
                              "model-visible output', async () => {\n"},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-5',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '          successfulToolCalls: 0,\n'
+                       '          failedToolCalls: 0,\n'
+                       '        }),\n'
+                       '        getTerminateMode: '
+                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                       '      } as unknown as AgentHeadless;\n'
+                       '\n'
+                       '      mockContextState = {\n'
+                       '        set: vi.fn(),\n',
+             'after': '          successfulToolCalls: 0,\n'
+                      '          failedToolCalls: 0,\n'
+                      '        }),\n'
+                      '        getTerminateMode: '
+                      'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                      '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '      } as unknown as AgentHeadless;\n'
+                      '\n'
+                      '      mockContextState = {\n'
+                      '        set: vi.fn(),\n',
+             'review_before': '          failedToolCalls: 0,\n'
+                              '        }),\n'
+                              '        getTerminateMode: '
+                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                              '      } as unknown as AgentHeadless;\n'
+                              '\n'
+                              '      mockContextState = {\n',
+             'review_after': '          failedToolCalls: 0,\n'
+                             '        }),\n'
+                             '        getTerminateMode: '
+                             'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                             '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '      } as unknown as AgentHeadless;\n'
+                             '\n'
+                             '      mockContextState = {\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-6',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '    beforeEach(() => {\n'
+                       '      mockAgent = {\n'
+                       '        execute: vi.fn().mockResolvedValue(undefined),\n'
+                       "        result: 'Task completed successfully',\n"
+                       '        terminateMode: AgentTerminateMode.GOAL,\n'
+                       '        getCore: vi.fn().mockReturnValue({\n'
+                       "          modelConfig: { model: 'subagent-model' },\n"
+                       '        }),\n'
+                       "        getFinalText: vi.fn().mockReturnValue('Task completed "
+                       "successfully'),\n"
+                       "        formatCompactResult: vi.fn().mockReturnValue('✅ "
+                       "Success'),\n"
+                       '        getExecutionSummary: vi.fn().mockReturnValue({\n'
+                       '          rounds: 1,\n'
+                       '          totalDurationMs: 500,\n'
+                       '          totalToolCalls: 1,\n'
+                       '          successfulToolCalls: 1,\n'
+                       '          failedToolCalls: 0,\n'
+                       '          successRate: 100,\n'
+                       '          inputTokens: 100,\n'
+                       '          outputTokens: 50,\n'
+                       '          totalTokens: 150,\n'
+                       '          estimatedCost: 0.01,\n'
+                       '          toolUsage: [],\n'
+                       '        }),\n'
+                       '        getStatistics: vi.fn().mockReturnValue({\n'
+                       '          rounds: 1,\n'
+                       '          totalDurationMs: 500,\n'
+                       '          totalToolCalls: 1,\n'
+                       '          successfulToolCalls: 1,\n'
+                       '          failedToolCalls: 0,\n'
+                       '        }),\n'
+                       '        getTerminateMode: '
+                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                       '      } as unknown as AgentHeadless;\n'
+                       '\n'
+                       '      mockContextState = {\n'
+                       '        set: vi.fn(),\n'
+                       '      } as unknown as ContextState;\n'
+                       '\n'
+                       '      MockedContextState.mockImplementation(() => '
+                       'mockContextState);\n'
+                       '\n'
+                       '      '
+                       'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(\n'
+                       '        mockSubagents[0],\n'
+                       '      );\n'
+                       '      '
+                       'vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({\n'
+                       '        subagent: mockAgent,\n'
+                       '        dispose: vi.fn().mockResolvedValue(undefined),\n'
+                       '      });\n'
+                       '\n'
+                       '      mockHookSystem = {\n'
+                       '        fireSubagentStartEvent: '
+                       'vi.fn().mockResolvedValue(undefined),\n'
+                       '        fireSubagentStopEvent: '
+                       'vi.fn().mockResolvedValue(undefined),\n'
+                       '      } as unknown as HookSystem;\n'
+                       '\n'
+                       '      '
+                       'vi.mocked(config.getGeminiClient).mockReturnValue(undefined as '
+                       'never);\n'
+                       '      (config as unknown as Record<string, '
+                       "unknown>)['getHookSystem'] = vi\n"
+                       '        .fn()\n'
+                       '        .mockReturnValue(mockHookSystem);\n'
+                       '      (config as unknown as Record<string, '
+                       "unknown>)['getTranscriptPath'] = vi\n"
+                       '        .fn()\n'
+                       "        .mockReturnValue('/test/transcript');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('should call fireSubagentStartEvent before execution', "
+                       'async () => {\n',
+             'after': '    beforeEach(() => {\n'
+                      '      mockAgent = {\n'
+                      '        execute: vi.fn().mockResolvedValue(undefined),\n'
+                      "        result: 'Task completed successfully',\n"
+                      '        terminateMode: AgentTerminateMode.GOAL,\n'
+                      '        getCore: vi.fn().mockReturnValue({\n'
+                      "          modelConfig: { model: 'subagent-model' },\n"
+                      '        }),\n'
+                      "        getFinalText: vi.fn().mockReturnValue('Task completed "
+                      "successfully'),\n"
+                      "        formatCompactResult: vi.fn().mockReturnValue('✅ "
+                      "Success'),\n"
+                      '        getExecutionSummary: vi.fn().mockReturnValue({\n'
+                      '          rounds: 1,\n'
+                      '          totalDurationMs: 500,\n'
+                      '          totalToolCalls: 1,\n'
+                      '          successfulToolCalls: 1,\n'
+                      '          failedToolCalls: 0,\n'
+                      '          successRate: 100,\n'
+                      '          inputTokens: 100,\n'
+                      '          outputTokens: 50,\n'
+                      '          totalTokens: 150,\n'
+                      '          estimatedCost: 0.01,\n'
+                      '          toolUsage: [],\n'
+                      '        }),\n'
+                      '        getStatistics: vi.fn().mockReturnValue({\n'
+                      '          rounds: 1,\n'
+                      '          totalDurationMs: 500,\n'
+                      '          totalToolCalls: 1,\n'
+                      '          successfulToolCalls: 1,\n'
+                      '          failedToolCalls: 0,\n'
+                      '        }),\n'
+                      '        getTerminateMode: '
+                      'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                      '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '      } as unknown as AgentHeadless;\n'
+                      '\n'
+                      '      mockContextState = {\n'
+                      '        set: vi.fn(),\n'
+                      '      } as unknown as ContextState;\n'
+                      '\n'
+                      '      MockedContextState.mockImplementation(() => '
+                      'mockContextState);\n'
+                      '\n'
+                      '      '
+                      'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(\n'
+                      '        mockSubagents[0],\n'
+                      '      );\n'
+                      '      '
+                      'vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({\n'
+                      '        subagent: mockAgent,\n'
+                      '        dispose: vi.fn().mockResolvedValue(undefined),\n'
+                      '      });\n'
+                      '\n'
+                      '      mockHookSystem = {\n'
+                      '        fireSubagentStartEvent: '
+                      'vi.fn().mockResolvedValue(undefined),\n'
+                      '        fireSubagentStopEvent: '
+                      'vi.fn().mockResolvedValue(undefined),\n'
+                      '      } as unknown as HookSystem;\n'
+                      '\n'
+                      '      '
+                      'vi.mocked(config.getGeminiClient).mockReturnValue(undefined as '
+                      'never);\n'
+                      '      (config as unknown as Record<string, '
+                      "unknown>)['getHookSystem'] = vi\n"
+                      '        .fn()\n'
+                      '        .mockReturnValue(mockHookSystem);\n'
+                      '      (config as unknown as Record<string, '
+                      "unknown>)['getTranscriptPath'] = vi\n"
+                      '        .fn()\n'
+                      "        .mockReturnValue('/test/transcript');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('should call fireSubagentStartEvent before execution', "
+                      'async () => {\n',
+             'review_before': '          failedToolCalls: 0,\n'
+                              '        }),\n'
+                              '        getTerminateMode: '
+                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                              '      } as unknown as AgentHeadless;\n'
+                              '\n'
+                              '      mockContextState = {\n',
+             'review_after': '          failedToolCalls: 0,\n'
+                             '        }),\n'
+                             '        getTerminateMode: '
+                             'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                             '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '      } as unknown as AgentHeadless;\n'
+                             '\n'
+                             '      mockContextState = {\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-7',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '    beforeEach(() => {\n'
+                       '      mockAgent = {\n'
+                       '        execute: vi.fn().mockResolvedValue(undefined),\n'
+                       "        result: 'Task completed successfully',\n"
+                       '        terminateMode: AgentTerminateMode.GOAL,\n'
+                       '        getCore: vi.fn().mockReturnValue({\n'
+                       "          modelConfig: { model: 'subagent-model' },\n"
+                       '        }),\n'
+                       "        getFinalText: vi.fn().mockReturnValue('Task completed "
+                       "successfully'),\n"
+                       "        formatCompactResult: vi.fn().mockReturnValue('✅ "
+                       "Success'),\n"
+                       '        getExecutionSummary: vi.fn().mockReturnValue({\n'
+                       '          rounds: 1,\n'
+                       '          totalDurationMs: 500,\n'
+                       '          totalToolCalls: 1,\n'
+                       '          successfulToolCalls: 1,\n'
+                       '          failedToolCalls: 0,\n'
+                       '          successRate: 100,\n'
+                       '          inputTokens: 100,\n'
+                       '          outputTokens: 50,\n'
+                       '          totalTokens: 150,\n'
+                       '          estimatedCost: 0.01,\n'
+                       '          toolUsage: [],\n'
+                       '        }),\n'
+                       '        getStatistics: vi.fn().mockReturnValue({\n'
+                       '          rounds: 1,\n'
+                       '          totalDurationMs: 500,\n'
+                       '          totalToolCalls: 1,\n'
+                       '          successfulToolCalls: 1,\n'
+                       '          failedToolCalls: 0,\n'
+                       '        }),\n'
+                       '        getTerminateMode: '
+                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                       '      } as unknown as AgentHeadless;\n'
+                       '\n'
+                       '      mockContextState = {\n'
+                       '        set: vi.fn(),\n'
+                       '      } as unknown as ContextState;\n'
+                       '\n'
+                       '      MockedContextState.mockImplementation(() => '
+                       'mockContextState);\n'
+                       '\n'
+                       '      '
+                       'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(\n'
+                       '        mockSubagents[0],\n'
+                       '      );\n'
+                       '      '
+                       'vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({\n'
+                       '        subagent: mockAgent,\n'
+                       '        dispose: vi.fn().mockResolvedValue(undefined),\n'
+                       '      });\n'
+                       '\n'
+                       '      mockHookSystem = {\n'
+                       '        fireSubagentStartEvent: '
+                       'vi.fn().mockResolvedValue(undefined),\n'
+                       '        fireSubagentStopEvent: '
+                       'vi.fn().mockResolvedValue(undefined),\n'
+                       '      } as unknown as HookSystem;\n'
+                       '\n'
+                       '      '
+                       'vi.mocked(config.getGeminiClient).mockReturnValue(undefined as '
+                       'never);\n'
+                       '      (config as unknown as Record<string, '
+                       "unknown>)['getHookSystem'] = vi\n"
+                       '        .fn()\n'
+                       '        .mockReturnValue(mockHookSystem);\n'
+                       '      (config as unknown as Record<string, '
+                       "unknown>)['getTranscriptPath'] = vi\n"
+                       '        .fn()\n'
+                       "        .mockReturnValue('/test/transcript');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('should call fireSubagentStopEvent after execution', "
+                       'async () => {\n',
+             'after': '    beforeEach(() => {\n'
+                      '      mockAgent = {\n'
+                      '        execute: vi.fn().mockResolvedValue(undefined),\n'
+                      "        result: 'Task completed successfully',\n"
+                      '        terminateMode: AgentTerminateMode.GOAL,\n'
+                      '        getCore: vi.fn().mockReturnValue({\n'
+                      "          modelConfig: { model: 'subagent-model' },\n"
+                      '        }),\n'
+                      "        getFinalText: vi.fn().mockReturnValue('Task completed "
+                      "successfully'),\n"
+                      "        formatCompactResult: vi.fn().mockReturnValue('✅ "
+                      "Success'),\n"
+                      '        getExecutionSummary: vi.fn().mockReturnValue({\n'
+                      '          rounds: 1,\n'
+                      '          totalDurationMs: 500,\n'
+                      '          totalToolCalls: 1,\n'
+                      '          successfulToolCalls: 1,\n'
+                      '          failedToolCalls: 0,\n'
+                      '          successRate: 100,\n'
+                      '          inputTokens: 100,\n'
+                      '          outputTokens: 50,\n'
+                      '          totalTokens: 150,\n'
+                      '          estimatedCost: 0.01,\n'
+                      '          toolUsage: [],\n'
+                      '        }),\n'
+                      '        getStatistics: vi.fn().mockReturnValue({\n'
+                      '          rounds: 1,\n'
+                      '          totalDurationMs: 500,\n'
+                      '          totalToolCalls: 1,\n'
+                      '          successfulToolCalls: 1,\n'
+                      '          failedToolCalls: 0,\n'
+                      '        }),\n'
+                      '        getTerminateMode: '
+                      'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                      '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '      } as unknown as AgentHeadless;\n'
+                      '\n'
+                      '      mockContextState = {\n'
+                      '        set: vi.fn(),\n'
+                      '      } as unknown as ContextState;\n'
+                      '\n'
+                      '      MockedContextState.mockImplementation(() => '
+                      'mockContextState);\n'
+                      '\n'
+                      '      '
+                      'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(\n'
+                      '        mockSubagents[0],\n'
+                      '      );\n'
+                      '      '
+                      'vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({\n'
+                      '        subagent: mockAgent,\n'
+                      '        dispose: vi.fn().mockResolvedValue(undefined),\n'
+                      '      });\n'
+                      '\n'
+                      '      mockHookSystem = {\n'
+                      '        fireSubagentStartEvent: '
+                      'vi.fn().mockResolvedValue(undefined),\n'
+                      '        fireSubagentStopEvent: '
+                      'vi.fn().mockResolvedValue(undefined),\n'
+                      '      } as unknown as HookSystem;\n'
+                      '\n'
+                      '      '
+                      'vi.mocked(config.getGeminiClient).mockReturnValue(undefined as '
+                      'never);\n'
+                      '      (config as unknown as Record<string, '
+                      "unknown>)['getHookSystem'] = vi\n"
+                      '        .fn()\n'
+                      '        .mockReturnValue(mockHookSystem);\n'
+                      '      (config as unknown as Record<string, '
+                      "unknown>)['getTranscriptPath'] = vi\n"
+                      '        .fn()\n'
+                      "        .mockReturnValue('/test/transcript');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('should call fireSubagentStopEvent after execution', "
+                      'async () => {\n',
+             'review_before': '          failedToolCalls: 0,\n'
+                              '        }),\n'
+                              '        getTerminateMode: '
+                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                              '      } as unknown as AgentHeadless;\n'
+                              '\n'
+                              '      mockContextState = {\n',
+             'review_after': '          failedToolCalls: 0,\n'
+                             '        }),\n'
+                             '        getTerminateMode: '
+                             'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                             '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '      } as unknown as AgentHeadless;\n'
+                             '\n'
+                             '      mockContextState = {\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-8',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '          failedToolCalls: 0,\n'
+                       '        }),\n'
+                       '        getTerminateMode: '
+                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                       '      } as unknown as AgentHeadless;\n'
+                       '\n'
+                       '      vi.mocked(mockAgent.execute).mockImplementation(async () '
+                       '=> {\n',
+             'after': '          failedToolCalls: 0,\n'
+                      '        }),\n'
+                      '        getTerminateMode: '
+                      'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                      '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '      } as unknown as AgentHeadless;\n'
+                      '\n'
+                      '      vi.mocked(mockAgent.execute).mockImplementation(async () '
+                      '=> {\n',
+             'review_before': '          failedToolCalls: 0,\n'
+                              '        }),\n'
+                              '        getTerminateMode: '
+                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                              '      } as unknown as AgentHeadless;\n'
+                              '\n'
+                              '      '
+                              'vi.mocked(mockAgent.execute).mockImplementation(async '
+                              '() => {\n',
+             'review_after': '          failedToolCalls: 0,\n'
+                             '        }),\n'
+                             '        getTerminateMode: '
+                             'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                             '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '      } as unknown as AgentHeadless;\n'
+                             '\n'
+                             '      '
+                             'vi.mocked(mockAgent.execute).mockImplementation(async () '
+                             '=> {\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-9',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '        executeExternalInputs: '
+                       'vi.fn().mockResolvedValue(undefined),\n'
+                       "        getFinalText: vi.fn().mockReturnValue('Monitor "
+                       "done'),\n"
+                       '        getTerminateMode: '
+                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                       '        getExecutionSummary: vi.fn().mockReturnValue({}),\n'
+                       "        // Background spawn subscribes to the core's event "
+                       'emitter to\n'
+                       "        // populate the entry's recentActivities buffer. "
+                       'Return a stub\n',
+             'after': '        executeExternalInputs: '
+                      'vi.fn().mockResolvedValue(undefined),\n'
+                      "        getFinalText: vi.fn().mockReturnValue('Monitor done'),\n"
+                      '        getTerminateMode: '
+                      'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                      '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '        getExecutionSummary: vi.fn().mockReturnValue({}),\n'
+                      "        // Background spawn subscribes to the core's event "
+                      'emitter to\n'
+                      "        // populate the entry's recentActivities buffer. Return "
+                      'a stub\n',
+             'review_before': '        executeExternalInputs: '
+                              'vi.fn().mockResolvedValue(undefined),\n'
+                              "        getFinalText: vi.fn().mockReturnValue('Monitor "
+                              "done'),\n"
+                              '        getTerminateMode: '
+                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                              '        getExecutionSummary: '
+                              'vi.fn().mockReturnValue({}),\n'
+                              "        // Background spawn subscribes to the core's "
+                              'event emitter to\n'
+                              "        // populate the entry's recentActivities "
+                              'buffer. Return a stub\n',
+             'review_after': '        executeExternalInputs: '
+                             'vi.fn().mockResolvedValue(undefined),\n'
+                             "        getFinalText: vi.fn().mockReturnValue('Monitor "
+                             "done'),\n"
+                             '        getTerminateMode: '
+                             'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
+                             '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '        getExecutionSummary: '
+                             'vi.fn().mockReturnValue({}),\n'
+                             "        // Background spawn subscribes to the core's "
+                             'event emitter to\n'
+                             "        // populate the entry's recentActivities buffer. "
+                             'Return a stub\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-1',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': "} from '../../agents/background-tasks.js';\n"
@@ -35104,7 +35563,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/services/chatCompressionService.ts': '75e64be7a5e28544fc9eba43b11346811a18fe66b0a186830707682533217523',
  'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
- 'packages/core/src/tools/agent/agent.test.ts': '7c321dbbd47db96c034190278000b24b7605a6ff22dcfcd1c05a14097ee15148',
+ 'packages/core/src/tools/agent/agent.test.ts': '00778f0d215607bdfe3f4e23e4762de1b6df9e3621f75a5f216fe406dc79a76a',
  'packages/core/src/tools/agent/agent.ts': '915eddfa8c1c1d1de08406631bd0a360d888624fa3d901a1468c167c27f1099f',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',

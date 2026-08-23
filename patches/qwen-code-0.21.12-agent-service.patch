@@ -10752,7 +10752,7 @@ index 8be0153..00aa6af 100644
      },
      {
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..6619454 100644
+index 6d3fb50..0be654f 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
 @@ -205,6 +205,7 @@ describe('AgentTool', () => {
@@ -10837,6 +10837,46 @@ index 6d3fb50..6619454 100644
      });
  
      it('explains successful subagents with no model-visible output', async () => {
+@@ -3407,6 +3459,7 @@ describe('AgentTool', () => {
+           failedToolCalls: 0,
+         }),
+         getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
++        getTurnsUsed: vi.fn().mockReturnValue(2),
+       } as unknown as AgentHeadless;
+ 
+       mockContextState = {
+@@ -4670,6 +4723,7 @@ describe('AgentTool', () => {
+           failedToolCalls: 0,
+         }),
+         getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
++        getTurnsUsed: vi.fn().mockReturnValue(2),
+       } as unknown as AgentHeadless;
+ 
+       mockContextState = {
+@@ -4866,6 +4920,7 @@ describe('AgentTool', () => {
+           failedToolCalls: 0,
+         }),
+         getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
++        getTurnsUsed: vi.fn().mockReturnValue(2),
+       } as unknown as AgentHeadless;
+ 
+       mockContextState = {
+@@ -5217,6 +5272,7 @@ describe('AgentTool', () => {
+           failedToolCalls: 0,
+         }),
+         getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
++        getTurnsUsed: vi.fn().mockReturnValue(2),
+       } as unknown as AgentHeadless;
+ 
+       vi.mocked(mockAgent.execute).mockImplementation(async () => {
+@@ -5593,6 +5649,7 @@ describe('AgentTool', () => {
+         executeExternalInputs: vi.fn().mockResolvedValue(undefined),
+         getFinalText: vi.fn().mockReturnValue('Monitor done'),
+         getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
++        getTurnsUsed: vi.fn().mockReturnValue(2),
+         getExecutionSummary: vi.fn().mockReturnValue({}),
+         // Background spawn subscribes to the core's event emitter to
+         // populate the entry's recentActivities buffer. Return a stub
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
 index 4bcea69..5b826b0 100644
 --- a/packages/core/src/tools/agent/agent.ts
