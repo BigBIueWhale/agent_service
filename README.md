@@ -44,13 +44,13 @@ The fixed stack is:
 | Thinking | Required, `xhigh` |
 | Historical thinking | `preserve_thinking=false` |
 | Qwen Code | `0.21.12`, commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38` |
-| Agent image | `sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec` |
-| Service | Rust, one session at a time, Docker-only; implementation commit `bc67dae720894cbbcd62122a2a9ff6b56b042168` |
-| Release lock commit | `7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc` |
-| Service image | `sha256:8f8d4b2e68bf47c9d92c6c5c0f77fdbf60d0056ef32155a34ecc96357dfd41f4` |
-| Docker broker image | `sha256:f9d3b77ed2e10d69648c2e443fa5e49ff06fca7eedf6fc580f9d8762d9bfb054` |
-| Fixed-relay image | `sha256:8b3aa7c098e5a9c757302340bf5554b9bd36c7c30640c1ce07d5cd1fc38417d1` |
-| Stream-capture image | `sha256:d87f39d60370eb5190e7ec166807131b90d545d6da20929a1e6fa7ccf7c186de` |
+| Agent image | `sha256:0d6d47d0516964c1f952b2d1506ba33614aad47e16899611b7ac0dedfd68b013` |
+| Service | Rust, one session at a time, Docker-only; implementation commit `46af008ad9673ec2fcbc7bd84b8d95867d3e90e2` |
+| Release lock commit | `a236fcceae7babb5a752f1b40283035afb40428f` |
+| Service image | `sha256:9a68fb95b9707e178d1c9c9061450b5ecab08ee2d57e9b6e81f954fae034b260` |
+| Docker broker image | `sha256:ae9dfef94486f86f0b6da4cd96ec76c5a245d23635c5b8a76d8f8e414e982a30` |
+| Fixed-relay image | `sha256:5153a46bc03fa920b0d09000eca1848af255010bda99cc50e8a6110ebcd02690` |
+| Stream-capture image | `sha256:2d38ea4ae0f33894740a1a067c7fa8e3e3d864ff58ef439d6d432fd4739b9aef` |
 | Service listener | `127.0.0.1:8090` only |
 | Model listener | `127.0.0.1:8000` only |
 
@@ -594,7 +594,7 @@ locked runtime/configuration identity. The service image is sealed by committed
 source, build-input, stack-lock, and Cargo-lock labels.
 
 The current agent image is
-`sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec`.
+`sha256:0d6d47d0516964c1f952b2d1506ba33614aad47e16899611b7ac0dedfd68b013`.
 Its build reconstructed exactly sixty-one changed/new files from pristine upstream
 and passed 2,427 tests across twenty-three focused test files. The sealed runtime
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
@@ -608,13 +608,13 @@ nine broker, three fixed-relay, two stream-capture, and two agent-exec tests. A
 full clean no-cache release build reproduced the exact locked agent, relay, capture,
 broker, and service image IDs; candidate build directories were absent afterward.
 The release lock pins implementation commit
-`bc67dae720894cbbcd62122a2a9ff6b56b042168`, the 66-entry build-input manifest
-hash `949edcada0c09591b416335d9418f02dcfd69a0a2ba3352b3f417af9a7b3b435`,
-stack-lock hash `de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3`,
+`46af008ad9673ec2fcbc7bd84b8d95867d3e90e2`, the 74-entry build-input manifest
+hash `b74df26f6feafb035fbe7180f8c97b3f9b30264b4063da65db9f40573bdbc210`,
+stack-lock hash `9e6ed8d6d7d7fb3e37a110c9c9d4e0e301f400a9a7e7864ef734c5618b903bb0`,
 and all five resulting image IDs. Release-lock commit
-`7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc` freezes that complete set; the
+`a236fcceae7babb5a752f1b40283035afb40428f` freezes that complete set; the
 release-lock file itself hashes to
-`a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4`.
+`d8194d257f2b17209e814cf6b7f7290b079f56b159ea6662bab844f3d92fca16`.
 
 Pinning is not a claim that the upstream dependency graph has no security debt. The
 Qwen `npm ci` build currently reports 66 audit advisories (2 low, 36 moderate, 25
