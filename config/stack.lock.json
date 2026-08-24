@@ -41,7 +41,7 @@
     "image_tag": "qwen38-docker-broker:1.1.0",
     "image_id": "sha256:b4bc441bc1d42fb062b84411658732f58c85a362a651a24e653bada8eb670233",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
-    "policy_sha256": "e229ea61c3e7f2fa614e2af77d6ae00cc2be945c408f713fd0c3395231fcef2e",
+    "policy_sha256": "ec8fcd98ae2013bdfc4341733cee6dc082bd23ed26072b96a982aa5124eb8bc7",
     "source_sha256": "5009ebb66cb2b42a2361ae820d9df376f0334c41438d68c895a09ac32dd1d6c0",
     "memory": "64m",
     "memory_swap": "64m",
