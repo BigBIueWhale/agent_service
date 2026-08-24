@@ -87,14 +87,15 @@ Verification performed in the pinned Node image:
   idempotence, new-file handling, source/output drift, intermediate-state refusal,
   review-diff drift, time-of-check/time-of-use mutation, and transactional rollback;
 - the complete patched TypeScript/CLI build passed;
-- nineteen focused core files passed, including base-client finish reasons, exact
-  auto-compaction, scheduler recovery, the complete Agent suite, strict
-  PNG/container/decode tests, chronological media, and runtime isolation;
-- all four focused CLI suites passed, covering locked auth revalidation,
-  configuration, initialization metadata, literal leading-slash prompts, and the
-  non-interactive path;
-- total focused behavioral tests: 2,427 passed across twenty-three suites, zero
-  failed;
+- twenty-one focused core files passed, including base-client finish reasons,
+  exact auto-compaction, scheduler recovery, the complete Agent suite, strict
+  PNG/container/decode tests, chronological media, runtime isolation, and the
+  deployment-prompt contract;
+- all five focused CLI suites passed, covering locked auth revalidation,
+  configuration, initialization metadata, literal leading-slash prompts, the
+  stream-json output adapter, and the non-interactive path;
+- total focused behavioral tests: 2,543 passed across twenty-six suites, zero
+  failed, with 259 environment-gated cases skipped;
 - a sealed runtime capture observed two `/tokenize` calls followed by one streaming `/v1/chat/completions` call;
 - the three requests carried identical messages, tools, and chat-template kwargs;
 - a synthetic exact prompt count of 12,345 produced `max_tokens: 249799` for the 262,144-token deployed context;
