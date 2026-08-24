@@ -3811,7 +3811,7 @@ new file mode 100644
 index 0000000..0399083
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,147 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -3921,6 +3921,11 @@ index 0000000..0399083
 +    expect(framed).toContain('## This session');
 +    expect(framed).toContain('you own the final response');
 +    expect(framed).toContain('Delegate generously');
++    expect(framed).toContain(
++      'Context length is the most important thing in AI',
++    );
++    expect(framed).toContain('stay on trajectory for longer');
++    expect(framed).toContain('re-ingested when it returns');
 +  });
 +
 +  it('requires and appends the unique invocation scratch in locked subagents', () => {
@@ -4058,7 +4063,7 @@ index 0000000..366499a
 + */
 +export function appendQwen38MainSessionFrame(base: string): string {
 +  if (!isQwen38LockedAgentServiceRuntime()) return base;
-+  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived, non-interactive session, and you own the final response.\n- Delegate generously to a foreground \`general-purpose\` or \`Explore\` subagent: broad searches, surveying unfamiliar code, reproducing a failure, converting documents -- any bounded work whose useful output is short but takes a lot of reading. Its reading stays out of your context and only its report returns, so a subagent that spends sixty turns costs you one.\n- Give it a self-contained assignment; it cannot see this conversation. Treat its report as evidence to verify, not a conclusion.\n- Keep the design decisions, the edits, and the final verification yourself.\n- Lead the final response with the outcome, then the material files, verification, and unresolved risks.`;
++  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived, non-interactive session, and you own the final response.\n- Context length is the most important thing in AI, and it is immoral to waste it. Reading is what wastes it: material you open once to learn one fact stays in this thread for the rest of the session and drags you toward compaction.\n- That is what subagents are for. A subagent's reading never enters your context; only its report comes back, so one that spends sixty turns costs you one. It is what lets a single long thread keep running without compacting the conversation, and that is the whole point -- you stay on trajectory for longer.\n- Delegate generously, then, to a foreground \`general-purpose\` or \`Explore\` subagent: broad searches, surveying unfamiliar code, reproducing a failure, converting documents -- any bounded work whose useful output is short but takes a lot of reading. Your own KV cache is held in DDR5 while it runs, so nothing you have already said is re-ingested when it returns; delegating is close to free.\n- Subagents run one at a time, in the foreground. Give it a self-contained assignment; it cannot see this conversation. Treat its report as evidence to verify, not a conclusion.\n- Keep the design decisions, the edits, and the final verification yourself.\n- Lead the final response with the outcome, then the material files, verification, and unresolved risks.`;
 +}
 +
 +export function appendQwen38DeploymentContract(base: string): string {

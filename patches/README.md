@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `78682767c538c83e8820b8010a854cc5072a03c2db640b39840bf4f85134426d`
+- Review-diff SHA-256: `7a579f12bbcda72e4025e340768554f4df196d6af5a4e4c64f8a12e154d33305`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `9d297e2e0e1a0295218a4a3aa49a4138b22fd48365bd342e26ef1bee1cab8af6`
+- Transformer-manifest SHA-256: `e2bba27d483ef8e980034c079e352343fa81753e2f77ba039b9f804ea4e10c26`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -36,6 +36,17 @@ provide as one fail-closed mode:
 - one universal tool allowlist covering core, dynamic, MCP, skill, and synthetic tools;
 - an explicit foreground-agents-only mode that exposes only `general-purpose` and `Explore`, returns results inline, and rejects forks, background work, teams, worktrees, custom agent types, and model overrides.
 - init metadata filtered through that same policy, so it does not advertise internal or uncallable agent types.
+- one sealed engineering discipline, delivered byte-identically to the main
+  session and to every foreground subagent, because honest verification, scope,
+  and tool-result integrity are properties of this runtime rather than of one
+  role; only genuinely role-specific framing is layered on top of it;
+- a main-session frame that states why delegation is the intended way to work
+  here: context length is the scarcest resource, a subagent's reading never
+  enters the parent context, and the parent's KV cache is retained in host RAM
+  for the duration of the subagent, so nothing already said is re-ingested when
+  the subagent returns. A long single thread therefore keeps running instead of
+  being compacted. Four assertions in the build pin the frame's motivation, not
+  just its presence, so it cannot be silently reduced to a bare instruction;
 - locked settings loading before initialization and during later auth validation:
   no workspace settings or `.env`, no ambient/project/CLI/session/injected MCP,
   and no include-directory override;

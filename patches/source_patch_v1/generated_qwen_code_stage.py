@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'd1a3d3f0bf32a37cd1a5212688442af8e6b4b47f77cdc325b8d8b529aa33d9b4',
+  'review_sha256': '7a579f12bbcda72e4025e340768554f4df196d6af5a4e4c64f8a12e154d33305',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -118,10 +118,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.test.ts',
              'before_sha256': None,
-             'after_sha256': '2194e034e19ea42035bbb4631155e1c4358b1f68f487f449012d7774b32eb532'},
+             'after_sha256': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.ts',
              'before_sha256': None,
-             'after_sha256': '351df1feec2b54dd886c05feae0bed2b31bd7442c5b37617f319ac22557f333d'},
+             'after_sha256': '0397a0cf6e4c71f9df3d0f04a2058c9703ae6b8507cd5cbcd9682603a993b24a'},
             {'path': 'packages/core/src/core/session-recovery.ts',
              'before_sha256': '65e3c71d4fc1661976daaab2add6dbcb6ae6a740f85c88f47ca0106c863186a6',
              'after_sha256': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513'},
@@ -11712,6 +11712,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    expect(framed).toContain('## This session');\n"
                       "    expect(framed).toContain('you own the final response');\n"
                       "    expect(framed).toContain('Delegate generously');\n"
+                      '    expect(framed).toContain(\n'
+                      "      'Context length is the most important thing in AI',\n"
+                      '    );\n'
+                      "    expect(framed).toContain('stay on trajectory for longer');\n"
+                      "    expect(framed).toContain('re-ingested when it returns');\n"
                       '  });\n'
                       '\n'
                       "  it('requires and appends the unique invocation scratch in "
@@ -11894,6 +11899,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    expect(framed).toContain('you own the final "
                              "response');\n"
                              "    expect(framed).toContain('Delegate generously');\n"
+                             '    expect(framed).toContain(\n'
+                             "      'Context length is the most important thing in "
+                             "AI',\n"
+                             '    );\n'
+                             "    expect(framed).toContain('stay on trajectory for "
+                             "longer');\n"
+                             "    expect(framed).toContain('re-ingested when it "
+                             "returns');\n"
                              '  });\n'
                              '\n'
                              "  it('requires and appends the unique invocation scratch "
@@ -12068,19 +12081,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  if (!isQwen38LockedAgentServiceRuntime()) return base;\n'
                       '  return `${base.trim()}\\n\\n## This session\\n\\n- You are '
                       'the main agent in one long-lived, non-interactive session, and '
-                      'you own the final response.\\n- Delegate generously to a '
+                      'you own the final response.\\n- Context length is the most '
+                      'important thing in AI, and it is immoral to waste it. Reading '
+                      'is what wastes it: material you open once to learn one fact '
+                      'stays in this thread for the rest of the session and drags you '
+                      'toward compaction.\\n- That is what subagents are for. A '
+                      "subagent's reading never enters your context; only its report "
+                      'comes back, so one that spends sixty turns costs you one. It is '
+                      'what lets a single long thread keep running without compacting '
+                      'the conversation, and that is the whole point -- you stay on '
+                      'trajectory for longer.\\n- Delegate generously, then, to a '
                       'foreground \\`general-purpose\\` or \\`Explore\\` subagent: '
                       'broad searches, surveying unfamiliar code, reproducing a '
                       'failure, converting documents -- any bounded work whose useful '
-                      'output is short but takes a lot of reading. Its reading stays '
-                      'out of your context and only its report returns, so a subagent '
-                      'that spends sixty turns costs you one.\\n- Give it a '
-                      'self-contained assignment; it cannot see this conversation. '
-                      'Treat its report as evidence to verify, not a conclusion.\\n- '
-                      'Keep the design decisions, the edits, and the final '
-                      'verification yourself.\\n- Lead the final response with the '
-                      'outcome, then the material files, verification, and unresolved '
-                      'risks.`;\n'
+                      'output is short but takes a lot of reading. Your own KV cache '
+                      'is held in DDR5 while it runs, so nothing you have already said '
+                      'is re-ingested when it returns; delegating is close to '
+                      'free.\\n- Subagents run one at a time, in the foreground. Give '
+                      'it a self-contained assignment; it cannot see this '
+                      'conversation. Treat its report as evidence to verify, not a '
+                      'conclusion.\\n- Keep the design decisions, the edits, and the '
+                      'final verification yourself.\\n- Lead the final response with '
+                      'the outcome, then the material files, verification, and '
+                      'unresolved risks.`;\n'
                       '}\n'
                       '\n'
                       'export function appendQwen38DeploymentContract(base: string): '
@@ -12253,20 +12276,32 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'base;\n'
                              '  return `${base.trim()}\\n\\n## This session\\n\\n- You '
                              'are the main agent in one long-lived, non-interactive '
-                             'session, and you own the final response.\\n- Delegate '
-                             'generously to a foreground \\`general-purpose\\` or '
-                             '\\`Explore\\` subagent: broad searches, surveying '
-                             'unfamiliar code, reproducing a failure, converting '
-                             'documents -- any bounded work whose useful output is '
-                             'short but takes a lot of reading. Its reading stays out '
-                             'of your context and only its report returns, so a '
-                             'subagent that spends sixty turns costs you one.\\n- Give '
-                             'it a self-contained assignment; it cannot see this '
-                             'conversation. Treat its report as evidence to verify, '
-                             'not a conclusion.\\n- Keep the design decisions, the '
-                             'edits, and the final verification yourself.\\n- Lead the '
-                             'final response with the outcome, then the material '
-                             'files, verification, and unresolved risks.`;\n'
+                             'session, and you own the final response.\\n- Context '
+                             'length is the most important thing in AI, and it is '
+                             'immoral to waste it. Reading is what wastes it: material '
+                             'you open once to learn one fact stays in this thread for '
+                             'the rest of the session and drags you toward '
+                             'compaction.\\n- That is what subagents are for. A '
+                             "subagent's reading never enters your context; only its "
+                             'report comes back, so one that spends sixty turns costs '
+                             'you one. It is what lets a single long thread keep '
+                             'running without compacting the conversation, and that is '
+                             'the whole point -- you stay on trajectory for '
+                             'longer.\\n- Delegate generously, then, to a foreground '
+                             '\\`general-purpose\\` or \\`Explore\\` subagent: broad '
+                             'searches, surveying unfamiliar code, reproducing a '
+                             'failure, converting documents -- any bounded work whose '
+                             'useful output is short but takes a lot of reading. Your '
+                             'own KV cache is held in DDR5 while it runs, so nothing '
+                             'you have already said is re-ingested when it returns; '
+                             'delegating is close to free.\\n- Subagents run one at a '
+                             'time, in the foreground. Give it a self-contained '
+                             'assignment; it cannot see this conversation. Treat its '
+                             'report as evidence to verify, not a conclusion.\\n- Keep '
+                             'the design decisions, the edits, and the final '
+                             'verification yourself.\\n- Lead the final response with '
+                             'the outcome, then the material files, verification, and '
+                             'unresolved risks.`;\n'
                              '}\n'
                              '\n'
                              'export function appendQwen38DeploymentContract(base: '
@@ -35547,8 +35582,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/openaiContentGenerator/pipeline.ts': '5c9d2127e4e1abbad35fabb93cf4f7997c876669edfaa82798e5bae57a0c03bb',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
  'packages/core/src/core/prompts.ts': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c',
- 'packages/core/src/core/qwen38-deployment-prompt.test.ts': '2194e034e19ea42035bbb4631155e1c4358b1f68f487f449012d7774b32eb532',
- 'packages/core/src/core/qwen38-deployment-prompt.ts': '351df1feec2b54dd886c05feae0bed2b31bd7442c5b37617f319ac22557f333d',
+ 'packages/core/src/core/qwen38-deployment-prompt.test.ts': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851',
+ 'packages/core/src/core/qwen38-deployment-prompt.ts': '0397a0cf6e4c71f9df3d0f04a2058c9703ae6b8507cd5cbcd9682603a993b24a',
  'packages/core/src/core/session-recovery.ts': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513',
  'packages/core/src/core/tokenLimits.test.ts': '0f4775ebb4abb3b3a7a38a2369b3c44995b97b2f256b04c56609c1ef0c01823c',
  'packages/core/src/core/tokenLimits.ts': '9a3bda80d944c61cae61197c018a10e4606a47187686f0a34b5ccf5624f978cb',

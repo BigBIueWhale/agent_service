@@ -292,8 +292,14 @@ The local patch provides:
   one role — a subagent holds real write and shell authority and its output is
   integrated by its parent, so exempting it would be exactly backwards. Only
   genuinely role-specific framing is layered on top: the main session owns the
-  final response and may delegate, while a subagent is told its assignment
-  boundary, its private scratch root, and that it may not delegate further;
+  final response and is told *why* delegation is the intended way to work here —
+  context length is the scarcest thing it has, a subagent's reading never enters
+  the parent's context, and the parent's KV cache is retained in host RAM for the
+  duration of the subagent, so nothing already said is re-ingested when the
+  subagent returns. A subagent that spends sixty turns therefore costs the parent
+  one, which is what lets a single long thread keep running instead of being
+  compacted. A subagent, in turn, is told its assignment boundary, its private
+  scratch root, and that it may not delegate further;
 - init metadata filtered through the identical two-agent policy, so uncallable
   internal agents are not advertised as an alternate behavior;
 - workspace settings and environment discovery disabled before initialization,
