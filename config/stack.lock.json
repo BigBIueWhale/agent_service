@@ -42,7 +42,7 @@
     "image_id": "sha256:b4bc441bc1d42fb062b84411658732f58c85a362a651a24e653bada8eb670233",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
     "policy_sha256": "ec8fcd98ae2013bdfc4341733cee6dc082bd23ed26072b96a982aa5124eb8bc7",
-    "source_sha256": "5009ebb66cb2b42a2361ae820d9df376f0334c41438d68c895a09ac32dd1d6c0",
+    "source_sha256": "af5a02ee5ab2a108a5bbf29b0012e2d1883127c6c6d417fdcdd17c1f427bdb36",
     "memory": "64m",
     "memory_swap": "64m",
     "pids_limit": 64
