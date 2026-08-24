@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '7a579f12bbcda72e4025e340768554f4df196d6af5a4e4c64f8a12e154d33305',
+  'review_sha256': '5d6cb03b60bdc7d34086b4be076c09dc0b291aadd90771b7ec4b66471b2de8d6',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -34,7 +34,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'ea3a7911c2ef9624d28eb039770d934b2db29a295c9144167ddbadad75f13a18'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
-             'after_sha256': '02233e6614397b85a2ab9fffbf5c1ab660e95eb4b92870dc86a45cd20e6ffb7e'},
+             'after_sha256': '559cbf3f8daa9d7943dea5ec09859fa25de68b25ecb624e66815a90d8a6b9932'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before_sha256': 'd59f5e8a9a9efc2f10770df56e1ea201ec38400b9b1dd00ef317ce2f8e5a1448',
              'after_sha256': 'f33feccda131157f509ecabcd77a47d53e85413719af23edc1a4f28448e1fb1a'},
@@ -2140,6 +2140,208 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'config.consumePendingRecoveredAgentsNotice()\n'
                              '          : null;\n'
                              '      if (recoveredAgentsNotice) {\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-4',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': '            }\n'
+                       '            loopDetected = true;\n'
+                       '          }\n'
+                       '          if (\n'
+                       '            outputFormat === OutputFormat.TEXT &&\n'
+                       '            event.type === GeminiEventType.Error\n'
+                       '          ) {\n'
+                       '            const errorText = parseAndFormatApiError(\n'
+                       '              event.value.error,\n'
+                       '              config.getContentGeneratorConfig()?.authType,\n'
+                       '            );\n'
+                       '            process.stderr.write(`${errorText}\\n`);\n'
+                       '            // We have already formatted and written the '
+                       'message; mark the\n'
+                       "            // throw so the top-level handleError doesn't "
+                       'reformat (which\n'
+                       '            // would yield "[API Error: [API Error: ...]]") or '
+                       'print it a\n'
+                       '            // second time. Exit code stays 1 — same as '
+                       'before.\n'
+                       '            throw new AlreadyReportedError(errorText);\n'
+                       '          }\n'
+                       '        }\n',
+             'after': '            }\n'
+                      '            loopDetected = true;\n'
+                      '          }\n'
+                      '          if (event.type === GeminiEventType.Error) {\n'
+                      '            const errorText = parseAndFormatApiError(\n'
+                      '              event.value.error,\n'
+                      '              config.getContentGeneratorConfig()?.authType,\n'
+                      '            );\n'
+                      '            process.stderr.write(`${errorText}\\n`);\n'
+                      '            // An API or transport error ends the run in every '
+                      'output format.\n'
+                      '            // Gating this on TEXT let JSON and STREAM_JSON '
+                      'consumers receive\n'
+                      '            // the error string as ordinary assistant text and '
+                      'then a\n'
+                      '            // `success` result with exit 0 — a failed turn '
+                      'presented as a\n'
+                      '            // finished answer. stderr carries the '
+                      'human-readable line, the\n'
+                      '            // terminal envelope carries the same text with '
+                      'is_error, and the\n'
+                      '            // exit code is 1. AlreadyReportedError marks the '
+                      'line as written\n'
+                      '            // so the top-level handleError neither reformats '
+                      'it (which would\n'
+                      '            // yield "[API Error: [API Error: ...]]") nor '
+                      'prints it twice.\n'
+                      '            throw new AlreadyReportedError(errorText);\n'
+                      '          }\n'
+                      '        }\n',
+             'review_before': '            }\n'
+                              '            loopDetected = true;\n'
+                              '          }\n'
+                              '          if (\n'
+                              '            outputFormat === OutputFormat.TEXT &&\n'
+                              '            event.type === GeminiEventType.Error\n'
+                              '          ) {\n'
+                              '            const errorText = parseAndFormatApiError(\n'
+                              '              event.value.error,\n'
+                              '              '
+                              'config.getContentGeneratorConfig()?.authType,\n'
+                              '            );\n'
+                              '            process.stderr.write(`${errorText}\\n`);\n'
+                              '            // We have already formatted and written '
+                              'the message; mark the\n'
+                              '            // throw so the top-level handleError '
+                              "doesn't reformat (which\n"
+                              '            // would yield "[API Error: [API Error: '
+                              '...]]") or print it a\n'
+                              '            // second time. Exit code stays 1 — same as '
+                              'before.\n'
+                              '            throw new AlreadyReportedError(errorText);\n'
+                              '          }\n'
+                              '        }\n',
+             'review_after': '            }\n'
+                             '            loopDetected = true;\n'
+                             '          }\n'
+                             '          if (event.type === GeminiEventType.Error) {\n'
+                             '            const errorText = parseAndFormatApiError(\n'
+                             '              event.value.error,\n'
+                             '              '
+                             'config.getContentGeneratorConfig()?.authType,\n'
+                             '            );\n'
+                             '            process.stderr.write(`${errorText}\\n`);\n'
+                             '            // An API or transport error ends the run in '
+                             'every output format.\n'
+                             '            // Gating this on TEXT let JSON and '
+                             'STREAM_JSON consumers receive\n'
+                             '            // the error string as ordinary assistant '
+                             'text and then a\n'
+                             '            // `success` result with exit 0 — a failed '
+                             'turn presented as a\n'
+                             '            // finished answer. stderr carries the '
+                             'human-readable line, the\n'
+                             '            // terminal envelope carries the same text '
+                             'with is_error, and the\n'
+                             '            // exit code is 1. AlreadyReportedError '
+                             'marks the line as written\n'
+                             '            // so the top-level handleError neither '
+                             'reformats it (which would\n'
+                             '            // yield "[API Error: [API Error: ...]]") '
+                             'nor prints it twice.\n'
+                             '            throw new AlreadyReportedError(errorText);\n'
+                             '          }\n'
+                             '        }\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-5',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': '                  }\n'
+                       '                  loopDetected = true;\n'
+                       '                }\n'
+                       '                if (\n'
+                       '                  outputFormat === OutputFormat.TEXT &&\n'
+                       '                  event.type === GeminiEventType.Error\n'
+                       '                ) {\n'
+                       '                  const errorText = parseAndFormatApiError(\n'
+                       '                    event.value.error,\n'
+                       '                    '
+                       'config.getContentGeneratorConfig()?.authType,\n'
+                       '                  );\n'
+                       '                  process.stderr.write(`${errorText}\\n`);\n'
+                       '                  // See the matching note in the first stream '
+                       'loop above —\n'
+                       "                  // we mark the throw so handleError doesn't "
+                       'reformat or\n'
+                       '                  // reprint downstream.\n'
+                       '                  throw new AlreadyReportedError(errorText);\n'
+                       '                }\n'
+                       '              }\n',
+             'after': '                  }\n'
+                      '                  loopDetected = true;\n'
+                      '                }\n'
+                      '                if (event.type === GeminiEventType.Error) {\n'
+                      '                  const errorText = parseAndFormatApiError(\n'
+                      '                    event.value.error,\n'
+                      '                    '
+                      'config.getContentGeneratorConfig()?.authType,\n'
+                      '                  );\n'
+                      '                  process.stderr.write(`${errorText}\\n`);\n'
+                      '                  // See the matching note in the first stream '
+                      'loop above —\n'
+                      '                  // every output format ends the run on an API '
+                      'error, and we\n'
+                      "                  // mark the throw so handleError doesn't "
+                      'reformat or reprint\n'
+                      '                  // downstream.\n'
+                      '                  throw new AlreadyReportedError(errorText);\n'
+                      '                }\n'
+                      '              }\n',
+             'review_before': '                  }\n'
+                              '                  loopDetected = true;\n'
+                              '                }\n'
+                              '                if (\n'
+                              '                  outputFormat === OutputFormat.TEXT '
+                              '&&\n'
+                              '                  event.type === GeminiEventType.Error\n'
+                              '                ) {\n'
+                              '                  const errorText = '
+                              'parseAndFormatApiError(\n'
+                              '                    event.value.error,\n'
+                              '                    '
+                              'config.getContentGeneratorConfig()?.authType,\n'
+                              '                  );\n'
+                              '                  '
+                              'process.stderr.write(`${errorText}\\n`);\n'
+                              '                  // See the matching note in the first '
+                              'stream loop above —\n'
+                              '                  // we mark the throw so handleError '
+                              "doesn't reformat or\n"
+                              '                  // reprint downstream.\n'
+                              '                  throw new '
+                              'AlreadyReportedError(errorText);\n'
+                              '                }\n'
+                              '              }\n',
+             'review_after': '                  }\n'
+                             '                  loopDetected = true;\n'
+                             '                }\n'
+                             '                if (event.type === '
+                             'GeminiEventType.Error) {\n'
+                             '                  const errorText = '
+                             'parseAndFormatApiError(\n'
+                             '                    event.value.error,\n'
+                             '                    '
+                             'config.getContentGeneratorConfig()?.authType,\n'
+                             '                  );\n'
+                             '                  '
+                             'process.stderr.write(`${errorText}\\n`);\n'
+                             '                  // See the matching note in the first '
+                             'stream loop above —\n'
+                             '                  // every output format ends the run on '
+                             'an API error, and we\n'
+                             '                  // mark the throw so handleError '
+                             "doesn't reformat or reprint\n"
+                             '                  // downstream.\n'
+                             '                  throw new '
+                             'AlreadyReportedError(errorText);\n'
+                             '                }\n'
+                             '              }\n'},
             {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-1',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before': 'import type { JsonOutputAdapterInterface } from '
@@ -35554,7 +35756,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '60644ab60158d63603c05454a2fd5da550fa033001c46209497fae8e0a153fd1',
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'ea3a7911c2ef9624d28eb039770d934b2db29a295c9144167ddbadad75f13a18',
- 'packages/cli/src/nonInteractiveCli.ts': '02233e6614397b85a2ab9fffbf5c1ab660e95eb4b92870dc86a45cd20e6ffb7e',
+ 'packages/cli/src/nonInteractiveCli.ts': '559cbf3f8daa9d7943dea5ec09859fa25de68b25ecb624e66815a90d8a6b9932',
  'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'f33feccda131157f509ecabcd77a47d53e85413719af23edc1a4f28448e1fb1a',
  'packages/cli/src/utils/nonInteractiveHelpers.ts': '7d818a669ee036bf8e8b935b47613d074c51f959e77832f6fcc6c289e398a2c8',
  'packages/core/src/agents/runtime/agent-context.test.ts': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a',

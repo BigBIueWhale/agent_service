@@ -64,7 +64,11 @@
     "mtp": false,
     "speculative_decoding": false,
     "cpu_offload_gb": 0,
-    "kv_offload": false
+    "kv_offload": true,
+    "kv_offload_connector": "OffloadingConnector",
+    "kv_offload_role": "kv_both",
+    "kv_offload_host_bytes": 7747584000,
+    "kv_offload_eviction_policy": "arc"
   },
   "generation": {
     "thinking_enabled": true,
@@ -140,6 +144,8 @@
     "max_cumulative_tool_calls": -1,
     "max_tool_calls_per_turn": 1000,
     "max_wall_time_seconds": -1,
+    "stream_idle_timeout_ms": 240000,
+    "stream_max_lifetime_ms": 21600000,
     "chat_recording": false,
     "slash_commands": false,
     "runtime_installation": false,
@@ -172,7 +178,7 @@
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "0d2c6fd9b7da1a7347407a19b168ff14d4b8c5395e68f93702d7347242c554ae",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "wrapper_sha256": "c5d75b49d9f4b689999d2ec570e715b28a70c9a64e2418083b504e199c726b5e",
+    "wrapper_sha256": "c9d5a4f06e732c6889267c16313f913213dcfd81b85292fac97035ff2eed1338",
     "agent_exec_source_sha256": "23db0c591965e4acc0db26d7b9b2b4e300e91e05e577693ad79d3cf308eea446"
   }
 }

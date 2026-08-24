@@ -57,7 +57,9 @@ MAX_STAGED_BYTES="$(jq -er '.limits.max_staged_bytes | numbers' "${SERVICE_ROOT}
   { printf 'FATAL: stack lock .limits.max_staged_bytes is absent or not a number\n' >&2; exit 1; }
 MAX_PROMPT_BYTES="$(jq -er '.limits.max_prompt_bytes | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
   { printf 'FATAL: stack lock .limits.max_prompt_bytes is absent or not a number\n' >&2; exit 1; }
-readonly MAX_STAGED_FILES MAX_STAGED_BYTES MAX_PROMPT_BYTES
+MAX_STAGED_ENTRIES="$(jq -er '.limits.max_staged_entries | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
+  { printf 'FATAL: stack lock .limits.max_staged_entries is absent or not a number\n' >&2; exit 1; }
+readonly MAX_STAGED_FILES MAX_STAGED_BYTES MAX_PROMPT_BYTES MAX_STAGED_ENTRIES
 readonly ENV_REPOSITORY=qwen38-swerebench-full-v1
 readonly UV_INSTALL='RUN curl -LsSf https://astral.sh/uv/0.7.13/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh'
 readonly LOGS_INSTALL='RUN mkdir -p /logs'
@@ -559,6 +561,13 @@ validate_completed_task() {
 # eligibility contract lives in one place and cannot drift between them.
 classify_task_inputs() {
   local instruction_bytes="$1" special_count="$2" file_count="$3" source_bytes="$4"
+  local dir_count="$5" symlink_count="$6"
+  # staging.rs counts one entry per distinct directory, symlink, and regular
+  # file, so the eligibility model counts the same three. Modelling only files
+  # and bytes let the plan call a task eligible that staging would then reject
+  # mid-run. max_archive_bytes needs no model here: submission-common.sh
+  # measures the real archive against it before anything is sent.
+  local entry_count=$(( dir_count + file_count + symlink_count ))
   if (( instruction_bytes > MAX_PROMPT_BYTES )); then
     printf 'production-input-contract-exclusion\tprompt_bytes_exceed_service_limit\n'
   elif (( special_count > 0 )); then
@@ -567,6 +576,8 @@ classify_task_inputs() {
     printf 'production-input-contract-exclusion\tsource_file_count_exceeds_service_limit\n'
   elif (( source_bytes > MAX_STAGED_BYTES )); then
     printf 'production-input-contract-exclusion\tsource_bytes_exceed_service_limit\n'
+  elif (( entry_count > MAX_STAGED_ENTRIES )); then
+    printf 'production-input-contract-exclusion\tsource_entry_count_exceeds_service_limit\n'
   else
     printf 'eligible\t\n'
   fi
@@ -593,7 +604,7 @@ rederive_task_classification() {
   local task_dir="${MATERIALIZATION_ROOT}/${task_id}"
   local manifest="${task_dir}/manifest.json"
   local instruction="${DATASET_ROOT}/${task_id}/instruction.md"
-  local instruction_bytes file_count source_bytes symlink_count special_count
+  local instruction_bytes file_count source_bytes symlink_count special_count dir_count
   local classification exclusion_reason
   [[ -f "${instruction}" && ! -L "${instruction}" ]] ||
     die "dataset instruction is absent or a symlink: ${task_id}"
@@ -605,6 +616,7 @@ rederive_task_classification() {
   source_bytes="$(find "${task_dir}/source" -type f -printf '%s\n' | awk '{sum += $1} END {print sum + 0}')"
   symlink_count="$(find "${task_dir}/source" -type l -printf '.\n' | wc -l)"
   special_count="$(find "${task_dir}/source" \! -type d \! -type f \! -type l -printf '.\n' | wc -l)"
+  dir_count="$(find "${task_dir}/source" -type d -printf '.\n' | wc -l)"
   jq -e \
     --argjson instruction_bytes "${instruction_bytes}" \
     --argjson file_count "${file_count}" \
@@ -618,7 +630,8 @@ rederive_task_classification() {
      .source.special_file_count == $special_count' "${manifest}" >/dev/null ||
     die "recorded classification inputs diverge from re-derived evidence: ${task_id}"
   IFS=$'\t' read -r classification exclusion_reason < <(classify_task_inputs \
-    "${instruction_bytes}" "${special_count}" "${file_count}" "${source_bytes}")
+    "${instruction_bytes}" "${special_count}" "${file_count}" "${source_bytes}" \
+    "${dir_count}" "${symlink_count}")
   [[ -n "${classification}" ]] || die "classification derivation failed: ${task_id}"
   append_derived_classification "${task_id}" "${classification}" "${exclusion_reason}"
   printf -v "${outvar}" '%s' "${classification}"
@@ -661,7 +674,7 @@ materialize_task() {
   local test_parser="${task_root}/tests/swan_log_parsers.py"
   local source_root="${partial_dir}/source"
   local base_ref base_repository base_id base_digest env_tag env_id workdir config_user base_commit
-  local language log_parser instruction_bytes file_count source_bytes symlink_count special_count
+  local language log_parser instruction_bytes file_count source_bytes symlink_count special_count dir_count
   local classification=eligible exclusion_reason='' policy_first=false policy_second=true
   local archive_sha archive_bytes regular_sha modes_sha symlinks_sha container_name source_archive
   local initial_git_status_sha initial_git_status_bytes initial_worktree_clean copied_git_status
@@ -829,6 +842,7 @@ materialize_task() {
   source_bytes="$(find "${source_root}" -type f -printf '%s\n' | awk '{sum += $1} END {print sum + 0}')"
   symlink_count="$(find "${source_root}" -type l -printf '.\n' | wc -l)"
   special_count="$(find "${source_root}" \! -type d \! -type f \! -type l -printf '.\n' | wc -l)"
+  dir_count="$(find "${source_root}" -type d -printf '.\n' | wc -l)"
   write_regular_manifest "${source_root}" "${partial_dir}/source-regular.sha256z"
   write_mode_manifest "${source_root}" "${partial_dir}/source-modes.z"
   write_symlink_manifest "${source_root}" "${partial_dir}/source-symlinks.z"
@@ -859,7 +873,8 @@ materialize_task() {
   # Special files stay excluded: staging has no meaning for a device, fifo, or
   # socket.
   IFS=$'\t' read -r classification exclusion_reason < <(classify_task_inputs \
-    "${instruction_bytes}" "${special_count}" "${file_count}" "${source_bytes}")
+    "${instruction_bytes}" "${special_count}" "${file_count}" "${source_bytes}" \
+    "${dir_count}" "${symlink_count}")
   [[ -n "${classification}" ]] || die "classification derivation failed: ${task_id}"
   if (( task_index % 2 == 1 )); then
     policy_first=true
@@ -1050,6 +1065,80 @@ jq '{
 }' "${SUMMARY_PARTIAL}" >"${PLAN_PARTIAL}"
 sync -f "${SUMMARY_PARTIAL}"
 sync -f "${PLAN_PARTIAL}"
+# POSIX gives no atomic multi-file rename, so the summary/plan swap is made
+# recoverable instead of merely short. The renames are journalled and fsynced
+# first, and a committed-step counter is advanced atomically after each one, so
+# an interrupted commit is resumed from exactly where it stopped. The counter is
+# what makes this safe: the steps chain (summary -> archive, then partial ->
+# summary), so a blind "is the source still there?" replay would re-run the
+# first step against the already-installed new file and destroy both. A step
+# that is genuinely missing both endpoints is real loss and still fails closed.
+readonly COMMIT_JOURNAL="${SUITE_ROOT}/.summary-plan-commit.journal"
+readonly COMMIT_JOURNAL_PROGRESS="${COMMIT_JOURNAL}.committed-steps"
+
+record_committed_steps() {
+  printf '%s\n' "$1" >"${COMMIT_JOURNAL_PROGRESS}.partial"
+  sync -f "${COMMIT_JOURNAL_PROGRESS}.partial"
+  mv -- "${COMMIT_JOURNAL_PROGRESS}.partial" "${COMMIT_JOURNAL_PROGRESS}"
+  sync -f "${SUITE_ROOT}"
+}
+
+apply_commit_journal() {
+  local -a sources=() destinations=()
+  local source destination
+  while IFS=$'\t' read -r source destination; do
+    [[ -n "${source}" && -n "${destination}" ]] || die 'malformed summary/plan commit journal entry'
+    sources+=("${source}")
+    destinations+=("${destination}")
+  done <"${COMMIT_JOURNAL}"
+  (( ${#sources[@]} > 0 )) || die 'summary/plan commit journal is empty'
+
+  local committed=0
+  if [[ -f "${COMMIT_JOURNAL_PROGRESS}" ]]; then
+    committed="$(cat -- "${COMMIT_JOURNAL_PROGRESS}")"
+    [[ "${committed}" =~ ^[0-9]+$ ]] && (( committed <= ${#sources[@]} )) ||
+      die "summary/plan commit progress marker is unusable: ${committed}"
+  fi
+
+  local index
+  for (( index = committed; index < ${#sources[@]}; index++ )); do
+    if [[ -e "${sources[index]}" ]]; then
+      mv -- "${sources[index]}" "${destinations[index]}"
+    elif [[ ! -e "${destinations[index]}" ]]; then
+      die "summary/plan commit step lost both endpoints: ${sources[index]} -> ${destinations[index]}"
+    fi
+    record_committed_steps "$(( index + 1 ))"
+  done
+
+  rm -f -- "${COMMIT_JOURNAL}" "${COMMIT_JOURNAL_PROGRESS}"
+  sync -f "${SUITE_ROOT}"
+}
+
+# Args are source/destination pairs, in application order.
+commit_renames() {
+  local -a steps=("$@")
+  (( ${#steps[@]} >= 2 && ${#steps[@]} % 2 == 0 )) || die 'commit_renames needs source/destination pairs'
+  rm -f -- "${COMMIT_JOURNAL_PROGRESS}" "${COMMIT_JOURNAL_PROGRESS}.partial"
+  : >"${COMMIT_JOURNAL}.partial"
+  local index
+  for (( index = 0; index < ${#steps[@]}; index += 2 )); do
+    printf '%s\t%s\n' "${steps[index]}" "${steps[index + 1]}" >>"${COMMIT_JOURNAL}.partial"
+  done
+  sync -f "${COMMIT_JOURNAL}.partial"
+  mv -- "${COMMIT_JOURNAL}.partial" "${COMMIT_JOURNAL}"
+  sync -f "${SUITE_ROOT}"
+  apply_commit_journal
+}
+
+# An interrupted commit from a previous run is completed before anything else
+# inspects the pair, so the incomplete-pair check below can never see a torn
+# intermediate state.
+if [[ -f "${COMMIT_JOURNAL}" ]]; then
+  printf 'COMMIT_JOURNAL_REPLAY entries=%s committed=%s\n' \
+    "$(wc -l <"${COMMIT_JOURNAL}")" "$(cat -- "${COMMIT_JOURNAL_PROGRESS}" 2>/dev/null || printf 0)"
+  apply_commit_journal
+fi
+
 if [[ -e "${SUMMARY_PATH}" || -e "${PLAN_PATH}" ]]; then
   [[ -f "${SUMMARY_PATH}" && -f "${PLAN_PATH}" ]] || die 'existing suite summary/plan pair is incomplete'
   if cmp -s -- "${SUMMARY_PATH}" "${SUMMARY_PARTIAL}" && cmp -s -- "${PLAN_PATH}" "${PLAN_PARTIAL}"; then
@@ -1067,18 +1156,18 @@ if [[ -e "${SUMMARY_PATH}" || -e "${PLAN_PATH}" ]]; then
     superseded_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
     [[ ! -e "${SUMMARY_PATH}.superseded-${superseded_stamp}" && ! -e "${PLAN_PATH}.superseded-${superseded_stamp}" ]] ||
       die 'supersession archive collision; investigate'
-    mv -- "${SUMMARY_PATH}" "${SUMMARY_PATH}.superseded-${superseded_stamp}"
-    mv -- "${PLAN_PATH}" "${PLAN_PATH}.superseded-${superseded_stamp}"
-    mv -- "${SUMMARY_PARTIAL}" "${SUMMARY_PATH}"
-    mv -- "${PLAN_PARTIAL}" "${PLAN_PATH}"
-    sync -f "${SUITE_ROOT}"
+    commit_renames \
+      "${SUMMARY_PATH}" "${SUMMARY_PATH}.superseded-${superseded_stamp}" \
+      "${PLAN_PATH}" "${PLAN_PATH}.superseded-${superseded_stamp}" \
+      "${SUMMARY_PARTIAL}" "${SUMMARY_PATH}" \
+      "${PLAN_PARTIAL}" "${PLAN_PATH}"
     printf 'PLAN_SUPERSEDED prior_contract=%s current_contract=%s archive_suffix=superseded-%s\n' \
       "${prior_contract}" "${current_contract}" "${superseded_stamp}"
   fi
 else
-  mv -- "${SUMMARY_PARTIAL}" "${SUMMARY_PATH}"
-  mv -- "${PLAN_PARTIAL}" "${PLAN_PATH}"
-  sync -f "${SUITE_ROOT}"
+  commit_renames \
+    "${SUMMARY_PARTIAL}" "${SUMMARY_PATH}" \
+    "${PLAN_PARTIAL}" "${PLAN_PATH}"
 fi
 rm -f -- "${DERIVED_LEDGER}"
 

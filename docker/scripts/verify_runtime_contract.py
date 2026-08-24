@@ -323,6 +323,19 @@ def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:
         require_equal(f"network.{denied_authority}", network[denied_authority], False)
     require_equal("model preflight retry policy", execution["model_preflight_retries"], 0)
     require_equal("model preflight request count", execution["model_preflight_requests"], 1)
+    for guard in ("stream_idle_timeout_ms", "stream_max_lifetime_ms"):
+        value = execution[guard]
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise ContractError(
+                f"execution.{guard} must be a positive integer, got {value!r}; both stream "
+                "guards stay armed because a session has no wall-clock limit by design, so a "
+                "never-completing upstream would otherwise hang it forever"
+            )
+    if execution["stream_max_lifetime_ms"] <= execution["stream_idle_timeout_ms"]:
+        raise ContractError(
+            "execution.stream_max_lifetime_ms must exceed stream_idle_timeout_ms; the idle "
+            "watchdog is the stall detector and the lifetime cap is only the drip-feed backstop"
+        )
     expected_filesystem_fields = {
         "workspace",
         "artifacts",
@@ -370,6 +383,8 @@ def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:
             f"readonly EXPECTED_IPV4_ADDRESS={network['ipv4_addresses'][0]}",
             f"readonly START_GATE_FILE={network['start_gate_file']}",
             f"export {sealed['marker_name']}={sealed['marker_value']}",
+            f"export QWEN_STREAM_IDLE_TIMEOUT_MS={execution['stream_idle_timeout_ms']}",
+            f"export QWEN_STREAM_MAX_LIFETIME_MS={execution['stream_max_lifetime_ms']}",
             "python3 \"${RUNTIME_CONTRACT_VERIFIER_SOURCE}\"",
             "python3 \"${TOOLCHAIN_VERIFIER_SOURCE}\"",
             "find /sys/class/net -mindepth 1 -maxdepth 1",

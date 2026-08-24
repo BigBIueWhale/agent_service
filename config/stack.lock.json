@@ -12,7 +12,7 @@
     "agent_apt_lock_sha256": "b653bee65b0d55f999b96a73102bdd3de03d72a4136a62810b9c89f091997770",
     "toolchain_verifier_sha256": "092f465dc47c3d102d7abe9d92d8317eea7e732d3133a7449607eb1dd46fe3ec",
     "toolchain_verifier_test_sha256": "932d6c5956a0e18a9f31a473ef68d1359d7bbd88a5b4fecdd5741568c3183011",
-    "runtime_contract_verifier_sha256": "f51f89b16221a1f9317bcefd829937cd89941c206be09d1ca31b47dedebf3f19",
+    "runtime_contract_verifier_sha256": "3916ecd88d57d9c54281a6561bf53154fdc207b726ea4dab74fad110ac134108",
     "runtime_contract_verifier_test_sha256": "7469b725ea8f96e9939f2ca86246e8a11e93adda9feef198b9925d29c48b7fc6",
     "wrapper_contract_test_sha256": "7b03231c0e17f181581b2cc4b10e08eeb4782942f2943e7b06c51d4ba77029c2",
     "jks_normalizer_sha256": "309570025cc08c1ea865d67607e357d92cbb32ce2afe9af5e17c2cd7af8c3d6a",
@@ -85,8 +85,8 @@
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "0d2c6fd9b7da1a7347407a19b168ff14d4b8c5395e68f93702d7347242c554ae",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "runtime_contract_sha256": "c01ef9aea3391d0374ce066f946601ea0479ae4e7bae333df0842252323b13ce",
-    "wrapper_sha256": "c5d75b49d9f4b689999d2ec570e715b28a70c9a64e2418083b504e199c726b5e",
+    "runtime_contract_sha256": "8786dbfc997195652ac4286b28b134a1ef14ef23b4121ebaf12a82bae6f4a078",
+    "wrapper_sha256": "c9d5a4f06e732c6889267c16313f913213dcfd81b85292fac97035ff2eed1338",
     "agent_exec_source_sha256": "23db0c591965e4acc0db26d7b9b2b4e300e91e05e577693ad79d3cf308eea446",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
     "model_base_url": "http://127.0.0.1:18000/v1",
@@ -109,8 +109,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "7a579f12bbcda72e4025e340768554f4df196d6af5a4e4c64f8a12e154d33305",
-      "source_patch_manifest_sha256": "e2bba27d483ef8e980034c079e352343fa81753e2f77ba039b9f804ea4e10c26"
+      "patch_sha256": "5d6cb03b60bdc7d34086b4be076c09dc0b291aadd90771b7ec4b66471b2de8d6",
+      "source_patch_manifest_sha256": "59acd4e03989bdd3dbbac308d5aa6d8690b26d2d15939566511037ba522a2e75"
     }
   },
   "backend": {

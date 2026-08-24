@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `7a579f12bbcda72e4025e340768554f4df196d6af5a4e4c64f8a12e154d33305`
+- Review-diff SHA-256: `5d6cb03b60bdc7d34086b4be076c09dc0b291aadd90771b7ec4b66471b2de8d6`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `e2bba27d483ef8e980034c079e352343fa81753e2f77ba039b9f804ea4e10c26`
+- Transformer-manifest SHA-256: `59acd4e03989bdd3dbbac308d5aa6d8690b26d2d15939566511037ba522a2e75`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -45,8 +45,18 @@ provide as one fail-closed mode:
   enters the parent context, and the parent's KV cache is retained in host RAM
   for the duration of the subagent, so nothing already said is re-ingested when
   the subagent returns. A long single thread therefore keeps running instead of
-  being compacted. Four assertions in the build pin the frame's motivation, not
-  just its presence, so it cannot be silently reduced to a bare instruction;
+  being compacted. Six assertions in the build pin the frame: three for its
+  presence and three for its reasoning, so it cannot be silently reduced to a
+  bare instruction;
+- an API or transport error ends the run in every output format. Upstream raises
+  it only under `--output-format text`; under `json` and `stream-json` the same
+  error was appended to the assistant message as ordinary text and the session
+  then reported `subtype: success`, `is_error: false`, exit 0 — a failed turn
+  presented to the caller as a finished answer. Production forensics found this
+  on a session whose last turn died on the stream cap: the recorded final
+  response was a mid-thought preamble followed by the error string, and the only
+  reason it was ever noticed is that the turn carried no usage, which broke the
+  service's independent `num_turns` cross-check;
 - locked settings loading before initialization and during later auth validation:
   no workspace settings or `.env`, no ambient/project/CLI/session/injected MCP,
   and no include-directory override;

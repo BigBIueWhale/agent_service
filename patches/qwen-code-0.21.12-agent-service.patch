@@ -617,6 +617,59 @@ index 6dfe8f8..aca1ab1 100644
            ? config.consumePendingRecoveredAgentsNotice()
            : null;
        if (recoveredAgentsNotice) {
+@@ -2360,19 +2360,21 @@
+             }
+             loopDetected = true;
+           }
+-          if (
+-            outputFormat === OutputFormat.TEXT &&
+-            event.type === GeminiEventType.Error
+-          ) {
++          if (event.type === GeminiEventType.Error) {
+             const errorText = parseAndFormatApiError(
+               event.value.error,
+               config.getContentGeneratorConfig()?.authType,
+             );
+             process.stderr.write(`${errorText}\n`);
+-            // We have already formatted and written the message; mark the
+-            // throw so the top-level handleError doesn't reformat (which
+-            // would yield "[API Error: [API Error: ...]]") or print it a
+-            // second time. Exit code stays 1 — same as before.
++            // An API or transport error ends the run in every output format.
++            // Gating this on TEXT let JSON and STREAM_JSON consumers receive
++            // the error string as ordinary assistant text and then a
++            // `success` result with exit 0 — a failed turn presented as a
++            // finished answer. stderr carries the human-readable line, the
++            // terminal envelope carries the same text with is_error, and the
++            // exit code is 1. AlreadyReportedError marks the line as written
++            // so the top-level handleError neither reformats it (which would
++            // yield "[API Error: [API Error: ...]]") nor prints it twice.
+             throw new AlreadyReportedError(errorText);
+           }
+         }
+@@ -2674,18 +2676,16 @@
+                   }
+                   loopDetected = true;
+                 }
+-                if (
+-                  outputFormat === OutputFormat.TEXT &&
+-                  event.type === GeminiEventType.Error
+-                ) {
++                if (event.type === GeminiEventType.Error) {
+                   const errorText = parseAndFormatApiError(
+                     event.value.error,
+                     config.getContentGeneratorConfig()?.authType,
+                   );
+                   process.stderr.write(`${errorText}\n`);
+                   // See the matching note in the first stream loop above —
+-                  // we mark the throw so handleError doesn't reformat or
+-                  // reprint downstream.
++                  // every output format ends the run on an API error, and we
++                  // mark the throw so handleError doesn't reformat or reprint
++                  // downstream.
+                   throw new AlreadyReportedError(errorText);
+                 }
+               }
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 index d0bb989..dc8c342 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.test.ts

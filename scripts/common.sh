@@ -7,6 +7,7 @@ readonly STACK_LOCK="${PROJECT_DIR}/config/stack.lock.json"
 readonly RELEASE_LOCK="${PROJECT_DIR}/config/release.lock.json"
 readonly BUILD_INPUTS_MANIFEST="${PROJECT_DIR}/config/build-inputs.sha256"
 readonly BROKER_POLICY="${PROJECT_DIR}/config/broker-policy-v1.json"
+readonly RUNTIME_CONTRACT="${PROJECT_DIR}/config/agent-runtime-contract-v1.json"
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -32,6 +33,12 @@ release_value() {
 policy_value() {
   local filter="$1"
   jq -er "${filter}" "${BROKER_POLICY}" || die "Missing/invalid broker policy field: ${filter}"
+}
+
+contract_value() {
+  local filter="$1"
+  jq -er "${filter}" "${RUNTIME_CONTRACT}" || \
+    die "Missing/invalid agent runtime contract field: ${filter}"
 }
 
 validate_release_lock() {
@@ -243,6 +250,29 @@ check_pinned_inputs() {
   require_equal "agent runtime contract SHA256" \
     "$(sha256_file "${PROJECT_DIR}/config/agent-runtime-contract-v1.json")" \
     "$(lock_value '.agent.runtime_contract_sha256')"
+  # The agent container has no network and never sees the backend argv, so the
+  # in-image verifier cannot check that the contract's description of the KV
+  # cache matches what the backend is actually launched with. Both files are
+  # pinned build inputs here, so the agreement is asserted on the host instead.
+  local kv_transfer_config
+  kv_transfer_config="$(jq -r '[.backend.command[] | select(test("\"kv_connector\""))] | first // ""' \
+    "${STACK_LOCK}")" || die "Backend KV transfer configuration is unreadable"
+  [[ -n "${kv_transfer_config}" ]] || \
+    die "Backend command carries no --kv-transfer-config; the runtime contract declares KV offload"
+  require_equal "runtime contract KV offload enabled" \
+    "$(contract_value '.model.kv_offload | tostring')" true
+  require_equal "runtime contract KV offload connector" \
+    "$(contract_value '.model.kv_offload_connector')" \
+    "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_connector')"
+  require_equal "runtime contract KV offload role" \
+    "$(contract_value '.model.kv_offload_role')" \
+    "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_role')"
+  require_equal "runtime contract KV offload host bytes" \
+    "$(contract_value '.model.kv_offload_host_bytes | tostring')" \
+    "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_connector_extra_config.cpu_bytes_to_use | tostring')"
+  require_equal "runtime contract KV offload eviction policy" \
+    "$(contract_value '.model.kv_offload_eviction_policy')" \
+    "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_connector_extra_config.eviction_policy')"
   require_equal "agent runtime contract verifier SHA256" \
     "$(sha256_file "${PROJECT_DIR}/docker/scripts/verify_runtime_contract.py")" \
     "$(lock_value '.build.runtime_contract_verifier_sha256')"

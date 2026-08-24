@@ -53,6 +53,20 @@ export QWEN38_AGENT_SERVICE_LOCKED=1
 export QWEN_SYSTEM_MD="${SYSTEM_PROMPT_SOURCE}"
 export QWEN_DEPLOYMENT_CONTRACT_MD="${DEPLOYMENT_CONTRACT_SOURCE}"
 export QWEN38_LOCAL_API_KEY=local-loopback-only
+# Both stream guards are pinned rather than inherited, because the upstream
+# defaults are sized for a remote gateway and this backend is a local vLLM.
+# The idle watchdog is the real stall detector: it resets on every chunk, so
+# it only fires when the stream genuinely stops. The lifetime cap does not
+# reset and exists solely to bound a drip-fed stream the watchdog can never
+# see; upstream's 900000 ms is shorter than a legitimate maximum-length
+# generation here and cuts healthy work. This deployment generates at most
+# 262144 tokens per request; at a deliberately pessimistic 12 tokens/second
+# floor that is 21845 s, so the cap is 21600000 ms. Measured decode is about
+# 30 tokens/second, which completes a full-length generation in roughly 2.4 h,
+# well inside the cap. Neither guard may be disabled: an unbounded stream
+# would hang a session that has no wall-clock limit by design.
+export QWEN_STREAM_IDLE_TIMEOUT_MS=240000
+export QWEN_STREAM_MAX_LIFETIME_MS=21600000
 export NO_COLOR=1
 export QWEN_TELEMETRY_ENABLED=false
 export XDG_CACHE_HOME=/qwen-runtime/cache
