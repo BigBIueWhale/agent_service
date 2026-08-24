@@ -38,12 +38,16 @@ readonly -a ACCEPTED_PROVENANCE=(
 )
 # The agent image doubles as the source extractor for fresh materialization, so
 # the current extractor must be the stack lock's agent image. It has been rebuilt
-# since the original suite (1dc84a6f -> 9393fe2c, both GNU tar 1.35), so a reused
-# manifest may record either; the source is independently re-verified against its
-# exact env image, so a historical extractor is accepted for validation.
-readonly SOURCE_EXTRACTOR_IMAGE_ID=sha256:9393fe2c53b34ba220ef86a930ab6ea2c6c7ad23a439af85f6c98cc446fe2f15
+# twice since the original suite (1dc84a6f -> 9393fe2c -> a85f7005, all GNU tar
+# 1.35), so a reused manifest may record any of them; the source is
+# independently re-verified against its exact env image, so a historical
+# extractor is accepted for validation. Entries other than the current one are
+# only ever string-compared against a manifest's recorded provenance and are
+# never run, so a superseded extractor image need not remain on disk.
+readonly SOURCE_EXTRACTOR_IMAGE_ID=sha256:a85f7005a0f43904eb322509c860046007ed4b52b125e631dc61521179143a3c
 readonly -a ACCEPTED_EXTRACTOR_IMAGES=(
   sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec
+  sha256:9393fe2c53b34ba220ef86a930ab6ea2c6c7ad23a439af85f6c98cc446fe2f15
   "${SOURCE_EXTRACTOR_IMAGE_ID}"
 )
 readonly SOURCE_EXTRACTOR_TAR_VERSION='tar (GNU tar) 1.35'
