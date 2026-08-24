@@ -711,7 +711,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.backend.profile_label != "socket-isolated-nonroot-vision-k8v4-agent-v15"
         || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v15"
         || lock.backend.image_id
-            != "sha256:920cda1e77728398a9ed4d69ace6bc20bfe468a510c972e1e18cd94bc09c161d"
+            != "sha256:c7dc10bafdc1a44853b6e73fee487e1bd951995532e4326662283a29eebc7573"
         || lock.backend.served_model != "qwen3.8-27b-nvfp4-k8v4"
         || lock.backend.max_model_len != 262_144
         || lock.backend.kv_cache_dtype != "turboquant_k8v4"

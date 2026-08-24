@@ -119,7 +119,7 @@
     "project_label": "Qwen_best_model_ever",
     "profile_label": "socket-isolated-nonroot-vision-k8v4-agent-v15",
     "image_tag": "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v15",
-    "image_id": "sha256:920cda1e77728398a9ed4d69ace6bc20bfe468a510c972e1e18cd94bc09c161d",
+    "image_id": "sha256:c7dc10bafdc1a44853b6e73fee487e1bd951995532e4326662283a29eebc7573",
     "user": "2000:0",
     "rootfs_read_only": true,
     "tmpfs": {
