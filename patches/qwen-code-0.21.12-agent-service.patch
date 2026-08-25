@@ -503,10 +503,101 @@ index 72409fd..aced76c 100644
          : new ExtensionFileWatcher(config, undefined, extensionRefreshState);
      extensionFileWatcher?.startWatching();
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-index e687181..ff19974 100644
+index e687181..2a07dcb 100644
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-@@ -1767,6 +1767,38 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -898,6 +898,63 @@ describe('BaseJsonOutputAdapter', () => {
+         text: 'First',
+       });
+     });
++
++    it('[compaction-event] emits a main-session compaction record with before/after tokens', () => {
++      adapter.processEvent({
++        type: GeminiEventType.ChatCompaction,
++        value: {
++          status: 'COMPRESSED',
++          succeeded: true,
++          originalTokenCount: 214883,
++          newTokenCount: 41207,
++          triggerReason: 'token_limit',
++        },
++      });
++
++      expect(adapter.emittedMessages).toHaveLength(1);
++      const message = adapter.emittedMessages[0];
++      expect(message.type).toBe('system');
++      if (message.type === 'system') {
++        expect(message.subtype).toBe('compaction');
++        // Main session, so the same null convention as its assistant/user
++        // messages — a consumer separates parent from subagent on this field.
++        expect(message.parent_tool_use_id).toBeNull();
++        expect(message.data).toEqual({
++          status: 'COMPRESSED',
++          succeeded: true,
++          originalTokenCount: 214883,
++          newTokenCount: 41207,
++          triggerReason: 'token_limit',
++        });
++      }
++    });
++
++    it('[compaction-event] records a refused attempt as a failure rather than staying silent', () => {
++      adapter.processEvent({
++        type: GeminiEventType.ChatCompaction,
++        value: {
++          status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',
++          succeeded: false,
++          originalTokenCount: 214883,
++          newTokenCount: 214883,
++          triggerReason: 'token_limit',
++        },
++      });
++
++      expect(adapter.emittedMessages).toHaveLength(1);
++      const message = adapter.emittedMessages[0];
++      expect(message.type).toBe('system');
++      if (message.type === 'system') {
++        expect(message.subtype).toBe('compaction');
++        expect(message.data).toMatchObject({
++          status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',
++          succeeded: false,
++          // The history was preserved, so the "after" count is the "before".
++          originalTokenCount: 214883,
++          newTokenCount: 214883,
++        });
++      }
++    });
+   });
+ 
+   describe('finalizeAssistantMessage', () => {
+@@ -1247,6 +1304,26 @@ describe('BaseJsonOutputAdapter', () => {
+         expect(message.subtype).toBe('test_subtype');
+       }
+     });
++
++    it('[compaction-event] attributes a system message to a subagent when given its tool-call id', () => {
++      adapter.emitSystemMessage('compaction', { succeeded: true });
++      adapter.emitSystemMessage(
++        'compaction',
++        { succeeded: true },
++        'agent-call-7',
++      );
++
++      expect(adapter.emittedMessages).toHaveLength(2);
++      const [mainSession, subagent] = adapter.emittedMessages;
++      expect(mainSession.type).toBe('system');
++      if (mainSession.type === 'system') {
++        expect(mainSession.parent_tool_use_id).toBeNull();
++      }
++      expect(subagent.type).toBe('system');
++      if (subagent.type === 'system') {
++        expect(subagent.parent_tool_use_id).toBe('agent-call-7');
++      }
++    });
+   });
+ 
+   describe('emitToolProgress', () => {
+@@ -1767,6 +1844,38 @@ describe('BaseJsonOutputAdapter', () => {
          expect(result).toBe('Tool result');
        });
  
@@ -545,7 +636,7 @@ index e687181..ff19974 100644
        it('includes the vision bridge disclosure with tool content', () => {
          const response = {
            callId: 'pdf-success',
-@@ -1813,7 +1845,7 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1813,7 +1922,7 @@ describe('BaseJsonOutputAdapter', () => {
  
          expect(toolResultContent(response)).toBe(
            'Converted 1 image via qwen3-vl-plus (dashscope.aliyuncs.com).\n' +
@@ -555,10 +646,65 @@ index e687181..ff19974 100644
        });
  
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
-index 0b15577..b38cbe5 100644
+index 0b15577..cb5e926 100644
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
-@@ -1439,17 +1439,23 @@ export function toolResultContent(
+@@ -94,7 +94,11 @@ export interface MessageEmitter {
+     response: ToolCallResponseInfo,
+     parentToolUseId?: string | null,
+   ): void;
+-  emitSystemMessage(subtype: string, data?: unknown): void;
++  emitSystemMessage(
++    subtype: string,
++    data?: unknown,
++    parentToolUseId?: string | null,
++  ): void;
+   /**
+    * Emits a tool progress stream event.
+    * Only emits when the adapter supports partial messages (stream mode).
+@@ -661,6 +665,16 @@ export abstract class BaseJsonOutputAdapter {
+           fallbackIndex: event.fallbackIndex,
+         });
+         break;
++      case GeminiEventType.ChatCompaction:
++        // Surface conversation compaction the same way. Without this the
++        // only trace of a compaction in a captured stream is a drop in
++        // reported input tokens between billed turns — a reconstruction
++        // that cannot tell a refused attempt from one that never ran.
++        // parent_tool_use_id is null here because processEvent only ever
++        // sees the main session's stream; subagent compactions are emitted
++        // with their agent tool-call id by the agent progress handler.
++        this.emitSystemMessage('compaction', event.value, null);
++        break;
+       default:
+         break;
+     }
+@@ -1080,14 +1094,22 @@ export abstract class BaseJsonOutputAdapter {
+    * Emits a system message.
+    * @param subtype - System message subtype
+    * @param data - Optional data payload
++   * @param parentToolUseId - Owning agent tool-call id when the event belongs
++   *   to a subagent; null (the default) for the main session. Same convention
++   *   as every assistant/user message, so one consumer rule separates the
++   *   parent thread from each subagent.
+    */
+-  emitSystemMessage(subtype: string, data?: unknown): void {
++  emitSystemMessage(
++    subtype: string,
++    data?: unknown,
++    parentToolUseId: string | null = null,
++  ): void {
+     const systemMessage = {
+       type: 'system',
+       subtype,
+       uuid: randomUUID(),
+       session_id: this.getSessionId(),
+-      parent_tool_use_id: null,
++      parent_tool_use_id: parentToolUseId,
+       data,
+     } as const;
+     this.emitMessageImpl(systemMessage);
+@@ -1439,17 +1461,23 @@ export function toolResultContent(
    if (response.error) {
      return response.error.message;
    }
@@ -588,7 +734,7 @@ index 0b15577..b38cbe5 100644
  }
  
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
-index 6dfe8f8..aca1ab1 100644
+index 6dfe8f8..e7f730a 100644
 --- a/packages/cli/src/nonInteractiveCli.ts
 +++ b/packages/cli/src/nonInteractiveCli.ts
 @@ -150,6 +150,7 @@ function suppressedOutputBody(structuredCaptured: boolean): string {
@@ -617,7 +763,7 @@ index 6dfe8f8..aca1ab1 100644
            ? config.consumePendingRecoveredAgentsNotice()
            : null;
        if (recoveredAgentsNotice) {
-@@ -2360,19 +2360,21 @@
+@@ -2360,19 +2361,21 @@ export async function runNonInteractive(
              }
              loopDetected = true;
            }
@@ -647,7 +793,7 @@ index 6dfe8f8..aca1ab1 100644
              throw new AlreadyReportedError(errorText);
            }
          }
-@@ -2674,18 +2676,16 @@
+@@ -2674,18 +2677,16 @@ export async function runNonInteractive(
                    }
                    loopDetected = true;
                  }
@@ -670,8 +816,25 @@ index 6dfe8f8..aca1ab1 100644
                    throw new AlreadyReportedError(errorText);
                  }
                }
+diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/hooks/useGeminiStream.ts
+index 27f4a60..e10b89a 100644
+--- a/packages/cli/src/ui/hooks/useGeminiStream.ts
++++ b/packages/cli/src/ui/hooks/useGeminiStream.ts
+@@ -2504,6 +2504,12 @@ export const useGeminiStream = (
+               geminiMessageBuffer = '';
+               assistantOutputStarted = false;
+               break;
++            case ServerGeminiEventType.ChatCompaction:
++              // Machine-readable record of a compaction attempt, consumed by
++              // the headless output adapters. The interactive notice for a
++              // successful compaction is driven by ChatCompressed above, so
++              // rendering this too would duplicate it.
++              break;
+             case ServerGeminiEventType.ToolCallConfirmation:
+             case ServerGeminiEventType.ToolCallResponse:
+               flushBufferedStreamEvents();
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
-index d0bb989..dc8c342 100644
+index d0bb989..16ca82a 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 @@ -24,6 +24,7 @@ import type {
@@ -743,8 +906,79 @@ index d0bb989..dc8c342 100644
    it('should build system message with all fields', async () => {
      const result = await buildSystemMessage(
        mockConfig,
+@@ -677,6 +722,7 @@ describe('createAgentToolProgressHandler', () => {
+       emitSubagentErrorResult: vi.fn(),
+       emitToolResult: vi.fn(),
+       emitUserMessage: vi.fn(),
++      emitSystemMessage: vi.fn(),
+     } as unknown as JsonOutputAdapterInterface;
+   });
+ 
+@@ -1079,6 +1125,62 @@ describe('createAgentToolProgressHandler', () => {
+     expect(mockAdapter.emitToolResult).not.toHaveBeenCalled();
+   });
+ 
++  it('[compaction-event] emits each new subagent compaction exactly once, attributed to the agent tool call', () => {
++    const { handler } = createAgentToolProgressHandler(
++      mockConfig,
++      'parent-tool-id',
++      mockAdapter,
++    );
++
++    const firstCompaction = {
++      status: 'COMPRESSED',
++      succeeded: true,
++      originalTokenCount: 198_400,
++      newTokenCount: 32_118,
++      triggerReason: 'token_limit' as const,
++    };
++    const secondCompaction = {
++      status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
++      succeeded: false,
++      originalTokenCount: 205_112,
++      newTokenCount: 205_112,
++      triggerReason: 'token_limit' as const,
++    };
++
++    const baseDisplay: AgentResultDisplay = {
++      type: 'task_execution',
++      subagentName: 'Explore',
++      taskDescription: 'Survey the repository',
++      taskPrompt: 'Survey the repository',
++      status: 'running',
++      toolCalls: [],
++    };
++
++    handler('task-call-id', { ...baseDisplay, compactions: [firstCompaction] });
++    // Same entry replayed in the next snapshot: it must not be emitted twice.
++    handler('task-call-id', { ...baseDisplay, compactions: [firstCompaction] });
++    handler('task-call-id', {
++      ...baseDisplay,
++      compactions: [firstCompaction, secondCompaction],
++    });
++
++    expect(mockAdapter.emitSystemMessage).toHaveBeenCalledTimes(2);
++    expect(mockAdapter.emitSystemMessage).toHaveBeenNthCalledWith(
++      1,
++      'compaction',
++      firstCompaction,
++      'parent-tool-id',
++    );
++    // The failed attempt is reported too, with its own outcome, so a subagent
++    // compaction that did not happen is not indistinguishable from silence.
++    expect(mockAdapter.emitSystemMessage).toHaveBeenNthCalledWith(
++      2,
++      'compaction',
++      secondCompaction,
++      'parent-tool-id',
++    );
++  });
++
+   it('should work with adapter that does not support subagent APIs', () => {
+     const limitedAdapter = {
+       emitToolResult: vi.fn(),
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/utils/nonInteractiveHelpers.ts
-index b17b1a7..b60acb9 100644
+index b17b1a7..f874a3b 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.ts
 @@ -64,6 +64,15 @@ export function normalizePartList(parts: PartListUnion | null): Part[] {
@@ -789,6 +1023,39 @@ index b17b1a7..b60acb9 100644
    } catch (error) {
      debugLogger.error('[buildSystemMessage] Failed to load subagents:', error);
    }
+@@ -324,6 +341,10 @@ export function createAgentToolProgressHandler(
+   const emittedToolUseIds = new Set<string>();
+   // Track which tool call IDs have already emitted tool_result to prevent duplicates
+   const emittedToolResultIds = new Set<string>();
++  // Count of compaction records already emitted per agent tool call. The
++  // display's `compactions` array is append-only, so the count is the exact
++  // boundary between what has been reported and what has not.
++  const emittedCompactionCounts = new Map<string, number>();
+ 
+   /**
+    * Builds a ToolCallRequestInfo object from a tool call.
+@@ -533,6 +554,21 @@ export function createAgentToolProgressHandler(
+         }
+       }
+ 
++      // Emit any compaction this subagent completed since the last update.
++      // A subagent compacts its own chat, so without this the parent stream
++      // records nothing at all — not even the token drop that betrays a
++      // main-session compaction. Attribution is the owning agent tool-call
++      // id, matching every other subagent message.
++      if (taskDisplay.compactions && taskDisplay.compactions.length > 0) {
++        const alreadyEmitted = emittedCompactionCounts.get(callId) ?? 0;
++        for (const compaction of taskDisplay.compactions.slice(
++          alreadyEmitted,
++        )) {
++          adapter.emitSystemMessage('compaction', compaction, agentToolCallId);
++        }
++        emittedCompactionCounts.set(callId, taskDisplay.compactions.length);
++      }
++
+       // Handle task-level errors (status: 'failed', 'cancelled')
+       if (
+         taskDisplay.status === 'failed' ||
 diff --git a/packages/core/src/agents/runtime/agent-context.test.ts b/packages/core/src/agents/runtime/agent-context.test.ts
 index 71e11a4..5212b23 100644
 --- a/packages/core/src/agents/runtime/agent-context.test.ts
@@ -903,7 +1170,7 @@ index 433be1b..c5e89d4 100644
   * Returns the depth of the current agent context frame. 0 means we're
   * inside a top-level subagent (or no subagent at all — but in that case
 diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/agents/runtime/agent-core.ts
-index 191b5ab..176809f 100644
+index 191b5ab..fa2dfae 100644
 --- a/packages/core/src/agents/runtime/agent-core.ts
 +++ b/packages/core/src/agents/runtime/agent-core.ts
 @@ -25,6 +25,7 @@ import type { Config } from '../../config/config.js';
@@ -926,7 +1193,53 @@ index 191b5ab..176809f 100644
  import {
    dedupeToolCallsById,
    getProviderToolCallId,
-@@ -2304,8 +2310,14 @@ Important Rules:
+@@ -83,6 +89,7 @@ import type {
+ } from './agent-types.js';
+ import { AgentTerminateMode } from './agent-types.js';
+ import type {
++  AgentCompactionEvent,
+   AgentRoundEvent,
+   AgentRoundTextEvent,
+   AgentToolCallEvent,
+@@ -973,18 +980,33 @@ export class AgentCore {
+             continue;
+           }
+ 
+-          // GeminiChat already mutated its own history; surface to the debug
+-          // log so subagent compactions show up alongside the main session's.
+-          if (streamEvent.type === 'compressed') {
++          // A subagent compacts its own chat, so the parent's history never
++          // shows it. Emit the attempt — success or failure — as a first
++          // class agent event so it reaches the session record attributed to
++          // this subagent, and keep the debug line for local triage.
++          if (streamEvent.type === 'compaction') {
++            this.eventEmitter?.emit(AgentEventType.COMPACTION, {
++              subagentId: this.subagentId,
++              round: turnCounter,
++              compaction: streamEvent.record,
++              timestamp: Date.now(),
++            } as AgentCompactionEvent);
+             this.runtimeContext
+               .getDebugLogger()
+               .debug(
+                 `[AGENT-COMPACT] subagent=${this.subagentId} round=${turnCounter} ` +
+-                  `tokens ${streamEvent.info.originalTokenCount} -> ${streamEvent.info.newTokenCount}`,
++                  `status=${streamEvent.record.status} tokens ` +
++                  `${streamEvent.record.originalTokenCount} -> ${streamEvent.record.newTokenCount}`,
+               );
+             continue;
+           }
+ 
++          // GeminiChat already mutated its own history; nothing further is
++          // required here — the compaction event above is the record.
++          if (streamEvent.type === 'compressed') {
++            continue;
++          }
++
+           // Handle chunk events
+           if (streamEvent.type === 'chunk') {
+             const resp = streamEvent.value;
+@@ -2304,8 +2326,14 @@ Important Rules:
  
      // Context files (QWEN.md + output-language.md) keep the subagent aligned
      // with project conventions; the volatile auto-memory section stays last.
@@ -942,6 +1255,63 @@ index 191b5ab..176809f 100644
        contextFiles: this.runtimeContext.getUserMemory(),
        autoMemory: this.runtimeContext.getAutoMemoryPrompt(),
      });
+diff --git a/packages/core/src/agents/runtime/agent-events.ts b/packages/core/src/agents/runtime/agent-events.ts
+index 013ae52..4463b73 100644
+--- a/packages/core/src/agents/runtime/agent-events.ts
++++ b/packages/core/src/agents/runtime/agent-events.ts
+@@ -20,6 +20,7 @@ import type {
+   ToolResultDisplay,
+ } from '../../tools/tools.js';
+ import type { Part, GenerateContentResponseUsageMetadata } from '@google/genai';
++import type { CompactionRecord } from '../../core/turn.js';
+ import type { AgentStatus } from './agent-types.js';
+ 
+ type WithoutConfirmationCallback<T> = T extends unknown
+@@ -44,6 +45,7 @@ export type AgentEvent =
+   | 'tool_waiting_approval'
+   | 'usage_metadata'
+   | 'external_message'
++  | 'compaction'
+   | 'finish'
+   | 'error'
+   | 'status_change';
+@@ -63,6 +65,8 @@ export enum AgentEventType {
+   USAGE_METADATA = 'usage_metadata',
+   /** External user message injected mid-run (e.g. via send_message). */
+   EXTERNAL_MESSAGE = 'external_message',
++  /** One compaction attempt on this subagent's own chat ran to completion. */
++  COMPACTION = 'compaction',
+   FINISH = 'finish',
+   ERROR = 'error',
+   STATUS_CHANGE = 'status_change',
+@@ -199,6 +203,19 @@ export interface AgentExternalMessageEvent {
+   timestamp: number;
+ }
+ 
++/**
++ * One completed compaction attempt on the subagent's own chat. A subagent
++ * runs on its own `GeminiChat`, so its compactions are invisible in the
++ * parent's history; this event is how they reach the session record with
++ * the owning agent-tool call as their parent.
++ */
++export interface AgentCompactionEvent {
++  subagentId: string;
++  round: number;
++  compaction: CompactionRecord;
++  timestamp: number;
++}
++
+ export interface AgentFinishEvent {
+   subagentId: string;
+   terminateReason: string;
+@@ -246,6 +263,7 @@ export interface AgentEventMap {
+   [AgentEventType.TOOL_WAITING_APPROVAL]: AgentApprovalRequestEvent;
+   [AgentEventType.USAGE_METADATA]: AgentUsageEvent;
+   [AgentEventType.EXTERNAL_MESSAGE]: AgentExternalMessageEvent;
++  [AgentEventType.COMPACTION]: AgentCompactionEvent;
+   [AgentEventType.FINISH]: AgentFinishEvent;
+   [AgentEventType.ERROR]: AgentErrorEvent;
+   [AgentEventType.STATUS_CHANGE]: AgentStatusChangeEvent;
 diff --git a/packages/core/src/agents/runtime/agent-headless.ts b/packages/core/src/agents/runtime/agent-headless.ts
 index 2870d4b..e325807 100644
 --- a/packages/core/src/agents/runtime/agent-headless.ts
@@ -1823,10 +2193,23 @@ index c224235..86ecf79 100644
            ),
          );
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
-index 5ae5029..1d1439b 100644
+index 5ae5029..c033ff4 100644
 --- a/packages/core/src/core/geminiChat.test.ts
 +++ b/packages/core/src/core/geminiChat.test.ts
-@@ -44,7 +44,6 @@ import {
+@@ -33,7 +33,11 @@ import type { OpenAICompatibleProvider } from './openaiContentGenerator/provider
+ import type { Config } from '../config/config.js';
+ import { setSimulate429 } from '../utils/testUtils.js';
+ import { uiTelemetryService } from '../telemetry/uiTelemetry.js';
+-import { CompressionStatus, type ChatCompressionInfo } from './turn.js';
++import {
++  CompressionStatus,
++  type ChatCompressionInfo,
++  type CompactionRecord,
++} from './turn.js';
+ import {
+   ChatCompressionService,
+   MAX_CONSECUTIVE_FAILURES,
+@@ -44,7 +48,6 @@ import {
  } from '../services/tokenEstimation.js';
  import { SYSTEM_REMINDER_OPEN } from '../utils/environmentContext.js';
  import { SessionStartSource } from '../hooks/types.js';
@@ -1834,7 +2217,148 @@ index 5ae5029..1d1439b 100644
  import {
    getToolCallPreparations,
    setToolCallPreparations,
-@@ -3279,139 +3278,6 @@ describe('GeminiChat', async () => {
+@@ -3172,7 +3175,7 @@ describe('GeminiChat', async () => {
+       expect(compressSpy.mock.calls[0][1].originalTokenCount).toBe(123_456);
+     });
+ 
+-    it('yields a COMPRESSED stream event as the first event after auto-compression succeeds', async () => {
++    it('yields a COMPACTION record then a COMPRESSED stream event after auto-compression succeeds', async () => {
+       const compressedHistory: Content[] = [
+         { role: 'user', parts: [{ text: 'summary' }] },
+         { role: 'model', parts: [{ text: 'ok' }] },
+@@ -3202,18 +3205,108 @@ describe('GeminiChat', async () => {
+         events.push(event as { type: StreamEventType });
+       }
+ 
+-      expect(events.length).toBeGreaterThan(0);
+-      expect(events[0].type).toBe(StreamEventType.COMPRESSED);
++      expect(events.length).toBeGreaterThan(1);
++      // The observability record comes first and is self-describing: a
++      // consumer never has to infer the compaction from a token drop.
++      expect(events[0].type).toBe(StreamEventType.COMPACTION);
++      expect(
++        (events[0] as { type: StreamEventType; record: CompactionRecord })
++          .record,
++      ).toEqual({
++        status: 'COMPRESSED',
++        succeeded: true,
++        originalTokenCount: 1000,
++        newTokenCount: 200,
++        triggerReason: null,
++      });
++      // COMPRESSED keeps its narrower meaning: the history was replaced.
++      expect(events[1].type).toBe(StreamEventType.COMPRESSED);
+       expect(
+-        (events[0] as { type: StreamEventType; info: ChatCompressionInfo }).info
++        (events[1] as { type: StreamEventType; info: ChatCompressionInfo }).info
+           .compressionStatus,
+       ).toBe(CompressionStatus.COMPRESSED);
+       expect(
+-        (events[0] as { type: StreamEventType; info: ChatCompressionInfo }).info
++        (events[1] as { type: StreamEventType; info: ChatCompressionInfo }).info
+           .newTokenCount,
+       ).toBe(200);
+     });
+ 
++    it('yields a COMPACTION record and no COMPRESSED event when the attempt fails', async () => {
++      vi.spyOn(
++        ChatCompressionService.prototype,
++        'compress',
++      ).mockResolvedValueOnce({
++        newHistory: null,
++        info: {
++          originalTokenCount: 1000,
++          newTokenCount: 1000,
++          compressionStatus:
++            CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++        },
++      });
++      vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
++        makeStreamResponse('answer'),
++      );
++
++      const stream = await chat.sendMessageStream(
++        'test-model',
++        { message: 'go' },
++        'prompt-id-yield-failed-compaction',
++      );
++      const events: Array<{ type: StreamEventType }> = [];
++      for await (const event of stream) {
++        events.push(event as { type: StreamEventType });
++      }
++
++      // A refused attempt is reported, not swallowed — that is the whole
++      // point of keeping this event separate from COMPRESSED.
++      expect(events[0].type).toBe(StreamEventType.COMPACTION);
++      expect(
++        (events[0] as { type: StreamEventType; record: CompactionRecord })
++          .record,
++      ).toEqual({
++        status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',
++        succeeded: false,
++        originalTokenCount: 1000,
++        newTokenCount: 1000,
++        triggerReason: null,
++      });
++      expect(
++        events.some((event) => event.type === StreamEventType.COMPRESSED),
++      ).toBe(false);
++    });
++
++    it('stays silent when no compaction was attempted', async () => {
++      vi.spyOn(
++        ChatCompressionService.prototype,
++        'compress',
++      ).mockResolvedValueOnce({
++        newHistory: null,
++        info: {
++          originalTokenCount: 1000,
++          newTokenCount: 1000,
++          compressionStatus: CompressionStatus.NOOP,
++        },
++      });
++      vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
++        makeStreamResponse('answer'),
++      );
++
++      const stream = await chat.sendMessageStream(
++        'test-model',
++        { message: 'go' },
++        'prompt-id-yield-noop-compaction',
++      );
++      const events: Array<{ type: StreamEventType }> = [];
++      for await (const event of stream) {
++        events.push(event as { type: StreamEventType });
++      }
++
++      expect(
++        events.some((event) => event.type === StreamEventType.COMPACTION),
++      ).toBe(false);
++    });
++
+     it('forwards the pending user message and request config to compression', async () => {
+       // The cheap-gate inside ChatCompressionService.compress uses
+       // estimatePromptTokens(history, pendingUserMessage, lastPromptTokenCount)
+@@ -3254,11 +3347,15 @@ describe('GeminiChat', async () => {
+         { message: userMessageText, config: { tools: requestTools } },
+         'prompt-id-first-turn',
+       );
+-      // The first event in the stream should be COMPRESSED because the
+-      // cheap-gate, fed the pending user message, can now size the prompt.
++      // The first event in the stream should be the COMPACTION record,
++      // immediately followed by COMPRESSED, because the cheap-gate, fed the
++      // pending user message, can now size the prompt.
+       const first = await stream.next();
+       expect(first.done).toBe(false);
+-      expect(first.value?.type).toBe(StreamEventType.COMPRESSED);
++      expect(first.value?.type).toBe(StreamEventType.COMPACTION);
++      const second = await stream.next();
++      expect(second.done).toBe(false);
++      expect(second.value?.type).toBe(StreamEventType.COMPRESSED);
+ 
+       // Drain the rest so the send-lock releases cleanly.
+       for await (const _ of stream) {
+@@ -3279,139 +3376,6 @@ describe('GeminiChat', async () => {
        );
      });
  
@@ -1974,7 +2498,23 @@ index 5ae5029..1d1439b 100644
      it('clears consecutiveFailures after a forced successful compression', async () => {
        const compressSpy = vi.spyOn(
          ChatCompressionService.prototype,
-@@ -5253,6 +5119,77 @@ describe('GeminiChat', async () => {
+@@ -3544,9 +3508,12 @@ describe('GeminiChat', async () => {
+         mockContentGenerator.generateContentStream,
+       ).mock.calls[1]![0];
+       expect(secondRequest.contents).toEqual(expectedRequestContents);
+-      expect(events[0]?.type).toBe(StreamEventType.COMPRESSED);
+-      expect(events[1]?.type).toBe(StreamEventType.RETRY);
+-      expect(events[1]).not.toHaveProperty('retryInfo');
++      // The pre-stream pass was a NOOP and stays silent; the reactive rescue
++      // is recorded before the COMPRESSED event it produced.
++      expect(events[0]?.type).toBe(StreamEventType.COMPACTION);
++      expect(events[1]?.type).toBe(StreamEventType.COMPRESSED);
++      expect(events[2]?.type).toBe(StreamEventType.RETRY);
++      expect(events[2]).not.toHaveProperty('retryInfo');
+       expect(
+         events.some(
+           (event) =>
+@@ -5253,6 +5220,77 @@ describe('GeminiChat', async () => {
        expect(requestConfig.maxOutputTokens).toBe(9_999);
      });
  
@@ -2052,7 +2592,7 @@ index 5ae5029..1d1439b 100644
      it('keeps the overhead pad after compression uses an estimated baseline', async () => {
        vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
          authType: AuthType.USE_GEMINI,
-@@ -5927,6 +5864,205 @@ describe('GeminiChat', async () => {
+@@ -5927,6 +5965,205 @@ describe('GeminiChat', async () => {
        }
      });
  
@@ -2258,7 +2798,7 @@ index 5ae5029..1d1439b 100644
      it('should fail after all retries on persistent invalid content and report metrics', async () => {
        vi.useFakeTimers();
        try {
-@@ -15129,6 +15265,41 @@ describe('GeminiChat', async () => {
+@@ -15129,6 +15366,41 @@ describe('GeminiChat', async () => {
        } as unknown as GenerateContentResponse;
      }
  
@@ -2301,7 +2841,7 @@ index 5ae5029..1d1439b 100644
        const xml =
          '<invoke name="read_file"><parameter name="file_path">a.ts</parameter></invoke>';
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
-index 8051292..bb0a12c 100644
+index 8051292..8e7540b 100644
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
 @@ -46,8 +46,13 @@ import {
@@ -2319,7 +2859,21 @@ index 8051292..bb0a12c 100644
    clampOutputTokensToWindow,
    defaultOutputCeiling,
    DEFAULT_TOKEN_LIMIT,
-@@ -126,6 +131,7 @@ import {
+@@ -103,7 +108,12 @@ import {
+   makeChatCompressionEvent,
+ } from '../telemetry/types.js';
+ import type { UiTelemetryService } from '../telemetry/uiTelemetry.js';
+-import { type ChatCompressionInfo, CompressionStatus } from './turn.js';
++import {
++  type ChatCompressionInfo,
++  type CompactionRecord,
++  CompressionStatus,
++  toCompactionRecord,
++} from './turn.js';
+ import { getContextLengthExceededInfo } from '../utils/contextLengthError.js';
+ import {
+   getStartupContextLength,
+@@ -126,6 +136,7 @@ import {
  } from './tool-call-preparation.js';
  import { InvalidStreamError } from './invalid-stream-error.js';
  import type { GoalTurnPermit } from '../goals/goal-protocol.js';
@@ -2327,7 +2881,7 @@ index 8051292..bb0a12c 100644
  
  export { InvalidStreamError };
  
-@@ -329,7 +335,8 @@ function isCompressionFailureStatus(status: CompressionStatus): boolean {
+@@ -329,7 +340,8 @@ function isCompressionFailureStatus(status: CompressionStatus): boolean {
      status === CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT ||
      status === CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY ||
      status === CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR ||
@@ -2337,7 +2891,28 @@ index 8051292..bb0a12c 100644
    );
  }
  
-@@ -486,6 +493,13 @@ const INVALID_STREAM_RETRY_CONFIG = {
+@@ -409,6 +421,12 @@ export enum StreamEventType {
+    * agent UI, subagent loop) can surface it without each call site running
+    * its own compaction step. */
+   COMPRESSED = 'compressed',
++  /** Emitted once for every compaction attempt that ran to completion,
++   * whether it succeeded, was refused, or failed. NOOP outcomes mean no
++   * attempt was made and stay silent. Unlike COMPRESSED this event carries
++   * no promise that the history changed, so it can report a failure without
++   * a consumer mistaking it for a successful compaction. */
++  COMPACTION = 'compaction',
+   /** Emitted when the primary model (or a prior fallback) exhausted its retry
+    * budget on a capacity/availability error and the system is switching to the
+    * next fallback model. The UI should discard partial content and display a
+@@ -441,6 +459,7 @@ export type StreamEvent =
+       maxOutputTokensEscalated?: number;
+     }
+   | { type: StreamEventType.COMPRESSED; info: ChatCompressionInfo }
++  | { type: StreamEventType.COMPACTION; record: CompactionRecord }
+   | { type: StreamEventType.MODEL_FALLBACK; info: ModelFallbackInfo };
+ 
+ interface TryCompressOptions {
+@@ -486,6 +505,13 @@ const INVALID_STREAM_RETRY_CONFIG = {
    initialDelayMs: 2000,
  };
  
@@ -2351,7 +2926,7 @@ index 8051292..bb0a12c 100644
  const TRANSPORT_STREAM_RETRY_CONFIG = {
    maxRetries: 2,
    initialDelayMs: 1000,
-@@ -1363,9 +1377,7 @@ class LeadingProtocolTagLeakDetector {
+@@ -1363,9 +1389,7 @@ class LeadingProtocolTagLeakDetector {
   * `onAllToolCallsComplete` was a single-shot that already fired into an
   * `isResponding` early-return).
   */
@@ -2362,7 +2937,7 @@ index 8051292..bb0a12c 100644
  
  /*
   * ============================================================================
-@@ -1866,8 +1878,11 @@ export class GeminiChat {
+@@ -1866,8 +1890,11 @@ export class GeminiChat {
     * Public history readers still use {@link getHistory}, which returns a
     * defensive deep copy for caller mutation safety.
     */
@@ -2376,7 +2951,7 @@ index 8051292..bb0a12c 100644
      const { maxRecentImages, imagePayloadThreshold } = resolveCompactionTuning(
        this.config.getChatCompression(),
      );
-@@ -1900,6 +1915,23 @@ export class GeminiChat {
+@@ -1900,6 +1927,23 @@ export class GeminiChat {
      return curatedHistory.map(copyContentContainer);
    }
  
@@ -2400,7 +2975,7 @@ index 8051292..bb0a12c 100644
    private getRequestHistoryForRoute(
      currentUserContent: Content | undefined,
      supportedModalities: InputModalities,
-@@ -1910,6 +1942,62 @@ export class GeminiChat {
+@@ -1910,6 +1954,62 @@ export class GeminiChat {
      ).slimmedHistory;
    }
  
@@ -2463,7 +3038,7 @@ index 8051292..bb0a12c 100644
    /**
     * Seed the last-prompt-token-count for chats created with inherited
     * history (forks, subagents, speculation). Without this, the auto-compress
-@@ -2262,6 +2350,38 @@ export class GeminiChat {
+@@ -2262,6 +2362,38 @@ export class GeminiChat {
      // estimate.
      const contextWindowForClamp =
        cgConfigForThresholds?.contextWindowSize ?? DEFAULT_TOKEN_LIMIT;
@@ -2502,7 +3077,7 @@ index 8051292..bb0a12c 100644
      let promptTokensForClamp = 0;
  
      let currentUserContent: Content | undefined;
-@@ -2337,13 +2457,20 @@ export class GeminiChat {
+@@ -2337,13 +2469,20 @@ export class GeminiChat {
        // `getContextLengthExceededInfo` → `tryCompress` → RETRY branch)
        // is the documented safety net when this under-count causes
        // hard-rescue to miss.
@@ -2530,7 +3105,7 @@ index 8051292..bb0a12c 100644
        const isHardTier = effectiveTokens >= hard;
        const shouldForceFromHard =
          !exactRoute &&
-@@ -2393,13 +2520,20 @@ export class GeminiChat {
+@@ -2393,13 +2532,20 @@ export class GeminiChat {
          );
        }
        const localPromptTokensAfterCompression = shouldForceFromHard
@@ -2558,7 +3133,7 @@ index 8051292..bb0a12c 100644
          : 0;
        if (
          shouldStopAfterHardRescue(
-@@ -2539,8 +2673,9 @@ export class GeminiChat {
+@@ -2539,8 +2685,9 @@ export class GeminiChat {
        // self-corrects when provider usage arrives. An under-count is the ONE
        // way `prompt + max_tokens` can still overflow the window, so keep the
        // pad until provider usage replaces the estimate.
@@ -2570,7 +3145,7 @@ index 8051292..bb0a12c 100644
            ? estimatePromptTokens(
                [],
                userContent,
-@@ -2550,7 +2685,7 @@ export class GeminiChat {
+@@ -2550,7 +2697,7 @@ export class GeminiChat {
                /* conservative= */ true,
              )
            : effectiveTokens;
@@ -2579,7 +3154,7 @@ index 8051292..bb0a12c 100644
          promptTokensForClamp += ESTIMATE_CLAMP_OVERHEAD_PAD;
          debugLogger.debug(
            `[clamp] estimate-derived prompt count; padded by ` +
-@@ -2559,11 +2694,17 @@ export class GeminiChat {
+@@ -2559,11 +2706,17 @@ export class GeminiChat {
              `count=${this.lastPromptTokenCount}`,
          );
        }
@@ -2602,7 +3177,34 @@ index 8051292..bb0a12c 100644
        params = {
          ...params,
          config: {
-@@ -2644,6 +2785,7 @@ export class GeminiChat {
+@@ -2594,11 +2747,24 @@ export class GeminiChat {
+         'Qwen Code is streaming a model response',
+       );
+       try {
+-        // Surface a successful auto-compression to the caller as the first
+-        // event in the stream. Failed/skipped compaction attempts are silent.
++        // Surface every completed auto-compaction attempt to the caller as
++        // the first event in the stream. A refused or failed attempt is
++        // reported exactly like a successful one and carries its own
++        // outcome, because a compaction that silently did not happen is
++        // indistinguishable, downstream, from one that never ran. Only NOOP
++        // — no attempt was made — stays silent.
+         // Must be inside the try so that a consumer abandoning the stream
+         // immediately after this event still triggers the finally below;
+         // otherwise `streamDoneResolver` never fires and the next send hangs.
++        if (compressionInfo.compressionStatus !== CompressionStatus.NOOP) {
++          yield {
++            type: StreamEventType.COMPACTION,
++            record: toCompactionRecord(compressionInfo),
++          };
++        }
++        // The narrower COMPRESSED event still means "the history was
++        // replaced", so startup-context restoration and the interactive
++        // compaction notice keep firing only on real successes.
+         if (
+           compressionInfo.compressionStatus === CompressionStatus.COMPRESSED
+         ) {
+@@ -2644,6 +2810,7 @@ export class GeminiChat {
          const cgConfig =
            exactRoute?.contentGeneratorConfig ??
            self.config.getContentGeneratorConfig();
@@ -2610,7 +3212,7 @@ index 8051292..bb0a12c 100644
          const requestOverrides = exactRoute
            ? {
                contentGenerator: exactRoute.contentGenerator,
-@@ -2674,11 +2816,17 @@ export class GeminiChat {
+@@ -2674,11 +2841,17 @@ export class GeminiChat {
          // outputCeiling fallback is defensive and should not fire in practice.
          const effectiveInitialMaxOutputTokens =
            params.config?.maxOutputTokens ?? outputCeiling;
@@ -2633,7 +3235,7 @@ index 8051292..bb0a12c 100644
          const shouldEscalateMaxOutputTokens =
            effectiveInitialMaxOutputTokens < escalatedLimit;
  
-@@ -2952,7 +3100,9 @@ export class GeminiChat {
+@@ -2952,7 +3125,9 @@ export class GeminiChat {
                // continuation one below.
                transportContinuationText.trim().length === 0 &&
                transportStreamRetryCount <
@@ -2644,7 +3246,7 @@ index 8051292..bb0a12c 100644
              ) {
                self.popPendingPartialAssistantTurn();
                transportStreamRetryCount++;
-@@ -3005,7 +3155,9 @@ export class GeminiChat {
+@@ -3005,7 +3180,9 @@ export class GeminiChat {
                !streamYieldedFunctionCall &&
                transportContinuationText.trim().length > 0 &&
                transportContinuationCount <
@@ -2655,7 +3257,26 @@ index 8051292..bb0a12c 100644
              if (canContinueAfterTransportCut) {
                self.popPendingPartialAssistantTurn();
                transportContinuationCount++;
-@@ -3199,8 +3351,9 @@ export class GeminiChat {
+@@ -3084,6 +3261,18 @@ export class GeminiChat {
+                     },
+                   );
+ 
++                  // Report the reactive attempt before branching on its
++                  // outcome, so an overflow rescue that failed to shrink the
++                  // history is recorded rather than only logged.
++                  if (
++                    reactiveInfo.compressionStatus !== CompressionStatus.NOOP
++                  ) {
++                    yield {
++                      type: StreamEventType.COMPACTION,
++                      record: toCompactionRecord(reactiveInfo),
++                    };
++                  }
++
+                   if (
+                     reactiveInfo.compressionStatus ===
+                     CompressionStatus.COMPRESSED
+@@ -3199,8 +3388,9 @@ export class GeminiChat {
              // Invalid stream responses use INVALID_STREAM_RETRY_CONFIG, which
              // is independent from HTTP retries handled by retryWithBackoff.
              const isInvalidStreamError = error instanceof InvalidStreamError;
@@ -2667,7 +3288,7 @@ index 8051292..bb0a12c 100644
                  ? INVALID_STREAM_RETRY_CONFIG.protocolTagLeakMaxRetries
                  : INVALID_STREAM_RETRY_CONFIG.transientMaxRetries;
              const invalidStreamRetryCount =
-@@ -3209,6 +3362,12 @@ export class GeminiChat {
+@@ -3209,6 +3399,12 @@ export class GeminiChat {
                  : transientInvalidStreamRetryCount;
              if (
                isInvalidStreamError &&
@@ -2680,7 +3301,7 @@ index 8051292..bb0a12c 100644
                invalidStreamRetryCount < maxInvalidStreamRetries
              ) {
                self.popPendingPartialAssistantTurn();
-@@ -3323,8 +3482,9 @@ export class GeminiChat {
+@@ -3323,8 +3519,9 @@ export class GeminiChat {
                attemptState.rollback();
                if (!(error instanceof InvalidStreamError)) throw error;
  
@@ -2692,7 +3313,7 @@ index 8051292..bb0a12c 100644
                    ? INVALID_STREAM_RETRY_CONFIG.protocolTagLeakMaxRetries
                    : INVALID_STREAM_RETRY_CONFIG.transientMaxRetries;
                const continuationRetryCount =
-@@ -3365,6 +3525,7 @@ export class GeminiChat {
+@@ -3365,6 +3562,7 @@ export class GeminiChat {
            }
          };
          if (
@@ -2700,7 +3321,7 @@ index 8051292..bb0a12c 100644
            lastError === null &&
            lastFinishReason === FinishReason.MAX_TOKENS &&
            !maxTokensEscalated &&
-@@ -3617,9 +3778,10 @@ export class GeminiChat {
+@@ -3617,9 +3815,10 @@ export class GeminiChat {
            // - Maximum 3 fallback transitions (capped by config normalization).
            // - Fallback is only for capacity/availability errors (429/503/529),
            //   not for auth/billing/client errors.
@@ -2714,7 +3335,7 @@ index 8051292..bb0a12c 100644
  
            if (
              fallbackModels.length > 0 &&
-@@ -3900,13 +4062,18 @@ export class GeminiChat {
+@@ -3900,13 +4099,18 @@ export class GeminiChat {
          prompt_id,
        );
      const cgConfig = this.config.getContentGeneratorConfig();
@@ -2734,7 +3355,7 @@ index 8051292..bb0a12c 100644
        shouldRetryOnError: (error: unknown) => {
          if (error instanceof Error) {
            if (isSchemaDepthError(error.message)) return false;
-@@ -4444,6 +4611,8 @@ export class GeminiChat {
+@@ -4444,6 +4648,8 @@ export class GeminiChat {
      goalContext?: GoalTurnPermit,
      transportContinuationPrefix?: string,
    ): AsyncGenerator<GenerateContentResponse> {
@@ -2743,7 +3364,7 @@ index 8051292..bb0a12c 100644
      // Collect ALL parts from the model response (including thoughts for recording)
      const allModelParts: Part[] = [];
      const usedToolCallIds = collectToolCallIdsFromHistory(this.history);
-@@ -4774,6 +4943,7 @@ export class GeminiChat {
+@@ -4774,6 +4980,7 @@ export class GeminiChat {
      // field instead of using the structured tool_calls array. Detect and
      // recover these so the agent loop is not broken. See #8003.
      if (
@@ -3861,7 +4482,7 @@ index 72d1aa5..c16d183 100644
  
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 new file mode 100644
-index 0000000..0399083
+index 0000000..a5cbb8d
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 @@ -0,0 +1,147 @@
@@ -4014,7 +4635,7 @@ index 0000000..0399083
 +});
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
 new file mode 100644
-index 0000000..366499a
+index 0000000..bb7ac8a
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.ts
 @@ -0,0 +1,124 @@
@@ -4278,10 +4899,26 @@ index 0000000..0e8e43d
 +  'persisted artifacts before deciding what to do next; do not blindly repeat ' +
 +  'a non-idempotent operation.';
 diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
-index d2801d0..58c3e5b 100644
+index d2801d0..81f188b 100644
 --- a/packages/core/src/core/turn.ts
 +++ b/packages/core/src/core/turn.ts
-@@ -359,6 +359,13 @@ export enum CompressionStatus {
+@@ -80,6 +80,15 @@ export enum GeminiEventType {
+   /** The system switched to a fallback model after the primary (or prior
+    *  fallback) exhausted retries on a capacity/availability error. */
+   ModelFallback = 'model_fallback',
++  /**
++   * One conversation-compaction attempt ran to completion, successfully or
++   * not. Distinct from `ChatCompressed`, which means the history actually
++   * was replaced: this event is the observability record of the attempt and
++   * fires for refusals and failures too. Emitted for every non-NOOP outcome,
++   * so a consumer never has to infer a compaction from a drop in reported
++   * input tokens.
++   */
++  ChatCompaction = 'chat_compaction',
+ }
+ 
+ export type ServerGeminiRetryEvent = {
+@@ -359,6 +368,13 @@ export enum CompressionStatus {
     * splitter). (R5.2)
     */
    COMPRESSION_FAILED_OUTPUT_TRUNCATED,
@@ -4295,6 +4932,90 @@ index d2801d0..58c3e5b 100644
  }
  
  /**
+@@ -387,6 +403,53 @@ export type ServerGeminiChatCompressedEvent = {
+   value: ChatCompressionInfo | null;
+ };
+ 
++/**
++ * The operator-facing record of one completed compaction attempt.
++ *
++ * This is the payload written to the captured event stream, so it is
++ * deliberately self-describing: `status` is the stable spelling of the
++ * `CompressionStatus` member rather than its ordinal, and `succeeded`
++ * answers "was the history actually replaced?" without a lookup table.
++ * A refused or failed attempt carries `succeeded: false` and keeps
++ * `newTokenCount` equal to the preserved history's count, so a silent
++ * failure cannot be read as a compaction that never happened.
++ */
++export interface CompactionRecord {
++  /** `CompressionStatus` member name, e.g. `COMPRESSED`. */
++  status: string;
++  /** True only when the compacted history replaced the original. */
++  succeeded: boolean;
++  /** Rendered prompt tokens before the attempt. */
++  originalTokenCount: number;
++  /** Rendered prompt tokens after it; equal to the original on failure. */
++  newTokenCount: number;
++  /** Why the attempt fired, or null when the caller did not classify it. */
++  triggerReason: CompactionTriggerReason | null;
++}
++
++/**
++ * Projects a `ChatCompressionInfo` onto the emitted record. Shared by the
++ * main-session and subagent paths so both carry byte-identical field sets.
++ */
++export function toCompactionRecord(
++  info: ChatCompressionInfo,
++): CompactionRecord {
++  return {
++    status:
++      CompressionStatus[info.compressionStatus] ??
++      String(info.compressionStatus),
++    succeeded: info.compressionStatus === CompressionStatus.COMPRESSED,
++    originalTokenCount: info.originalTokenCount,
++    newTokenCount: info.newTokenCount,
++    triggerReason: info.triggerReason ?? null,
++  };
++}
++
++export type ServerGeminiChatCompactionEvent = {
++  type: GeminiEventType.ChatCompaction;
++  value: CompactionRecord;
++};
++
+ export type ServerGeminiMaxSessionTurnsEvent = {
+   type: GeminiEventType.MaxSessionTurns;
+ };
+@@ -453,6 +516,7 @@ export type ServerGeminiGoalStateEvent = {
+ export type ServerGeminiStreamEvent =
+   | ServerGeminiGoalStateEvent
+   | ServerGeminiActiveGoalEvent
++  | ServerGeminiChatCompactionEvent
+   | ServerGeminiChatCompressedEvent
+   | ServerGeminiCitationEvent
+   | ServerGeminiContentEvent
+@@ -581,6 +645,21 @@ export class Turn {
+           continue;
+         }
+ 
++        // Surface every completed compaction attempt as the top-level
++        // ChatCompaction event. This is the observability record: it fires
++        // for refusals and failures as well as successes, and it is the
++        // only event a headless consumer needs to answer "did this session
++        // compact, when, and from how many tokens to how many". It stays
++        // separate from ChatCompressed below, which continues to mean the
++        // narrower "the history was replaced".
++        if (streamEvent.type === 'compaction') {
++          yield {
++            type: GeminiEventType.ChatCompaction,
++            value: streamEvent.record,
++          };
++          continue;
++        }
++
+         // Surface auto-compaction that fired inside chat.sendMessageStream
+         // as the top-level ChatCompressed event so existing UI handlers stay
+         // connected. This bridge is the primary path for auto-compaction
 diff --git a/packages/core/src/models/constants.ts b/packages/core/src/models/constants.ts
 index 4f55526..0280a42 100644
 --- a/packages/core/src/models/constants.ts
@@ -10810,10 +11531,18 @@ index 8be0153..00aa6af 100644
      },
      {
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..0be654f 100644
+index 6d3fb50..ef5168b 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
-@@ -205,6 +205,7 @@ describe('AgentTool', () => {
+@@ -32,6 +32,7 @@ import {
+ } from '../../agents/runtime/agent-headless.js';
+ import { AgentEventType } from '../../agents/runtime/agent-events.js';
+ import type {
++  AgentCompactionEvent,
+   AgentToolCallEvent,
+   AgentToolResultEvent,
+   AgentApprovalRequestEvent,
+@@ -205,6 +206,7 @@ describe('AgentTool', () => {
        getSessionId: vi.fn().mockReturnValue('test-session-id'),
        getCliVersion: vi.fn().mockReturnValue('test-version'),
        getSubagentManager: vi.fn(),
@@ -10821,7 +11550,7 @@ index 6d3fb50..0be654f 100644
        getGeminiClient: vi.fn().mockReturnValue(undefined),
        getHookSystem: vi.fn().mockReturnValue(undefined),
        getStopHookBlockingCap: vi.fn().mockReturnValue(8),
-@@ -449,6 +450,51 @@ describe('AgentTool', () => {
+@@ -449,6 +451,51 @@ describe('AgentTool', () => {
    });
  
    describe('schema generation', () => {
@@ -10873,7 +11602,7 @@ index 6d3fb50..0be654f 100644
      it('keeps subagent_type open when named subagents are available', () => {
        const schema = agentTool.schema;
        const properties = schema.parametersJsonSchema as {
-@@ -2045,6 +2091,7 @@ describe('AgentTool', () => {
+@@ -2045,6 +2092,7 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -10881,7 +11610,7 @@ index 6d3fb50..0be654f 100644
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -2224,7 +2271,12 @@ describe('AgentTool', () => {
+@@ -2224,7 +2272,12 @@ describe('AgentTool', () => {
        ).createInvocation(params);
        const result = await invocation.execute();
  
@@ -10895,7 +11624,7 @@ index 6d3fb50..0be654f 100644
      });
  
      it('explains successful subagents with no model-visible output', async () => {
-@@ -3407,6 +3459,7 @@ describe('AgentTool', () => {
+@@ -3407,6 +3460,7 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -10903,7 +11632,7 @@ index 6d3fb50..0be654f 100644
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -4670,6 +4723,7 @@ describe('AgentTool', () => {
+@@ -4670,6 +4724,7 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -10911,7 +11640,7 @@ index 6d3fb50..0be654f 100644
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -4866,6 +4920,7 @@ describe('AgentTool', () => {
+@@ -4866,6 +4921,7 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -10919,7 +11648,7 @@ index 6d3fb50..0be654f 100644
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -5217,6 +5272,7 @@ describe('AgentTool', () => {
+@@ -5217,6 +5273,7 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -10927,7 +11656,80 @@ index 6d3fb50..0be654f 100644
        } as unknown as AgentHeadless;
  
        vi.mocked(mockAgent.execute).mockImplementation(async () => {
-@@ -5593,6 +5649,7 @@ describe('AgentTool', () => {
+@@ -5286,6 +5343,72 @@ describe('AgentTool', () => {
+       expect(toolCall?.responseParts).toBe(responseParts);
+     });
+ 
++    it('[compaction-event] accumulates every subagent compaction attempt on the display, oldest first', async () => {
++      vi.mocked(config.isInteractive).mockReturnValue(false);
++      const snapshots: AgentResultDisplay[] = [];
++
++      const invocation = createInvocationWithEventDrivenAgent((emitter) => {
++        emitter.emit(AgentEventType.COMPACTION, {
++          subagentId: 'sub-1',
++          round: 4,
++          compaction: {
++            status: 'COMPRESSED',
++            succeeded: true,
++            originalTokenCount: 198_400,
++            newTokenCount: 32_118,
++            triggerReason: 'token_limit',
++          },
++          timestamp: Date.now(),
++        } satisfies AgentCompactionEvent);
++
++        emitter.emit(AgentEventType.COMPACTION, {
++          subagentId: 'sub-1',
++          round: 9,
++          compaction: {
++            status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
++            succeeded: false,
++            originalTokenCount: 205_112,
++            newTokenCount: 205_112,
++            triggerReason: 'token_limit',
++          },
++          timestamp: Date.now(),
++        } satisfies AgentCompactionEvent);
++      });
++
++      await invocation.execute(undefined, (output) => {
++        snapshots.push(output as AgentResultDisplay);
++      });
++
++      const withBoth = snapshots.filter(
++        (snapshot) => (snapshot.compactions?.length ?? 0) === 2,
++      );
++      expect(withBoth.length).toBeGreaterThan(0);
++      // Append-only and in order, so a consumer can emit only the tail it
++      // has not seen and never re-report an earlier attempt.
++      expect(withBoth.at(-1)?.compactions).toEqual([
++        {
++          status: 'COMPRESSED',
++          succeeded: true,
++          originalTokenCount: 198_400,
++          newTokenCount: 32_118,
++          triggerReason: 'token_limit',
++        },
++        {
++          status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
++          succeeded: false,
++          originalTokenCount: 205_112,
++          newTokenCount: 205_112,
++          triggerReason: 'token_limit',
++        },
++      ]);
++      const firstSnapshotWithCompaction = snapshots.find(
++        (snapshot) => (snapshot.compactions?.length ?? 0) === 1,
++      );
++      expect(firstSnapshotWithCompaction?.compactions?.[0]?.status).toBe(
++        'COMPRESSED',
++      );
++    });
++
+     it('omits subagent protocol payloads from interactive display state', async () => {
+       vi.mocked(config.isInteractive).mockReturnValue(true);
+       const responseParts: Part[] = [{ text: 'raw protocol result' }];
+@@ -5593,6 +5716,7 @@ describe('AgentTool', () => {
          executeExternalInputs: vi.fn().mockResolvedValue(undefined),
          getFinalText: vi.fn().mockReturnValue('Monitor done'),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -10936,10 +11738,18 @@ index 6d3fb50..0be654f 100644
          // Background spawn subscribes to the core's event emitter to
          // populate the entry's recentActivities buffer. Return a stub
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..5b826b0 100644
+index 4bcea69..0bfecf7 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
-@@ -130,6 +130,12 @@ import type {
+@@ -88,6 +88,7 @@ import {
+   AgentEventType,
+ } from '../../agents/runtime/agent-events.js';
+ import type {
++  AgentCompactionEvent,
+   AgentToolCallEvent,
+   AgentToolResultEvent,
+   AgentFinishEvent,
+@@ -130,6 +131,12 @@ import type {
  } from '../../agents/background-tasks.js';
  import { buildModelIdContext, resolveModelId } from '../../utils/modelId.js';
  import type { AuthOverrides } from '../../models/content-generator-config.js';
@@ -10952,7 +11762,7 @@ index 4bcea69..5b826b0 100644
  
  function persistBackgroundCancellation(
    metaPath: string,
-@@ -1004,8 +1010,48 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1004,8 +1011,48 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
  </example>
  `;
  
@@ -11003,7 +11813,7 @@ index 4bcea69..5b826b0 100644
  
      // Update the parameter schema by modifying the existing object
      const schema = this.parameterSchema as {
-@@ -1035,7 +1081,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1035,7 +1082,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        const availableGrades = [
          ...this.subagentManager.getAvailableModelGrades().keys(),
        ];
@@ -11015,7 +11825,7 @@ index 4bcea69..5b826b0 100644
          schema.properties.model = {
            type: 'string',
            enum: availableGrades,
-@@ -1075,6 +1124,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1075,6 +1125,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        return 'Parameter "todo_id" must be a non-empty string of at most 500 characters.';
      }
  
@@ -11050,7 +11860,36 @@ index 4bcea69..5b826b0 100644
      if (params.subagent_type !== undefined) {
        if (
          typeof params.subagent_type !== 'string' ||
-@@ -2174,7 +2251,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1425,6 +1503,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+   readonly eventEmitter: AgentEventEmitter = new AgentEventEmitter();
+   private currentDisplay: AgentResultDisplay | null = null;
+   private currentToolCalls: AgentResultDisplay['toolCalls'] = [];
++  private readonly currentCompactions: NonNullable<
++    AgentResultDisplay['compactions']
++  > = [];
+   private callId?: string;
+ 
+   constructor(
+@@ -1552,6 +1633,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+       }
+     });
+ 
++    // Compactions are append-only: each event adds one entry and never
++    // rewrites an earlier one, so a consumer diffing successive displays
++    // emits exactly the tail it has not seen.
++    this.eventEmitter.on(AgentEventType.COMPACTION, (...args: unknown[]) => {
++      const event = args[0] as AgentCompactionEvent;
++      this.currentCompactions.push(event.compaction);
++      this.updateDisplay(
++        { compactions: [...this.currentCompactions] },
++        updateOutput,
++      );
++    });
++
+     this.eventEmitter.on(AgentEventType.FINISH, (...args: unknown[]) => {
+       const event = args[0] as AgentFinishEvent;
+       this.updateDisplay(
+@@ -2174,7 +2267,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        const subagentRawText = subagent.getFinalText();
        const terminateMode = subagent.getTerminateMode();
        const finalText = appendStopHookBlockingCapWarning(
@@ -11063,7 +11902,7 @@ index 4bcea69..5b826b0 100644
          stopHookWarning,
        );
        const success = terminateMode === AgentTerminateMode.GOAL;
-@@ -2567,6 +2648,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2567,6 +2664,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      // background-agent concurrency caps (agents.maxParallelAgentsByModel).
      let subagentModelId: string | undefined;
      let subagentRuntimeAuthOverrides: AuthOverrides | undefined;
@@ -11071,7 +11910,7 @@ index 4bcea69..5b826b0 100644
      const releaseBackgroundSlotReservation = () => {
        if (backgroundSlotReservation && !backgroundSlotReservationConsumed) {
          this.config
-@@ -2696,8 +2778,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2696,8 +2794,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // Implicit background requests downgrade to an awaited foreground run
        // instead of orphaning the child's results. The runtime spawn guard
        // above rejects an explicit run_in_background: true request.
@@ -11083,7 +11922,7 @@ index 4bcea69..5b826b0 100644
            ? true
            : (this.params.run_in_background ??
              (subagentConfig.background === true ||
-@@ -3077,6 +3160,19 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3077,6 +3176,19 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            subagentRuntimeConfig as Config,
            {
              eventEmitter: backgroundEventEmitter ?? this.eventEmitter,
@@ -11103,7 +11942,7 @@ index 4bcea69..5b826b0 100644
              ...(shouldRunInBackground && subagentModelId
                ? { modelConfigOverrides: { model: subagentModelId } }
                : {}),
-@@ -3944,6 +4040,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3944,6 +4056,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
  
        const fgHookOpts = { ...hookOpts, signal: fgAbortController.signal };
@@ -11137,7 +11976,7 @@ index 4bcea69..5b826b0 100644
        // Wrap in qwen-code.subagent span (#3731 Phase 3). Foreground
        // invocations are child spans of the AGENT tool's `qwen-code.tool`
        // span, inheriting its traceId so the trace tree stays unified.
-@@ -3952,11 +4075,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3952,11 +4091,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            this.buildSubagentSpanSpec(hookOpts, subagentConfig, 'foreground'),
            fgAbortController.signal,
            (recordSpanOutcome) =>
@@ -11158,7 +11997,7 @@ index 4bcea69..5b826b0 100644
              ),
          );
  
-@@ -4112,12 +4239,45 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4112,12 +4255,45 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            depth: launchDepth,
          });
  
@@ -11209,7 +12048,7 @@ index 4bcea69..5b826b0 100644
          const wtSuffix = formatWorktreeSuffix(await cleanupWorktreeIsolation());
          if (terminateMode === AgentTerminateMode.ERROR) {
            return {
-@@ -4266,8 +4426,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4266,8 +4442,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          terminateReason: `Failed to run subagent: ${errorMessage}`,
        };
  
@@ -11949,6 +12788,33 @@ index ab8f8f0..e3f2881 100644
      if (params.pages) {
        const parsed = parsePDFPageRange(params.pages);
        if (!parsed) {
+diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
+index e98c50a..327d587 100644
+--- a/packages/core/src/tools/tools.ts
++++ b/packages/core/src/tools/tools.ts
+@@ -11,6 +11,7 @@ import { SchemaValidator } from '../utils/schemaValidator.js';
+ import { type AgentStatsSummary } from '../agents/runtime/agent-statistics.js';
+ import type { AnsiOutput } from '../utils/terminalSerializer.js';
+ import type { PermissionDecision } from '../permissions/types.js';
++import type { CompactionRecord } from '../core/turn.js';
+ import type { VisionBridgeNoticeDisplay } from '../services/visionBridge/vision-bridge-service.js';
+ 
+ /**
+@@ -650,6 +651,14 @@ export interface AgentResultDisplay {
+   // this contains the confirmation details for inline UI rendering.
+   pendingConfirmation?: ToolCallConfirmationDetails;
+ 
++  /**
++   * Append-only log of the compaction attempts this subagent's own chat has
++   * completed, oldest first. Entries are never rewritten, so a consumer can
++   * emit the tail it has not seen yet — the same discipline `toolCalls` uses
++   * for tool_use/tool_result.
++   */
++  compactions?: CompactionRecord[];
++
+   toolCalls?: Array<{
+     callId: string;
+     name: string;
 diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils/fileUtils.test.ts
 index 4987635..ca0d047 100644
 --- a/packages/core/src/utils/fileUtils.test.ts

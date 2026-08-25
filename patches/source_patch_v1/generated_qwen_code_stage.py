@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '5d6cb03b60bdc7d34086b4be076c09dc0b291aadd90771b7ec4b66471b2de8d6',
+  'review_sha256': '937094cc35bbda420d954cac28335d819b828a885ee2ac64608478b6d7356f4b',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -28,19 +28,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before_sha256': '17e660b5b946d5647814af611bc5b6aaf43c597e7b329e4926d90b8bf7fa72e8',
-             'after_sha256': '60644ab60158d63603c05454a2fd5da550fa033001c46209497fae8e0a153fd1'},
+             'after_sha256': '356a29b720098f3a95a9122fd08097fa2967962f5c42ba2da9f017cb94819f4b'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before_sha256': 'd389950daa67e5b2578ed5da8e340e417d7f696486c81ed78f3aca735e22c0bd',
-             'after_sha256': 'ea3a7911c2ef9624d28eb039770d934b2db29a295c9144167ddbadad75f13a18'},
+             'after_sha256': 'a28b31eb386970897bbdd7f72590d5e27d6f9436a6e3d5e81f46b3c60c1d806e'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
              'after_sha256': '559cbf3f8daa9d7943dea5ec09859fa25de68b25ecb624e66815a90d8a6b9932'},
+            {'path': 'packages/cli/src/ui/hooks/useGeminiStream.ts',
+             'before_sha256': '81ae8edc386ed5b31b09a99435bbb94925117c9a56e6bf4bb80d3c9be422f5ba',
+             'after_sha256': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before_sha256': 'd59f5e8a9a9efc2f10770df56e1ea201ec38400b9b1dd00ef317ce2f8e5a1448',
-             'after_sha256': 'f33feccda131157f509ecabcd77a47d53e85413719af23edc1a4f28448e1fb1a'},
+             'after_sha256': '7299e9cf41b76940842156009a422e74ead871243ffbdef7a786f87fc3b721e0'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
              'before_sha256': 'e1a5371ec1215d1cc23eb87ce43d82bf62270b1e38b75110dbea4bf77c925a5d',
-             'after_sha256': '7d818a669ee036bf8e8b935b47613d074c51f959e77832f6fcc6c289e398a2c8'},
+             'after_sha256': '5b43358b8fbe6832582037527523c6654999f1cb8ce1fbe697597f5ee5fc4e5d'},
             {'path': 'packages/core/src/agents/runtime/agent-context.test.ts',
              'before_sha256': 'af818483ce52245a742302e55abe01f78aefe66c2f82e863693a394515d374a4',
              'after_sha256': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a'},
@@ -49,7 +52,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6'},
             {'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before_sha256': '79dd902bfd3af29fff89a1886f4076e64019681261f9550e446eda0df0ab9464',
-             'after_sha256': '35a2d0b3f45533e5e63fc705725a6a831978776bf81b8d65d6dfc8e005c86034'},
+             'after_sha256': '2a556372e4581ea51cd43ecc36ea5479069190c2263f1f4f0719870a37ccb53c'},
+            {'path': 'packages/core/src/agents/runtime/agent-events.ts',
+             'before_sha256': 'c28f4f24651cdb75ea34b3102c9456e3b467d5ee0a03afb73a160b25b736d3b8',
+             'after_sha256': '94a3f2bda99cb2f5f3a64c374e0759a167368ec1b71dc10f5d633e9054001e0e'},
             {'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before_sha256': 'db6d8ed8f7714a83483fb9f22c860a3f2e7e38cf53171e79c5fc49a363d3c3ce',
              'after_sha256': '566427c59d72b3bc5f2e582e6b83a43388e5bb2d66642026d35951dd5b017f5c'},
@@ -82,10 +88,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '9aca5b3131e9e089c30ca80b2a310a3d0da01623b55c2949c7d097348baf8756'},
             {'path': 'packages/core/src/core/geminiChat.test.ts',
              'before_sha256': 'c3ec701c78d99698ad538c188e08d10b78b266c372b850907def72f9badb8830',
-             'after_sha256': 'a00d58358c3ea4120451645cf2bd62c581876a4757154085f8873938837f147d'},
+             'after_sha256': '417a72c54062d140ec82392680c397ec5602535293d1ccd675d2ea0839bcfeca'},
             {'path': 'packages/core/src/core/geminiChat.ts',
              'before_sha256': '384de52c73dc5c387d3147713046713d34de0b6724b12feb00574508a4d7cc6c',
-             'after_sha256': '7c8cbc4bd4aa6b88cb1500e28f2c12daca5cd86a2c9d59cb0d00b653b4c16597'},
+             'after_sha256': 'ad16bac94914e60ad012884f45a06ecf9147f9c7d307f1a2a9783f0bbb00d407'},
             {'path': 'packages/core/src/core/genai-compat.ts',
              'before_sha256': 'aedda72dcd33427fd6a26e044e911a3a34fc67b6db7d90a59407b9b8c2b6d576',
              'after_sha256': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81'},
@@ -136,7 +142,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9'},
             {'path': 'packages/core/src/core/turn.ts',
              'before_sha256': 'f1be47023cae4b9e3a4fd9fd756c28bf36724f772bd9759e8ecd72e73cdea6b7',
-             'after_sha256': 'e1ce33664ccbc6f1212d8c21ca9e78eee1ad1bfa2462b92c5c454e5b6149453b'},
+             'after_sha256': 'cf1b6edc14b558b27098af0f8aefbea0a6e07cb98d1968001e286ceac05b3270'},
             {'path': 'packages/core/src/models/constants.ts',
              'before_sha256': 'f719e3d18c0160698f92d6703b8751aef9159899d670fc3ea59036e56e962d86',
              'after_sha256': '11cf01eda085973eedc575e4b8cd0c7bf469ced519e66bbac72129c47e8b2d38'},
@@ -166,10 +172,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
-             'after_sha256': '00778f0d215607bdfe3f4e23e4762de1b6df9e3621f75a5f216fe406dc79a76a'},
+             'after_sha256': '794728ecbc5ef8d25593a32c5a9d104dba2cda8bbf0bef986295a95ce6c14c51'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': '915eddfa8c1c1d1de08406631bd0a360d888624fa3d901a1468c167c27f1099f'},
+             'after_sha256': '37c8312f988ba485efe66d7bbf5352c23a2762d4786c1d9b254b081914f34e53'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -188,6 +194,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/tools/read-file.ts',
              'before_sha256': '2aad58d97ebc1ba94b3f0020d690b46d7409c9dba4103eb5dfb01ece38f9049b',
              'after_sha256': 'b2023049f4b50a1581ce502523c7c9aef8968c5eff05d363c158905d3d6aca8d'},
+            {'path': 'packages/core/src/tools/tools.ts',
+             'before_sha256': 'e04d871a71b7d432ab4de1918f701e6cf5f3caa3f6b95f97a55a331054e3d554',
+             'after_sha256': 'baca3633ee6efdf3c334cedc62c0c6bb83db6aa124548e8e227311705a7b7c15'},
             {'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before_sha256': '88bf6740ee046a7a75116659df85ece80338247c88f5fc48833fd4053e3d19b1',
              'after_sha256': '9f191c0db8201be82d3242e35855052f911684ef53569776f53175170b5584e8'},
@@ -1799,6 +1808,232 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    extensionFileWatcher?.startWatching();\n'},
             {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-1',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before': "        text: 'First',\n"
+                       '      });\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n'
+                       "  describe('finalizeAssistantMessage', () => {\n",
+             'after': "        text: 'First',\n"
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[compaction-event] emits a main-session compaction "
+                      "record with before/after tokens', () => {\n"
+                      '      adapter.processEvent({\n'
+                      '        type: GeminiEventType.ChatCompaction,\n'
+                      '        value: {\n'
+                      "          status: 'COMPRESSED',\n"
+                      '          succeeded: true,\n'
+                      '          originalTokenCount: 214883,\n'
+                      '          newTokenCount: 41207,\n'
+                      "          triggerReason: 'token_limit',\n"
+                      '        },\n'
+                      '      });\n'
+                      '\n'
+                      '      expect(adapter.emittedMessages).toHaveLength(1);\n'
+                      '      const message = adapter.emittedMessages[0];\n'
+                      "      expect(message.type).toBe('system');\n"
+                      "      if (message.type === 'system') {\n"
+                      "        expect(message.subtype).toBe('compaction');\n"
+                      '        // Main session, so the same null convention as its '
+                      'assistant/user\n'
+                      '        // messages — a consumer separates parent from subagent '
+                      'on this field.\n'
+                      '        expect(message.parent_tool_use_id).toBeNull();\n'
+                      '        expect(message.data).toEqual({\n'
+                      "          status: 'COMPRESSED',\n"
+                      '          succeeded: true,\n'
+                      '          originalTokenCount: 214883,\n'
+                      '          newTokenCount: 41207,\n'
+                      "          triggerReason: 'token_limit',\n"
+                      '        });\n'
+                      '      }\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[compaction-event] records a refused attempt as a "
+                      "failure rather than staying silent', () => {\n"
+                      '      adapter.processEvent({\n'
+                      '        type: GeminiEventType.ChatCompaction,\n'
+                      '        value: {\n'
+                      "          status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',\n"
+                      '          succeeded: false,\n'
+                      '          originalTokenCount: 214883,\n'
+                      '          newTokenCount: 214883,\n'
+                      "          triggerReason: 'token_limit',\n"
+                      '        },\n'
+                      '      });\n'
+                      '\n'
+                      '      expect(adapter.emittedMessages).toHaveLength(1);\n'
+                      '      const message = adapter.emittedMessages[0];\n'
+                      "      expect(message.type).toBe('system');\n"
+                      "      if (message.type === 'system') {\n"
+                      "        expect(message.subtype).toBe('compaction');\n"
+                      '        expect(message.data).toMatchObject({\n'
+                      "          status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',\n"
+                      '          succeeded: false,\n'
+                      '          // The history was preserved, so the "after" count is '
+                      'the "before".\n'
+                      '          originalTokenCount: 214883,\n'
+                      '          newTokenCount: 214883,\n'
+                      '        });\n'
+                      '      }\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('finalizeAssistantMessage', () => {\n",
+             'review_before': "        text: 'First',\n"
+                              '      });\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n'
+                              "  describe('finalizeAssistantMessage', () => {\n",
+             'review_after': "        text: 'First',\n"
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[compaction-event] emits a main-session "
+                             "compaction record with before/after tokens', () => {\n"
+                             '      adapter.processEvent({\n'
+                             '        type: GeminiEventType.ChatCompaction,\n'
+                             '        value: {\n'
+                             "          status: 'COMPRESSED',\n"
+                             '          succeeded: true,\n'
+                             '          originalTokenCount: 214883,\n'
+                             '          newTokenCount: 41207,\n'
+                             "          triggerReason: 'token_limit',\n"
+                             '        },\n'
+                             '      });\n'
+                             '\n'
+                             '      expect(adapter.emittedMessages).toHaveLength(1);\n'
+                             '      const message = adapter.emittedMessages[0];\n'
+                             "      expect(message.type).toBe('system');\n"
+                             "      if (message.type === 'system') {\n"
+                             "        expect(message.subtype).toBe('compaction');\n"
+                             '        // Main session, so the same null convention as '
+                             'its assistant/user\n'
+                             '        // messages — a consumer separates parent from '
+                             'subagent on this field.\n'
+                             '        expect(message.parent_tool_use_id).toBeNull();\n'
+                             '        expect(message.data).toEqual({\n'
+                             "          status: 'COMPRESSED',\n"
+                             '          succeeded: true,\n'
+                             '          originalTokenCount: 214883,\n'
+                             '          newTokenCount: 41207,\n'
+                             "          triggerReason: 'token_limit',\n"
+                             '        });\n'
+                             '      }\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[compaction-event] records a refused attempt as "
+                             "a failure rather than staying silent', () => {\n"
+                             '      adapter.processEvent({\n'
+                             '        type: GeminiEventType.ChatCompaction,\n'
+                             '        value: {\n'
+                             '          status: '
+                             "'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',\n"
+                             '          succeeded: false,\n'
+                             '          originalTokenCount: 214883,\n'
+                             '          newTokenCount: 214883,\n'
+                             "          triggerReason: 'token_limit',\n"
+                             '        },\n'
+                             '      });\n'
+                             '\n'
+                             '      expect(adapter.emittedMessages).toHaveLength(1);\n'
+                             '      const message = adapter.emittedMessages[0];\n'
+                             "      expect(message.type).toBe('system');\n"
+                             "      if (message.type === 'system') {\n"
+                             "        expect(message.subtype).toBe('compaction');\n"
+                             '        expect(message.data).toMatchObject({\n'
+                             '          status: '
+                             "'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',\n"
+                             '          succeeded: false,\n'
+                             '          // The history was preserved, so the "after" '
+                             'count is the "before".\n'
+                             '          originalTokenCount: 214883,\n'
+                             '          newTokenCount: 214883,\n'
+                             '        });\n'
+                             '      }\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('finalizeAssistantMessage', () => {\n"},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-2',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before': "        expect(message.subtype).toBe('test_subtype');\n"
+                       '      }\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n'
+                       "  describe('emitToolProgress', () => {\n",
+             'after': "        expect(message.subtype).toBe('test_subtype');\n"
+                      '      }\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[compaction-event] attributes a system message to a "
+                      "subagent when given its tool-call id', () => {\n"
+                      "      adapter.emitSystemMessage('compaction', { succeeded: true "
+                      '});\n'
+                      '      adapter.emitSystemMessage(\n'
+                      "        'compaction',\n"
+                      '        { succeeded: true },\n'
+                      "        'agent-call-7',\n"
+                      '      );\n'
+                      '\n'
+                      '      expect(adapter.emittedMessages).toHaveLength(2);\n'
+                      '      const [mainSession, subagent] = adapter.emittedMessages;\n'
+                      "      expect(mainSession.type).toBe('system');\n"
+                      "      if (mainSession.type === 'system') {\n"
+                      '        expect(mainSession.parent_tool_use_id).toBeNull();\n'
+                      '      }\n'
+                      "      expect(subagent.type).toBe('system');\n"
+                      "      if (subagent.type === 'system') {\n"
+                      '        '
+                      "expect(subagent.parent_tool_use_id).toBe('agent-call-7');\n"
+                      '      }\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('emitToolProgress', () => {\n",
+             'review_before': "        expect(message.subtype).toBe('test_subtype');\n"
+                              '      }\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n'
+                              "  describe('emitToolProgress', () => {\n",
+             'review_after': "        expect(message.subtype).toBe('test_subtype');\n"
+                             '      }\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[compaction-event] attributes a system message "
+                             "to a subagent when given its tool-call id', () => {\n"
+                             "      adapter.emitSystemMessage('compaction', { "
+                             'succeeded: true });\n'
+                             '      adapter.emitSystemMessage(\n'
+                             "        'compaction',\n"
+                             '        { succeeded: true },\n'
+                             "        'agent-call-7',\n"
+                             '      );\n'
+                             '\n'
+                             '      expect(adapter.emittedMessages).toHaveLength(2);\n'
+                             '      const [mainSession, subagent] = '
+                             'adapter.emittedMessages;\n'
+                             "      expect(mainSession.type).toBe('system');\n"
+                             "      if (mainSession.type === 'system') {\n"
+                             '        '
+                             'expect(mainSession.parent_tool_use_id).toBeNull();\n'
+                             '      }\n'
+                             "      expect(subagent.type).toBe('system');\n"
+                             "      if (subagent.type === 'system') {\n"
+                             '        '
+                             "expect(subagent.parent_tool_use_id).toBe('agent-call-7');\n"
+                             '      }\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('emitToolProgress', () => {\n"},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-3',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': "        expect(result).toBe('Tool result');\n"
                        '      });\n'
                        '\n'
@@ -1903,7 +2138,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "tool content', () => {\n"
                              '        const response = {\n'
                              "          callId: 'pdf-success',\n"},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-2',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-4',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '\n'
                        '        expect(toolResultContent(response)).toBe(\n'
@@ -1938,6 +2173,192 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      });\n'
                              '\n'},
             {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-1',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': '    response: ToolCallResponseInfo,\n'
+                       '    parentToolUseId?: string | null,\n'
+                       '  ): void;\n'
+                       '  emitSystemMessage(subtype: string, data?: unknown): void;\n'
+                       '  /**\n'
+                       '   * Emits a tool progress stream event.\n'
+                       '   * Only emits when the adapter supports partial messages '
+                       '(stream mode).\n',
+             'after': '    response: ToolCallResponseInfo,\n'
+                      '    parentToolUseId?: string | null,\n'
+                      '  ): void;\n'
+                      '  emitSystemMessage(\n'
+                      '    subtype: string,\n'
+                      '    data?: unknown,\n'
+                      '    parentToolUseId?: string | null,\n'
+                      '  ): void;\n'
+                      '  /**\n'
+                      '   * Emits a tool progress stream event.\n'
+                      '   * Only emits when the adapter supports partial messages '
+                      '(stream mode).\n',
+             'review_before': '    response: ToolCallResponseInfo,\n'
+                              '    parentToolUseId?: string | null,\n'
+                              '  ): void;\n'
+                              '  emitSystemMessage(subtype: string, data?: unknown): '
+                              'void;\n'
+                              '  /**\n'
+                              '   * Emits a tool progress stream event.\n'
+                              '   * Only emits when the adapter supports partial '
+                              'messages (stream mode).\n',
+             'review_after': '    response: ToolCallResponseInfo,\n'
+                             '    parentToolUseId?: string | null,\n'
+                             '  ): void;\n'
+                             '  emitSystemMessage(\n'
+                             '    subtype: string,\n'
+                             '    data?: unknown,\n'
+                             '    parentToolUseId?: string | null,\n'
+                             '  ): void;\n'
+                             '  /**\n'
+                             '   * Emits a tool progress stream event.\n'
+                             '   * Only emits when the adapter supports partial '
+                             'messages (stream mode).\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-2',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': '          fallbackIndex: event.fallbackIndex,\n'
+                       '        });\n'
+                       '        break;\n'
+                       '      default:\n'
+                       '        break;\n'
+                       '    }\n',
+             'after': '          fallbackIndex: event.fallbackIndex,\n'
+                      '        });\n'
+                      '        break;\n'
+                      '      case GeminiEventType.ChatCompaction:\n'
+                      '        // Surface conversation compaction the same way. '
+                      'Without this the\n'
+                      '        // only trace of a compaction in a captured stream is a '
+                      'drop in\n'
+                      '        // reported input tokens between billed turns — a '
+                      'reconstruction\n'
+                      '        // that cannot tell a refused attempt from one that '
+                      'never ran.\n'
+                      '        // parent_tool_use_id is null here because processEvent '
+                      'only ever\n'
+                      "        // sees the main session's stream; subagent compactions "
+                      'are emitted\n'
+                      '        // with their agent tool-call id by the agent progress '
+                      'handler.\n'
+                      "        this.emitSystemMessage('compaction', event.value, "
+                      'null);\n'
+                      '        break;\n'
+                      '      default:\n'
+                      '        break;\n'
+                      '    }\n',
+             'review_before': '          fallbackIndex: event.fallbackIndex,\n'
+                              '        });\n'
+                              '        break;\n'
+                              '      default:\n'
+                              '        break;\n'
+                              '    }\n',
+             'review_after': '          fallbackIndex: event.fallbackIndex,\n'
+                             '        });\n'
+                             '        break;\n'
+                             '      case GeminiEventType.ChatCompaction:\n'
+                             '        // Surface conversation compaction the same way. '
+                             'Without this the\n'
+                             '        // only trace of a compaction in a captured '
+                             'stream is a drop in\n'
+                             '        // reported input tokens between billed turns — '
+                             'a reconstruction\n'
+                             '        // that cannot tell a refused attempt from one '
+                             'that never ran.\n'
+                             '        // parent_tool_use_id is null here because '
+                             'processEvent only ever\n'
+                             "        // sees the main session's stream; subagent "
+                             'compactions are emitted\n'
+                             '        // with their agent tool-call id by the agent '
+                             'progress handler.\n'
+                             "        this.emitSystemMessage('compaction', "
+                             'event.value, null);\n'
+                             '        break;\n'
+                             '      default:\n'
+                             '        break;\n'
+                             '    }\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-3',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': '   * Emits a system message.\n'
+                       '   * @param subtype - System message subtype\n'
+                       '   * @param data - Optional data payload\n'
+                       '   */\n'
+                       '  emitSystemMessage(subtype: string, data?: unknown): void {\n'
+                       '    const systemMessage = {\n'
+                       "      type: 'system',\n"
+                       '      subtype,\n'
+                       '      uuid: randomUUID(),\n'
+                       '      session_id: this.getSessionId(),\n'
+                       '      parent_tool_use_id: null,\n'
+                       '      data,\n'
+                       '    } as const;\n'
+                       '    this.emitMessageImpl(systemMessage);\n',
+             'after': '   * Emits a system message.\n'
+                      '   * @param subtype - System message subtype\n'
+                      '   * @param data - Optional data payload\n'
+                      '   * @param parentToolUseId - Owning agent tool-call id when '
+                      'the event belongs\n'
+                      '   *   to a subagent; null (the default) for the main session. '
+                      'Same convention\n'
+                      '   *   as every assistant/user message, so one consumer rule '
+                      'separates the\n'
+                      '   *   parent thread from each subagent.\n'
+                      '   */\n'
+                      '  emitSystemMessage(\n'
+                      '    subtype: string,\n'
+                      '    data?: unknown,\n'
+                      '    parentToolUseId: string | null = null,\n'
+                      '  ): void {\n'
+                      '    const systemMessage = {\n'
+                      "      type: 'system',\n"
+                      '      subtype,\n'
+                      '      uuid: randomUUID(),\n'
+                      '      session_id: this.getSessionId(),\n'
+                      '      parent_tool_use_id: parentToolUseId,\n'
+                      '      data,\n'
+                      '    } as const;\n'
+                      '    this.emitMessageImpl(systemMessage);\n',
+             'review_before': '   * Emits a system message.\n'
+                              '   * @param subtype - System message subtype\n'
+                              '   * @param data - Optional data payload\n'
+                              '   */\n'
+                              '  emitSystemMessage(subtype: string, data?: unknown): '
+                              'void {\n'
+                              '    const systemMessage = {\n'
+                              "      type: 'system',\n"
+                              '      subtype,\n'
+                              '      uuid: randomUUID(),\n'
+                              '      session_id: this.getSessionId(),\n'
+                              '      parent_tool_use_id: null,\n'
+                              '      data,\n'
+                              '    } as const;\n'
+                              '    this.emitMessageImpl(systemMessage);\n',
+             'review_after': '   * Emits a system message.\n'
+                             '   * @param subtype - System message subtype\n'
+                             '   * @param data - Optional data payload\n'
+                             '   * @param parentToolUseId - Owning agent tool-call id '
+                             'when the event belongs\n'
+                             '   *   to a subagent; null (the default) for the main '
+                             'session. Same convention\n'
+                             '   *   as every assistant/user message, so one consumer '
+                             'rule separates the\n'
+                             '   *   parent thread from each subagent.\n'
+                             '   */\n'
+                             '  emitSystemMessage(\n'
+                             '    subtype: string,\n'
+                             '    data?: unknown,\n'
+                             '    parentToolUseId: string | null = null,\n'
+                             '  ): void {\n'
+                             '    const systemMessage = {\n'
+                             "      type: 'system',\n"
+                             '      subtype,\n'
+                             '      uuid: randomUUID(),\n'
+                             '      session_id: this.getSessionId(),\n'
+                             '      parent_tool_use_id: parentToolUseId,\n'
+                             '      data,\n'
+                             '    } as const;\n'
+                             '    this.emitMessageImpl(systemMessage);\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-4',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '  if (response.error) {\n'
                        '    return response.error.message;\n'
@@ -2342,6 +2763,54 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'AlreadyReportedError(errorText);\n'
                              '                }\n'
                              '              }\n'},
+            {'name': 'packages/cli/src/ui/hooks/useGeminiStream.ts:landmark-1',
+             'path': 'packages/cli/src/ui/hooks/useGeminiStream.ts',
+             'before': "              geminiMessageBuffer = '';\n"
+                       '              assistantOutputStarted = false;\n'
+                       '              break;\n'
+                       '            case ServerGeminiEventType.ToolCallConfirmation:\n'
+                       '            case ServerGeminiEventType.ToolCallResponse:\n'
+                       '              flushBufferedStreamEvents();\n',
+             'after': "              geminiMessageBuffer = '';\n"
+                      '              assistantOutputStarted = false;\n'
+                      '              break;\n'
+                      '            case ServerGeminiEventType.ChatCompaction:\n'
+                      '              // Machine-readable record of a compaction '
+                      'attempt, consumed by\n'
+                      '              // the headless output adapters. The interactive '
+                      'notice for a\n'
+                      '              // successful compaction is driven by '
+                      'ChatCompressed above, so\n'
+                      '              // rendering this too would duplicate it.\n'
+                      '              break;\n'
+                      '            case ServerGeminiEventType.ToolCallConfirmation:\n'
+                      '            case ServerGeminiEventType.ToolCallResponse:\n'
+                      '              flushBufferedStreamEvents();\n',
+             'review_before': "              geminiMessageBuffer = '';\n"
+                              '              assistantOutputStarted = false;\n'
+                              '              break;\n'
+                              '            case '
+                              'ServerGeminiEventType.ToolCallConfirmation:\n'
+                              '            case '
+                              'ServerGeminiEventType.ToolCallResponse:\n'
+                              '              flushBufferedStreamEvents();\n',
+             'review_after': "              geminiMessageBuffer = '';\n"
+                             '              assistantOutputStarted = false;\n'
+                             '              break;\n'
+                             '            case ServerGeminiEventType.ChatCompaction:\n'
+                             '              // Machine-readable record of a compaction '
+                             'attempt, consumed by\n'
+                             '              // the headless output adapters. The '
+                             'interactive notice for a\n'
+                             '              // successful compaction is driven by '
+                             'ChatCompressed above, so\n'
+                             '              // rendering this too would duplicate it.\n'
+                             '              break;\n'
+                             '            case '
+                             'ServerGeminiEventType.ToolCallConfirmation:\n'
+                             '            case '
+                             'ServerGeminiEventType.ToolCallResponse:\n'
+                             '              flushBufferedStreamEvents();\n'},
             {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-1',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before': 'import type { JsonOutputAdapterInterface } from '
@@ -2542,6 +3011,198 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'async () => {\n'
                              '    const result = await buildSystemMessage(\n'
                              '      mockConfig,\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-4',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
+             'before': '      emitSubagentErrorResult: vi.fn(),\n'
+                       '      emitToolResult: vi.fn(),\n'
+                       '      emitUserMessage: vi.fn(),\n'
+                       '    } as unknown as JsonOutputAdapterInterface;\n'
+                       '  });\n'
+                       '\n',
+             'after': '      emitSubagentErrorResult: vi.fn(),\n'
+                      '      emitToolResult: vi.fn(),\n'
+                      '      emitUserMessage: vi.fn(),\n'
+                      '      emitSystemMessage: vi.fn(),\n'
+                      '    } as unknown as JsonOutputAdapterInterface;\n'
+                      '  });\n'
+                      '\n',
+             'review_before': '      emitSubagentErrorResult: vi.fn(),\n'
+                              '      emitToolResult: vi.fn(),\n'
+                              '      emitUserMessage: vi.fn(),\n'
+                              '    } as unknown as JsonOutputAdapterInterface;\n'
+                              '  });\n'
+                              '\n',
+             'review_after': '      emitSubagentErrorResult: vi.fn(),\n'
+                             '      emitToolResult: vi.fn(),\n'
+                             '      emitUserMessage: vi.fn(),\n'
+                             '      emitSystemMessage: vi.fn(),\n'
+                             '    } as unknown as JsonOutputAdapterInterface;\n'
+                             '  });\n'
+                             '\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-5',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
+             'before': '    '
+                       'expect(mockAdapter.emitToolResult).not.toHaveBeenCalled();\n'
+                       '  });\n'
+                       '\n'
+                       "  it('should work with adapter that does not support subagent "
+                       "APIs', () => {\n"
+                       '    const limitedAdapter = {\n'
+                       '      emitToolResult: vi.fn(),\n',
+             'after': '    expect(mockAdapter.emitToolResult).not.toHaveBeenCalled();\n'
+                      '  });\n'
+                      '\n'
+                      "  it('[compaction-event] emits each new subagent compaction "
+                      "exactly once, attributed to the agent tool call', () => {\n"
+                      '    const { handler } = createAgentToolProgressHandler(\n'
+                      '      mockConfig,\n'
+                      "      'parent-tool-id',\n"
+                      '      mockAdapter,\n'
+                      '    );\n'
+                      '\n'
+                      '    const firstCompaction = {\n'
+                      "      status: 'COMPRESSED',\n"
+                      '      succeeded: true,\n'
+                      '      originalTokenCount: 198_400,\n'
+                      '      newTokenCount: 32_118,\n'
+                      "      triggerReason: 'token_limit' as const,\n"
+                      '    };\n'
+                      '    const secondCompaction = {\n'
+                      "      status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
+                      '      succeeded: false,\n'
+                      '      originalTokenCount: 205_112,\n'
+                      '      newTokenCount: 205_112,\n'
+                      "      triggerReason: 'token_limit' as const,\n"
+                      '    };\n'
+                      '\n'
+                      '    const baseDisplay: AgentResultDisplay = {\n'
+                      "      type: 'task_execution',\n"
+                      "      subagentName: 'Explore',\n"
+                      "      taskDescription: 'Survey the repository',\n"
+                      "      taskPrompt: 'Survey the repository',\n"
+                      "      status: 'running',\n"
+                      '      toolCalls: [],\n'
+                      '    };\n'
+                      '\n'
+                      "    handler('task-call-id', { ...baseDisplay, compactions: "
+                      '[firstCompaction] });\n'
+                      '    // Same entry replayed in the next snapshot: it must not be '
+                      'emitted twice.\n'
+                      "    handler('task-call-id', { ...baseDisplay, compactions: "
+                      '[firstCompaction] });\n'
+                      "    handler('task-call-id', {\n"
+                      '      ...baseDisplay,\n'
+                      '      compactions: [firstCompaction, secondCompaction],\n'
+                      '    });\n'
+                      '\n'
+                      '    '
+                      'expect(mockAdapter.emitSystemMessage).toHaveBeenCalledTimes(2);\n'
+                      '    '
+                      'expect(mockAdapter.emitSystemMessage).toHaveBeenNthCalledWith(\n'
+                      '      1,\n'
+                      "      'compaction',\n"
+                      '      firstCompaction,\n'
+                      "      'parent-tool-id',\n"
+                      '    );\n'
+                      '    // The failed attempt is reported too, with its own '
+                      'outcome, so a subagent\n'
+                      '    // compaction that did not happen is not indistinguishable '
+                      'from silence.\n'
+                      '    '
+                      'expect(mockAdapter.emitSystemMessage).toHaveBeenNthCalledWith(\n'
+                      '      2,\n'
+                      "      'compaction',\n"
+                      '      secondCompaction,\n'
+                      "      'parent-tool-id',\n"
+                      '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('should work with adapter that does not support subagent "
+                      "APIs', () => {\n"
+                      '    const limitedAdapter = {\n'
+                      '      emitToolResult: vi.fn(),\n',
+             'review_before': '    '
+                              'expect(mockAdapter.emitToolResult).not.toHaveBeenCalled();\n'
+                              '  });\n'
+                              '\n'
+                              "  it('should work with adapter that does not support "
+                              "subagent APIs', () => {\n"
+                              '    const limitedAdapter = {\n'
+                              '      emitToolResult: vi.fn(),\n',
+             'review_after': '    '
+                             'expect(mockAdapter.emitToolResult).not.toHaveBeenCalled();\n'
+                             '  });\n'
+                             '\n'
+                             "  it('[compaction-event] emits each new subagent "
+                             'compaction exactly once, attributed to the agent tool '
+                             "call', () => {\n"
+                             '    const { handler } = createAgentToolProgressHandler(\n'
+                             '      mockConfig,\n'
+                             "      'parent-tool-id',\n"
+                             '      mockAdapter,\n'
+                             '    );\n'
+                             '\n'
+                             '    const firstCompaction = {\n'
+                             "      status: 'COMPRESSED',\n"
+                             '      succeeded: true,\n'
+                             '      originalTokenCount: 198_400,\n'
+                             '      newTokenCount: 32_118,\n'
+                             "      triggerReason: 'token_limit' as const,\n"
+                             '    };\n'
+                             '    const secondCompaction = {\n'
+                             "      status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
+                             '      succeeded: false,\n'
+                             '      originalTokenCount: 205_112,\n'
+                             '      newTokenCount: 205_112,\n'
+                             "      triggerReason: 'token_limit' as const,\n"
+                             '    };\n'
+                             '\n'
+                             '    const baseDisplay: AgentResultDisplay = {\n'
+                             "      type: 'task_execution',\n"
+                             "      subagentName: 'Explore',\n"
+                             "      taskDescription: 'Survey the repository',\n"
+                             "      taskPrompt: 'Survey the repository',\n"
+                             "      status: 'running',\n"
+                             '      toolCalls: [],\n'
+                             '    };\n'
+                             '\n'
+                             "    handler('task-call-id', { ...baseDisplay, "
+                             'compactions: [firstCompaction] });\n'
+                             '    // Same entry replayed in the next snapshot: it must '
+                             'not be emitted twice.\n'
+                             "    handler('task-call-id', { ...baseDisplay, "
+                             'compactions: [firstCompaction] });\n'
+                             "    handler('task-call-id', {\n"
+                             '      ...baseDisplay,\n'
+                             '      compactions: [firstCompaction, secondCompaction],\n'
+                             '    });\n'
+                             '\n'
+                             '    '
+                             'expect(mockAdapter.emitSystemMessage).toHaveBeenCalledTimes(2);\n'
+                             '    '
+                             'expect(mockAdapter.emitSystemMessage).toHaveBeenNthCalledWith(\n'
+                             '      1,\n'
+                             "      'compaction',\n"
+                             '      firstCompaction,\n'
+                             "      'parent-tool-id',\n"
+                             '    );\n'
+                             '    // The failed attempt is reported too, with its own '
+                             'outcome, so a subagent\n'
+                             '    // compaction that did not happen is not '
+                             'indistinguishable from silence.\n'
+                             '    '
+                             'expect(mockAdapter.emitSystemMessage).toHaveBeenNthCalledWith(\n'
+                             '      2,\n'
+                             "      'compaction',\n"
+                             '      secondCompaction,\n'
+                             "      'parent-tool-id',\n"
+                             '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('should work with adapter that does not support "
+                             "subagent APIs', () => {\n"
+                             '    const limitedAdapter = {\n'
+                             '      emitToolResult: vi.fn(),\n'},
             {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-1',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
              'before': '  return [parts as Part];\n'
@@ -2688,6 +3349,130 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    debugLogger.error('[buildSystemMessage] Failed to "
                              "load subagents:', error);\n"
                              '  }\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-4',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
+             'before': '  const emittedToolUseIds = new Set<string>();\n'
+                       '  // Track which tool call IDs have already emitted '
+                       'tool_result to prevent duplicates\n'
+                       '  const emittedToolResultIds = new Set<string>();\n'
+                       '\n'
+                       '  /**\n'
+                       '   * Builds a ToolCallRequestInfo object from a tool call.\n',
+             'after': '  const emittedToolUseIds = new Set<string>();\n'
+                      '  // Track which tool call IDs have already emitted tool_result '
+                      'to prevent duplicates\n'
+                      '  const emittedToolResultIds = new Set<string>();\n'
+                      '  // Count of compaction records already emitted per agent tool '
+                      'call. The\n'
+                      "  // display's `compactions` array is append-only, so the count "
+                      'is the exact\n'
+                      '  // boundary between what has been reported and what has not.\n'
+                      '  const emittedCompactionCounts = new Map<string, number>();\n'
+                      '\n'
+                      '  /**\n'
+                      '   * Builds a ToolCallRequestInfo object from a tool call.\n',
+             'review_before': '  const emittedToolUseIds = new Set<string>();\n'
+                              '  // Track which tool call IDs have already emitted '
+                              'tool_result to prevent duplicates\n'
+                              '  const emittedToolResultIds = new Set<string>();\n'
+                              '\n'
+                              '  /**\n'
+                              '   * Builds a ToolCallRequestInfo object from a tool '
+                              'call.\n',
+             'review_after': '  const emittedToolUseIds = new Set<string>();\n'
+                             '  // Track which tool call IDs have already emitted '
+                             'tool_result to prevent duplicates\n'
+                             '  const emittedToolResultIds = new Set<string>();\n'
+                             '  // Count of compaction records already emitted per '
+                             'agent tool call. The\n'
+                             "  // display's `compactions` array is append-only, so "
+                             'the count is the exact\n'
+                             '  // boundary between what has been reported and what '
+                             'has not.\n'
+                             '  const emittedCompactionCounts = new Map<string, '
+                             'number>();\n'
+                             '\n'
+                             '  /**\n'
+                             '   * Builds a ToolCallRequestInfo object from a tool '
+                             'call.\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-5',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
+             'before': '        }\n'
+                       '      }\n'
+                       '\n'
+                       "      // Handle task-level errors (status: 'failed', "
+                       "'cancelled')\n"
+                       '      if (\n'
+                       "        taskDisplay.status === 'failed' ||\n",
+             'after': '        }\n'
+                      '      }\n'
+                      '\n'
+                      '      // Emit any compaction this subagent completed since the '
+                      'last update.\n'
+                      '      // A subagent compacts its own chat, so without this the '
+                      'parent stream\n'
+                      '      // records nothing at all — not even the token drop that '
+                      'betrays a\n'
+                      '      // main-session compaction. Attribution is the owning '
+                      'agent tool-call\n'
+                      '      // id, matching every other subagent message.\n'
+                      '      if (taskDisplay.compactions && '
+                      'taskDisplay.compactions.length > 0) {\n'
+                      '        const alreadyEmitted = '
+                      'emittedCompactionCounts.get(callId) ?? 0;\n'
+                      '        for (const compaction of '
+                      'taskDisplay.compactions.slice(\n'
+                      '          alreadyEmitted,\n'
+                      '        )) {\n'
+                      "          adapter.emitSystemMessage('compaction', compaction, "
+                      'agentToolCallId);\n'
+                      '        }\n'
+                      '        emittedCompactionCounts.set(callId, '
+                      'taskDisplay.compactions.length);\n'
+                      '      }\n'
+                      '\n'
+                      "      // Handle task-level errors (status: 'failed', "
+                      "'cancelled')\n"
+                      '      if (\n'
+                      "        taskDisplay.status === 'failed' ||\n",
+             'review_before': '        }\n'
+                              '      }\n'
+                              '\n'
+                              "      // Handle task-level errors (status: 'failed', "
+                              "'cancelled')\n"
+                              '      if (\n'
+                              "        taskDisplay.status === 'failed' ||\n",
+             'review_after': '        }\n'
+                             '      }\n'
+                             '\n'
+                             '      // Emit any compaction this subagent completed '
+                             'since the last update.\n'
+                             '      // A subagent compacts its own chat, so without '
+                             'this the parent stream\n'
+                             '      // records nothing at all — not even the token '
+                             'drop that betrays a\n'
+                             '      // main-session compaction. Attribution is the '
+                             'owning agent tool-call\n'
+                             '      // id, matching every other subagent message.\n'
+                             '      if (taskDisplay.compactions && '
+                             'taskDisplay.compactions.length > 0) {\n'
+                             '        const alreadyEmitted = '
+                             'emittedCompactionCounts.get(callId) ?? 0;\n'
+                             '        for (const compaction of '
+                             'taskDisplay.compactions.slice(\n'
+                             '          alreadyEmitted,\n'
+                             '        )) {\n'
+                             "          adapter.emitSystemMessage('compaction', "
+                             'compaction, agentToolCallId);\n'
+                             '        }\n'
+                             '        emittedCompactionCounts.set(callId, '
+                             'taskDisplay.compactions.length);\n'
+                             '      }\n'
+                             '\n'
+                             "      // Handle task-level errors (status: 'failed', "
+                             "'cancelled')\n"
+                             '      if (\n'
+                             "        taskDisplay.status === 'failed' ||\n"},
             {'name': 'packages/core/src/agents/runtime/agent-context.test.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-context.test.ts',
              'before': '  childLaunchDepth,\n'
@@ -3091,6 +3876,169 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  getProviderToolCallId,\n'},
             {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-3',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
+             'before': "} from './agent-types.js';\n"
+                       "import { AgentTerminateMode } from './agent-types.js';\n"
+                       'import type {\n'
+                       '  AgentRoundEvent,\n'
+                       '  AgentRoundTextEvent,\n'
+                       '  AgentToolCallEvent,\n',
+             'after': "} from './agent-types.js';\n"
+                      "import { AgentTerminateMode } from './agent-types.js';\n"
+                      'import type {\n'
+                      '  AgentCompactionEvent,\n'
+                      '  AgentRoundEvent,\n'
+                      '  AgentRoundTextEvent,\n'
+                      '  AgentToolCallEvent,\n',
+             'review_before': "} from './agent-types.js';\n"
+                              "import { AgentTerminateMode } from './agent-types.js';\n"
+                              'import type {\n'
+                              '  AgentRoundEvent,\n'
+                              '  AgentRoundTextEvent,\n'
+                              '  AgentToolCallEvent,\n',
+             'review_after': "} from './agent-types.js';\n"
+                             "import { AgentTerminateMode } from './agent-types.js';\n"
+                             'import type {\n'
+                             '  AgentCompactionEvent,\n'
+                             '  AgentRoundEvent,\n'
+                             '  AgentRoundTextEvent,\n'
+                             '  AgentToolCallEvent,\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-4',
+             'path': 'packages/core/src/agents/runtime/agent-core.ts',
+             'before': '            continue;\n'
+                       '          }\n'
+                       '\n'
+                       '          // GeminiChat already mutated its own history; '
+                       'surface to the debug\n'
+                       '          // log so subagent compactions show up alongside the '
+                       "main session's.\n"
+                       "          if (streamEvent.type === 'compressed') {\n"
+                       '            this.runtimeContext\n'
+                       '              .getDebugLogger()\n'
+                       '              .debug(\n'
+                       '                `[AGENT-COMPACT] subagent=${this.subagentId} '
+                       'round=${turnCounter} ` +\n'
+                       '                  `tokens '
+                       '${streamEvent.info.originalTokenCount} -> '
+                       '${streamEvent.info.newTokenCount}`,\n'
+                       '              );\n'
+                       '            continue;\n'
+                       '          }\n'
+                       '\n'
+                       '          // Handle chunk events\n'
+                       "          if (streamEvent.type === 'chunk') {\n"
+                       '            const resp = streamEvent.value;\n',
+             'after': '            continue;\n'
+                      '          }\n'
+                      '\n'
+                      "          // A subagent compacts its own chat, so the parent's "
+                      'history never\n'
+                      '          // shows it. Emit the attempt — success or failure — '
+                      'as a first\n'
+                      '          // class agent event so it reaches the session record '
+                      'attributed to\n'
+                      '          // this subagent, and keep the debug line for local '
+                      'triage.\n'
+                      "          if (streamEvent.type === 'compaction') {\n"
+                      '            this.eventEmitter?.emit(AgentEventType.COMPACTION, '
+                      '{\n'
+                      '              subagentId: this.subagentId,\n'
+                      '              round: turnCounter,\n'
+                      '              compaction: streamEvent.record,\n'
+                      '              timestamp: Date.now(),\n'
+                      '            } as AgentCompactionEvent);\n'
+                      '            this.runtimeContext\n'
+                      '              .getDebugLogger()\n'
+                      '              .debug(\n'
+                      '                `[AGENT-COMPACT] subagent=${this.subagentId} '
+                      'round=${turnCounter} ` +\n'
+                      '                  `status=${streamEvent.record.status} tokens ` '
+                      '+\n'
+                      '                  `${streamEvent.record.originalTokenCount} -> '
+                      '${streamEvent.record.newTokenCount}`,\n'
+                      '              );\n'
+                      '            continue;\n'
+                      '          }\n'
+                      '\n'
+                      '          // GeminiChat already mutated its own history; '
+                      'nothing further is\n'
+                      '          // required here — the compaction event above is the '
+                      'record.\n'
+                      "          if (streamEvent.type === 'compressed') {\n"
+                      '            continue;\n'
+                      '          }\n'
+                      '\n'
+                      '          // Handle chunk events\n'
+                      "          if (streamEvent.type === 'chunk') {\n"
+                      '            const resp = streamEvent.value;\n',
+             'review_before': '            continue;\n'
+                              '          }\n'
+                              '\n'
+                              '          // GeminiChat already mutated its own '
+                              'history; surface to the debug\n'
+                              '          // log so subagent compactions show up '
+                              "alongside the main session's.\n"
+                              "          if (streamEvent.type === 'compressed') {\n"
+                              '            this.runtimeContext\n'
+                              '              .getDebugLogger()\n'
+                              '              .debug(\n'
+                              '                `[AGENT-COMPACT] '
+                              'subagent=${this.subagentId} round=${turnCounter} ` +\n'
+                              '                  `tokens '
+                              '${streamEvent.info.originalTokenCount} -> '
+                              '${streamEvent.info.newTokenCount}`,\n'
+                              '              );\n'
+                              '            continue;\n'
+                              '          }\n'
+                              '\n'
+                              '          // Handle chunk events\n'
+                              "          if (streamEvent.type === 'chunk') {\n"
+                              '            const resp = streamEvent.value;\n',
+             'review_after': '            continue;\n'
+                             '          }\n'
+                             '\n'
+                             '          // A subagent compacts its own chat, so the '
+                             "parent's history never\n"
+                             '          // shows it. Emit the attempt — success or '
+                             'failure — as a first\n'
+                             '          // class agent event so it reaches the session '
+                             'record attributed to\n'
+                             '          // this subagent, and keep the debug line for '
+                             'local triage.\n'
+                             "          if (streamEvent.type === 'compaction') {\n"
+                             '            '
+                             'this.eventEmitter?.emit(AgentEventType.COMPACTION, {\n'
+                             '              subagentId: this.subagentId,\n'
+                             '              round: turnCounter,\n'
+                             '              compaction: streamEvent.record,\n'
+                             '              timestamp: Date.now(),\n'
+                             '            } as AgentCompactionEvent);\n'
+                             '            this.runtimeContext\n'
+                             '              .getDebugLogger()\n'
+                             '              .debug(\n'
+                             '                `[AGENT-COMPACT] '
+                             'subagent=${this.subagentId} round=${turnCounter} ` +\n'
+                             '                  `status=${streamEvent.record.status} '
+                             'tokens ` +\n'
+                             '                  '
+                             '`${streamEvent.record.originalTokenCount} -> '
+                             '${streamEvent.record.newTokenCount}`,\n'
+                             '              );\n'
+                             '            continue;\n'
+                             '          }\n'
+                             '\n'
+                             '          // GeminiChat already mutated its own history; '
+                             'nothing further is\n'
+                             '          // required here — the compaction event above '
+                             'is the record.\n'
+                             "          if (streamEvent.type === 'compressed') {\n"
+                             '            continue;\n'
+                             '          }\n'
+                             '\n'
+                             '          // Handle chunk events\n'
+                             "          if (streamEvent.type === 'chunk') {\n"
+                             '            const resp = streamEvent.value;\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-5',
+             'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '\n'
                        '    // Context files (QWEN.md + output-language.md) keep the '
                        'subagent aligned\n'
@@ -3148,6 +4096,202 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      autoMemory: '
                              'this.runtimeContext.getAutoMemoryPrompt(),\n'
                              '    });\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-events.ts:landmark-1',
+             'path': 'packages/core/src/agents/runtime/agent-events.ts',
+             'before': '  ToolResultDisplay,\n'
+                       "} from '../../tools/tools.js';\n"
+                       'import type { Part, GenerateContentResponseUsageMetadata } '
+                       "from '@google/genai';\n"
+                       "import type { AgentStatus } from './agent-types.js';\n"
+                       '\n'
+                       'type WithoutConfirmationCallback<T> = T extends unknown\n',
+             'after': '  ToolResultDisplay,\n'
+                      "} from '../../tools/tools.js';\n"
+                      'import type { Part, GenerateContentResponseUsageMetadata } from '
+                      "'@google/genai';\n"
+                      "import type { CompactionRecord } from '../../core/turn.js';\n"
+                      "import type { AgentStatus } from './agent-types.js';\n"
+                      '\n'
+                      'type WithoutConfirmationCallback<T> = T extends unknown\n',
+             'review_before': '  ToolResultDisplay,\n'
+                              "} from '../../tools/tools.js';\n"
+                              'import type { Part, '
+                              'GenerateContentResponseUsageMetadata } from '
+                              "'@google/genai';\n"
+                              "import type { AgentStatus } from './agent-types.js';\n"
+                              '\n'
+                              'type WithoutConfirmationCallback<T> = T extends '
+                              'unknown\n',
+             'review_after': '  ToolResultDisplay,\n'
+                             "} from '../../tools/tools.js';\n"
+                             'import type { Part, GenerateContentResponseUsageMetadata '
+                             "} from '@google/genai';\n"
+                             'import type { CompactionRecord } from '
+                             "'../../core/turn.js';\n"
+                             "import type { AgentStatus } from './agent-types.js';\n"
+                             '\n'
+                             'type WithoutConfirmationCallback<T> = T extends '
+                             'unknown\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-events.ts:landmark-2',
+             'path': 'packages/core/src/agents/runtime/agent-events.ts',
+             'before': "  | 'tool_waiting_approval'\n"
+                       "  | 'usage_metadata'\n"
+                       "  | 'external_message'\n"
+                       "  | 'finish'\n"
+                       "  | 'error'\n"
+                       "  | 'status_change';\n",
+             'after': "  | 'tool_waiting_approval'\n"
+                      "  | 'usage_metadata'\n"
+                      "  | 'external_message'\n"
+                      "  | 'compaction'\n"
+                      "  | 'finish'\n"
+                      "  | 'error'\n"
+                      "  | 'status_change';\n",
+             'review_before': "  | 'tool_waiting_approval'\n"
+                              "  | 'usage_metadata'\n"
+                              "  | 'external_message'\n"
+                              "  | 'finish'\n"
+                              "  | 'error'\n"
+                              "  | 'status_change';\n",
+             'review_after': "  | 'tool_waiting_approval'\n"
+                             "  | 'usage_metadata'\n"
+                             "  | 'external_message'\n"
+                             "  | 'compaction'\n"
+                             "  | 'finish'\n"
+                             "  | 'error'\n"
+                             "  | 'status_change';\n"},
+            {'name': 'packages/core/src/agents/runtime/agent-events.ts:landmark-3',
+             'path': 'packages/core/src/agents/runtime/agent-events.ts',
+             'before': "  USAGE_METADATA = 'usage_metadata',\n"
+                       '  /** External user message injected mid-run (e.g. via '
+                       'send_message). */\n'
+                       "  EXTERNAL_MESSAGE = 'external_message',\n"
+                       "  FINISH = 'finish',\n"
+                       "  ERROR = 'error',\n"
+                       "  STATUS_CHANGE = 'status_change',\n",
+             'after': "  USAGE_METADATA = 'usage_metadata',\n"
+                      '  /** External user message injected mid-run (e.g. via '
+                      'send_message). */\n'
+                      "  EXTERNAL_MESSAGE = 'external_message',\n"
+                      "  /** One compaction attempt on this subagent's own chat ran to "
+                      'completion. */\n'
+                      "  COMPACTION = 'compaction',\n"
+                      "  FINISH = 'finish',\n"
+                      "  ERROR = 'error',\n"
+                      "  STATUS_CHANGE = 'status_change',\n",
+             'review_before': "  USAGE_METADATA = 'usage_metadata',\n"
+                              '  /** External user message injected mid-run (e.g. via '
+                              'send_message). */\n'
+                              "  EXTERNAL_MESSAGE = 'external_message',\n"
+                              "  FINISH = 'finish',\n"
+                              "  ERROR = 'error',\n"
+                              "  STATUS_CHANGE = 'status_change',\n",
+             'review_after': "  USAGE_METADATA = 'usage_metadata',\n"
+                             '  /** External user message injected mid-run (e.g. via '
+                             'send_message). */\n'
+                             "  EXTERNAL_MESSAGE = 'external_message',\n"
+                             "  /** One compaction attempt on this subagent's own chat "
+                             'ran to completion. */\n'
+                             "  COMPACTION = 'compaction',\n"
+                             "  FINISH = 'finish',\n"
+                             "  ERROR = 'error',\n"
+                             "  STATUS_CHANGE = 'status_change',\n"},
+            {'name': 'packages/core/src/agents/runtime/agent-events.ts:landmark-4',
+             'path': 'packages/core/src/agents/runtime/agent-events.ts',
+             'before': '  timestamp: number;\n'
+                       '}\n'
+                       '\n'
+                       'export interface AgentFinishEvent {\n'
+                       '  subagentId: string;\n'
+                       '  terminateReason: string;\n',
+             'after': '  timestamp: number;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      " * One completed compaction attempt on the subagent's own chat. "
+                      'A subagent\n'
+                      ' * runs on its own `GeminiChat`, so its compactions are '
+                      'invisible in the\n'
+                      " * parent's history; this event is how they reach the session "
+                      'record with\n'
+                      ' * the owning agent-tool call as their parent.\n'
+                      ' */\n'
+                      'export interface AgentCompactionEvent {\n'
+                      '  subagentId: string;\n'
+                      '  round: number;\n'
+                      '  compaction: CompactionRecord;\n'
+                      '  timestamp: number;\n'
+                      '}\n'
+                      '\n'
+                      'export interface AgentFinishEvent {\n'
+                      '  subagentId: string;\n'
+                      '  terminateReason: string;\n',
+             'review_before': '  timestamp: number;\n'
+                              '}\n'
+                              '\n'
+                              'export interface AgentFinishEvent {\n'
+                              '  subagentId: string;\n'
+                              '  terminateReason: string;\n',
+             'review_after': '  timestamp: number;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             " * One completed compaction attempt on the subagent's "
+                             'own chat. A subagent\n'
+                             ' * runs on its own `GeminiChat`, so its compactions are '
+                             'invisible in the\n'
+                             " * parent's history; this event is how they reach the "
+                             'session record with\n'
+                             ' * the owning agent-tool call as their parent.\n'
+                             ' */\n'
+                             'export interface AgentCompactionEvent {\n'
+                             '  subagentId: string;\n'
+                             '  round: number;\n'
+                             '  compaction: CompactionRecord;\n'
+                             '  timestamp: number;\n'
+                             '}\n'
+                             '\n'
+                             'export interface AgentFinishEvent {\n'
+                             '  subagentId: string;\n'
+                             '  terminateReason: string;\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-events.ts:landmark-5',
+             'path': 'packages/core/src/agents/runtime/agent-events.ts',
+             'before': '  [AgentEventType.TOOL_WAITING_APPROVAL]: '
+                       'AgentApprovalRequestEvent;\n'
+                       '  [AgentEventType.USAGE_METADATA]: AgentUsageEvent;\n'
+                       '  [AgentEventType.EXTERNAL_MESSAGE]: '
+                       'AgentExternalMessageEvent;\n'
+                       '  [AgentEventType.FINISH]: AgentFinishEvent;\n'
+                       '  [AgentEventType.ERROR]: AgentErrorEvent;\n'
+                       '  [AgentEventType.STATUS_CHANGE]: AgentStatusChangeEvent;\n',
+             'after': '  [AgentEventType.TOOL_WAITING_APPROVAL]: '
+                      'AgentApprovalRequestEvent;\n'
+                      '  [AgentEventType.USAGE_METADATA]: AgentUsageEvent;\n'
+                      '  [AgentEventType.EXTERNAL_MESSAGE]: '
+                      'AgentExternalMessageEvent;\n'
+                      '  [AgentEventType.COMPACTION]: AgentCompactionEvent;\n'
+                      '  [AgentEventType.FINISH]: AgentFinishEvent;\n'
+                      '  [AgentEventType.ERROR]: AgentErrorEvent;\n'
+                      '  [AgentEventType.STATUS_CHANGE]: AgentStatusChangeEvent;\n',
+             'review_before': '  [AgentEventType.TOOL_WAITING_APPROVAL]: '
+                              'AgentApprovalRequestEvent;\n'
+                              '  [AgentEventType.USAGE_METADATA]: AgentUsageEvent;\n'
+                              '  [AgentEventType.EXTERNAL_MESSAGE]: '
+                              'AgentExternalMessageEvent;\n'
+                              '  [AgentEventType.FINISH]: AgentFinishEvent;\n'
+                              '  [AgentEventType.ERROR]: AgentErrorEvent;\n'
+                              '  [AgentEventType.STATUS_CHANGE]: '
+                              'AgentStatusChangeEvent;\n',
+             'review_after': '  [AgentEventType.TOOL_WAITING_APPROVAL]: '
+                             'AgentApprovalRequestEvent;\n'
+                             '  [AgentEventType.USAGE_METADATA]: AgentUsageEvent;\n'
+                             '  [AgentEventType.EXTERNAL_MESSAGE]: '
+                             'AgentExternalMessageEvent;\n'
+                             '  [AgentEventType.COMPACTION]: AgentCompactionEvent;\n'
+                             '  [AgentEventType.FINISH]: AgentFinishEvent;\n'
+                             '  [AgentEventType.ERROR]: AgentErrorEvent;\n'
+                             '  [AgentEventType.STATUS_CHANGE]: '
+                             'AgentStatusChangeEvent;\n'},
             {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before': '  private readonly core: AgentCore;\n'
@@ -5952,6 +7096,51 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        );\n'},
             {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-1',
              'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': "import type { Config } from '../config/config.js';\n"
+                       "import { setSimulate429 } from '../utils/testUtils.js';\n"
+                       'import { uiTelemetryService } from '
+                       "'../telemetry/uiTelemetry.js';\n"
+                       'import { CompressionStatus, type ChatCompressionInfo } from '
+                       "'./turn.js';\n"
+                       'import {\n'
+                       '  ChatCompressionService,\n'
+                       '  MAX_CONSECUTIVE_FAILURES,\n',
+             'after': "import type { Config } from '../config/config.js';\n"
+                      "import { setSimulate429 } from '../utils/testUtils.js';\n"
+                      'import { uiTelemetryService } from '
+                      "'../telemetry/uiTelemetry.js';\n"
+                      'import {\n'
+                      '  CompressionStatus,\n'
+                      '  type ChatCompressionInfo,\n'
+                      '  type CompactionRecord,\n'
+                      "} from './turn.js';\n"
+                      'import {\n'
+                      '  ChatCompressionService,\n'
+                      '  MAX_CONSECUTIVE_FAILURES,\n',
+             'review_before': "import type { Config } from '../config/config.js';\n"
+                              'import { setSimulate429 } from '
+                              "'../utils/testUtils.js';\n"
+                              'import { uiTelemetryService } from '
+                              "'../telemetry/uiTelemetry.js';\n"
+                              'import { CompressionStatus, type ChatCompressionInfo } '
+                              "from './turn.js';\n"
+                              'import {\n'
+                              '  ChatCompressionService,\n'
+                              '  MAX_CONSECUTIVE_FAILURES,\n',
+             'review_after': "import type { Config } from '../config/config.js';\n"
+                             "import { setSimulate429 } from '../utils/testUtils.js';\n"
+                             'import { uiTelemetryService } from '
+                             "'../telemetry/uiTelemetry.js';\n"
+                             'import {\n'
+                             '  CompressionStatus,\n'
+                             '  type ChatCompressionInfo,\n'
+                             '  type CompactionRecord,\n'
+                             "} from './turn.js';\n"
+                             'import {\n'
+                             '  ChatCompressionService,\n'
+                             '  MAX_CONSECUTIVE_FAILURES,\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-2',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': "} from '../services/tokenEstimation.js';\n"
                        'import { SYSTEM_REMINDER_OPEN } from '
                        "'../utils/environmentContext.js';\n"
@@ -5984,7 +7173,434 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'import {\n'
                              '  getToolCallPreparations,\n'
                              '  setToolCallPreparations,\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-2',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-3',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '      '
+                       'expect(compressSpy.mock.calls[0][1].originalTokenCount).toBe(123_456);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('yields a COMPRESSED stream event as the first event "
+                       "after auto-compression succeeds', async () => {\n"
+                       '      const compressedHistory: Content[] = [\n'
+                       "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                       "        { role: 'model', parts: [{ text: 'ok' }] },\n",
+             'after': '      '
+                      'expect(compressSpy.mock.calls[0][1].originalTokenCount).toBe(123_456);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('yields a COMPACTION record then a COMPRESSED stream "
+                      "event after auto-compression succeeds', async () => {\n"
+                      '      const compressedHistory: Content[] = [\n'
+                      "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                      "        { role: 'model', parts: [{ text: 'ok' }] },\n",
+             'review_before': '      '
+                              'expect(compressSpy.mock.calls[0][1].originalTokenCount).toBe(123_456);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('yields a COMPRESSED stream event as the first "
+                              "event after auto-compression succeeds', async () => {\n"
+                              '      const compressedHistory: Content[] = [\n'
+                              "        { role: 'user', parts: [{ text: 'summary' }] "
+                              '},\n'
+                              "        { role: 'model', parts: [{ text: 'ok' }] },\n",
+             'review_after': '      '
+                             'expect(compressSpy.mock.calls[0][1].originalTokenCount).toBe(123_456);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('yields a COMPACTION record then a COMPRESSED "
+                             "stream event after auto-compression succeeds', async () "
+                             '=> {\n'
+                             '      const compressedHistory: Content[] = [\n'
+                             "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                             "        { role: 'model', parts: [{ text: 'ok' }] },\n"},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-4',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '        events.push(event as { type: StreamEventType });\n'
+                       '      }\n'
+                       '\n'
+                       '      expect(events.length).toBeGreaterThan(0);\n'
+                       '      '
+                       'expect(events[0].type).toBe(StreamEventType.COMPRESSED);\n'
+                       '      expect(\n'
+                       '        (events[0] as { type: StreamEventType; info: '
+                       'ChatCompressionInfo }).info\n'
+                       '          .compressionStatus,\n'
+                       '      ).toBe(CompressionStatus.COMPRESSED);\n'
+                       '      expect(\n'
+                       '        (events[0] as { type: StreamEventType; info: '
+                       'ChatCompressionInfo }).info\n'
+                       '          .newTokenCount,\n'
+                       '      ).toBe(200);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('forwards the pending user message and request config "
+                       "to compression', async () => {\n"
+                       '      // The cheap-gate inside ChatCompressionService.compress '
+                       'uses\n'
+                       '      // estimatePromptTokens(history, pendingUserMessage, '
+                       'lastPromptTokenCount)\n',
+             'after': '        events.push(event as { type: StreamEventType });\n'
+                      '      }\n'
+                      '\n'
+                      '      expect(events.length).toBeGreaterThan(1);\n'
+                      '      // The observability record comes first and is '
+                      'self-describing: a\n'
+                      '      // consumer never has to infer the compaction from a '
+                      'token drop.\n'
+                      '      expect(events[0].type).toBe(StreamEventType.COMPACTION);\n'
+                      '      expect(\n'
+                      '        (events[0] as { type: StreamEventType; record: '
+                      'CompactionRecord })\n'
+                      '          .record,\n'
+                      '      ).toEqual({\n'
+                      "        status: 'COMPRESSED',\n"
+                      '        succeeded: true,\n'
+                      '        originalTokenCount: 1000,\n'
+                      '        newTokenCount: 200,\n'
+                      '        triggerReason: null,\n'
+                      '      });\n'
+                      '      // COMPRESSED keeps its narrower meaning: the history was '
+                      'replaced.\n'
+                      '      expect(events[1].type).toBe(StreamEventType.COMPRESSED);\n'
+                      '      expect(\n'
+                      '        (events[1] as { type: StreamEventType; info: '
+                      'ChatCompressionInfo }).info\n'
+                      '          .compressionStatus,\n'
+                      '      ).toBe(CompressionStatus.COMPRESSED);\n'
+                      '      expect(\n'
+                      '        (events[1] as { type: StreamEventType; info: '
+                      'ChatCompressionInfo }).info\n'
+                      '          .newTokenCount,\n'
+                      '      ).toBe(200);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('yields a COMPACTION record and no COMPRESSED event when "
+                      "the attempt fails', async () => {\n"
+                      '      vi.spyOn(\n'
+                      '        ChatCompressionService.prototype,\n'
+                      "        'compress',\n"
+                      '      ).mockResolvedValueOnce({\n'
+                      '        newHistory: null,\n'
+                      '        info: {\n'
+                      '          originalTokenCount: 1000,\n'
+                      '          newTokenCount: 1000,\n'
+                      '          compressionStatus:\n'
+                      '            '
+                      'CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,\n'
+                      '        },\n'
+                      '      });\n'
+                      '      '
+                      'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                      "        makeStreamResponse('answer'),\n"
+                      '      );\n'
+                      '\n'
+                      '      const stream = await chat.sendMessageStream(\n'
+                      "        'test-model',\n"
+                      "        { message: 'go' },\n"
+                      "        'prompt-id-yield-failed-compaction',\n"
+                      '      );\n'
+                      '      const events: Array<{ type: StreamEventType }> = [];\n'
+                      '      for await (const event of stream) {\n'
+                      '        events.push(event as { type: StreamEventType });\n'
+                      '      }\n'
+                      '\n'
+                      '      // A refused attempt is reported, not swallowed — that is '
+                      'the whole\n'
+                      '      // point of keeping this event separate from COMPRESSED.\n'
+                      '      expect(events[0].type).toBe(StreamEventType.COMPACTION);\n'
+                      '      expect(\n'
+                      '        (events[0] as { type: StreamEventType; record: '
+                      'CompactionRecord })\n'
+                      '          .record,\n'
+                      '      ).toEqual({\n'
+                      "        status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',\n"
+                      '        succeeded: false,\n'
+                      '        originalTokenCount: 1000,\n'
+                      '        newTokenCount: 1000,\n'
+                      '        triggerReason: null,\n'
+                      '      });\n'
+                      '      expect(\n'
+                      '        events.some((event) => event.type === '
+                      'StreamEventType.COMPRESSED),\n'
+                      '      ).toBe(false);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('stays silent when no compaction was attempted', async "
+                      '() => {\n'
+                      '      vi.spyOn(\n'
+                      '        ChatCompressionService.prototype,\n'
+                      "        'compress',\n"
+                      '      ).mockResolvedValueOnce({\n'
+                      '        newHistory: null,\n'
+                      '        info: {\n'
+                      '          originalTokenCount: 1000,\n'
+                      '          newTokenCount: 1000,\n'
+                      '          compressionStatus: CompressionStatus.NOOP,\n'
+                      '        },\n'
+                      '      });\n'
+                      '      '
+                      'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                      "        makeStreamResponse('answer'),\n"
+                      '      );\n'
+                      '\n'
+                      '      const stream = await chat.sendMessageStream(\n'
+                      "        'test-model',\n"
+                      "        { message: 'go' },\n"
+                      "        'prompt-id-yield-noop-compaction',\n"
+                      '      );\n'
+                      '      const events: Array<{ type: StreamEventType }> = [];\n'
+                      '      for await (const event of stream) {\n'
+                      '        events.push(event as { type: StreamEventType });\n'
+                      '      }\n'
+                      '\n'
+                      '      expect(\n'
+                      '        events.some((event) => event.type === '
+                      'StreamEventType.COMPACTION),\n'
+                      '      ).toBe(false);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('forwards the pending user message and request config to "
+                      "compression', async () => {\n"
+                      '      // The cheap-gate inside ChatCompressionService.compress '
+                      'uses\n'
+                      '      // estimatePromptTokens(history, pendingUserMessage, '
+                      'lastPromptTokenCount)\n',
+             'review_before': '        events.push(event as { type: StreamEventType '
+                              '});\n'
+                              '      }\n'
+                              '\n'
+                              '      expect(events.length).toBeGreaterThan(0);\n'
+                              '      '
+                              'expect(events[0].type).toBe(StreamEventType.COMPRESSED);\n'
+                              '      expect(\n'
+                              '        (events[0] as { type: StreamEventType; info: '
+                              'ChatCompressionInfo }).info\n'
+                              '          .compressionStatus,\n'
+                              '      ).toBe(CompressionStatus.COMPRESSED);\n'
+                              '      expect(\n'
+                              '        (events[0] as { type: StreamEventType; info: '
+                              'ChatCompressionInfo }).info\n'
+                              '          .newTokenCount,\n'
+                              '      ).toBe(200);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('forwards the pending user message and request "
+                              "config to compression', async () => {\n"
+                              '      // The cheap-gate inside '
+                              'ChatCompressionService.compress uses\n'
+                              '      // estimatePromptTokens(history, '
+                              'pendingUserMessage, lastPromptTokenCount)\n',
+             'review_after': '        events.push(event as { type: StreamEventType '
+                             '});\n'
+                             '      }\n'
+                             '\n'
+                             '      expect(events.length).toBeGreaterThan(1);\n'
+                             '      // The observability record comes first and is '
+                             'self-describing: a\n'
+                             '      // consumer never has to infer the compaction from '
+                             'a token drop.\n'
+                             '      '
+                             'expect(events[0].type).toBe(StreamEventType.COMPACTION);\n'
+                             '      expect(\n'
+                             '        (events[0] as { type: StreamEventType; record: '
+                             'CompactionRecord })\n'
+                             '          .record,\n'
+                             '      ).toEqual({\n'
+                             "        status: 'COMPRESSED',\n"
+                             '        succeeded: true,\n'
+                             '        originalTokenCount: 1000,\n'
+                             '        newTokenCount: 200,\n'
+                             '        triggerReason: null,\n'
+                             '      });\n'
+                             '      // COMPRESSED keeps its narrower meaning: the '
+                             'history was replaced.\n'
+                             '      '
+                             'expect(events[1].type).toBe(StreamEventType.COMPRESSED);\n'
+                             '      expect(\n'
+                             '        (events[1] as { type: StreamEventType; info: '
+                             'ChatCompressionInfo }).info\n'
+                             '          .compressionStatus,\n'
+                             '      ).toBe(CompressionStatus.COMPRESSED);\n'
+                             '      expect(\n'
+                             '        (events[1] as { type: StreamEventType; info: '
+                             'ChatCompressionInfo }).info\n'
+                             '          .newTokenCount,\n'
+                             '      ).toBe(200);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('yields a COMPACTION record and no COMPRESSED "
+                             "event when the attempt fails', async () => {\n"
+                             '      vi.spyOn(\n'
+                             '        ChatCompressionService.prototype,\n'
+                             "        'compress',\n"
+                             '      ).mockResolvedValueOnce({\n'
+                             '        newHistory: null,\n'
+                             '        info: {\n'
+                             '          originalTokenCount: 1000,\n'
+                             '          newTokenCount: 1000,\n'
+                             '          compressionStatus:\n'
+                             '            '
+                             'CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,\n'
+                             '        },\n'
+                             '      });\n'
+                             '      '
+                             'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                             "        makeStreamResponse('answer'),\n"
+                             '      );\n'
+                             '\n'
+                             '      const stream = await chat.sendMessageStream(\n'
+                             "        'test-model',\n"
+                             "        { message: 'go' },\n"
+                             "        'prompt-id-yield-failed-compaction',\n"
+                             '      );\n'
+                             '      const events: Array<{ type: StreamEventType }> = '
+                             '[];\n'
+                             '      for await (const event of stream) {\n'
+                             '        events.push(event as { type: StreamEventType '
+                             '});\n'
+                             '      }\n'
+                             '\n'
+                             '      // A refused attempt is reported, not swallowed — '
+                             'that is the whole\n'
+                             '      // point of keeping this event separate from '
+                             'COMPRESSED.\n'
+                             '      '
+                             'expect(events[0].type).toBe(StreamEventType.COMPACTION);\n'
+                             '      expect(\n'
+                             '        (events[0] as { type: StreamEventType; record: '
+                             'CompactionRecord })\n'
+                             '          .record,\n'
+                             '      ).toEqual({\n'
+                             '        status: '
+                             "'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',\n"
+                             '        succeeded: false,\n'
+                             '        originalTokenCount: 1000,\n'
+                             '        newTokenCount: 1000,\n'
+                             '        triggerReason: null,\n'
+                             '      });\n'
+                             '      expect(\n'
+                             '        events.some((event) => event.type === '
+                             'StreamEventType.COMPRESSED),\n'
+                             '      ).toBe(false);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('stays silent when no compaction was attempted', "
+                             'async () => {\n'
+                             '      vi.spyOn(\n'
+                             '        ChatCompressionService.prototype,\n'
+                             "        'compress',\n"
+                             '      ).mockResolvedValueOnce({\n'
+                             '        newHistory: null,\n'
+                             '        info: {\n'
+                             '          originalTokenCount: 1000,\n'
+                             '          newTokenCount: 1000,\n'
+                             '          compressionStatus: CompressionStatus.NOOP,\n'
+                             '        },\n'
+                             '      });\n'
+                             '      '
+                             'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                             "        makeStreamResponse('answer'),\n"
+                             '      );\n'
+                             '\n'
+                             '      const stream = await chat.sendMessageStream(\n'
+                             "        'test-model',\n"
+                             "        { message: 'go' },\n"
+                             "        'prompt-id-yield-noop-compaction',\n"
+                             '      );\n'
+                             '      const events: Array<{ type: StreamEventType }> = '
+                             '[];\n'
+                             '      for await (const event of stream) {\n'
+                             '        events.push(event as { type: StreamEventType '
+                             '});\n'
+                             '      }\n'
+                             '\n'
+                             '      expect(\n'
+                             '        events.some((event) => event.type === '
+                             'StreamEventType.COMPACTION),\n'
+                             '      ).toBe(false);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('forwards the pending user message and request "
+                             "config to compression', async () => {\n"
+                             '      // The cheap-gate inside '
+                             'ChatCompressionService.compress uses\n'
+                             '      // estimatePromptTokens(history, '
+                             'pendingUserMessage, lastPromptTokenCount)\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-5',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '        { message: userMessageText, config: { tools: '
+                       'requestTools } },\n'
+                       "        'prompt-id-first-turn',\n"
+                       '      );\n'
+                       '      // The first event in the stream should be COMPRESSED '
+                       'because the\n'
+                       '      // cheap-gate, fed the pending user message, can now '
+                       'size the prompt.\n'
+                       '      const first = await stream.next();\n'
+                       '      expect(first.done).toBe(false);\n'
+                       '      '
+                       'expect(first.value?.type).toBe(StreamEventType.COMPRESSED);\n'
+                       '\n'
+                       '      // Drain the rest so the send-lock releases cleanly.\n'
+                       '      for await (const _ of stream) {\n',
+             'after': '        { message: userMessageText, config: { tools: '
+                      'requestTools } },\n'
+                      "        'prompt-id-first-turn',\n"
+                      '      );\n'
+                      '      // The first event in the stream should be the COMPACTION '
+                      'record,\n'
+                      '      // immediately followed by COMPRESSED, because the '
+                      'cheap-gate, fed the\n'
+                      '      // pending user message, can now size the prompt.\n'
+                      '      const first = await stream.next();\n'
+                      '      expect(first.done).toBe(false);\n'
+                      '      '
+                      'expect(first.value?.type).toBe(StreamEventType.COMPACTION);\n'
+                      '      const second = await stream.next();\n'
+                      '      expect(second.done).toBe(false);\n'
+                      '      '
+                      'expect(second.value?.type).toBe(StreamEventType.COMPRESSED);\n'
+                      '\n'
+                      '      // Drain the rest so the send-lock releases cleanly.\n'
+                      '      for await (const _ of stream) {\n',
+             'review_before': '        { message: userMessageText, config: { tools: '
+                              'requestTools } },\n'
+                              "        'prompt-id-first-turn',\n"
+                              '      );\n'
+                              '      // The first event in the stream should be '
+                              'COMPRESSED because the\n'
+                              '      // cheap-gate, fed the pending user message, can '
+                              'now size the prompt.\n'
+                              '      const first = await stream.next();\n'
+                              '      expect(first.done).toBe(false);\n'
+                              '      '
+                              'expect(first.value?.type).toBe(StreamEventType.COMPRESSED);\n'
+                              '\n'
+                              '      // Drain the rest so the send-lock releases '
+                              'cleanly.\n'
+                              '      for await (const _ of stream) {\n',
+             'review_after': '        { message: userMessageText, config: { tools: '
+                             'requestTools } },\n'
+                             "        'prompt-id-first-turn',\n"
+                             '      );\n'
+                             '      // The first event in the stream should be the '
+                             'COMPACTION record,\n'
+                             '      // immediately followed by COMPRESSED, because the '
+                             'cheap-gate, fed the\n'
+                             '      // pending user message, can now size the prompt.\n'
+                             '      const first = await stream.next();\n'
+                             '      expect(first.done).toBe(false);\n'
+                             '      '
+                             'expect(first.value?.type).toBe(StreamEventType.COMPACTION);\n'
+                             '      const second = await stream.next();\n'
+                             '      expect(second.done).toBe(false);\n'
+                             '      '
+                             'expect(second.value?.type).toBe(StreamEventType.COMPRESSED);\n'
+                             '\n'
+                             '      // Drain the rest so the send-lock releases '
+                             'cleanly.\n'
+                             '      for await (const _ of stream) {\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-6',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      );\n'
                        '    });\n'
@@ -6359,7 +7975,68 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "successful compression', async () => {\n"
                              '      const compressSpy = vi.spyOn(\n'
                              '        ChatCompressionService.prototype,\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-3',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-7',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '        mockContentGenerator.generateContentStream,\n'
+                       '      ).mock.calls[1]![0];\n'
+                       '      '
+                       'expect(secondRequest.contents).toEqual(expectedRequestContents);\n'
+                       '      '
+                       'expect(events[0]?.type).toBe(StreamEventType.COMPRESSED);\n'
+                       '      expect(events[1]?.type).toBe(StreamEventType.RETRY);\n'
+                       "      expect(events[1]).not.toHaveProperty('retryInfo');\n"
+                       '      expect(\n'
+                       '        events.some(\n'
+                       '          (event) =>\n',
+             'after': '        mockContentGenerator.generateContentStream,\n'
+                      '      ).mock.calls[1]![0];\n'
+                      '      '
+                      'expect(secondRequest.contents).toEqual(expectedRequestContents);\n'
+                      '      // The pre-stream pass was a NOOP and stays silent; the '
+                      'reactive rescue\n'
+                      '      // is recorded before the COMPRESSED event it produced.\n'
+                      '      '
+                      'expect(events[0]?.type).toBe(StreamEventType.COMPACTION);\n'
+                      '      '
+                      'expect(events[1]?.type).toBe(StreamEventType.COMPRESSED);\n'
+                      '      expect(events[2]?.type).toBe(StreamEventType.RETRY);\n'
+                      "      expect(events[2]).not.toHaveProperty('retryInfo');\n"
+                      '      expect(\n'
+                      '        events.some(\n'
+                      '          (event) =>\n',
+             'review_before': '        mockContentGenerator.generateContentStream,\n'
+                              '      ).mock.calls[1]![0];\n'
+                              '      '
+                              'expect(secondRequest.contents).toEqual(expectedRequestContents);\n'
+                              '      '
+                              'expect(events[0]?.type).toBe(StreamEventType.COMPRESSED);\n'
+                              '      '
+                              'expect(events[1]?.type).toBe(StreamEventType.RETRY);\n'
+                              '      '
+                              "expect(events[1]).not.toHaveProperty('retryInfo');\n"
+                              '      expect(\n'
+                              '        events.some(\n'
+                              '          (event) =>\n',
+             'review_after': '        mockContentGenerator.generateContentStream,\n'
+                             '      ).mock.calls[1]![0];\n'
+                             '      '
+                             'expect(secondRequest.contents).toEqual(expectedRequestContents);\n'
+                             '      // The pre-stream pass was a NOOP and stays '
+                             'silent; the reactive rescue\n'
+                             '      // is recorded before the COMPRESSED event it '
+                             'produced.\n'
+                             '      '
+                             'expect(events[0]?.type).toBe(StreamEventType.COMPACTION);\n'
+                             '      '
+                             'expect(events[1]?.type).toBe(StreamEventType.COMPRESSED);\n'
+                             '      '
+                             'expect(events[2]?.type).toBe(StreamEventType.RETRY);\n'
+                             '      '
+                             "expect(events[2]).not.toHaveProperty('retryInfo');\n"
+                             '      expect(\n'
+                             '        events.some(\n'
+                             '          (event) =>\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-8',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      expect(requestConfig.maxOutputTokens).toBe(9_999);\n'
                        '    });\n'
@@ -6560,7 +8237,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      '
                              'vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({\n'
                              '        authType: AuthType.USE_GEMINI,\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-4',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-9',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      }\n'
                        '    });\n'
@@ -7064,7 +8741,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "invalid content and report metrics', async () => {\n"
                              '      vi.useFakeTimers();\n'
                              '      try {\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-5',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-10',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      } as unknown as GenerateContentResponse;\n'
                        '    }\n'
@@ -7229,6 +8906,56 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  DEFAULT_TOKEN_LIMIT,\n'},
             {'name': 'packages/core/src/core/geminiChat.ts:landmark-2',
              'path': 'packages/core/src/core/geminiChat.ts',
+             'before': '  makeChatCompressionEvent,\n'
+                       "} from '../telemetry/types.js';\n"
+                       'import type { UiTelemetryService } from '
+                       "'../telemetry/uiTelemetry.js';\n"
+                       'import { type ChatCompressionInfo, CompressionStatus } from '
+                       "'./turn.js';\n"
+                       'import { getContextLengthExceededInfo } from '
+                       "'../utils/contextLengthError.js';\n"
+                       'import {\n'
+                       '  getStartupContextLength,\n',
+             'after': '  makeChatCompressionEvent,\n'
+                      "} from '../telemetry/types.js';\n"
+                      'import type { UiTelemetryService } from '
+                      "'../telemetry/uiTelemetry.js';\n"
+                      'import {\n'
+                      '  type ChatCompressionInfo,\n'
+                      '  type CompactionRecord,\n'
+                      '  CompressionStatus,\n'
+                      '  toCompactionRecord,\n'
+                      "} from './turn.js';\n"
+                      'import { getContextLengthExceededInfo } from '
+                      "'../utils/contextLengthError.js';\n"
+                      'import {\n'
+                      '  getStartupContextLength,\n',
+             'review_before': '  makeChatCompressionEvent,\n'
+                              "} from '../telemetry/types.js';\n"
+                              'import type { UiTelemetryService } from '
+                              "'../telemetry/uiTelemetry.js';\n"
+                              'import { type ChatCompressionInfo, CompressionStatus } '
+                              "from './turn.js';\n"
+                              'import { getContextLengthExceededInfo } from '
+                              "'../utils/contextLengthError.js';\n"
+                              'import {\n'
+                              '  getStartupContextLength,\n',
+             'review_after': '  makeChatCompressionEvent,\n'
+                             "} from '../telemetry/types.js';\n"
+                             'import type { UiTelemetryService } from '
+                             "'../telemetry/uiTelemetry.js';\n"
+                             'import {\n'
+                             '  type ChatCompressionInfo,\n'
+                             '  type CompactionRecord,\n'
+                             '  CompressionStatus,\n'
+                             '  toCompactionRecord,\n'
+                             "} from './turn.js';\n"
+                             'import { getContextLengthExceededInfo } from '
+                             "'../utils/contextLengthError.js';\n"
+                             'import {\n'
+                             '  getStartupContextLength,\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-3',
+             'path': 'packages/core/src/core/geminiChat.ts',
              'before': "} from './tool-call-preparation.js';\n"
                        'import { InvalidStreamError } from '
                        "'./invalid-stream-error.js';\n"
@@ -7265,7 +8992,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              'export { InvalidStreamError };\n'
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-3',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-4',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    status === '
                        'CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT ||\n'
@@ -7320,7 +9047,108 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  );\n'
                              '}\n'
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-4',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-5',
+             'path': 'packages/core/src/core/geminiChat.ts',
+             'before': '   * agent UI, subagent loop) can surface it without each call '
+                       'site running\n'
+                       '   * its own compaction step. */\n'
+                       "  COMPRESSED = 'compressed',\n"
+                       '  /** Emitted when the primary model (or a prior fallback) '
+                       'exhausted its retry\n'
+                       '   * budget on a capacity/availability error and the system is '
+                       'switching to the\n'
+                       '   * next fallback model. The UI should discard partial '
+                       'content and display a\n',
+             'after': '   * agent UI, subagent loop) can surface it without each call '
+                      'site running\n'
+                      '   * its own compaction step. */\n'
+                      "  COMPRESSED = 'compressed',\n"
+                      '  /** Emitted once for every compaction attempt that ran to '
+                      'completion,\n'
+                      '   * whether it succeeded, was refused, or failed. NOOP '
+                      'outcomes mean no\n'
+                      '   * attempt was made and stay silent. Unlike COMPRESSED this '
+                      'event carries\n'
+                      '   * no promise that the history changed, so it can report a '
+                      'failure without\n'
+                      '   * a consumer mistaking it for a successful compaction. */\n'
+                      "  COMPACTION = 'compaction',\n"
+                      '  /** Emitted when the primary model (or a prior fallback) '
+                      'exhausted its retry\n'
+                      '   * budget on a capacity/availability error and the system is '
+                      'switching to the\n'
+                      '   * next fallback model. The UI should discard partial content '
+                      'and display a\n',
+             'review_before': '   * agent UI, subagent loop) can surface it without '
+                              'each call site running\n'
+                              '   * its own compaction step. */\n'
+                              "  COMPRESSED = 'compressed',\n"
+                              '  /** Emitted when the primary model (or a prior '
+                              'fallback) exhausted its retry\n'
+                              '   * budget on a capacity/availability error and the '
+                              'system is switching to the\n'
+                              '   * next fallback model. The UI should discard partial '
+                              'content and display a\n',
+             'review_after': '   * agent UI, subagent loop) can surface it without '
+                             'each call site running\n'
+                             '   * its own compaction step. */\n'
+                             "  COMPRESSED = 'compressed',\n"
+                             '  /** Emitted once for every compaction attempt that ran '
+                             'to completion,\n'
+                             '   * whether it succeeded, was refused, or failed. NOOP '
+                             'outcomes mean no\n'
+                             '   * attempt was made and stay silent. Unlike COMPRESSED '
+                             'this event carries\n'
+                             '   * no promise that the history changed, so it can '
+                             'report a failure without\n'
+                             '   * a consumer mistaking it for a successful '
+                             'compaction. */\n'
+                             "  COMPACTION = 'compaction',\n"
+                             '  /** Emitted when the primary model (or a prior '
+                             'fallback) exhausted its retry\n'
+                             '   * budget on a capacity/availability error and the '
+                             'system is switching to the\n'
+                             '   * next fallback model. The UI should discard partial '
+                             'content and display a\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-6',
+             'path': 'packages/core/src/core/geminiChat.ts',
+             'before': '      maxOutputTokensEscalated?: number;\n'
+                       '    }\n'
+                       '  | { type: StreamEventType.COMPRESSED; info: '
+                       'ChatCompressionInfo }\n'
+                       '  | { type: StreamEventType.MODEL_FALLBACK; info: '
+                       'ModelFallbackInfo };\n'
+                       '\n'
+                       'interface TryCompressOptions {\n',
+             'after': '      maxOutputTokensEscalated?: number;\n'
+                      '    }\n'
+                      '  | { type: StreamEventType.COMPRESSED; info: '
+                      'ChatCompressionInfo }\n'
+                      '  | { type: StreamEventType.COMPACTION; record: '
+                      'CompactionRecord }\n'
+                      '  | { type: StreamEventType.MODEL_FALLBACK; info: '
+                      'ModelFallbackInfo };\n'
+                      '\n'
+                      'interface TryCompressOptions {\n',
+             'review_before': '      maxOutputTokensEscalated?: number;\n'
+                              '    }\n'
+                              '  | { type: StreamEventType.COMPRESSED; info: '
+                              'ChatCompressionInfo }\n'
+                              '  | { type: StreamEventType.MODEL_FALLBACK; info: '
+                              'ModelFallbackInfo };\n'
+                              '\n'
+                              'interface TryCompressOptions {\n',
+             'review_after': '      maxOutputTokensEscalated?: number;\n'
+                             '    }\n'
+                             '  | { type: StreamEventType.COMPRESSED; info: '
+                             'ChatCompressionInfo }\n'
+                             '  | { type: StreamEventType.COMPACTION; record: '
+                             'CompactionRecord }\n'
+                             '  | { type: StreamEventType.MODEL_FALLBACK; info: '
+                             'ModelFallbackInfo };\n'
+                             '\n'
+                             'interface TryCompressOptions {\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-7',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '  initialDelayMs: 2000,\n'
                        '};\n'
@@ -7368,7 +9196,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'const TRANSPORT_STREAM_RETRY_CONFIG = {\n'
                              '  maxRetries: 2,\n'
                              '  initialDelayMs: 1000,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-5',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-8',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': ' * `onAllToolCallsComplete` was a single-shot that already '
                        'fired into an\n'
@@ -7416,7 +9244,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '/*\n'
                              ' * '
                              '============================================================================\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-6',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-9',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '   * Public history readers still use {@link getHistory}, '
                        'which returns a\n'
@@ -7470,7 +9298,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'resolveCompactionTuning(\n'
                              '      this.config.getChatCompression(),\n'
                              '    );\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-7',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-10',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    return curatedHistory.map(copyContentContainer);\n'
                        '  }\n'
@@ -7534,7 +9362,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  private getRequestHistoryForRoute(\n'
                              '    currentUserContent: Content | undefined,\n'
                              '    supportedModalities: InputModalities,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-8',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-11',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    ).slimmedHistory;\n'
                        '  }\n'
@@ -7709,7 +9537,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'with inherited\n'
                              '   * history (forks, subagents, speculation). Without '
                              'this, the auto-compress\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-9',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-12',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    // estimate.\n'
                        '    const contextWindowForClamp =\n'
@@ -7819,7 +9647,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    let promptTokensForClamp = 0;\n'
                              '\n'
                              '    let currentUserContent: Content | undefined;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-10',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-13',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      // `getContextLengthExceededInfo` → `tryCompress` → '
                        'RETRY branch)\n'
@@ -7899,7 +9727,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const isHardTier = effectiveTokens >= hard;\n'
                              '      const shouldForceFromHard =\n'
                              '        !exactRoute &&\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-11',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-14',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        );\n'
                        '      }\n'
@@ -7976,7 +9804,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        : 0;\n'
                              '      if (\n'
                              '        shouldStopAfterHardRescue(\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-12',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-15',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      // self-corrects when provider usage arrives. An '
                        'under-count is the ONE\n'
@@ -8023,7 +9851,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ? estimatePromptTokens(\n'
                              '              [],\n'
                              '              userContent,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-13',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-16',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              /* conservative= */ true,\n'
                        '            )\n'
@@ -8061,7 +9889,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        debugLogger.debug(\n'
                              '          `[clamp] estimate-derived prompt count; padded '
                              'by ` +\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-14',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-17',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '            `count=${this.lastPromptTokenCount}`,\n'
                        '        );\n'
@@ -8121,7 +9949,118 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      params = {\n'
                              '        ...params,\n'
                              '        config: {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-15',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-18',
+             'path': 'packages/core/src/core/geminiChat.ts',
+             'before': "        'Qwen Code is streaming a model response',\n"
+                       '      );\n'
+                       '      try {\n'
+                       '        // Surface a successful auto-compression to the caller '
+                       'as the first\n'
+                       '        // event in the stream. Failed/skipped compaction '
+                       'attempts are silent.\n'
+                       '        // Must be inside the try so that a consumer '
+                       'abandoning the stream\n'
+                       '        // immediately after this event still triggers the '
+                       'finally below;\n'
+                       '        // otherwise `streamDoneResolver` never fires and the '
+                       'next send hangs.\n'
+                       '        if (\n'
+                       '          compressionInfo.compressionStatus === '
+                       'CompressionStatus.COMPRESSED\n'
+                       '        ) {\n',
+             'after': "        'Qwen Code is streaming a model response',\n"
+                      '      );\n'
+                      '      try {\n'
+                      '        // Surface every completed auto-compaction attempt to '
+                      'the caller as\n'
+                      '        // the first event in the stream. A refused or failed '
+                      'attempt is\n'
+                      '        // reported exactly like a successful one and carries '
+                      'its own\n'
+                      '        // outcome, because a compaction that silently did not '
+                      'happen is\n'
+                      '        // indistinguishable, downstream, from one that never '
+                      'ran. Only NOOP\n'
+                      '        // — no attempt was made — stays silent.\n'
+                      '        // Must be inside the try so that a consumer abandoning '
+                      'the stream\n'
+                      '        // immediately after this event still triggers the '
+                      'finally below;\n'
+                      '        // otherwise `streamDoneResolver` never fires and the '
+                      'next send hangs.\n'
+                      '        if (compressionInfo.compressionStatus !== '
+                      'CompressionStatus.NOOP) {\n'
+                      '          yield {\n'
+                      '            type: StreamEventType.COMPACTION,\n'
+                      '            record: toCompactionRecord(compressionInfo),\n'
+                      '          };\n'
+                      '        }\n'
+                      '        // The narrower COMPRESSED event still means "the '
+                      'history was\n'
+                      '        // replaced", so startup-context restoration and the '
+                      'interactive\n'
+                      '        // compaction notice keep firing only on real '
+                      'successes.\n'
+                      '        if (\n'
+                      '          compressionInfo.compressionStatus === '
+                      'CompressionStatus.COMPRESSED\n'
+                      '        ) {\n',
+             'review_before': "        'Qwen Code is streaming a model response',\n"
+                              '      );\n'
+                              '      try {\n'
+                              '        // Surface a successful auto-compression to the '
+                              'caller as the first\n'
+                              '        // event in the stream. Failed/skipped '
+                              'compaction attempts are silent.\n'
+                              '        // Must be inside the try so that a consumer '
+                              'abandoning the stream\n'
+                              '        // immediately after this event still triggers '
+                              'the finally below;\n'
+                              '        // otherwise `streamDoneResolver` never fires '
+                              'and the next send hangs.\n'
+                              '        if (\n'
+                              '          compressionInfo.compressionStatus === '
+                              'CompressionStatus.COMPRESSED\n'
+                              '        ) {\n',
+             'review_after': "        'Qwen Code is streaming a model response',\n"
+                             '      );\n'
+                             '      try {\n'
+                             '        // Surface every completed auto-compaction '
+                             'attempt to the caller as\n'
+                             '        // the first event in the stream. A refused or '
+                             'failed attempt is\n'
+                             '        // reported exactly like a successful one and '
+                             'carries its own\n'
+                             '        // outcome, because a compaction that silently '
+                             'did not happen is\n'
+                             '        // indistinguishable, downstream, from one that '
+                             'never ran. Only NOOP\n'
+                             '        // — no attempt was made — stays silent.\n'
+                             '        // Must be inside the try so that a consumer '
+                             'abandoning the stream\n'
+                             '        // immediately after this event still triggers '
+                             'the finally below;\n'
+                             '        // otherwise `streamDoneResolver` never fires '
+                             'and the next send hangs.\n'
+                             '        if (compressionInfo.compressionStatus !== '
+                             'CompressionStatus.NOOP) {\n'
+                             '          yield {\n'
+                             '            type: StreamEventType.COMPACTION,\n'
+                             '            record: '
+                             'toCompactionRecord(compressionInfo),\n'
+                             '          };\n'
+                             '        }\n'
+                             '        // The narrower COMPRESSED event still means '
+                             '"the history was\n'
+                             '        // replaced", so startup-context restoration and '
+                             'the interactive\n'
+                             '        // compaction notice keep firing only on real '
+                             'successes.\n'
+                             '        if (\n'
+                             '          compressionInfo.compressionStatus === '
+                             'CompressionStatus.COMPRESSED\n'
+                             '        ) {\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-19',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        const cgConfig =\n'
                        '          exactRoute?.contentGeneratorConfig ??\n'
@@ -8153,7 +10092,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ? {\n'
                              '              contentGenerator: '
                              'exactRoute.contentGenerator,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-16',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-20',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        // outputCeiling fallback is defensive and should not '
                        'fire in practice.\n'
@@ -8220,7 +10159,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          effectiveInitialMaxOutputTokens < '
                              'escalatedLimit;\n'
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-17',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-21',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              // continuation one below.\n'
                        '              transportContinuationText.trim().length === 0 '
@@ -8259,7 +10198,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            ) {\n'
                              '              self.popPendingPartialAssistantTurn();\n'
                              '              transportStreamRetryCount++;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-18',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-22',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              !streamYieldedFunctionCall &&\n'
                        '              transportContinuationText.trim().length > 0 &&\n'
@@ -8299,7 +10238,67 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            if (canContinueAfterTransportCut) {\n'
                              '              self.popPendingPartialAssistantTurn();\n'
                              '              transportContinuationCount++;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-19',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-23',
+             'path': 'packages/core/src/core/geminiChat.ts',
+             'before': '                    },\n'
+                       '                  );\n'
+                       '\n'
+                       '                  if (\n'
+                       '                    reactiveInfo.compressionStatus ===\n'
+                       '                    CompressionStatus.COMPRESSED\n',
+             'after': '                    },\n'
+                      '                  );\n'
+                      '\n'
+                      '                  // Report the reactive attempt before '
+                      'branching on its\n'
+                      '                  // outcome, so an overflow rescue that failed '
+                      'to shrink the\n'
+                      '                  // history is recorded rather than only '
+                      'logged.\n'
+                      '                  if (\n'
+                      '                    reactiveInfo.compressionStatus !== '
+                      'CompressionStatus.NOOP\n'
+                      '                  ) {\n'
+                      '                    yield {\n'
+                      '                      type: StreamEventType.COMPACTION,\n'
+                      '                      record: '
+                      'toCompactionRecord(reactiveInfo),\n'
+                      '                    };\n'
+                      '                  }\n'
+                      '\n'
+                      '                  if (\n'
+                      '                    reactiveInfo.compressionStatus ===\n'
+                      '                    CompressionStatus.COMPRESSED\n',
+             'review_before': '                    },\n'
+                              '                  );\n'
+                              '\n'
+                              '                  if (\n'
+                              '                    reactiveInfo.compressionStatus ===\n'
+                              '                    CompressionStatus.COMPRESSED\n',
+             'review_after': '                    },\n'
+                             '                  );\n'
+                             '\n'
+                             '                  // Report the reactive attempt before '
+                             'branching on its\n'
+                             '                  // outcome, so an overflow rescue that '
+                             'failed to shrink the\n'
+                             '                  // history is recorded rather than '
+                             'only logged.\n'
+                             '                  if (\n'
+                             '                    reactiveInfo.compressionStatus !== '
+                             'CompressionStatus.NOOP\n'
+                             '                  ) {\n'
+                             '                    yield {\n'
+                             '                      type: StreamEventType.COMPACTION,\n'
+                             '                      record: '
+                             'toCompactionRecord(reactiveInfo),\n'
+                             '                    };\n'
+                             '                  }\n'
+                             '\n'
+                             '                  if (\n'
+                             '                    reactiveInfo.compressionStatus ===\n'
+                             '                    CompressionStatus.COMPRESSED\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-24',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '            // Invalid stream responses use '
                        'INVALID_STREAM_RETRY_CONFIG, which\n'
@@ -8360,7 +10359,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                : '
                              'INVALID_STREAM_RETRY_CONFIG.transientMaxRetries;\n'
                              '            const invalidStreamRetryCount =\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-20',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-25',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '                : transientInvalidStreamRetryCount;\n'
                        '            if (\n'
@@ -8409,7 +10408,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'maxInvalidStreamRetries\n'
                              '            ) {\n'
                              '              self.popPendingPartialAssistantTurn();\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-21',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-26',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              attemptState.rollback();\n'
                        '              if (!(error instanceof InvalidStreamError)) '
@@ -8458,7 +10457,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                  : '
                              'INVALID_STREAM_RETRY_CONFIG.transientMaxRetries;\n'
                              '              const continuationRetryCount =\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-22',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-27',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          }\n'
                        '        };\n'
@@ -8488,7 +10487,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          lastFinishReason === FinishReason.MAX_TOKENS '
                              '&&\n'
                              '          !maxTokensEscalated &&\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-23',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-28',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          // - Maximum 3 fallback transitions (capped by '
                        'config normalization).\n'
@@ -8536,7 +10535,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '          if (\n'
                              '            fallbackModels.length > 0 &&\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-24',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-29',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        prompt_id,\n'
                        '      );\n'
@@ -8631,7 +10630,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        if (error instanceof Error) {\n'
                              '          if (isSchemaDepthError(error.message)) return '
                              'false;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-25',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-30',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    goalContext?: GoalTurnPermit,\n'
                        '    transportContinuationPrefix?: string,\n'
@@ -8672,7 +10671,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const allModelParts: Part[] = [];\n'
                              '    const usedToolCallIds = '
                              'collectToolCallIdsFromHistory(this.history);\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-26',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-31',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    // field instead of using the structured tool_calls array. '
                        'Detect and\n'
@@ -12910,6 +14909,68 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "  'a non-idempotent operation.';\n"},
             {'name': 'packages/core/src/core/turn.ts:landmark-1',
              'path': 'packages/core/src/core/turn.ts',
+             'before': '  /** The system switched to a fallback model after the '
+                       'primary (or prior\n'
+                       '   *  fallback) exhausted retries on a capacity/availability '
+                       'error. */\n'
+                       "  ModelFallback = 'model_fallback',\n"
+                       '}\n'
+                       '\n'
+                       'export type ServerGeminiRetryEvent = {\n',
+             'after': '  /** The system switched to a fallback model after the primary '
+                      '(or prior\n'
+                      '   *  fallback) exhausted retries on a capacity/availability '
+                      'error. */\n'
+                      "  ModelFallback = 'model_fallback',\n"
+                      '  /**\n'
+                      '   * One conversation-compaction attempt ran to completion, '
+                      'successfully or\n'
+                      '   * not. Distinct from `ChatCompressed`, which means the '
+                      'history actually\n'
+                      '   * was replaced: this event is the observability record of '
+                      'the attempt and\n'
+                      '   * fires for refusals and failures too. Emitted for every '
+                      'non-NOOP outcome,\n'
+                      '   * so a consumer never has to infer a compaction from a drop '
+                      'in reported\n'
+                      '   * input tokens.\n'
+                      '   */\n'
+                      "  ChatCompaction = 'chat_compaction',\n"
+                      '}\n'
+                      '\n'
+                      'export type ServerGeminiRetryEvent = {\n',
+             'review_before': '  /** The system switched to a fallback model after the '
+                              'primary (or prior\n'
+                              '   *  fallback) exhausted retries on a '
+                              'capacity/availability error. */\n'
+                              "  ModelFallback = 'model_fallback',\n"
+                              '}\n'
+                              '\n'
+                              'export type ServerGeminiRetryEvent = {\n',
+             'review_after': '  /** The system switched to a fallback model after the '
+                             'primary (or prior\n'
+                             '   *  fallback) exhausted retries on a '
+                             'capacity/availability error. */\n'
+                             "  ModelFallback = 'model_fallback',\n"
+                             '  /**\n'
+                             '   * One conversation-compaction attempt ran to '
+                             'completion, successfully or\n'
+                             '   * not. Distinct from `ChatCompressed`, which means '
+                             'the history actually\n'
+                             '   * was replaced: this event is the observability '
+                             'record of the attempt and\n'
+                             '   * fires for refusals and failures too. Emitted for '
+                             'every non-NOOP outcome,\n'
+                             '   * so a consumer never has to infer a compaction from '
+                             'a drop in reported\n'
+                             '   * input tokens.\n'
+                             '   */\n'
+                             "  ChatCompaction = 'chat_compaction',\n"
+                             '}\n'
+                             '\n'
+                             'export type ServerGeminiRetryEvent = {\n'},
+            {'name': 'packages/core/src/core/turn.ts:landmark-2',
+             'path': 'packages/core/src/core/turn.ts',
              'before': '   * splitter). (R5.2)\n'
                        '   */\n'
                        '  COMPRESSION_FAILED_OUTPUT_TRUNCATED,\n'
@@ -12954,6 +15015,262 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '}\n'
                              '\n'
                              '/**\n'},
+            {'name': 'packages/core/src/core/turn.ts:landmark-3',
+             'path': 'packages/core/src/core/turn.ts',
+             'before': '  value: ChatCompressionInfo | null;\n'
+                       '};\n'
+                       '\n'
+                       'export type ServerGeminiMaxSessionTurnsEvent = {\n'
+                       '  type: GeminiEventType.MaxSessionTurns;\n'
+                       '};\n',
+             'after': '  value: ChatCompressionInfo | null;\n'
+                      '};\n'
+                      '\n'
+                      '/**\n'
+                      ' * The operator-facing record of one completed compaction '
+                      'attempt.\n'
+                      ' *\n'
+                      ' * This is the payload written to the captured event stream, so '
+                      'it is\n'
+                      ' * deliberately self-describing: `status` is the stable '
+                      'spelling of the\n'
+                      ' * `CompressionStatus` member rather than its ordinal, and '
+                      '`succeeded`\n'
+                      ' * answers "was the history actually replaced?" without a '
+                      'lookup table.\n'
+                      ' * A refused or failed attempt carries `succeeded: false` and '
+                      'keeps\n'
+                      " * `newTokenCount` equal to the preserved history's count, so a "
+                      'silent\n'
+                      ' * failure cannot be read as a compaction that never happened.\n'
+                      ' */\n'
+                      'export interface CompactionRecord {\n'
+                      '  /** `CompressionStatus` member name, e.g. `COMPRESSED`. */\n'
+                      '  status: string;\n'
+                      '  /** True only when the compacted history replaced the '
+                      'original. */\n'
+                      '  succeeded: boolean;\n'
+                      '  /** Rendered prompt tokens before the attempt. */\n'
+                      '  originalTokenCount: number;\n'
+                      '  /** Rendered prompt tokens after it; equal to the original on '
+                      'failure. */\n'
+                      '  newTokenCount: number;\n'
+                      '  /** Why the attempt fired, or null when the caller did not '
+                      'classify it. */\n'
+                      '  triggerReason: CompactionTriggerReason | null;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * Projects a `ChatCompressionInfo` onto the emitted record. '
+                      'Shared by the\n'
+                      ' * main-session and subagent paths so both carry byte-identical '
+                      'field sets.\n'
+                      ' */\n'
+                      'export function toCompactionRecord(\n'
+                      '  info: ChatCompressionInfo,\n'
+                      '): CompactionRecord {\n'
+                      '  return {\n'
+                      '    status:\n'
+                      '      CompressionStatus[info.compressionStatus] ??\n'
+                      '      String(info.compressionStatus),\n'
+                      '    succeeded: info.compressionStatus === '
+                      'CompressionStatus.COMPRESSED,\n'
+                      '    originalTokenCount: info.originalTokenCount,\n'
+                      '    newTokenCount: info.newTokenCount,\n'
+                      '    triggerReason: info.triggerReason ?? null,\n'
+                      '  };\n'
+                      '}\n'
+                      '\n'
+                      'export type ServerGeminiChatCompactionEvent = {\n'
+                      '  type: GeminiEventType.ChatCompaction;\n'
+                      '  value: CompactionRecord;\n'
+                      '};\n'
+                      '\n'
+                      'export type ServerGeminiMaxSessionTurnsEvent = {\n'
+                      '  type: GeminiEventType.MaxSessionTurns;\n'
+                      '};\n',
+             'review_before': '  value: ChatCompressionInfo | null;\n'
+                              '};\n'
+                              '\n'
+                              'export type ServerGeminiMaxSessionTurnsEvent = {\n'
+                              '  type: GeminiEventType.MaxSessionTurns;\n'
+                              '};\n',
+             'review_after': '  value: ChatCompressionInfo | null;\n'
+                             '};\n'
+                             '\n'
+                             '/**\n'
+                             ' * The operator-facing record of one completed '
+                             'compaction attempt.\n'
+                             ' *\n'
+                             ' * This is the payload written to the captured event '
+                             'stream, so it is\n'
+                             ' * deliberately self-describing: `status` is the stable '
+                             'spelling of the\n'
+                             ' * `CompressionStatus` member rather than its ordinal, '
+                             'and `succeeded`\n'
+                             ' * answers "was the history actually replaced?" without '
+                             'a lookup table.\n'
+                             ' * A refused or failed attempt carries `succeeded: '
+                             'false` and keeps\n'
+                             " * `newTokenCount` equal to the preserved history's "
+                             'count, so a silent\n'
+                             ' * failure cannot be read as a compaction that never '
+                             'happened.\n'
+                             ' */\n'
+                             'export interface CompactionRecord {\n'
+                             '  /** `CompressionStatus` member name, e.g. '
+                             '`COMPRESSED`. */\n'
+                             '  status: string;\n'
+                             '  /** True only when the compacted history replaced the '
+                             'original. */\n'
+                             '  succeeded: boolean;\n'
+                             '  /** Rendered prompt tokens before the attempt. */\n'
+                             '  originalTokenCount: number;\n'
+                             '  /** Rendered prompt tokens after it; equal to the '
+                             'original on failure. */\n'
+                             '  newTokenCount: number;\n'
+                             '  /** Why the attempt fired, or null when the caller did '
+                             'not classify it. */\n'
+                             '  triggerReason: CompactionTriggerReason | null;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * Projects a `ChatCompressionInfo` onto the emitted '
+                             'record. Shared by the\n'
+                             ' * main-session and subagent paths so both carry '
+                             'byte-identical field sets.\n'
+                             ' */\n'
+                             'export function toCompactionRecord(\n'
+                             '  info: ChatCompressionInfo,\n'
+                             '): CompactionRecord {\n'
+                             '  return {\n'
+                             '    status:\n'
+                             '      CompressionStatus[info.compressionStatus] ??\n'
+                             '      String(info.compressionStatus),\n'
+                             '    succeeded: info.compressionStatus === '
+                             'CompressionStatus.COMPRESSED,\n'
+                             '    originalTokenCount: info.originalTokenCount,\n'
+                             '    newTokenCount: info.newTokenCount,\n'
+                             '    triggerReason: info.triggerReason ?? null,\n'
+                             '  };\n'
+                             '}\n'
+                             '\n'
+                             'export type ServerGeminiChatCompactionEvent = {\n'
+                             '  type: GeminiEventType.ChatCompaction;\n'
+                             '  value: CompactionRecord;\n'
+                             '};\n'
+                             '\n'
+                             'export type ServerGeminiMaxSessionTurnsEvent = {\n'
+                             '  type: GeminiEventType.MaxSessionTurns;\n'
+                             '};\n'},
+            {'name': 'packages/core/src/core/turn.ts:landmark-4',
+             'path': 'packages/core/src/core/turn.ts',
+             'before': 'export type ServerGeminiStreamEvent =\n'
+                       '  | ServerGeminiGoalStateEvent\n'
+                       '  | ServerGeminiActiveGoalEvent\n'
+                       '  | ServerGeminiChatCompressedEvent\n'
+                       '  | ServerGeminiCitationEvent\n'
+                       '  | ServerGeminiContentEvent\n',
+             'after': 'export type ServerGeminiStreamEvent =\n'
+                      '  | ServerGeminiGoalStateEvent\n'
+                      '  | ServerGeminiActiveGoalEvent\n'
+                      '  | ServerGeminiChatCompactionEvent\n'
+                      '  | ServerGeminiChatCompressedEvent\n'
+                      '  | ServerGeminiCitationEvent\n'
+                      '  | ServerGeminiContentEvent\n',
+             'review_before': 'export type ServerGeminiStreamEvent =\n'
+                              '  | ServerGeminiGoalStateEvent\n'
+                              '  | ServerGeminiActiveGoalEvent\n'
+                              '  | ServerGeminiChatCompressedEvent\n'
+                              '  | ServerGeminiCitationEvent\n'
+                              '  | ServerGeminiContentEvent\n',
+             'review_after': 'export type ServerGeminiStreamEvent =\n'
+                             '  | ServerGeminiGoalStateEvent\n'
+                             '  | ServerGeminiActiveGoalEvent\n'
+                             '  | ServerGeminiChatCompactionEvent\n'
+                             '  | ServerGeminiChatCompressedEvent\n'
+                             '  | ServerGeminiCitationEvent\n'
+                             '  | ServerGeminiContentEvent\n'},
+            {'name': 'packages/core/src/core/turn.ts:landmark-5',
+             'path': 'packages/core/src/core/turn.ts',
+             'before': '          continue;\n'
+                       '        }\n'
+                       '\n'
+                       '        // Surface auto-compaction that fired inside '
+                       'chat.sendMessageStream\n'
+                       '        // as the top-level ChatCompressed event so existing '
+                       'UI handlers stay\n'
+                       '        // connected. This bridge is the primary path for '
+                       'auto-compaction\n',
+             'after': '          continue;\n'
+                      '        }\n'
+                      '\n'
+                      '        // Surface every completed compaction attempt as the '
+                      'top-level\n'
+                      '        // ChatCompaction event. This is the observability '
+                      'record: it fires\n'
+                      '        // for refusals and failures as well as successes, and '
+                      'it is the\n'
+                      '        // only event a headless consumer needs to answer "did '
+                      'this session\n'
+                      '        // compact, when, and from how many tokens to how '
+                      'many". It stays\n'
+                      '        // separate from ChatCompressed below, which continues '
+                      'to mean the\n'
+                      '        // narrower "the history was replaced".\n'
+                      "        if (streamEvent.type === 'compaction') {\n"
+                      '          yield {\n'
+                      '            type: GeminiEventType.ChatCompaction,\n'
+                      '            value: streamEvent.record,\n'
+                      '          };\n'
+                      '          continue;\n'
+                      '        }\n'
+                      '\n'
+                      '        // Surface auto-compaction that fired inside '
+                      'chat.sendMessageStream\n'
+                      '        // as the top-level ChatCompressed event so existing UI '
+                      'handlers stay\n'
+                      '        // connected. This bridge is the primary path for '
+                      'auto-compaction\n',
+             'review_before': '          continue;\n'
+                              '        }\n'
+                              '\n'
+                              '        // Surface auto-compaction that fired inside '
+                              'chat.sendMessageStream\n'
+                              '        // as the top-level ChatCompressed event so '
+                              'existing UI handlers stay\n'
+                              '        // connected. This bridge is the primary path '
+                              'for auto-compaction\n',
+             'review_after': '          continue;\n'
+                             '        }\n'
+                             '\n'
+                             '        // Surface every completed compaction attempt as '
+                             'the top-level\n'
+                             '        // ChatCompaction event. This is the '
+                             'observability record: it fires\n'
+                             '        // for refusals and failures as well as '
+                             'successes, and it is the\n'
+                             '        // only event a headless consumer needs to '
+                             'answer "did this session\n'
+                             '        // compact, when, and from how many tokens to '
+                             'how many". It stays\n'
+                             '        // separate from ChatCompressed below, which '
+                             'continues to mean the\n'
+                             '        // narrower "the history was replaced".\n'
+                             "        if (streamEvent.type === 'compaction') {\n"
+                             '          yield {\n'
+                             '            type: GeminiEventType.ChatCompaction,\n'
+                             '            value: streamEvent.record,\n'
+                             '          };\n'
+                             '          continue;\n'
+                             '        }\n'
+                             '\n'
+                             '        // Surface auto-compaction that fired inside '
+                             'chat.sendMessageStream\n'
+                             '        // as the top-level ChatCompressed event so '
+                             'existing UI handlers stay\n'
+                             '        // connected. This bridge is the primary path '
+                             'for auto-compaction\n'},
             {'name': 'packages/core/src/models/constants.ts:landmark-1',
              'path': 'packages/core/src/models/constants.ts',
              'before': "  'customHeaders',\n"
@@ -29828,6 +32145,38 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    {\n'},
             {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-1',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': "} from '../../agents/runtime/agent-headless.js';\n"
+                       'import { AgentEventType } from '
+                       "'../../agents/runtime/agent-events.js';\n"
+                       'import type {\n'
+                       '  AgentToolCallEvent,\n'
+                       '  AgentToolResultEvent,\n'
+                       '  AgentApprovalRequestEvent,\n',
+             'after': "} from '../../agents/runtime/agent-headless.js';\n"
+                      'import { AgentEventType } from '
+                      "'../../agents/runtime/agent-events.js';\n"
+                      'import type {\n'
+                      '  AgentCompactionEvent,\n'
+                      '  AgentToolCallEvent,\n'
+                      '  AgentToolResultEvent,\n'
+                      '  AgentApprovalRequestEvent,\n',
+             'review_before': "} from '../../agents/runtime/agent-headless.js';\n"
+                              'import { AgentEventType } from '
+                              "'../../agents/runtime/agent-events.js';\n"
+                              'import type {\n'
+                              '  AgentToolCallEvent,\n'
+                              '  AgentToolResultEvent,\n'
+                              '  AgentApprovalRequestEvent,\n',
+             'review_after': "} from '../../agents/runtime/agent-headless.js';\n"
+                             'import { AgentEventType } from '
+                             "'../../agents/runtime/agent-events.js';\n"
+                             'import type {\n'
+                             '  AgentCompactionEvent,\n'
+                             '  AgentToolCallEvent,\n'
+                             '  AgentToolResultEvent,\n'
+                             '  AgentApprovalRequestEvent,\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-2',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '      getSessionId: '
                        "vi.fn().mockReturnValue('test-session-id'),\n"
                        "      getCliVersion: vi.fn().mockReturnValue('test-version'),\n"
@@ -29867,7 +32216,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.fn().mockReturnValue(undefined),\n'
                              '      getStopHookBlockingCap: '
                              'vi.fn().mockReturnValue(8),\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-2',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-3',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '  });\n'
                        '\n'
@@ -30002,7 +32351,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const schema = agentTool.schema;\n'
                              '      const properties = schema.parametersJsonSchema as '
                              '{\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-3',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-4',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '          successfulToolCalls: 3,\n'
                        '          failedToolCalls: 0,\n'
@@ -30038,7 +32387,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      } as unknown as AgentHeadless;\n'
                              '\n'
                              '      mockContextState = {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-4',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-5',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '      ).createInvocation(params);\n'
                        '      const result = await invocation.execute();\n'
@@ -30088,7 +32437,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              "    it('explains successful subagents with no "
                              "model-visible output', async () => {\n"},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-5',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-6',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '          successfulToolCalls: 0,\n'
                        '          failedToolCalls: 0,\n'
@@ -30124,7 +32473,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      } as unknown as AgentHeadless;\n'
                              '\n'
                              '      mockContextState = {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-6',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-7',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '    beforeEach(() => {\n'
                        '      mockAgent = {\n'
@@ -30292,7 +32641,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      } as unknown as AgentHeadless;\n'
                              '\n'
                              '      mockContextState = {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-7',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-8',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '    beforeEach(() => {\n'
                        '      mockAgent = {\n'
@@ -30460,7 +32809,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      } as unknown as AgentHeadless;\n'
                              '\n'
                              '      mockContextState = {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-8',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-9',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '          failedToolCalls: 0,\n'
                        '        }),\n'
@@ -30498,7 +32847,194 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      '
                              'vi.mocked(mockAgent.execute).mockImplementation(async () '
                              '=> {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-9',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-10',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '      expect(toolCall?.responseParts).toBe(responseParts);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('omits subagent protocol payloads from interactive "
+                       "display state', async () => {\n"
+                       '      vi.mocked(config.isInteractive).mockReturnValue(true);\n'
+                       "      const responseParts: Part[] = [{ text: 'raw protocol "
+                       "result' }];\n",
+             'after': '      expect(toolCall?.responseParts).toBe(responseParts);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[compaction-event] accumulates every subagent "
+                      "compaction attempt on the display, oldest first', async () => "
+                      '{\n'
+                      '      vi.mocked(config.isInteractive).mockReturnValue(false);\n'
+                      '      const snapshots: AgentResultDisplay[] = [];\n'
+                      '\n'
+                      '      const invocation = '
+                      'createInvocationWithEventDrivenAgent((emitter) => {\n'
+                      '        emitter.emit(AgentEventType.COMPACTION, {\n'
+                      "          subagentId: 'sub-1',\n"
+                      '          round: 4,\n'
+                      '          compaction: {\n'
+                      "            status: 'COMPRESSED',\n"
+                      '            succeeded: true,\n'
+                      '            originalTokenCount: 198_400,\n'
+                      '            newTokenCount: 32_118,\n'
+                      "            triggerReason: 'token_limit',\n"
+                      '          },\n'
+                      '          timestamp: Date.now(),\n'
+                      '        } satisfies AgentCompactionEvent);\n'
+                      '\n'
+                      '        emitter.emit(AgentEventType.COMPACTION, {\n'
+                      "          subagentId: 'sub-1',\n"
+                      '          round: 9,\n'
+                      '          compaction: {\n'
+                      "            status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
+                      '            succeeded: false,\n'
+                      '            originalTokenCount: 205_112,\n'
+                      '            newTokenCount: 205_112,\n'
+                      "            triggerReason: 'token_limit',\n"
+                      '          },\n'
+                      '          timestamp: Date.now(),\n'
+                      '        } satisfies AgentCompactionEvent);\n'
+                      '      });\n'
+                      '\n'
+                      '      await invocation.execute(undefined, (output) => {\n'
+                      '        snapshots.push(output as AgentResultDisplay);\n'
+                      '      });\n'
+                      '\n'
+                      '      const withBoth = snapshots.filter(\n'
+                      '        (snapshot) => (snapshot.compactions?.length ?? 0) === '
+                      '2,\n'
+                      '      );\n'
+                      '      expect(withBoth.length).toBeGreaterThan(0);\n'
+                      '      // Append-only and in order, so a consumer can emit only '
+                      'the tail it\n'
+                      '      // has not seen and never re-report an earlier attempt.\n'
+                      '      expect(withBoth.at(-1)?.compactions).toEqual([\n'
+                      '        {\n'
+                      "          status: 'COMPRESSED',\n"
+                      '          succeeded: true,\n'
+                      '          originalTokenCount: 198_400,\n'
+                      '          newTokenCount: 32_118,\n'
+                      "          triggerReason: 'token_limit',\n"
+                      '        },\n'
+                      '        {\n'
+                      "          status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
+                      '          succeeded: false,\n'
+                      '          originalTokenCount: 205_112,\n'
+                      '          newTokenCount: 205_112,\n'
+                      "          triggerReason: 'token_limit',\n"
+                      '        },\n'
+                      '      ]);\n'
+                      '      const firstSnapshotWithCompaction = snapshots.find(\n'
+                      '        (snapshot) => (snapshot.compactions?.length ?? 0) === '
+                      '1,\n'
+                      '      );\n'
+                      '      '
+                      'expect(firstSnapshotWithCompaction?.compactions?.[0]?.status).toBe(\n'
+                      "        'COMPRESSED',\n"
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      "    it('omits subagent protocol payloads from interactive "
+                      "display state', async () => {\n"
+                      '      vi.mocked(config.isInteractive).mockReturnValue(true);\n'
+                      "      const responseParts: Part[] = [{ text: 'raw protocol "
+                      "result' }];\n",
+             'review_before': '      '
+                              'expect(toolCall?.responseParts).toBe(responseParts);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('omits subagent protocol payloads from "
+                              "interactive display state', async () => {\n"
+                              '      '
+                              'vi.mocked(config.isInteractive).mockReturnValue(true);\n'
+                              "      const responseParts: Part[] = [{ text: 'raw "
+                              "protocol result' }];\n",
+             'review_after': '      '
+                             'expect(toolCall?.responseParts).toBe(responseParts);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[compaction-event] accumulates every subagent "
+                             "compaction attempt on the display, oldest first', async "
+                             '() => {\n'
+                             '      '
+                             'vi.mocked(config.isInteractive).mockReturnValue(false);\n'
+                             '      const snapshots: AgentResultDisplay[] = [];\n'
+                             '\n'
+                             '      const invocation = '
+                             'createInvocationWithEventDrivenAgent((emitter) => {\n'
+                             '        emitter.emit(AgentEventType.COMPACTION, {\n'
+                             "          subagentId: 'sub-1',\n"
+                             '          round: 4,\n'
+                             '          compaction: {\n'
+                             "            status: 'COMPRESSED',\n"
+                             '            succeeded: true,\n'
+                             '            originalTokenCount: 198_400,\n'
+                             '            newTokenCount: 32_118,\n'
+                             "            triggerReason: 'token_limit',\n"
+                             '          },\n'
+                             '          timestamp: Date.now(),\n'
+                             '        } satisfies AgentCompactionEvent);\n'
+                             '\n'
+                             '        emitter.emit(AgentEventType.COMPACTION, {\n'
+                             "          subagentId: 'sub-1',\n"
+                             '          round: 9,\n'
+                             '          compaction: {\n'
+                             "            status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
+                             '            succeeded: false,\n'
+                             '            originalTokenCount: 205_112,\n'
+                             '            newTokenCount: 205_112,\n'
+                             "            triggerReason: 'token_limit',\n"
+                             '          },\n'
+                             '          timestamp: Date.now(),\n'
+                             '        } satisfies AgentCompactionEvent);\n'
+                             '      });\n'
+                             '\n'
+                             '      await invocation.execute(undefined, (output) => {\n'
+                             '        snapshots.push(output as AgentResultDisplay);\n'
+                             '      });\n'
+                             '\n'
+                             '      const withBoth = snapshots.filter(\n'
+                             '        (snapshot) => (snapshot.compactions?.length ?? '
+                             '0) === 2,\n'
+                             '      );\n'
+                             '      expect(withBoth.length).toBeGreaterThan(0);\n'
+                             '      // Append-only and in order, so a consumer can '
+                             'emit only the tail it\n'
+                             '      // has not seen and never re-report an earlier '
+                             'attempt.\n'
+                             '      expect(withBoth.at(-1)?.compactions).toEqual([\n'
+                             '        {\n'
+                             "          status: 'COMPRESSED',\n"
+                             '          succeeded: true,\n'
+                             '          originalTokenCount: 198_400,\n'
+                             '          newTokenCount: 32_118,\n'
+                             "          triggerReason: 'token_limit',\n"
+                             '        },\n'
+                             '        {\n'
+                             "          status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
+                             '          succeeded: false,\n'
+                             '          originalTokenCount: 205_112,\n'
+                             '          newTokenCount: 205_112,\n'
+                             "          triggerReason: 'token_limit',\n"
+                             '        },\n'
+                             '      ]);\n'
+                             '      const firstSnapshotWithCompaction = '
+                             'snapshots.find(\n'
+                             '        (snapshot) => (snapshot.compactions?.length ?? '
+                             '0) === 1,\n'
+                             '      );\n'
+                             '      '
+                             'expect(firstSnapshotWithCompaction?.compactions?.[0]?.status).toBe(\n'
+                             "        'COMPRESSED',\n"
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('omits subagent protocol payloads from "
+                             "interactive display state', async () => {\n"
+                             '      '
+                             'vi.mocked(config.isInteractive).mockReturnValue(true);\n'
+                             "      const responseParts: Part[] = [{ text: 'raw "
+                             "protocol result' }];\n"},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-11',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '        executeExternalInputs: '
                        'vi.fn().mockResolvedValue(undefined),\n'
@@ -30549,6 +33085,34 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'Return a stub\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-1',
              'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '  AgentEventType,\n'
+                       "} from '../../agents/runtime/agent-events.js';\n"
+                       'import type {\n'
+                       '  AgentToolCallEvent,\n'
+                       '  AgentToolResultEvent,\n'
+                       '  AgentFinishEvent,\n',
+             'after': '  AgentEventType,\n'
+                      "} from '../../agents/runtime/agent-events.js';\n"
+                      'import type {\n'
+                      '  AgentCompactionEvent,\n'
+                      '  AgentToolCallEvent,\n'
+                      '  AgentToolResultEvent,\n'
+                      '  AgentFinishEvent,\n',
+             'review_before': '  AgentEventType,\n'
+                              "} from '../../agents/runtime/agent-events.js';\n"
+                              'import type {\n'
+                              '  AgentToolCallEvent,\n'
+                              '  AgentToolResultEvent,\n'
+                              '  AgentFinishEvent,\n',
+             'review_after': '  AgentEventType,\n'
+                             "} from '../../agents/runtime/agent-events.js';\n"
+                             'import type {\n'
+                             '  AgentCompactionEvent,\n'
+                             '  AgentToolCallEvent,\n'
+                             '  AgentToolResultEvent,\n'
+                             '  AgentFinishEvent,\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-2',
+             'path': 'packages/core/src/tools/agent/agent.ts',
              'before': "} from '../../agents/background-tasks.js';\n"
                        'import { buildModelIdContext, resolveModelId } from '
                        "'../../utils/modelId.js';\n"
@@ -30597,7 +33161,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              'function persistBackgroundCancellation(\n'
                              '  metaPath: string,\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-2',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-3',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '</example>\n'
                        '`;\n'
@@ -30751,7 +33315,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // Update the parameter schema by modifying the '
                              'existing object\n'
                              '    const schema = this.parameterSchema as {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-3',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-4',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      const availableGrades = [\n'
                        '        '
@@ -30791,7 +33355,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        schema.properties.model = {\n'
                              "          type: 'string',\n"
                              '          enum: availableGrades,\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-4',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-5',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      return \'Parameter "todo_id" must be a non-empty string '
                        "of at most 500 characters.';\n"
@@ -30888,7 +33452,109 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    if (params.subagent_type !== undefined) {\n'
                              '      if (\n'
                              "        typeof params.subagent_type !== 'string' ||\n"},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-5',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-6',
+             'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '  readonly eventEmitter: AgentEventEmitter = new '
+                       'AgentEventEmitter();\n'
+                       '  private currentDisplay: AgentResultDisplay | null = null;\n'
+                       "  private currentToolCalls: AgentResultDisplay['toolCalls'] = "
+                       '[];\n'
+                       '  private callId?: string;\n'
+                       '\n'
+                       '  constructor(\n',
+             'after': '  readonly eventEmitter: AgentEventEmitter = new '
+                      'AgentEventEmitter();\n'
+                      '  private currentDisplay: AgentResultDisplay | null = null;\n'
+                      "  private currentToolCalls: AgentResultDisplay['toolCalls'] = "
+                      '[];\n'
+                      '  private readonly currentCompactions: NonNullable<\n'
+                      "    AgentResultDisplay['compactions']\n"
+                      '  > = [];\n'
+                      '  private callId?: string;\n'
+                      '\n'
+                      '  constructor(\n',
+             'review_before': '  readonly eventEmitter: AgentEventEmitter = new '
+                              'AgentEventEmitter();\n'
+                              '  private currentDisplay: AgentResultDisplay | null = '
+                              'null;\n'
+                              '  private currentToolCalls: '
+                              "AgentResultDisplay['toolCalls'] = [];\n"
+                              '  private callId?: string;\n'
+                              '\n'
+                              '  constructor(\n',
+             'review_after': '  readonly eventEmitter: AgentEventEmitter = new '
+                             'AgentEventEmitter();\n'
+                             '  private currentDisplay: AgentResultDisplay | null = '
+                             'null;\n'
+                             '  private currentToolCalls: '
+                             "AgentResultDisplay['toolCalls'] = [];\n"
+                             '  private readonly currentCompactions: NonNullable<\n'
+                             "    AgentResultDisplay['compactions']\n"
+                             '  > = [];\n'
+                             '  private callId?: string;\n'
+                             '\n'
+                             '  constructor(\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-7',
+             'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '      }\n'
+                       '    });\n'
+                       '\n'
+                       '    this.eventEmitter.on(AgentEventType.FINISH, (...args: '
+                       'unknown[]) => {\n'
+                       '      const event = args[0] as AgentFinishEvent;\n'
+                       '      this.updateDisplay(\n',
+             'after': '      }\n'
+                      '    });\n'
+                      '\n'
+                      '    // Compactions are append-only: each event adds one entry '
+                      'and never\n'
+                      '    // rewrites an earlier one, so a consumer diffing '
+                      'successive displays\n'
+                      '    // emits exactly the tail it has not seen.\n'
+                      '    this.eventEmitter.on(AgentEventType.COMPACTION, (...args: '
+                      'unknown[]) => {\n'
+                      '      const event = args[0] as AgentCompactionEvent;\n'
+                      '      this.currentCompactions.push(event.compaction);\n'
+                      '      this.updateDisplay(\n'
+                      '        { compactions: [...this.currentCompactions] },\n'
+                      '        updateOutput,\n'
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      '    this.eventEmitter.on(AgentEventType.FINISH, (...args: '
+                      'unknown[]) => {\n'
+                      '      const event = args[0] as AgentFinishEvent;\n'
+                      '      this.updateDisplay(\n',
+             'review_before': '      }\n'
+                              '    });\n'
+                              '\n'
+                              '    this.eventEmitter.on(AgentEventType.FINISH, '
+                              '(...args: unknown[]) => {\n'
+                              '      const event = args[0] as AgentFinishEvent;\n'
+                              '      this.updateDisplay(\n',
+             'review_after': '      }\n'
+                             '    });\n'
+                             '\n'
+                             '    // Compactions are append-only: each event adds one '
+                             'entry and never\n'
+                             '    // rewrites an earlier one, so a consumer diffing '
+                             'successive displays\n'
+                             '    // emits exactly the tail it has not seen.\n'
+                             '    this.eventEmitter.on(AgentEventType.COMPACTION, '
+                             '(...args: unknown[]) => {\n'
+                             '      const event = args[0] as AgentCompactionEvent;\n'
+                             '      this.currentCompactions.push(event.compaction);\n'
+                             '      this.updateDisplay(\n'
+                             '        { compactions: [...this.currentCompactions] },\n'
+                             '        updateOutput,\n'
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             '    this.eventEmitter.on(AgentEventType.FINISH, '
+                             '(...args: unknown[]) => {\n'
+                             '      const event = args[0] as AgentFinishEvent;\n'
+                             '      this.updateDisplay(\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-8',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      const subagentRawText = subagent.getFinalText();\n'
                        '      const terminateMode = subagent.getTerminateMode();\n'
@@ -30936,7 +33602,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '      const success = terminateMode === '
                              'AgentTerminateMode.GOAL;\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-6',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '    // background-agent concurrency caps '
                        '(agents.maxParallelAgentsByModel).\n'
@@ -30976,7 +33642,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      if (backgroundSlotReservation && '
                              '!backgroundSlotReservationConsumed) {\n'
                              '        this.config\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-7',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      // Implicit background requests downgrade to an awaited '
                        'foreground run\n'
@@ -31026,7 +33692,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ? true\n'
                              '          : (this.params.run_in_background ??\n'
                              '            (subagentConfig.background === true ||\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-8',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          subagentRuntimeConfig as Config,\n'
                        '          {\n'
@@ -31100,7 +33766,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              ? { modelConfigOverrides: { model: '
                              'subagentModelId } }\n'
                              '              : {}),\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '\n'
@@ -31209,7 +33875,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`qwen-code.tool`\n'
                              '      // span, inheriting its traceId so the trace tree '
                              'stays unified.\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          this.buildSubagentSpanSpec(hookOpts, subagentConfig, '
                        "'foreground'),\n"
@@ -31272,7 +33938,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            ),\n'
                              '        );\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          depth: launchDepth,\n'
                        '        });\n'
@@ -31404,7 +34070,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        if (terminateMode === AgentTerminateMode.ERROR) '
                              '{\n'
                              '          return {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        terminateReason: `Failed to run subagent: '
                        '${errorMessage}`,\n'
@@ -33175,6 +35841,103 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    if (params.pages) {\n'
                              '      const parsed = parsePDFPageRange(params.pages);\n'
                              '      if (!parsed) {\n'},
+            {'name': 'packages/core/src/tools/tools.ts:landmark-1',
+             'path': 'packages/core/src/tools/tools.ts',
+             'before': 'import { type AgentStatsSummary } from '
+                       "'../agents/runtime/agent-statistics.js';\n"
+                       'import type { AnsiOutput } from '
+                       "'../utils/terminalSerializer.js';\n"
+                       'import type { PermissionDecision } from '
+                       "'../permissions/types.js';\n"
+                       'import type { VisionBridgeNoticeDisplay } from '
+                       "'../services/visionBridge/vision-bridge-service.js';\n"
+                       '\n'
+                       '/**\n',
+             'after': 'import { type AgentStatsSummary } from '
+                      "'../agents/runtime/agent-statistics.js';\n"
+                      'import type { AnsiOutput } from '
+                      "'../utils/terminalSerializer.js';\n"
+                      'import type { PermissionDecision } from '
+                      "'../permissions/types.js';\n"
+                      "import type { CompactionRecord } from '../core/turn.js';\n"
+                      'import type { VisionBridgeNoticeDisplay } from '
+                      "'../services/visionBridge/vision-bridge-service.js';\n"
+                      '\n'
+                      '/**\n',
+             'review_before': 'import { type AgentStatsSummary } from '
+                              "'../agents/runtime/agent-statistics.js';\n"
+                              'import type { AnsiOutput } from '
+                              "'../utils/terminalSerializer.js';\n"
+                              'import type { PermissionDecision } from '
+                              "'../permissions/types.js';\n"
+                              'import type { VisionBridgeNoticeDisplay } from '
+                              "'../services/visionBridge/vision-bridge-service.js';\n"
+                              '\n'
+                              '/**\n',
+             'review_after': 'import { type AgentStatsSummary } from '
+                             "'../agents/runtime/agent-statistics.js';\n"
+                             'import type { AnsiOutput } from '
+                             "'../utils/terminalSerializer.js';\n"
+                             'import type { PermissionDecision } from '
+                             "'../permissions/types.js';\n"
+                             'import type { CompactionRecord } from '
+                             "'../core/turn.js';\n"
+                             'import type { VisionBridgeNoticeDisplay } from '
+                             "'../services/visionBridge/vision-bridge-service.js';\n"
+                             '\n'
+                             '/**\n'},
+            {'name': 'packages/core/src/tools/tools.ts:landmark-2',
+             'path': 'packages/core/src/tools/tools.ts',
+             'before': '  // this contains the confirmation details for inline UI '
+                       'rendering.\n'
+                       '  pendingConfirmation?: ToolCallConfirmationDetails;\n'
+                       '\n'
+                       '  toolCalls?: Array<{\n'
+                       '    callId: string;\n'
+                       '    name: string;\n',
+             'after': '  // this contains the confirmation details for inline UI '
+                      'rendering.\n'
+                      '  pendingConfirmation?: ToolCallConfirmationDetails;\n'
+                      '\n'
+                      '  /**\n'
+                      "   * Append-only log of the compaction attempts this subagent's "
+                      'own chat has\n'
+                      '   * completed, oldest first. Entries are never rewritten, so a '
+                      'consumer can\n'
+                      '   * emit the tail it has not seen yet — the same discipline '
+                      '`toolCalls` uses\n'
+                      '   * for tool_use/tool_result.\n'
+                      '   */\n'
+                      '  compactions?: CompactionRecord[];\n'
+                      '\n'
+                      '  toolCalls?: Array<{\n'
+                      '    callId: string;\n'
+                      '    name: string;\n',
+             'review_before': '  // this contains the confirmation details for inline '
+                              'UI rendering.\n'
+                              '  pendingConfirmation?: ToolCallConfirmationDetails;\n'
+                              '\n'
+                              '  toolCalls?: Array<{\n'
+                              '    callId: string;\n'
+                              '    name: string;\n',
+             'review_after': '  // this contains the confirmation details for inline '
+                             'UI rendering.\n'
+                             '  pendingConfirmation?: ToolCallConfirmationDetails;\n'
+                             '\n'
+                             '  /**\n'
+                             '   * Append-only log of the compaction attempts this '
+                             "subagent's own chat has\n"
+                             '   * completed, oldest first. Entries are never '
+                             'rewritten, so a consumer can\n'
+                             '   * emit the tail it has not seen yet — the same '
+                             'discipline `toolCalls` uses\n'
+                             '   * for tool_use/tool_result.\n'
+                             '   */\n'
+                             '  compactions?: CompactionRecord[];\n'
+                             '\n'
+                             '  toolCalls?: Array<{\n'
+                             '    callId: string;\n'
+                             '    name: string;\n'},
             {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-1',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before': "      expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
@@ -35754,14 +38517,16 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/config/config.ts': 'c476125a2be618c868e8b38fdce4a77d53c882e8525ce33b20fb35947a38d7c0',
  'packages/cli/src/gemini.test.tsx': '2e547b0eb91c2e1746e3b966511cb286846cbc5495779056d0b1099776795166',
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',
- 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '60644ab60158d63603c05454a2fd5da550fa033001c46209497fae8e0a153fd1',
- 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'ea3a7911c2ef9624d28eb039770d934b2db29a295c9144167ddbadad75f13a18',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '356a29b720098f3a95a9122fd08097fa2967962f5c42ba2da9f017cb94819f4b',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'a28b31eb386970897bbdd7f72590d5e27d6f9436a6e3d5e81f46b3c60c1d806e',
  'packages/cli/src/nonInteractiveCli.ts': '559cbf3f8daa9d7943dea5ec09859fa25de68b25ecb624e66815a90d8a6b9932',
- 'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'f33feccda131157f509ecabcd77a47d53e85413719af23edc1a4f28448e1fb1a',
- 'packages/cli/src/utils/nonInteractiveHelpers.ts': '7d818a669ee036bf8e8b935b47613d074c51f959e77832f6fcc6c289e398a2c8',
+ 'packages/cli/src/ui/hooks/useGeminiStream.ts': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e',
+ 'packages/cli/src/utils/nonInteractiveHelpers.test.ts': '7299e9cf41b76940842156009a422e74ead871243ffbdef7a786f87fc3b721e0',
+ 'packages/cli/src/utils/nonInteractiveHelpers.ts': '5b43358b8fbe6832582037527523c6654999f1cb8ce1fbe697597f5ee5fc4e5d',
  'packages/core/src/agents/runtime/agent-context.test.ts': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a',
  'packages/core/src/agents/runtime/agent-context.ts': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6',
- 'packages/core/src/agents/runtime/agent-core.ts': '35a2d0b3f45533e5e63fc705725a6a831978776bf81b8d65d6dfc8e005c86034',
+ 'packages/core/src/agents/runtime/agent-core.ts': '2a556372e4581ea51cd43ecc36ea5479069190c2263f1f4f0719870a37ccb53c',
+ 'packages/core/src/agents/runtime/agent-events.ts': '94a3f2bda99cb2f5f3a64c374e0759a167368ec1b71dc10f5d633e9054001e0e',
  'packages/core/src/agents/runtime/agent-headless.ts': '566427c59d72b3bc5f2e582e6b83a43388e5bb2d66642026d35951dd5b017f5c',
  'packages/core/src/agents/subagent-result.test.ts': 'b0ff2c8c306c52b336b2382a6e70ef7f520a2b777908997966967056f5c7aa00',
  'packages/core/src/agents/subagent-result.ts': '3a950d84ad4118335f7b13cd3bea5449420be1bd1e8a07e46389472a271a90f4',
@@ -35772,8 +38537,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/contentGenerator.ts': '476242ed064c4980cec6789b84bb5496cb93a28d7763b659fb799f84fcd9bebc',
  'packages/core/src/core/coreToolScheduler.test.ts': 'd4c1005c66b7a2d5b332127874bb5b7847dc6c561d9bdddc7c9aec136d34d894',
  'packages/core/src/core/coreToolScheduler.ts': '9aca5b3131e9e089c30ca80b2a310a3d0da01623b55c2949c7d097348baf8756',
- 'packages/core/src/core/geminiChat.test.ts': 'a00d58358c3ea4120451645cf2bd62c581876a4757154085f8873938837f147d',
- 'packages/core/src/core/geminiChat.ts': '7c8cbc4bd4aa6b88cb1500e28f2c12daca5cd86a2c9d59cb0d00b653b4c16597',
+ 'packages/core/src/core/geminiChat.test.ts': '417a72c54062d140ec82392680c397ec5602535293d1ccd675d2ea0839bcfeca',
+ 'packages/core/src/core/geminiChat.ts': 'ad16bac94914e60ad012884f45a06ecf9147f9c7d307f1a2a9783f0bbb00d407',
  'packages/core/src/core/genai-compat.ts': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81',
  'packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts': '39cb515dfc3afb39edfe8dbabd3956351dd4b7b71e82f2fd77e4f6dc2b8ce695',
  'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'bb73338e3cb074e243c5baf4c09159a638134210e0eabf816a90df3656e8da28',
@@ -35790,7 +38555,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/tokenLimits.test.ts': '0f4775ebb4abb3b3a7a38a2369b3c44995b97b2f256b04c56609c1ef0c01823c',
  'packages/core/src/core/tokenLimits.ts': '9a3bda80d944c61cae61197c018a10e4606a47187686f0a34b5ccf5624f978cb',
  'packages/core/src/core/toolOutcome.ts': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9',
- 'packages/core/src/core/turn.ts': 'e1ce33664ccbc6f1212d8c21ca9e78eee1ad1bfa2462b92c5c454e5b6149453b',
+ 'packages/core/src/core/turn.ts': 'cf1b6edc14b558b27098af0f8aefbea0a6e07cb98d1968001e286ceac05b3270',
  'packages/core/src/models/constants.ts': '11cf01eda085973eedc575e4b8cd0c7bf469ced519e66bbac72129c47e8b2d38',
  'packages/core/src/models/content-generator-config.ts': '6f8c6321a1171425eec010e05e72e5e71b6ae1f7415075779a935f4b58565503',
  'packages/core/src/models/types.ts': '36aeae5b246fb84e527d3d767e0ac4dd90288e6969240c982ac7488848ae844b',
@@ -35800,14 +38565,15 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/services/chatCompressionService.ts': '75e64be7a5e28544fc9eba43b11346811a18fe66b0a186830707682533217523',
  'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
- 'packages/core/src/tools/agent/agent.test.ts': '00778f0d215607bdfe3f4e23e4762de1b6df9e3621f75a5f216fe406dc79a76a',
- 'packages/core/src/tools/agent/agent.ts': '915eddfa8c1c1d1de08406631bd0a360d888624fa3d901a1468c167c27f1099f',
+ 'packages/core/src/tools/agent/agent.test.ts': '794728ecbc5ef8d25593a32c5a9d104dba2cda8bbf0bef986295a95ce6c14c51',
+ 'packages/core/src/tools/agent/agent.ts': '37c8312f988ba485efe66d7bbf5352c23a2762d4786c1d9b254b081914f34e53',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.ts': '6f901a5cda41071d4237acdc3f3bfd9ba8cf92ef1db93d73ae1aabb038d53e46',
  'packages/core/src/tools/read-file.test.ts': '3d8e74099403f77cd72fe749e547f8c2bec627b8c846f46ae41f1f97d9d7525b',
  'packages/core/src/tools/read-file.ts': 'b2023049f4b50a1581ce502523c7c9aef8968c5eff05d363c158905d3d6aca8d',
+ 'packages/core/src/tools/tools.ts': 'baca3633ee6efdf3c334cedc62c0c6bb83db6aa124548e8e227311705a7b7c15',
  'packages/core/src/utils/fileUtils.test.ts': '9f191c0db8201be82d3242e35855052f911684ef53569776f53175170b5584e8',
  'packages/core/src/utils/fileUtils.ts': '1012d14b04390f147d46df13ebc8f578bcde0f9ebf60e5e93da3edeb7ac491e5',
  'packages/core/src/utils/image-view.test.ts': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d',

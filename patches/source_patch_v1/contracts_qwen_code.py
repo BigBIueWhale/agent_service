@@ -1050,6 +1050,204 @@ def _validate_stream_evidence_after(state: State) -> None:
     )
 
 
+def _validate_compaction_event_before(state: State) -> None:
+    label = "headless compaction event precondition"
+    chat = "packages/core/src/core/geminiChat.ts"
+    turn = "packages/core/src/core/turn.ts"
+    agent_core = "packages/core/src/agents/runtime/agent-core.ts"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
+    # Upstream reports only the successful half of a compaction, and only as
+    # an interactive signal; a refused or failed attempt yields nothing.
+    require_text(
+        state,
+        chat,
+        "Failed/skipped compaction attempts are silent.",
+        label=label,
+    )
+    # A subagent's compaction reaches nothing but the debug log.
+    require_text(state, agent_core, "[AGENT-COMPACT]", label=label)
+    forbid_text(state, turn, "ChatCompaction", label=label)
+    forbid_text(state, adapter, "'compaction'", label=label)
+    forbid_text(state, helpers, "'compaction'", label=label)
+
+
+def _validate_compaction_event_after(state: State) -> None:
+    label = "headless compaction event result"
+    chat = "packages/core/src/core/geminiChat.ts"
+    turn = "packages/core/src/core/turn.ts"
+    agent_core = "packages/core/src/agents/runtime/agent-core.ts"
+    agent_tool = "packages/core/src/tools/agent/agent.ts"
+    tools = "packages/core/src/tools/tools.ts"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
+    chat_test = "packages/core/src/core/geminiChat.test.ts"
+    agent_tool_test = "packages/core/src/tools/agent/agent.test.ts"
+    adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
+    helpers_test = "packages/cli/src/utils/nonInteractiveHelpers.test.ts"
+
+    # One projection builds the emitted record, so the main session and every
+    # subagent carry the same field set, and `succeeded` is derived from the
+    # status rather than assumed.
+    _require_all(
+        state,
+        turn,
+        (
+            "ChatCompaction = 'chat_compaction'",
+            "export interface CompactionRecord {",
+            "export function toCompactionRecord(",
+            "succeeded: info.compressionStatus === CompressionStatus.COMPRESSED,",
+            "ServerGeminiChatCompactionEvent",
+        ),
+        label=label,
+    )
+    # The bridge in turn.ts must forward the record itself.
+    require_text(
+        state,
+        turn,
+        "type: GeminiEventType.ChatCompaction,",
+        label=label,
+    )
+
+    # Emission is gated on "an attempt completed", not on success, so a
+    # refusal cannot be silent. NOOP means no attempt ran and stays silent.
+    chat_source = _require_all(
+        state,
+        chat,
+        (
+            "COMPACTION = 'compaction'",
+            "type: StreamEventType.COMPACTION;",
+        ),
+        label=label,
+    )
+    forbid_text(
+        state,
+        chat,
+        "Failed/skipped compaction attempts are silent.",
+        label=label,
+    )
+    _require(
+        chat_source.count(
+            "if (compressionInfo.compressionStatus !== CompressionStatus.NOOP) {"
+        )
+        == 1,
+        f"{label}: {chat} no longer reports failed pre-stream compactions",
+    )
+    _require(
+        chat_source.count(
+            "reactiveInfo.compressionStatus !== CompressionStatus.NOOP"
+        )
+        == 1,
+        f"{label}: {chat} no longer reports the reactive overflow rescue",
+    )
+    _require(
+        chat_source.count("type: StreamEventType.COMPACTION,") == 2,
+        f"{label}: {chat} must report both compaction sites",
+    )
+
+    # Subagent attribution: the agent event carries the record to the agent
+    # tool's display, and the headless bridge stamps the owning tool-call id.
+    require_text(
+        state,
+        agent_core,
+        "this.eventEmitter?.emit(AgentEventType.COMPACTION, {",
+        label=label,
+    )
+    require_text(state, tools, "compactions?: CompactionRecord[];", label=label)
+    require_text(
+        state,
+        agent_tool,
+        "this.currentCompactions.push(event.compaction);",
+        label=label,
+    )
+    require_text(
+        state,
+        helpers,
+        "adapter.emitSystemMessage('compaction', compaction, agentToolCallId);",
+        label=label,
+    )
+
+    # emitSystemMessage must be able to carry a parent id at all — without
+    # that, every subagent compaction would be silently reattributed to the
+    # parent thread — and it must default to null for the main session.
+    require_text(
+        state,
+        adapter,
+        "  emitSystemMessage(\n"
+        "    subtype: string,\n"
+        "    data?: unknown,\n"
+        "    parentToolUseId?: string | null,\n"
+        "  ): void;",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter,
+        "  emitSystemMessage(\n"
+        "    subtype: string,\n"
+        "    data?: unknown,\n"
+        "    parentToolUseId: string | null = null,\n"
+        "  ): void {",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter,
+        "      session_id: this.getSessionId(),\n"
+        "      parent_tool_use_id: parentToolUseId,\n"
+        "      data,",
+        label=label,
+    )
+    require_text(
+        state, adapter, "case GeminiEventType.ChatCompaction:", label=label
+    )
+    require_text(
+        state,
+        adapter,
+        "this.emitSystemMessage('compaction', event.value, null);",
+        label=label,
+    )
+
+    require_text(
+        state,
+        chat_test,
+        "yields a COMPACTION record and no COMPRESSED event when the attempt fails",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "[compaction-event] emits a main-session compaction record with before/after tokens",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "[compaction-event] records a refused attempt as a failure rather than staying silent",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "[compaction-event] attributes a system message to a subagent when given its tool-call id",
+        label=label,
+    )
+    require_text(
+        state,
+        helpers_test,
+        "[compaction-event] emits each new subagent compaction exactly once, "
+        "attributed to the agent tool call",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool_test,
+        "[compaction-event] accumulates every subagent compaction attempt on "
+        "the display, oldest first",
+        label=label,
+    )
+
+
 def _validate_nonpdf_pages_before(state: State) -> None:
     label = "non-PDF pages rejection precondition"
     tool = "packages/core/src/tools/read-file.ts"
@@ -1310,6 +1508,35 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_stream_evidence_before,
         validate_after=_validate_stream_evidence_after,
+    ),
+    SemanticConcern(
+        name="headless-compaction-event",
+        rationale=(
+            "Conversation compaction was invisible in the captured event "
+            "stream. Upstream surfaces it only as an interactive UI signal "
+            "and only when it succeeds, so the sole way to tell that a "
+            "session compacted was to infer it from a drop in "
+            "usage.input_tokens between consecutive billed assistant "
+            "events — a reconstruction from a side effect that cannot "
+            "distinguish an attempt that was refused or failed from one "
+            "that never ran, and that shows nothing at all for a subagent, "
+            "which compacts its own chat outside the parent's history. "
+            "Every completed attempt is now emitted as a first-class "
+            "system/compaction event carrying the rendered prompt token "
+            "count before and after, the outcome, and the same "
+            "parent_tool_use_id convention as every other message, so the "
+            "main session and each subagent are separable from the "
+            "standard bundle alone."
+        ),
+        removal_condition=(
+            "Remove only when upstream emits a compaction event in "
+            "stream-json for every attempt — successful, refused, and "
+            "failed alike — attributed to the main session or the owning "
+            "subagent tool call, and carrying the before/after rendered "
+            "prompt token counts."
+        ),
+        validate_before=_validate_compaction_event_before,
+        validate_after=_validate_compaction_event_after,
     ),
     SemanticConcern(
         name="session-time-anchor",
