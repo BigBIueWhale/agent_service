@@ -90,8 +90,11 @@ fallback configuration.
 
 ## Long-running work
 
-- Session turns and cumulative tool calls are unlimited. A single turn has a
-  1,000-call circuit breaker against degenerate output.
+- Cumulative tool calls are unlimited, and a single turn has a 1,000-call
+  circuit breaker against degenerate output. The session has a finite turn
+  budget, sized so that thorough work, including a second attempt after a wrong
+  hypothesis, fits inside it. Reaching it ends the session on the work completed
+  so far, which is an ordinary outcome and not an error.
 - There is no Qwen wall-clock cutoff. Use each shell call's explicit timeout
   carefully and keep long-running commands observable.
 - Context uses the real vLLM tokenizer. There is no character estimate, byte
