@@ -64,8 +64,10 @@ SUBMISSION_MAX_PROMPT_BYTES="$(jq -er '.limits.max_prompt_bytes | numbers' "${SC
   || { printf 'FATAL: stack lock .limits.max_prompt_bytes is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
 SUBMISSION_MAX_SESSION_TURNS_CEILING="$(jq -er '.limits.max_session_turns_ceiling | numbers' "${SCRIPT_DIR}/config/stack.lock.json")" \
   || { printf 'FATAL: stack lock .limits.max_session_turns_ceiling is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
+SUBMISSION_DEFAULT_MAX_SESSION_TURNS="$(jq -er '.limits.max_session_turns | numbers' "${SCRIPT_DIR}/config/stack.lock.json")" \
+  || { printf 'FATAL: stack lock .limits.max_session_turns is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
 readonly SUBMISSION_MAX_ARCHIVE_BYTES SUBMISSION_MAX_REQUEST_BYTES SUBMISSION_MAX_PROMPT_BYTES
-readonly SUBMISSION_MAX_SESSION_TURNS_CEILING
+readonly SUBMISSION_MAX_SESSION_TURNS_CEILING SUBMISSION_DEFAULT_MAX_SESSION_TURNS
 # Total transfer deadline scales with the archive cap so the one submission path
 # stays a single mode from an 8 KiB workspace to a 200 GiB one: a 100 MiB/s
 # sustained floor plus a fixed 300 s allowance for the server's spool-hash-

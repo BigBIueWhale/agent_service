@@ -691,6 +691,14 @@ Run one task and wait through a server-side notification, without client polling
 ./run.sh /home/user/Desktop/my_project /home/user/Desktop/task-prompt.txt
 ```
 
+Both optional creation-body fields are named options, and omitting one selects
+the deployment default rather than sending it explicitly:
+
+```bash
+./run.sh /home/user/Desktop/my_project /home/user/Desktop/task-prompt.txt \
+  --preserve-thinking=true --max-session-turns=700
+```
+
 Cancel a known session:
 
 ```bash
