@@ -678,6 +678,35 @@ cd /home/user/Desktop/agent_service
 ./build.sh
 ```
 
+`./build.sh` verifies; it never advances a pin. It rebuilds every image from the
+committed tree and refuses if any image ID is not the one the lock records, so
+any checkout can be proved to produce exactly the images it claims.
+
+Cutting a new release — changing anything the images are built from — is
+`./release.sh`, with the stack stopped:
+
+```bash
+./stop.sh
+./release.sh
+```
+
+It is one command because the components form a chain: the agent image ID is
+compiled into the typed broker policy, that policy is compiled into the broker
+and the service, and the stack lock is compiled into the service, so moving one
+moves the next. It builds, adopts whichever image ID moved, commits, and repeats
+until `./build.sh` agrees, then proves the release lock names a commit that
+already contains the tree it records. It terminates because the service image ID
+is recorded only in `config/release.lock.json`, which is excluded from the
+build-input manifest, so adopting it changes no build input.
+
+Nothing in that sequence is a manual step or a remembered exception. In
+particular the release lock advances its `implementation_commit` only when the
+build-input manifest actually changed, which is what keeps the service image's
+baked `SOURCE_COMMIT` describing its own tree; that falls out of the rule rather
+than being a special case anyone has to know. `scripts/test-release.sh` proves
+the pin locations, the refusal to rewrite an ambiguous value, and the
+termination condition, and it runs as part of every `./build.sh`.
+
 Start both the pinned backend (if absent) and the agent service:
 
 ```bash
