@@ -1,10 +1,15 @@
 //! Strict parser for pinned Qwen Code 0.21.12 stream-JSON.
 //!
-//! Exactly one terminal `result` object is required and it must be the final
-//! non-empty line. Every line must be a JSON object with a supported `type`,
-//! a non-empty UUID, and the same non-empty session ID. This deliberately
-//! rejects partial, duplicated, recovered, or post-terminal output rather
-//! than choosing a convenient-looking last result.
+//! Every event names its scope in `parent_tool_use_id`: null (or absent) is
+//! the main session, an `agent` tool-call id is that subagent. A subagent that
+//! stops without a report emits its own `result` under its tool-call id, so
+//! `result` alone does not mean the session ended.
+//!
+//! Exactly one terminal `result` object *for the main session* is required and
+//! it must be the final non-empty line. Every line must be a JSON object with
+//! a supported `type`, a non-empty UUID, and the same non-empty session ID.
+//! This deliberately rejects partial, duplicated, recovered, or post-terminal
+//! output rather than choosing a convenient-looking last result.
 
 use std::io::{BufRead, BufReader, Read};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
@@ -130,6 +135,8 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
             _ => {}
         }
 
+        require_parent_scope(object, physical_line)?;
+
         if is_completed_main_turn(object) {
             main_assistant_events = main_assistant_events.checked_add(1).ok_or_else(|| {
                 ServiceError::AgentOutputMissing(
@@ -137,7 +144,10 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
                 )
             })?;
         }
-        if event_type == "result" {
+        // A subagent's own terminal record is scoped to its agent tool call
+        // and is not the end of the session. Only the main session's result
+        // terminates the stream; anything after it is post-terminal output.
+        if event_type == "result" && is_main_session_event(object) {
             terminal_line = physical_line;
             result = Some(object.clone());
         }
@@ -152,7 +162,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
 
     let result = result.ok_or_else(|| {
         ServiceError::AgentOutputMissing(format!(
-            "events.jsonl has {event_count} event(s) but no terminal result"
+            "events.jsonl has {event_count} event(s) but no main-session terminal result"
         ))
     })?;
     let is_error = result
@@ -356,11 +366,36 @@ fn validate_init_event(
     Ok(())
 }
 
+/// Every emitted event names its scope: `null` and an absent field both mean
+/// the main session, any other value is the owning `agent` tool-call id. Only
+/// null-or-absent is read as the main session, so a value of any other shape
+/// can only ever exclude an event from the main thread, never admit one to it.
+fn is_main_session_event(object: &serde_json::Map<String, serde_json::Value>) -> bool {
+    object
+        .get("parent_tool_use_id")
+        .is_none_or(serde_json::Value::is_null)
+}
+
+/// Refuse an event whose scope is neither the main session nor an agent
+/// tool-call id. Which record terminates the stream is decided from this
+/// field, so a value of an unexpected shape is contradictory evidence and is
+/// rejected here rather than silently read as "some subagent".
+fn require_parent_scope(
+    object: &serde_json::Map<String, serde_json::Value>,
+    line: usize,
+) -> ServiceResult<()> {
+    match object.get("parent_tool_use_id") {
+        None | Some(serde_json::Value::Null) => Ok(()),
+        Some(serde_json::Value::String(id)) if !id.is_empty() => Ok(()),
+        Some(other) => Err(ServiceError::AgentOutputMissing(format!(
+            "events.jsonl line {line} has parent_tool_use_id {other}, which is neither null nor a non-empty agent tool-call id"
+        ))),
+    }
+}
+
 pub(crate) fn is_completed_main_turn(object: &serde_json::Map<String, serde_json::Value>) -> bool {
     object.get("type").and_then(serde_json::Value::as_str) == Some("assistant")
-        && object
-            .get("parent_tool_use_id")
-            .is_none_or(serde_json::Value::is_null)
+        && is_main_session_event(object)
         && object
             .get("message")
             .and_then(serde_json::Value::as_object)
@@ -422,6 +457,15 @@ mod tests {
 
     const INIT: &str = "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n";
 
+    // One completed main turn, one completed subagent turn under the agent
+    // tool call that owns it, that subagent's own terminal record, and the
+    // session's own terminal record. The subagent turn is deliberately billed
+    // so that only the scope rule can exclude it from the main-turn count.
+    const MAIN_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42}}}\n";
+    const SUBAGENT_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"message\":{\"usage\":{\"input_tokens\":11}}}\n";
+    const SUBAGENT_RESULT: &str = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"is_error\":true,\"duration_ms\":0,\"duration_api_ms\":0,\"num_turns\":3,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"MAX_TURNS\"}}\n";
+    const MAIN_RESULT: &str = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{},\"permission_denials\":[]}\n";
+
     fn parse_text(text: &str) -> ServiceResult<AgentResult> {
         let path = std::env::temp_dir().join(format!(
             "agent-service-result-{}.jsonl",
@@ -453,6 +497,53 @@ mod tests {
         let parsed = parse_text(&text).expect("strict valid stream parses");
         assert_eq!(parsed.response, "ok");
         assert_eq!(parsed.num_turns, 1);
+    }
+
+    #[test]
+    fn a_subagent_result_does_not_terminate_the_session() {
+        // A foreground subagent that exhausts its inherited turn budget emits
+        // its own result under its agent tool-call id, and the parent then
+        // recovers and finishes the session normally.
+        let text = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{MAIN_RESULT}");
+        let parsed = parse_text(&text)
+            .expect("a subagent's result belongs to the subagent, not to the session");
+        assert!(!parsed.is_error);
+        assert_eq!(parsed.response, "ok");
+        // The subagent's billed turn is the subagent's own, so the session's
+        // main-turn count and its terminal cross-check are unchanged by it.
+        assert_eq!(parsed.num_turns, 1);
+    }
+
+    #[test]
+    fn rejects_a_stream_that_ends_at_a_subagent_result() {
+        let text = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}");
+        let error = parse_text(&text).expect_err("the session itself never reported an outcome");
+        assert!(error
+            .to_string()
+            .contains("no main-session terminal result"));
+    }
+
+    #[test]
+    fn rejects_a_subagent_result_after_the_session_result() {
+        let text = format!("{INIT}{MAIN_TURN}{MAIN_RESULT}{SUBAGENT_RESULT}");
+        let error =
+            parse_text(&text).expect_err("nothing may follow the session's own terminal result");
+        assert!(error.to_string().contains("is followed by another event"));
+    }
+
+    #[test]
+    fn rejects_a_scope_that_is_neither_null_nor_a_tool_call_id() {
+        for malformed in ["0", "\"\"", "[]", "false", "{}"] {
+            let corrupt = MAIN_TURN.replace(
+                "\"parent_tool_use_id\":null",
+                &format!("\"parent_tool_use_id\":{malformed}"),
+            );
+            let text = format!("{INIT}{corrupt}{MAIN_RESULT}");
+            let error = parse_text(&text).expect_err(
+                "a scope of an unexpected shape is contradictory evidence, not a subagent",
+            );
+            assert!(error.to_string().contains("parent_tool_use_id"));
+        }
     }
 
     #[test]

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `937094cc35bbda420d954cac28335d819b828a885ee2ac64608478b6d7356f4b`
+- Review-diff SHA-256: `85b6bbf74ea0070af4a00fc23534fbb6786acd95c773f0030379ca3f4fe7892a`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `b015851ec45771dc8b21278587711bc0277e8a18c8cc3b5ff79da4d4b9269ef5`
+- Transformer-manifest SHA-256: `b70de96802a4a9a8bef5cff320c899b42fc78af7c968b3896f02dadc221eae48`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -97,7 +97,46 @@ provide as one fail-closed mode:
   exact meaning of "the history was replaced", so startup-context restoration
   and the interactive notice still fire only on real successes (seven
   `[compaction-event]` and compaction-ordering tests execute this in the
-  build).
+  build);
+- a subagent's own terminal record scoped to the subagent that produced it.
+  Every emitted event names its scope — `parent_tool_use_id` is `null` for
+  the main session and the owning `agent` tool-call id for a subagent — but
+  upstream's subagent error result carried no scope at all, even though
+  `emitSubagentErrorResult` already holds that id and uses it one line
+  earlier to finalize the subagent's pending assistant message. A session run
+  with `--max-session-turns=3`, whose subagent was told to loop forever,
+  therefore recorded the subagent's `MAX_TURNS` result as the *session's*
+  terminal result; the parent then recovered, answered, and finished, so four
+  more events followed a record the service had to read as the end of the
+  run. The service refused the entire capture as `agent_output_missing`, and
+  it was right to: the alternative is choosing a convenient-looking last
+  result, which is exactly what that check exists to prevent. The cost was
+  that every session in which a subagent exhausted its budget was discarded
+  whole, even though the parent had completed successfully. The record now
+  carries its owning tool-call id, both branches of the session's own result
+  stamp `parent_tool_use_id: null` instead of omitting the field, and the
+  service treats only a null-scoped result as terminal — the same rule its
+  main-turn count already used. Suppressing the event instead was rejected:
+  it would restore precisely the subagent invisibility the compaction event
+  above was added to remove, leaving a refused attempt indistinguishable from
+  one that never ran;
+- how far that subagent got. The same capture reported `num_turns: 0` for a
+  subagent that had completed three turns, and the text handed to the parent
+  was `[subagent exhausted its turn budget and produced no report; its
+  assignment is unfinished]` with no count in it. Nothing had lost the count:
+  `AgentHeadless` held 3 across the whole `MAX_TURNS` exit, which returns
+  normally rather than throwing. `num_turns` was an upstream literal `0` at
+  the emit site, and the model-visible text is built by a *second*
+  `toModelVisibleSubagentResult` call in the agent tool's foreground body —
+  the call inside `runSubagentWithHooks` that already received the count only
+  feeds the display, never the parent. Both report it now. The count reaches
+  the emitted record over the same `AgentResultDisplay` channel the
+  subagent's tool calls and compactions already ride, published in the update
+  that carries the terminal status, so `num_turns` on a subagent result means
+  what it means on the session's own: the model round-trips that scope
+  completed, which is the number of assistant events the stream carries under
+  that tool-call id (seven `[subagent-scope]` tests execute both halves in
+  the build).
 
 Verification performed in the pinned Node image:
 

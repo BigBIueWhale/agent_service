@@ -503,10 +503,29 @@ index 72409fd..aced76c 100644
          : new ExtensionFileWatcher(config, undefined, extensionRefreshState);
      extensionFileWatcher?.startWatching();
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-index e687181..2a07dcb 100644
+index e687181..5d55add 100644
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-@@ -898,6 +898,63 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -159,8 +159,16 @@ class TestJsonOutputAdapter extends BaseJsonOutputAdapter {
+     return this.buildResultMessage(options, this.lastAssistantMessage);
+   }
+ 
+-  exposeBuildSubagentErrorResult(errorMessage: string, numTurns: number) {
+-    return this.buildSubagentErrorResult(errorMessage, numTurns);
++  exposeBuildSubagentErrorResult(
++    errorMessage: string,
++    numTurns: number,
++    parentToolUseId: string,
++  ) {
++    return this.buildSubagentErrorResult(
++      errorMessage,
++      numTurns,
++      parentToolUseId,
++    );
+   }
+ }
+ 
+@@ -898,6 +906,63 @@ describe('BaseJsonOutputAdapter', () => {
          text: 'First',
        });
      });
@@ -570,7 +589,7 @@ index e687181..2a07dcb 100644
    });
  
    describe('finalizeAssistantMessage', () => {
-@@ -1247,6 +1304,26 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1247,6 +1312,26 @@ describe('BaseJsonOutputAdapter', () => {
          expect(message.subtype).toBe('test_subtype');
        }
      });
@@ -597,7 +616,91 @@ index e687181..2a07dcb 100644
    });
  
    describe('emitToolProgress', () => {
-@@ -1767,6 +1844,38 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1624,6 +1709,7 @@ describe('BaseJsonOutputAdapter', () => {
+       const errorResult = adapter.exposeBuildSubagentErrorResult(
+         'Error message',
+         3,
++        'parent-tool-1',
+       );
+ 
+       expect(errorResult.type).toBe('result');
+@@ -1635,6 +1721,75 @@ describe('BaseJsonOutputAdapter', () => {
+         input_tokens: 0,
+         output_tokens: 0,
+       });
++      expect(errorResult.parent_tool_use_id).toBe('parent-tool-1');
++    });
++  });
++
++  describe('result attribution', () => {
++    it('[subagent-scope] scopes a subagent error result to the agent tool call that owns it', () => {
++      const parentToolUseId = 'chatcmpl-tool-9d45d85b34aefc38';
++      adapter.startSubagentAssistantMessage(parentToolUseId);
++
++      adapter.emitSubagentErrorResult('MAX_TURNS', 3, parentToolUseId);
++
++      const results = adapter.emittedMessages.filter(
++        (msg) => msg.type === 'result',
++      );
++      expect(results).toHaveLength(1);
++      // An unscoped record is read as the session's own terminal result: the
++      // subagent's failure is attributed to the parent, and every event the
++      // parent goes on to emit looks like output after the end of the run.
++      expect(results[0]).toMatchObject({
++        type: 'result',
++        subtype: 'error_during_execution',
++        is_error: true,
++        parent_tool_use_id: parentToolUseId,
++        num_turns: 3,
++        error: { message: 'MAX_TURNS' },
++      });
++    });
++
++    it('[subagent-scope] leaves the session terminal result unscoped', () => {
++      adapter.emitResult({
++        isError: false,
++        durationMs: 12,
++        apiDurationMs: 8,
++        numTurns: 2,
++        summary: 'done',
++      });
++
++      const results = adapter.emittedMessages.filter(
++        (msg) => msg.type === 'result',
++      );
++      expect(results).toHaveLength(1);
++      expect(results[0]).toMatchObject({
++        type: 'result',
++        subtype: 'success',
++        is_error: false,
++        parent_tool_use_id: null,
++        num_turns: 2,
++      });
++    });
++
++    it('[subagent-scope] leaves a session error result unscoped too', () => {
++      adapter.emitResult({
++        isError: true,
++        errorMessage: 'transport closed',
++        durationMs: 12,
++        apiDurationMs: 8,
++        numTurns: 2,
++      });
++
++      const results = adapter.emittedMessages.filter(
++        (msg) => msg.type === 'result',
++      );
++      expect(results).toHaveLength(1);
++      expect(results[0]).toMatchObject({
++        type: 'result',
++        subtype: 'error_during_execution',
++        is_error: true,
++        parent_tool_use_id: null,
++      });
+     });
+   });
+ 
+@@ -1767,6 +1922,38 @@ describe('BaseJsonOutputAdapter', () => {
          expect(result).toBe('Tool result');
        });
  
@@ -636,7 +739,7 @@ index e687181..2a07dcb 100644
        it('includes the vision bridge disclosure with tool content', () => {
          const response = {
            callId: 'pdf-success',
-@@ -1813,7 +1922,7 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1813,7 +2000,7 @@ describe('BaseJsonOutputAdapter', () => {
  
          expect(toolResultContent(response)).toBe(
            'Converted 1 image via qwen3-vl-plus (dashscope.aliyuncs.com).\n' +
@@ -646,7 +749,7 @@ index e687181..2a07dcb 100644
        });
  
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
-index 0b15577..cb5e926 100644
+index 0b15577..0931963 100644
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 @@ -94,7 +94,11 @@ export interface MessageEmitter {
@@ -679,7 +782,20 @@ index 0b15577..cb5e926 100644
        default:
          break;
      }
-@@ -1080,14 +1094,22 @@ export abstract class BaseJsonOutputAdapter {
+@@ -712,7 +726,11 @@ export abstract class BaseJsonOutputAdapter {
+       this.finalizeSubagentAssistantMessage(parentToolUseId);
+     }
+ 
+-    const errorResult = this.buildSubagentErrorResult(errorMessage, numTurns);
++    const errorResult = this.buildSubagentErrorResult(
++      errorMessage,
++      numTurns,
++      parentToolUseId,
++    );
+     this.emitMessageImpl(errorResult);
+   }
+ 
+@@ -1080,14 +1098,22 @@ export abstract class BaseJsonOutputAdapter {
     * Emits a system message.
     * @param subtype - System message subtype
     * @param data - Optional data payload
@@ -704,7 +820,49 @@ index 0b15577..cb5e926 100644
        data,
      } as const;
      this.emitMessageImpl(systemMessage);
-@@ -1439,17 +1461,23 @@ export function toolResultContent(
+@@ -1202,6 +1228,7 @@ export abstract class BaseJsonOutputAdapter {
+           'error_during_execution',
+         uuid: baseUuid,
+         session_id: baseSessionId,
++        parent_tool_use_id: null,
+         is_error: true,
+         duration_ms: options.durationMs,
+         duration_api_ms: options.apiDurationMs,
+@@ -1238,6 +1265,7 @@ export abstract class BaseJsonOutputAdapter {
+           (options.subtype as CLIResultMessageSuccess['subtype']) ?? 'success',
+         uuid: baseUuid,
+         session_id: baseSessionId,
++        parent_tool_use_id: null,
+         is_error: false,
+         duration_ms: options.durationMs,
+         duration_api_ms: options.apiDurationMs,
+@@ -1265,11 +1293,17 @@ export abstract class BaseJsonOutputAdapter {
+    * separately and would be included in the main agent's result message.
+    * @param errorMessage - Error message
+    * @param numTurns - Number of turns
++   * @param parentToolUseId - Owning agent tool-call id. Required, because a
++   *   subagent result that does not name its subagent is read as the session's
++   *   own terminal result: the failure is attributed to the parent, and every
++   *   event the parent goes on to emit looks like output after the end of the
++   *   session.
+    * @returns CLIResultMessageError
+    */
+   protected buildSubagentErrorResult(
+     errorMessage: string,
+     numTurns: number,
++    parentToolUseId: string,
+   ): CLIResultMessageError {
+     const usage: ExtendedUsage = {
+       input_tokens: 0,
+@@ -1281,6 +1315,7 @@ export abstract class BaseJsonOutputAdapter {
+       subtype: 'error_during_execution',
+       uuid: randomUUID(),
+       session_id: this.getSessionId(),
++      parent_tool_use_id: parentToolUseId,
+       is_error: true,
+       duration_ms: 0,
+       duration_api_ms: 0,
+@@ -1439,17 +1474,23 @@ export function toolResultContent(
    if (response.error) {
      return response.error.message;
    }
@@ -733,6 +891,33 @@ index 0b15577..cb5e926 100644
    return undefined;
  }
  
+diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInteractive/types.ts
+index 53801c8..5a9d2a2 100644
+--- a/packages/cli/src/nonInteractive/types.ts
++++ b/packages/cli/src/nonInteractive/types.ts
+@@ -163,6 +163,13 @@ export interface CLIResultMessageSuccess {
+   subtype: 'success';
+   uuid: string;
+   session_id: string;
++  /**
++   * Owning agent tool-call id when the result belongs to a subagent, null for
++   * the session's own terminal result. Same convention as every assistant,
++   * user, and system message, so one consumer rule separates the parent
++   * thread from each subagent.
++   */
++  parent_tool_use_id: string | null;
+   is_error: false;
+   duration_ms: number;
+   duration_api_ms: number;
+@@ -179,6 +186,8 @@ export interface CLIResultMessageError {
+   subtype: 'error_max_turns' | 'error_during_execution';
+   uuid: string;
+   session_id: string;
++  /** See {@link CLIResultMessageSuccess.parent_tool_use_id}. */
++  parent_tool_use_id: string | null;
+   is_error: true;
+   duration_ms: number;
+   duration_api_ms: number;
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
 index 6dfe8f8..e7f730a 100644
 --- a/packages/cli/src/nonInteractiveCli.ts
@@ -834,7 +1019,7 @@ index 27f4a60..e10b89a 100644
              case ServerGeminiEventType.ToolCallResponse:
                flushBufferedStreamEvents();
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
-index d0bb989..16ca82a 100644
+index d0bb989..90ac151 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 @@ -24,6 +24,7 @@ import type {
@@ -866,7 +1051,7 @@ index d0bb989..16ca82a 100644
  // Mock dependencies
  vi.mock('../nonInteractiveCliCommands.js', () => ({
    getAvailableCommands: vi
-@@ -426,9 +441,39 @@ describe('buildSystemMessage', () => {
+@@ -426,7 +441,37 @@ describe('buildSystemMessage', () => {
        getModel: vi.fn().mockReturnValue('test-model'),
        getCliVersion: vi.fn().mockReturnValue('1.0.0'),
        getDebugMode: vi.fn().mockReturnValue(false),
@@ -874,9 +1059,9 @@ index d0bb989..16ca82a 100644
 +      getSubagentManager: vi.fn().mockReturnValue({
 +        listSubagents: vi.fn().mockResolvedValue([]),
 +      }),
-     } as unknown as Config;
-   });
- 
++    } as unknown as Config;
++  });
++
 +  it('advertises only callable agents in foreground-only mode', async () => {
 +    const config = {
 +      ...mockConfig,
@@ -891,7 +1076,7 @@ index d0bb989..16ca82a 100644
 +            { name: 'custom-agent' },
 +          ]),
 +      }),
-+    } as unknown as Config;
+     } as unknown as Config;
 +
 +    const result = await buildSystemMessage(
 +      config,
@@ -901,11 +1086,9 @@ index d0bb989..16ca82a 100644
 +
 +    expect(result.agents).toEqual(['general-purpose', 'Explore']);
 +    expect(result.slash_commands).toEqual([]);
-+  });
-+
+   });
+ 
    it('should build system message with all fields', async () => {
-     const result = await buildSystemMessage(
-       mockConfig,
 @@ -677,6 +722,7 @@ describe('createAgentToolProgressHandler', () => {
        emitSubagentErrorResult: vi.fn(),
        emitToolResult: vi.fn(),
@@ -914,7 +1097,54 @@ index d0bb989..16ca82a 100644
      } as unknown as JsonOutputAdapterInterface;
    });
  
-@@ -1079,6 +1125,62 @@ describe('createAgentToolProgressHandler', () => {
+@@ -958,6 +1004,46 @@ describe('createAgentToolProgressHandler', () => {
+     );
+   });
+ 
++  it('[subagent-scope] reports the turn count the stopped subagent reached', () => {
++    const { handler } = createAgentToolProgressHandler(
++      mockConfig,
++      'parent-tool-id',
++      mockAdapter,
++    );
++
++    const runningDisplay: AgentResultDisplay = {
++      type: 'task_execution',
++      subagentName: 'general-purpose',
++      taskDescription: 'Test task',
++      taskPrompt: 'Test prompt',
++      status: 'running',
++      toolCalls: [],
++    };
++
++    const exhaustedDisplay: AgentResultDisplay = {
++      type: 'task_execution',
++      subagentName: 'general-purpose',
++      taskDescription: 'Test task',
++      taskPrompt: 'Test prompt',
++      status: 'failed',
++      terminateReason: 'MAX_TURNS',
++      turnsUsed: 3,
++      toolCalls: [],
++    };
++
++    handler('task-call-id', runningDisplay);
++    handler('task-call-id', exhaustedDisplay);
++
++    // num_turns on a subagent result means what it means on the session's
++    // terminal result: the round-trips that scope completed. A subagent that
++    // spent its whole budget must not be recorded as having taken none.
++    expect(mockAdapter.emitSubagentErrorResult).toHaveBeenCalledWith(
++      'MAX_TURNS',
++      3,
++      'parent-tool-id',
++    );
++  });
++
+   it('should emit error result for cancelled task status', () => {
+     const { handler } = createAgentToolProgressHandler(
+       mockConfig,
+@@ -1079,6 +1165,62 @@ describe('createAgentToolProgressHandler', () => {
      expect(mockAdapter.emitToolResult).not.toHaveBeenCalled();
    });
  
@@ -978,7 +1208,7 @@ index d0bb989..16ca82a 100644
      const limitedAdapter = {
        emitToolResult: vi.fn(),
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/utils/nonInteractiveHelpers.ts
-index b17b1a7..f874a3b 100644
+index b17b1a7..e67ea7a 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.ts
 @@ -64,6 +64,15 @@ export function normalizePartList(parts: PartListUnion | null): Part[] {
@@ -1056,6 +1286,27 @@ index b17b1a7..f874a3b 100644
        // Handle task-level errors (status: 'failed', 'cancelled')
        if (
          taskDisplay.status === 'failed' ||
+@@ -550,8 +586,18 @@ export function createAgentToolProgressHandler(
+             (taskDisplay.status === 'cancelled'
+               ? 'Task was cancelled'
+               : 'Task execution failed');
+-          // Use subagent adapter's emitSubagentErrorResult method
+-          adapter.emitSubagentErrorResult(errorMessage, 0, agentToolCallId);
++          // Use subagent adapter's emitSubagentErrorResult method.
++          // `num_turns` means the same thing on a subagent result as on the
++          // session's terminal result: the model round-trips that scope
++          // completed, which is the number of assistant events the stream
++          // carries under this tool-call id. Upstream hardcoded 0, so a
++          // subagent that used its entire budget was recorded as having taken
++          // no turns at all.
++          adapter.emitSubagentErrorResult(
++            errorMessage,
++            taskDisplay.turnsUsed ?? 0,
++            agentToolCallId,
++          );
+         }
+       }
+ 
 diff --git a/packages/core/src/agents/runtime/agent-context.test.ts b/packages/core/src/agents/runtime/agent-context.test.ts
 index 71e11a4..5212b23 100644
 --- a/packages/core/src/agents/runtime/agent-context.test.ts
@@ -11531,7 +11782,7 @@ index 8be0153..00aa6af 100644
      },
      {
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..ef5168b 100644
+index 6d3fb50..c871f01 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
 @@ -32,6 +32,7 @@ import {
@@ -11610,7 +11861,7 @@ index 6d3fb50..ef5168b 100644
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -2224,7 +2272,12 @@ describe('AgentTool', () => {
+@@ -2224,7 +2272,98 @@ describe('AgentTool', () => {
        ).createInvocation(params);
        const result = await invocation.execute();
  
@@ -11621,10 +11872,96 @@ index 6d3fb50..ef5168b 100644
 +      const text = partToString(result.llmContent);
 +      expect(text).toContain(raw);
 +      expect(text).toContain('its assignment is unfinished');
++    });
++
++    it('[subagent-scope] tells the parent how far an exhausted subagent got', async () => {
++      vi.mocked(mockAgent.getFinalText).mockReturnValue('');
++      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(
++        AgentTerminateMode.MAX_TURNS,
++      );
++      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(3);
++
++      const params: AgentParams = {
++        description: 'Search files',
++        prompt: 'Find all TypeScript files',
++        subagent_type: 'file-search',
++        run_in_background: false,
++      };
++
++      const invocation = (
++        agentTool as AgentToolWithProtectedMethods
++      ).createInvocation(params);
++      const result = await invocation.execute();
++
++      // This is the text the parent model reads. The identical construction
++      // inside runSubagentWithHooks only feeds the display, so carrying the
++      // count there is not enough: the budget is the one bound on a session
++      // here, and "how far did it get" is what decides whether to resume,
++      // re-scope, or take the assignment back.
++      expect(partToString(result.llmContent)).toContain(
++        'exhausted its turn budget after 3 turns',
++      );
++    });
++
++    it('[subagent-scope] renders a single completed turn in the singular', async () => {
++      vi.mocked(mockAgent.getFinalText).mockReturnValue('partial findings');
++      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(
++        AgentTerminateMode.MAX_TURNS,
++      );
++      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(1);
++
++      const params: AgentParams = {
++        description: 'Search files',
++        prompt: 'Find all TypeScript files',
++        subagent_type: 'file-search',
++        run_in_background: false,
++      };
++
++      const invocation = (
++        agentTool as AgentToolWithProtectedMethods
++      ).createInvocation(params);
++      const result = await invocation.execute();
++
++      const text = partToString(result.llmContent);
++      expect(text).toContain('exhausted its turn budget after 1 turn;');
++      expect(text).not.toContain('1 turns');
++      expect(text).toContain('partial findings');
++    });
++
++    it('[subagent-scope] publishes the turn count with the terminal display status', async () => {
++      vi.mocked(mockAgent.getFinalText).mockReturnValue('');
++      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(
++        AgentTerminateMode.MAX_TURNS,
++      );
++      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(3);
++
++      const params: AgentParams = {
++        description: 'Search files',
++        prompt: 'Find all TypeScript files',
++        subagent_type: 'file-search',
++        run_in_background: false,
++      };
++
++      const snapshots: AgentResultDisplay[] = [];
++      const invocation = (
++        agentTool as AgentToolWithProtectedMethods
++      ).createInvocation(params);
++      await invocation.execute(undefined, (output) => {
++        snapshots.push(output as AgentResultDisplay);
++      });
++
++      // The headless stream builds the subagent's error result from this
++      // snapshot, so the turn count has to arrive in the same update as the
++      // terminal status rather than in a later one.
++      const terminal = snapshots.filter(
++        (snapshot) => snapshot.status === 'failed',
++      );
++      expect(terminal.length).toBeGreaterThan(0);
++      expect(terminal.at(-1)?.turnsUsed).toBe(3);
      });
  
      it('explains successful subagents with no model-visible output', async () => {
-@@ -3407,6 +3460,7 @@ describe('AgentTool', () => {
+@@ -3407,6 +3546,7 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -11632,7 +11969,7 @@ index 6d3fb50..ef5168b 100644
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -4670,6 +4724,7 @@ describe('AgentTool', () => {
+@@ -4670,6 +4810,7 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -11640,7 +11977,7 @@ index 6d3fb50..ef5168b 100644
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -4866,6 +4921,7 @@ describe('AgentTool', () => {
+@@ -4866,6 +5007,7 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -11648,7 +11985,7 @@ index 6d3fb50..ef5168b 100644
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -5217,6 +5273,7 @@ describe('AgentTool', () => {
+@@ -5217,6 +5359,7 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -11656,7 +11993,7 @@ index 6d3fb50..ef5168b 100644
        } as unknown as AgentHeadless;
  
        vi.mocked(mockAgent.execute).mockImplementation(async () => {
-@@ -5286,6 +5343,72 @@ describe('AgentTool', () => {
+@@ -5286,6 +5429,72 @@ describe('AgentTool', () => {
        expect(toolCall?.responseParts).toBe(responseParts);
      });
  
@@ -11729,7 +12066,7 @@ index 6d3fb50..ef5168b 100644
      it('omits subagent protocol payloads from interactive display state', async () => {
        vi.mocked(config.isInteractive).mockReturnValue(true);
        const responseParts: Part[] = [{ text: 'raw protocol result' }];
-@@ -5593,6 +5716,7 @@ describe('AgentTool', () => {
+@@ -5593,6 +5802,7 @@ describe('AgentTool', () => {
          executeExternalInputs: vi.fn().mockResolvedValue(undefined),
          getFinalText: vi.fn().mockReturnValue('Monitor done'),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -11738,7 +12075,7 @@ index 6d3fb50..ef5168b 100644
          // Background spawn subscribes to the core's event emitter to
          // populate the entry's recentActivities buffer. Return a stub
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..0bfecf7 100644
+index 4bcea69..2dd0bfc 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -88,6 +88,7 @@ import {
@@ -11902,7 +12239,33 @@ index 4bcea69..0bfecf7 100644
          stopHookWarning,
        );
        const success = terminateMode === AgentTerminateMode.GOAL;
-@@ -2567,6 +2664,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2199,12 +2296,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+         }),
+       );
+ 
++      // The turn count rides the same update as the terminal status, so a
++      // consumer that reacts to the status change reads how far the subagent
++      // actually got from the same snapshot.
++      const turnsUsed = subagent.getTurnsUsed();
+       if (signal?.aborted) {
+         this.updateDisplay(
+           {
+             status: 'cancelled',
+             terminateReason: 'Agent was cancelled by user',
+             executionSummary,
++            turnsUsed,
+           },
+           updateOutput,
+         );
+@@ -2215,6 +2317,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+             terminateReason: terminateMode,
+             result: finalText,
+             executionSummary,
++            turnsUsed,
+           },
+           updateOutput,
+         );
+@@ -2567,6 +2670,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      // background-agent concurrency caps (agents.maxParallelAgentsByModel).
      let subagentModelId: string | undefined;
      let subagentRuntimeAuthOverrides: AuthOverrides | undefined;
@@ -11910,7 +12273,7 @@ index 4bcea69..0bfecf7 100644
      const releaseBackgroundSlotReservation = () => {
        if (backgroundSlotReservation && !backgroundSlotReservationConsumed) {
          this.config
-@@ -2696,8 +2794,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2696,8 +2800,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // Implicit background requests downgrade to an awaited foreground run
        // instead of orphaning the child's results. The runtime spawn guard
        // above rejects an explicit run_in_background: true request.
@@ -11922,7 +12285,7 @@ index 4bcea69..0bfecf7 100644
            ? true
            : (this.params.run_in_background ??
              (subagentConfig.background === true ||
-@@ -3077,6 +3176,19 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3077,6 +3182,19 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            subagentRuntimeConfig as Config,
            {
              eventEmitter: backgroundEventEmitter ?? this.eventEmitter,
@@ -11942,7 +12305,7 @@ index 4bcea69..0bfecf7 100644
              ...(shouldRunInBackground && subagentModelId
                ? { modelConfigOverrides: { model: subagentModelId } }
                : {}),
-@@ -3944,6 +4056,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3944,6 +4062,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
  
        const fgHookOpts = { ...hookOpts, signal: fgAbortController.signal };
@@ -11976,7 +12339,7 @@ index 4bcea69..0bfecf7 100644
        // Wrap in qwen-code.subagent span (#3731 Phase 3). Foreground
        // invocations are child spans of the AGENT tool's `qwen-code.tool`
        // span, inheriting its traceId so the trace tree stays unified.
-@@ -3952,11 +4091,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3952,11 +4097,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            this.buildSubagentSpanSpec(hookOpts, subagentConfig, 'foreground'),
            fgAbortController.signal,
            (recordSpanOutcome) =>
@@ -11997,7 +12360,7 @@ index 4bcea69..0bfecf7 100644
              ),
          );
  
-@@ -4112,12 +4255,45 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4112,12 +4261,52 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            depth: launchDepth,
          });
  
@@ -12037,18 +12400,25 @@ index 4bcea69..0bfecf7 100644
 -          toModelVisibleSubagentResult(subagent.getFinalText(), terminateMode),
 -          stopHookWarning,
 -        );
++        // This is the text the parent model actually reads; the identical
++        // construction inside runSubagentWithHooks only feeds the display.
++        // Both need the turn count -- omitting it here told the parent that a
++        // subagent had stopped without saying how far it had got, which is
++        // the one fact that decides whether to resume, re-scope, or take the
++        // assignment back.
 +        const finalText =
 +          appendStopHookBlockingCapWarning(
 +            toModelVisibleSubagentResult(
 +              subagent.getFinalText(),
 +              terminateMode,
++              subagent.getTurnsUsed(),
 +            ),
 +            stopHookWarning,
 +          ) + effectSuffix;
          const wtSuffix = formatWorktreeSuffix(await cleanupWorktreeIsolation());
          if (terminateMode === AgentTerminateMode.ERROR) {
            return {
-@@ -4266,8 +4442,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4266,8 +4455,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          terminateReason: `Failed to run subagent: ${errorMessage}`,
        };
  
@@ -12789,7 +13159,7 @@ index ab8f8f0..e3f2881 100644
        const parsed = parsePDFPageRange(params.pages);
        if (!parsed) {
 diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
-index e98c50a..327d587 100644
+index e98c50a..a337bf9 100644
 --- a/packages/core/src/tools/tools.ts
 +++ b/packages/core/src/tools/tools.ts
 @@ -11,6 +11,7 @@ import { SchemaValidator } from '../utils/schemaValidator.js';
@@ -12800,7 +13170,22 @@ index e98c50a..327d587 100644
  import type { VisionBridgeNoticeDisplay } from '../services/visionBridge/vision-bridge-service.js';
  
  /**
-@@ -650,6 +651,14 @@ export interface AgentResultDisplay {
+@@ -643,6 +644,14 @@ export interface AgentResultDisplay {
+   terminateReason?: string;
+   result?: string;
+   executionSummary?: AgentStatsSummary;
++  /**
++   * Model round-trips this subagent completed, published together with its
++   * terminal status. A stopped subagent's progress is otherwise unavailable
++   * to a consumer of the display: `executionSummary` reports the statistics
++   * collector's rounds, which is a different count and is absent whenever the
++   * run ended by throwing.
++   */
++  turnsUsed?: number;
+   /** Real-time output-token count during execution, accumulated across subagent rounds. */
+   tokenCount?: number;
+ 
+@@ -650,6 +659,14 @@ export interface AgentResultDisplay {
    // this contains the confirmation details for inline UI rendering.
    pendingConfirmation?: ToolCallConfirmationDetails;
  

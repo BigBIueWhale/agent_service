@@ -1248,6 +1248,233 @@ def _validate_compaction_event_after(state: State) -> None:
     )
 
 
+def _validate_subagent_result_scope_before(state: State) -> None:
+    label = "subagent result scope precondition"
+    types = "packages/cli/src/nonInteractive/types.ts"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
+    agent_tool = "packages/core/src/tools/agent/agent.ts"
+    tools = "packages/core/src/tools/tools.ts"
+    # A result message carries no scope at all, so a subagent's own terminal
+    # record is indistinguishable from the session's.
+    require_text(
+        state,
+        types,
+        "  uuid: string;\n  session_id: string;\n  is_error: false;",
+        label=label,
+    )
+    require_text(
+        state,
+        types,
+        "  uuid: string;\n  session_id: string;\n  is_error: true;",
+        label=label,
+    )
+    # The owning id is in scope at the emit site and dropped one line later.
+    require_text(
+        state,
+        adapter,
+        "const errorResult = this.buildSubagentErrorResult(errorMessage, numTurns);",
+        label=label,
+    )
+    # The subagent's turn count is hardcoded to zero on the emitted record...
+    require_text(
+        state,
+        helpers,
+        "adapter.emitSubagentErrorResult(errorMessage, 0, agentToolCallId);",
+        label=label,
+    )
+    # ...and the display it would have to come from does not carry one.
+    forbid_text(state, tools, "turnsUsed?: number;", label=label)
+    # The model-visible construction on the foreground path takes no count.
+    require_text(
+        state,
+        agent_tool,
+        "toModelVisibleSubagentResult(subagent.getFinalText(), terminateMode),",
+        label=label,
+    )
+
+
+def _validate_subagent_result_scope_after(state: State) -> None:
+    label = "subagent result scope result"
+    types = "packages/cli/src/nonInteractive/types.ts"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
+    helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
+    helpers_test = "packages/cli/src/utils/nonInteractiveHelpers.test.ts"
+    agent_tool = "packages/core/src/tools/agent/agent.ts"
+    agent_tool_test = "packages/core/src/tools/agent/agent.test.ts"
+    tools = "packages/core/src/tools/tools.ts"
+
+    # Both result shapes declare the scope, so no result can be emitted
+    # without saying which thread it ends.
+    require_text(
+        state,
+        types,
+        "  parent_tool_use_id: string | null;\n  is_error: false;",
+        label=label,
+    )
+    require_text(
+        state,
+        types,
+        "  parent_tool_use_id: string | null;\n  is_error: true;",
+        label=label,
+    )
+
+    # The owning id is required by the builder's signature, threaded from the
+    # emit site, and stamped on the record.
+    require_text(
+        state,
+        adapter,
+        "  protected buildSubagentErrorResult(\n"
+        "    errorMessage: string,\n"
+        "    numTurns: number,\n"
+        "    parentToolUseId: string,\n"
+        "  ): CLIResultMessageError {",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter,
+        "    const errorResult = this.buildSubagentErrorResult(\n"
+        "      errorMessage,\n"
+        "      numTurns,\n"
+        "      parentToolUseId,\n"
+        "    );",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter,
+        "      parent_tool_use_id: parentToolUseId,\n      is_error: true,",
+        label=label,
+    )
+    forbid_text(
+        state,
+        adapter,
+        "this.buildSubagentErrorResult(errorMessage, numTurns)",
+        label=label,
+    )
+    # Both branches of the session's own result stamp null, so "main session"
+    # is stated rather than inferred from an absent field.
+    require_text(
+        state,
+        adapter,
+        "        parent_tool_use_id: null,\n",
+        count=2,
+        label=label,
+    )
+
+    # The subagent's turn count reaches the emitted record through the same
+    # display channel every other subagent event already uses, published in
+    # the update that carries the terminal status.
+    require_text(state, tools, "  turnsUsed?: number;", label=label)
+    require_text(
+        state,
+        agent_tool,
+        "      const turnsUsed = subagent.getTurnsUsed();",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool,
+        "            executionSummary,\n            turnsUsed,\n          },",
+        count=2,
+        label=label,
+    )
+    require_text(
+        state,
+        helpers,
+        "          adapter.emitSubagentErrorResult(\n"
+        "            errorMessage,\n"
+        "            taskDisplay.turnsUsed ?? 0,\n"
+        "            agentToolCallId,\n"
+        "          );",
+        label=label,
+    )
+    forbid_text(
+        state,
+        helpers,
+        "adapter.emitSubagentErrorResult(errorMessage, 0, agentToolCallId);",
+        label=label,
+    )
+
+    # Both reachable model-visible constructions carry the turn count. The one
+    # inside runSubagentWithHooks only feeds the display; the foreground body
+    # builds the text the parent model actually reads, and it is the one that
+    # was losing the count.
+    require_text(
+        state,
+        agent_tool,
+        "        toModelVisibleSubagentResult(\n"
+        "          subagentRawText,\n"
+        "          terminateMode,\n"
+        "          subagent.getTurnsUsed(),\n"
+        "        ),",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool,
+        "            toModelVisibleSubagentResult(\n"
+        "              subagent.getFinalText(),\n"
+        "              terminateMode,\n"
+        "              subagent.getTurnsUsed(),\n"
+        "            ),",
+        label=label,
+    )
+    forbid_text(
+        state,
+        agent_tool,
+        "toModelVisibleSubagentResult(subagent.getFinalText(), terminateMode)",
+        label=label,
+    )
+
+    require_text(
+        state,
+        adapter_test,
+        "[subagent-scope] scopes a subagent error result to the agent tool "
+        "call that owns it",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "[subagent-scope] leaves the session terminal result unscoped",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "[subagent-scope] leaves a session error result unscoped too",
+        label=label,
+    )
+    require_text(
+        state,
+        helpers_test,
+        "[subagent-scope] reports the turn count the stopped subagent reached",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool_test,
+        "[subagent-scope] tells the parent how far an exhausted subagent got",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool_test,
+        "[subagent-scope] renders a single completed turn in the singular",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool_test,
+        "[subagent-scope] publishes the turn count with the terminal display "
+        "status",
+        label=label,
+    )
+
+
 def _validate_nonpdf_pages_before(state: State) -> None:
     label = "non-PDF pages rejection precondition"
     tool = "packages/core/src/tools/read-file.ts"
@@ -1537,6 +1764,36 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_compaction_event_before,
         validate_after=_validate_compaction_event_after,
+    ),
+    SemanticConcern(
+        name="subagent-result-scope-and-turn-count",
+        rationale=(
+            "A subagent that exhausted its inherited turn budget emitted a "
+            "terminal result with no parent_tool_use_id and num_turns 0. "
+            "Every other emitted event names its scope -- null for the main "
+            "session, the agent tool-call id for a subagent -- so an unscoped "
+            "result is read as the session's own: the subagent's failure was "
+            "attributed to the parent, and the parent's subsequent recovery "
+            "and real answer became output after the end of the session. The "
+            "service correctly refused the whole capture, so every session in "
+            "which a subagent ran out of turns was discarded even though the "
+            "parent had finished. The turn count was lost twice over: the "
+            "record said the subagent took no turns at all, and the "
+            "model-visible text the parent reads was built by the foreground "
+            "body from a second call that never received the count, while "
+            "only the display-facing call inside runSubagentWithHooks had "
+            "it. A subagent failure has to stay visible in the stream and "
+            "scoped to the subagent, carrying how far it got."
+        ),
+        removal_condition=(
+            "Remove only when upstream scopes every result message to the "
+            "thread it ends -- null for the main session, the owning agent "
+            "tool-call id for a subagent -- and reports that subagent's own "
+            "completed turn count both on the emitted record and in the text "
+            "the parent model receives."
+        ),
+        validate_before=_validate_subagent_result_scope_before,
+        validate_after=_validate_subagent_result_scope_after,
     ),
     SemanticConcern(
         name="session-time-anchor",

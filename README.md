@@ -423,12 +423,17 @@ mode today.
 
 The client itself emits stream-JSON. The service requires every completed line to
 be a JSON object, a first `system/init` event whose Qwen version/model/workspace/tool
-metadata exactly matches the deployed contract, a stable session ID, exactly one
-terminal result as the final event, an internally consistent main-turn count, and
-the complete success/error envelope. Zero-usage streaming fragments are not
-mistaken for additional turns. Duplicate results, post-result output, malformed
-lines, missing fields, an empty successful result, and a missing result are hard
-errors. It never chooses a convenient-looking “last result.”
+metadata exactly matches the deployed contract, a stable session ID, a scope on
+every event (`parent_tool_use_id`: null for the main session, the owning `agent`
+tool-call id for a subagent), exactly one main-session terminal result as the final
+event, an internally consistent main-turn count, and the complete success/error
+envelope. A subagent that stops without a report emits its own terminal record under
+its tool-call id; that record belongs to the subagent, and it neither ends the
+session nor counts toward the session's turns. Zero-usage streaming fragments are
+not mistaken for additional turns. Duplicate results, post-result output, a scope
+that is neither null nor an agent tool-call id, malformed lines, missing fields, an
+empty successful result, and a missing main-session result are hard errors. It never
+chooses a convenient-looking “last result.”
 
 ## Prefix caching evidence
 

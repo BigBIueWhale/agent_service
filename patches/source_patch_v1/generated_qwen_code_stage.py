@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '937094cc35bbda420d954cac28335d819b828a885ee2ac64608478b6d7356f4b',
+  'review_sha256': '85b6bbf74ea0070af4a00fc23534fbb6786acd95c773f0030379ca3f4fe7892a',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -28,10 +28,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before_sha256': '17e660b5b946d5647814af611bc5b6aaf43c597e7b329e4926d90b8bf7fa72e8',
-             'after_sha256': '356a29b720098f3a95a9122fd08097fa2967962f5c42ba2da9f017cb94819f4b'},
+             'after_sha256': '8db491cfdef9a99c4dd5720967e5b6f822b41f3b8678c52a3699b459c982f819'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before_sha256': 'd389950daa67e5b2578ed5da8e340e417d7f696486c81ed78f3aca735e22c0bd',
-             'after_sha256': 'a28b31eb386970897bbdd7f72590d5e27d6f9436a6e3d5e81f46b3c60c1d806e'},
+             'after_sha256': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863'},
+            {'path': 'packages/cli/src/nonInteractive/types.ts',
+             'before_sha256': '6ad4da59e11d6a84d2b9bd03376b834d1737edfc7a8dc9af1e90783ccab2acdf',
+             'after_sha256': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
              'after_sha256': '559cbf3f8daa9d7943dea5ec09859fa25de68b25ecb624e66815a90d8a6b9932'},
@@ -40,10 +43,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before_sha256': 'd59f5e8a9a9efc2f10770df56e1ea201ec38400b9b1dd00ef317ce2f8e5a1448',
-             'after_sha256': '7299e9cf41b76940842156009a422e74ead871243ffbdef7a786f87fc3b721e0'},
+             'after_sha256': '9f524ee280510ed4d80e3e37907a942c368c7ead0dd02f3d37c9e697990ecf19'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
              'before_sha256': 'e1a5371ec1215d1cc23eb87ce43d82bf62270b1e38b75110dbea4bf77c925a5d',
-             'after_sha256': '5b43358b8fbe6832582037527523c6654999f1cb8ce1fbe697597f5ee5fc4e5d'},
+             'after_sha256': '05bf1bb209b455a0fa1b386321198442d08c332cdd1a2f2c08fc05a9948e752c'},
             {'path': 'packages/core/src/agents/runtime/agent-context.test.ts',
              'before_sha256': 'af818483ce52245a742302e55abe01f78aefe66c2f82e863693a394515d374a4',
              'after_sha256': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a'},
@@ -172,10 +175,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
-             'after_sha256': '794728ecbc5ef8d25593a32c5a9d104dba2cda8bbf0bef986295a95ce6c14c51'},
+             'after_sha256': 'effd65eff9899c8150ee2f002effbc3c15485b9d7bc0d627e76935bf3f50a74c'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': '37c8312f988ba485efe66d7bbf5352c23a2762d4786c1d9b254b081914f34e53'},
+             'after_sha256': '1b96052f1f5e7678f2a704d92e95668e3ce00b697d570b2673b35118163780ac'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -196,7 +199,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'b2023049f4b50a1581ce502523c7c9aef8968c5eff05d363c158905d3d6aca8d'},
             {'path': 'packages/core/src/tools/tools.ts',
              'before_sha256': 'e04d871a71b7d432ab4de1918f701e6cf5f3caa3f6b95f97a55a331054e3d554',
-             'after_sha256': 'baca3633ee6efdf3c334cedc62c0c6bb83db6aa124548e8e227311705a7b7c15'},
+             'after_sha256': '0f51fbfa7251b2f18878b5c5e64b9c331791e051b1d7120ee1a5735621a6ce5f'},
             {'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before_sha256': '88bf6740ee046a7a75116659df85ece80338247c88f5fc48833fd4053e3d19b1',
              'after_sha256': '9f191c0db8201be82d3242e35855052f911684ef53569776f53175170b5584e8'},
@@ -1808,6 +1811,64 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    extensionFileWatcher?.startWatching();\n'},
             {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-1',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before': '    return this.buildResultMessage(options, '
+                       'this.lastAssistantMessage);\n'
+                       '  }\n'
+                       '\n'
+                       '  exposeBuildSubagentErrorResult(errorMessage: string, '
+                       'numTurns: number) {\n'
+                       '    return this.buildSubagentErrorResult(errorMessage, '
+                       'numTurns);\n'
+                       '  }\n'
+                       '}\n'
+                       '\n',
+             'after': '    return this.buildResultMessage(options, '
+                      'this.lastAssistantMessage);\n'
+                      '  }\n'
+                      '\n'
+                      '  exposeBuildSubagentErrorResult(\n'
+                      '    errorMessage: string,\n'
+                      '    numTurns: number,\n'
+                      '    parentToolUseId: string,\n'
+                      '  ) {\n'
+                      '    return this.buildSubagentErrorResult(\n'
+                      '      errorMessage,\n'
+                      '      numTurns,\n'
+                      '      parentToolUseId,\n'
+                      '    );\n'
+                      '  }\n'
+                      '}\n'
+                      '\n',
+             'review_before': '    return this.buildResultMessage(options, '
+                              'this.lastAssistantMessage);\n'
+                              '  }\n'
+                              '\n'
+                              '  exposeBuildSubagentErrorResult(errorMessage: string, '
+                              'numTurns: number) {\n'
+                              '    return this.buildSubagentErrorResult(errorMessage, '
+                              'numTurns);\n'
+                              '  }\n'
+                              '}\n'
+                              '\n',
+             'review_after': '    return this.buildResultMessage(options, '
+                             'this.lastAssistantMessage);\n'
+                             '  }\n'
+                             '\n'
+                             '  exposeBuildSubagentErrorResult(\n'
+                             '    errorMessage: string,\n'
+                             '    numTurns: number,\n'
+                             '    parentToolUseId: string,\n'
+                             '  ) {\n'
+                             '    return this.buildSubagentErrorResult(\n'
+                             '      errorMessage,\n'
+                             '      numTurns,\n'
+                             '      parentToolUseId,\n'
+                             '    );\n'
+                             '  }\n'
+                             '}\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-2',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': "        text: 'First',\n"
                        '      });\n'
                        '    });\n'
@@ -1958,7 +2019,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  });\n'
                              '\n'
                              "  describe('finalizeAssistantMessage', () => {\n"},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-2',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-3',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': "        expect(message.subtype).toBe('test_subtype');\n"
                        '      }\n'
@@ -2032,7 +2093,222 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  });\n'
                              '\n'
                              "  describe('emitToolProgress', () => {\n"},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-3',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-4',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before': '      const errorResult = '
+                       'adapter.exposeBuildSubagentErrorResult(\n'
+                       "        'Error message',\n"
+                       '        3,\n'
+                       '      );\n'
+                       '\n'
+                       "      expect(errorResult.type).toBe('result');\n",
+             'after': '      const errorResult = '
+                      'adapter.exposeBuildSubagentErrorResult(\n'
+                      "        'Error message',\n"
+                      '        3,\n'
+                      "        'parent-tool-1',\n"
+                      '      );\n'
+                      '\n'
+                      "      expect(errorResult.type).toBe('result');\n",
+             'review_before': '      const errorResult = '
+                              'adapter.exposeBuildSubagentErrorResult(\n'
+                              "        'Error message',\n"
+                              '        3,\n'
+                              '      );\n'
+                              '\n'
+                              "      expect(errorResult.type).toBe('result');\n",
+             'review_after': '      const errorResult = '
+                             'adapter.exposeBuildSubagentErrorResult(\n'
+                             "        'Error message',\n"
+                             '        3,\n'
+                             "        'parent-tool-1',\n"
+                             '      );\n'
+                             '\n'
+                             "      expect(errorResult.type).toBe('result');\n"},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-5',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before': '        input_tokens: 0,\n'
+                       '        output_tokens: 0,\n'
+                       '      });\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n',
+             'after': '        input_tokens: 0,\n'
+                      '        output_tokens: 0,\n'
+                      '      });\n'
+                      '      '
+                      "expect(errorResult.parent_tool_use_id).toBe('parent-tool-1');\n"
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('result attribution', () => {\n"
+                      "    it('[subagent-scope] scopes a subagent error result to the "
+                      "agent tool call that owns it', () => {\n"
+                      '      const parentToolUseId = '
+                      "'chatcmpl-tool-9d45d85b34aefc38';\n"
+                      '      adapter.startSubagentAssistantMessage(parentToolUseId);\n'
+                      '\n'
+                      "      adapter.emitSubagentErrorResult('MAX_TURNS', 3, "
+                      'parentToolUseId);\n'
+                      '\n'
+                      '      const results = adapter.emittedMessages.filter(\n'
+                      "        (msg) => msg.type === 'result',\n"
+                      '      );\n'
+                      '      expect(results).toHaveLength(1);\n'
+                      "      // An unscoped record is read as the session's own "
+                      'terminal result: the\n'
+                      "      // subagent's failure is attributed to the parent, and "
+                      'every event the\n'
+                      '      // parent goes on to emit looks like output after the end '
+                      'of the run.\n'
+                      '      expect(results[0]).toMatchObject({\n'
+                      "        type: 'result',\n"
+                      "        subtype: 'error_during_execution',\n"
+                      '        is_error: true,\n'
+                      '        parent_tool_use_id: parentToolUseId,\n'
+                      '        num_turns: 3,\n'
+                      "        error: { message: 'MAX_TURNS' },\n"
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[subagent-scope] leaves the session terminal result "
+                      "unscoped', () => {\n"
+                      '      adapter.emitResult({\n'
+                      '        isError: false,\n'
+                      '        durationMs: 12,\n'
+                      '        apiDurationMs: 8,\n'
+                      '        numTurns: 2,\n'
+                      "        summary: 'done',\n"
+                      '      });\n'
+                      '\n'
+                      '      const results = adapter.emittedMessages.filter(\n'
+                      "        (msg) => msg.type === 'result',\n"
+                      '      );\n'
+                      '      expect(results).toHaveLength(1);\n'
+                      '      expect(results[0]).toMatchObject({\n'
+                      "        type: 'result',\n"
+                      "        subtype: 'success',\n"
+                      '        is_error: false,\n'
+                      '        parent_tool_use_id: null,\n'
+                      '        num_turns: 2,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[subagent-scope] leaves a session error result unscoped "
+                      "too', () => {\n"
+                      '      adapter.emitResult({\n'
+                      '        isError: true,\n'
+                      "        errorMessage: 'transport closed',\n"
+                      '        durationMs: 12,\n'
+                      '        apiDurationMs: 8,\n'
+                      '        numTurns: 2,\n'
+                      '      });\n'
+                      '\n'
+                      '      const results = adapter.emittedMessages.filter(\n'
+                      "        (msg) => msg.type === 'result',\n"
+                      '      );\n'
+                      '      expect(results).toHaveLength(1);\n'
+                      '      expect(results[0]).toMatchObject({\n'
+                      "        type: 'result',\n"
+                      "        subtype: 'error_during_execution',\n"
+                      '        is_error: true,\n'
+                      '        parent_tool_use_id: null,\n'
+                      '      });\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n',
+             'review_before': '        input_tokens: 0,\n'
+                              '        output_tokens: 0,\n'
+                              '      });\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n',
+             'review_after': '        input_tokens: 0,\n'
+                             '        output_tokens: 0,\n'
+                             '      });\n'
+                             '      '
+                             "expect(errorResult.parent_tool_use_id).toBe('parent-tool-1');\n"
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('result attribution', () => {\n"
+                             "    it('[subagent-scope] scopes a subagent error result "
+                             "to the agent tool call that owns it', () => {\n"
+                             '      const parentToolUseId = '
+                             "'chatcmpl-tool-9d45d85b34aefc38';\n"
+                             '      '
+                             'adapter.startSubagentAssistantMessage(parentToolUseId);\n'
+                             '\n'
+                             "      adapter.emitSubagentErrorResult('MAX_TURNS', 3, "
+                             'parentToolUseId);\n'
+                             '\n'
+                             '      const results = adapter.emittedMessages.filter(\n'
+                             "        (msg) => msg.type === 'result',\n"
+                             '      );\n'
+                             '      expect(results).toHaveLength(1);\n'
+                             "      // An unscoped record is read as the session's own "
+                             'terminal result: the\n'
+                             "      // subagent's failure is attributed to the parent, "
+                             'and every event the\n'
+                             '      // parent goes on to emit looks like output after '
+                             'the end of the run.\n'
+                             '      expect(results[0]).toMatchObject({\n'
+                             "        type: 'result',\n"
+                             "        subtype: 'error_during_execution',\n"
+                             '        is_error: true,\n'
+                             '        parent_tool_use_id: parentToolUseId,\n'
+                             '        num_turns: 3,\n'
+                             "        error: { message: 'MAX_TURNS' },\n"
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[subagent-scope] leaves the session terminal "
+                             "result unscoped', () => {\n"
+                             '      adapter.emitResult({\n'
+                             '        isError: false,\n'
+                             '        durationMs: 12,\n'
+                             '        apiDurationMs: 8,\n'
+                             '        numTurns: 2,\n'
+                             "        summary: 'done',\n"
+                             '      });\n'
+                             '\n'
+                             '      const results = adapter.emittedMessages.filter(\n'
+                             "        (msg) => msg.type === 'result',\n"
+                             '      );\n'
+                             '      expect(results).toHaveLength(1);\n'
+                             '      expect(results[0]).toMatchObject({\n'
+                             "        type: 'result',\n"
+                             "        subtype: 'success',\n"
+                             '        is_error: false,\n'
+                             '        parent_tool_use_id: null,\n'
+                             '        num_turns: 2,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[subagent-scope] leaves a session error result "
+                             "unscoped too', () => {\n"
+                             '      adapter.emitResult({\n'
+                             '        isError: true,\n'
+                             "        errorMessage: 'transport closed',\n"
+                             '        durationMs: 12,\n'
+                             '        apiDurationMs: 8,\n'
+                             '        numTurns: 2,\n'
+                             '      });\n'
+                             '\n'
+                             '      const results = adapter.emittedMessages.filter(\n'
+                             "        (msg) => msg.type === 'result',\n"
+                             '      );\n'
+                             '      expect(results).toHaveLength(1);\n'
+                             '      expect(results[0]).toMatchObject({\n'
+                             "        type: 'result',\n"
+                             "        subtype: 'error_during_execution',\n"
+                             '        is_error: true,\n'
+                             '        parent_tool_use_id: null,\n'
+                             '      });\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-6',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': "        expect(result).toBe('Tool result');\n"
                        '      });\n'
@@ -2138,7 +2414,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "tool content', () => {\n"
                              '        const response = {\n'
                              "          callId: 'pdf-success',\n"},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-4',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-7',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '\n'
                        '        expect(toolResultContent(response)).toBe(\n'
@@ -2279,6 +2555,48 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    }\n'},
             {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-3',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': '      this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                       '    }\n'
+                       '\n'
+                       '    const errorResult = '
+                       'this.buildSubagentErrorResult(errorMessage, numTurns);\n'
+                       '    this.emitMessageImpl(errorResult);\n'
+                       '  }\n'
+                       '\n',
+             'after': '      this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                      '    }\n'
+                      '\n'
+                      '    const errorResult = this.buildSubagentErrorResult(\n'
+                      '      errorMessage,\n'
+                      '      numTurns,\n'
+                      '      parentToolUseId,\n'
+                      '    );\n'
+                      '    this.emitMessageImpl(errorResult);\n'
+                      '  }\n'
+                      '\n',
+             'review_before': '      '
+                              'this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                              '    }\n'
+                              '\n'
+                              '    const errorResult = '
+                              'this.buildSubagentErrorResult(errorMessage, numTurns);\n'
+                              '    this.emitMessageImpl(errorResult);\n'
+                              '  }\n'
+                              '\n',
+             'review_after': '      '
+                             'this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                             '    }\n'
+                             '\n'
+                             '    const errorResult = this.buildSubagentErrorResult(\n'
+                             '      errorMessage,\n'
+                             '      numTurns,\n'
+                             '      parentToolUseId,\n'
+                             '    );\n'
+                             '    this.emitMessageImpl(errorResult);\n'
+                             '  }\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-4',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '   * Emits a system message.\n'
                        '   * @param subtype - System message subtype\n'
                        '   * @param data - Optional data payload\n'
@@ -2358,7 +2676,165 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      data,\n'
                              '    } as const;\n'
                              '    this.emitMessageImpl(systemMessage);\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-4',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-5',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': "          'error_during_execution',\n"
+                       '        uuid: baseUuid,\n'
+                       '        session_id: baseSessionId,\n'
+                       '        is_error: true,\n'
+                       '        duration_ms: options.durationMs,\n'
+                       '        duration_api_ms: options.apiDurationMs,\n',
+             'after': "          'error_during_execution',\n"
+                      '        uuid: baseUuid,\n'
+                      '        session_id: baseSessionId,\n'
+                      '        parent_tool_use_id: null,\n'
+                      '        is_error: true,\n'
+                      '        duration_ms: options.durationMs,\n'
+                      '        duration_api_ms: options.apiDurationMs,\n',
+             'review_before': "          'error_during_execution',\n"
+                              '        uuid: baseUuid,\n'
+                              '        session_id: baseSessionId,\n'
+                              '        is_error: true,\n'
+                              '        duration_ms: options.durationMs,\n'
+                              '        duration_api_ms: options.apiDurationMs,\n',
+             'review_after': "          'error_during_execution',\n"
+                             '        uuid: baseUuid,\n'
+                             '        session_id: baseSessionId,\n'
+                             '        parent_tool_use_id: null,\n'
+                             '        is_error: true,\n'
+                             '        duration_ms: options.durationMs,\n'
+                             '        duration_api_ms: options.apiDurationMs,\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-6',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': '          (options.subtype as '
+                       "CLIResultMessageSuccess['subtype']) ?? 'success',\n"
+                       '        uuid: baseUuid,\n'
+                       '        session_id: baseSessionId,\n'
+                       '        is_error: false,\n'
+                       '        duration_ms: options.durationMs,\n'
+                       '        duration_api_ms: options.apiDurationMs,\n',
+             'after': '          (options.subtype as '
+                      "CLIResultMessageSuccess['subtype']) ?? 'success',\n"
+                      '        uuid: baseUuid,\n'
+                      '        session_id: baseSessionId,\n'
+                      '        parent_tool_use_id: null,\n'
+                      '        is_error: false,\n'
+                      '        duration_ms: options.durationMs,\n'
+                      '        duration_api_ms: options.apiDurationMs,\n',
+             'review_before': '          (options.subtype as '
+                              "CLIResultMessageSuccess['subtype']) ?? 'success',\n"
+                              '        uuid: baseUuid,\n'
+                              '        session_id: baseSessionId,\n'
+                              '        is_error: false,\n'
+                              '        duration_ms: options.durationMs,\n'
+                              '        duration_api_ms: options.apiDurationMs,\n',
+             'review_after': '          (options.subtype as '
+                             "CLIResultMessageSuccess['subtype']) ?? 'success',\n"
+                             '        uuid: baseUuid,\n'
+                             '        session_id: baseSessionId,\n'
+                             '        parent_tool_use_id: null,\n'
+                             '        is_error: false,\n'
+                             '        duration_ms: options.durationMs,\n'
+                             '        duration_api_ms: options.apiDurationMs,\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-7',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': "   * separately and would be included in the main agent's "
+                       'result message.\n'
+                       '   * @param errorMessage - Error message\n'
+                       '   * @param numTurns - Number of turns\n'
+                       '   * @returns CLIResultMessageError\n'
+                       '   */\n'
+                       '  protected buildSubagentErrorResult(\n'
+                       '    errorMessage: string,\n'
+                       '    numTurns: number,\n'
+                       '  ): CLIResultMessageError {\n'
+                       '    const usage: ExtendedUsage = {\n'
+                       '      input_tokens: 0,\n',
+             'after': "   * separately and would be included in the main agent's "
+                      'result message.\n'
+                      '   * @param errorMessage - Error message\n'
+                      '   * @param numTurns - Number of turns\n'
+                      '   * @param parentToolUseId - Owning agent tool-call id. '
+                      'Required, because a\n'
+                      '   *   subagent result that does not name its subagent is read '
+                      "as the session's\n"
+                      '   *   own terminal result: the failure is attributed to the '
+                      'parent, and every\n'
+                      '   *   event the parent goes on to emit looks like output after '
+                      'the end of the\n'
+                      '   *   session.\n'
+                      '   * @returns CLIResultMessageError\n'
+                      '   */\n'
+                      '  protected buildSubagentErrorResult(\n'
+                      '    errorMessage: string,\n'
+                      '    numTurns: number,\n'
+                      '    parentToolUseId: string,\n'
+                      '  ): CLIResultMessageError {\n'
+                      '    const usage: ExtendedUsage = {\n'
+                      '      input_tokens: 0,\n',
+             'review_before': '   * separately and would be included in the main '
+                              "agent's result message.\n"
+                              '   * @param errorMessage - Error message\n'
+                              '   * @param numTurns - Number of turns\n'
+                              '   * @returns CLIResultMessageError\n'
+                              '   */\n'
+                              '  protected buildSubagentErrorResult(\n'
+                              '    errorMessage: string,\n'
+                              '    numTurns: number,\n'
+                              '  ): CLIResultMessageError {\n'
+                              '    const usage: ExtendedUsage = {\n'
+                              '      input_tokens: 0,\n',
+             'review_after': '   * separately and would be included in the main '
+                             "agent's result message.\n"
+                             '   * @param errorMessage - Error message\n'
+                             '   * @param numTurns - Number of turns\n'
+                             '   * @param parentToolUseId - Owning agent tool-call id. '
+                             'Required, because a\n'
+                             '   *   subagent result that does not name its subagent '
+                             "is read as the session's\n"
+                             '   *   own terminal result: the failure is attributed to '
+                             'the parent, and every\n'
+                             '   *   event the parent goes on to emit looks like '
+                             'output after the end of the\n'
+                             '   *   session.\n'
+                             '   * @returns CLIResultMessageError\n'
+                             '   */\n'
+                             '  protected buildSubagentErrorResult(\n'
+                             '    errorMessage: string,\n'
+                             '    numTurns: number,\n'
+                             '    parentToolUseId: string,\n'
+                             '  ): CLIResultMessageError {\n'
+                             '    const usage: ExtendedUsage = {\n'
+                             '      input_tokens: 0,\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-8',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': "      subtype: 'error_during_execution',\n"
+                       '      uuid: randomUUID(),\n'
+                       '      session_id: this.getSessionId(),\n'
+                       '      is_error: true,\n'
+                       '      duration_ms: 0,\n'
+                       '      duration_api_ms: 0,\n',
+             'after': "      subtype: 'error_during_execution',\n"
+                      '      uuid: randomUUID(),\n'
+                      '      session_id: this.getSessionId(),\n'
+                      '      parent_tool_use_id: parentToolUseId,\n'
+                      '      is_error: true,\n'
+                      '      duration_ms: 0,\n'
+                      '      duration_api_ms: 0,\n',
+             'review_before': "      subtype: 'error_during_execution',\n"
+                              '      uuid: randomUUID(),\n'
+                              '      session_id: this.getSessionId(),\n'
+                              '      is_error: true,\n'
+                              '      duration_ms: 0,\n'
+                              '      duration_api_ms: 0,\n',
+             'review_after': "      subtype: 'error_during_execution',\n"
+                             '      uuid: randomUUID(),\n'
+                             '      session_id: this.getSessionId(),\n'
+                             '      parent_tool_use_id: parentToolUseId,\n'
+                             '      is_error: true,\n'
+                             '      duration_ms: 0,\n'
+                             '      duration_api_ms: 0,\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-9',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '  if (response.error) {\n'
                        '    return response.error.message;\n'
@@ -2464,6 +2940,86 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  return undefined;\n'
                              '}\n'
                              '\n'},
+            {'name': 'packages/cli/src/nonInteractive/types.ts:landmark-1',
+             'path': 'packages/cli/src/nonInteractive/types.ts',
+             'before': "  subtype: 'success';\n"
+                       '  uuid: string;\n'
+                       '  session_id: string;\n'
+                       '  is_error: false;\n'
+                       '  duration_ms: number;\n'
+                       '  duration_api_ms: number;\n',
+             'after': "  subtype: 'success';\n"
+                      '  uuid: string;\n'
+                      '  session_id: string;\n'
+                      '  /**\n'
+                      '   * Owning agent tool-call id when the result belongs to a '
+                      'subagent, null for\n'
+                      "   * the session's own terminal result. Same convention as "
+                      'every assistant,\n'
+                      '   * user, and system message, so one consumer rule separates '
+                      'the parent\n'
+                      '   * thread from each subagent.\n'
+                      '   */\n'
+                      '  parent_tool_use_id: string | null;\n'
+                      '  is_error: false;\n'
+                      '  duration_ms: number;\n'
+                      '  duration_api_ms: number;\n',
+             'review_before': "  subtype: 'success';\n"
+                              '  uuid: string;\n'
+                              '  session_id: string;\n'
+                              '  is_error: false;\n'
+                              '  duration_ms: number;\n'
+                              '  duration_api_ms: number;\n',
+             'review_after': "  subtype: 'success';\n"
+                             '  uuid: string;\n'
+                             '  session_id: string;\n'
+                             '  /**\n'
+                             '   * Owning agent tool-call id when the result belongs '
+                             'to a subagent, null for\n'
+                             "   * the session's own terminal result. Same convention "
+                             'as every assistant,\n'
+                             '   * user, and system message, so one consumer rule '
+                             'separates the parent\n'
+                             '   * thread from each subagent.\n'
+                             '   */\n'
+                             '  parent_tool_use_id: string | null;\n'
+                             '  is_error: false;\n'
+                             '  duration_ms: number;\n'
+                             '  duration_api_ms: number;\n'},
+            {'name': 'packages/cli/src/nonInteractive/types.ts:landmark-2',
+             'path': 'packages/cli/src/nonInteractive/types.ts',
+             'before': "  subtype: 'error_max_turns' | 'error_during_execution';\n"
+                       '  uuid: string;\n'
+                       '  session_id: string;\n'
+                       '  is_error: true;\n'
+                       '  duration_ms: number;\n'
+                       '  duration_api_ms: number;\n',
+             'after': "  subtype: 'error_max_turns' | 'error_during_execution';\n"
+                      '  uuid: string;\n'
+                      '  session_id: string;\n'
+                      '  /** See {@link CLIResultMessageSuccess.parent_tool_use_id}. '
+                      '*/\n'
+                      '  parent_tool_use_id: string | null;\n'
+                      '  is_error: true;\n'
+                      '  duration_ms: number;\n'
+                      '  duration_api_ms: number;\n',
+             'review_before': "  subtype: 'error_max_turns' | "
+                              "'error_during_execution';\n"
+                              '  uuid: string;\n'
+                              '  session_id: string;\n'
+                              '  is_error: true;\n'
+                              '  duration_ms: number;\n'
+                              '  duration_api_ms: number;\n',
+             'review_after': "  subtype: 'error_max_turns' | "
+                             "'error_during_execution';\n"
+                             '  uuid: string;\n'
+                             '  session_id: string;\n'
+                             '  /** See {@link '
+                             'CLIResultMessageSuccess.parent_tool_use_id}. */\n'
+                             '  parent_tool_use_id: string | null;\n'
+                             '  is_error: true;\n'
+                             '  duration_ms: number;\n'
+                             '  duration_api_ms: number;\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-1',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '\n'
@@ -2912,9 +3468,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '  });\n'
                        '\n'
                        "  it('should build system message with all fields', async () "
-                       '=> {\n'
-                       '    const result = await buildSystemMessage(\n'
-                       '      mockConfig,\n',
+                       '=> {\n',
              'after': "      getModel: vi.fn().mockReturnValue('test-model'),\n"
                       "      getCliVersion: vi.fn().mockReturnValue('1.0.0'),\n"
                       '      getDebugMode: vi.fn().mockReturnValue(false),\n'
@@ -2954,9 +3508,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  });\n'
                       '\n'
                       "  it('should build system message with all fields', async () => "
-                      '{\n'
-                      '    const result = await buildSystemMessage(\n'
-                      '      mockConfig,\n',
+                      '{\n',
              'review_before': "      getModel: vi.fn().mockReturnValue('test-model'),\n"
                               "      getCliVersion: vi.fn().mockReturnValue('1.0.0'),\n"
                               '      getDebugMode: vi.fn().mockReturnValue(false),\n'
@@ -2964,9 +3516,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  });\n'
                               '\n'
                               "  it('should build system message with all fields', "
-                              'async () => {\n'
-                              '    const result = await buildSystemMessage(\n'
-                              '      mockConfig,\n',
+                              'async () => {\n',
              'review_after': "      getModel: vi.fn().mockReturnValue('test-model'),\n"
                              "      getCliVersion: vi.fn().mockReturnValue('1.0.0'),\n"
                              '      getDebugMode: vi.fn().mockReturnValue(false),\n'
@@ -3008,9 +3558,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  });\n'
                              '\n'
                              "  it('should build system message with all fields', "
-                             'async () => {\n'
-                             '    const result = await buildSystemMessage(\n'
-                             '      mockConfig,\n'},
+                             'async () => {\n'},
             {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-4',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before': '      emitSubagentErrorResult: vi.fn(),\n'
@@ -3040,6 +3588,127 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  });\n'
                              '\n'},
             {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-5',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
+             'before': '    );\n'
+                       '  });\n'
+                       '\n'
+                       "  it('should emit error result for cancelled task status', () "
+                       '=> {\n'
+                       '    const { handler } = createAgentToolProgressHandler(\n'
+                       '      mockConfig,\n',
+             'after': '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('[subagent-scope] reports the turn count the stopped "
+                      "subagent reached', () => {\n"
+                      '    const { handler } = createAgentToolProgressHandler(\n'
+                      '      mockConfig,\n'
+                      "      'parent-tool-id',\n"
+                      '      mockAdapter,\n'
+                      '    );\n'
+                      '\n'
+                      '    const runningDisplay: AgentResultDisplay = {\n'
+                      "      type: 'task_execution',\n"
+                      "      subagentName: 'general-purpose',\n"
+                      "      taskDescription: 'Test task',\n"
+                      "      taskPrompt: 'Test prompt',\n"
+                      "      status: 'running',\n"
+                      '      toolCalls: [],\n'
+                      '    };\n'
+                      '\n'
+                      '    const exhaustedDisplay: AgentResultDisplay = {\n'
+                      "      type: 'task_execution',\n"
+                      "      subagentName: 'general-purpose',\n"
+                      "      taskDescription: 'Test task',\n"
+                      "      taskPrompt: 'Test prompt',\n"
+                      "      status: 'failed',\n"
+                      "      terminateReason: 'MAX_TURNS',\n"
+                      '      turnsUsed: 3,\n'
+                      '      toolCalls: [],\n'
+                      '    };\n'
+                      '\n'
+                      "    handler('task-call-id', runningDisplay);\n"
+                      "    handler('task-call-id', exhaustedDisplay);\n"
+                      '\n'
+                      '    // num_turns on a subagent result means what it means on '
+                      "the session's\n"
+                      '    // terminal result: the round-trips that scope completed. A '
+                      'subagent that\n'
+                      '    // spent its whole budget must not be recorded as having '
+                      'taken none.\n'
+                      '    '
+                      'expect(mockAdapter.emitSubagentErrorResult).toHaveBeenCalledWith(\n'
+                      "      'MAX_TURNS',\n"
+                      '      3,\n'
+                      "      'parent-tool-id',\n"
+                      '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('should emit error result for cancelled task status', () "
+                      '=> {\n'
+                      '    const { handler } = createAgentToolProgressHandler(\n'
+                      '      mockConfig,\n',
+             'review_before': '    );\n'
+                              '  });\n'
+                              '\n'
+                              "  it('should emit error result for cancelled task "
+                              "status', () => {\n"
+                              '    const { handler } = '
+                              'createAgentToolProgressHandler(\n'
+                              '      mockConfig,\n',
+             'review_after': '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('[subagent-scope] reports the turn count the "
+                             "stopped subagent reached', () => {\n"
+                             '    const { handler } = createAgentToolProgressHandler(\n'
+                             '      mockConfig,\n'
+                             "      'parent-tool-id',\n"
+                             '      mockAdapter,\n'
+                             '    );\n'
+                             '\n'
+                             '    const runningDisplay: AgentResultDisplay = {\n'
+                             "      type: 'task_execution',\n"
+                             "      subagentName: 'general-purpose',\n"
+                             "      taskDescription: 'Test task',\n"
+                             "      taskPrompt: 'Test prompt',\n"
+                             "      status: 'running',\n"
+                             '      toolCalls: [],\n'
+                             '    };\n'
+                             '\n'
+                             '    const exhaustedDisplay: AgentResultDisplay = {\n'
+                             "      type: 'task_execution',\n"
+                             "      subagentName: 'general-purpose',\n"
+                             "      taskDescription: 'Test task',\n"
+                             "      taskPrompt: 'Test prompt',\n"
+                             "      status: 'failed',\n"
+                             "      terminateReason: 'MAX_TURNS',\n"
+                             '      turnsUsed: 3,\n'
+                             '      toolCalls: [],\n'
+                             '    };\n'
+                             '\n'
+                             "    handler('task-call-id', runningDisplay);\n"
+                             "    handler('task-call-id', exhaustedDisplay);\n"
+                             '\n'
+                             '    // num_turns on a subagent result means what it '
+                             "means on the session's\n"
+                             '    // terminal result: the round-trips that scope '
+                             'completed. A subagent that\n'
+                             '    // spent its whole budget must not be recorded as '
+                             'having taken none.\n'
+                             '    '
+                             'expect(mockAdapter.emitSubagentErrorResult).toHaveBeenCalledWith(\n'
+                             "      'MAX_TURNS',\n"
+                             '      3,\n'
+                             "      'parent-tool-id',\n"
+                             '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('should emit error result for cancelled task "
+                             "status', () => {\n"
+                             '    const { handler } = createAgentToolProgressHandler(\n'
+                             '      mockConfig,\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-6',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before': '    '
                        'expect(mockAdapter.emitToolResult).not.toHaveBeenCalled();\n'
@@ -3473,6 +4142,76 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'cancelled')\n"
                              '      if (\n'
                              "        taskDisplay.status === 'failed' ||\n"},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-6',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
+             'before': "            (taskDisplay.status === 'cancelled'\n"
+                       "              ? 'Task was cancelled'\n"
+                       "              : 'Task execution failed');\n"
+                       "          // Use subagent adapter's emitSubagentErrorResult "
+                       'method\n'
+                       '          adapter.emitSubagentErrorResult(errorMessage, 0, '
+                       'agentToolCallId);\n'
+                       '        }\n'
+                       '      }\n'
+                       '\n',
+             'after': "            (taskDisplay.status === 'cancelled'\n"
+                      "              ? 'Task was cancelled'\n"
+                      "              : 'Task execution failed');\n"
+                      "          // Use subagent adapter's emitSubagentErrorResult "
+                      'method.\n'
+                      '          // `num_turns` means the same thing on a subagent '
+                      'result as on the\n'
+                      "          // session's terminal result: the model round-trips "
+                      'that scope\n'
+                      '          // completed, which is the number of assistant events '
+                      'the stream\n'
+                      '          // carries under this tool-call id. Upstream '
+                      'hardcoded 0, so a\n'
+                      '          // subagent that used its entire budget was recorded '
+                      'as having taken\n'
+                      '          // no turns at all.\n'
+                      '          adapter.emitSubagentErrorResult(\n'
+                      '            errorMessage,\n'
+                      '            taskDisplay.turnsUsed ?? 0,\n'
+                      '            agentToolCallId,\n'
+                      '          );\n'
+                      '        }\n'
+                      '      }\n'
+                      '\n',
+             'review_before': "            (taskDisplay.status === 'cancelled'\n"
+                              "              ? 'Task was cancelled'\n"
+                              "              : 'Task execution failed');\n"
+                              "          // Use subagent adapter's "
+                              'emitSubagentErrorResult method\n'
+                              '          adapter.emitSubagentErrorResult(errorMessage, '
+                              '0, agentToolCallId);\n'
+                              '        }\n'
+                              '      }\n'
+                              '\n',
+             'review_after': "            (taskDisplay.status === 'cancelled'\n"
+                             "              ? 'Task was cancelled'\n"
+                             "              : 'Task execution failed');\n"
+                             "          // Use subagent adapter's "
+                             'emitSubagentErrorResult method.\n'
+                             '          // `num_turns` means the same thing on a '
+                             'subagent result as on the\n'
+                             "          // session's terminal result: the model "
+                             'round-trips that scope\n'
+                             '          // completed, which is the number of assistant '
+                             'events the stream\n'
+                             '          // carries under this tool-call id. Upstream '
+                             'hardcoded 0, so a\n'
+                             '          // subagent that used its entire budget was '
+                             'recorded as having taken\n'
+                             '          // no turns at all.\n'
+                             '          adapter.emitSubagentErrorResult(\n'
+                             '            errorMessage,\n'
+                             '            taskDisplay.turnsUsed ?? 0,\n'
+                             '            agentToolCallId,\n'
+                             '          );\n'
+                             '        }\n'
+                             '      }\n'
+                             '\n'},
             {'name': 'packages/core/src/agents/runtime/agent-context.test.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-context.test.ts',
              'before': '  childLaunchDepth,\n'
@@ -32410,6 +33149,104 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "      expect(text).toContain('its assignment is unfinished');\n"
                       '    });\n'
                       '\n'
+                      "    it('[subagent-scope] tells the parent how far an exhausted "
+                      "subagent got', async () => {\n"
+                      "      vi.mocked(mockAgent.getFinalText).mockReturnValue('');\n"
+                      '      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                      '        AgentTerminateMode.MAX_TURNS,\n'
+                      '      );\n'
+                      '      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(3);\n'
+                      '\n'
+                      '      const params: AgentParams = {\n'
+                      "        description: 'Search files',\n"
+                      "        prompt: 'Find all TypeScript files',\n"
+                      "        subagent_type: 'file-search',\n"
+                      '        run_in_background: false,\n'
+                      '      };\n'
+                      '\n'
+                      '      const invocation = (\n'
+                      '        agentTool as AgentToolWithProtectedMethods\n'
+                      '      ).createInvocation(params);\n'
+                      '      const result = await invocation.execute();\n'
+                      '\n'
+                      '      // This is the text the parent model reads. The identical '
+                      'construction\n'
+                      '      // inside runSubagentWithHooks only feeds the display, so '
+                      'carrying the\n'
+                      '      // count there is not enough: the budget is the one bound '
+                      'on a session\n'
+                      '      // here, and "how far did it get" is what decides whether '
+                      'to resume,\n'
+                      '      // re-scope, or take the assignment back.\n'
+                      '      expect(partToString(result.llmContent)).toContain(\n'
+                      "        'exhausted its turn budget after 3 turns',\n"
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[subagent-scope] renders a single completed turn in the "
+                      "singular', async () => {\n"
+                      '      '
+                      "vi.mocked(mockAgent.getFinalText).mockReturnValue('partial "
+                      "findings');\n"
+                      '      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                      '        AgentTerminateMode.MAX_TURNS,\n'
+                      '      );\n'
+                      '      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(1);\n'
+                      '\n'
+                      '      const params: AgentParams = {\n'
+                      "        description: 'Search files',\n"
+                      "        prompt: 'Find all TypeScript files',\n"
+                      "        subagent_type: 'file-search',\n"
+                      '        run_in_background: false,\n'
+                      '      };\n'
+                      '\n'
+                      '      const invocation = (\n'
+                      '        agentTool as AgentToolWithProtectedMethods\n'
+                      '      ).createInvocation(params);\n'
+                      '      const result = await invocation.execute();\n'
+                      '\n'
+                      '      const text = partToString(result.llmContent);\n'
+                      "      expect(text).toContain('exhausted its turn budget after 1 "
+                      "turn;');\n"
+                      "      expect(text).not.toContain('1 turns');\n"
+                      "      expect(text).toContain('partial findings');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('[subagent-scope] publishes the turn count with the "
+                      "terminal display status', async () => {\n"
+                      "      vi.mocked(mockAgent.getFinalText).mockReturnValue('');\n"
+                      '      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                      '        AgentTerminateMode.MAX_TURNS,\n'
+                      '      );\n'
+                      '      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(3);\n'
+                      '\n'
+                      '      const params: AgentParams = {\n'
+                      "        description: 'Search files',\n"
+                      "        prompt: 'Find all TypeScript files',\n"
+                      "        subagent_type: 'file-search',\n"
+                      '        run_in_background: false,\n'
+                      '      };\n'
+                      '\n'
+                      '      const snapshots: AgentResultDisplay[] = [];\n'
+                      '      const invocation = (\n'
+                      '        agentTool as AgentToolWithProtectedMethods\n'
+                      '      ).createInvocation(params);\n'
+                      '      await invocation.execute(undefined, (output) => {\n'
+                      '        snapshots.push(output as AgentResultDisplay);\n'
+                      '      });\n'
+                      '\n'
+                      "      // The headless stream builds the subagent's error result "
+                      'from this\n'
+                      '      // snapshot, so the turn count has to arrive in the same '
+                      'update as the\n'
+                      '      // terminal status rather than in a later one.\n'
+                      '      const terminal = snapshots.filter(\n'
+                      "        (snapshot) => snapshot.status === 'failed',\n"
+                      '      );\n'
+                      '      expect(terminal.length).toBeGreaterThan(0);\n'
+                      '      expect(terminal.at(-1)?.turnsUsed).toBe(3);\n'
+                      '    });\n'
+                      '\n'
                       "    it('explains successful subagents with no model-visible "
                       "output', async () => {\n",
              'review_before': '      ).createInvocation(params);\n'
@@ -32433,6 +33270,113 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      expect(text).toContain(raw);\n'
                              "      expect(text).toContain('its assignment is "
                              "unfinished');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('[subagent-scope] tells the parent how far an "
+                             "exhausted subagent got', async () => {\n"
+                             '      '
+                             "vi.mocked(mockAgent.getFinalText).mockReturnValue('');\n"
+                             '      '
+                             'vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                             '        AgentTerminateMode.MAX_TURNS,\n'
+                             '      );\n'
+                             '      '
+                             'vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(3);\n'
+                             '\n'
+                             '      const params: AgentParams = {\n'
+                             "        description: 'Search files',\n"
+                             "        prompt: 'Find all TypeScript files',\n"
+                             "        subagent_type: 'file-search',\n"
+                             '        run_in_background: false,\n'
+                             '      };\n'
+                             '\n'
+                             '      const invocation = (\n'
+                             '        agentTool as AgentToolWithProtectedMethods\n'
+                             '      ).createInvocation(params);\n'
+                             '      const result = await invocation.execute();\n'
+                             '\n'
+                             '      // This is the text the parent model reads. The '
+                             'identical construction\n'
+                             '      // inside runSubagentWithHooks only feeds the '
+                             'display, so carrying the\n'
+                             '      // count there is not enough: the budget is the '
+                             'one bound on a session\n'
+                             '      // here, and "how far did it get" is what decides '
+                             'whether to resume,\n'
+                             '      // re-scope, or take the assignment back.\n'
+                             '      '
+                             'expect(partToString(result.llmContent)).toContain(\n'
+                             "        'exhausted its turn budget after 3 turns',\n"
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[subagent-scope] renders a single completed turn "
+                             "in the singular', async () => {\n"
+                             '      '
+                             "vi.mocked(mockAgent.getFinalText).mockReturnValue('partial "
+                             "findings');\n"
+                             '      '
+                             'vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                             '        AgentTerminateMode.MAX_TURNS,\n'
+                             '      );\n'
+                             '      '
+                             'vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(1);\n'
+                             '\n'
+                             '      const params: AgentParams = {\n'
+                             "        description: 'Search files',\n"
+                             "        prompt: 'Find all TypeScript files',\n"
+                             "        subagent_type: 'file-search',\n"
+                             '        run_in_background: false,\n'
+                             '      };\n'
+                             '\n'
+                             '      const invocation = (\n'
+                             '        agentTool as AgentToolWithProtectedMethods\n'
+                             '      ).createInvocation(params);\n'
+                             '      const result = await invocation.execute();\n'
+                             '\n'
+                             '      const text = partToString(result.llmContent);\n'
+                             "      expect(text).toContain('exhausted its turn budget "
+                             "after 1 turn;');\n"
+                             "      expect(text).not.toContain('1 turns');\n"
+                             "      expect(text).toContain('partial findings');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('[subagent-scope] publishes the turn count with "
+                             "the terminal display status', async () => {\n"
+                             '      '
+                             "vi.mocked(mockAgent.getFinalText).mockReturnValue('');\n"
+                             '      '
+                             'vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                             '        AgentTerminateMode.MAX_TURNS,\n'
+                             '      );\n'
+                             '      '
+                             'vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(3);\n'
+                             '\n'
+                             '      const params: AgentParams = {\n'
+                             "        description: 'Search files',\n"
+                             "        prompt: 'Find all TypeScript files',\n"
+                             "        subagent_type: 'file-search',\n"
+                             '        run_in_background: false,\n'
+                             '      };\n'
+                             '\n'
+                             '      const snapshots: AgentResultDisplay[] = [];\n'
+                             '      const invocation = (\n'
+                             '        agentTool as AgentToolWithProtectedMethods\n'
+                             '      ).createInvocation(params);\n'
+                             '      await invocation.execute(undefined, (output) => {\n'
+                             '        snapshots.push(output as AgentResultDisplay);\n'
+                             '      });\n'
+                             '\n'
+                             "      // The headless stream builds the subagent's error "
+                             'result from this\n'
+                             '      // snapshot, so the turn count has to arrive in '
+                             'the same update as the\n'
+                             '      // terminal status rather than in a later one.\n'
+                             '      const terminal = snapshots.filter(\n'
+                             "        (snapshot) => snapshot.status === 'failed',\n"
+                             '      );\n'
+                             '      expect(terminal.length).toBeGreaterThan(0);\n'
+                             '      expect(terminal.at(-1)?.turnsUsed).toBe(3);\n'
                              '    });\n'
                              '\n'
                              "    it('explains successful subagents with no "
@@ -33604,6 +34548,100 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'AgentTerminateMode.GOAL;\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
              'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '        }),\n'
+                       '      );\n'
+                       '\n'
+                       '      if (signal?.aborted) {\n'
+                       '        this.updateDisplay(\n'
+                       '          {\n'
+                       "            status: 'cancelled',\n"
+                       "            terminateReason: 'Agent was cancelled by user',\n"
+                       '            executionSummary,\n'
+                       '          },\n'
+                       '          updateOutput,\n'
+                       '        );\n',
+             'after': '        }),\n'
+                      '      );\n'
+                      '\n'
+                      '      // The turn count rides the same update as the terminal '
+                      'status, so a\n'
+                      '      // consumer that reacts to the status change reads how '
+                      'far the subagent\n'
+                      '      // actually got from the same snapshot.\n'
+                      '      const turnsUsed = subagent.getTurnsUsed();\n'
+                      '      if (signal?.aborted) {\n'
+                      '        this.updateDisplay(\n'
+                      '          {\n'
+                      "            status: 'cancelled',\n"
+                      "            terminateReason: 'Agent was cancelled by user',\n"
+                      '            executionSummary,\n'
+                      '            turnsUsed,\n'
+                      '          },\n'
+                      '          updateOutput,\n'
+                      '        );\n',
+             'review_before': '        }),\n'
+                              '      );\n'
+                              '\n'
+                              '      if (signal?.aborted) {\n'
+                              '        this.updateDisplay(\n'
+                              '          {\n'
+                              "            status: 'cancelled',\n"
+                              "            terminateReason: 'Agent was cancelled by "
+                              "user',\n"
+                              '            executionSummary,\n'
+                              '          },\n'
+                              '          updateOutput,\n'
+                              '        );\n',
+             'review_after': '        }),\n'
+                             '      );\n'
+                             '\n'
+                             '      // The turn count rides the same update as the '
+                             'terminal status, so a\n'
+                             '      // consumer that reacts to the status change reads '
+                             'how far the subagent\n'
+                             '      // actually got from the same snapshot.\n'
+                             '      const turnsUsed = subagent.getTurnsUsed();\n'
+                             '      if (signal?.aborted) {\n'
+                             '        this.updateDisplay(\n'
+                             '          {\n'
+                             "            status: 'cancelled',\n"
+                             "            terminateReason: 'Agent was cancelled by "
+                             "user',\n"
+                             '            executionSummary,\n'
+                             '            turnsUsed,\n'
+                             '          },\n'
+                             '          updateOutput,\n'
+                             '        );\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
+             'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '            terminateReason: terminateMode,\n'
+                       '            result: finalText,\n'
+                       '            executionSummary,\n'
+                       '          },\n'
+                       '          updateOutput,\n'
+                       '        );\n',
+             'after': '            terminateReason: terminateMode,\n'
+                      '            result: finalText,\n'
+                      '            executionSummary,\n'
+                      '            turnsUsed,\n'
+                      '          },\n'
+                      '          updateOutput,\n'
+                      '        );\n',
+             'review_before': '            terminateReason: terminateMode,\n'
+                              '            result: finalText,\n'
+                              '            executionSummary,\n'
+                              '          },\n'
+                              '          updateOutput,\n'
+                              '        );\n',
+             'review_after': '            terminateReason: terminateMode,\n'
+                             '            result: finalText,\n'
+                             '            executionSummary,\n'
+                             '            turnsUsed,\n'
+                             '          },\n'
+                             '          updateOutput,\n'
+                             '        );\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
+             'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '    // background-agent concurrency caps '
                        '(agents.maxParallelAgentsByModel).\n'
                        '    let subagentModelId: string | undefined;\n'
@@ -33642,7 +34680,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      if (backgroundSlotReservation && '
                              '!backgroundSlotReservationConsumed) {\n'
                              '        this.config\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      // Implicit background requests downgrade to an awaited '
                        'foreground run\n'
@@ -33692,7 +34730,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ? true\n'
                              '          : (this.params.run_in_background ??\n'
                              '            (subagentConfig.background === true ||\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          subagentRuntimeConfig as Config,\n'
                        '          {\n'
@@ -33766,7 +34804,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              ? { modelConfigOverrides: { model: '
                              'subagentModelId } }\n'
                              '              : {}),\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '\n'
@@ -33875,7 +34913,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`qwen-code.tool`\n'
                              '      // span, inheriting its traceId so the trace tree '
                              'stays unified.\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          this.buildSubagentSpanSpec(hookOpts, subagentConfig, '
                        "'foreground'),\n"
@@ -33938,7 +34976,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            ),\n'
                              '        );\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-16',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          depth: launchDepth,\n'
                        '        });\n'
@@ -33990,11 +35028,23 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          ? `\\n\\n${qwen38EffectSummary}`\n'
                       "          : '';\n"
                       '        const terminateMode = subagent.getTerminateMode();\n'
+                      '        // This is the text the parent model actually reads; '
+                      'the identical\n'
+                      '        // construction inside runSubagentWithHooks only feeds '
+                      'the display.\n'
+                      '        // Both need the turn count -- omitting it here told '
+                      'the parent that a\n'
+                      '        // subagent had stopped without saying how far it had '
+                      'got, which is\n'
+                      '        // the one fact that decides whether to resume, '
+                      're-scope, or take the\n'
+                      '        // assignment back.\n'
                       '        const finalText =\n'
                       '          appendStopHookBlockingCapWarning(\n'
                       '            toModelVisibleSubagentResult(\n'
                       '              subagent.getFinalText(),\n'
                       '              terminateMode,\n'
+                      '              subagent.getTurnsUsed(),\n'
                       '            ),\n'
                       '            stopHookWarning,\n'
                       '          ) + effectSuffix;\n'
@@ -34057,11 +35107,23 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "          : '';\n"
                              '        const terminateMode = '
                              'subagent.getTerminateMode();\n'
+                             '        // This is the text the parent model actually '
+                             'reads; the identical\n'
+                             '        // construction inside runSubagentWithHooks only '
+                             'feeds the display.\n'
+                             '        // Both need the turn count -- omitting it here '
+                             'told the parent that a\n'
+                             '        // subagent had stopped without saying how far '
+                             'it had got, which is\n'
+                             '        // the one fact that decides whether to resume, '
+                             're-scope, or take the\n'
+                             '        // assignment back.\n'
                              '        const finalText =\n'
                              '          appendStopHookBlockingCapWarning(\n'
                              '            toModelVisibleSubagentResult(\n'
                              '              subagent.getFinalText(),\n'
                              '              terminateMode,\n'
+                             '              subagent.getTurnsUsed(),\n'
                              '            ),\n'
                              '            stopHookWarning,\n'
                              '          ) + effectSuffix;\n'
@@ -34070,7 +35132,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        if (terminateMode === AgentTerminateMode.ERROR) '
                              '{\n'
                              '          return {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-17',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        terminateReason: `Failed to run subagent: '
                        '${errorMessage}`,\n'
@@ -35887,6 +36949,60 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '/**\n'},
             {'name': 'packages/core/src/tools/tools.ts:landmark-2',
+             'path': 'packages/core/src/tools/tools.ts',
+             'before': '  terminateReason?: string;\n'
+                       '  result?: string;\n'
+                       '  executionSummary?: AgentStatsSummary;\n'
+                       '  /** Real-time output-token count during execution, '
+                       'accumulated across subagent rounds. */\n'
+                       '  tokenCount?: number;\n'
+                       '\n',
+             'after': '  terminateReason?: string;\n'
+                      '  result?: string;\n'
+                      '  executionSummary?: AgentStatsSummary;\n'
+                      '  /**\n'
+                      '   * Model round-trips this subagent completed, published '
+                      'together with its\n'
+                      "   * terminal status. A stopped subagent's progress is "
+                      'otherwise unavailable\n'
+                      '   * to a consumer of the display: `executionSummary` reports '
+                      'the statistics\n'
+                      "   * collector's rounds, which is a different count and is "
+                      'absent whenever the\n'
+                      '   * run ended by throwing.\n'
+                      '   */\n'
+                      '  turnsUsed?: number;\n'
+                      '  /** Real-time output-token count during execution, '
+                      'accumulated across subagent rounds. */\n'
+                      '  tokenCount?: number;\n'
+                      '\n',
+             'review_before': '  terminateReason?: string;\n'
+                              '  result?: string;\n'
+                              '  executionSummary?: AgentStatsSummary;\n'
+                              '  /** Real-time output-token count during execution, '
+                              'accumulated across subagent rounds. */\n'
+                              '  tokenCount?: number;\n'
+                              '\n',
+             'review_after': '  terminateReason?: string;\n'
+                             '  result?: string;\n'
+                             '  executionSummary?: AgentStatsSummary;\n'
+                             '  /**\n'
+                             '   * Model round-trips this subagent completed, '
+                             'published together with its\n'
+                             "   * terminal status. A stopped subagent's progress is "
+                             'otherwise unavailable\n'
+                             '   * to a consumer of the display: `executionSummary` '
+                             'reports the statistics\n'
+                             "   * collector's rounds, which is a different count and "
+                             'is absent whenever the\n'
+                             '   * run ended by throwing.\n'
+                             '   */\n'
+                             '  turnsUsed?: number;\n'
+                             '  /** Real-time output-token count during execution, '
+                             'accumulated across subagent rounds. */\n'
+                             '  tokenCount?: number;\n'
+                             '\n'},
+            {'name': 'packages/core/src/tools/tools.ts:landmark-3',
              'path': 'packages/core/src/tools/tools.ts',
              'before': '  // this contains the confirmation details for inline UI '
                        'rendering.\n'
@@ -38517,12 +39633,13 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/config/config.ts': 'c476125a2be618c868e8b38fdce4a77d53c882e8525ce33b20fb35947a38d7c0',
  'packages/cli/src/gemini.test.tsx': '2e547b0eb91c2e1746e3b966511cb286846cbc5495779056d0b1099776795166',
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',
- 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '356a29b720098f3a95a9122fd08097fa2967962f5c42ba2da9f017cb94819f4b',
- 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'a28b31eb386970897bbdd7f72590d5e27d6f9436a6e3d5e81f46b3c60c1d806e',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '8db491cfdef9a99c4dd5720967e5b6f822b41f3b8678c52a3699b459c982f819',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863',
+ 'packages/cli/src/nonInteractive/types.ts': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e',
  'packages/cli/src/nonInteractiveCli.ts': '559cbf3f8daa9d7943dea5ec09859fa25de68b25ecb624e66815a90d8a6b9932',
  'packages/cli/src/ui/hooks/useGeminiStream.ts': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e',
- 'packages/cli/src/utils/nonInteractiveHelpers.test.ts': '7299e9cf41b76940842156009a422e74ead871243ffbdef7a786f87fc3b721e0',
- 'packages/cli/src/utils/nonInteractiveHelpers.ts': '5b43358b8fbe6832582037527523c6654999f1cb8ce1fbe697597f5ee5fc4e5d',
+ 'packages/cli/src/utils/nonInteractiveHelpers.test.ts': '9f524ee280510ed4d80e3e37907a942c368c7ead0dd02f3d37c9e697990ecf19',
+ 'packages/cli/src/utils/nonInteractiveHelpers.ts': '05bf1bb209b455a0fa1b386321198442d08c332cdd1a2f2c08fc05a9948e752c',
  'packages/core/src/agents/runtime/agent-context.test.ts': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a',
  'packages/core/src/agents/runtime/agent-context.ts': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6',
  'packages/core/src/agents/runtime/agent-core.ts': '2a556372e4581ea51cd43ecc36ea5479069190c2263f1f4f0719870a37ccb53c',
@@ -38565,15 +39682,15 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/services/chatCompressionService.ts': '75e64be7a5e28544fc9eba43b11346811a18fe66b0a186830707682533217523',
  'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
- 'packages/core/src/tools/agent/agent.test.ts': '794728ecbc5ef8d25593a32c5a9d104dba2cda8bbf0bef986295a95ce6c14c51',
- 'packages/core/src/tools/agent/agent.ts': '37c8312f988ba485efe66d7bbf5352c23a2762d4786c1d9b254b081914f34e53',
+ 'packages/core/src/tools/agent/agent.test.ts': 'effd65eff9899c8150ee2f002effbc3c15485b9d7bc0d627e76935bf3f50a74c',
+ 'packages/core/src/tools/agent/agent.ts': '1b96052f1f5e7678f2a704d92e95668e3ce00b697d570b2673b35118163780ac',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.ts': '6f901a5cda41071d4237acdc3f3bfd9ba8cf92ef1db93d73ae1aabb038d53e46',
  'packages/core/src/tools/read-file.test.ts': '3d8e74099403f77cd72fe749e547f8c2bec627b8c846f46ae41f1f97d9d7525b',
  'packages/core/src/tools/read-file.ts': 'b2023049f4b50a1581ce502523c7c9aef8968c5eff05d363c158905d3d6aca8d',
- 'packages/core/src/tools/tools.ts': 'baca3633ee6efdf3c334cedc62c0c6bb83db6aa124548e8e227311705a7b7c15',
+ 'packages/core/src/tools/tools.ts': '0f51fbfa7251b2f18878b5c5e64b9c331791e051b1d7120ee1a5735621a6ce5f',
  'packages/core/src/utils/fileUtils.test.ts': '9f191c0db8201be82d3242e35855052f911684ef53569776f53175170b5584e8',
  'packages/core/src/utils/fileUtils.ts': '1012d14b04390f147d46df13ebc8f578bcde0f9ebf60e5e93da3edeb7ac491e5',
  'packages/core/src/utils/image-view.test.ts': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d',
