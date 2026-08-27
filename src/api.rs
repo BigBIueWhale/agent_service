@@ -13,8 +13,8 @@
 //!
 //! - `POST /v1/agent/sessions` — idempotently accept. The body is exactly
 //!   two ordered `multipart/form-data` parts: part 1 `request`
-//!   (`application/json` — `{prompt, preserve_thinking?, archive_bytes,
-//!   archive_sha256}`) and part 2 `archive` (`application/zip` — the exact
+//!   (`application/json` — `{prompt, preserve_thinking?, max_session_turns?,
+//!   archive_bytes, archive_sha256}`) and part 2 `archive` (`application/zip` — the exact
 //!   workspace bytes, streamed to a disk spool while hashed). A required
 //!   caller-generated 256-bit `Idempotency-Key` names the operation.
 //!   Acceptance requires the streamed bytes to equal the declared count and
@@ -97,6 +97,14 @@ pub struct CreateRequest {
     /// boolean rather than a profile name or ambient environment knob.
     #[serde(default)]
     pub preserve_thinking: bool,
+    /// Non-default session turn budget. Omission selects the locked default;
+    /// a present value must be a JSON integer inside the pinned ceiling and
+    /// is refused by name otherwise. It is carried as a raw JSON number so
+    /// zero, a negative count, and a non-integer are refused with the value
+    /// the caller actually sent rather than dying in the decoder as one
+    /// undifferentiated shape error.
+    #[serde(default)]
+    pub max_session_turns: Option<serde_json::Number>,
     /// Exact byte count of the archive part that follows. The upload is
     /// accepted only if the streamed bytes equal this declaration.
     pub archive_bytes: u64,
@@ -137,16 +145,23 @@ async fn create_session(
     .await?;
     let body: CreateRequest = serde_json::from_slice(&request_bytes).map_err(|error| {
         ServiceError::InvalidRequest(format!(
-            "part `request` must be exactly one JSON object with string prompt, optional boolean preserve_thinking, integer archive_bytes, and string archive_sha256: {error}"
+            "part `request` must be exactly one JSON object with string prompt, optional boolean preserve_thinking, optional integer max_session_turns, integer archive_bytes, and string archive_sha256: {error}"
         ))
     })?;
     crate::validation::validate_archive_commitment(body.archive_bytes, &body.archive_sha256)?;
+    // The turn budget is decided before a single archive byte is spooled: an
+    // unrunnable budget must not cost the caller a 200 GiB upload first.
+    let max_session_turns = match &body.max_session_turns {
+        Some(value) => crate::validation::validate_max_session_turns(value)?,
+        None => crate::config::DEFAULT_MAX_SESSION_TURNS,
+    };
     tracing::info!(
         session_id,
         prompt_chars = body.prompt.chars().count(),
         archive_bytes = body.archive_bytes,
         archive_sha256 = %body.archive_sha256,
         preserve_thinking = body.preserve_thinking,
+        max_session_turns,
         "POST /v1/agent/sessions: caller-known handle and archive commitment parsed; streaming the archive part to the spool"
     );
 
@@ -184,6 +199,7 @@ async fn create_session(
             session_id,
             body.prompt,
             body.preserve_thinking,
+            max_session_turns,
             SpooledArchive {
                 path: spool.archive_path.clone(),
                 bytes: body.archive_bytes,
@@ -2270,11 +2286,12 @@ fn sweep_state_dir(
                 // but that fact alone is not deletion authority for an
                 // arbitrary directory bearing a session-shaped name.  Only
                 // remove the exact, empty pre-acceptance layout created by
-                // our own transaction, including its canonical prompt and
-                // history-policy controls.  Any copied workspace, output,
-                // unexpected entry, mode/owner drift, or partially written
-                // control remains intact and blocks readiness for explicit
-                // recovery instead of being guessed disposable.
+                // our own transaction, including its canonical prompt,
+                // history-policy, and turn-budget controls.  Any copied
+                // workspace, output, unexpected entry, mode/owner drift, or
+                // partially written control remains intact and blocks
+                // readiness for explicit recovery instead of being guessed
+                // disposable.
                 let uncommitted = SessionPaths::new(state_dir, name);
                 uncommitted.ensure_recovery_dirs().map_err(|error| {
                     ServiceError::Internal(format!(
@@ -3147,6 +3164,7 @@ mod tests {
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
             preserve_thinking: false,
+            max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
             prompt_preview: "fixture".to_string(),
             progress_revision: 1,
             progress_at_unix_ms: 1,
@@ -3258,6 +3276,59 @@ mod tests {
             r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","preserve_thinking":"true"}"#,
         )
         .expect_err("string policy coercion must fail closed");
+        assert!(error.to_string().contains("invalid type"));
+    }
+
+    #[test]
+    fn create_request_carries_one_optional_typed_turn_budget() {
+        let default = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa"}"#,
+        )
+        .expect("omission must be accepted");
+        assert!(
+            default.max_session_turns.is_none(),
+            "an absent turn budget must stay absent so the locked default is selected explicitly"
+        );
+
+        let requested = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","max_session_turns":700}"#,
+        )
+        .expect("an explicit JSON integer must be accepted by the decoder");
+        let requested_budget = requested
+            .max_session_turns
+            .as_ref()
+            .expect("an explicit budget survives decoding");
+        assert_eq!(
+            crate::validation::validate_max_session_turns(requested_budget)
+                .expect("700 is inside the pinned ceiling"),
+            700
+        );
+
+        // The decoder deliberately admits every JSON number so the typed
+        // validator, not serde, produces the refusal that names the field.
+        for rejected in ["0", "-1", "1.5", "801"] {
+            let body = serde_json::from_str::<CreateRequest>(&format!(
+                r#"{{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","max_session_turns":{rejected}}}"#
+            ))
+            .expect("a JSON number decodes before it is judged");
+            let error = crate::validation::validate_max_session_turns(
+                body.max_session_turns
+                    .as_ref()
+                    .expect("the fixture carries a budget"),
+            )
+            .expect_err("an unrunnable budget must be refused, never clamped");
+            assert!(
+                error.to_string().contains("max_session_turns"),
+                "refusal of {rejected} does not name the field: {error}"
+            );
+        }
+
+        // A non-number remains a decoder-level shape error, exactly as a
+        // non-boolean preserve_thinking is.
+        let error = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","max_session_turns":"700"}"#,
+        )
+        .expect_err("string turn-budget coercion must fail closed");
         assert!(error.to_string().contains("invalid type"));
     }
 
@@ -3534,6 +3605,9 @@ mod tests {
         paths
             .write_history_policy(false)
             .expect("write exact history policy");
+        paths
+            .write_turn_budget(crate::config::DEFAULT_MAX_SESSION_TURNS)
+            .expect("write exact turn budget");
         for path in [
             &paths.root,
             &paths.staged,
@@ -3543,6 +3617,7 @@ mod tests {
             &paths.output,
             &paths.control.join("prompt.txt"),
             &paths.control.join("history-policy.json"),
+            &paths.control.join("turn-budget.json"),
         ] {
             make_service_owned(path);
         }

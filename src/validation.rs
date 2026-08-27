@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use crate::config::{MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES};
+use crate::config::{MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES, MAX_SESSION_TURNS_CEILING};
 use crate::error::{io_msg, ServiceError, ServiceResult};
 
 /// One spooled, hash-committed workspace archive received over the
@@ -28,6 +28,11 @@ pub struct ValidatedRequest {
     pub prompt: String,
     /// Exact typed history policy selected by the trusted API decoder.
     pub preserve_thinking: bool,
+    /// Exact turn budget this session runs under: the locked default unless
+    /// the creation body named another one inside the pinned ceiling. The
+    /// launcher passes it to Qwen Code, so every foreground subagent this
+    /// session starts is bounded by the same number.
+    pub max_session_turns: u32,
     /// The spooled workspace archive whose structure has been proved against
     /// the archive contract before durable acceptance.
     pub archive: SpooledArchive,
@@ -36,13 +41,16 @@ pub struct ValidatedRequest {
 pub fn validate(
     prompt: &str,
     preserve_thinking: bool,
+    max_session_turns: u32,
     archive: SpooledArchive,
 ) -> ServiceResult<ValidatedRequest> {
     let prompt = validate_prompt(prompt)?;
+    validate_session_turn_budget(max_session_turns)?;
     let archive = validate_spooled_archive(archive)?;
     Ok(ValidatedRequest {
         prompt,
         preserve_thinking,
+        max_session_turns,
         archive,
     })
 }
@@ -66,6 +74,59 @@ fn validate_prompt(prompt: &str) -> ServiceResult<String> {
         ));
     }
     Ok(prompt.to_string())
+}
+
+/// Decode the optional `max_session_turns` field of the creation body.
+///
+/// The wire type is a JSON number, so a fractional value, an exponent form
+/// that is not integral, and a negative count all arrive here as
+/// syntactically valid JSON and must be refused by name. Nothing is rounded,
+/// truncated, or clamped: a caller that asked for a budget this deployment
+/// cannot run gets an error, not a quietly different session. A silently
+/// shortened budget would end as an ordinary turn-exhausted exit 53 and be
+/// graded as one, which is exactly the misreading this refuses to create.
+pub fn validate_max_session_turns(value: &serde_json::Number) -> ServiceResult<u32> {
+    // An ordinary request: a JSON integer literal that fits an unsigned 64-bit
+    // count. Anything above the ceiling is named as such before narrowing, so
+    // the refusal quotes the number the caller actually sent.
+    if let Some(turns) = value.as_u64() {
+        if turns > u64::from(MAX_SESSION_TURNS_CEILING) {
+            return Err(ServiceError::InvalidRequest(format!(
+                "field `max_session_turns` ({turns}) exceeds the {MAX_SESSION_TURNS_CEILING}-turn ceiling"
+            )));
+        }
+        let turns = turns as u32;
+        validate_session_turn_budget(turns)?;
+        return Ok(turns);
+    }
+    if value.as_i64().is_some() {
+        return Err(ServiceError::InvalidRequest(format!(
+            "field `max_session_turns` ({value}) is negative; the per-session turn budget must be an integer in 1..={MAX_SESSION_TURNS_CEILING}"
+        )));
+    }
+    // Every remaining JSON number is one this deployment cannot read as a turn
+    // count: a fraction, an exponent form, or a magnitude no integer type here
+    // can hold. None of them is repaired into a nearby budget.
+    Err(ServiceError::InvalidRequest(format!(
+        "field `max_session_turns` ({value}) is not a plain integer; the per-session turn budget must be an integer in 1..={MAX_SESSION_TURNS_CEILING}"
+    )))
+}
+
+/// The turn-budget range rule shared by the pre-stream API check and the
+/// pre-acceptance request validation. Zero and the ceiling are separate,
+/// separately named refusals: they are different mistakes.
+pub fn validate_session_turn_budget(turns: u32) -> ServiceResult<()> {
+    if turns == 0 {
+        return Err(ServiceError::InvalidRequest(
+            "field `max_session_turns` is zero; a session that may take no model turn cannot do any work".into(),
+        ));
+    }
+    if turns > MAX_SESSION_TURNS_CEILING {
+        return Err(ServiceError::InvalidRequest(format!(
+            "field `max_session_turns` ({turns}) exceeds the {MAX_SESSION_TURNS_CEILING}-turn ceiling"
+        )));
+    }
+    Ok(())
 }
 
 /// The archive commitment rules shared by the pre-stream API check and the
@@ -138,8 +199,67 @@ fn validate_spooled_archive(archive: SpooledArchive) -> ServiceResult<SpooledArc
 mod tests {
     use std::os::unix::fs::symlink;
 
-    use super::{validate_prompt, validate_spooled_archive, SpooledArchive};
-    use crate::config::{MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES};
+    use super::{
+        validate_max_session_turns, validate_prompt, validate_session_turn_budget,
+        validate_spooled_archive, SpooledArchive,
+    };
+    use crate::config::{
+        DEFAULT_MAX_SESSION_TURNS, MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES,
+        MAX_SESSION_TURNS_CEILING,
+    };
+
+    fn decode_turns(json: &str) -> crate::error::ServiceResult<u32> {
+        let value: serde_json::Number =
+            serde_json::from_str(json).expect("fixture must be a JSON number");
+        validate_max_session_turns(&value)
+    }
+
+    #[test]
+    fn session_turn_budget_validation_is_exact_and_never_clamps() {
+        assert_eq!(decode_turns("1").expect("one turn is requestable"), 1);
+        assert_eq!(
+            decode_turns(&DEFAULT_MAX_SESSION_TURNS.to_string())
+                .expect("the locked default is requestable"),
+            DEFAULT_MAX_SESSION_TURNS
+        );
+        assert_eq!(
+            decode_turns(&MAX_SESSION_TURNS_CEILING.to_string())
+                .expect("the ceiling itself is requestable"),
+            MAX_SESSION_TURNS_CEILING
+        );
+
+        let just_above_ceiling = (MAX_SESSION_TURNS_CEILING + 1).to_string();
+        let ceiling_fragment =
+            format!("exceeds the {MAX_SESSION_TURNS_CEILING}-turn ceiling");
+        for (json, fragment) in [
+            ("0", "is zero"),
+            ("-1", "is negative"),
+            ("-400", "is negative"),
+            ("1.5", "is not a plain integer"),
+            ("400.5", "is not a plain integer"),
+            // Beyond u64 there is no integer representation left, so this is
+            // refused as unreadable rather than silently becoming a float.
+            ("100000000000000000000", "is not a plain integer"),
+            (just_above_ceiling.as_str(), ceiling_fragment.as_str()),
+            ("1000000", ceiling_fragment.as_str()),
+        ] {
+            let error = decode_turns(json)
+                .expect_err(&format!("turn budget {json} must be refused, never clamped"));
+            let message = error.to_string();
+            assert!(
+                message.contains(fragment) && message.contains("max_session_turns"),
+                "turn budget {json} produced an unnamed refusal: {message}"
+            );
+        }
+
+        // The range rule the API boundary and the pre-acceptance validation
+        // share must agree with the decoder on every edge.
+        assert!(validate_session_turn_budget(0).is_err());
+        assert!(validate_session_turn_budget(1).is_ok());
+        assert!(validate_session_turn_budget(MAX_SESSION_TURNS_CEILING).is_ok());
+        assert!(validate_session_turn_budget(MAX_SESSION_TURNS_CEILING + 1).is_err());
+    }
+
 
     #[test]
     fn prompt_validation_is_exact_and_fail_closed() {

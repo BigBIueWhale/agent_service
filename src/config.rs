@@ -60,7 +60,37 @@ pub const MAX_ARCHIVE_BYTES: u64 = MAX_STAGED_BYTES + 64 * 1024 * 1024;
 /// converging. Qwen Code stops itself at this count and exits 53, which is an
 /// ordinary terminal outcome graded on the work done, never an infrastructure
 /// failure. `max_wall_time_seconds` stays disabled everywhere by design.
-pub const MAX_SESSION_TURNS: u32 = 400;
+///
+/// This is the budget a submission that says nothing about turns receives. A
+/// caller that knows its task is shaped differently may name another budget in
+/// the creation body; this value is what the deployment chose for everything
+/// else, and it stays cross-checked against the stack lock, the agent runtime
+/// contract, both sealed settings files, and the launcher's own constant.
+pub const DEFAULT_MAX_SESSION_TURNS: u32 = 400;
+
+/// The largest turn budget a submission may request.
+///
+/// A per-session budget is a task-shape decision, not an escape hatch from the
+/// circuit breaker: something has to remain finite, or a degenerate loop simply
+/// asks for a bigger number. 800 is exactly two default budgets -- room for a
+/// genuinely larger repository task (a multi-service change, a long build/verify
+/// cycle) without admitting a budget that could no longer be distinguished from
+/// unbounded. A request outside `1..=800` is refused with the offending value;
+/// it is never clamped, because a silently shortened budget would look like an
+/// ordinary turn-exhausted exit 53 and be graded as one.
+///
+/// Like the default, this is pinned rather than being a bare literal: the stack
+/// lock carries it for the service, the agent runtime contract carries it for
+/// the in-image verifier, and the launcher compiles its own copy that the
+/// verifier proves equal to the contract's.
+pub const MAX_SESSION_TURNS_CEILING: u32 = 800;
+
+// The default must itself be a budget a caller could have asked for. A build in
+// which it is not is incoherent before it ever reaches a request.
+const _: () = assert!(
+    DEFAULT_MAX_SESSION_TURNS >= 1 && DEFAULT_MAX_SESSION_TURNS <= MAX_SESSION_TURNS_CEILING,
+    "the default session turn budget must lie inside the requestable range"
+);
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -104,7 +134,10 @@ pub struct LimitsLock {
     pub max_staged_files: u64,
     pub max_staged_entries: u64,
     pub max_archive_bytes: u64,
+    /// The turn budget a submission receives when it names none.
     pub max_session_turns: u32,
+    /// The largest turn budget a submission may name.
+    pub max_session_turns_ceiling: u32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -473,12 +506,13 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.limits.max_staged_files != MAX_STAGED_FILES
         || lock.limits.max_staged_entries != MAX_STAGED_ENTRIES
         || lock.limits.max_archive_bytes != MAX_ARCHIVE_BYTES
-        || lock.limits.max_session_turns != MAX_SESSION_TURNS
+        || lock.limits.max_session_turns != DEFAULT_MAX_SESSION_TURNS
+        || lock.limits.max_session_turns_ceiling != MAX_SESSION_TURNS_CEILING
     {
         return fail(format!(
             "limits in the lock disagree with the compiled constants \
-             (lock: prompt={} staged={} files={} entries={} archive={} turns={}; \
-             compiled: prompt={} staged={} files={} entries={} archive={} turns={}); \
+             (lock: prompt={} staged={} files={} entries={} archive={} turns={} turn_ceiling={}; \
+             compiled: prompt={} staged={} files={} entries={} archive={} turns={} turn_ceiling={}); \
              the shell harness reads these from the lock, so they must match exactly",
             lock.limits.max_prompt_bytes,
             lock.limits.max_staged_bytes,
@@ -486,12 +520,14 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
             lock.limits.max_staged_entries,
             lock.limits.max_archive_bytes,
             lock.limits.max_session_turns,
+            lock.limits.max_session_turns_ceiling,
             MAX_PROMPT_BYTES,
             MAX_STAGED_BYTES,
             MAX_STAGED_FILES,
             MAX_STAGED_ENTRIES,
             MAX_ARCHIVE_BYTES,
-            MAX_SESSION_TURNS,
+            DEFAULT_MAX_SESSION_TURNS,
+            MAX_SESSION_TURNS_CEILING,
         ));
     }
     if lock.service.container_name != "qwen38-agent-service"
@@ -1140,13 +1176,14 @@ mod tests {
         // lock must equal the constant this binary compiled against. A single
         // field off by one must fail closed, so a client mirror can never
         // quietly admit or reject a task the service would not.
-        let mutations: [fn(&mut StackLock); 6] = [
+        let mutations: [fn(&mut StackLock); 7] = [
             |lock: &mut StackLock| lock.limits.max_prompt_bytes += 1,
             |lock: &mut StackLock| lock.limits.max_staged_bytes += 1,
             |lock: &mut StackLock| lock.limits.max_staged_files += 1,
             |lock: &mut StackLock| lock.limits.max_staged_entries += 1,
             |lock: &mut StackLock| lock.limits.max_archive_bytes += 1,
             |lock: &mut StackLock| lock.limits.max_session_turns += 1,
+            |lock: &mut StackLock| lock.limits.max_session_turns_ceiling += 1,
         ];
         for mutate in mutations {
             let mut lock = checked_in_lock();

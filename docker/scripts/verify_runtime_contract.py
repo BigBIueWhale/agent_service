@@ -105,7 +105,7 @@ def verify_settings(
         generation["reasoning_effort"],
     )
     require_equal(
-        "settings max session turns",
+        "settings default max session turns",
         settings["model"]["maxSessionTurns"],
         execution["max_session_turns"],
     )
@@ -408,8 +408,58 @@ def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:
         raise ContractError("agent wrapper must not own or write service output files")
 
 
+def require_turn_budget(label: str, value: Any) -> int:
+    """A turn budget is a positive integer, and `bool` is not one."""
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ContractError(f"{label} must be an integer of at least 1, got {value!r}")
+    return value
+
+
+def verify_agent_exec_turn_budget(contract: dict[str, Any], source: str) -> None:
+    """Prove the launcher's own turn-budget bounds are the contract's.
+
+    The turn budget is the one bound on session length and the only bound a
+    caller may vary, so this proves the two numbers the launcher compiles --
+    the default a submission gets when it names none, and the ceiling above
+    which it refuses to launch at all -- rather than only proving that the
+    flag is present. A literal fragment could not catch a resealed constant,
+    and a ceiling that existed only as a bare literal in one file would not be
+    pinned at all.
+    """
+    execution = contract["execution"]
+    contract_default = require_turn_budget(
+        "execution.max_session_turns", execution["max_session_turns"]
+    )
+    contract_ceiling = require_turn_budget(
+        "execution.max_session_turns_ceiling", execution["max_session_turns_ceiling"]
+    )
+    if contract_default > contract_ceiling:
+        raise ContractError(
+            "execution.max_session_turns "
+            f"({contract_default}) exceeds execution.max_session_turns_ceiling "
+            f"({contract_ceiling}); the default budget must itself be requestable"
+        )
+    for label, pattern, expected in (
+        (
+            "agent_exec default max session turns",
+            r"const DEFAULT_MAX_SESSION_TURNS: u32 = (\d+);",
+            contract_default,
+        ),
+        (
+            "agent_exec max session turns ceiling",
+            r"const MAX_SESSION_TURNS_CEILING: u32 = (\d+);",
+            contract_ceiling,
+        ),
+    ):
+        match = re.search(pattern, source)
+        if not match:
+            raise ContractError(f"{label} declaration is missing from agent_exec")
+        require_equal(label, int(match.group(1)), expected)
+
+
 def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
     filesystem = contract["filesystem"]
+    sealed = contract["sealed_environment"]
     require_fragments(
         "agent_exec source",
         source,
@@ -417,6 +467,7 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             f'const SANDBOX_ID: &str = "{filesystem["agent_exec_sandbox"]}";',
             'const EVENTS_SOCKET: &str = "/streams/events.sock";',
             'const STDERR_SOCKET: &str = "/streams/stderr.sock";',
+            f'const TURN_BUDGET_FILE: &str = "{sealed["turn_budget_path"]}";',
             'const NODE: &str = "/usr/local/bin/node";',
             'const CLI: &str = "/opt/qwen-code/scripts/cli-entry.js";',
             'std::path::Path::new("/output").exists()',
@@ -429,21 +480,17 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             'libc::close_range(3, u32::MAX, 0)',
             '.arg("--foreground-agents-only")',
             '.arg("--max-subagent-depth=1")',
-            '.arg(format!("--max-session-turns={MAX_SESSION_TURNS}"))',
+            # The budget the launcher passes is the per-session one it read from
+            # the sealed control record, not a compiled-in number. That single
+            # flag is also what every foreground subagent inherits, because the
+            # patched Agent tool derives its own max_turns from the same
+            # resolved config value this flag sets.
+            'let max_session_turns = read_session_turn_budget()?;',
+            '.arg(format!("--max-session-turns={max_session_turns}"))',
             '.arg("--max-tool-calls=-1")',
         ],
     )
-    # The turn budget is the one bound on session length, so prove the value the
-    # agent actually passes equals the contract's, rather than only proving the
-    # flag is present. A literal fragment could not catch a resealed constant.
-    match = re.search(r"const MAX_SESSION_TURNS: u32 = (\d+);", source)
-    if not match:
-        raise ContractError("agent_exec session turn-budget declaration is missing")
-    require_equal(
-        "agent_exec max session turns",
-        int(match.group(1)),
-        contract["execution"]["max_session_turns"],
-    )
+    verify_agent_exec_turn_budget(contract, source)
     match = re.search(r'const STRICT_TOOLS: &str =\s*"([^"]+)";', source)
     if not match:
         raise ContractError("agent_exec strict-tool declaration is missing")

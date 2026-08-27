@@ -29,6 +29,8 @@ readonly TERMINAL_ID='s-22222222222222222222222222222222222222222222222222222222
 readonly INVALID_ID='s-3333333333333333333333333333333333333333333333333333333333333333'
 readonly EMPTY_ID='s-4444444444444444444444444444444444444444444444444444444444444444'
 readonly TAMPER_ID='s-5555555555555555555555555555555555555555555555555555555555555555'
+readonly BUDGET_ID='s-6666666666666666666666666666666666666666666666666666666666666666'
+readonly REFUSED_ID='s-7777777777777777777777777777777777777777777777777777777777777777'
 PROMPT_FILE="${TEST_DIR}/prompt.txt"
 printf 'exact receipt prompt\n' >"${PROMPT_FILE}"
 
@@ -125,7 +127,7 @@ curl() {
     --arg model "${TEST_MODEL}" \
     --argjson archive_bytes "${echo_bytes}" \
     --arg archive_sha256 "${echo_sha}" \
-    '{session_id:$id,status:$status,progress_revision:1,progress_events:[],model:$model,context_window:262144,preserve_thinking:false,archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' \
+    '{session_id:$id,status:$status,progress_revision:1,progress_events:[],model:$model,context_window:262144,preserve_thinking:false,max_session_turns:400,archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' \
     >"${output}"
   printf '%s' "${TEST_HTTP_STATUS}"
 }
@@ -173,6 +175,34 @@ if submission_validate_receipt "${TAMPER_ID}" >/dev/null 2>&1; then
 fi
 rm -rf -- "${SUBMISSION_RECEIPT_ROOT}/${TAMPER_ID}"
 
+# The two optional creation-body fields are exercised through the same one
+# receipt path: an explicit budget must survive serialization and revalidation
+# byte-exactly, and a budget outside the locked ceiling must be refused before
+# any receipt exists.
+BUDGET_REQUEST="$(submission_create_receipt "${BUDGET_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" '' 700)"
+readonly BUDGET_REQUEST
+assert_receipt "${BUDGET_ID}" "${BUDGET_REQUEST}"
+[[ "$(jq -r '.max_session_turns' "${BUDGET_REQUEST}")" == 700 ]] || {
+  printf 'explicit turn budget was not recorded in the receipt\n' >&2
+  exit 1
+}
+[[ "$(jq -r 'has("preserve_thinking")' "${BUDGET_REQUEST}")" == false ]] || {
+  printf 'omitted preserve_thinking appeared in the receipt\n' >&2
+  exit 1
+}
+rm -rf -- "${SUBMISSION_RECEIPT_ROOT}/${BUDGET_ID}"
+for rejected in 0 -1 801 1.5 abc; do
+  if submission_create_receipt "${REFUSED_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" '' "${rejected}" \
+    >/dev/null 2>&1; then
+    printf 'turn budget %s was accepted by the client harness\n' "${rejected}" >&2
+    exit 1
+  fi
+  [[ ! -e "${SUBMISSION_RECEIPT_ROOT}/${REFUSED_ID}" ]] || {
+    printf 'a refused turn budget left a receipt behind: %s\n' "${rejected}" >&2
+    exit 1
+  }
+done
+
 INVALID_REQUEST="$(submission_create_receipt "${INVALID_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}")"
 readonly INVALID_REQUEST
 TEST_RESPONSE_STATUS='completed'
@@ -184,4 +214,4 @@ if submission_post_receipt "${INVALID_ID}" "${INVALID_REQUEST}" >/dev/null 2>&1;
 fi
 assert_receipt "${INVALID_ID}" "${INVALID_REQUEST}"
 
-printf 'SUBMISSION_CONTRACT_OK archive-receipt=validated commitment=hash-checked empty-workspace=canonical tamper=fail-closed replay-running=accepted replay-terminal=accepted malformed-202=retained\n'
+printf 'SUBMISSION_CONTRACT_OK archive-receipt=validated commitment=hash-checked empty-workspace=canonical tamper=fail-closed replay-running=accepted replay-terminal=accepted malformed-202=retained turn-budget=optional-and-bounded\n'

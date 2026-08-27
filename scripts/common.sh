@@ -273,6 +273,18 @@ check_pinned_inputs() {
   require_equal "runtime contract KV offload eviction policy" \
     "$(contract_value '.model.kv_offload_eviction_policy')" \
     "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_connector_extra_config.eviction_policy')"
+  # The turn budget is the only locked limit a caller may vary per session, and
+  # it is stated in two locked documents: the service reads the lock, and the
+  # in-image verifier reads the contract. The in-image verifier proves the
+  # contract against the launcher and the settings, and the service proves the
+  # lock against its own compiled constants, so the one pair neither of them can
+  # see is asserted here.
+  require_equal "runtime contract default session turn budget" \
+    "$(contract_value '.execution.max_session_turns | tostring')" \
+    "$(lock_value '.limits.max_session_turns | tostring')"
+  require_equal "runtime contract session turn-budget ceiling" \
+    "$(contract_value '.execution.max_session_turns_ceiling | tostring')" \
+    "$(lock_value '.limits.max_session_turns_ceiling | tostring')"
   require_equal "agent runtime contract verifier SHA256" \
     "$(sha256_file "${PROJECT_DIR}/docker/scripts/verify_runtime_contract.py")" \
     "$(lock_value '.build.runtime_contract_verifier_sha256')"

@@ -168,23 +168,34 @@ tokenizer, or tokenizer fallback in the compaction trigger or outbound clamp. If
 the tokenizer is missing, malformed, or reports another model window, the turn
 fails before generation.
 
-A session is bounded by model turns, never by wall-clock time: the locked budget
-is 400 turns (`limits.max_session_turns`), enforced by the client itself, and
-`max_wall_time_seconds` is disabled everywhere. The budget counts the owning
-session's own turns, so a foreground subagent that spends sixty turns costs its
-parent one; a subagent is bounded by the same budget in its own right, and if it
-exhausts it the parent is told so explicitly, with the turn count, and treats the
-assignment as unfinished rather than concluding from a partial report. Delegation
-is therefore how the main thread stays on trajectory rather than a way to escape
-the budget, and the backend keeps an evicted context in host RAM so returning
-from a subagent restores it by DMA instead of re-prefilling it. Turns are the hardware-independent
-measure of agent progress, so the same trajectory is judged identically whatever
-the backend's generation speed; a wall-clock budget would instead score how fast
-this GPU happens to run. Reaching the budget is an ordinary terminal outcome —
-the client exits 53 and the work done up to that point stands — not an error.
-The budget is a degenerate-loop circuit breaker: a repository-level fix needs
-roughly 80-190 turns to orient, build, diagnose, implement, and verify, so 400
-admits a complete second attempt after a wrong hypothesis. Cumulative tool calls
+A session is bounded by model turns, never by wall-clock time: the default
+budget is 400 turns (`limits.max_session_turns`), a submission may name any
+budget from 1 to the locked 800-turn ceiling
+(`limits.max_session_turns_ceiling`) in its optional `max_session_turns` field,
+the chosen budget is enforced by the client itself, and `max_wall_time_seconds`
+is disabled everywhere. The budget counts the owning session's own turns, so a
+foreground subagent that spends sixty turns costs its parent one; a subagent is
+bounded by the same budget in its own right, and if it exhausts it the parent is
+told so explicitly, with the turn count, and treats the assignment as unfinished
+rather than concluding from a partial report. Delegation is therefore how the
+main thread stays on trajectory rather than a way to escape the budget, and the
+backend keeps an evicted context in host RAM so returning from a subagent
+restores it by DMA instead of re-prefilling it. Turns are the
+hardware-independent measure of agent progress, so the same trajectory is judged
+identically whatever the backend's generation speed; a wall-clock budget would
+instead score how fast this GPU happens to run. Reaching the budget is an
+ordinary terminal outcome — the client exits 53 and the work done up to that
+point stands — not an error. The budget is a degenerate-loop circuit breaker: a
+repository-level fix needs roughly 80-190 turns to orient, build, diagnose,
+implement, and verify, so 400 admits a complete second attempt after a wrong
+hypothesis. A caller who knows a particular task is shaped differently can say
+so per session, but something must stay finite or a degenerate loop simply asks
+for a bigger number: the ceiling is exactly two default budgets, and a request
+for zero, a negative count, a non-integer, or more than 800 turns is an error
+naming the value, never a silently clamped session that would end as an ordinary
+exit 53 and be graded as one. The effective budget is recorded in the session
+body and in the bundle's `control/turn-budget.json`, so a finished session can
+be read back to see the bound it actually ran under. Cumulative tool calls
 have no separate cutoff, and one model turn still has a 1,000-tool-call circuit
 breaker for degenerate output. Auto-compaction is
 delayed to the latest safe threshold supported by the pinned client. Subagents run
@@ -715,10 +726,16 @@ All endpoints listen only on `127.0.0.1:8090`:
 
 The creation body is exactly two ordered `multipart/form-data` parts: part 1
 `request` (`application/json` — `{"prompt", "preserve_thinking"?,
-"archive_bytes", "archive_sha256"}`, at most 2 MiB) and part 2 `archive`
-(`application/zip` — the exact workspace bytes, streamed to a disk spool while
-hashed, bounded only by the explicit 200 GiB + container-overhead archive cap).
-A required caller-generated 256-bit `Idempotency-Key` names the operation.
+"max_session_turns"?, "archive_bytes", "archive_sha256"}`, at most 2 MiB) and
+part 2 `archive` (`application/zip` — the exact workspace bytes, streamed to a
+disk spool while hashed, bounded only by the explicit 200 GiB +
+container-overhead archive cap). A required caller-generated 256-bit
+`Idempotency-Key` names the operation. Both optional fields are typed, not
+profile names: `preserve_thinking` is a JSON boolean and `max_session_turns` is
+a JSON integer in `1..=800`. Omitting one selects the locked default (`false`
+and 400 turns); a bad value is refused by name before the archive part is
+spooled, and a replay under the same handle must repeat the same values or it is
+a 409 rather than a second operation.
 There is no serving-capacity gate: sessions run concurrently, each in its own
 isolated topology, because whether more than one should run at once is a
 placement decision for whatever sits above this service. Concurrent sessions

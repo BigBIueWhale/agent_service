@@ -12,8 +12,8 @@
     "agent_apt_lock_sha256": "b653bee65b0d55f999b96a73102bdd3de03d72a4136a62810b9c89f091997770",
     "toolchain_verifier_sha256": "092f465dc47c3d102d7abe9d92d8317eea7e732d3133a7449607eb1dd46fe3ec",
     "toolchain_verifier_test_sha256": "932d6c5956a0e18a9f31a473ef68d1359d7bbd88a5b4fecdd5741568c3183011",
-    "runtime_contract_verifier_sha256": "3916ecd88d57d9c54281a6561bf53154fdc207b726ea4dab74fad110ac134108",
-    "runtime_contract_verifier_test_sha256": "7469b725ea8f96e9939f2ca86246e8a11e93adda9feef198b9925d29c48b7fc6",
+    "runtime_contract_verifier_sha256": "46a80b8fb9d0ab739b06e38a38e04cad2bb563819e12ad4ab2a2935014d203dc",
+    "runtime_contract_verifier_test_sha256": "cb19b1f8f627626a30980d743c36eadee1f7c3accd0a76e3d462378b6b4d70c7",
     "wrapper_contract_test_sha256": "7b03231c0e17f181581b2cc4b10e08eeb4782942f2943e7b06c51d4ba77029c2",
     "jks_normalizer_sha256": "309570025cc08c1ea865d67607e357d92cbb32ce2afe9af5e17c2cd7af8c3d6a",
     "jks_normalizer_test_sha256": "9e9060b44eee4132a78a9a523d8525a0b53c8665f61b16f4b5cc5e3d2e03fcb1",
@@ -85,9 +85,9 @@
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "0d2c6fd9b7da1a7347407a19b168ff14d4b8c5395e68f93702d7347242c554ae",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "runtime_contract_sha256": "8786dbfc997195652ac4286b28b134a1ef14ef23b4121ebaf12a82bae6f4a078",
+    "runtime_contract_sha256": "4a962387657104b5ed827b3a679bfc4f263bad148657319a879e0ba214632447",
     "wrapper_sha256": "c9d5a4f06e732c6889267c16313f913213dcfd81b85292fac97035ff2eed1338",
-    "agent_exec_source_sha256": "23db0c591965e4acc0db26d7b9b2b4e300e91e05e577693ad79d3cf308eea446",
+    "agent_exec_source_sha256": "250b64e511583ff908306d8f7809e71d37019821857817a18f340c6eb72f870c",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
     "model_base_url": "http://127.0.0.1:18000/v1",
     "model_proxy_port": 18000,
@@ -284,6 +284,7 @@
     "max_staged_files": 200000,
     "max_staged_entries": 250000,
     "max_archive_bytes": 214815473664,
-    "max_session_turns": 400
+    "max_session_turns": 400,
+    "max_session_turns_ceiling": 800
   }
 }

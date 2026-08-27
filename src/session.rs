@@ -33,6 +33,7 @@ struct FailureContext<'a> {
     session_id: &'a str,
     prompt_preview: &'a str,
     preserve_thinking: bool,
+    max_session_turns: u32,
     archive_bytes: u64,
     archive_sha256: &'a str,
     started_at_unix: u64,
@@ -210,6 +211,7 @@ pub async fn run_one(
         session_id,
         prompt_preview: &prompt_preview,
         preserve_thinking: req.preserve_thinking,
+        max_session_turns: req.max_session_turns,
         archive_bytes: req.archive.bytes,
         archive_sha256: &req.archive.sha256,
         started_at_unix,
@@ -845,6 +847,7 @@ pub async fn run_one(
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         preserve_thinking: req.preserve_thinking,
+        max_session_turns: req.max_session_turns,
         archive_bytes: req.archive.bytes,
         archive_sha256: req.archive.sha256.clone(),
         prompt_preview,
@@ -1004,6 +1007,7 @@ pub async fn recover_after_execution_panic(
     full_prompt: &str,
     prompt_preview: &str,
     preserve_thinking: bool,
+    max_session_turns: u32,
     archive_bytes: u64,
     archive_sha256: &str,
     started_at_unix: u64,
@@ -1084,6 +1088,11 @@ pub async fn recover_after_execution_panic(
             if let Err(error) = ensure_history_policy_record(&paths, preserve_thinking) {
                 diagnostics.push(format!(
                     "preserve history policy after execution-task failure: {error}"
+                ));
+            }
+            if let Err(error) = ensure_turn_budget_record(&paths, max_session_turns) {
+                diagnostics.push(format!(
+                    "preserve turn budget after execution-task failure: {error}"
                 ));
             }
             for (path, contents) in [
@@ -1175,6 +1184,7 @@ pub async fn recover_after_execution_panic(
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         preserve_thinking,
+        max_session_turns,
         archive_bytes,
         archive_sha256: archive_sha256.to_string(),
         prompt_preview: prompt_preview.to_string(),
@@ -1222,6 +1232,7 @@ pub async fn recover_after_service_restart(
     paths.ensure_recovery_dirs()?;
     ensure_prompt_record(&paths, &acceptance.prompt)?;
     ensure_history_policy_record(&paths, acceptance.preserve_thinking)?;
+    ensure_turn_budget_record(&paths, acceptance.max_session_turns)?;
 
     let status = if cancellation_was_durable {
         SessionStatus::Cancelled
@@ -1352,6 +1363,7 @@ pub async fn recover_after_service_restart(
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         preserve_thinking: acceptance.preserve_thinking,
+        max_session_turns: acceptance.max_session_turns,
         archive_bytes: acceptance.archive_bytes,
         archive_sha256: acceptance.archive_sha256.clone(),
         prompt_preview: crate::runtime::preview(&acceptance.prompt),
@@ -1484,6 +1496,49 @@ fn ensure_history_policy_record(
         }
         Err(error) => Err(ServiceError::Internal(format!(
             "stat panic-recovery history policy {}: {error}",
+            path.display()
+        ))),
+    }
+}
+
+fn ensure_turn_budget_record(
+    paths: &SessionPaths,
+    max_session_turns: u32,
+) -> ServiceResult<()> {
+    let path = paths.control.join("turn-budget.json");
+    let expected = staging::turn_budget_record(max_session_turns);
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata)
+            if metadata.is_file()
+                && !metadata.file_type().is_symlink()
+                && metadata.uid() == 1000
+                && metadata.gid() == 1000
+                && metadata.permissions().mode() & 0o777 == 0o444 =>
+        {
+            let existing =
+                read_exact_owned_regular_file(&path, 0o444, 64, "panic-recovery turn budget")?;
+            if existing == expected.as_bytes() {
+                Ok(())
+            } else {
+                Err(ServiceError::Internal(format!(
+                    "existing panic-recovery turn budget {} contradicts the accepted max_session_turns={max_session_turns}",
+                    path.display()
+                )))
+            }
+        }
+        Ok(metadata) => Err(ServiceError::Internal(format!(
+            "{} is not the exact regular 1000:1000 mode-0444 turn-budget record: type={:?} uid={} gid={} mode={:o}",
+            path.display(),
+            metadata.file_type(),
+            metadata.uid(),
+            metadata.gid(),
+            metadata.permissions().mode() & 0o777
+        ))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            paths.write_turn_budget(max_session_turns).map(|_| ())
+        }
+        Err(error) => Err(ServiceError::Internal(format!(
+            "stat panic-recovery turn budget {}: {error}",
             path.display()
         ))),
     }
@@ -1900,6 +1955,7 @@ async fn finalize_setup_failure(
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         preserve_thinking: context.preserve_thinking,
+        max_session_turns: context.max_session_turns,
         archive_bytes: context.archive_bytes,
         archive_sha256: context.archive_sha256.to_string(),
         prompt_preview: context.prompt_preview.to_string(),

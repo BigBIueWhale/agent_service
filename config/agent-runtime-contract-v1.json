@@ -8,6 +8,7 @@
     "qwen_home": "/opt/agent",
     "preserved_qwen_home": "/opt/agent-preserved",
     "history_policy_path": "/run/agent/history-policy.json",
+    "turn_budget_path": "/run/agent/turn-budget.json",
     "system_prompt_path": "/opt/agent/system.md",
     "deployment_contract_path": "/opt/agent/deployment-contract.md",
     "uid": 1000,
@@ -141,6 +142,7 @@
   },
   "execution": {
     "max_session_turns": 400,
+    "max_session_turns_ceiling": 800,
     "max_cumulative_tool_calls": -1,
     "max_tool_calls_per_turn": 1000,
     "max_wall_time_seconds": -1,
@@ -179,6 +181,6 @@
     "deployment_contract_sha256": "0d2c6fd9b7da1a7347407a19b168ff14d4b8c5395e68f93702d7347242c554ae",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
     "wrapper_sha256": "c9d5a4f06e732c6889267c16313f913213dcfd81b85292fac97035ff2eed1338",
-    "agent_exec_source_sha256": "23db0c591965e4acc0db26d7b9b2b4e300e91e05e577693ad79d3cf308eea446"
+    "agent_exec_source_sha256": "250b64e511583ff908306d8f7809e71d37019821857817a18f340c6eb72f870c"
   }
 }

@@ -13,6 +13,7 @@ use std::ffi::CString;
 use std::io;
 use std::mem;
 use std::os::fd::{AsRawFd, RawFd};
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::process::{Command, ExitCode};
 
@@ -20,15 +21,42 @@ const SANDBOX_ID: &str =
     "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1";
 const EVENTS_SOCKET: &str = "/streams/events.sock";
 const STDERR_SOCKET: &str = "/streams/stderr.sock";
+/// The sole per-session turn budget input.
+///
+/// The agent container has no environment knob, argument, or network path that
+/// could carry a per-session value, so the service publishes the accepted
+/// budget as one canonical read-only record in the control mount and this
+/// launcher reads it here. The launcher still accepts no arguments: the record
+/// is trusted service-owned state, not caller-controlled argv.
+const TURN_BUDGET_FILE: &str = "/run/agent/turn-budget.json";
+/// The canonical record is one short line; anything larger is malformed by
+/// construction and is refused without being read as a budget.
+const MAX_TURN_BUDGET_BYTES: u64 = 64;
 /// Session turn budget: the one bound on how long a session may work. Turns,
 /// never wall time -- a wall-clock budget would measure backend generation speed
 /// rather than agent progress. Qwen Code stops itself here and exits 53, an
-/// ordinary terminal outcome. This value must equal `limits.max_session_turns`
-/// in the stack lock, `execution.max_session_turns` in the agent runtime
-/// contract, and `model.maxSessionTurns` in both sealed settings files; the
-/// in-image runtime-contract verifier proves the contract and settings agree,
-/// and the service proves the lock equals its own compiled constant.
-const MAX_SESSION_TURNS: u32 = 400;
+/// ordinary terminal outcome.
+///
+/// This is the budget a session that named none was accepted with. It must
+/// equal `limits.max_session_turns` in the stack lock,
+/// `execution.max_session_turns` in the agent runtime contract, and
+/// `model.maxSessionTurns` in both sealed settings files; the in-image
+/// runtime-contract verifier proves the contract, the settings, and this
+/// declaration agree, and the service proves the lock equals its own compiled
+/// constant.
+const DEFAULT_MAX_SESSION_TURNS: u32 = 400;
+/// The largest budget a session may have been accepted with. The service
+/// refuses a larger request before acceptance; this launcher refuses a larger
+/// record before exec, so a turn budget beyond the reviewed bound cannot reach
+/// Qwen Code even if the control mount were wrong. It must equal
+/// `limits.max_session_turns_ceiling` in the stack lock and
+/// `execution.max_session_turns_ceiling` in the agent runtime contract.
+const MAX_SESSION_TURNS_CEILING: u32 = 800;
+// The sealed default must itself be a runnable budget.
+const _: () = assert!(
+    DEFAULT_MAX_SESSION_TURNS >= 1 && DEFAULT_MAX_SESSION_TURNS <= MAX_SESSION_TURNS_CEILING,
+    "the sealed default session turn budget must lie inside the accepted range"
+);
 const NODE: &str = "/usr/local/bin/node";
 const CLI: &str = "/opt/qwen-code/scripts/cli-entry.js";
 const CONTROL_ATTEST_FD: RawFd = 3;
@@ -112,6 +140,9 @@ fn run() -> Result<std::convert::Infallible, String> {
     if std::path::Path::new("/output").exists() {
         return Err("/output must be absent from the Qwen container mount namespace".into());
     }
+    // Read the session's budget before anything else is set up: a session that
+    // cannot be given an exact bound must not reach the model at all.
+    let max_session_turns = read_session_turn_budget()?;
 
     let events = UnixStream::connect(EVENTS_SOCKET)
         .map_err(|error| format!("connect fixed event capture socket {EVENTS_SOCKET}: {error}"))?;
@@ -161,11 +192,76 @@ fn run() -> Result<std::convert::Infallible, String> {
             .arg(format!("--strict-tools={STRICT_TOOLS}"))
             .arg("--foreground-agents-only")
             .arg("--max-subagent-depth=1")
-            .arg(format!("--max-session-turns={MAX_SESSION_TURNS}"))
+            .arg(format!("--max-session-turns={max_session_turns}"))
             .arg("--max-tool-calls=-1")
             .arg("--no-chat-recording"),
     );
     Err(format!("exec pinned Qwen Code entrypoint: {error}"))
+}
+
+/// Read the accepted per-session turn budget from the sealed control mount.
+///
+/// The record is service-owned state on a read-only bind mount, and it is
+/// checked like one: exactly the ownership, mode, and bytes the service
+/// publishes. There is no default-on-failure path -- an unreadable, drifted,
+/// or malformed record fails the session instead of silently substituting the
+/// sealed default, because a session that quietly ran on a different budget
+/// than the one it was accepted with would be graded as though it had not.
+fn read_session_turn_budget() -> Result<u32, String> {
+    let metadata = std::fs::symlink_metadata(TURN_BUDGET_FILE).map_err(|error| {
+        format!("stat sealed session turn budget {TURN_BUDGET_FILE}: {error}")
+    })?;
+    if !metadata.is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.uid() != 1000
+        || metadata.gid() != 1000
+        || metadata.permissions().mode() & 0o777 != 0o444
+        || metadata.len() > MAX_TURN_BUDGET_BYTES
+    {
+        return Err(format!(
+            "{TURN_BUDGET_FILE} must be a regular non-symlink uid:gid 1000:1000 mode-0444 record of at most {MAX_TURN_BUDGET_BYTES} bytes; observed type={:?} uid={} gid={} mode={:o} bytes={}",
+            metadata.file_type(),
+            metadata.uid(),
+            metadata.gid(),
+            metadata.permissions().mode() & 0o777,
+            metadata.len()
+        ));
+    }
+    let raw = std::fs::read(TURN_BUDGET_FILE)
+        .map_err(|error| format!("read sealed session turn budget {TURN_BUDGET_FILE}: {error}"))?;
+    parse_session_turn_budget(&raw)
+}
+
+/// Parse the one canonical spelling of the record and nothing else.
+///
+/// The service writes these bytes; both sides compare bytes rather than
+/// accepting whatever a JSON parser would tolerate, so a rewritten,
+/// re-indented, or extended record is a failure rather than a reinterpretation.
+fn parse_session_turn_budget(raw: &[u8]) -> Result<u32, String> {
+    let malformed = |detail: &str| {
+        format!(
+            "{TURN_BUDGET_FILE} is not one canonical {{\"max_session_turns\":N}} line with N in 1..={MAX_SESSION_TURNS_CEILING} (the sealed default is {DEFAULT_MAX_SESSION_TURNS}): {detail}"
+        )
+    };
+    let text = std::str::from_utf8(raw).map_err(|error| malformed(&format!("{error}")))?;
+    let digits = text
+        .strip_prefix("{\"max_session_turns\":")
+        .and_then(|rest| rest.strip_suffix("}\n"))
+        .ok_or_else(|| malformed(&format!("observed {text:?}")))?;
+    if digits.is_empty()
+        || digits.len() > 10
+        || digits.starts_with('0')
+        || !digits.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(malformed(&format!("observed turn count {digits:?}")));
+    }
+    let turns: u32 = digits
+        .parse()
+        .map_err(|error| malformed(&format!("turn count {digits:?}: {error}")))?;
+    if turns == 0 || turns > MAX_SESSION_TURNS_CEILING {
+        return Err(malformed(&format!("turn count {turns} is outside the accepted range")));
+    }
+    Ok(turns)
 }
 
 fn require_control_fd(fd: RawFd, label: &str) -> Result<(), String> {
@@ -406,12 +502,59 @@ mod tests {
     }
 
     #[test]
+    fn session_turn_budget_records_are_read_exactly_and_never_defaulted() {
+        for turns in [1u32, DEFAULT_MAX_SESSION_TURNS, MAX_SESSION_TURNS_CEILING] {
+            let record = format!("{{\"max_session_turns\":{turns}}}\n");
+            assert_eq!(
+                parse_session_turn_budget(record.as_bytes()),
+                Ok(turns),
+                "canonical record for {turns} turns was not read back exactly"
+            );
+        }
+
+        // Every rejection must fail the session. None of these may fall back
+        // to the sealed default: the whole point of the record is that the
+        // budget Qwen Code enforces is the budget the session was accepted
+        // with, and a session graded on a bound nobody chose is worse than a
+        // session that refuses to start.
+        for malformed in [
+            // Not the canonical spelling.
+            "{\"max_session_turns\":400}".to_string(),
+            "{\"max_session_turns\": 400}\n".to_string(),
+            " {\"max_session_turns\":400}\n".to_string(),
+            "{\"max_session_turns\":400}\n\n".to_string(),
+            "{\"max_session_turns\":0400}\n".to_string(),
+            "{\"max_session_turns\":+400}\n".to_string(),
+            "{\"max_session_turns\":\"400\"}\n".to_string(),
+            "{\"max_session_turns\":400,\"preserve_thinking\":false}\n".to_string(),
+            // A different sealed record must never be read as a budget.
+            "{\"preserve_thinking\":false}\n".to_string(),
+            String::new(),
+            // Outside the accepted range.
+            "{\"max_session_turns\":0}\n".to_string(),
+            "{\"max_session_turns\":-1}\n".to_string(),
+            format!("{{\"max_session_turns\":{}}}\n", MAX_SESSION_TURNS_CEILING + 1),
+            format!("{{\"max_session_turns\":{}}}\n", u64::from(u32::MAX) + 1),
+        ] {
+            let error = parse_session_turn_budget(malformed.as_bytes())
+                .expect_err(&format!("malformed record was accepted: {malformed:?}"));
+            assert!(
+                error.contains(TURN_BUDGET_FILE) && error.contains("max_session_turns"),
+                "refusal does not name the record it read: {error}"
+            );
+        }
+    }
+
+    #[test]
     fn fixed_command_and_sandbox_identity_are_exact() {
         assert_eq!(
             SANDBOX_ID,
             "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
         );
         assert_eq!(NODE, "/usr/local/bin/node");
+        assert_eq!(TURN_BUDGET_FILE, "/run/agent/turn-budget.json");
+        assert_eq!(DEFAULT_MAX_SESSION_TURNS, 400);
+        assert_eq!(MAX_SESSION_TURNS_CEILING, 800);
         assert_eq!(CLI, "/opt/qwen-code/scripts/cli-entry.js");
         assert_eq!(CONTROL_ATTEST_FD, 3);
         assert_eq!(CONTROL_RELEASE_FD, 4);

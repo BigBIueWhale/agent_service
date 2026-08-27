@@ -62,7 +62,10 @@ SUBMISSION_MAX_REQUEST_BYTES="$(jq -er '.service.request_body_limit_bytes | numb
   || { printf 'FATAL: stack lock .service.request_body_limit_bytes is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
 SUBMISSION_MAX_PROMPT_BYTES="$(jq -er '.limits.max_prompt_bytes | numbers' "${SCRIPT_DIR}/config/stack.lock.json")" \
   || { printf 'FATAL: stack lock .limits.max_prompt_bytes is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
+SUBMISSION_MAX_SESSION_TURNS_CEILING="$(jq -er '.limits.max_session_turns_ceiling | numbers' "${SCRIPT_DIR}/config/stack.lock.json")" \
+  || { printf 'FATAL: stack lock .limits.max_session_turns_ceiling is absent or not a number in %s\n' "${SCRIPT_DIR}/config/stack.lock.json" >&2; exit 1; }
 readonly SUBMISSION_MAX_ARCHIVE_BYTES SUBMISSION_MAX_REQUEST_BYTES SUBMISSION_MAX_PROMPT_BYTES
+readonly SUBMISSION_MAX_SESSION_TURNS_CEILING
 # Total transfer deadline scales with the archive cap so the one submission path
 # stays a single mode from an 8 KiB workspace to a 200 GiB one: a 100 MiB/s
 # sustained floor plus a fixed 300 s allowance for the server's spool-hash-
@@ -106,15 +109,21 @@ submission_validate_receipt() {
   ((archive_bytes > 0 && archive_bytes <= SUBMISSION_MAX_ARCHIVE_BYTES)) ||
     submission_die "receipt archive is ${archive_bytes} bytes; required range is 1..${SUBMISSION_MAX_ARCHIVE_BYTES}" || return
 
-  jq -e --argjson archive_bytes "${archive_bytes}" '
+  # `keys` is sorted, so subtracting the two optional fields leaves exactly the
+  # three required ones: every required key present, no unknown key admitted,
+  # and each optional field, when present, of its one accepted type and range.
+  jq -e --argjson archive_bytes "${archive_bytes}" \
+    --argjson turn_ceiling "${SUBMISSION_MAX_SESSION_TURNS_CEILING}" '
     type == "object" and
-    ((keys == ["archive_bytes", "archive_sha256", "prompt"]) or
-     (keys == ["archive_bytes", "archive_sha256", "preserve_thinking", "prompt"])) and
+    ((keys - ["max_session_turns", "preserve_thinking"]) ==
+      ["archive_bytes", "archive_sha256", "prompt"]) and
     (.prompt | type == "string" and length > 0) and
     (.archive_bytes == $archive_bytes) and
     (.archive_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     ((has("preserve_thinking") | not) or
-     (.preserve_thinking | type == "boolean"))
+     (.preserve_thinking | type == "boolean")) and
+    ((has("max_session_turns") | not) or
+     (.max_session_turns | type == "number" and . == floor and . >= 1 and . <= $turn_ceiling))
   ' "${request_file}" >/dev/null ||
     submission_die "receipt request for ${session_id} violates the one creation-body schema or disagrees with its archive" || return
 
@@ -134,9 +143,16 @@ submission_validate_receipt() {
 
 submission_create_receipt() {
   local session_id="$1" folder="$2" prompt_file="$3" preserve_thinking="${4-}"
+  local max_session_turns="${5-}"
   submission_require_handle "${session_id}" || return
   [[ -z "${preserve_thinking}" || "${preserve_thinking}" == true || "${preserve_thinking}" == false ]] ||
     submission_die "preserve_thinking must be omitted, true, or false; got ${preserve_thinking@Q}" || return
+  # The ceiling comes from the stack lock, never a hand-copied mirror, so this
+  # client cannot refuse a budget the service admits or offer one it refuses.
+  [[ -z "${max_session_turns}" ||
+     ( "${max_session_turns}" =~ ^[1-9][0-9]*$ &&
+       "${max_session_turns}" -le "${SUBMISSION_MAX_SESSION_TURNS_CEILING}" ) ]] ||
+    submission_die "max_session_turns must be omitted or an integer in 1..${SUBMISSION_MAX_SESSION_TURNS_CEILING}; got ${max_session_turns@Q}" || return
   submission_ensure_receipt_root || return
 
   local receipt_dir="${SUBMISSION_RECEIPT_ROOT}/${session_id}"
@@ -185,20 +201,19 @@ submission_create_receipt() {
   archive_sha256="$(sha256sum -- "${archive_file}" | awk '{print $1}')" ||
     submission_die "cannot hash receipt archive for ${session_id}" || return
 
-  if [[ -z "${preserve_thinking}" ]]; then
-    jq -n --argjson archive_bytes "${archive_bytes}" \
-      --arg archive_sha256 "${archive_sha256}" \
-      --rawfile prompt "${prompt_file}" \
-      '{prompt:$prompt,archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' >"${request_next}" ||
-      submission_die "cannot serialize exact request receipt for ${session_id}" || return
-  else
-    jq -n --argjson archive_bytes "${archive_bytes}" \
-      --arg archive_sha256 "${archive_sha256}" \
-      --argjson preserve_thinking "${preserve_thinking}" \
-      --rawfile prompt "${prompt_file}" \
-      '{prompt:$prompt,preserve_thinking:$preserve_thinking,archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' >"${request_next}" ||
-      submission_die "cannot serialize exact request receipt for ${session_id}" || return
-  fi
+  # One literal filter for every combination: an omitted optional field is
+  # absent from the body, never present as null, and the emitted body is
+  # exactly what a later replay resends.
+  jq -n --argjson archive_bytes "${archive_bytes}" \
+    --arg archive_sha256 "${archive_sha256}" \
+    --argjson preserve_thinking "${preserve_thinking:-null}" \
+    --argjson max_session_turns "${max_session_turns:-null}" \
+    --rawfile prompt "${prompt_file}" \
+    '{prompt:$prompt}
+     + (if $preserve_thinking == null then {} else {preserve_thinking:$preserve_thinking} end)
+     + (if $max_session_turns == null then {} else {max_session_turns:$max_session_turns} end)
+     + {archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' >"${request_next}" ||
+    submission_die "cannot serialize exact request receipt for ${session_id}" || return
   chmod 0600 -- "${request_next}" ||
     submission_die "cannot set private mode on receipt for ${session_id}" || return
   sync -f -- "${request_next}" ||
@@ -256,6 +271,7 @@ submission_response_is_valid() {
       (.model | type == "string" and length > 0) and
       (.context_window | type == "number" and . == 262144) and
       (.preserve_thinking | type == "boolean") and
+      (.max_session_turns | type == "number" and . == floor and . >= 1) and
       (.archive_bytes == $archive_bytes) and
       (.archive_sha256 == $archive_sha256)
     ' "${response_file}" >/dev/null

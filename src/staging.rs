@@ -11,6 +11,7 @@
 //! control/        ← bind-mounted into agent container as /run/agent (ro)
 //!   prompt.txt
 //!   history-policy.json
+//!   turn-budget.json
 //!   start-gate.lock
 //! streams/        ← capture component rw; Qwen container ro
 //!   events.sock
@@ -36,7 +37,9 @@ use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use crate::config::{MAX_STAGED_BYTES, MAX_STAGED_ENTRIES, MAX_STAGED_FILES};
+use crate::config::{
+    MAX_SESSION_TURNS_CEILING, MAX_STAGED_BYTES, MAX_STAGED_ENTRIES, MAX_STAGED_FILES,
+};
 use crate::error::{io_msg, ServiceError, ServiceResult};
 use tokio_util::sync::CancellationToken;
 
@@ -214,6 +217,42 @@ impl SessionPaths {
         Ok(path)
     }
 
+    /// Publish the one canonical per-session turn-budget record.
+    ///
+    /// This is the exact number the launcher inside the agent container reads
+    /// and passes to Qwen Code as `--max-session-turns`, so it is the only
+    /// place the per-session budget crosses into the agent: the agent has no
+    /// environment, argument, or network channel that could carry it instead.
+    /// It is deliberately canonical byte data for the same reason the history
+    /// policy is -- the launcher proves the exact bytes rather than parsing a
+    /// permissive document -- and it is bundled, so a completed session can be
+    /// read back to see which budget it actually ran under.
+    pub fn write_turn_budget(&self, max_session_turns: u32) -> ServiceResult<PathBuf> {
+        let path = self.control.join("turn-budget.json");
+        let contents = turn_budget_record(max_session_turns);
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+            .map_err(|error| {
+                ServiceError::Staging(io_msg("open turn-budget.json", &path, &error))
+            })?;
+        file.write_all(contents.as_bytes()).map_err(|error| {
+            ServiceError::Staging(io_msg("write turn-budget.json", &path, &error))
+        })?;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o444)).map_err(
+            |error| {
+                ServiceError::Staging(io_msg("chmod 0444 turn-budget.json", &path, &error))
+            },
+        )?;
+        file.flush().and_then(|_| file.sync_all()).map_err(|error| {
+            ServiceError::Staging(io_msg("flush/sync turn-budget.json", &path, &error))
+        })?;
+        sync_directory(&self.control, "sync turn-budget publication")?;
+        Ok(path)
+    }
+
     /// Create and exclusively lock the cross-container start gate before the
     /// agent exists. The wrapper blocks in `flock(1)` on the read-only bind;
     /// the service releases this descriptor only after the broker has proved
@@ -248,6 +287,40 @@ impl SessionPaths {
     pub fn input_archive(&self) -> PathBuf {
         self.root.join("input-archive.zip")
     }
+}
+
+/// The exact bytes of the one canonical per-session turn-budget record.
+///
+/// One line, one field, no whitespace variation: every reader on the far side
+/// of a mount boundary compares bytes instead of accepting whatever a JSON
+/// parser would tolerate.
+pub fn turn_budget_record(max_session_turns: u32) -> String {
+    format!("{{\"max_session_turns\":{max_session_turns}}}\n")
+}
+
+/// Read a turn-budget record back, returning the budget only for the exact
+/// canonical spelling of a budget this deployment can actually run.
+///
+/// Leading zeros, whitespace, a second field, a missing terminal newline, a
+/// zero budget, and anything above the pinned ceiling are all `None`: a
+/// malformed record is never repaired into a plausible-looking budget.
+pub fn parse_turn_budget_record(bytes: &[u8]) -> Option<u32> {
+    let digits = std::str::from_utf8(bytes)
+        .ok()?
+        .strip_prefix("{\"max_session_turns\":")?
+        .strip_suffix("}\n")?;
+    if digits.is_empty()
+        || digits.len() > 10
+        || digits.starts_with('0')
+        || !digits.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let turns: u32 = digits.parse().ok()?;
+    if turns == 0 || turns > MAX_SESSION_TURNS_CEILING {
+        return None;
+    }
+    Some(turns)
 }
 
 fn create_exact_directory(path: &Path, mode: u32) -> ServiceResult<()> {
@@ -1071,7 +1144,10 @@ mod tests {
     use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 
     use super::{require_staging_caps, SessionPaths};
-    use crate::config::{MAX_STAGED_BYTES, MAX_STAGED_ENTRIES, MAX_STAGED_FILES};
+    use crate::config::{
+        DEFAULT_MAX_SESSION_TURNS, MAX_SESSION_TURNS_CEILING, MAX_STAGED_BYTES,
+        MAX_STAGED_ENTRIES, MAX_STAGED_FILES,
+    };
     use crate::error::ServiceError;
 
     #[test]
@@ -1140,6 +1216,68 @@ mod tests {
                 "policy publication silently overwrote an existing record"
             );
             std::fs::remove_dir_all(&root).expect("remove fixture");
+        }
+    }
+
+    #[test]
+    fn turn_budget_records_are_canonical_no_clobber_byte_data() {
+        for turns in [1u32, DEFAULT_MAX_SESSION_TURNS, MAX_SESSION_TURNS_CEILING] {
+            let root = std::env::temp_dir().join(format!(
+                "qwen38-turn-budget-{turns}-{}",
+                uuid::Uuid::new_v4().simple()
+            ));
+            std::fs::create_dir_all(root.join("sessions"))
+                .expect("create fixed sessions parent");
+            let paths = SessionPaths::new(&root, "s-22222222222222222222222222222222");
+            paths.create_dirs().expect("create fixture layout");
+            let path = paths
+                .write_turn_budget(turns)
+                .expect("publish canonical turn budget");
+            let written = std::fs::read(&path).expect("read turn budget");
+            assert_eq!(
+                written,
+                format!("{{\"max_session_turns\":{turns}}}\n").as_bytes()
+            );
+            assert_eq!(super::parse_turn_budget_record(&written), Some(turns));
+            assert_eq!(
+                std::fs::metadata(&path)
+                    .expect("stat turn budget")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o444
+            );
+            assert!(
+                paths.write_turn_budget(turns).is_err(),
+                "turn-budget publication silently overwrote an existing record"
+            );
+            std::fs::remove_dir_all(&root).expect("remove fixture");
+        }
+
+        // The launcher inside the agent container compares these exact bytes,
+        // so every near-miss spelling and every unrunnable budget must read
+        // back as "no budget", never as a repaired one.
+        for malformed in [
+            "{\"max_session_turns\":400}".as_bytes(),
+            "{\"max_session_turns\": 400}\n".as_bytes(),
+            "{\"max_session_turns\":0400}\n".as_bytes(),
+            "{\"max_session_turns\":+400}\n".as_bytes(),
+            "{\"max_session_turns\":400}\n\n".as_bytes(),
+            "{\"max_session_turns\":400,\"preserve_thinking\":false}\n".as_bytes(),
+            "{\"max_session_turns\":\"400\"}\n".as_bytes(),
+            "{\"preserve_thinking\":false}\n".as_bytes(),
+            "{\"max_session_turns\":0}\n".as_bytes(),
+            "{\"max_session_turns\":-1}\n".as_bytes(),
+            format!("{{\"max_session_turns\":{}}}\n", MAX_SESSION_TURNS_CEILING + 1).as_bytes(),
+            format!("{{\"max_session_turns\":{}}}\n", u64::from(u32::MAX) + 1).as_bytes(),
+            "".as_bytes(),
+        ] {
+            assert_eq!(
+                super::parse_turn_budget_record(malformed),
+                None,
+                "a non-canonical turn-budget record was accepted: {:?}",
+                String::from_utf8_lossy(malformed)
+            );
         }
     }
 

@@ -94,6 +94,121 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             ):
                 MODULE.verify(paths)
 
+    def test_rejects_turn_budget_drift_even_if_settings_are_resealed(self) -> None:
+        # The default turn budget is cross-checked in six places. Resealing the
+        # settings pair and the contract together still leaves the launcher's
+        # own compiled default, which is what the agent actually runs under.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+            contract["execution"]["max_session_turns"] = 401
+            settings_paths = []
+            for index, name in ((1, "settings.json"), (2, "settings-preserved.json")):
+                settings = json.loads(self.paths[index].read_text(encoding="utf-8"))
+                settings["model"]["maxSessionTurns"] = 401
+                path = root / name
+                path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+                settings_paths.append(path)
+            contract["components"]["settings_sha256"] = MODULE.sha256(
+                settings_paths[0].read_bytes()
+            )
+            contract["components"]["preserved_settings_sha256"] = MODULE.sha256(
+                settings_paths[1].read_bytes()
+            )
+            contract_path = root / "contract.json"
+            contract_path.write_text(
+                json.dumps(contract, indent=2) + "\n", encoding="utf-8"
+            )
+            paths = [contract_path, *settings_paths, *self.paths[3:]]
+            with self.assertRaisesRegex(
+                MODULE.ContractError, "agent_exec default max session turns drift"
+            ):
+                MODULE.verify(paths)
+
+    def test_rejects_turn_budget_ceiling_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.mutated_contract(
+                root,
+                lambda value: value["execution"].__setitem__(
+                    "max_session_turns_ceiling", 900
+                ),
+            )
+            with self.assertRaisesRegex(
+                MODULE.ContractError, "agent_exec max session turns ceiling drift"
+            ):
+                MODULE.verify(paths)
+
+    def test_rejects_a_default_turn_budget_above_the_ceiling(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.mutated_contract(
+                root,
+                lambda value: value["execution"].__setitem__(
+                    "max_session_turns_ceiling", 100
+                ),
+            )
+            with self.assertRaisesRegex(
+                MODULE.ContractError, "the default budget must itself be requestable"
+            ):
+                MODULE.verify(paths)
+
+    def test_rejects_an_unbounded_or_malformed_turn_budget(self) -> None:
+        for bad in (0, -1, True, "800", 800.0, None):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                paths = self.mutated_contract(
+                    root,
+                    lambda value, bad=bad: value["execution"].__setitem__(
+                        "max_session_turns_ceiling", bad
+                    ),
+                )
+                with self.assertRaisesRegex(
+                    MODULE.ContractError, "must be an integer of at least 1"
+                ):
+                    MODULE.verify(paths)
+
+    def test_rejects_a_contract_without_a_turn_budget_ceiling(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.mutated_contract(
+                root,
+                lambda value: value["execution"].pop("max_session_turns_ceiling"),
+            )
+            # A contract that declares no ceiling cannot be verified against
+            # one, so verification fails rather than assuming a bound.
+            with self.assertRaises(KeyError):
+                MODULE.verify(paths)
+
+    def test_rejects_a_launcher_that_passes_a_fixed_turn_budget(self) -> None:
+        # The per-session budget reaches Qwen Code -- and therefore every
+        # foreground subagent -- through exactly one flag. A launcher that
+        # rebuilt that flag from a constant would silently ignore the accepted
+        # budget, so the flag's per-session form is pinned.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.paths[8].read_text(encoding="utf-8")
+            resealed = source.replace(
+                '.arg(format!("--max-session-turns={max_session_turns}"))',
+                '.arg(format!("--max-session-turns={DEFAULT_MAX_SESSION_TURNS}"))',
+            )
+            self.assertNotEqual(source, resealed)
+            source_path = root / "agent_exec.rs"
+            source_path.write_text(resealed, encoding="utf-8")
+            contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+            contract["components"]["agent_exec_source_sha256"] = MODULE.sha256(
+                source_path.read_bytes()
+            )
+            contract_path = root / "contract.json"
+            contract_path.write_text(
+                json.dumps(contract, indent=2) + "\n", encoding="utf-8"
+            )
+            paths = [contract_path, *self.paths[1:8], source_path]
+            with self.assertRaisesRegex(
+                MODULE.ContractError, "missing canonical fragment"
+            ):
+                MODULE.verify(paths)
+
     def test_rejects_extra_native_tool(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
