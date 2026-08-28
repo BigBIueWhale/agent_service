@@ -9,6 +9,6 @@
     "capture": "sha256:2d38ea4ae0f33894740a1a067c7fa8e3e3d864ff58ef439d6d432fd4739b9aef",
     "relay": "sha256:5153a46bc03fa920b0d09000eca1848af255010bda99cc50e8a6110ebcd02690",
     "broker": "sha256:de9f6a144ef100a8e09899c75ce6b6d22b86d87a904c5ae72cb42d2dcb0c3549",
-    "service": "sha256:2c73b249d4d9b5240b4cb1251ed73c06e8390f2d5454dfe3aff0a9368d222b0d"
+    "service": "sha256:3a4fa1b022644fc89ea9fbd92f9d7297f229cbecb8ab6db40513cf79e8afb779"
   }
 }
