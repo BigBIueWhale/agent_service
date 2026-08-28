@@ -1409,6 +1409,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
         "          subagentRawText,\n"
         "          terminateMode,\n"
         "          subagent.getTurnsUsed(),\n"
+        "          subagent.getLoopType(),\n"
         "        ),",
         label=label,
     )
@@ -1419,6 +1420,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
         "              subagent.getFinalText(),\n"
         "              terminateMode,\n"
         "              subagent.getTurnsUsed(),\n"
+        "              subagent.getLoopType(),\n"
         "            ),",
         label=label,
     )
@@ -1475,16 +1477,114 @@ def _validate_subagent_result_scope_after(state: State) -> None:
     )
 
 
-def _validate_nonpdf_pages_before(state: State) -> None:
-    label = "non-PDF pages rejection precondition"
+def _validate_phase_budget_before(state: State) -> None:
+    label = "maintenance phase-budget precondition"
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    # There is no per-request phase budget at all. The layer one would have to
+    # survive is the provider hook called below, which merges the pinned
+    # `extra_body` over whatever this file built.
+    forbid_text(state, pipeline, "phaseBudgetOverrides", label=label)
+    require_text(
+        state,
+        pipeline,
+        "    let providerRequest = this.config.provider.buildRequest(",
+        label=label,
+    )
+    # The single exit of the sampling-parameter branch, which the budget must
+    # not be attached to, and the end of the wire request, where it must.
+    require_text(
+        state,
+        pipeline,
+        "      return clampProviderOutputBudgetKeys(",
+        label=label,
+    )
+    require_text(state, pipeline, "    return providerRequest;", label=label)
+
+
+def _validate_phase_budget_after(state: State) -> None:
+    label = "maintenance phase-budget result"
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    pipeline_test = "packages/core/src/core/openaiContentGenerator/pipeline.test.ts"
+
+    source = _require_all(
+        state,
+        pipeline,
+        (
+            "function applyPhaseBudgetOverrides(\n  wireRequest: Record<string, unknown>,",
+            "  const configured = wireRequest[wireKey];",
+            "  wireRequest['thinking_token_budget'] = overrides.thinkingTokenBudget;",
+            "  wireRequest['final_response_token_budget'] =",
+        ),
+        label=label,
+    )
+    # Exactly one application, and it is the last thing done to the request,
+    # after the provider hook has merged every pinned configuration layer.
+    _require(
+        source.count("applyPhaseBudgetOverrides(") == 2,
+        f"{label}: {pipeline} must declare and apply the phase budget exactly once",
+    )
+    _require_ordered(
+        source,
+        (
+            "let providerRequest = this.config.provider.buildRequest(",
+            "applyPhaseBudgetOverrides(\n      typed,\n      request.phaseBudgetOverrides,\n"
+            "      request.config?.maxOutputTokens,\n    );",
+            "return providerRequest;",
+        ),
+        label=label,
+        location=pipeline,
+    )
+    # The sampling-parameter layer no longer writes it, so it cannot be
+    # overwritten downstream.
+    forbid_text(
+        state,
+        pipeline,
+        "(request as PromptCacheSharingParameters).phaseBudgetOverrides",
+        label=label,
+    )
+    # The ceiling guard is unchanged in wording and now reads the merged wire
+    # value, so a per-request budget above the pinned one is refused.
+    require_text(
+        state,
+        pipeline,
+        "budget must not exceed the pinned provider ceiling",
+        label=label,
+    )
+    require_text(
+        state,
+        pipeline_test,
+        "[phase-budget] overrides a phase budget pinned in extra_body, "
+        "which the provider merges over the request",
+        label=label,
+    )
+    require_text(
+        state,
+        pipeline_test,
+        "[phase-budget] refuses a phase budget above a ceiling pinned in extra_body",
+        label=label,
+    )
+
+
+def _validate_pages_affordance_before(state: State) -> None:
+    label = "read_file range-mechanism precondition"
     tool = "packages/core/src/tools/read-file.ts"
     files = "packages/core/src/utils/fileUtils.ts"
-    forbid_text(
-        state, tool, "applies only to PDF files", label=label
+    pdf = "packages/core/src/utils/pdf.ts"
+    # Upstream advertises the PDF-only page range on every file type.
+    require_text(state, tool, "  pages?: string;", label=label)
+    require_text(
+        state,
+        tool,
+        "          pages: {\n            description: `Optional: For PDF files,",
+        label=label,
     )
-    forbid_text(
-        state, files, "applies only to PDF files", label=label
+    require_text(state, tool, "        pages: this.params.pages,", label=label)
+    # And every remediation message points back at that parameter.
+    require_text(
+        state, pdf, "Use the 'pages' parameter to read a specific page range", label=label
     )
+    forbid_text(state, pdf, "PDF_PAGE_RANGE_REMEDY", label=label)
+    forbid_text(state, files, "applies only to PDF files", label=label)
     require_text(
         state,
         files,
@@ -1493,28 +1593,55 @@ def _validate_nonpdf_pages_before(state: State) -> None:
     )
 
 
-def _validate_nonpdf_pages_after(state: State) -> None:
-    label = "non-PDF pages rejection result"
+def _validate_pages_affordance_after(state: State) -> None:
+    label = "read_file range-mechanism result"
     tool = "packages/core/src/tools/read-file.ts"
     files = "packages/core/src/utils/fileUtils.ts"
+    pdf = "packages/core/src/utils/pdf.ts"
     tool_test = "packages/core/src/tools/read-file.test.ts"
     files_test = "packages/core/src/utils/fileUtils.test.ts"
-    # The file-type decision precedes every pages syntax check, names the
-    # real remedy, and exists at both the validation and consumption layers
-    # so no caller can silently drop a supplied pages parameter.
+
+    # The parameter is gone from the tool's type, its advertised schema, and
+    # everything it forwards: the model is never offered a parameter whose
+    # applicability it cannot evaluate from the schema.
+    tool_source = _source(state, tool, label=label)
+    forbid_text(state, tool, "  pages?: string;", label=label)
+    forbid_text(state, tool, "          pages: {", label=label)
+    forbid_text(state, tool, "this.params.pages", label=label)
+    forbid_text(state, tool, "parsePDFPageRange", label=label)
+    _require(
+        tool_source.count("            type: 'integer',") == 2
+        and tool_source.count("          file_path: {") == 1,
+        f"{label}: {tool} must advertise exactly file_path, offset, and limit",
+    )
+    # A supplied argument is refused rather than silently dropped, and the
+    # refusal does not depend on the file type, so it cannot be evaded by
+    # renaming the file.
     require_text(
         state,
         tool,
-        "if (params.pages !== undefined && ext !== '.pdf') {",
+        "if ((params as { pages?: unknown }).pages !== undefined) {",
         label=label,
     )
     require_text(
         state,
         tool,
-        "applies only to PDF files; '${path.basename(filePath)}' is not a PDF."
-        " For text files, use 'offset' and 'limit' instead.",
+        "read_file has no 'pages' parameter and reads whole files.",
         label=label,
     )
+
+    # One remedy, declared once and used by every message that has to send
+    # the model somewhere, so no guidance names a parameter that is gone.
+    require_text(state, pdf, "export const PDF_PAGE_RANGE_REMEDY =", label=label)
+    forbid_text(state, pdf, "'pages' parameter", label=label)
+    forbid_text(state, files, "'pages' parameter to", label=label)
+    _require(
+        _source(state, pdf, label=label).count("${PDF_PAGE_RANGE_REMEDY}") == 5
+        and _source(state, files, label=label).count("${PDF_PAGE_RANGE_REMEDY}") == 3,
+        f"{label}: every large/truncated PDF message must name the one remedy",
+    )
+    # The consumption layer keeps its fail-closed guard: a `pages` option
+    # supplied to the shared utility on a non-PDF is refused, never ignored.
     require_text(
         state,
         files,
@@ -1528,7 +1655,7 @@ def _validate_nonpdf_pages_after(state: State) -> None:
         count=2,
         label=label,
     )
-    # PDF behavior is byte-for-byte untouched.
+    # PDF page extraction itself is byte-for-byte untouched.
     require_text(
         state,
         files,
@@ -1538,19 +1665,278 @@ def _validate_nonpdf_pages_after(state: State) -> None:
     require_text(
         state,
         tool_test,
-        "[pages-contract] rejects pages on a non-PDF file before any syntax validation",
+        "[pages-contract] advertises exactly one range mechanism and no pages parameter",
         label=label,
     )
     require_text(
         state,
         tool_test,
-        "[pages-contract] still accepts a bounded pages range on a PDF",
+        "[pages-contract] refuses an undeclared pages argument on %s",
+        label=label,
+    )
+    require_text(
+        state,
+        tool_test,
+        "[pages-contract] reads a PDF whole, with no page parameter to supply",
         label=label,
     )
     require_text(
         state,
         files_test,
         "[pages-contract] rejects a pages parameter on a non-PDF file instead of ignoring it",
+        label=label,
+    )
+
+
+def _validate_subagent_progress_before(state: State) -> None:
+    label = "subagent terminal-progress precondition"
+    events = "packages/core/src/agents/runtime/agent-events.ts"
+    headless = "packages/core/src/agents/runtime/agent-headless.ts"
+    core = "packages/core/src/agents/runtime/agent-core.ts"
+    agent_tool = "packages/core/src/tools/agent/agent.ts"
+    cli = "packages/cli/src/nonInteractiveCli.ts"
+    detector = "packages/core/src/services/loopDetectionService.ts"
+    subagent_result = "packages/core/src/agents/subagent-result.ts"
+    # The terminal event announces the status without the count that decides
+    # what to do about it, and without which of nine rules stopped the run.
+    require_text(
+        state,
+        events,
+        "export interface AgentFinishEvent {\n  subagentId: string;\n"
+        "  terminateReason: string;\n  timestamp: number;",
+        label=label,
+    )
+    forbid_text(state, events, "loopType", label=label)
+    forbid_text(state, headless, "getLoopType", label=label)
+    forbid_text(state, core, "loopType", label=label)
+    forbid_text(state, agent_tool, "describeSubagentTerminateReason", label=label)
+    forbid_text(state, subagent_result, "describeLoopType", label=label)
+    # The rule labels exist only inside the CLI, out of reach of the core
+    # subagent path, which is why only the main session ever names a rule.
+    require_text(
+        state, cli, "const LOOP_TYPE_LABELS: Record<LoopType, string> = {", label=label
+    )
+    forbid_text(state, detector, "LOOP_TYPE_LABELS", label=label)
+
+
+def _validate_subagent_progress_after(state: State) -> None:
+    label = "subagent terminal-progress result"
+    events = "packages/core/src/agents/runtime/agent-events.ts"
+    headless = "packages/core/src/agents/runtime/agent-headless.ts"
+    core = "packages/core/src/agents/runtime/agent-core.ts"
+    agent_tool = "packages/core/src/tools/agent/agent.ts"
+    agent_tool_test = "packages/core/src/tools/agent/agent.test.ts"
+    cli = "packages/cli/src/nonInteractiveCli.ts"
+    detector = "packages/core/src/services/loopDetectionService.ts"
+    index = "packages/core/src/index.ts"
+    subagent_result = "packages/core/src/agents/subagent-result.ts"
+    subagent_result_test = "packages/core/src/agents/subagent-result.test.ts"
+
+    # The terminal event carries both terminal facts, and both are required
+    # rather than optional, so no emit site can omit them.
+    _require_all(
+        state,
+        events,
+        (
+            "  turnsUsed: number;",
+            "  loopType: LoopType | null;",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        headless,
+        "          turnsUsed: this.turnsUsed,\n          loopType: this.loopType,",
+        label=label,
+    )
+    require_text(state, headless, "  getLoopType(): LoopType | null {", label=label)
+    # The reasoning loop reports which rule fired, and only when one did.
+    require_text(
+        state,
+        core,
+        "      loopType:\n        terminateMode === AgentTerminateMode.LOOP_DETECTED\n"
+        "          ? loopDetector.getLastLoopType()\n          : null,",
+        label=label,
+    )
+    # The listener that wins the running -> failed transition publishes the
+    # complete terminal snapshot; a later, richer update is never read.
+    require_text(
+        state,
+        agent_tool,
+        "          terminateReason: describeSubagentTerminateReason(\n"
+        "            event.terminateReason as AgentTerminateMode,\n"
+        "            event.loopType,\n          ),\n"
+        "          turnsUsed: event.turnsUsed,",
+        label=label,
+    )
+    # Both writers of the terminal display say the same thing the same way.
+    require_text(
+        state,
+        agent_tool,
+        "            terminateReason: describeSubagentTerminateReason(\n"
+        "              terminateMode,\n              loopType,\n            ),",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool,
+        "            executionSummary,\n            turnsUsed,\n          },",
+        count=2,
+        label=label,
+    )
+    # Both model-visible constructions carry the count and the rule.
+    require_text(
+        state,
+        agent_tool,
+        "          subagent.getTurnsUsed(),\n          subagent.getLoopType(),\n        ),",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool,
+        "              subagent.getTurnsUsed(),\n              subagent.getLoopType(),\n            ),",
+        label=label,
+    )
+    # One vocabulary for the rules, beside the detector, used by the headless
+    # session and the subagent path alike.
+    _require_all(
+        state,
+        detector,
+        (
+            "export const LOOP_TYPE_LABELS: Record<LoopType, string> = {",
+            "export function describeLoopType(",
+        ),
+        label=label,
+    )
+    require_text(state, index, "  describeLoopType,", label=label)
+    forbid_text(state, cli, "const LOOP_TYPE_LABELS", label=label)
+    require_text(state, cli, "const described = describeLoopType(loopType);", label=label)
+    require_text(
+        state,
+        subagent_result,
+        "export function describeSubagentTerminateReason(",
+        label=label,
+    )
+    require_text(
+        state,
+        subagent_result,
+        "      reason = `stopped as ${String(terminateMode).toLowerCase()}${detail}${turns}`;",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool_test,
+        "[subagent-scope] publishes the turn count with the terminal display status",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_tool_test,
+        "[loop-attribution] names the rule that halted a looping subagent",
+        label=label,
+    )
+    require_text(
+        state,
+        subagent_result_test,
+        "[loop-attribution] names the loop rule in the text the parent reads",
+        label=label,
+    )
+    require_text(
+        state,
+        subagent_result_test,
+        "[loop-attribution] distinguishes a budget halt from a repetition halt",
+        label=label,
+    )
+    require_text(
+        state,
+        subagent_result_test,
+        "[loop-attribution] leaves a non-loop terminate reason exactly as it was",
+        label=label,
+    )
+
+
+def _validate_compaction_accounting_before(state: State) -> None:
+    label = "compaction output-accounting precondition"
+    turn = "packages/core/src/core/turn.ts"
+    service = "packages/core/src/services/chatCompressionService.ts"
+    # Nothing records how the fixed maintenance budget was spent; the only
+    # trace of a truncated attempt is a debug warning that this deployment
+    # never enables.
+    forbid_text(state, turn, "CompactionOutputAccounting", label=label)
+    forbid_text(state, service, "outputAccounting", label=label)
+    require_text(
+        state,
+        service,
+        "export const COMPACT_MAX_OUTPUT_TOKENS = 20_000;",
+        label=label,
+    )
+
+
+def _validate_compaction_accounting_after(state: State) -> None:
+    label = "compaction output-accounting result"
+    turn = "packages/core/src/core/turn.ts"
+    service = "packages/core/src/services/chatCompressionService.ts"
+    service_test = "packages/core/src/services/chatCompressionService.test.ts"
+    adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
+
+    # The record answers "where did the output budget go": the ceiling, both
+    # phase budgets, what was produced, how much of it was hidden reasoning,
+    # how much summary survived, and why generation stopped.
+    _require_all(
+        state,
+        turn,
+        (
+            "export interface CompactionOutputAccounting {",
+            "  maxOutputTokens: number;",
+            "  thinkingTokenBudget: number;",
+            "  finalResponseTokenBudget: number;",
+            "  outputTokens: number;",
+            "  thinkingTokens: number;",
+            "  summaryChars: number;",
+            "  finishReason: string | null;",
+            "  output: CompactionOutputAccounting | null;",
+            "    output: info.output ?? null,",
+        ),
+        label=label,
+    )
+    # Populated once from the single generation, and attached to every
+    # outcome reachable after it, so no post-generation status can be silent
+    # about the budget. A refusal before generation stays empty.
+    service_source = _require_all(
+        state,
+        service,
+        (
+            "    const outputAccounting: CompactionOutputAccounting = {",
+            "      thinkingTokens: summaryResult.usage?.thoughtsTokenCount ?? 0,",
+            "      summaryChars: processedSummary.length,",
+        ),
+        label=label,
+    )
+    _require(
+        service_source.count("const outputAccounting") == 1,
+        f"{label}: {service} must derive the accounting exactly once",
+    )
+    _require(
+        service_source.count("output: outputAccounting,") == 10,
+        f"{label}: {service} must attach the accounting to every "
+        "post-generation outcome",
+    )
+    require_text(
+        state,
+        service_test,
+        "[compaction-event] records where a truncated attempt spent its output budget",
+        label=label,
+    )
+    require_text(
+        state,
+        service_test,
+        "[compaction-event] leaves the accounting null when no generation ran",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "[compaction-event] carries the failed attempt output accounting to the stream",
         label=label,
     )
 
@@ -1697,25 +2083,65 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         validate_after=_validate_behavioral_evidence_after,
     ),
     SemanticConcern(
-        name="non-pdf-pages-rejection",
+        name="wire-level-maintenance-phase-budget",
         rationale=(
-            "Production benchmark forensics showed three agent runs dying in "
-            "identical read_file loops: the PDF-only pages parameter used as a "
-            "line range on source files. Upstream validated pages syntax before "
-            "knowing the file type, reported a PDF capacity error on text files, "
-            "and silently ignored pages small enough to pass, so the model's "
-            "only feedback pointed away from the real fix. The file-type "
-            "decision must come first, the error must name the remedy "
-            "(offset/limit), and a supplied parameter must never be silently "
-            "dropped at the consumption layer."
+            "Automatic compaction runs inside a fixed 20,000-token output "
+            "ceiling and splits it deliberately: a bounded thinking phase "
+            "and a reserved final-response phase, so the state snapshot has "
+            "room to be written. The override was applied to the "
+            "per-request sampling parameters, but the pinned deployment "
+            "declares both phase budgets in extra_body, which the provider "
+            "hook merges over the request. The split therefore never "
+            "reached the wire: the summarizer ran at the pinned 262,144-"
+            "token thinking budget inside a 20,000-token cap, and since "
+            "thought parts are filtered out of the response, two "
+            "consecutive attempts each spent ~19,900 output tokens and "
+            "produced no summary at all. The session then died refusing to "
+            "send 240,122 tokens against a 239,144-token limit. The "
+            "existing ceiling guard could not catch it either: it compared "
+            "against the sampling-parameter layer, which never declares "
+            "these keys, so it read undefined and always passed. A "
+            "per-request budget must be written where every configuration "
+            "layer has already merged, and validated against the exact "
+            "value it replaces."
         ),
         removal_condition=(
-            "Remove only when upstream read_file rejects pages on non-PDF "
-            "inputs at both the validation and consumption layers with an "
-            "error that names offset/limit as the text-file remedy."
+            "Remove only when upstream applies per-request phase budgets to "
+            "the final wire request and validates them against the merged "
+            "configured value, so no provider hook can silently restore the "
+            "pinned budget."
         ),
-        validate_before=_validate_nonpdf_pages_before,
-        validate_after=_validate_nonpdf_pages_after,
+        validate_before=_validate_phase_budget_before,
+        validate_after=_validate_phase_budget_after,
+    ),
+    SemanticConcern(
+        name="read-file-single-range-mechanism",
+        rationale=(
+            "read_file advertised a PDF-only `pages` parameter on every file "
+            "type. A tool schema is the model's only map of what is "
+            "callable, and a parameter whose applicability depends on the "
+            "value of another parameter cannot be evaluated from that map, "
+            "so the model used it as a line range on source files. Making "
+            "the error message accurate did not change the behaviour: it "
+            "was measured again afterwards, 106 times across 7 of 18 "
+            "subagent scopes in one run, one subagent issuing 55 such "
+            "calls, and three subagents repeating a byte-identical failing "
+            "call until loop detection killed them. The affordance itself "
+            "is the defect. read_file now reads whole files with exactly "
+            "one range mechanism, offset/limit; page selection happens "
+            "where it is unambiguous, a page-ranged pdftotext run in the "
+            "shell, which is already this deployment's sealed PDF doctrine "
+            "and is named by every message that has to send the model "
+            "somewhere. A `pages` argument supplied anyway is refused at "
+            "both the tool and the shared consumption layer, never dropped."
+        ),
+        removal_condition=(
+            "Remove only when upstream read_file advertises no parameter "
+            "that is valid for a subset of the file types it accepts, and "
+            "refuses rather than ignores one that is supplied anyway."
+        ),
+        validate_before=_validate_pages_affordance_before,
+        validate_after=_validate_pages_affordance_after,
     ),
     SemanticConcern(
         name="headless-stream-evidence",
@@ -1794,6 +2220,68 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_subagent_result_scope_before,
         validate_after=_validate_subagent_result_scope_after,
+    ),
+    SemanticConcern(
+        name="subagent-terminal-progress-and-loop-attribution",
+        rationale=(
+            "Every subagent error result recorded num_turns 0, whatever "
+            "stopped it -- MAX_TURNS, TIMEOUT, ERROR, CANCELLED, "
+            "LOOP_DETECTED alike -- while the real counts in the same "
+            "capture were 11, 7 and 9. Nothing had lost the count: two "
+            "writers flip the subagent display from running to failed, and "
+            "the one that wins is the terminal event from the reasoning "
+            "loop's own exit, which announced the status without it. The "
+            "emitted record is built on the first running-to-failed "
+            "transition, so the later, complete update from the tool body "
+            "was never read. The terminal event now carries the terminal "
+            "facts in full. It also carries which rule fired: LOOP_DETECTED "
+            "covers nine rules across two tiers, and the subagent path "
+            "never read the detector's last loop type, so a five-identical-"
+            "call halt and an exhausted per-turn tool-call budget reached "
+            "the operator and the parent model as the same word -- which is "
+            "why diagnosing one took a five-hour telemetry reconstruction. "
+            "The rule labels moved beside the detector so the headless "
+            "session's message and a subagent's record name the same cause "
+            "in the same words."
+        ),
+        removal_condition=(
+            "Remove only when upstream's subagent terminal event carries "
+            "the run's completed turn count and the loop rule that ended "
+            "it, and both reach the emitted record and the text the parent "
+            "model reads."
+        ),
+        validate_before=_validate_subagent_progress_before,
+        validate_after=_validate_subagent_progress_after,
+    ),
+    SemanticConcern(
+        name="compaction-output-accounting",
+        rationale=(
+            "A failed compaction was undiagnosable. The service captures "
+            "the stream-json event file and enables no debug logging, so "
+            "the '[chat-compression] summary terminated with MAX_TOKENS' "
+            "warning and its siblings went nowhere, and the truncated "
+            "summary was discarded unpersisted. Forensics on the session "
+            "that died could establish that the 20,000-token maintenance "
+            "budget had been exhausted but not how it split between the "
+            "hidden thinking phase and the final response -- the one fact "
+            "that identifies the failure. Turning on debug logging would be "
+            "a second mode and would pollute the captured stream, so the "
+            "native compaction event carries it instead: the ceiling, both "
+            "phase budgets, the output tokens produced, how many of them "
+            "were reasoning, how much summary survived, and the provider's "
+            "terminal reason. It is attached to every outcome reachable "
+            "after the generation and left empty when the attempt was "
+            "refused before it, so a budget consumed entirely by reasoning "
+            "stays distinguishable from a request that never ran."
+        ),
+        removal_condition=(
+            "Remove only when upstream reports a compaction attempt's "
+            "output-budget accounting -- at minimum the thinking/visible "
+            "split and the terminal reason -- in the captured event stream "
+            "without enabling debug logging."
+        ),
+        validate_before=_validate_compaction_accounting_before,
+        validate_after=_validate_compaction_accounting_after,
     ),
     SemanticConcern(
         name="session-time-anchor",

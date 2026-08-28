@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '85b6bbf74ea0070af4a00fc23534fbb6786acd95c773f0030379ca3f4fe7892a',
+  'review_sha256': '3a636dd1a9115b9ee195a100d62bfeaf5c8b10b0aecb3f0e7e29cb19a3e0c6a1',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -28,7 +28,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before_sha256': '17e660b5b946d5647814af611bc5b6aaf43c597e7b329e4926d90b8bf7fa72e8',
-             'after_sha256': '8db491cfdef9a99c4dd5720967e5b6f822b41f3b8678c52a3699b459c982f819'},
+             'after_sha256': '4f8e5df8c5eadcc7630bdc2d8fee011fca11cbbfe3a02b5dd9d0b8aebfd4e882'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before_sha256': 'd389950daa67e5b2578ed5da8e340e417d7f696486c81ed78f3aca735e22c0bd',
              'after_sha256': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863'},
@@ -37,13 +37,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
-             'after_sha256': '559cbf3f8daa9d7943dea5ec09859fa25de68b25ecb624e66815a90d8a6b9932'},
+             'after_sha256': 'ecdd192c690882e67189edc322d8d02b0af1cf25f13d5b218f567e071f25bec9'},
             {'path': 'packages/cli/src/ui/hooks/useGeminiStream.ts',
              'before_sha256': '81ae8edc386ed5b31b09a99435bbb94925117c9a56e6bf4bb80d3c9be422f5ba',
              'after_sha256': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before_sha256': 'd59f5e8a9a9efc2f10770df56e1ea201ec38400b9b1dd00ef317ce2f8e5a1448',
-             'after_sha256': '9f524ee280510ed4d80e3e37907a942c368c7ead0dd02f3d37c9e697990ecf19'},
+             'after_sha256': 'f66258a3b847539dec79c84ec2c38a82646a2f1d89cf9d7b63e4f9feb26540fd'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
              'before_sha256': 'e1a5371ec1215d1cc23eb87ce43d82bf62270b1e38b75110dbea4bf77c925a5d',
              'after_sha256': '05bf1bb209b455a0fa1b386321198442d08c332cdd1a2f2c08fc05a9948e752c'},
@@ -53,21 +53,24 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/agents/runtime/agent-context.ts',
              'before_sha256': '1bf327d3c46f0ac09a9109b606eea7309b557efe6cb1dfd95db5b2e3e7ff762e',
              'after_sha256': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6'},
+            {'path': 'packages/core/src/agents/runtime/agent-core.test.ts',
+             'before_sha256': 'd8db843e95fe93797cd31e4686cea069d55a827afff7432d376ec764acc60fb6',
+             'after_sha256': '5ce2e138841cfd514818d12a56ce0a426974f633e81bbbaad4b0cf38cc0437de'},
             {'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before_sha256': '79dd902bfd3af29fff89a1886f4076e64019681261f9550e446eda0df0ab9464',
-             'after_sha256': '2a556372e4581ea51cd43ecc36ea5479069190c2263f1f4f0719870a37ccb53c'},
+             'after_sha256': '787fa977687afead6306964aa5062163f2986f0dc3d2f62a9d5b115380a46ef2'},
             {'path': 'packages/core/src/agents/runtime/agent-events.ts',
              'before_sha256': 'c28f4f24651cdb75ea34b3102c9456e3b467d5ee0a03afb73a160b25b736d3b8',
-             'after_sha256': '94a3f2bda99cb2f5f3a64c374e0759a167368ec1b71dc10f5d633e9054001e0e'},
+             'after_sha256': 'a34880c8ffa5ba33ebb5f045db3703093b5527ebc629f19ece83037e2b5b7603'},
             {'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before_sha256': 'db6d8ed8f7714a83483fb9f22c860a3f2e7e38cf53171e79c5fc49a363d3c3ce',
-             'after_sha256': '566427c59d72b3bc5f2e582e6b83a43388e5bb2d66642026d35951dd5b017f5c'},
+             'after_sha256': '6de78e3741afc80ff928b7c6c2f3b22dec2d281363593b85fdb940618e9fabb3'},
             {'path': 'packages/core/src/agents/subagent-result.test.ts',
              'before_sha256': '044cd3646709a861e488f473d015f4238405dc37dd5c8d26ce8ab010a391ba6d',
-             'after_sha256': 'b0ff2c8c306c52b336b2382a6e70ef7f520a2b777908997966967056f5c7aa00'},
+             'after_sha256': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91'},
             {'path': 'packages/core/src/agents/subagent-result.ts',
              'before_sha256': 'e82b58889f3c2349c5db5858581a45f0348d6c315b4807ea4b3357b56dcac8df',
-             'after_sha256': '3a950d84ad4118335f7b13cd3bea5449420be1bd1e8a07e46389472a271a90f4'},
+             'after_sha256': '6dc6f199ba394f6e0520aca1d54a5d7c529eea9b0d94f76ab0fffa29327b12e2'},
             {'path': 'packages/core/src/config/config.ts',
              'before_sha256': 'e784e48248ab4258e83393996691c85a10e3ea3ab906a88e1cceb683baa1b6f5',
              'after_sha256': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49'},
@@ -91,7 +94,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '9aca5b3131e9e089c30ca80b2a310a3d0da01623b55c2949c7d097348baf8756'},
             {'path': 'packages/core/src/core/geminiChat.test.ts',
              'before_sha256': 'c3ec701c78d99698ad538c188e08d10b78b266c372b850907def72f9badb8830',
-             'after_sha256': '417a72c54062d140ec82392680c397ec5602535293d1ccd675d2ea0839bcfeca'},
+             'after_sha256': '44f96af12396270fb3cba0af6db7e23a85463c7e28a7ce8e3935c31bc97c311f'},
             {'path': 'packages/core/src/core/geminiChat.ts',
              'before_sha256': '384de52c73dc5c387d3147713046713d34de0b6724b12feb00574508a4d7cc6c',
              'after_sha256': 'ad16bac94914e60ad012884f45a06ecf9147f9c7d307f1a2a9783f0bbb00d407'},
@@ -112,13 +115,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts',
              'before_sha256': '45a51e9f9f3e0a87c903b960847d7e17faf768d129e2706f6df9c731e69e2f2b',
-             'after_sha256': 'f43030a216b2f6194f4320001b5aa04a441faa696a1f0507adcf08376f116316'},
+             'after_sha256': '31a0c872819e5b0ded6cc91c865e0b0614fee8a17e065a15f07a0efef3014ea6'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts',
              'before_sha256': None,
              'after_sha256': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before_sha256': 'fd6061e56956d1072885a4a8e40be6ed148623d791a5586f3669bbf325c1d09c',
-             'after_sha256': '5c9d2127e4e1abbad35fabb93cf4f7997c876669edfaa82798e5bae57a0c03bb'},
+             'after_sha256': 'eb39024c965025c6c9d35178d0ae8517bcbe954182e539ae640a8b97cd656f20'},
             {'path': 'packages/core/src/core/openaiContentGenerator/types.ts',
              'before_sha256': '0b827511f3ccefbc74aa7d14eaccf7502e1a2aaed846983b982ac9191827aa51',
              'after_sha256': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c'},
@@ -145,7 +148,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9'},
             {'path': 'packages/core/src/core/turn.ts',
              'before_sha256': 'f1be47023cae4b9e3a4fd9fd756c28bf36724f772bd9759e8ecd72e73cdea6b7',
-             'after_sha256': 'cf1b6edc14b558b27098af0f8aefbea0a6e07cb98d1968001e286ceac05b3270'},
+             'after_sha256': '0f82b31907e018ad75cd5ce0d793fab9e9f8a2f1c305676199decd480aca1572'},
+            {'path': 'packages/core/src/index.ts',
+             'before_sha256': '27213fe57ba91831bad52f0b07700aae9240bc636c1bab83f144d726514e3b6b',
+             'after_sha256': '6ce05101bad847681232aae4d4b738afa4e7d6206a495a6210df2a913b9dbcef'},
             {'path': 'packages/core/src/models/constants.ts',
              'before_sha256': 'f719e3d18c0160698f92d6703b8751aef9159899d670fc3ea59036e56e962d86',
              'after_sha256': '11cf01eda085973eedc575e4b8cd0c7bf469ced519e66bbac72129c47e8b2d38'},
@@ -163,10 +169,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779'},
             {'path': 'packages/core/src/services/chatCompressionService.test.ts',
              'before_sha256': 'dca73e970a07ea2c8e819976dc758b57426754e89be5ec230954fda06a2b03db',
-             'after_sha256': '3a2cdee1b9fed150ada600d7c3005f5d89030e0c7514ddbf28559689e027757b'},
+             'after_sha256': '28313a20cbfc6fc2fb92a32a34d607ae398b4fa75eaf4684ac050e4852406728'},
             {'path': 'packages/core/src/services/chatCompressionService.ts',
              'before_sha256': 'ce64d44a40510b3eb83c00345a7e6bb6caee0ffcb9f959fbe1a91a804b03899f',
-             'after_sha256': '75e64be7a5e28544fc9eba43b11346811a18fe66b0a186830707682533217523'},
+             'after_sha256': '7fd7ee2d68e555a4a80f256f701c386950540809e19cf56806fa46d5732cef92'},
+            {'path': 'packages/core/src/services/loopDetectionService.ts',
+             'before_sha256': 'fa854927e7b6c9998ae2ee147942a2732671855dbeddb6d9a0d7c9a25c063d16',
+             'after_sha256': '9e3b6457192b8bd6691ada479da2db67d10721778c3ad260e06409778217f99d'},
             {'path': 'packages/core/src/subagents/builtin-agents.test.ts',
              'before_sha256': 'a60a774878f4158db2e5553a0defcabae5bda0f7d54c0c6752b094adf00c43e7',
              'after_sha256': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95'},
@@ -175,10 +184,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
-             'after_sha256': 'effd65eff9899c8150ee2f002effbc3c15485b9d7bc0d627e76935bf3f50a74c'},
+             'after_sha256': '6dcceb44938d59bd79f4d3b78010413ca0238a3339e7b80729d60611f898a4df'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': '1b96052f1f5e7678f2a704d92e95668e3ce00b697d570b2673b35118163780ac'},
+             'after_sha256': 'a278d5cee32be5984975d15c88dd3e76721f3e196953340730062cae76cb69e2'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -193,28 +202,43 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '6f901a5cda41071d4237acdc3f3bfd9ba8cf92ef1db93d73ae1aabb038d53e46'},
             {'path': 'packages/core/src/tools/read-file.test.ts',
              'before_sha256': '03e21f96d35d1c07c9d7532e7b8340b7aca2707c3ac920e349655148cd965fc8',
-             'after_sha256': '3d8e74099403f77cd72fe749e547f8c2bec627b8c846f46ae41f1f97d9d7525b'},
+             'after_sha256': '6c246ccf7a3a6713e4544659f422dde00d683c45c6ab40f0720ce15e6c195279'},
             {'path': 'packages/core/src/tools/read-file.ts',
              'before_sha256': '2aad58d97ebc1ba94b3f0020d690b46d7409c9dba4103eb5dfb01ece38f9049b',
-             'after_sha256': 'b2023049f4b50a1581ce502523c7c9aef8968c5eff05d363c158905d3d6aca8d'},
+             'after_sha256': 'dc584bf73e4cce40525ac8e6ab345c56d2f748442ec8eadf099e422d51a3592b'},
             {'path': 'packages/core/src/tools/tools.ts',
              'before_sha256': 'e04d871a71b7d432ab4de1918f701e6cf5f3caa3f6b95f97a55a331054e3d554',
              'after_sha256': '0f51fbfa7251b2f18878b5c5e64b9c331791e051b1d7120ee1a5735621a6ce5f'},
+            {'path': 'packages/core/src/tools/web-fetch.test.ts',
+             'before_sha256': 'c44f673902e701587a26f841e510cefff6532b92c69e99f8406a305d49b7e24a',
+             'after_sha256': 'e97c6eb5800e66cd65538cf493e8ec7fb923a083fe2e7ed77c633a1c4bf46f2e'},
+            {'path': 'packages/core/src/tools/web-fetch.ts',
+             'before_sha256': 'ad362e896f894454ed2a35cf83558002ce7145df082714f57d3aa0300627b6fe',
+             'after_sha256': '73323a41757e2e5b217b2f6f3e7eb1401be1980ec066e05ae41231036eddf331'},
             {'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before_sha256': '88bf6740ee046a7a75116659df85ece80338247c88f5fc48833fd4053e3d19b1',
-             'after_sha256': '9f191c0db8201be82d3242e35855052f911684ef53569776f53175170b5584e8'},
+             'after_sha256': '4693ae0d9db34d0ff9d4df6f1b89b6df2f6994f04f27bdc16cea2a7096744349'},
             {'path': 'packages/core/src/utils/fileUtils.ts',
              'before_sha256': '2199d050fa06f801f8da8947b3768dd517c9b14abc9d0d015244475b2139e016',
-             'after_sha256': '1012d14b04390f147d46df13ebc8f578bcde0f9ebf60e5e93da3edeb7ac491e5'},
+             'after_sha256': '893932451f8b1582e12d7d80e5028a5171a98752bb17d974b89800670aa6334f'},
             {'path': 'packages/core/src/utils/image-view.test.ts',
              'before_sha256': 'b2bdc3799926ccc1c3ce56ca62b6b2154031a97e59be151c10b0781f2c6b5dd9',
              'after_sha256': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d'},
             {'path': 'packages/core/src/utils/image-view.ts',
              'before_sha256': '6dccf9a0ce9e12a24943308841a1b6b5ffd7899e4a41b3a8a0b30a1515276b46',
              'after_sha256': '82383711baeb81895042e6fd865f2f509ca29756ff22b02378dc89c0b2c5e9ea'},
+            {'path': 'packages/core/src/utils/pdf.test.ts',
+             'before_sha256': 'cdbe94dded0743094f29eafec39b8c30c3b8484cbc6578267eeb420532ff01c3',
+             'after_sha256': '09a180ec3eef8fe76bb124db660af16d6a0cc6cba7f218615214e584be28884a'},
+            {'path': 'packages/core/src/utils/pdf.ts',
+             'before_sha256': '73fcaa59ca45c2a13c735958d0991070500ff0339d8a20c782a41aa99575e193',
+             'after_sha256': 'ab834ab89f828a9c91d06b7e56634d109e23a509ea82f900f9f23145d8d7319e'},
             {'path': 'packages/core/src/utils/qwen38-image-contract.test.ts',
              'before_sha256': None,
              'after_sha256': '57972bb126651812bbd508ff26d87f3c7d5aab94603900b773e88a3e90a234c9'},
+            {'path': 'packages/core/src/utils/readManyFiles.test.ts',
+             'before_sha256': '634b29c8570086526acea37a9513331ee6a8a7447af9d16e49f9f6d1faa839b1',
+             'after_sha256': 'e6d93fee96847e8a06e0b71995c7da0a1c5a06541d1b37e13d0f09e06aac9ca0'},
             {'path': 'packages/core/src/utils/shellContextEnv.test.ts',
              'before_sha256': '9142598a98d3d712a03178c545340ed2e6b0dc25a2bae13e1ccdea7902b7a2de',
              'after_sha256': 'bd658f00ce587c0e42043ca76269e353bd4da76f68c3e00bc82d2527366c31cf'},
@@ -1889,6 +1913,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          originalTokenCount: 214883,\n'
                       '          newTokenCount: 41207,\n'
                       "          triggerReason: 'token_limit',\n"
+                      '          output: null,\n'
                       '        },\n'
                       '      });\n'
                       '\n'
@@ -1908,6 +1933,51 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          originalTokenCount: 214883,\n'
                       '          newTokenCount: 41207,\n'
                       "          triggerReason: 'token_limit',\n"
+                      '          output: null,\n'
+                      '        });\n'
+                      '      }\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[compaction-event] carries the failed attempt output "
+                      "accounting to the stream', () => {\n"
+                      '      adapter.processEvent({\n'
+                      '        type: GeminiEventType.ChatCompaction,\n'
+                      '        value: {\n'
+                      "          status: 'COMPRESSION_FAILED_OUTPUT_TRUNCATED',\n"
+                      '          succeeded: false,\n'
+                      '          originalTokenCount: 233926,\n'
+                      '          newTokenCount: 233926,\n'
+                      "          triggerReason: 'token_limit',\n"
+                      '          output: {\n'
+                      '            maxOutputTokens: 20000,\n'
+                      '            thinkingTokenBudget: 12000,\n'
+                      '            finalResponseTokenBudget: 8000,\n'
+                      '            outputTokens: 19900,\n'
+                      '            thinkingTokens: 19900,\n'
+                      '            summaryChars: 0,\n'
+                      "            finishReason: 'MAX_TOKENS',\n"
+                      '          },\n'
+                      '        },\n'
+                      '      });\n'
+                      '\n'
+                      '      const message = adapter.emittedMessages[0];\n'
+                      "      expect(message.type).toBe('system');\n"
+                      "      if (message.type === 'system') {\n"
+                      '        // No debug logging is enabled in the sealed runtime, '
+                      'so the captured\n'
+                      '        // stream is the only place this can survive. Reasoning '
+                      'consuming the\n'
+                      '        // entire maintenance budget and yielding no summary '
+                      'has to be\n'
+                      '        // readable from the bundle alone.\n'
+                      '        expect(message.data).toMatchObject({\n'
+                      "          status: 'COMPRESSION_FAILED_OUTPUT_TRUNCATED',\n"
+                      '          output: {\n'
+                      '            maxOutputTokens: 20000,\n'
+                      '            thinkingTokens: 19900,\n'
+                      '            summaryChars: 0,\n'
+                      "            finishReason: 'MAX_TOKENS',\n"
+                      '          },\n'
                       '        });\n'
                       '      }\n'
                       '    });\n'
@@ -1922,6 +1992,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          originalTokenCount: 214883,\n'
                       '          newTokenCount: 214883,\n'
                       "          triggerReason: 'token_limit',\n"
+                      '          output: null,\n'
                       '        },\n'
                       '      });\n'
                       '\n'
@@ -1963,6 +2034,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          originalTokenCount: 214883,\n'
                              '          newTokenCount: 41207,\n'
                              "          triggerReason: 'token_limit',\n"
+                             '          output: null,\n'
                              '        },\n'
                              '      });\n'
                              '\n'
@@ -1982,6 +2054,53 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          originalTokenCount: 214883,\n'
                              '          newTokenCount: 41207,\n'
                              "          triggerReason: 'token_limit',\n"
+                             '          output: null,\n'
+                             '        });\n'
+                             '      }\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[compaction-event] carries the failed attempt "
+                             "output accounting to the stream', () => {\n"
+                             '      adapter.processEvent({\n'
+                             '        type: GeminiEventType.ChatCompaction,\n'
+                             '        value: {\n'
+                             '          status: '
+                             "'COMPRESSION_FAILED_OUTPUT_TRUNCATED',\n"
+                             '          succeeded: false,\n'
+                             '          originalTokenCount: 233926,\n'
+                             '          newTokenCount: 233926,\n'
+                             "          triggerReason: 'token_limit',\n"
+                             '          output: {\n'
+                             '            maxOutputTokens: 20000,\n'
+                             '            thinkingTokenBudget: 12000,\n'
+                             '            finalResponseTokenBudget: 8000,\n'
+                             '            outputTokens: 19900,\n'
+                             '            thinkingTokens: 19900,\n'
+                             '            summaryChars: 0,\n'
+                             "            finishReason: 'MAX_TOKENS',\n"
+                             '          },\n'
+                             '        },\n'
+                             '      });\n'
+                             '\n'
+                             '      const message = adapter.emittedMessages[0];\n'
+                             "      expect(message.type).toBe('system');\n"
+                             "      if (message.type === 'system') {\n"
+                             '        // No debug logging is enabled in the sealed '
+                             'runtime, so the captured\n'
+                             '        // stream is the only place this can survive. '
+                             'Reasoning consuming the\n'
+                             '        // entire maintenance budget and yielding no '
+                             'summary has to be\n'
+                             '        // readable from the bundle alone.\n'
+                             '        expect(message.data).toMatchObject({\n'
+                             '          status: '
+                             "'COMPRESSION_FAILED_OUTPUT_TRUNCATED',\n"
+                             '          output: {\n'
+                             '            maxOutputTokens: 20000,\n'
+                             '            thinkingTokens: 19900,\n'
+                             '            summaryChars: 0,\n'
+                             "            finishReason: 'MAX_TOKENS',\n"
+                             '          },\n'
                              '        });\n'
                              '      }\n'
                              '    });\n'
@@ -1997,6 +2116,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          originalTokenCount: 214883,\n'
                              '          newTokenCount: 214883,\n'
                              "          triggerReason: 'token_limit',\n"
+                             '          output: null,\n'
                              '        },\n'
                              '      });\n'
                              '\n'
@@ -3022,6 +3142,34 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  duration_api_ms: number;\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-1',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': '  OutputFormat,\n'
+                       '  InputFormat,\n'
+                       '  LoopType,\n'
+                       '  ToolNames,\n'
+                       '  uiTelemetryService,\n'
+                       '  parseAndFormatApiError,\n',
+             'after': '  OutputFormat,\n'
+                      '  InputFormat,\n'
+                      '  LoopType,\n'
+                      '  describeLoopType,\n'
+                      '  ToolNames,\n'
+                      '  uiTelemetryService,\n'
+                      '  parseAndFormatApiError,\n',
+             'review_before': '  OutputFormat,\n'
+                              '  InputFormat,\n'
+                              '  LoopType,\n'
+                              '  ToolNames,\n'
+                              '  uiTelemetryService,\n'
+                              '  parseAndFormatApiError,\n',
+             'review_after': '  OutputFormat,\n'
+                             '  InputFormat,\n'
+                             '  LoopType,\n'
+                             '  describeLoopType,\n'
+                             '  ToolNames,\n'
+                             '  uiTelemetryService,\n'
+                             '  parseAndFormatApiError,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-2',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '\n'
                        'import {\n'
                        '  normalizePartList,\n'
@@ -3048,7 +3196,151 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  extractPartsFromUserMessage,\n'
                              '  buildSystemMessage,\n'
                              '  createToolProgressHandler,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-2',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-3',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': '  insertAfterFunctionResponses,\n'
+                       "} from './utils/nonInteractiveHelpers.js';\n"
+                       '\n'
+                       '// Human-readable labels for the detectors that can fire '
+                       'mid-stream.\n'
+                       '// Surfaced to stderr in TEXT mode so a headless run that '
+                       'halts on a loop\n'
+                       "// doesn't exit with empty stdout and no explanation — see PR "
+                       '#3236 review.\n'
+                       'const LOOP_TYPE_LABELS: Record<LoopType, string> = {\n'
+                       '  [LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS]:\n'
+                       "    'the model repeated the same tool call with identical "
+                       "arguments',\n"
+                       '  [LoopType.CHANTING_IDENTICAL_SENTENCES]:\n'
+                       "    'the model repeated the same sentence in its output',\n"
+                       '  [LoopType.REPETITIVE_THOUGHTS]:\n'
+                       "    'the model repeated the same reasoning thought',\n"
+                       '  [LoopType.READ_FILE_LOOP]:\n'
+                       "    'the model spent too many consecutive calls reading files "
+                       "without making progress',\n"
+                       '  [LoopType.ACTION_STAGNATION]:\n'
+                       "    'the model kept calling the same tool without making "
+                       "progress',\n"
+                       '  [LoopType.SHELL_COMMAND_STAGNATION]:\n'
+                       "    'the model repeated similar shell inspection commands "
+                       "without making progress',\n"
+                       '  [LoopType.GLOBAL_TOOL_CALL_DUPLICATE]:\n'
+                       "    'the model repeated the same tool call across the turn, "
+                       "even when not back-to-back',\n"
+                       '  [LoopType.ALTERNATING_TOOL_CALL_PATTERN]:\n'
+                       "    'the model alternated between the same two tool calls in a "
+                       "repeating pattern',\n"
+                       '  [LoopType.TURN_TOOL_CALL_CAP]:\n'
+                       "    'the turn reached the per-turn tool-call limit',\n"
+                       '  [LoopType.INVALID_TOOL_PARAMS_STAGNATION]:\n'
+                       "    'the model repeatedly sent invalid tool parameters without "
+                       "correcting them',\n"
+                       '  [LoopType.REPEATED_TOOL_EXECUTION_FAILURE]:\n'
+                       "    'the same tool execution failure continued after a "
+                       "corrective reminder',\n"
+                       '};\n'
+                       '\n'
+                       'function formatLoopDetectedMessage(loopType: LoopType | '
+                       'undefined): string {\n'
+                       '  const reason = loopType ? LOOP_TYPE_LABELS[loopType] : '
+                       'undefined;\n'
+                       "  const detail = reason ? ` (${loopType}: ${reason})` : '';\n"
+                       '  // The always-on guards run before the skipLoopDetection '
+                       'gate, so that\n'
+                       "  // setting can't disable them — don't suggest it for those "
+                       'loop types. The\n'
+                       '  // per-turn cap is also always-on but has its own knob, so '
+                       'it gets a\n',
+             'after': '  insertAfterFunctionResponses,\n'
+                      "} from './utils/nonInteractiveHelpers.js';\n"
+                      '\n'
+                      'function formatLoopDetectedMessage(loopType: LoopType | '
+                      'undefined): string {\n'
+                      '  // The rule labels live beside the detector in core, so this '
+                      'message and a\n'
+                      "  // subagent's terminal record name the same cause in the same "
+                      'words.\n'
+                      '  const described = describeLoopType(loopType);\n'
+                      "  const detail = described ? ` (${described})` : '';\n"
+                      '  // The always-on guards run before the skipLoopDetection '
+                      'gate, so that\n'
+                      "  // setting can't disable them — don't suggest it for those "
+                      'loop types. The\n'
+                      '  // per-turn cap is also always-on but has its own knob, so it '
+                      'gets a\n',
+             'review_before': '  insertAfterFunctionResponses,\n'
+                              "} from './utils/nonInteractiveHelpers.js';\n"
+                              '\n'
+                              '// Human-readable labels for the detectors that can '
+                              'fire mid-stream.\n'
+                              '// Surfaced to stderr in TEXT mode so a headless run '
+                              'that halts on a loop\n'
+                              "// doesn't exit with empty stdout and no explanation — "
+                              'see PR #3236 review.\n'
+                              'const LOOP_TYPE_LABELS: Record<LoopType, string> = {\n'
+                              '  [LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS]:\n'
+                              "    'the model repeated the same tool call with "
+                              "identical arguments',\n"
+                              '  [LoopType.CHANTING_IDENTICAL_SENTENCES]:\n'
+                              "    'the model repeated the same sentence in its "
+                              "output',\n"
+                              '  [LoopType.REPETITIVE_THOUGHTS]:\n'
+                              "    'the model repeated the same reasoning thought',\n"
+                              '  [LoopType.READ_FILE_LOOP]:\n'
+                              "    'the model spent too many consecutive calls reading "
+                              "files without making progress',\n"
+                              '  [LoopType.ACTION_STAGNATION]:\n'
+                              "    'the model kept calling the same tool without "
+                              "making progress',\n"
+                              '  [LoopType.SHELL_COMMAND_STAGNATION]:\n'
+                              "    'the model repeated similar shell inspection "
+                              "commands without making progress',\n"
+                              '  [LoopType.GLOBAL_TOOL_CALL_DUPLICATE]:\n'
+                              "    'the model repeated the same tool call across the "
+                              "turn, even when not back-to-back',\n"
+                              '  [LoopType.ALTERNATING_TOOL_CALL_PATTERN]:\n'
+                              "    'the model alternated between the same two tool "
+                              "calls in a repeating pattern',\n"
+                              '  [LoopType.TURN_TOOL_CALL_CAP]:\n'
+                              "    'the turn reached the per-turn tool-call limit',\n"
+                              '  [LoopType.INVALID_TOOL_PARAMS_STAGNATION]:\n'
+                              "    'the model repeatedly sent invalid tool parameters "
+                              "without correcting them',\n"
+                              '  [LoopType.REPEATED_TOOL_EXECUTION_FAILURE]:\n'
+                              "    'the same tool execution failure continued after a "
+                              "corrective reminder',\n"
+                              '};\n'
+                              '\n'
+                              'function formatLoopDetectedMessage(loopType: LoopType | '
+                              'undefined): string {\n'
+                              '  const reason = loopType ? LOOP_TYPE_LABELS[loopType] '
+                              ': undefined;\n'
+                              '  const detail = reason ? ` (${loopType}: ${reason})` : '
+                              "'';\n"
+                              '  // The always-on guards run before the '
+                              'skipLoopDetection gate, so that\n'
+                              "  // setting can't disable them — don't suggest it for "
+                              'those loop types. The\n'
+                              '  // per-turn cap is also always-on but has its own '
+                              'knob, so it gets a\n',
+             'review_after': '  insertAfterFunctionResponses,\n'
+                             "} from './utils/nonInteractiveHelpers.js';\n"
+                             '\n'
+                             'function formatLoopDetectedMessage(loopType: LoopType | '
+                             'undefined): string {\n'
+                             '  // The rule labels live beside the detector in core, '
+                             'so this message and a\n'
+                             "  // subagent's terminal record name the same cause in "
+                             'the same words.\n'
+                             '  const described = describeLoopType(loopType);\n'
+                             "  const detail = described ? ` (${described})` : '';\n"
+                             '  // The always-on guards run before the '
+                             'skipLoopDetection gate, so that\n'
+                             "  // setting can't disable them — don't suggest it for "
+                             'those loop types. The\n'
+                             '  // per-turn cap is also always-on but has its own '
+                             'knob, so it gets a\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-4',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '\n'
                        '      if (!initialPartList) {\n'
@@ -3083,7 +3375,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'handleSlashCommand(\n'
                              '            input,\n'
                              '            abortController,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-3',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-5',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '      const recoveredAgentsNotice =\n'
                        '        resumedSessionData &&\n'
@@ -3117,7 +3409,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'config.consumePendingRecoveredAgentsNotice()\n'
                              '          : null;\n'
                              '      if (recoveredAgentsNotice) {\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-4',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-6',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '            }\n'
                        '            loopDetected = true;\n'
@@ -3227,7 +3519,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            throw new AlreadyReportedError(errorText);\n'
                              '          }\n'
                              '        }\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-5',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-7',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '                  }\n'
                        '                  loopDetected = true;\n'
@@ -3735,6 +4027,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      originalTokenCount: 198_400,\n'
                       '      newTokenCount: 32_118,\n'
                       "      triggerReason: 'token_limit' as const,\n"
+                      '      output: null,\n'
                       '    };\n'
                       '    const secondCompaction = {\n'
                       "      status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
@@ -3742,6 +4035,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      originalTokenCount: 205_112,\n'
                       '      newTokenCount: 205_112,\n'
                       "      triggerReason: 'token_limit' as const,\n"
+                      '      output: null,\n'
                       '    };\n'
                       '\n'
                       '    const baseDisplay: AgentResultDisplay = {\n'
@@ -3817,6 +4111,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      originalTokenCount: 198_400,\n'
                              '      newTokenCount: 32_118,\n'
                              "      triggerReason: 'token_limit' as const,\n"
+                             '      output: null,\n'
                              '    };\n'
                              '    const secondCompaction = {\n'
                              "      status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
@@ -3824,6 +4119,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      originalTokenCount: 205_112,\n'
                              '      newTokenCount: 205_112,\n'
                              "      triggerReason: 'token_limit' as const,\n"
+                             '      output: null,\n'
                              '    };\n'
                              '\n'
                              '    const baseDisplay: AgentResultDisplay = {\n'
@@ -4547,6 +4843,41 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "0 means we're\n"
                              ' * inside a top-level subagent (or no subagent at all — '
                              'but in that case\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.test.ts:landmark-1',
+             'path': 'packages/core/src/agents/runtime/agent-core.test.ts',
+             'before': "      '_runReasoningLoopInner',\n"
+                       '    ).mockImplementation(async () => {\n'
+                       '      observed = getInvocationContext();\n'
+                       "      return { text: '', terminateMode: null, turnsUsed: 0 };\n"
+                       '    });\n'
+                       '\n'
+                       '    await runWithInvocationContext(parentContext, () =>\n',
+             'after': "      '_runReasoningLoopInner',\n"
+                      '    ).mockImplementation(async () => {\n'
+                      '      observed = getInvocationContext();\n'
+                      "      return { text: '', terminateMode: null, turnsUsed: 0, "
+                      'loopType: null };\n'
+                      '    });\n'
+                      '\n'
+                      '    await runWithInvocationContext(parentContext, () =>\n',
+             'review_before': "      '_runReasoningLoopInner',\n"
+                              '    ).mockImplementation(async () => {\n'
+                              '      observed = getInvocationContext();\n'
+                              "      return { text: '', terminateMode: null, "
+                              'turnsUsed: 0 };\n'
+                              '    });\n'
+                              '\n'
+                              '    await runWithInvocationContext(parentContext, () '
+                              '=>\n',
+             'review_after': "      '_runReasoningLoopInner',\n"
+                             '    ).mockImplementation(async () => {\n'
+                             '      observed = getInvocationContext();\n'
+                             "      return { text: '', terminateMode: null, turnsUsed: "
+                             '0, loopType: null };\n'
+                             '    });\n'
+                             '\n'
+                             '    await runWithInvocationContext(parentContext, () '
+                             '=>\n'},
             {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': 'import {\n'
@@ -4576,6 +4907,39 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  isTopLevelSession,\n'
                              '  runWithAgentContext,\n'},
             {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-2',
+             'path': 'packages/core/src/agents/runtime/agent-core.ts',
+             'before': '  type ToolCallRequestInfo,\n'
+                       "} from '../../core/turn.js';\n"
+                       'import { LoopDetectionService } from '
+                       "'../../services/loopDetectionService.js';\n"
+                       'import {\n'
+                       '  CoreToolScheduler,\n'
+                       '  type ToolCall,\n',
+             'after': '  type ToolCallRequestInfo,\n'
+                      "} from '../../core/turn.js';\n"
+                      'import { LoopDetectionService } from '
+                      "'../../services/loopDetectionService.js';\n"
+                      "import type { LoopType } from '../../telemetry/types.js';\n"
+                      'import {\n'
+                      '  CoreToolScheduler,\n'
+                      '  type ToolCall,\n',
+             'review_before': '  type ToolCallRequestInfo,\n'
+                              "} from '../../core/turn.js';\n"
+                              'import { LoopDetectionService } from '
+                              "'../../services/loopDetectionService.js';\n"
+                              'import {\n'
+                              '  CoreToolScheduler,\n'
+                              '  type ToolCall,\n',
+             'review_after': '  type ToolCallRequestInfo,\n'
+                             "} from '../../core/turn.js';\n"
+                             'import { LoopDetectionService } from '
+                             "'../../services/loopDetectionService.js';\n"
+                             'import type { LoopType } from '
+                             "'../../telemetry/types.js';\n"
+                             'import {\n'
+                             '  CoreToolScheduler,\n'
+                             '  type ToolCall,\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-3',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': "} from '@google/genai';\n"
                        "import { GeminiChat } from '../../core/geminiChat.js';\n"
@@ -4613,7 +4977,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'import {\n'
                              '  dedupeToolCallsById,\n'
                              '  getProviderToolCallId,\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-3',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-4',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': "} from './agent-types.js';\n"
                        "import { AgentTerminateMode } from './agent-types.js';\n"
@@ -4641,7 +5005,83 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  AgentRoundEvent,\n'
                              '  AgentRoundTextEvent,\n'
                              '  AgentToolCallEvent,\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-4',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-5',
+             'path': 'packages/core/src/agents/runtime/agent-core.ts',
+             'before': '  terminateMode: AgentTerminateMode | null;\n'
+                       '  /** Number of model round-trips completed. */\n'
+                       '  turnsUsed: number;\n'
+                       '}\n'
+                       '\n'
+                       '/**\n',
+             'after': '  terminateMode: AgentTerminateMode | null;\n'
+                      '  /** Number of model round-trips completed. */\n'
+                      '  turnsUsed: number;\n'
+                      '  /**\n'
+                      '   * Which loop-detection rule ended the run, when one did. '
+                      '`LOOP_DETECTED`\n'
+                      '   * covers nine rules across two tiers, and null on a '
+                      'LOOP_DETECTED result\n'
+                      '   * means the halt came from the duplicate-provider-tool-call '
+                      'guard rather\n'
+                      '   * than from the detector.\n'
+                      '   */\n'
+                      '  loopType: LoopType | null;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n',
+             'review_before': '  terminateMode: AgentTerminateMode | null;\n'
+                              '  /** Number of model round-trips completed. */\n'
+                              '  turnsUsed: number;\n'
+                              '}\n'
+                              '\n'
+                              '/**\n',
+             'review_after': '  terminateMode: AgentTerminateMode | null;\n'
+                             '  /** Number of model round-trips completed. */\n'
+                             '  turnsUsed: number;\n'
+                             '  /**\n'
+                             '   * Which loop-detection rule ended the run, when one '
+                             'did. `LOOP_DETECTED`\n'
+                             '   * covers nine rules across two tiers, and null on a '
+                             'LOOP_DETECTED result\n'
+                             '   * means the halt came from the '
+                             'duplicate-provider-tool-call guard rather\n'
+                             '   * than from the detector.\n'
+                             '   */\n'
+                             '  loopType: LoopType | null;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-6',
+             'path': 'packages/core/src/agents/runtime/agent-core.ts',
+             'before': '              text: finalText,\n'
+                       '              terminateMode: AgentTerminateMode.CANCELLED,\n'
+                       '              turnsUsed: turnCounter,\n'
+                       '            };\n'
+                       '          }\n'
+                       '\n',
+             'after': '              text: finalText,\n'
+                      '              terminateMode: AgentTerminateMode.CANCELLED,\n'
+                      '              turnsUsed: turnCounter,\n'
+                      '              loopType: null,\n'
+                      '            };\n'
+                      '          }\n'
+                      '\n',
+             'review_before': '              text: finalText,\n'
+                              '              terminateMode: '
+                              'AgentTerminateMode.CANCELLED,\n'
+                              '              turnsUsed: turnCounter,\n'
+                              '            };\n'
+                              '          }\n'
+                              '\n',
+             'review_after': '              text: finalText,\n'
+                             '              terminateMode: '
+                             'AgentTerminateMode.CANCELLED,\n'
+                             '              turnsUsed: turnCounter,\n'
+                             '              loopType: null,\n'
+                             '            };\n'
+                             '          }\n'
+                             '\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-7',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '            continue;\n'
                        '          }\n'
@@ -4776,7 +5216,42 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          // Handle chunk events\n'
                              "          if (streamEvent.type === 'chunk') {\n"
                              '            const resp = streamEvent.value;\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-5',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-8',
+             'path': 'packages/core/src/agents/runtime/agent-core.ts',
+             'before': '      text: finalText,\n'
+                       '      terminateMode,\n'
+                       '      turnsUsed: turnCounter,\n'
+                       '    };\n'
+                       '  }\n'
+                       '\n',
+             'after': '      text: finalText,\n'
+                      '      terminateMode,\n'
+                      '      turnsUsed: turnCounter,\n'
+                      '      loopType:\n'
+                      '        terminateMode === AgentTerminateMode.LOOP_DETECTED\n'
+                      '          ? loopDetector.getLastLoopType()\n'
+                      '          : null,\n'
+                      '    };\n'
+                      '  }\n'
+                      '\n',
+             'review_before': '      text: finalText,\n'
+                              '      terminateMode,\n'
+                              '      turnsUsed: turnCounter,\n'
+                              '    };\n'
+                              '  }\n'
+                              '\n',
+             'review_after': '      text: finalText,\n'
+                             '      terminateMode,\n'
+                             '      turnsUsed: turnCounter,\n'
+                             '      loopType:\n'
+                             '        terminateMode === '
+                             'AgentTerminateMode.LOOP_DETECTED\n'
+                             '          ? loopDetector.getLastLoopType()\n'
+                             '          : null,\n'
+                             '    };\n'
+                             '  }\n'
+                             '\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-9',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '\n'
                        '    // Context files (QWEN.md + output-language.md) keep the '
@@ -4849,6 +5324,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'import type { Part, GenerateContentResponseUsageMetadata } from '
                       "'@google/genai';\n"
                       "import type { CompactionRecord } from '../../core/turn.js';\n"
+                      "import type { LoopType } from '../../telemetry/types.js';\n"
                       "import type { AgentStatus } from './agent-types.js';\n"
                       '\n'
                       'type WithoutConfirmationCallback<T> = T extends unknown\n',
@@ -4867,6 +5343,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "} from '@google/genai';\n"
                              'import type { CompactionRecord } from '
                              "'../../core/turn.js';\n"
+                             'import type { LoopType } from '
+                             "'../../telemetry/types.js';\n"
                              "import type { AgentStatus } from './agent-types.js';\n"
                              '\n'
                              'type WithoutConfirmationCallback<T> = T extends '
@@ -4942,7 +5420,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '\n'
                        'export interface AgentFinishEvent {\n'
                        '  subagentId: string;\n'
-                       '  terminateReason: string;\n',
+                       '  terminateReason: string;\n'
+                       '  timestamp: number;\n'
+                       '  rounds?: number;\n'
+                       '  totalDurationMs?: number;\n',
              'after': '  timestamp: number;\n'
                       '}\n'
                       '\n'
@@ -4964,13 +5445,43 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '\n'
                       'export interface AgentFinishEvent {\n'
                       '  subagentId: string;\n'
-                      '  terminateReason: string;\n',
+                      '  terminateReason: string;\n'
+                      '  /**\n'
+                      '   * Model round-trips this run started. Required, because this '
+                      'event is what\n'
+                      "   * flips a consumer's view of the agent to its terminal "
+                      'state: a terminal\n'
+                      '   * announcement that omits the count leaves any later, fuller '
+                      'update\n'
+                      '   * unreadable to an edge-triggered consumer, which then has '
+                      'to invent a\n'
+                      '   * number. Distinct from `rounds`, which is the statistics '
+                      "collector's\n"
+                      '   * completed-round total and accumulates across '
+                      'continuations.\n'
+                      '   */\n'
+                      '  turnsUsed: number;\n'
+                      '  /**\n'
+                      '   * Which loop-detection rule ended the run, when one did. '
+                      'Null for every\n'
+                      '   * other terminate reason, and null on a LOOP_DETECTED finish '
+                      'that came from\n'
+                      '   * the duplicate-provider-tool-call guard rather than from '
+                      'the detector.\n'
+                      '   */\n'
+                      '  loopType: LoopType | null;\n'
+                      '  timestamp: number;\n'
+                      '  rounds?: number;\n'
+                      '  totalDurationMs?: number;\n',
              'review_before': '  timestamp: number;\n'
                               '}\n'
                               '\n'
                               'export interface AgentFinishEvent {\n'
                               '  subagentId: string;\n'
-                              '  terminateReason: string;\n',
+                              '  terminateReason: string;\n'
+                              '  timestamp: number;\n'
+                              '  rounds?: number;\n'
+                              '  totalDurationMs?: number;\n',
              'review_after': '  timestamp: number;\n'
                              '}\n'
                              '\n'
@@ -4992,7 +5503,34 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              'export interface AgentFinishEvent {\n'
                              '  subagentId: string;\n'
-                             '  terminateReason: string;\n'},
+                             '  terminateReason: string;\n'
+                             '  /**\n'
+                             '   * Model round-trips this run started. Required, '
+                             'because this event is what\n'
+                             "   * flips a consumer's view of the agent to its "
+                             'terminal state: a terminal\n'
+                             '   * announcement that omits the count leaves any later, '
+                             'fuller update\n'
+                             '   * unreadable to an edge-triggered consumer, which '
+                             'then has to invent a\n'
+                             '   * number. Distinct from `rounds`, which is the '
+                             "statistics collector's\n"
+                             '   * completed-round total and accumulates across '
+                             'continuations.\n'
+                             '   */\n'
+                             '  turnsUsed: number;\n'
+                             '  /**\n'
+                             '   * Which loop-detection rule ended the run, when one '
+                             'did. Null for every\n'
+                             '   * other terminate reason, and null on a LOOP_DETECTED '
+                             'finish that came from\n'
+                             '   * the duplicate-provider-tool-call guard rather than '
+                             'from the detector.\n'
+                             '   */\n'
+                             '  loopType: LoopType | null;\n'
+                             '  timestamp: number;\n'
+                             '  rounds?: number;\n'
+                             '  totalDurationMs?: number;\n'},
             {'name': 'packages/core/src/agents/runtime/agent-events.ts:landmark-5',
              'path': 'packages/core/src/agents/runtime/agent-events.ts',
              'before': '  [AgentEventType.TOOL_WAITING_APPROVAL]: '
@@ -5033,6 +5571,49 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'AgentStatusChangeEvent;\n'},
             {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-headless.ts',
+             'before': "import { AgentTerminateMode } from './agent-types.js';\n"
+                       'import { logSubagentExecution } from '
+                       "'../../telemetry/loggers.js';\n"
+                       'import { SubagentExecutionEvent } from '
+                       "'../../telemetry/types.js';\n"
+                       'import { AgentCore, EXTERNAL_MESSAGE_PREFIX } from '
+                       "'./agent-core.js';\n"
+                       "import { DEFAULT_QWEN_MODEL } from '../../config/models.js';\n"
+                       '\n',
+             'after': "import { AgentTerminateMode } from './agent-types.js';\n"
+                      'import { logSubagentExecution } from '
+                      "'../../telemetry/loggers.js';\n"
+                      'import { SubagentExecutionEvent } from '
+                      "'../../telemetry/types.js';\n"
+                      "import type { LoopType } from '../../telemetry/types.js';\n"
+                      'import { AgentCore, EXTERNAL_MESSAGE_PREFIX } from '
+                      "'./agent-core.js';\n"
+                      "import { DEFAULT_QWEN_MODEL } from '../../config/models.js';\n"
+                      '\n',
+             'review_before': "import { AgentTerminateMode } from './agent-types.js';\n"
+                              'import { logSubagentExecution } from '
+                              "'../../telemetry/loggers.js';\n"
+                              'import { SubagentExecutionEvent } from '
+                              "'../../telemetry/types.js';\n"
+                              'import { AgentCore, EXTERNAL_MESSAGE_PREFIX } from '
+                              "'./agent-core.js';\n"
+                              'import { DEFAULT_QWEN_MODEL } from '
+                              "'../../config/models.js';\n"
+                              '\n',
+             'review_after': "import { AgentTerminateMode } from './agent-types.js';\n"
+                             'import { logSubagentExecution } from '
+                             "'../../telemetry/loggers.js';\n"
+                             'import { SubagentExecutionEvent } from '
+                             "'../../telemetry/types.js';\n"
+                             'import type { LoopType } from '
+                             "'../../telemetry/types.js';\n"
+                             'import { AgentCore, EXTERNAL_MESSAGE_PREFIX } from '
+                             "'./agent-core.js';\n"
+                             'import { DEFAULT_QWEN_MODEL } from '
+                             "'../../config/models.js';\n"
+                             '\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-2',
+             'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before': '  private readonly core: AgentCore;\n'
                        "  private finalText: string = '';\n"
                        '  private terminateMode: AgentTerminateMode = '
@@ -5045,6 +5626,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  private terminateMode: AgentTerminateMode = '
                       'AgentTerminateMode.ERROR;\n'
                       '  private turnsUsed: number = 0;\n'
+                      '  private loopType: LoopType | null = null;\n'
                       '  private chat?: GeminiChat;\n'
                       '  private toolsList?: FunctionDeclaration[];\n'
                       '  private executing = false;\n',
@@ -5060,10 +5642,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  private terminateMode: AgentTerminateMode = '
                              'AgentTerminateMode.ERROR;\n'
                              '  private turnsUsed: number = 0;\n'
+                             '  private loopType: LoopType | null = null;\n'
                              '  private chat?: GeminiChat;\n'
                              '  private toolsList?: FunctionDeclaration[];\n'
                              '  private executing = false;\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-2',
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-3',
              'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before': '    this.executing = true;\n'
                        "    this.finalText = '';\n"
@@ -5075,6 +5658,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    this.finalText = '';\n"
                       '    this.terminateMode = AgentTerminateMode.ERROR;\n'
                       '    this.turnsUsed = 0;\n'
+                      '    this.loopType = null;\n'
                       '    const resetStats = options.resetStats !== false;\n'
                       '    if (resetStats) {\n'
                       '      this.core.resetExecutionStats();\n',
@@ -5088,10 +5672,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    this.finalText = '';\n"
                              '    this.terminateMode = AgentTerminateMode.ERROR;\n'
                              '    this.turnsUsed = 0;\n'
+                             '    this.loopType = null;\n'
                              '    const resetStats = options.resetStats !== false;\n'
                              '    if (resetStats) {\n'
                              '      this.core.resetExecutionStats();\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-3',
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-4',
              'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before': '\n'
                        '        this.finalText = result.text;\n'
@@ -5106,6 +5691,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        this.terminateMode = result.terminateMode ?? '
                       'AgentTerminateMode.GOAL;\n'
                       '        this.turnsUsed = result.turnsUsed;\n'
+                      '        this.loopType = result.loopType;\n'
                       '      } catch (error) {\n'
                       "        debugLogger.error('Error during subagent execution:', "
                       'error);\n'
@@ -5124,12 +5710,45 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        this.terminateMode = result.terminateMode ?? '
                              'AgentTerminateMode.GOAL;\n'
                              '        this.turnsUsed = result.turnsUsed;\n'
+                             '        this.loopType = result.loopType;\n'
                              '      } catch (error) {\n'
                              "        debugLogger.error('Error during subagent "
                              "execution:', error);\n"
                              '        this.terminateMode = '
                              'AgentTerminateMode.ERROR;\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-4',
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-5',
+             'path': 'packages/core/src/agents/runtime/agent-headless.ts',
+             'before': '        this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
+                       '          subagentId: this.core.subagentId,\n'
+                       '          terminateReason: this.terminateMode,\n'
+                       '          timestamp: Date.now(),\n'
+                       '          rounds: summary.rounds,\n'
+                       '          totalDurationMs: summary.totalDurationMs,\n',
+             'after': '        this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
+                      '          subagentId: this.core.subagentId,\n'
+                      '          terminateReason: this.terminateMode,\n'
+                      '          turnsUsed: this.turnsUsed,\n'
+                      '          loopType: this.loopType,\n'
+                      '          timestamp: Date.now(),\n'
+                      '          rounds: summary.rounds,\n'
+                      '          totalDurationMs: summary.totalDurationMs,\n',
+             'review_before': '        '
+                              'this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
+                              '          subagentId: this.core.subagentId,\n'
+                              '          terminateReason: this.terminateMode,\n'
+                              '          timestamp: Date.now(),\n'
+                              '          rounds: summary.rounds,\n'
+                              '          totalDurationMs: summary.totalDurationMs,\n',
+             'review_after': '        '
+                             'this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
+                             '          subagentId: this.core.subagentId,\n'
+                             '          terminateReason: this.terminateMode,\n'
+                             '          turnsUsed: this.turnsUsed,\n'
+                             '          loopType: this.loopType,\n'
+                             '          timestamp: Date.now(),\n'
+                             '          rounds: summary.rounds,\n'
+                             '          totalDurationMs: summary.totalDurationMs,\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-6',
              'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before': '    return this.terminateMode;\n'
                        '  }\n'
@@ -5152,6 +5771,19 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '   */\n'
                       '  getTurnsUsed(): number {\n'
                       '    return this.turnsUsed;\n'
+                      '  }\n'
+                      '\n'
+                      '  /**\n'
+                      '   * The loop-detection rule that ended this run, or null when '
+                      'the run did not\n'
+                      '   * end on one. `LOOP_DETECTED` spans nine rules across two '
+                      'tiers, so the\n'
+                      '   * reason alone cannot tell a five-identical-call halt from '
+                      'an exhausted\n'
+                      '   * per-turn tool-call budget.\n'
+                      '   */\n'
+                      '  getLoopType(): LoopType | null {\n'
+                      '    return this.loopType;\n'
                       '  }\n'
                       '\n'
                       '  /**\n'
@@ -5182,11 +5814,67 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  }\n'
                              '\n'
                              '  /**\n'
+                             '   * The loop-detection rule that ended this run, or '
+                             'null when the run did not\n'
+                             '   * end on one. `LOOP_DETECTED` spans nine rules across '
+                             'two tiers, so the\n'
+                             '   * reason alone cannot tell a five-identical-call halt '
+                             'from an exhausted\n'
+                             '   * per-turn tool-call budget.\n'
+                             '   */\n'
+                             '  getLoopType(): LoopType | null {\n'
+                             '    return this.loopType;\n'
+                             '  }\n'
+                             '\n'
+                             '  /**\n'
                              '   * Sets a callback that the reasoning loop calls '
                              'between tool rounds\n'
                              '   * to drain external messages (e.g. from SendMessage '
                              'tool).\n'},
             {'name': 'packages/core/src/agents/subagent-result.test.ts:landmark-1',
+             'path': 'packages/core/src/agents/subagent-result.test.ts',
+             'before': '\n'
+                       "import { describe, expect, it } from 'vitest';\n"
+                       'import { AgentTerminateMode } from '
+                       "'./runtime/agent-types.js';\n"
+                       'import { toModelVisibleSubagentResult } from '
+                       "'./subagent-result.js';\n"
+                       '\n'
+                       "describe('toModelVisibleSubagentResult', () => {\n"
+                       '  it.each([\n',
+             'after': '\n'
+                      "import { describe, expect, it } from 'vitest';\n"
+                      "import { AgentTerminateMode } from './runtime/agent-types.js';\n"
+                      "import { LoopType } from '../telemetry/types.js';\n"
+                      'import {\n'
+                      '  describeSubagentTerminateReason,\n'
+                      '  toModelVisibleSubagentResult,\n'
+                      "} from './subagent-result.js';\n"
+                      '\n'
+                      "describe('toModelVisibleSubagentResult', () => {\n"
+                      '  it.each([\n',
+             'review_before': '\n'
+                              "import { describe, expect, it } from 'vitest';\n"
+                              'import { AgentTerminateMode } from '
+                              "'./runtime/agent-types.js';\n"
+                              'import { toModelVisibleSubagentResult } from '
+                              "'./subagent-result.js';\n"
+                              '\n'
+                              "describe('toModelVisibleSubagentResult', () => {\n"
+                              '  it.each([\n',
+             'review_after': '\n'
+                             "import { describe, expect, it } from 'vitest';\n"
+                             'import { AgentTerminateMode } from '
+                             "'./runtime/agent-types.js';\n"
+                             "import { LoopType } from '../telemetry/types.js';\n"
+                             'import {\n'
+                             '  describeSubagentTerminateReason,\n'
+                             '  toModelVisibleSubagentResult,\n'
+                             "} from './subagent-result.js';\n"
+                             '\n'
+                             "describe('toModelVisibleSubagentResult', () => {\n"
+                             '  it.each([\n'},
+            {'name': 'packages/core/src/agents/subagent-result.test.ts:landmark-2',
              'path': 'packages/core/src/agents/subagent-result.test.ts',
              'before': "  it('preserves raw diagnostics for non-goal terminations', () "
                        '=> {\n'
@@ -5236,6 +5924,69 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    expect(text).toContain('after 1 turn and produced no "
                       "report');\n"
                       "    expect(text).not.toContain('1 turns');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('[loop-attribution] names the loop rule in the text the "
+                      "parent reads', () => {\n"
+                      '    const text = toModelVisibleSubagentResult(\n'
+                      "      '   ',\n"
+                      '      AgentTerminateMode.LOOP_DETECTED,\n'
+                      '      11,\n'
+                      '      LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,\n'
+                      '    );\n'
+                      '\n'
+                      '    expect(text).toContain(\n'
+                      "      'stopped as loop_detected "
+                      "(consecutive_identical_tool_calls: ' +\n"
+                      "        'the model repeated the same tool call with identical "
+                      "arguments) ' +\n"
+                      "        'after 11 turns',\n"
+                      '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('[loop-attribution] distinguishes a budget halt from a "
+                      "repetition halt', () => {\n"
+                      '    // Both are LOOP_DETECTED. Told apart, they call for '
+                      'different responses:\n'
+                      '    // one is a stuck model, the other an assignment larger '
+                      'than the budget.\n'
+                      '    expect(\n'
+                      '      describeSubagentTerminateReason(\n'
+                      '        AgentTerminateMode.LOOP_DETECTED,\n'
+                      '        LoopType.TURN_TOOL_CALL_CAP,\n'
+                      '      ),\n'
+                      '    ).toBe(\n'
+                      "      'LOOP_DETECTED (turn_tool_call_cap: the turn reached the "
+                      "per-turn ' +\n"
+                      "        'tool-call limit)',\n"
+                      '    );\n'
+                      '    expect(\n'
+                      '      describeSubagentTerminateReason(\n'
+                      '        AgentTerminateMode.LOOP_DETECTED,\n'
+                      '        LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,\n'
+                      '      ),\n'
+                      '    ).toBe(\n'
+                      "      'LOOP_DETECTED (consecutive_identical_tool_calls: the "
+                      "model repeated ' +\n"
+                      "        'the same tool call with identical arguments)',\n"
+                      '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('[loop-attribution] leaves a non-loop terminate reason "
+                      "exactly as it was', () => {\n"
+                      '    expect(\n'
+                      '      '
+                      'describeSubagentTerminateReason(AgentTerminateMode.MAX_TURNS, '
+                      'null),\n'
+                      "    ).toBe('MAX_TURNS');\n"
+                      '    // A LOOP_DETECTED halt from the duplicate-provider guard '
+                      'fires no rule,\n'
+                      '    // so there is nothing to name and nothing is invented.\n'
+                      '    expect(\n'
+                      '      '
+                      'describeSubagentTerminateReason(AgentTerminateMode.LOOP_DETECTED, '
+                      'null),\n'
+                      "    ).toBe('LOOP_DETECTED');\n"
                       '  });\n'
                       '});\n',
              'review_before': "  it('preserves raw diagnostics for non-goal "
@@ -5288,8 +6039,147 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "report');\n"
                              "    expect(text).not.toContain('1 turns');\n"
                              '  });\n'
+                             '\n'
+                             "  it('[loop-attribution] names the loop rule in the text "
+                             "the parent reads', () => {\n"
+                             '    const text = toModelVisibleSubagentResult(\n'
+                             "      '   ',\n"
+                             '      AgentTerminateMode.LOOP_DETECTED,\n'
+                             '      11,\n'
+                             '      LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,\n'
+                             '    );\n'
+                             '\n'
+                             '    expect(text).toContain(\n'
+                             "      'stopped as loop_detected "
+                             "(consecutive_identical_tool_calls: ' +\n"
+                             "        'the model repeated the same tool call with "
+                             "identical arguments) ' +\n"
+                             "        'after 11 turns',\n"
+                             '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('[loop-attribution] distinguishes a budget halt "
+                             "from a repetition halt', () => {\n"
+                             '    // Both are LOOP_DETECTED. Told apart, they call for '
+                             'different responses:\n'
+                             '    // one is a stuck model, the other an assignment '
+                             'larger than the budget.\n'
+                             '    expect(\n'
+                             '      describeSubagentTerminateReason(\n'
+                             '        AgentTerminateMode.LOOP_DETECTED,\n'
+                             '        LoopType.TURN_TOOL_CALL_CAP,\n'
+                             '      ),\n'
+                             '    ).toBe(\n'
+                             "      'LOOP_DETECTED (turn_tool_call_cap: the turn "
+                             "reached the per-turn ' +\n"
+                             "        'tool-call limit)',\n"
+                             '    );\n'
+                             '    expect(\n'
+                             '      describeSubagentTerminateReason(\n'
+                             '        AgentTerminateMode.LOOP_DETECTED,\n'
+                             '        LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,\n'
+                             '      ),\n'
+                             '    ).toBe(\n'
+                             "      'LOOP_DETECTED (consecutive_identical_tool_calls: "
+                             "the model repeated ' +\n"
+                             "        'the same tool call with identical arguments)',\n"
+                             '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('[loop-attribution] leaves a non-loop terminate "
+                             "reason exactly as it was', () => {\n"
+                             '    expect(\n'
+                             '      '
+                             'describeSubagentTerminateReason(AgentTerminateMode.MAX_TURNS, '
+                             'null),\n'
+                             "    ).toBe('MAX_TURNS');\n"
+                             '    // A LOOP_DETECTED halt from the duplicate-provider '
+                             'guard fires no rule,\n'
+                             '    // so there is nothing to name and nothing is '
+                             'invented.\n'
+                             '    expect(\n'
+                             '      '
+                             'describeSubagentTerminateReason(AgentTerminateMode.LOOP_DETECTED, '
+                             'null),\n'
+                             "    ).toBe('LOOP_DETECTED');\n"
+                             '  });\n'
                              '});\n'},
             {'name': 'packages/core/src/agents/subagent-result.ts:landmark-1',
+             'path': 'packages/core/src/agents/subagent-result.ts',
+             'before': ' */\n'
+                       '\n'
+                       'import { AgentTerminateMode } from '
+                       "'./runtime/agent-types.js';\n"
+                       '\n'
+                       'function isClosingAnalysisTag(tag: string): boolean {\n'
+                       "  return tag.startsWith('</');\n",
+             'after': ' */\n'
+                      '\n'
+                      "import { AgentTerminateMode } from './runtime/agent-types.js';\n"
+                      'import { describeLoopType } from '
+                      "'../services/loopDetectionService.js';\n"
+                      "import type { LoopType } from '../telemetry/types.js';\n"
+                      '\n'
+                      '/**\n'
+                      ' * Why a subagent stopped, naming the loop-detection rule when '
+                      'one fired.\n'
+                      ' * `LOOP_DETECTED` alone covers nine rules across two tiers, so '
+                      'a five\n'
+                      ' * identical-tool-call halt and an exhausted per-turn tool-call '
+                      'budget are\n'
+                      ' * indistinguishable without it — the difference between "the '
+                      'model is stuck"\n'
+                      ' * and "the assignment was bigger than the budget".\n'
+                      ' */\n'
+                      'export function describeSubagentTerminateReason(\n'
+                      '  terminateMode: AgentTerminateMode,\n'
+                      '  loopType?: LoopType | null,\n'
+                      '): string {\n'
+                      '  const rule = describeLoopType(loopType);\n'
+                      '  return rule ? `${terminateMode} (${rule})` : '
+                      'String(terminateMode);\n'
+                      '}\n'
+                      '\n'
+                      'function isClosingAnalysisTag(tag: string): boolean {\n'
+                      "  return tag.startsWith('</');\n",
+             'review_before': ' */\n'
+                              '\n'
+                              'import { AgentTerminateMode } from '
+                              "'./runtime/agent-types.js';\n"
+                              '\n'
+                              'function isClosingAnalysisTag(tag: string): boolean {\n'
+                              "  return tag.startsWith('</');\n",
+             'review_after': ' */\n'
+                             '\n'
+                             'import { AgentTerminateMode } from '
+                             "'./runtime/agent-types.js';\n"
+                             'import { describeLoopType } from '
+                             "'../services/loopDetectionService.js';\n"
+                             "import type { LoopType } from '../telemetry/types.js';\n"
+                             '\n'
+                             '/**\n'
+                             ' * Why a subagent stopped, naming the loop-detection '
+                             'rule when one fired.\n'
+                             ' * `LOOP_DETECTED` alone covers nine rules across two '
+                             'tiers, so a five\n'
+                             ' * identical-tool-call halt and an exhausted per-turn '
+                             'tool-call budget are\n'
+                             ' * indistinguishable without it — the difference between '
+                             '"the model is stuck"\n'
+                             ' * and "the assignment was bigger than the budget".\n'
+                             ' */\n'
+                             'export function describeSubagentTerminateReason(\n'
+                             '  terminateMode: AgentTerminateMode,\n'
+                             '  loopType?: LoopType | null,\n'
+                             '): string {\n'
+                             '  const rule = describeLoopType(loopType);\n'
+                             '  return rule ? `${terminateMode} (${rule})` : '
+                             'String(terminateMode);\n'
+                             '}\n'
+                             '\n'
+                             'function isClosingAnalysisTag(tag: string): boolean {\n'
+                             "  return tag.startsWith('</');\n"},
+            {'name': 'packages/core/src/agents/subagent-result.ts:landmark-2',
              'path': 'packages/core/src/agents/subagent-result.ts',
              'before': 'export function toModelVisibleSubagentResult(\n'
                        '  text: string,\n'
@@ -5305,6 +6195,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  text: string,\n'
                       '  terminateMode = AgentTerminateMode.GOAL,\n'
                       '  turnsUsed?: number,\n'
+                      '  loopType?: LoopType | null,\n'
                       '): string {\n'
                       '  if (terminateMode !== AgentTerminateMode.GOAL) {\n'
                       '    // A subagent that stopped for any reason other than '
@@ -5326,6 +6217,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "        ? ` after ${turnsUsed} turn${turnsUsed === 1 ? '' : "
                       "'s'}`\n"
                       "        : '';\n"
+                      '    // The rule that fired is as actionable as the count: it is '
+                      'the difference\n'
+                      '    // between a stuck model and an assignment larger than the '
+                      'budget.\n'
+                      '    const rule = describeLoopType(loopType);\n'
+                      "    const detail = rule ? ` (${rule})` : '';\n"
                       '    let reason: string;\n'
                       '    if (terminateMode === AgentTerminateMode.MAX_TURNS) {\n'
                       '      reason = `exhausted its turn budget${turns}`;\n'
@@ -5336,7 +6233,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      reason = `was cancelled${turns}`;\n'
                       '    } else {\n'
                       '      reason = `stopped as '
-                      '${String(terminateMode).toLowerCase()}${turns}`;\n'
+                      '${String(terminateMode).toLowerCase()}${detail}${turns}`;\n'
                       '    }\n'
                       '    const partial = text.trim();\n'
                       '    return partial\n'
@@ -5362,6 +6259,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  text: string,\n'
                              '  terminateMode = AgentTerminateMode.GOAL,\n'
                              '  turnsUsed?: number,\n'
+                             '  loopType?: LoopType | null,\n'
                              '): string {\n'
                              '  if (terminateMode !== AgentTerminateMode.GOAL) {\n'
                              '    // A subagent that stopped for any reason other than '
@@ -5383,6 +6281,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ? ` after ${turnsUsed} turn${turnsUsed === 1 ? '
                              "'' : 's'}`\n"
                              "        : '';\n"
+                             '    // The rule that fired is as actionable as the '
+                             'count: it is the difference\n'
+                             '    // between a stuck model and an assignment larger '
+                             'than the budget.\n'
+                             '    const rule = describeLoopType(loopType);\n'
+                             "    const detail = rule ? ` (${rule})` : '';\n"
                              '    let reason: string;\n'
                              '    if (terminateMode === AgentTerminateMode.MAX_TURNS) '
                              '{\n'
@@ -5395,7 +6299,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      reason = `was cancelled${turns}`;\n'
                              '    } else {\n'
                              '      reason = `stopped as '
-                             '${String(terminateMode).toLowerCase()}${turns}`;\n'
+                             '${String(terminateMode).toLowerCase()}${detail}${turns}`;\n'
                              '    }\n'
                              '    const partial = text.trim();\n'
                              '    return partial\n'
@@ -7997,6 +8901,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        originalTokenCount: 1000,\n'
                       '        newTokenCount: 200,\n'
                       '        triggerReason: null,\n'
+                      '        output: null,\n'
                       '      });\n'
                       '      // COMPRESSED keeps its narrower meaning: the history was '
                       'replaced.\n'
@@ -8057,6 +8962,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        originalTokenCount: 1000,\n'
                       '        newTokenCount: 1000,\n'
                       '        triggerReason: null,\n'
+                      '        output: null,\n'
                       '      });\n'
                       '      expect(\n'
                       '        events.some((event) => event.type === '
@@ -8150,6 +9056,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        originalTokenCount: 1000,\n'
                              '        newTokenCount: 200,\n'
                              '        triggerReason: null,\n'
+                             '        output: null,\n'
                              '      });\n'
                              '      // COMPRESSED keeps its narrower meaning: the '
                              'history was replaced.\n'
@@ -8216,6 +9123,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        originalTokenCount: 1000,\n'
                              '        newTokenCount: 1000,\n'
                              '        triggerReason: null,\n'
+                             '        output: null,\n'
                              '      });\n'
                              '      expect(\n'
                              '        events.some((event) => event.type === '
@@ -13305,6 +14213,135 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      '
                       'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
                       '    });\n'
+                      '\n'
+                      "    it('[phase-budget] overrides a phase budget pinned in "
+                      "extra_body, which the provider merges over the request', async "
+                      '() => {\n'
+                      '      // The deployed provider pins the phase budgets in '
+                      '`extra_body`, which\n'
+                      '      // DefaultOpenAICompatibleProvider merges over the '
+                      'request it is given.\n'
+                      '      // Run the real provider so the merge actually happens: a '
+                      'maintenance\n'
+                      '      // budget written before that merge is silently replaced '
+                      'by the pinned\n'
+                      '      // one, which is how a 20K compaction was run with an '
+                      'unbounded\n'
+                      '      // thinking budget and produced no summary at all.\n'
+                      '      mockContentGeneratorConfig = {\n'
+                      '        ...mockContentGeneratorConfig,\n'
+                      '        samplingParams: {\n'
+                      '          temperature: 1,\n'
+                      '          max_tokens: 262_144,\n'
+                      '        },\n'
+                      '        extra_body: {\n'
+                      "          reasoning_effort: 'xhigh',\n"
+                      '          thinking_token_budget: 262_144,\n'
+                      '          final_response_token_budget: 131_072,\n'
+                      '        },\n'
+                      '      } as ContentGeneratorConfig;\n'
+                      '      mockConfig = {\n'
+                      '        ...mockConfig,\n'
+                      '        contentGeneratorConfig: mockContentGeneratorConfig,\n'
+                      '      };\n'
+                      '      pipeline = new ContentGenerationPipeline(mockConfig);\n'
+                      '\n'
+                      '      const realProvider = new '
+                      'DefaultOpenAICompatibleProvider(\n'
+                      '        mockContentGeneratorConfig,\n'
+                      '        {} as unknown as Config,\n'
+                      '      );\n'
+                      '      (mockProvider.buildRequest as '
+                      'Mock).mockImplementation((req) =>\n'
+                      "        realProvider.buildRequest(req, 'compaction'),\n"
+                      '      );\n'
+                      '\n'
+                      '      const request: PromptCacheSharingParameters = {\n'
+                      "        model: 'test-model',\n"
+                      "        contents: [{ parts: [{ text: 'Summarize safely' }], "
+                      "role: 'user' }],\n"
+                      '        config: { maxOutputTokens: 20_000 },\n'
+                      '        phaseBudgetOverrides: {\n'
+                      '          thinkingTokenBudget: 12_000,\n'
+                      '          finalResponseTokenBudget: 8_000,\n'
+                      '        },\n'
+                      '      };\n'
+                      '      (mockConverter.convertGeminiRequestToOpenAI as '
+                      'Mock).mockReturnValue([]);\n'
+                      '      (mockConverter.convertOpenAIResponseToGemini as '
+                      'Mock).mockReturnValue(\n'
+                      '        new GenerateContentResponse(),\n'
+                      '      );\n'
+                      '      (mockClient.chat.completions.create as '
+                      'Mock).mockResolvedValue({\n'
+                      "        id: 'test',\n"
+                      "        choices: [{ message: { content: 'summary' } }],\n"
+                      '      });\n'
+                      '\n'
+                      "      await pipeline.execute(request, 'compaction');\n"
+                      '\n'
+                      '      expect(\n'
+                      '        (mockClient.chat.completions.create as '
+                      'Mock).mock.calls[0][0],\n'
+                      '      ).toMatchObject({\n'
+                      '        max_tokens: 20_000,\n'
+                      '        thinking_token_budget: 12_000,\n'
+                      '        final_response_token_budget: 8_000,\n'
+                      '        // Every other pinned extra_body key still reaches the '
+                      'wire unchanged.\n'
+                      "        reasoning_effort: 'xhigh',\n"
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[phase-budget] refuses a phase budget above a ceiling "
+                      "pinned in extra_body', async () => {\n"
+                      '      mockContentGeneratorConfig = {\n'
+                      '        ...mockContentGeneratorConfig,\n'
+                      '        samplingParams: {\n'
+                      '          temperature: 1,\n'
+                      '          max_tokens: 262_144,\n'
+                      '        },\n'
+                      '        extra_body: {\n'
+                      '          thinking_token_budget: 11_999,\n'
+                      '          final_response_token_budget: 131_072,\n'
+                      '        },\n'
+                      '      } as ContentGeneratorConfig;\n'
+                      '      mockConfig = {\n'
+                      '        ...mockConfig,\n'
+                      '        contentGeneratorConfig: mockContentGeneratorConfig,\n'
+                      '      };\n'
+                      '      pipeline = new ContentGenerationPipeline(mockConfig);\n'
+                      '\n'
+                      '      const realProvider = new '
+                      'DefaultOpenAICompatibleProvider(\n'
+                      '        mockContentGeneratorConfig,\n'
+                      '        {} as unknown as Config,\n'
+                      '      );\n'
+                      '      (mockProvider.buildRequest as '
+                      'Mock).mockImplementation((req) =>\n'
+                      "        realProvider.buildRequest(req, 'compaction'),\n"
+                      '      );\n'
+                      '\n'
+                      '      const request: PromptCacheSharingParameters = {\n'
+                      "        model: 'test-model',\n"
+                      "        contents: [{ parts: [{ text: 'Summarize safely' }], "
+                      "role: 'user' }],\n"
+                      '        config: { maxOutputTokens: 20_000 },\n'
+                      '        phaseBudgetOverrides: {\n'
+                      '          thinkingTokenBudget: 12_000,\n'
+                      '          finalResponseTokenBudget: 8_000,\n'
+                      '        },\n'
+                      '      };\n'
+                      '      (mockConverter.convertGeminiRequestToOpenAI as '
+                      'Mock).mockReturnValue([]);\n'
+                      '\n'
+                      '      await expect(pipeline.execute(request, '
+                      "'compaction')).rejects.toThrow(\n"
+                      "        'must not exceed the pinned provider ceiling',\n"
+                      '      );\n'
+                      '      '
+                      'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
+                      '    });\n'
                       '  });\n'
                       '\n'
                       "  describe('createRequestContext', () => {\n",
@@ -13465,6 +14502,140 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      await expect(pipeline.execute(request, '
                              "'compaction')).rejects.toThrow(\n"
                              '        error,\n'
+                             '      );\n'
+                             '      '
+                             'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[phase-budget] overrides a phase budget pinned "
+                             'in extra_body, which the provider merges over the '
+                             "request', async () => {\n"
+                             '      // The deployed provider pins the phase budgets in '
+                             '`extra_body`, which\n'
+                             '      // DefaultOpenAICompatibleProvider merges over the '
+                             'request it is given.\n'
+                             '      // Run the real provider so the merge actually '
+                             'happens: a maintenance\n'
+                             '      // budget written before that merge is silently '
+                             'replaced by the pinned\n'
+                             '      // one, which is how a 20K compaction was run with '
+                             'an unbounded\n'
+                             '      // thinking budget and produced no summary at '
+                             'all.\n'
+                             '      mockContentGeneratorConfig = {\n'
+                             '        ...mockContentGeneratorConfig,\n'
+                             '        samplingParams: {\n'
+                             '          temperature: 1,\n'
+                             '          max_tokens: 262_144,\n'
+                             '        },\n'
+                             '        extra_body: {\n'
+                             "          reasoning_effort: 'xhigh',\n"
+                             '          thinking_token_budget: 262_144,\n'
+                             '          final_response_token_budget: 131_072,\n'
+                             '        },\n'
+                             '      } as ContentGeneratorConfig;\n'
+                             '      mockConfig = {\n'
+                             '        ...mockConfig,\n'
+                             '        contentGeneratorConfig: '
+                             'mockContentGeneratorConfig,\n'
+                             '      };\n'
+                             '      pipeline = new '
+                             'ContentGenerationPipeline(mockConfig);\n'
+                             '\n'
+                             '      const realProvider = new '
+                             'DefaultOpenAICompatibleProvider(\n'
+                             '        mockContentGeneratorConfig,\n'
+                             '        {} as unknown as Config,\n'
+                             '      );\n'
+                             '      (mockProvider.buildRequest as '
+                             'Mock).mockImplementation((req) =>\n'
+                             "        realProvider.buildRequest(req, 'compaction'),\n"
+                             '      );\n'
+                             '\n'
+                             '      const request: PromptCacheSharingParameters = {\n'
+                             "        model: 'test-model',\n"
+                             "        contents: [{ parts: [{ text: 'Summarize safely' "
+                             "}], role: 'user' }],\n"
+                             '        config: { maxOutputTokens: 20_000 },\n'
+                             '        phaseBudgetOverrides: {\n'
+                             '          thinkingTokenBudget: 12_000,\n'
+                             '          finalResponseTokenBudget: 8_000,\n'
+                             '        },\n'
+                             '      };\n'
+                             '      (mockConverter.convertGeminiRequestToOpenAI as '
+                             'Mock).mockReturnValue([]);\n'
+                             '      (mockConverter.convertOpenAIResponseToGemini as '
+                             'Mock).mockReturnValue(\n'
+                             '        new GenerateContentResponse(),\n'
+                             '      );\n'
+                             '      (mockClient.chat.completions.create as '
+                             'Mock).mockResolvedValue({\n'
+                             "        id: 'test',\n"
+                             "        choices: [{ message: { content: 'summary' } }],\n"
+                             '      });\n'
+                             '\n'
+                             "      await pipeline.execute(request, 'compaction');\n"
+                             '\n'
+                             '      expect(\n'
+                             '        (mockClient.chat.completions.create as '
+                             'Mock).mock.calls[0][0],\n'
+                             '      ).toMatchObject({\n'
+                             '        max_tokens: 20_000,\n'
+                             '        thinking_token_budget: 12_000,\n'
+                             '        final_response_token_budget: 8_000,\n'
+                             '        // Every other pinned extra_body key still '
+                             'reaches the wire unchanged.\n'
+                             "        reasoning_effort: 'xhigh',\n"
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[phase-budget] refuses a phase budget above a "
+                             "ceiling pinned in extra_body', async () => {\n"
+                             '      mockContentGeneratorConfig = {\n'
+                             '        ...mockContentGeneratorConfig,\n'
+                             '        samplingParams: {\n'
+                             '          temperature: 1,\n'
+                             '          max_tokens: 262_144,\n'
+                             '        },\n'
+                             '        extra_body: {\n'
+                             '          thinking_token_budget: 11_999,\n'
+                             '          final_response_token_budget: 131_072,\n'
+                             '        },\n'
+                             '      } as ContentGeneratorConfig;\n'
+                             '      mockConfig = {\n'
+                             '        ...mockConfig,\n'
+                             '        contentGeneratorConfig: '
+                             'mockContentGeneratorConfig,\n'
+                             '      };\n'
+                             '      pipeline = new '
+                             'ContentGenerationPipeline(mockConfig);\n'
+                             '\n'
+                             '      const realProvider = new '
+                             'DefaultOpenAICompatibleProvider(\n'
+                             '        mockContentGeneratorConfig,\n'
+                             '        {} as unknown as Config,\n'
+                             '      );\n'
+                             '      (mockProvider.buildRequest as '
+                             'Mock).mockImplementation((req) =>\n'
+                             "        realProvider.buildRequest(req, 'compaction'),\n"
+                             '      );\n'
+                             '\n'
+                             '      const request: PromptCacheSharingParameters = {\n'
+                             "        model: 'test-model',\n"
+                             "        contents: [{ parts: [{ text: 'Summarize safely' "
+                             "}], role: 'user' }],\n"
+                             '        config: { maxOutputTokens: 20_000 },\n'
+                             '        phaseBudgetOverrides: {\n'
+                             '          thinkingTokenBudget: 12_000,\n'
+                             '          finalResponseTokenBudget: 8_000,\n'
+                             '        },\n'
+                             '      };\n'
+                             '      (mockConverter.convertGeminiRequestToOpenAI as '
+                             'Mock).mockReturnValue([]);\n'
+                             '\n'
+                             '      await expect(pipeline.execute(request, '
+                             "'compaction')).rejects.toThrow(\n"
+                             "        'must not exceed the pinned provider ceiling',\n"
                              '      );\n'
                              '      '
                              'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
@@ -13665,13 +14836,34 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after': '  return samplingParams;\n'
                       '}\n'
                       '\n'
+                      '/**\n'
+                      ' * Write the per-request maintenance phase budget onto the '
+                      'fully merged wire\n'
+                      ' * request, mutating and returning the passed object.\n'
+                      ' *\n'
+                      ' * This is deliberately the last transformation of the request. '
+                      'The phase\n'
+                      ' * budgets are ordinary wire keys that the pinned configuration '
+                      'also declares\n'
+                      ' * — in `samplingParams`, in a provider hook, or in '
+                      '`extra_body`, which\n'
+                      ' * providers merge over the request — so an override written '
+                      'before those\n'
+                      ' * layers have merged is silently replaced by the pinned value, '
+                      'and the\n'
+                      ' * ceiling check below compares against an absent value it can '
+                      'never refuse.\n'
+                      ' * Written here, the override is both the value that ships and '
+                      'the value\n'
+                      ' * validated against the one it replaces.\n'
+                      ' */\n'
                       'function applyPhaseBudgetOverrides(\n'
-                      '  params: Record<string, unknown>,\n'
+                      '  wireRequest: Record<string, unknown>,\n'
                       '  overrides: '
                       "PromptCacheSharingParameters['phaseBudgetOverrides'],\n"
                       '  requestMaxTokens: number | undefined,\n'
                       '): Record<string, unknown> {\n'
-                      '  if (!overrides) return params;\n'
+                      '  if (!overrides) return wireRequest;\n'
                       '  const entries = [\n'
                       "    ['thinking_token_budget', overrides.thinkingTokenBudget],\n"
                       "    ['final_response_token_budget', "
@@ -13684,7 +14876,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'safe integer.`,\n'
                       '      );\n'
                       '    }\n'
-                      '    const configured = params[wireKey];\n'
+                      '    const configured = wireRequest[wireKey];\n'
                       '    if (\n'
                       '      configured !== undefined &&\n'
                       "      (typeof configured !== 'number' ||\n"
@@ -13712,12 +14904,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'max=${requestMaxTokens}.`,\n'
                       '    );\n'
                       '  }\n'
-                      '  return {\n'
-                      '    ...params,\n'
-                      '    thinking_token_budget: overrides.thinkingTokenBudget,\n'
-                      '    final_response_token_budget: '
-                      'overrides.finalResponseTokenBudget,\n'
-                      '  };\n'
+                      "  wireRequest['thinking_token_budget'] = "
+                      'overrides.thinkingTokenBudget;\n'
+                      "  wireRequest['final_response_token_budget'] =\n"
+                      '    overrides.finalResponseTokenBudget;\n'
+                      '  return wireRequest;\n'
                       '}\n'
                       '\n'
                       '/**\n'
@@ -13736,13 +14927,34 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'review_after': '  return samplingParams;\n'
                              '}\n'
                              '\n'
+                             '/**\n'
+                             ' * Write the per-request maintenance phase budget onto '
+                             'the fully merged wire\n'
+                             ' * request, mutating and returning the passed object.\n'
+                             ' *\n'
+                             ' * This is deliberately the last transformation of the '
+                             'request. The phase\n'
+                             ' * budgets are ordinary wire keys that the pinned '
+                             'configuration also declares\n'
+                             ' * — in `samplingParams`, in a provider hook, or in '
+                             '`extra_body`, which\n'
+                             ' * providers merge over the request — so an override '
+                             'written before those\n'
+                             ' * layers have merged is silently replaced by the pinned '
+                             'value, and the\n'
+                             ' * ceiling check below compares against an absent value '
+                             'it can never refuse.\n'
+                             ' * Written here, the override is both the value that '
+                             'ships and the value\n'
+                             ' * validated against the one it replaces.\n'
+                             ' */\n'
                              'function applyPhaseBudgetOverrides(\n'
-                             '  params: Record<string, unknown>,\n'
+                             '  wireRequest: Record<string, unknown>,\n'
                              '  overrides: '
                              "PromptCacheSharingParameters['phaseBudgetOverrides'],\n"
                              '  requestMaxTokens: number | undefined,\n'
                              '): Record<string, unknown> {\n'
-                             '  if (!overrides) return params;\n'
+                             '  if (!overrides) return wireRequest;\n'
                              '  const entries = [\n'
                              "    ['thinking_token_budget', "
                              'overrides.thinkingTokenBudget],\n'
@@ -13757,7 +14969,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'positive safe integer.`,\n'
                              '      );\n'
                              '    }\n'
-                             '    const configured = params[wireKey];\n'
+                             '    const configured = wireRequest[wireKey];\n'
                              '    if (\n'
                              '      configured !== undefined &&\n'
                              "      (typeof configured !== 'number' ||\n"
@@ -13786,13 +14998,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'max=${requestMaxTokens}.`,\n'
                              '    );\n'
                              '  }\n'
-                             '  return {\n'
-                             '    ...params,\n'
-                             '    thinking_token_budget: '
-                             'overrides.thinkingTokenBudget,\n'
-                             '    final_response_token_budget: '
-                             'overrides.finalResponseTokenBudget,\n'
-                             '  };\n'
+                             "  wireRequest['thinking_token_budget'] = "
+                             'overrides.thinkingTokenBudget;\n'
+                             "  wireRequest['final_response_token_budget'] =\n"
+                             '    overrides.finalResponseTokenBudget;\n'
+                             '  return wireRequest;\n'
                              '}\n'
                              '\n'
                              '/**\n'
@@ -14111,113 +15321,43 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    userPromptId: string,\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-5',
              'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
-             'before': '      // provider-specific output-budget key in the result is '
-                       'clamped to the\n'
-                       '      // window too — a config carrying both max_tokens and '
-                       'e.g.\n'
-                       '      // max_completion_tokens must not leak the provider key '
-                       'unclamped.\n'
-                       '      return clampProviderOutputBudgetKeys(\n'
-                       '        maxTokens !== undefined\n'
-                       '          ? { ...configSamplingParams, max_tokens: maxTokens '
-                       '}\n'
-                       '          : { ...configSamplingParams },\n'
-                       '        requestMaxTokens,\n'
-                       '      );\n'
-                       '    }\n',
-             'after': '      // provider-specific output-budget key in the result is '
-                      'clamped to the\n'
-                      '      // window too — a config carrying both max_tokens and '
-                      'e.g.\n'
-                      '      // max_completion_tokens must not leak the provider key '
-                      'unclamped.\n'
-                      '      return applyPhaseBudgetOverrides(\n'
-                      '        clampProviderOutputBudgetKeys(\n'
-                      '          maxTokens !== undefined\n'
-                      '            ? { ...configSamplingParams, max_tokens: maxTokens '
-                      '}\n'
-                      '            : { ...configSamplingParams },\n'
-                      '          requestMaxTokens,\n'
-                      '        ),\n'
-                      '        (request as '
-                      'PromptCacheSharingParameters).phaseBudgetOverrides,\n'
-                      '        requestMaxTokens,\n'
-                      '      );\n'
-                      '    }\n',
-             'review_before': '      // provider-specific output-budget key in the '
-                              'result is clamped to the\n'
-                              '      // window too — a config carrying both max_tokens '
-                              'and e.g.\n'
-                              '      // max_completion_tokens must not leak the '
-                              'provider key unclamped.\n'
-                              '      return clampProviderOutputBudgetKeys(\n'
-                              '        maxTokens !== undefined\n'
-                              '          ? { ...configSamplingParams, max_tokens: '
-                              'maxTokens }\n'
-                              '          : { ...configSamplingParams },\n'
-                              '        requestMaxTokens,\n'
-                              '      );\n'
-                              '    }\n',
-             'review_after': '      // provider-specific output-budget key in the '
-                             'result is clamped to the\n'
-                             '      // window too — a config carrying both max_tokens '
-                             'and e.g.\n'
-                             '      // max_completion_tokens must not leak the '
-                             'provider key unclamped.\n'
-                             '      return applyPhaseBudgetOverrides(\n'
-                             '        clampProviderOutputBudgetKeys(\n'
-                             '          maxTokens !== undefined\n'
-                             '            ? { ...configSamplingParams, max_tokens: '
-                             'maxTokens }\n'
-                             '            : { ...configSamplingParams },\n'
-                             '          requestMaxTokens,\n'
-                             '        ),\n'
-                             '        (request as '
-                             'PromptCacheSharingParameters).phaseBudgetOverrides,\n'
-                             '        requestMaxTokens,\n'
-                             '      );\n'
-                             '    }\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-6',
-             'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
-             'before': '      ...this.buildReasoningConfig(request),\n'
-                       '    };\n'
+             'before': "      delete typed['tool_choice'];\n"
+                       '    }\n'
                        '\n'
-                       '    return params;\n'
+                       '    return providerRequest;\n'
                        '  }\n'
-                       '\n'
-                       '  private buildReasoningConfig(\n',
-             'after': '      ...this.buildReasoningConfig(request),\n'
-                      '    };\n'
+                       '\n',
+             'after': "      delete typed['tool_choice'];\n"
+                      '    }\n'
                       '\n'
-                      '    return applyPhaseBudgetOverrides(\n'
-                      '      params,\n'
-                      '      (request as '
-                      'PromptCacheSharingParameters).phaseBudgetOverrides,\n'
+                      '    applyPhaseBudgetOverrides(\n'
+                      '      typed,\n'
+                      '      request.phaseBudgetOverrides,\n'
                       '      request.config?.maxOutputTokens,\n'
                       '    );\n'
-                      '  }\n'
                       '\n'
-                      '  private buildReasoningConfig(\n',
-             'review_before': '      ...this.buildReasoningConfig(request),\n'
-                              '    };\n'
+                      '    return providerRequest;\n'
+                      '  }\n'
+                      '\n',
+             'review_before': "      delete typed['tool_choice'];\n"
+                              '    }\n'
                               '\n'
-                              '    return params;\n'
+                              '    return providerRequest;\n'
                               '  }\n'
-                              '\n'
-                              '  private buildReasoningConfig(\n',
-             'review_after': '      ...this.buildReasoningConfig(request),\n'
-                             '    };\n'
+                              '\n',
+             'review_after': "      delete typed['tool_choice'];\n"
+                             '    }\n'
                              '\n'
-                             '    return applyPhaseBudgetOverrides(\n'
-                             '      params,\n'
-                             '      (request as '
-                             'PromptCacheSharingParameters).phaseBudgetOverrides,\n'
+                             '    applyPhaseBudgetOverrides(\n'
+                             '      typed,\n'
+                             '      request.phaseBudgetOverrides,\n'
                              '      request.config?.maxOutputTokens,\n'
                              '    );\n'
-                             '  }\n'
                              '\n'
-                             '  private buildReasoningConfig(\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-7',
+                             '    return providerRequest;\n'
+                             '  }\n'
+                             '\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-6',
              'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before': '      model: effectiveModel,\n'
                        '      modalities: this.contentGeneratorConfig.modalities ?? '
@@ -15756,6 +16896,156 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '/**\n'},
             {'name': 'packages/core/src/core/turn.ts:landmark-3',
              'path': 'packages/core/src/core/turn.ts',
+             'before': "  | 'image_overflow'\n"
+                       "  | 'manual';\n"
+                       '\n'
+                       'export interface ChatCompressionInfo {\n'
+                       '  originalTokenCount: number;\n'
+                       '  newTokenCount: number;\n',
+             'after': "  | 'image_overflow'\n"
+                      "  | 'manual';\n"
+                      '\n'
+                      '/**\n'
+                      ' * How one compaction generation spent its fixed output '
+                      'budget.\n'
+                      ' *\n'
+                      ' * A compaction runs inside a hard output ceiling that the '
+                      'thinking and\n'
+                      ' * final-response phases share. When it fails, the only '
+                      'question that matters\n'
+                      ' * is where that ceiling went: reasoning that produced no '
+                      'summary, a summary\n'
+                      ' * that was written and then rejected, or a request that never '
+                      'generated at\n'
+                      ' * all are three different defects with the same status. '
+                      'Without this the\n'
+                      ' * answer is unrecoverable — the summary is discarded and the '
+                      'usage of a\n'
+                      ' * failed side query never reaches the billed event stream.\n'
+                      ' */\n'
+                      'export interface CompactionOutputAccounting {\n'
+                      '  /** Hard output ceiling the attempt was given. */\n'
+                      '  maxOutputTokens: number;\n'
+                      '  /** Thinking-phase budget requested on the wire. */\n'
+                      '  thinkingTokenBudget: number;\n'
+                      '  /** Final-response budget requested on the wire. */\n'
+                      '  finalResponseTokenBudget: number;\n'
+                      '  /** Output tokens the model actually produced, across both '
+                      'phases. */\n'
+                      '  outputTokens: number;\n'
+                      '  /** Of those, the ones spent in the hidden reasoning channel. '
+                      '*/\n'
+                      '  thinkingTokens: number;\n'
+                      '  /**\n'
+                      '   * Characters of usable summary the attempt yielded. Zero '
+                      'alongside a large\n'
+                      '   * `thinkingTokens` is the exact signature of reasoning '
+                      'consuming a\n'
+                      '   * maintenance budget and contributing nothing.\n'
+                      '   */\n'
+                      '  summaryChars: number;\n'
+                      "  /** The provider's terminal reason, e.g. `MAX_TOKENS`. */\n"
+                      '  finishReason: string | null;\n'
+                      '}\n'
+                      '\n'
+                      'export interface ChatCompressionInfo {\n'
+                      '  originalTokenCount: number;\n'
+                      '  newTokenCount: number;\n',
+             'review_before': "  | 'image_overflow'\n"
+                              "  | 'manual';\n"
+                              '\n'
+                              'export interface ChatCompressionInfo {\n'
+                              '  originalTokenCount: number;\n'
+                              '  newTokenCount: number;\n',
+             'review_after': "  | 'image_overflow'\n"
+                             "  | 'manual';\n"
+                             '\n'
+                             '/**\n'
+                             ' * How one compaction generation spent its fixed output '
+                             'budget.\n'
+                             ' *\n'
+                             ' * A compaction runs inside a hard output ceiling that '
+                             'the thinking and\n'
+                             ' * final-response phases share. When it fails, the only '
+                             'question that matters\n'
+                             ' * is where that ceiling went: reasoning that produced '
+                             'no summary, a summary\n'
+                             ' * that was written and then rejected, or a request that '
+                             'never generated at\n'
+                             ' * all are three different defects with the same status. '
+                             'Without this the\n'
+                             ' * answer is unrecoverable — the summary is discarded '
+                             'and the usage of a\n'
+                             ' * failed side query never reaches the billed event '
+                             'stream.\n'
+                             ' */\n'
+                             'export interface CompactionOutputAccounting {\n'
+                             '  /** Hard output ceiling the attempt was given. */\n'
+                             '  maxOutputTokens: number;\n'
+                             '  /** Thinking-phase budget requested on the wire. */\n'
+                             '  thinkingTokenBudget: number;\n'
+                             '  /** Final-response budget requested on the wire. */\n'
+                             '  finalResponseTokenBudget: number;\n'
+                             '  /** Output tokens the model actually produced, across '
+                             'both phases. */\n'
+                             '  outputTokens: number;\n'
+                             '  /** Of those, the ones spent in the hidden reasoning '
+                             'channel. */\n'
+                             '  thinkingTokens: number;\n'
+                             '  /**\n'
+                             '   * Characters of usable summary the attempt yielded. '
+                             'Zero alongside a large\n'
+                             '   * `thinkingTokens` is the exact signature of '
+                             'reasoning consuming a\n'
+                             '   * maintenance budget and contributing nothing.\n'
+                             '   */\n'
+                             '  summaryChars: number;\n'
+                             "  /** The provider's terminal reason, e.g. `MAX_TOKENS`. "
+                             '*/\n'
+                             '  finishReason: string | null;\n'
+                             '}\n'
+                             '\n'
+                             'export interface ChatCompressionInfo {\n'
+                             '  originalTokenCount: number;\n'
+                             '  newTokenCount: number;\n'},
+            {'name': 'packages/core/src/core/turn.ts:landmark-4',
+             'path': 'packages/core/src/core/turn.ts',
+             'before': '  triggerReason?: CompactionTriggerReason;\n'
+                       '  /** Set when the compaction model was swapped for the main '
+                       'model at runtime. */\n'
+                       '  warning?: string;\n'
+                       '}\n'
+                       '\n'
+                       'export type ServerGeminiChatCompressedEvent = {\n',
+             'after': '  triggerReason?: CompactionTriggerReason;\n'
+                      '  /** Set when the compaction model was swapped for the main '
+                      'model at runtime. */\n'
+                      '  warning?: string;\n'
+                      '  /** Absent when the attempt was refused before any generation '
+                      'ran. */\n'
+                      '  output?: CompactionOutputAccounting;\n'
+                      '}\n'
+                      '\n'
+                      'export type ServerGeminiChatCompressedEvent = {\n',
+             'review_before': '  triggerReason?: CompactionTriggerReason;\n'
+                              '  /** Set when the compaction model was swapped for the '
+                              'main model at runtime. */\n'
+                              '  warning?: string;\n'
+                              '}\n'
+                              '\n'
+                              'export type ServerGeminiChatCompressedEvent = {\n',
+             'review_after': '  triggerReason?: CompactionTriggerReason;\n'
+                             '  /** Set when the compaction model was swapped for the '
+                             'main model at runtime. */\n'
+                             '  warning?: string;\n'
+                             '  /** Absent when the attempt was refused before any '
+                             'generation ran. */\n'
+                             '  output?: CompactionOutputAccounting;\n'
+                             '}\n'
+                             '\n'
+                             'export type ServerGeminiChatCompressedEvent = {\n'},
+            {'name': 'packages/core/src/core/turn.ts:landmark-5',
+             'path': 'packages/core/src/core/turn.ts',
              'before': '  value: ChatCompressionInfo | null;\n'
                        '};\n'
                        '\n'
@@ -15797,6 +17087,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  /** Why the attempt fired, or null when the caller did not '
                       'classify it. */\n'
                       '  triggerReason: CompactionTriggerReason | null;\n'
+                      '  /**\n'
+                      "   * How the attempt's output budget was spent, or null when it "
+                      'was refused\n'
+                      '   * before generating anything.\n'
+                      '   */\n'
+                      '  output: CompactionOutputAccounting | null;\n'
                       '}\n'
                       '\n'
                       '/**\n'
@@ -15817,6 +17113,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    originalTokenCount: info.originalTokenCount,\n'
                       '    newTokenCount: info.newTokenCount,\n'
                       '    triggerReason: info.triggerReason ?? null,\n'
+                      '    output: info.output ?? null,\n'
                       '  };\n'
                       '}\n'
                       '\n'
@@ -15871,6 +17168,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  /** Why the attempt fired, or null when the caller did '
                              'not classify it. */\n'
                              '  triggerReason: CompactionTriggerReason | null;\n'
+                             '  /**\n'
+                             "   * How the attempt's output budget was spent, or null "
+                             'when it was refused\n'
+                             '   * before generating anything.\n'
+                             '   */\n'
+                             '  output: CompactionOutputAccounting | null;\n'
                              '}\n'
                              '\n'
                              '/**\n'
@@ -15891,6 +17194,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    originalTokenCount: info.originalTokenCount,\n'
                              '    newTokenCount: info.newTokenCount,\n'
                              '    triggerReason: info.triggerReason ?? null,\n'
+                             '    output: info.output ?? null,\n'
                              '  };\n'
                              '}\n'
                              '\n'
@@ -15902,7 +17206,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'export type ServerGeminiMaxSessionTurnsEvent = {\n'
                              '  type: GeminiEventType.MaxSessionTurns;\n'
                              '};\n'},
-            {'name': 'packages/core/src/core/turn.ts:landmark-4',
+            {'name': 'packages/core/src/core/turn.ts:landmark-6',
              'path': 'packages/core/src/core/turn.ts',
              'before': 'export type ServerGeminiStreamEvent =\n'
                        '  | ServerGeminiGoalStateEvent\n'
@@ -15930,7 +17234,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  | ServerGeminiChatCompressedEvent\n'
                              '  | ServerGeminiCitationEvent\n'
                              '  | ServerGeminiContentEvent\n'},
-            {'name': 'packages/core/src/core/turn.ts:landmark-5',
+            {'name': 'packages/core/src/core/turn.ts:landmark-7',
              'path': 'packages/core/src/core/turn.ts',
              'before': '          continue;\n'
                        '        }\n'
@@ -16010,6 +17314,36 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'existing UI handlers stay\n'
                              '        // connected. This bridge is the primary path '
                              'for auto-compaction\n'},
+            {'name': 'packages/core/src/index.ts:landmark-1',
+             'path': 'packages/core/src/index.ts',
+             'before': 'export {\n'
+                       '  DEFAULT_MAX_TOOL_CALLS_PER_TURN,\n'
+                       '  GLOBAL_DUPLICATE_THRESHOLD,\n'
+                       '  getToolCallRepeatKey,\n'
+                       '  shouldHaltOnTurnToolCallCap,\n'
+                       "} from './services/loopDetectionService.js';\n",
+             'after': 'export {\n'
+                      '  DEFAULT_MAX_TOOL_CALLS_PER_TURN,\n'
+                      '  GLOBAL_DUPLICATE_THRESHOLD,\n'
+                      '  LOOP_TYPE_LABELS,\n'
+                      '  describeLoopType,\n'
+                      '  getToolCallRepeatKey,\n'
+                      '  shouldHaltOnTurnToolCallCap,\n'
+                      "} from './services/loopDetectionService.js';\n",
+             'review_before': 'export {\n'
+                              '  DEFAULT_MAX_TOOL_CALLS_PER_TURN,\n'
+                              '  GLOBAL_DUPLICATE_THRESHOLD,\n'
+                              '  getToolCallRepeatKey,\n'
+                              '  shouldHaltOnTurnToolCallCap,\n'
+                              "} from './services/loopDetectionService.js';\n",
+             'review_after': 'export {\n'
+                             '  DEFAULT_MAX_TOOL_CALLS_PER_TURN,\n'
+                             '  GLOBAL_DUPLICATE_THRESHOLD,\n'
+                             '  LOOP_TYPE_LABELS,\n'
+                             '  describeLoopType,\n'
+                             '  getToolCallRepeatKey,\n'
+                             '  shouldHaltOnTurnToolCallCap,\n'
+                             "} from './services/loopDetectionService.js';\n"},
             {'name': 'packages/core/src/models/constants.ts:landmark-1',
              'path': 'packages/core/src/models/constants.ts',
              'before': "  'customHeaders',\n"
@@ -22227,6 +23561,65 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    expect(result.newHistory).toBeNull();\n'
                       '    expect(result.info.compressionStatus).toBe(status);\n'
                       '    expect(harness.countCandidate).toHaveBeenCalledTimes(1);\n'
+                      '  });\n'
+                      '\n'
+                      "  it('[compaction-event] records where a truncated attempt "
+                      "spent its output budget', async () => {\n"
+                      '    const harness = makeHarness();\n'
+                      '    harness.generateText.mockResolvedValueOnce(\n'
+                      '      summaryResult({\n'
+                      "        text: '',\n"
+                      '        finishReason: FinishReason.MAX_TOKENS,\n'
+                      '        usage: {\n'
+                      '          promptTokenCount: 233_926,\n'
+                      '          candidatesTokenCount: 19_900,\n'
+                      '          thoughtsTokenCount: 19_900,\n'
+                      '          totalTokenCount: 253_826,\n'
+                      '        },\n'
+                      '      }),\n'
+                      '    );\n'
+                      '\n'
+                      '    const result = await compress(harness);\n'
+                      '\n'
+                      '    expect(result.info.compressionStatus).toBe(\n'
+                      '      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,\n'
+                      '    );\n'
+                      '    // The whole maintenance budget went to hidden reasoning '
+                      'and produced no\n'
+                      '    // summary at all. The status alone cannot separate that '
+                      'from a request\n'
+                      '    // that never generated, and the summary itself is '
+                      'discarded, so this is\n'
+                      '    // the only surviving evidence of where the tokens went.\n'
+                      '    expect(result.info.output).toEqual({\n'
+                      '      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
+                      '      thinkingTokenBudget: COMPACT_THINKING_TOKEN_BUDGET,\n'
+                      '      finalResponseTokenBudget: '
+                      'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
+                      '      outputTokens: 19_900,\n'
+                      '      thinkingTokens: 19_900,\n'
+                      '      summaryChars: 0,\n'
+                      '      finishReason: FinishReason.MAX_TOKENS,\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  it('[compaction-event] leaves the accounting null when no "
+                      "generation ran', async () => {\n"
+                      '    const harness = makeHarness();\n'
+                      '    harness.countSideQuery.mockRejectedValueOnce(new '
+                      "Error('tokenizer down'));\n"
+                      '\n'
+                      '    const result = await compress(harness);\n'
+                      '\n'
+                      '    expect(result.info.compressionStatus).toBe(\n'
+                      '      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                      '    );\n'
+                      '    expect(harness.generateText).not.toHaveBeenCalled();\n'
+                      '    // No attempt, no accounting to invent: a refusal before '
+                      'generation and a\n'
+                      '    // generation that produced nothing must stay '
+                      'distinguishable.\n'
+                      '    expect(result.info.output).toBeUndefined();\n'
                       '  });\n'
                       '\n'
                       "  it('fails closed instead of fabricating history when "
@@ -28507,6 +29900,70 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'expect(harness.countCandidate).toHaveBeenCalledTimes(1);\n'
                              '  });\n'
                              '\n'
+                             "  it('[compaction-event] records where a truncated "
+                             "attempt spent its output budget', async () => {\n"
+                             '    const harness = makeHarness();\n'
+                             '    harness.generateText.mockResolvedValueOnce(\n'
+                             '      summaryResult({\n'
+                             "        text: '',\n"
+                             '        finishReason: FinishReason.MAX_TOKENS,\n'
+                             '        usage: {\n'
+                             '          promptTokenCount: 233_926,\n'
+                             '          candidatesTokenCount: 19_900,\n'
+                             '          thoughtsTokenCount: 19_900,\n'
+                             '          totalTokenCount: 253_826,\n'
+                             '        },\n'
+                             '      }),\n'
+                             '    );\n'
+                             '\n'
+                             '    const result = await compress(harness);\n'
+                             '\n'
+                             '    expect(result.info.compressionStatus).toBe(\n'
+                             '      '
+                             'CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,\n'
+                             '    );\n'
+                             '    // The whole maintenance budget went to hidden '
+                             'reasoning and produced no\n'
+                             '    // summary at all. The status alone cannot separate '
+                             'that from a request\n'
+                             '    // that never generated, and the summary itself is '
+                             'discarded, so this is\n'
+                             '    // the only surviving evidence of where the tokens '
+                             'went.\n'
+                             '    expect(result.info.output).toEqual({\n'
+                             '      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
+                             '      thinkingTokenBudget: '
+                             'COMPACT_THINKING_TOKEN_BUDGET,\n'
+                             '      finalResponseTokenBudget: '
+                             'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
+                             '      outputTokens: 19_900,\n'
+                             '      thinkingTokens: 19_900,\n'
+                             '      summaryChars: 0,\n'
+                             '      finishReason: FinishReason.MAX_TOKENS,\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  it('[compaction-event] leaves the accounting null when "
+                             "no generation ran', async () => {\n"
+                             '    const harness = makeHarness();\n'
+                             '    harness.countSideQuery.mockRejectedValueOnce(new '
+                             "Error('tokenizer down'));\n"
+                             '\n'
+                             '    const result = await compress(harness);\n'
+                             '\n'
+                             '    expect(result.info.compressionStatus).toBe(\n'
+                             '      '
+                             'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                             '    );\n'
+                             '    '
+                             'expect(harness.generateText).not.toHaveBeenCalled();\n'
+                             '    // No attempt, no accounting to invent: a refusal '
+                             'before generation and a\n'
+                             '    // generation that produced nothing must stay '
+                             'distinguishable.\n'
+                             '    expect(result.info.output).toBeUndefined();\n'
+                             '  });\n'
+                             '\n'
                              "  it('fails closed instead of fabricating history when "
                              "composition fails', async () => {\n"
                              '    const harness = makeHarness();\n'
@@ -28654,42 +30111,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        "import { AuthType } from '../core/contentGenerator.js';\n"
                        "import type { GeminiChat } from '../core/geminiChat.js';\n"
                        'import {\n'
-                       '  type ChatCompressionInfo,\n',
-             'after': "import { ApprovalMode } from '../config/config.js';\n"
-                      'import type { GenerateTextResult } from '
-                      "'../core/baseLlmClient.js';\n"
-                      "import { AuthType } from '../core/contentGenerator.js';\n"
-                      'import {\n'
-                      '  FinishReason,\n'
-                      '  FunctionCallingConfigMode,\n'
-                      "} from '../core/genai-compat.js';\n"
-                      "import type { GeminiChat } from '../core/geminiChat.js';\n"
-                      'import {\n'
-                      '  type ChatCompressionInfo,\n',
-             'review_before': "import { ApprovalMode } from '../config/config.js';\n"
-                              'import type { GenerateTextResult } from '
-                              "'../core/baseLlmClient.js';\n"
-                              'import { AuthType } from '
-                              "'../core/contentGenerator.js';\n"
-                              'import type { GeminiChat } from '
-                              "'../core/geminiChat.js';\n"
-                              'import {\n'
-                              '  type ChatCompressionInfo,\n',
-             'review_after': "import { ApprovalMode } from '../config/config.js';\n"
-                             'import type { GenerateTextResult } from '
-                             "'../core/baseLlmClient.js';\n"
-                             "import { AuthType } from '../core/contentGenerator.js';\n"
-                             'import {\n'
-                             '  FinishReason,\n'
-                             '  FunctionCallingConfigMode,\n'
-                             "} from '../core/genai-compat.js';\n"
-                             'import type { GeminiChat } from '
-                             "'../core/geminiChat.js';\n"
-                             'import {\n'
-                             '  type ChatCompressionInfo,\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-2',
-             'path': 'packages/core/src/services/chatCompressionService.ts',
-             'before': "} from '../core/turn.js';\n"
+                       '  type ChatCompressionInfo,\n'
+                       '  type CompactionTriggerReason,\n'
+                       '  CompressionStatus,\n'
+                       "} from '../core/turn.js';\n"
                        "import { DEFAULT_TOKEN_LIMIT } from '../core/tokenLimits.js';\n"
                        "import { getCompressionPrompt } from '../core/prompts.js';\n"
                        "import { runSideQuery } from '../utils/sideQuery.js';\n"
@@ -28748,7 +30173,21 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '/**\n'
                        ' * Default proportional auto-compaction threshold — the '
                        'preferred trigger and an\n',
-             'after': "} from '../core/turn.js';\n"
+             'after': "import { ApprovalMode } from '../config/config.js';\n"
+                      'import type { GenerateTextResult } from '
+                      "'../core/baseLlmClient.js';\n"
+                      "import { AuthType } from '../core/contentGenerator.js';\n"
+                      'import {\n'
+                      '  FinishReason,\n'
+                      '  FunctionCallingConfigMode,\n'
+                      "} from '../core/genai-compat.js';\n"
+                      "import type { GeminiChat } from '../core/geminiChat.js';\n"
+                      'import {\n'
+                      '  type ChatCompressionInfo,\n'
+                      '  type CompactionOutputAccounting,\n'
+                      '  type CompactionTriggerReason,\n'
+                      '  CompressionStatus,\n'
+                      "} from '../core/turn.js';\n"
                       "import { DEFAULT_TOKEN_LIMIT } from '../core/tokenLimits.js';\n"
                       "import { getCompressionPrompt } from '../core/prompts.js';\n"
                       'import { supportsOpenAIPrefixCaching } from '
@@ -28801,7 +30240,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '/**\n'
                       ' * Default proportional auto-compaction threshold — the '
                       'preferred trigger and an\n',
-             'review_before': "} from '../core/turn.js';\n"
+             'review_before': "import { ApprovalMode } from '../config/config.js';\n"
+                              'import type { GenerateTextResult } from '
+                              "'../core/baseLlmClient.js';\n"
+                              'import { AuthType } from '
+                              "'../core/contentGenerator.js';\n"
+                              'import type { GeminiChat } from '
+                              "'../core/geminiChat.js';\n"
+                              'import {\n'
+                              '  type ChatCompressionInfo,\n'
+                              '  type CompactionTriggerReason,\n'
+                              '  CompressionStatus,\n'
+                              "} from '../core/turn.js';\n"
                               'import { DEFAULT_TOKEN_LIMIT } from '
                               "'../core/tokenLimits.js';\n"
                               'import { getCompressionPrompt } from '
@@ -28864,7 +30314,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '/**\n'
                               ' * Default proportional auto-compaction threshold — the '
                               'preferred trigger and an\n',
-             'review_after': "} from '../core/turn.js';\n"
+             'review_after': "import { ApprovalMode } from '../config/config.js';\n"
+                             'import type { GenerateTextResult } from '
+                             "'../core/baseLlmClient.js';\n"
+                             "import { AuthType } from '../core/contentGenerator.js';\n"
+                             'import {\n'
+                             '  FinishReason,\n'
+                             '  FunctionCallingConfigMode,\n'
+                             "} from '../core/genai-compat.js';\n"
+                             'import type { GeminiChat } from '
+                             "'../core/geminiChat.js';\n"
+                             'import {\n'
+                             '  type ChatCompressionInfo,\n'
+                             '  type CompactionOutputAccounting,\n'
+                             '  type CompactionTriggerReason,\n'
+                             '  CompressionStatus,\n'
+                             "} from '../core/turn.js';\n"
                              'import { DEFAULT_TOKEN_LIMIT } from '
                              "'../core/tokenLimits.js';\n"
                              'import { getCompressionPrompt } from '
@@ -28922,7 +30387,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '/**\n'
                              ' * Default proportional auto-compaction threshold — the '
                              'preferred trigger and an\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-3',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-2',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': ' */\n'
                        'export const MAX_CONSECUTIVE_FAILURES = 3;\n'
@@ -29011,7 +30476,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'once it is merged\n'
                              ' * into the side-query system prompt. The user-supplied '
                              '`/compress` text is\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-4',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-3',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '   */\n'
                        '  consecutiveFailures: number;\n'
@@ -29074,7 +30539,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '   */\n'
                              '  originalTokenCount: number;\n'
                              '  /**\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-5',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-4',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '  trigger?: CompactTrigger;\n'
                        '  signal?: AbortSignal;\n'
@@ -29168,7 +30633,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  precomputedEffectiveTokens?: number;\n'
                              '  /** Per-request overrides used by the main turn, '
                              'including transient tools. */\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-6',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-5',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '    let triggerReason: CompactionTriggerReason =\n'
                        "      compactTrigger === 'manual' ? 'manual' : 'token_limit';\n"
@@ -29212,7 +30677,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const contentGeneratorConfig = '
                              'config.getContentGeneratorConfig();\n'
                              '    const contextLimit =\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-7',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-6',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '      };\n'
                        '    }\n'
@@ -29285,7 +30750,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'send-path output clamp\n'
                              '      // guarantees `prompt + max_tokens ≤ window`, so '
                              'no output budget needs\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-8',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-7',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '        contextLimit,\n'
                        '        config.getAutoCompactThreshold(),\n'
@@ -29443,7 +30908,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'token threshold,\n'
                              '        // compact once tool-returned images accumulate '
                              'past the configured\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-9',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-8',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '        // only (countToolResponseImages), not user-pasted '
                        'top-level images.\n'
@@ -29480,7 +30945,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            tuning.screenshotTriggerThreshold;\n'
                              '        if (!screenshotOverflow) {\n'
                              '          debugLogger.debug(\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-10',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-9',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '      }\n'
                        '    }\n'
@@ -29561,7 +31026,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'split, no tail\n'
                              '    // preservation), and the post-compact history is '
                              'assembled by\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-11',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-10',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '            .slice(0, MAX_HOOK_INSTRUCTIONS_CHARS);\n'
                        '        }\n'
@@ -30593,6 +32058,27 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "'');\n"
                       '    const compressionOutputTokenCount =\n'
                       '      summaryResult.usage?.candidatesTokenCount;\n'
+                      '    // Every outcome from here on carries the same accounting, '
+                      'because the\n'
+                      '    // only way to tell these failures apart afterwards is '
+                      'where the fixed\n'
+                      '    // maintenance budget went. `getResponseText` drops thought '
+                      'parts, so a\n'
+                      '    // run whose reasoning consumed the whole ceiling and '
+                      'emitted no summary\n'
+                      '    // is otherwise indistinguishable from one that never '
+                      'generated.\n'
+                      '    const outputAccounting: CompactionOutputAccounting = {\n'
+                      '      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
+                      '      thinkingTokenBudget: COMPACT_THINKING_TOKEN_BUDGET,\n'
+                      '      finalResponseTokenBudget: '
+                      'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
+                      '      outputTokens: compressionOutputTokenCount ?? 0,\n'
+                      '      thinkingTokens: summaryResult.usage?.thoughtsTokenCount '
+                      '?? 0,\n'
+                      '      summaryChars: processedSummary.length,\n'
+                      '      finishReason: summaryResult.finishReason ?? null,\n'
+                      '    };\n'
                       '\n'
                       '    if (summaryResult.finishReason === FinishReason.MAX_TOKENS) '
                       '{\n'
@@ -30610,6 +32096,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          compressionStatus:\n'
                       '            '
                       'CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,\n'
+                      '          output: outputAccounting,\n'
                       '        },\n'
                       '      };\n'
                       '    }\n'
@@ -30631,6 +32118,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          compressionStatus:\n'
                       '            '
                       'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                      '          output: outputAccounting,\n'
                       '        },\n'
                       '      };\n'
                       '    }\n'
@@ -30642,6 +32130,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          newTokenCount: exactOriginalTokenCount,\n'
                       '          compressionStatus: '
                       'CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,\n'
+                      '          output: outputAccounting,\n'
                       '        },\n'
                       '      };\n'
                       '    }\n'
@@ -30664,6 +32153,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          compressionStatus:\n'
                       '            '
                       'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                      '          output: outputAccounting,\n'
                       '        },\n'
                       '      };\n'
                       '    }\n'
@@ -30699,6 +32189,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          compressionStatus:\n'
                       '            '
                       'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                      '          output: outputAccounting,\n'
                       '        },\n'
                       '      };\n'
                       '    }\n'
@@ -30735,6 +32226,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          compressionStatus:\n'
                       '            '
                       'CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,\n'
+                      '          output: outputAccounting,\n'
                       '        },\n'
                       '      };\n'
                       '    }\n'
@@ -30762,6 +32254,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          compressionStatus:\n'
                       '            '
                       'CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,\n'
+                      '          output: outputAccounting,\n'
                       '        },\n'
                       '      };\n'
                       '    }\n'
@@ -30784,6 +32277,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          compressionStatus:\n'
                       '            '
                       'CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,\n'
+                      '          output: outputAccounting,\n'
                       '        },\n'
                       '      };\n'
                       '    }\n'
@@ -30810,6 +32304,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          compressionStatus:\n'
                       '            '
                       'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                      '          output: outputAccounting,\n'
                       '        },\n'
                       '      };\n'
                       '    }\n'
@@ -30822,6 +32317,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        newTokenCountIsEstimated: false,\n'
                       '        compressionStatus: CompressionStatus.COMPRESSED,\n'
                       '        triggerReason,\n'
+                      '        output: outputAccounting,\n'
                       '      },\n'
                       '    };\n'
                       '  }\n'
@@ -31898,6 +33394,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "?? '');\n"
                              '    const compressionOutputTokenCount =\n'
                              '      summaryResult.usage?.candidatesTokenCount;\n'
+                             '    // Every outcome from here on carries the same '
+                             'accounting, because the\n'
+                             '    // only way to tell these failures apart afterwards '
+                             'is where the fixed\n'
+                             '    // maintenance budget went. `getResponseText` drops '
+                             'thought parts, so a\n'
+                             '    // run whose reasoning consumed the whole ceiling '
+                             'and emitted no summary\n'
+                             '    // is otherwise indistinguishable from one that '
+                             'never generated.\n'
+                             '    const outputAccounting: CompactionOutputAccounting = '
+                             '{\n'
+                             '      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
+                             '      thinkingTokenBudget: '
+                             'COMPACT_THINKING_TOKEN_BUDGET,\n'
+                             '      finalResponseTokenBudget: '
+                             'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
+                             '      outputTokens: compressionOutputTokenCount ?? 0,\n'
+                             '      thinkingTokens: '
+                             'summaryResult.usage?.thoughtsTokenCount ?? 0,\n'
+                             '      summaryChars: processedSummary.length,\n'
+                             '      finishReason: summaryResult.finishReason ?? null,\n'
+                             '    };\n'
                              '\n'
                              '    if (summaryResult.finishReason === '
                              'FinishReason.MAX_TOKENS) {\n'
@@ -31915,6 +33434,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus:\n'
                              '            '
                              'CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,\n'
+                             '          output: outputAccounting,\n'
                              '        },\n'
                              '      };\n'
                              '    }\n'
@@ -31937,6 +33457,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus:\n'
                              '            '
                              'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                             '          output: outputAccounting,\n'
                              '        },\n'
                              '      };\n'
                              '    }\n'
@@ -31948,6 +33469,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          newTokenCount: exactOriginalTokenCount,\n'
                              '          compressionStatus: '
                              'CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,\n'
+                             '          output: outputAccounting,\n'
                              '        },\n'
                              '      };\n'
                              '    }\n'
@@ -31970,6 +33492,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus:\n'
                              '            '
                              'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                             '          output: outputAccounting,\n'
                              '        },\n'
                              '      };\n'
                              '    }\n'
@@ -32006,6 +33529,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus:\n'
                              '            '
                              'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                             '          output: outputAccounting,\n'
                              '        },\n'
                              '      };\n'
                              '    }\n'
@@ -32043,6 +33567,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus:\n'
                              '            '
                              'CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,\n'
+                             '          output: outputAccounting,\n'
                              '        },\n'
                              '      };\n'
                              '    }\n'
@@ -32070,6 +33595,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus:\n'
                              '            '
                              'CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,\n'
+                             '          output: outputAccounting,\n'
                              '        },\n'
                              '      };\n'
                              '    }\n'
@@ -32092,6 +33618,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus:\n'
                              '            '
                              'CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,\n'
+                             '          output: outputAccounting,\n'
                              '        },\n'
                              '      };\n'
                              '    }\n'
@@ -32118,6 +33645,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus:\n'
                              '            '
                              'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                             '          output: outputAccounting,\n'
                              '        },\n'
                              '      };\n'
                              '    }\n'
@@ -32131,10 +33659,166 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        compressionStatus: '
                              'CompressionStatus.COMPRESSED,\n'
                              '        triggerReason,\n'
+                             '        output: outputAccounting,\n'
                              '      },\n'
                              '    };\n'
                              '  }\n'
                              '}\n'},
+            {'name': 'packages/core/src/services/loopDetectionService.ts:landmark-1',
+             'path': 'packages/core/src/services/loopDetectionService.ts',
+             'before': '  return isExplicitCap || totalCalls > hardCap || stuck;\n'
+                       '}\n'
+                       '\n'
+                       '/**\n'
+                       ' * Service for detecting and preventing infinite loops in AI '
+                       'responses.\n'
+                       ' * Monitors tool call repetitions and content sentence '
+                       'repetitions.\n',
+             'after': '  return isExplicitCap || totalCalls > hardCap || stuck;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * Human-readable explanation of each rule this service can '
+                      'fire, kept beside\n'
+                      ' * the rules themselves so every surface that reports a halt '
+                      'names the same\n'
+                      ' * cause. A halt is only actionable if it says which rule '
+                      'fired: a\n'
+                      ' * five-identical-call guard and an exhausted per-turn '
+                      'tool-call budget are\n'
+                      ' * different problems with different remedies, and '
+                      '`loop_detected` alone\n'
+                      ' * cannot tell them apart.\n'
+                      ' */\n'
+                      'export const LOOP_TYPE_LABELS: Record<LoopType, string> = {\n'
+                      '  [LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS]:\n'
+                      "    'the model repeated the same tool call with identical "
+                      "arguments',\n"
+                      '  [LoopType.CHANTING_IDENTICAL_SENTENCES]:\n'
+                      "    'the model repeated the same sentence in its output',\n"
+                      '  [LoopType.REPETITIVE_THOUGHTS]:\n'
+                      "    'the model repeated the same reasoning thought',\n"
+                      '  [LoopType.READ_FILE_LOOP]:\n'
+                      "    'the model spent too many consecutive calls reading files "
+                      "without making progress',\n"
+                      '  [LoopType.ACTION_STAGNATION]:\n'
+                      "    'the model kept calling the same tool without making "
+                      "progress',\n"
+                      '  [LoopType.SHELL_COMMAND_STAGNATION]:\n'
+                      "    'the model repeated similar shell inspection commands "
+                      "without making progress',\n"
+                      '  [LoopType.GLOBAL_TOOL_CALL_DUPLICATE]:\n'
+                      "    'the model repeated the same tool call across the turn, "
+                      "even when not back-to-back',\n"
+                      '  [LoopType.ALTERNATING_TOOL_CALL_PATTERN]:\n'
+                      "    'the model alternated between the same two tool calls in a "
+                      "repeating pattern',\n"
+                      '  [LoopType.TURN_TOOL_CALL_CAP]:\n'
+                      "    'the turn reached the per-turn tool-call limit',\n"
+                      '  [LoopType.INVALID_TOOL_PARAMS_STAGNATION]:\n'
+                      "    'the model repeatedly sent invalid tool parameters without "
+                      "correcting them',\n"
+                      '  [LoopType.REPEATED_TOOL_EXECUTION_FAILURE]:\n'
+                      "    'the same tool execution failure continued after a "
+                      "corrective reminder',\n"
+                      '};\n'
+                      '\n'
+                      '/**\n'
+                      ' * `"<loop_type>: <explanation>"` for the rule that fired, or '
+                      'undefined when\n'
+                      " * the halt did not come from one of this service's rules.\n"
+                      ' */\n'
+                      'export function describeLoopType(\n'
+                      '  loopType: LoopType | null | undefined,\n'
+                      '): string | undefined {\n'
+                      '  return loopType ? `${loopType}: '
+                      '${LOOP_TYPE_LABELS[loopType]}` : undefined;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * Service for detecting and preventing infinite loops in AI '
+                      'responses.\n'
+                      ' * Monitors tool call repetitions and content sentence '
+                      'repetitions.\n',
+             'review_before': '  return isExplicitCap || totalCalls > hardCap || '
+                              'stuck;\n'
+                              '}\n'
+                              '\n'
+                              '/**\n'
+                              ' * Service for detecting and preventing infinite loops '
+                              'in AI responses.\n'
+                              ' * Monitors tool call repetitions and content sentence '
+                              'repetitions.\n',
+             'review_after': '  return isExplicitCap || totalCalls > hardCap || '
+                             'stuck;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * Human-readable explanation of each rule this service '
+                             'can fire, kept beside\n'
+                             ' * the rules themselves so every surface that reports a '
+                             'halt names the same\n'
+                             ' * cause. A halt is only actionable if it says which '
+                             'rule fired: a\n'
+                             ' * five-identical-call guard and an exhausted per-turn '
+                             'tool-call budget are\n'
+                             ' * different problems with different remedies, and '
+                             '`loop_detected` alone\n'
+                             ' * cannot tell them apart.\n'
+                             ' */\n'
+                             'export const LOOP_TYPE_LABELS: Record<LoopType, string> '
+                             '= {\n'
+                             '  [LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS]:\n'
+                             "    'the model repeated the same tool call with "
+                             "identical arguments',\n"
+                             '  [LoopType.CHANTING_IDENTICAL_SENTENCES]:\n'
+                             "    'the model repeated the same sentence in its "
+                             "output',\n"
+                             '  [LoopType.REPETITIVE_THOUGHTS]:\n'
+                             "    'the model repeated the same reasoning thought',\n"
+                             '  [LoopType.READ_FILE_LOOP]:\n'
+                             "    'the model spent too many consecutive calls reading "
+                             "files without making progress',\n"
+                             '  [LoopType.ACTION_STAGNATION]:\n'
+                             "    'the model kept calling the same tool without making "
+                             "progress',\n"
+                             '  [LoopType.SHELL_COMMAND_STAGNATION]:\n'
+                             "    'the model repeated similar shell inspection "
+                             "commands without making progress',\n"
+                             '  [LoopType.GLOBAL_TOOL_CALL_DUPLICATE]:\n'
+                             "    'the model repeated the same tool call across the "
+                             "turn, even when not back-to-back',\n"
+                             '  [LoopType.ALTERNATING_TOOL_CALL_PATTERN]:\n'
+                             "    'the model alternated between the same two tool "
+                             "calls in a repeating pattern',\n"
+                             '  [LoopType.TURN_TOOL_CALL_CAP]:\n'
+                             "    'the turn reached the per-turn tool-call limit',\n"
+                             '  [LoopType.INVALID_TOOL_PARAMS_STAGNATION]:\n'
+                             "    'the model repeatedly sent invalid tool parameters "
+                             "without correcting them',\n"
+                             '  [LoopType.REPEATED_TOOL_EXECUTION_FAILURE]:\n'
+                             "    'the same tool execution failure continued after a "
+                             "corrective reminder',\n"
+                             '};\n'
+                             '\n'
+                             '/**\n'
+                             ' * `"<loop_type>: <explanation>"` for the rule that '
+                             'fired, or undefined when\n'
+                             " * the halt did not come from one of this service's "
+                             'rules.\n'
+                             ' */\n'
+                             'export function describeLoopType(\n'
+                             '  loopType: LoopType | null | undefined,\n'
+                             '): string | undefined {\n'
+                             '  return loopType ? `${loopType}: '
+                             '${LOOP_TYPE_LABELS[loopType]}` : undefined;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * Service for detecting and preventing infinite loops '
+                             'in AI responses.\n'
+                             ' * Monitors tool call repetitions and content sentence '
+                             'repetitions.\n'},
             {'name': 'packages/core/src/subagents/builtin-agents.test.ts:landmark-1',
              'path': 'packages/core/src/subagents/builtin-agents.test.ts',
              'before': "        'general-purpose subagent working for a parent "
@@ -32884,31 +34568,37 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    {\n'},
             {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-1',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
-             'before': "} from '../../agents/runtime/agent-headless.js';\n"
+             'before': '  ContextState,\n'
+                       "} from '../../agents/runtime/agent-headless.js';\n"
                        'import { AgentEventType } from '
                        "'../../agents/runtime/agent-events.js';\n"
                        'import type {\n'
                        '  AgentToolCallEvent,\n'
                        '  AgentToolResultEvent,\n'
                        '  AgentApprovalRequestEvent,\n',
-             'after': "} from '../../agents/runtime/agent-headless.js';\n"
+             'after': '  ContextState,\n'
+                      "} from '../../agents/runtime/agent-headless.js';\n"
                       'import { AgentEventType } from '
                       "'../../agents/runtime/agent-events.js';\n"
+                      "import { LoopType } from '../../telemetry/types.js';\n"
                       'import type {\n'
                       '  AgentCompactionEvent,\n'
                       '  AgentToolCallEvent,\n'
                       '  AgentToolResultEvent,\n'
                       '  AgentApprovalRequestEvent,\n',
-             'review_before': "} from '../../agents/runtime/agent-headless.js';\n"
+             'review_before': '  ContextState,\n'
+                              "} from '../../agents/runtime/agent-headless.js';\n"
                               'import { AgentEventType } from '
                               "'../../agents/runtime/agent-events.js';\n"
                               'import type {\n'
                               '  AgentToolCallEvent,\n'
                               '  AgentToolResultEvent,\n'
                               '  AgentApprovalRequestEvent,\n',
-             'review_after': "} from '../../agents/runtime/agent-headless.js';\n"
+             'review_after': '  ContextState,\n'
+                             "} from '../../agents/runtime/agent-headless.js';\n"
                              'import { AgentEventType } from '
                              "'../../agents/runtime/agent-events.js';\n"
+                             "import { LoopType } from '../../telemetry/types.js';\n"
                              'import type {\n'
                              '  AgentCompactionEvent,\n'
                              '  AgentToolCallEvent,\n'
@@ -33107,6 +34797,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        getTerminateMode: '
                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                       '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '        getLoopType: vi.fn().mockReturnValue(null),\n'
                       '      } as unknown as AgentHeadless;\n'
                       '\n'
                       '      mockContextState = {\n'
@@ -33123,6 +34814,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        getTerminateMode: '
                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                              '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '        getLoopType: vi.fn().mockReturnValue(null),\n'
                              '      } as unknown as AgentHeadless;\n'
                              '\n'
                              '      mockContextState = {\n'},
@@ -33231,20 +34923,97 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      const invocation = (\n'
                       '        agentTool as AgentToolWithProtectedMethods\n'
                       '      ).createInvocation(params);\n'
+                      '      // In the real runtime the reasoning loop announces the '
+                      'terminal state\n'
+                      '      // as it unwinds, before the tool body publishes its own '
+                      'fuller update\n'
+                      '      // for the same transition.\n'
+                      '      vi.mocked(mockAgent.execute).mockImplementation(async () '
+                      '=> {\n'
+                      '        invocation.eventEmitter.emit(AgentEventType.FINISH, {\n'
+                      "          subagentId: 'sub-1',\n"
+                      '          terminateReason: AgentTerminateMode.MAX_TURNS,\n'
+                      '          turnsUsed: 3,\n'
+                      '          loopType: null,\n'
+                      '          timestamp: Date.now(),\n'
+                      '        });\n'
+                      '      });\n'
                       '      await invocation.execute(undefined, (output) => {\n'
                       '        snapshots.push(output as AgentResultDisplay);\n'
                       '      });\n'
                       '\n'
                       "      // The headless stream builds the subagent's error result "
-                      'from this\n'
-                      '      // snapshot, so the turn count has to arrive in the same '
-                      'update as the\n'
-                      '      // terminal status rather than in a later one.\n'
+                      'from the first\n'
+                      '      // running -> failed snapshot and ignores every later '
+                      'one, so the count\n'
+                      '      // has to be on all of them, not merely on the last.\n'
                       '      const terminal = snapshots.filter(\n'
                       "        (snapshot) => snapshot.status === 'failed',\n"
                       '      );\n'
                       '      expect(terminal.length).toBeGreaterThan(0);\n'
-                      '      expect(terminal.at(-1)?.turnsUsed).toBe(3);\n'
+                      '      expect(terminal.map((snapshot) => '
+                      'snapshot.turnsUsed)).toEqual(\n'
+                      '        terminal.map(() => 3),\n'
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[loop-attribution] names the rule that halted a looping "
+                      "subagent', async () => {\n"
+                      "      vi.mocked(mockAgent.getFinalText).mockReturnValue('');\n"
+                      '      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                      '        AgentTerminateMode.LOOP_DETECTED,\n'
+                      '      );\n'
+                      '      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(11);\n'
+                      '      vi.mocked(mockAgent.getLoopType).mockReturnValue(\n'
+                      '        LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,\n'
+                      '      );\n'
+                      '\n'
+                      '      const params: AgentParams = {\n'
+                      "        description: 'Search files',\n"
+                      "        prompt: 'Find all TypeScript files',\n"
+                      "        subagent_type: 'file-search',\n"
+                      '        run_in_background: false,\n'
+                      '      };\n'
+                      '\n'
+                      '      const snapshots: AgentResultDisplay[] = [];\n'
+                      '      const invocation = (\n'
+                      '        agentTool as AgentToolWithProtectedMethods\n'
+                      '      ).createInvocation(params);\n'
+                      '      vi.mocked(mockAgent.execute).mockImplementation(async () '
+                      '=> {\n'
+                      '        invocation.eventEmitter.emit(AgentEventType.FINISH, {\n'
+                      "          subagentId: 'sub-1',\n"
+                      '          terminateReason: AgentTerminateMode.LOOP_DETECTED,\n'
+                      '          turnsUsed: 11,\n'
+                      '          loopType: LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,\n'
+                      '          timestamp: Date.now(),\n'
+                      '        });\n'
+                      '      });\n'
+                      '      const result = await invocation.execute(undefined, '
+                      '(output) => {\n'
+                      '        snapshots.push(output as AgentResultDisplay);\n'
+                      '      });\n'
+                      '\n'
+                      '      // Nine rules across two tiers end in LOOP_DETECTED. Both '
+                      'the record the\n'
+                      '      // service reads and the text the parent model reads have '
+                      'to say which\n'
+                      '      // one fired: a five-identical-call halt and an exhausted '
+                      'per-turn\n'
+                      '      // tool-call budget need different responses.\n'
+                      '      const terminal = snapshots.filter(\n'
+                      "        (snapshot) => snapshot.status === 'failed',\n"
+                      '      );\n'
+                      '      expect(terminal.length).toBeGreaterThan(0);\n'
+                      '      for (const snapshot of terminal) {\n'
+                      '        expect(snapshot.terminateReason).toContain(\n'
+                      "          'consecutive_identical_tool_calls',\n"
+                      '        );\n'
+                      '      }\n'
+                      '      const modelVisible = JSON.stringify(result.llmContent);\n'
+                      '      '
+                      "expect(modelVisible).toContain('consecutive_identical_tool_calls');\n"
+                      "      expect(modelVisible).toContain('after 11 turns');\n"
                       '    });\n'
                       '\n'
                       "    it('explains successful subagents with no model-visible "
@@ -33363,20 +35132,109 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const invocation = (\n'
                              '        agentTool as AgentToolWithProtectedMethods\n'
                              '      ).createInvocation(params);\n'
+                             '      // In the real runtime the reasoning loop '
+                             'announces the terminal state\n'
+                             '      // as it unwinds, before the tool body publishes '
+                             'its own fuller update\n'
+                             '      // for the same transition.\n'
+                             '      '
+                             'vi.mocked(mockAgent.execute).mockImplementation(async () '
+                             '=> {\n'
+                             '        '
+                             'invocation.eventEmitter.emit(AgentEventType.FINISH, {\n'
+                             "          subagentId: 'sub-1',\n"
+                             '          terminateReason: '
+                             'AgentTerminateMode.MAX_TURNS,\n'
+                             '          turnsUsed: 3,\n'
+                             '          loopType: null,\n'
+                             '          timestamp: Date.now(),\n'
+                             '        });\n'
+                             '      });\n'
                              '      await invocation.execute(undefined, (output) => {\n'
                              '        snapshots.push(output as AgentResultDisplay);\n'
                              '      });\n'
                              '\n'
                              "      // The headless stream builds the subagent's error "
-                             'result from this\n'
-                             '      // snapshot, so the turn count has to arrive in '
-                             'the same update as the\n'
-                             '      // terminal status rather than in a later one.\n'
+                             'result from the first\n'
+                             '      // running -> failed snapshot and ignores every '
+                             'later one, so the count\n'
+                             '      // has to be on all of them, not merely on the '
+                             'last.\n'
                              '      const terminal = snapshots.filter(\n'
                              "        (snapshot) => snapshot.status === 'failed',\n"
                              '      );\n'
                              '      expect(terminal.length).toBeGreaterThan(0);\n'
-                             '      expect(terminal.at(-1)?.turnsUsed).toBe(3);\n'
+                             '      expect(terminal.map((snapshot) => '
+                             'snapshot.turnsUsed)).toEqual(\n'
+                             '        terminal.map(() => 3),\n'
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[loop-attribution] names the rule that halted a "
+                             "looping subagent', async () => {\n"
+                             '      '
+                             "vi.mocked(mockAgent.getFinalText).mockReturnValue('');\n"
+                             '      '
+                             'vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                             '        AgentTerminateMode.LOOP_DETECTED,\n'
+                             '      );\n'
+                             '      '
+                             'vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(11);\n'
+                             '      vi.mocked(mockAgent.getLoopType).mockReturnValue(\n'
+                             '        LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,\n'
+                             '      );\n'
+                             '\n'
+                             '      const params: AgentParams = {\n'
+                             "        description: 'Search files',\n"
+                             "        prompt: 'Find all TypeScript files',\n"
+                             "        subagent_type: 'file-search',\n"
+                             '        run_in_background: false,\n'
+                             '      };\n'
+                             '\n'
+                             '      const snapshots: AgentResultDisplay[] = [];\n'
+                             '      const invocation = (\n'
+                             '        agentTool as AgentToolWithProtectedMethods\n'
+                             '      ).createInvocation(params);\n'
+                             '      '
+                             'vi.mocked(mockAgent.execute).mockImplementation(async () '
+                             '=> {\n'
+                             '        '
+                             'invocation.eventEmitter.emit(AgentEventType.FINISH, {\n'
+                             "          subagentId: 'sub-1',\n"
+                             '          terminateReason: '
+                             'AgentTerminateMode.LOOP_DETECTED,\n'
+                             '          turnsUsed: 11,\n'
+                             '          loopType: '
+                             'LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,\n'
+                             '          timestamp: Date.now(),\n'
+                             '        });\n'
+                             '      });\n'
+                             '      const result = await invocation.execute(undefined, '
+                             '(output) => {\n'
+                             '        snapshots.push(output as AgentResultDisplay);\n'
+                             '      });\n'
+                             '\n'
+                             '      // Nine rules across two tiers end in '
+                             'LOOP_DETECTED. Both the record the\n'
+                             '      // service reads and the text the parent model '
+                             'reads have to say which\n'
+                             '      // one fired: a five-identical-call halt and an '
+                             'exhausted per-turn\n'
+                             '      // tool-call budget need different responses.\n'
+                             '      const terminal = snapshots.filter(\n'
+                             "        (snapshot) => snapshot.status === 'failed',\n"
+                             '      );\n'
+                             '      expect(terminal.length).toBeGreaterThan(0);\n'
+                             '      for (const snapshot of terminal) {\n'
+                             '        expect(snapshot.terminateReason).toContain(\n'
+                             "          'consecutive_identical_tool_calls',\n"
+                             '        );\n'
+                             '      }\n'
+                             '      const modelVisible = '
+                             'JSON.stringify(result.llmContent);\n'
+                             '      '
+                             "expect(modelVisible).toContain('consecutive_identical_tool_calls');\n"
+                             "      expect(modelVisible).toContain('after 11 turns');\n"
                              '    });\n'
                              '\n'
                              "    it('explains successful subagents with no "
@@ -33398,6 +35256,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        getTerminateMode: '
                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                       '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '        getLoopType: vi.fn().mockReturnValue(null),\n'
                       '      } as unknown as AgentHeadless;\n'
                       '\n'
                       '      mockContextState = {\n'
@@ -33414,6 +35273,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        getTerminateMode: '
                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                              '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '        getLoopType: vi.fn().mockReturnValue(null),\n'
                              '      } as unknown as AgentHeadless;\n'
                              '\n'
                              '      mockContextState = {\n'},
@@ -33529,6 +35389,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        getTerminateMode: '
                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                       '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '        getLoopType: vi.fn().mockReturnValue(null),\n'
                       '      } as unknown as AgentHeadless;\n'
                       '\n'
                       '      mockContextState = {\n'
@@ -33582,6 +35443,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        getTerminateMode: '
                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                              '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '        getLoopType: vi.fn().mockReturnValue(null),\n'
                              '      } as unknown as AgentHeadless;\n'
                              '\n'
                              '      mockContextState = {\n'},
@@ -33697,6 +35559,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        getTerminateMode: '
                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                       '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '        getLoopType: vi.fn().mockReturnValue(null),\n'
                       '      } as unknown as AgentHeadless;\n'
                       '\n'
                       '      mockContextState = {\n'
@@ -33750,6 +35613,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        getTerminateMode: '
                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                              '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '        getLoopType: vi.fn().mockReturnValue(null),\n'
                              '      } as unknown as AgentHeadless;\n'
                              '\n'
                              '      mockContextState = {\n'},
@@ -33768,6 +35632,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        getTerminateMode: '
                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                       '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '        getLoopType: vi.fn().mockReturnValue(null),\n'
                       '      } as unknown as AgentHeadless;\n'
                       '\n'
                       '      vi.mocked(mockAgent.execute).mockImplementation(async () '
@@ -33786,6 +35651,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        getTerminateMode: '
                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                              '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '        getLoopType: vi.fn().mockReturnValue(null),\n'
                              '      } as unknown as AgentHeadless;\n'
                              '\n'
                              '      '
@@ -33821,6 +35687,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            originalTokenCount: 198_400,\n'
                       '            newTokenCount: 32_118,\n'
                       "            triggerReason: 'token_limit',\n"
+                      '            output: null,\n'
                       '          },\n'
                       '          timestamp: Date.now(),\n'
                       '        } satisfies AgentCompactionEvent);\n'
@@ -33834,6 +35701,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            originalTokenCount: 205_112,\n'
                       '            newTokenCount: 205_112,\n'
                       "            triggerReason: 'token_limit',\n"
+                      '            output: null,\n'
                       '          },\n'
                       '          timestamp: Date.now(),\n'
                       '        } satisfies AgentCompactionEvent);\n'
@@ -33858,6 +35726,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          originalTokenCount: 198_400,\n'
                       '          newTokenCount: 32_118,\n'
                       "          triggerReason: 'token_limit',\n"
+                      '          output: null,\n'
                       '        },\n'
                       '        {\n'
                       "          status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
@@ -33865,6 +35734,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          originalTokenCount: 205_112,\n'
                       '          newTokenCount: 205_112,\n'
                       "          triggerReason: 'token_limit',\n"
+                      '          output: null,\n'
                       '        },\n'
                       '      ]);\n'
                       '      const firstSnapshotWithCompaction = snapshots.find(\n'
@@ -33914,6 +35784,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            originalTokenCount: 198_400,\n'
                              '            newTokenCount: 32_118,\n'
                              "            triggerReason: 'token_limit',\n"
+                             '            output: null,\n'
                              '          },\n'
                              '          timestamp: Date.now(),\n'
                              '        } satisfies AgentCompactionEvent);\n'
@@ -33927,6 +35798,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            originalTokenCount: 205_112,\n'
                              '            newTokenCount: 205_112,\n'
                              "            triggerReason: 'token_limit',\n"
+                             '            output: null,\n'
                              '          },\n'
                              '          timestamp: Date.now(),\n'
                              '        } satisfies AgentCompactionEvent);\n'
@@ -33952,6 +35824,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          originalTokenCount: 198_400,\n'
                              '          newTokenCount: 32_118,\n'
                              "          triggerReason: 'token_limit',\n"
+                             '          output: null,\n'
                              '        },\n'
                              '        {\n'
                              "          status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',\n"
@@ -33959,6 +35832,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          originalTokenCount: 205_112,\n'
                              '          newTokenCount: 205_112,\n'
                              "          triggerReason: 'token_limit',\n"
+                             '          output: null,\n'
                              '        },\n'
                              '      ]);\n'
                              '      const firstSnapshotWithCompaction = '
@@ -33997,6 +35871,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        getTerminateMode: '
                       'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                       '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                      '        getLoopType: vi.fn().mockReturnValue(null),\n'
                       '        getExecutionSummary: vi.fn().mockReturnValue({}),\n'
                       "        // Background spawn subscribes to the core's event "
                       'emitter to\n'
@@ -34021,6 +35896,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        getTerminateMode: '
                              'vi.fn().mockReturnValue(AgentTerminateMode.GOAL),\n'
                              '        getTurnsUsed: vi.fn().mockReturnValue(2),\n'
+                             '        getLoopType: vi.fn().mockReturnValue(null),\n'
                              '        getExecutionSummary: '
                              'vi.fn().mockReturnValue({}),\n'
                              "        // Background spawn subscribes to the core's "
@@ -34056,6 +35932,44 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  AgentToolResultEvent,\n'
                              '  AgentFinishEvent,\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-2',
+             'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '  appendStopHookBlockingCapWarning,\n'
+                       '  formatStopHookBlockingCapWarning,\n'
+                       "} from '../../hooks/stopHookCap.js';\n"
+                       'import { toModelVisibleSubagentResult } from '
+                       "'../../agents/subagent-result.js';\n"
+                       'import {\n'
+                       '  ApprovalMode,\n'
+                       '  Config,\n',
+             'after': '  appendStopHookBlockingCapWarning,\n'
+                      '  formatStopHookBlockingCapWarning,\n'
+                      "} from '../../hooks/stopHookCap.js';\n"
+                      'import {\n'
+                      '  describeSubagentTerminateReason,\n'
+                      '  toModelVisibleSubagentResult,\n'
+                      "} from '../../agents/subagent-result.js';\n"
+                      'import {\n'
+                      '  ApprovalMode,\n'
+                      '  Config,\n',
+             'review_before': '  appendStopHookBlockingCapWarning,\n'
+                              '  formatStopHookBlockingCapWarning,\n'
+                              "} from '../../hooks/stopHookCap.js';\n"
+                              'import { toModelVisibleSubagentResult } from '
+                              "'../../agents/subagent-result.js';\n"
+                              'import {\n'
+                              '  ApprovalMode,\n'
+                              '  Config,\n',
+             'review_after': '  appendStopHookBlockingCapWarning,\n'
+                             '  formatStopHookBlockingCapWarning,\n'
+                             "} from '../../hooks/stopHookCap.js';\n"
+                             'import {\n'
+                             '  describeSubagentTerminateReason,\n'
+                             '  toModelVisibleSubagentResult,\n'
+                             "} from '../../agents/subagent-result.js';\n"
+                             'import {\n'
+                             '  ApprovalMode,\n'
+                             '  Config,\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-3',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': "} from '../../agents/background-tasks.js';\n"
                        'import { buildModelIdContext, resolveModelId } from '
@@ -34105,7 +36019,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              'function persistBackgroundCancellation(\n'
                              '  metaPath: string,\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-3',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-4',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '</example>\n'
                        '`;\n'
@@ -34259,7 +36173,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // Update the parameter schema by modifying the '
                              'existing object\n'
                              '    const schema = this.parameterSchema as {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-4',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-5',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      const availableGrades = [\n'
                        '        '
@@ -34299,7 +36213,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        schema.properties.model = {\n'
                              "          type: 'string',\n"
                              '          enum: availableGrades,\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-5',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-6',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      return \'Parameter "todo_id" must be a non-empty string '
                        "of at most 500 characters.';\n"
@@ -34396,7 +36310,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    if (params.subagent_type !== undefined) {\n'
                              '      if (\n'
                              "        typeof params.subagent_type !== 'string' ||\n"},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-6',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-7',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '  readonly eventEmitter: AgentEventEmitter = new '
                        'AgentEventEmitter();\n'
@@ -34438,7 +36352,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  private callId?: string;\n'
                              '\n'
                              '  constructor(\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-7',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-8',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '    });\n'
@@ -34446,7 +36360,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '    this.eventEmitter.on(AgentEventType.FINISH, (...args: '
                        'unknown[]) => {\n'
                        '      const event = args[0] as AgentFinishEvent;\n'
-                       '      this.updateDisplay(\n',
+                       '      this.updateDisplay(\n'
+                       '        {\n'
+                       "          status: event.terminateReason === 'GOAL' ? "
+                       "'completed' : 'failed',\n"
+                       '          terminateReason: event.terminateReason,\n'
+                       '        },\n'
+                       '        updateOutput,\n'
+                       '      );\n',
              'after': '      }\n'
                       '    });\n'
                       '\n'
@@ -34465,17 +36386,44 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      );\n'
                       '    });\n'
                       '\n'
+                      '    // This is the first update that leaves `running`, so it is '
+                      'the one an\n'
+                      '    // edge-triggered consumer reads. It therefore has to carry '
+                      'the terminal\n'
+                      '    // facts in full: a later, richer update for the same '
+                      'transition is not\n'
+                      '    // read at all, and a consumer that finds no turn count on '
+                      'this one\n'
+                      '    // records that the subagent took no turns.\n'
                       '    this.eventEmitter.on(AgentEventType.FINISH, (...args: '
                       'unknown[]) => {\n'
                       '      const event = args[0] as AgentFinishEvent;\n'
-                      '      this.updateDisplay(\n',
+                      '      this.updateDisplay(\n'
+                      '        {\n'
+                      "          status: event.terminateReason === 'GOAL' ? "
+                      "'completed' : 'failed',\n"
+                      '          terminateReason: describeSubagentTerminateReason(\n'
+                      '            event.terminateReason as AgentTerminateMode,\n'
+                      '            event.loopType,\n'
+                      '          ),\n'
+                      '          turnsUsed: event.turnsUsed,\n'
+                      '        },\n'
+                      '        updateOutput,\n'
+                      '      );\n',
              'review_before': '      }\n'
                               '    });\n'
                               '\n'
                               '    this.eventEmitter.on(AgentEventType.FINISH, '
                               '(...args: unknown[]) => {\n'
                               '      const event = args[0] as AgentFinishEvent;\n'
-                              '      this.updateDisplay(\n',
+                              '      this.updateDisplay(\n'
+                              '        {\n'
+                              "          status: event.terminateReason === 'GOAL' ? "
+                              "'completed' : 'failed',\n"
+                              '          terminateReason: event.terminateReason,\n'
+                              '        },\n'
+                              '        updateOutput,\n'
+                              '      );\n',
              'review_after': '      }\n'
                              '    });\n'
                              '\n'
@@ -34494,11 +36442,33 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '    });\n'
                              '\n'
+                             '    // This is the first update that leaves `running`, '
+                             'so it is the one an\n'
+                             '    // edge-triggered consumer reads. It therefore has '
+                             'to carry the terminal\n'
+                             '    // facts in full: a later, richer update for the '
+                             'same transition is not\n'
+                             '    // read at all, and a consumer that finds no turn '
+                             'count on this one\n'
+                             '    // records that the subagent took no turns.\n'
                              '    this.eventEmitter.on(AgentEventType.FINISH, '
                              '(...args: unknown[]) => {\n'
                              '      const event = args[0] as AgentFinishEvent;\n'
-                             '      this.updateDisplay(\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-8',
+                             '      this.updateDisplay(\n'
+                             '        {\n'
+                             "          status: event.terminateReason === 'GOAL' ? "
+                             "'completed' : 'failed',\n"
+                             '          terminateReason: '
+                             'describeSubagentTerminateReason(\n'
+                             '            event.terminateReason as '
+                             'AgentTerminateMode,\n'
+                             '            event.loopType,\n'
+                             '          ),\n'
+                             '          turnsUsed: event.turnsUsed,\n'
+                             '        },\n'
+                             '        updateOutput,\n'
+                             '      );\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      const subagentRawText = subagent.getFinalText();\n'
                        '      const terminateMode = subagent.getTerminateMode();\n'
@@ -34516,6 +36486,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          subagentRawText,\n'
                       '          terminateMode,\n'
                       '          subagent.getTurnsUsed(),\n'
+                      '          subagent.getLoopType(),\n'
                       '        ),\n'
                       '        stopHookWarning,\n'
                       '      );\n'
@@ -34541,12 +36512,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          subagentRawText,\n'
                              '          terminateMode,\n'
                              '          subagent.getTurnsUsed(),\n'
+                             '          subagent.getLoopType(),\n'
                              '        ),\n'
                              '        stopHookWarning,\n'
                              '      );\n'
                              '      const success = terminateMode === '
                              'AgentTerminateMode.GOAL;\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        }),\n'
                        '      );\n'
@@ -34569,6 +36541,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'far the subagent\n'
                       '      // actually got from the same snapshot.\n'
                       '      const turnsUsed = subagent.getTurnsUsed();\n'
+                      '      const loopType = subagent.getLoopType();\n'
                       '      if (signal?.aborted) {\n'
                       '        this.updateDisplay(\n'
                       '          {\n'
@@ -34601,6 +36574,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'how far the subagent\n'
                              '      // actually got from the same snapshot.\n'
                              '      const turnsUsed = subagent.getTurnsUsed();\n'
+                             '      const loopType = subagent.getLoopType();\n'
                              '      if (signal?.aborted) {\n'
                              '        this.updateDisplay(\n'
                              '          {\n'
@@ -34612,35 +36586,54 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          },\n'
                              '          updateOutput,\n'
                              '        );\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
              'path': 'packages/core/src/tools/agent/agent.ts',
-             'before': '            terminateReason: terminateMode,\n'
+             'before': '        this.updateDisplay(\n'
+                       '          {\n'
+                       "            status: success ? 'completed' : 'failed',\n"
+                       '            terminateReason: terminateMode,\n'
                        '            result: finalText,\n'
                        '            executionSummary,\n'
                        '          },\n'
                        '          updateOutput,\n'
                        '        );\n',
-             'after': '            terminateReason: terminateMode,\n'
+             'after': '        this.updateDisplay(\n'
+                      '          {\n'
+                      "            status: success ? 'completed' : 'failed',\n"
+                      '            terminateReason: describeSubagentTerminateReason(\n'
+                      '              terminateMode,\n'
+                      '              loopType,\n'
+                      '            ),\n'
                       '            result: finalText,\n'
                       '            executionSummary,\n'
                       '            turnsUsed,\n'
                       '          },\n'
                       '          updateOutput,\n'
                       '        );\n',
-             'review_before': '            terminateReason: terminateMode,\n'
+             'review_before': '        this.updateDisplay(\n'
+                              '          {\n'
+                              "            status: success ? 'completed' : 'failed',\n"
+                              '            terminateReason: terminateMode,\n'
                               '            result: finalText,\n'
                               '            executionSummary,\n'
                               '          },\n'
                               '          updateOutput,\n'
                               '        );\n',
-             'review_after': '            terminateReason: terminateMode,\n'
+             'review_after': '        this.updateDisplay(\n'
+                             '          {\n'
+                             "            status: success ? 'completed' : 'failed',\n"
+                             '            terminateReason: '
+                             'describeSubagentTerminateReason(\n'
+                             '              terminateMode,\n'
+                             '              loopType,\n'
+                             '            ),\n'
                              '            result: finalText,\n'
                              '            executionSummary,\n'
                              '            turnsUsed,\n'
                              '          },\n'
                              '          updateOutput,\n'
                              '        );\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '    // background-agent concurrency caps '
                        '(agents.maxParallelAgentsByModel).\n'
@@ -34680,7 +36673,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      if (backgroundSlotReservation && '
                              '!backgroundSlotReservationConsumed) {\n'
                              '        this.config\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      // Implicit background requests downgrade to an awaited '
                        'foreground run\n'
@@ -34730,7 +36723,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ? true\n'
                              '          : (this.params.run_in_background ??\n'
                              '            (subagentConfig.background === true ||\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          subagentRuntimeConfig as Config,\n'
                        '          {\n'
@@ -34804,7 +36797,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              ? { modelConfigOverrides: { model: '
                              'subagentModelId } }\n'
                              '              : {}),\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '\n'
@@ -34913,7 +36906,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`qwen-code.tool`\n'
                              '      // span, inheriting its traceId so the trace tree '
                              'stays unified.\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-16',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          this.buildSubagentSpanSpec(hookOpts, subagentConfig, '
                        "'foreground'),\n"
@@ -34976,7 +36969,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            ),\n'
                              '        );\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-16',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-17',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          depth: launchDepth,\n'
                        '        });\n'
@@ -35045,6 +37038,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '              subagent.getFinalText(),\n'
                       '              terminateMode,\n'
                       '              subagent.getTurnsUsed(),\n'
+                      '              subagent.getLoopType(),\n'
                       '            ),\n'
                       '            stopHookWarning,\n'
                       '          ) + effectSuffix;\n'
@@ -35124,6 +37118,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              subagent.getFinalText(),\n'
                              '              terminateMode,\n'
                              '              subagent.getTurnsUsed(),\n'
+                             '              subagent.getLoopType(),\n'
                              '            ),\n'
                              '            stopHookWarning,\n'
                              '          ) + effectSuffix;\n'
@@ -35132,7 +37127,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        if (terminateMode === AgentTerminateMode.ERROR) '
                              '{\n'
                              '          return {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-17',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-18',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        terminateReason: `Failed to run subagent: '
                        '${errorMessage}`,\n'
@@ -36669,73 +38664,985 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '}\n'},
             {'name': 'packages/core/src/tools/read-file.test.ts:landmark-1',
              'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': '    });\n'
+                       '\n'
+                       "    it('should reject pages for notebook files', () => {\n"
+                       '      const params: ReadFileToolParams = {\n'
+                       "        file_path: path.join(tempRootDir, 'test.ipynb'),\n"
+                       "        pages: '1',\n"
+                       '      };\n'
+                       '\n'
+                       '      expect(() => tool.build(params)).toThrow(\n'
+                       "        'pages is not supported for Jupyter notebook (.ipynb) "
+                       "files',\n"
+                       '      );\n'
+                       '    });\n'
+                       '  });\n',
+             'after': '    });\n'
+                      '\n'
+                      "    it('should reject pages for notebook files', () => {\n"
+                      '      const params = {\n'
+                      "        file_path: path.join(tempRootDir, 'test.ipynb'),\n"
+                      "        pages: '1',\n"
+                      '      } as ReadFileToolParams;\n'
+                      '\n'
+                      '      expect(() => tool.build(params)).toThrow(\n'
+                      '        "read_file has no \'pages\' parameter",\n'
+                      '      );\n'
+                      '    });\n'
+                      '  });\n',
+             'review_before': '    });\n'
+                              '\n'
+                              "    it('should reject pages for notebook files', () => "
+                              '{\n'
+                              '      const params: ReadFileToolParams = {\n'
+                              '        file_path: path.join(tempRootDir, '
+                              "'test.ipynb'),\n"
+                              "        pages: '1',\n"
+                              '      };\n'
+                              '\n'
+                              '      expect(() => tool.build(params)).toThrow(\n'
+                              "        'pages is not supported for Jupyter notebook "
+                              "(.ipynb) files',\n"
+                              '      );\n'
+                              '    });\n'
+                              '  });\n',
+             'review_after': '    });\n'
+                             '\n'
+                             "    it('should reject pages for notebook files', () => "
+                             '{\n'
+                             '      const params = {\n'
+                             '        file_path: path.join(tempRootDir, '
+                             "'test.ipynb'),\n"
+                             "        pages: '1',\n"
+                             '      } as ReadFileToolParams;\n'
+                             '\n'
+                             '      expect(() => tool.build(params)).toThrow(\n'
+                             '        "read_file has no \'pages\' parameter",\n'
+                             '      );\n'
+                             '    });\n'
+                             '  });\n'},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-2',
+             'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': '        await fsp.writeFile(pdfPath, '
+                       "Buffer.from('%PDF-1.7'));\n"
+                       '        const invocation = createTextOnlyTool().build({\n'
+                       '          file_path: pdfPath,\n'
+                       "          pages: '20-25',\n"
+                       '        }) as ToolInvocation<ReadFileToolParams, ToolResult>;\n'
+                       '        return invocation.execute(signalOverride);\n'
+                       '      }\n',
+             'after': "        await fsp.writeFile(pdfPath, Buffer.from('%PDF-1.7'));\n"
+                      '        const invocation = createTextOnlyTool().build({\n'
+                      '          file_path: pdfPath,\n'
+                      '        }) as ToolInvocation<ReadFileToolParams, ToolResult>;\n'
+                      '        return invocation.execute(signalOverride);\n'
+                      '      }\n',
+             'review_before': '        await fsp.writeFile(pdfPath, '
+                              "Buffer.from('%PDF-1.7'));\n"
+                              '        const invocation = '
+                              'createTextOnlyTool().build({\n'
+                              '          file_path: pdfPath,\n'
+                              "          pages: '20-25',\n"
+                              '        }) as ToolInvocation<ReadFileToolParams, '
+                              'ToolResult>;\n'
+                              '        return invocation.execute(signalOverride);\n'
+                              '      }\n',
+             'review_after': '        await fsp.writeFile(pdfPath, '
+                             "Buffer.from('%PDF-1.7'));\n"
+                             '        const invocation = createTextOnlyTool().build({\n'
+                             '          file_path: pdfPath,\n'
+                             '        }) as ToolInvocation<ReadFileToolParams, '
+                             'ToolResult>;\n'
+                             '        return invocation.execute(signalOverride);\n'
+                             '      }\n'},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-3',
+             'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': '\n'
+                       '      beforeEach(() => {\n'
+                       '        '
+                       'visionBridgeMocks.shouldRunVisionBridge.mockReturnValue(true);\n'
+                       '        pdfMocks.renderPDFPagesToImages.mockResolvedValue({\n'
+                       '          success: true,\n'
+                       "          images: ['20', '21', '22', '23'].map((data) => ({\n"
+                       '            data,\n'
+                       "            mimeType: 'image/jpeg',\n"
+                       '          })),\n',
+             'after': '\n'
+                      '      beforeEach(() => {\n'
+                      '        '
+                      'visionBridgeMocks.shouldRunVisionBridge.mockReturnValue(true);\n'
+                      '        // Under the full-text page limit, so the read reaches '
+                      'the bridge\n'
+                      '        // instead of stopping at the large-PDF gate.\n'
+                      '        pdfMocks.getPDFPageCount.mockResolvedValue(6);\n'
+                      '        pdfMocks.renderPDFPagesToImages.mockResolvedValue({\n'
+                      '          success: true,\n'
+                      "          images: ['1', '2', '3', '4'].map((data) => ({\n"
+                      '            data,\n'
+                      "            mimeType: 'image/jpeg',\n"
+                      '          })),\n',
+             'review_before': '\n'
+                              '      beforeEach(() => {\n'
+                              '        '
+                              'visionBridgeMocks.shouldRunVisionBridge.mockReturnValue(true);\n'
+                              '        '
+                              'pdfMocks.renderPDFPagesToImages.mockResolvedValue({\n'
+                              '          success: true,\n'
+                              "          images: ['20', '21', '22', '23'].map((data) "
+                              '=> ({\n'
+                              '            data,\n'
+                              "            mimeType: 'image/jpeg',\n"
+                              '          })),\n',
+             'review_after': '\n'
+                             '      beforeEach(() => {\n'
+                             '        '
+                             'visionBridgeMocks.shouldRunVisionBridge.mockReturnValue(true);\n'
+                             '        // Under the full-text page limit, so the read '
+                             'reaches the bridge\n'
+                             '        // instead of stopping at the large-PDF gate.\n'
+                             '        pdfMocks.getPDFPageCount.mockResolvedValue(6);\n'
+                             '        '
+                             'pdfMocks.renderPDFPagesToImages.mockResolvedValue({\n'
+                             '          success: true,\n'
+                             "          images: ['1', '2', '3', '4'].map((data) => ({\n"
+                             '            data,\n'
+                             "            mimeType: 'image/jpeg',\n"
+                             '          })),\n'},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-4',
+             'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': "          status: 'ok',\n"
+                       '          parts: [\n'
+                       '            {\n'
+                       "              text: '[Untrusted transcription]\\nPage 20: "
+                       'heading\\nPages 24-25 exist but were not transcribed; call '
+                       'read_file on the original PDF with a later page range to '
+                       "continue.',\n"
+                       '            },\n'
+                       '          ],\n'
+                       '          convertedCount: 4,\n',
+             'after': "          status: 'ok',\n"
+                      '          parts: [\n'
+                      '            {\n'
+                      "              text: '[Untrusted transcription]\\nPage 1: "
+                      "heading\\nPages 5-6 exist but were not transcribed.',\n"
+                      '            },\n'
+                      '          ],\n'
+                      '          convertedCount: 4,\n',
+             'review_before': "          status: 'ok',\n"
+                              '          parts: [\n'
+                              '            {\n'
+                              "              text: '[Untrusted transcription]\\nPage "
+                              '20: heading\\nPages 24-25 exist but were not '
+                              'transcribed; call read_file on the original PDF with a '
+                              "later page range to continue.',\n"
+                              '            },\n'
+                              '          ],\n'
+                              '          convertedCount: 4,\n',
+             'review_after': "          status: 'ok',\n"
+                             '          parts: [\n'
+                             '            {\n'
+                             "              text: '[Untrusted transcription]\\nPage 1: "
+                             "heading\\nPages 5-6 exist but were not transcribed.',\n"
+                             '            },\n'
+                             '          ],\n'
+                             '          convertedCount: 4,\n'},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-5',
+             'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': "          'Untrusted transcription',\n"
+                       '        );\n'
+                       '        expect(JSON.stringify(result.llmContent)).toContain(\n'
+                       "          'Pages 24-25 exist but were not transcribed',\n"
+                       '        );\n'
+                       '        '
+                       'expect(JSON.stringify(result.llmContent)).not.toContain(\n'
+                       "          'pages 24-25 were not included',\n"
+                       '        );\n'
+                       '        const display = bridgeDisplay(result);\n'
+                       '        expect(display.summary).toContain(\n'
+                       "          'transcribed PDF pages 20-23; remaining pages "
+                       "24-25',\n"
+                       '        );\n'
+                       "        expect(display.notice).toContain('qwen3-vl-plus');\n"
+                       '        '
+                       "expect(display.notice).toContain('dashscope.aliyuncs.com');\n",
+             'after': "          'Untrusted transcription',\n"
+                      '        );\n'
+                      '        expect(JSON.stringify(result.llmContent)).toContain(\n'
+                      "          'Pages 5-6 exist but were not transcribed',\n"
+                      '        );\n'
+                      '        '
+                      'expect(JSON.stringify(result.llmContent)).not.toContain(\n'
+                      "          'pages 5-6 were not included',\n"
+                      '        );\n'
+                      '        const display = bridgeDisplay(result);\n'
+                      '        expect(display.summary).toContain(\n'
+                      "          'transcribed PDF pages 1-4; remaining pages 5-6',\n"
+                      '        );\n'
+                      "        expect(display.notice).toContain('qwen3-vl-plus');\n"
+                      '        '
+                      "expect(display.notice).toContain('dashscope.aliyuncs.com');\n",
+             'review_before': "          'Untrusted transcription',\n"
+                              '        );\n'
+                              '        '
+                              'expect(JSON.stringify(result.llmContent)).toContain(\n'
+                              "          'Pages 24-25 exist but were not "
+                              "transcribed',\n"
+                              '        );\n'
+                              '        '
+                              'expect(JSON.stringify(result.llmContent)).not.toContain(\n'
+                              "          'pages 24-25 were not included',\n"
+                              '        );\n'
+                              '        const display = bridgeDisplay(result);\n'
+                              '        expect(display.summary).toContain(\n'
+                              "          'transcribed PDF pages 20-23; remaining pages "
+                              "24-25',\n"
+                              '        );\n'
+                              '        '
+                              "expect(display.notice).toContain('qwen3-vl-plus');\n"
+                              '        '
+                              "expect(display.notice).toContain('dashscope.aliyuncs.com');\n",
+             'review_after': "          'Untrusted transcription',\n"
+                             '        );\n'
+                             '        '
+                             'expect(JSON.stringify(result.llmContent)).toContain(\n'
+                             "          'Pages 5-6 exist but were not transcribed',\n"
+                             '        );\n'
+                             '        '
+                             'expect(JSON.stringify(result.llmContent)).not.toContain(\n'
+                             "          'pages 5-6 were not included',\n"
+                             '        );\n'
+                             '        const display = bridgeDisplay(result);\n'
+                             '        expect(display.summary).toContain(\n'
+                             "          'transcribed PDF pages 1-4; remaining pages "
+                             "5-6',\n"
+                             '        );\n'
+                             '        '
+                             "expect(display.notice).toContain('qwen3-vl-plus');\n"
+                             '        '
+                             "expect(display.notice).toContain('dashscope.aliyuncs.com');\n"},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-6',
+             'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': '          expect.objectContaining({\n'
+                       '            sourceContext: {\n'
+                       "              displayName: 'scanned.pdf',\n"
+                       '              renderedRange: { firstPage: 20, lastPage: 23 },\n'
+                       '              continuation: {\n'
+                       "                certainty: 'known',\n"
+                       '                firstPage: 24,\n'
+                       '                lastPage: 25,\n'
+                       '              },\n'
+                       '            },\n'
+                       '          }),\n',
+             'after': '          expect.objectContaining({\n'
+                      '            sourceContext: {\n'
+                      "              displayName: 'scanned.pdf',\n"
+                      '              renderedRange: { firstPage: 1, lastPage: 4 },\n'
+                      '              continuation: {\n'
+                      "                certainty: 'known',\n"
+                      '                firstPage: 5,\n'
+                      '                lastPage: 6,\n'
+                      '              },\n'
+                      '            },\n'
+                      '          }),\n',
+             'review_before': '          expect.objectContaining({\n'
+                              '            sourceContext: {\n'
+                              "              displayName: 'scanned.pdf',\n"
+                              '              renderedRange: { firstPage: 20, lastPage: '
+                              '23 },\n'
+                              '              continuation: {\n'
+                              "                certainty: 'known',\n"
+                              '                firstPage: 24,\n'
+                              '                lastPage: 25,\n'
+                              '              },\n'
+                              '            },\n'
+                              '          }),\n',
+             'review_after': '          expect.objectContaining({\n'
+                             '            sourceContext: {\n'
+                             "              displayName: 'scanned.pdf',\n"
+                             '              renderedRange: { firstPage: 1, lastPage: 4 '
+                             '},\n'
+                             '              continuation: {\n'
+                             "                certainty: 'known',\n"
+                             '                firstPage: 5,\n'
+                             '                lastPage: 6,\n'
+                             '              },\n'
+                             '            },\n'
+                             '          }),\n'},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-7',
+             'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': '        visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                       '          applied: true,\n'
+                       "          status: 'ok',\n"
+                       "          parts: [{ text: '[Untrusted transcription]\\nPage "
+                       "20: heading' }],\n"
+                       '          convertedCount: 4,\n'
+                       '          omittedCount: 0,\n'
+                       "          modelId: 'qwen3-vl-plus',\n",
+             'after': '        visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                      '          applied: true,\n'
+                      "          status: 'ok',\n"
+                      "          parts: [{ text: '[Untrusted transcription]\\nPage 1: "
+                      "heading' }],\n"
+                      '          convertedCount: 4,\n'
+                      '          omittedCount: 0,\n'
+                      "          modelId: 'qwen3-vl-plus',\n",
+             'review_before': '        '
+                              'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                              '          applied: true,\n'
+                              "          status: 'ok',\n"
+                              "          parts: [{ text: '[Untrusted "
+                              "transcription]\\nPage 20: heading' }],\n"
+                              '          convertedCount: 4,\n'
+                              '          omittedCount: 0,\n'
+                              "          modelId: 'qwen3-vl-plus',\n",
+             'review_after': '        '
+                             'visionBridgeMocks.runVisionBridge.mockResolvedValue({\n'
+                             '          applied: true,\n'
+                             "          status: 'ok',\n"
+                             "          parts: [{ text: '[Untrusted "
+                             "transcription]\\nPage 1: heading' }],\n"
+                             '          convertedCount: 4,\n'
+                             '          omittedCount: 0,\n'
+                             "          modelId: 'qwen3-vl-plus',\n"},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-8',
+             'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': '\n'
+                       '        const display = bridgeDisplay(result);\n'
+                       '        expect(display.summary).toContain(\n'
+                       "          'additional pages may exist from page 24 through "
+                       "page 25',\n"
+                       '        );\n'
+                       "        expect(display.summary).not.toContain('remaining pages "
+                       "24-25');\n"
+                       '        '
+                       'expect(visionBridgeMocks.runVisionBridge).toHaveBeenCalledWith(\n'
+                       '          expect.objectContaining({\n'
+                       '            sourceContext: expect.objectContaining({\n'
+                       '              continuation: {\n'
+                       "                certainty: 'possible',\n"
+                       '                firstPage: 24,\n'
+                       '                requestedLastPage: 25,\n'
+                       '              },\n'
+                       '            }),\n'
+                       '          }),\n',
+             'after': '\n'
+                      '        const display = bridgeDisplay(result);\n'
+                      '        expect(display.summary).toContain(\n'
+                      "          'additional pages may exist from page 5',\n"
+                      '        );\n'
+                      "        expect(display.summary).not.toContain('remaining "
+                      "pages');\n"
+                      '        '
+                      'expect(visionBridgeMocks.runVisionBridge).toHaveBeenCalledWith(\n'
+                      '          expect.objectContaining({\n'
+                      '            sourceContext: expect.objectContaining({\n'
+                      '              continuation: {\n'
+                      "                certainty: 'possible',\n"
+                      '                firstPage: 5,\n'
+                      '              },\n'
+                      '            }),\n'
+                      '          }),\n',
+             'review_before': '\n'
+                              '        const display = bridgeDisplay(result);\n'
+                              '        expect(display.summary).toContain(\n'
+                              "          'additional pages may exist from page 24 "
+                              "through page 25',\n"
+                              '        );\n'
+                              '        '
+                              "expect(display.summary).not.toContain('remaining pages "
+                              "24-25');\n"
+                              '        '
+                              'expect(visionBridgeMocks.runVisionBridge).toHaveBeenCalledWith(\n'
+                              '          expect.objectContaining({\n'
+                              '            sourceContext: expect.objectContaining({\n'
+                              '              continuation: {\n'
+                              "                certainty: 'possible',\n"
+                              '                firstPage: 24,\n'
+                              '                requestedLastPage: 25,\n'
+                              '              },\n'
+                              '            }),\n'
+                              '          }),\n',
+             'review_after': '\n'
+                             '        const display = bridgeDisplay(result);\n'
+                             '        expect(display.summary).toContain(\n'
+                             "          'additional pages may exist from page 5',\n"
+                             '        );\n'
+                             "        expect(display.summary).not.toContain('remaining "
+                             "pages');\n"
+                             '        '
+                             'expect(visionBridgeMocks.runVisionBridge).toHaveBeenCalledWith(\n'
+                             '          expect.objectContaining({\n'
+                             '            sourceContext: expect.objectContaining({\n'
+                             '              continuation: {\n'
+                             "                certainty: 'possible',\n"
+                             '                firstPage: 5,\n'
+                             '              },\n'
+                             '            }),\n'
+                             '          }),\n'},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-9',
+             'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '      }\n'
                        '    });\n'
                        '\n'
                        "    it('should reject invalid pages parameter', () => {\n"
                        '      const params: ReadFileToolParams = {\n'
-                       "        file_path: '/tmp/test.pdf',\n",
+                       "        file_path: '/tmp/test.pdf',\n"
+                       "        pages: 'abc',\n"
+                       '      };\n'
+                       "      expect(() => tool.build(params)).toThrow('Invalid pages "
+                       "parameter');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('should reject pages range exceeding 20', () => {\n"
+                       '      const params: ReadFileToolParams = {\n'
+                       "        file_path: '/tmp/test.pdf',\n"
+                       "        pages: '1-25',\n"
+                       '      };\n'
+                       '      expect(() => tool.build(params)).toThrow(\n'
+                       "        'Pages range exceeds maximum of 20',\n"
+                       '      );\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should reject open-ended pages range', () => {\n"
+                       '      const params: ReadFileToolParams = {\n'
+                       "        file_path: '/tmp/test.pdf',\n"
+                       "        pages: '3-',\n"
+                       '      };\n'
+                       "      expect(() => tool.build(params)).toThrow('Open-ended "
+                       "page ranges');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('should accept valid pages parameter', () => {\n"
+                       '      const params: ReadFileToolParams = {\n'
+                       "        file_path: path.join(tempRootDir, 'test.pdf'),\n"
+                       "        pages: '1-5',\n"
+                       '      };\n'
+                       '      expect(() => tool.build(params)).not.toThrow();\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should treat empty pages parameter as unset', () => {\n"
+                       '      const params: ReadFileToolParams = {\n'
+                       "        file_path: path.join(tempRootDir, 'test.txt'),\n"
+                       "        pages: '',\n"
+                       '      };\n'
+                       '      const invocation = tool.build(params);\n'
+                       '\n'
+                       '      expect(invocation.params.pages).toBeUndefined();\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should support offset and limit for text files', async "
+                       '() => {\n'
+                       '      const filePath = path.join(tempRootDir, '
+                       "'paginated.txt');\n"
+                       '      const lines = Array.from({ length: 20 }, (_, i) => `Line '
+                       '${i + 1}`);\n',
              'after': '      }\n'
                       '    });\n'
                       '\n'
-                      "    it('[pages-contract] rejects pages on a non-PDF file before "
-                      "any syntax validation', () => {\n"
-                      '      const params: ReadFileToolParams = {\n'
-                      "        file_path: '/tmp/Example.java',\n"
-                      "        pages: '600-721',\n"
+                      "    it('[pages-contract] advertises exactly one range mechanism "
+                      "and no pages parameter', () => {\n"
+                      '      const schema = tool.schema.parametersJsonSchema as {\n'
+                      '        properties: Record<string, unknown>;\n'
                       '      };\n'
-                      '      expect(() => tool.build(params)).toThrow(\n'
-                      '        "The \'pages\' parameter applies only to PDF files",\n'
-                      '      );\n'
+                      '      expect(Object.keys(schema.properties).sort()).toEqual([\n'
+                      "        'file_path',\n"
+                      "        'limit',\n"
+                      "        'offset',\n"
+                      '      ]);\n'
+                      "      expect(tool.schema.description).toContain('pdftotext "
+                      "-layout');\n"
                       '    });\n'
                       '\n'
-                      "    it('[pages-contract] still accepts a bounded pages range on "
-                      "a PDF', () => {\n"
+                      '    it.each([\n'
+                      "      ['a non-PDF source file', '/tmp/Example.java', "
+                      "'600-721'],\n"
+                      "      ['a PDF', '/tmp/test.pdf', '1-2'],\n"
+                      "      ['an empty value', '/tmp/notes.txt', ''],\n"
+                      '    ])(\n'
+                      "      '[pages-contract] refuses an undeclared pages argument on "
+                      "%s',\n"
+                      '      (_name, filePath, pages) => {\n'
+                      '        // Undeclared keys survive JSON-schema validation, so '
+                      'the refusal has\n'
+                      '        // to be explicit: a dropped page range would leave the '
+                      'model\n'
+                      '        // believing it had asked for one. The refusal does not '
+                      'depend on the\n'
+                      '        // file type, so it cannot be worked around by renaming '
+                      'the file.\n'
+                      '        const params = { file_path: filePath, pages } as '
+                      'ReadFileToolParams;\n'
+                      '        expect(() => tool.build(params)).toThrow(\n'
+                      '          "read_file has no \'pages\' parameter",\n'
+                      '        );\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      "    it('[pages-contract] reads a PDF whole, with no page "
+                      "parameter to supply', () => {\n"
                       '      const params: ReadFileToolParams = {\n'
-                      "        file_path: '/tmp/test.pdf',\n"
-                      "        pages: '1-2',\n"
+                      "        file_path: path.join(tempRootDir, 'test.pdf'),\n"
                       '      };\n'
                       '      expect(() => tool.build(params)).not.toThrow();\n'
                       '    });\n'
                       '\n'
-                      "    it('should reject invalid pages parameter', () => {\n"
-                      '      const params: ReadFileToolParams = {\n'
-                      "        file_path: '/tmp/test.pdf',\n",
+                      "    it('should support offset and limit for text files', async "
+                      '() => {\n'
+                      '      const filePath = path.join(tempRootDir, '
+                      "'paginated.txt');\n"
+                      '      const lines = Array.from({ length: 20 }, (_, i) => `Line '
+                      '${i + 1}`);\n',
              'review_before': '      }\n'
                               '    });\n'
                               '\n'
                               "    it('should reject invalid pages parameter', () => "
                               '{\n'
                               '      const params: ReadFileToolParams = {\n'
-                              "        file_path: '/tmp/test.pdf',\n",
+                              "        file_path: '/tmp/test.pdf',\n"
+                              "        pages: 'abc',\n"
+                              '      };\n'
+                              "      expect(() => tool.build(params)).toThrow('Invalid "
+                              "pages parameter');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('should reject pages range exceeding 20', () => "
+                              '{\n'
+                              '      const params: ReadFileToolParams = {\n'
+                              "        file_path: '/tmp/test.pdf',\n"
+                              "        pages: '1-25',\n"
+                              '      };\n'
+                              '      expect(() => tool.build(params)).toThrow(\n'
+                              "        'Pages range exceeds maximum of 20',\n"
+                              '      );\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should reject open-ended pages range', () => {\n"
+                              '      const params: ReadFileToolParams = {\n'
+                              "        file_path: '/tmp/test.pdf',\n"
+                              "        pages: '3-',\n"
+                              '      };\n'
+                              '      expect(() => '
+                              "tool.build(params)).toThrow('Open-ended page ranges');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('should accept valid pages parameter', () => {\n"
+                              '      const params: ReadFileToolParams = {\n'
+                              "        file_path: path.join(tempRootDir, 'test.pdf'),\n"
+                              "        pages: '1-5',\n"
+                              '      };\n'
+                              '      expect(() => tool.build(params)).not.toThrow();\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should treat empty pages parameter as unset', "
+                              '() => {\n'
+                              '      const params: ReadFileToolParams = {\n'
+                              "        file_path: path.join(tempRootDir, 'test.txt'),\n"
+                              "        pages: '',\n"
+                              '      };\n'
+                              '      const invocation = tool.build(params);\n'
+                              '\n'
+                              '      expect(invocation.params.pages).toBeUndefined();\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should support offset and limit for text "
+                              "files', async () => {\n"
+                              '      const filePath = path.join(tempRootDir, '
+                              "'paginated.txt');\n"
+                              '      const lines = Array.from({ length: 20 }, (_, i) '
+                              '=> `Line ${i + 1}`);\n',
              'review_after': '      }\n'
                              '    });\n'
                              '\n'
-                             "    it('[pages-contract] rejects pages on a non-PDF file "
-                             "before any syntax validation', () => {\n"
-                             '      const params: ReadFileToolParams = {\n'
-                             "        file_path: '/tmp/Example.java',\n"
-                             "        pages: '600-721',\n"
+                             "    it('[pages-contract] advertises exactly one range "
+                             "mechanism and no pages parameter', () => {\n"
+                             '      const schema = tool.schema.parametersJsonSchema as '
+                             '{\n'
+                             '        properties: Record<string, unknown>;\n'
                              '      };\n'
-                             '      expect(() => tool.build(params)).toThrow(\n'
-                             '        "The \'pages\' parameter applies only to PDF '
-                             'files",\n'
-                             '      );\n'
+                             '      '
+                             'expect(Object.keys(schema.properties).sort()).toEqual([\n'
+                             "        'file_path',\n"
+                             "        'limit',\n"
+                             "        'offset',\n"
+                             '      ]);\n'
+                             '      '
+                             "expect(tool.schema.description).toContain('pdftotext "
+                             "-layout');\n"
                              '    });\n'
                              '\n'
-                             "    it('[pages-contract] still accepts a bounded pages "
-                             "range on a PDF', () => {\n"
+                             '    it.each([\n'
+                             "      ['a non-PDF source file', '/tmp/Example.java', "
+                             "'600-721'],\n"
+                             "      ['a PDF', '/tmp/test.pdf', '1-2'],\n"
+                             "      ['an empty value', '/tmp/notes.txt', ''],\n"
+                             '    ])(\n'
+                             "      '[pages-contract] refuses an undeclared pages "
+                             "argument on %s',\n"
+                             '      (_name, filePath, pages) => {\n'
+                             '        // Undeclared keys survive JSON-schema '
+                             'validation, so the refusal has\n'
+                             '        // to be explicit: a dropped page range would '
+                             'leave the model\n'
+                             '        // believing it had asked for one. The refusal '
+                             'does not depend on the\n'
+                             '        // file type, so it cannot be worked around by '
+                             'renaming the file.\n'
+                             '        const params = { file_path: filePath, pages } as '
+                             'ReadFileToolParams;\n'
+                             '        expect(() => tool.build(params)).toThrow(\n'
+                             '          "read_file has no \'pages\' parameter",\n'
+                             '        );\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'
+                             "    it('[pages-contract] reads a PDF whole, with no page "
+                             "parameter to supply', () => {\n"
                              '      const params: ReadFileToolParams = {\n'
-                             "        file_path: '/tmp/test.pdf',\n"
-                             "        pages: '1-2',\n"
+                             "        file_path: path.join(tempRootDir, 'test.pdf'),\n"
                              '      };\n'
                              '      expect(() => tool.build(params)).not.toThrow();\n'
                              '    });\n'
                              '\n'
-                             "    it('should reject invalid pages parameter', () => {\n"
-                             '      const params: ReadFileToolParams = {\n'
-                             "        file_path: '/tmp/test.pdf',\n"},
+                             "    it('should support offset and limit for text files', "
+                             'async () => {\n'
+                             '      const filePath = path.join(tempRootDir, '
+                             "'paginated.txt');\n"
+                             '      const lines = Array.from({ length: 20 }, (_, i) => '
+                             '`Line ${i + 1}`);\n'},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-10',
+             'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': '        '
+                       'expect(result.error?.type).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                       '        '
+                       'expect(String(result.llmContent).length).toBeLessThan(1000);\n'
+                       "        expect(result.llmContent).toContain('has 31 pages');\n"
+                       '        expect(result.llmContent).toContain("Use the \'pages\' '
+                       'parameter");\n'
+                       '      });\n'
+                       '\n'
+                       "      it('returns the file_unchanged placeholder on a second "
+                       "full Read of an unchanged text file', async () => {\n",
+             'after': '        '
+                      'expect(result.error?.type).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                      '        '
+                      'expect(String(result.llmContent).length).toBeLessThan(1000);\n'
+                      "        expect(result.llmContent).toContain('has 31 pages');\n"
+                      "        expect(result.llmContent).toContain('pdftotext "
+                      "-layout');\n"
+                      '      });\n'
+                      '\n'
+                      "      it('returns the file_unchanged placeholder on a second "
+                      "full Read of an unchanged text file', async () => {\n",
+             'review_before': '        '
+                              'expect(result.error?.type).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                              '        '
+                              'expect(String(result.llmContent).length).toBeLessThan(1000);\n'
+                              "        expect(result.llmContent).toContain('has 31 "
+                              "pages');\n"
+                              '        expect(result.llmContent).toContain("Use the '
+                              '\'pages\' parameter");\n'
+                              '      });\n'
+                              '\n'
+                              "      it('returns the file_unchanged placeholder on a "
+                              "second full Read of an unchanged text file', async () "
+                              '=> {\n',
+             'review_after': '        '
+                             'expect(result.error?.type).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                             '        '
+                             'expect(String(result.llmContent).length).toBeLessThan(1000);\n'
+                             "        expect(result.llmContent).toContain('has 31 "
+                             "pages');\n"
+                             "        expect(result.llmContent).toContain('pdftotext "
+                             "-layout');\n"
+                             '      });\n'
+                             '\n'
+                             "      it('returns the file_unchanged placeholder on a "
+                             "second full Read of an unchanged text file', async () => "
+                             '{\n'},
             {'name': 'packages/core/src/tools/read-file.ts:landmark-1',
+             'path': 'packages/core/src/tools/read-file.ts',
+             'before': '  type PDFVisionBridgeCandidate,\n'
+                       '  type ProcessedFileReadResult,\n'
+                       "} from '../utils/fileUtils.js';\n"
+                       'import { parsePDFPageRange, PDF_MAX_PAGES_PER_READ } from '
+                       "'../utils/pdf.js';\n"
+                       "import type { Config } from '../config/config.js';\n"
+                       "import { FileOperation } from '../telemetry/metrics.js';\n"
+                       'import { getProgrammingLanguage } from '
+                       "'../telemetry/telemetry-utils.js';\n",
+             'after': '  type PDFVisionBridgeCandidate,\n'
+                      '  type ProcessedFileReadResult,\n'
+                      "} from '../utils/fileUtils.js';\n"
+                      "import { PDF_PAGE_RANGE_REMEDY } from '../utils/pdf.js';\n"
+                      "import type { Config } from '../config/config.js';\n"
+                      "import { FileOperation } from '../telemetry/metrics.js';\n"
+                      'import { getProgrammingLanguage } from '
+                      "'../telemetry/telemetry-utils.js';\n",
+             'review_before': '  type PDFVisionBridgeCandidate,\n'
+                              '  type ProcessedFileReadResult,\n'
+                              "} from '../utils/fileUtils.js';\n"
+                              'import { parsePDFPageRange, PDF_MAX_PAGES_PER_READ } '
+                              "from '../utils/pdf.js';\n"
+                              "import type { Config } from '../config/config.js';\n"
+                              'import { FileOperation } from '
+                              "'../telemetry/metrics.js';\n"
+                              'import { getProgrammingLanguage } from '
+                              "'../telemetry/telemetry-utils.js';\n",
+             'review_after': '  type PDFVisionBridgeCandidate,\n'
+                             '  type ProcessedFileReadResult,\n'
+                             "} from '../utils/fileUtils.js';\n"
+                             'import { PDF_PAGE_RANGE_REMEDY } from '
+                             "'../utils/pdf.js';\n"
+                             "import type { Config } from '../config/config.js';\n"
+                             'import { FileOperation } from '
+                             "'../telemetry/metrics.js';\n"
+                             'import { getProgrammingLanguage } from '
+                             "'../telemetry/telemetry-utils.js';\n"},
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-2',
+             'path': 'packages/core/src/tools/read-file.ts',
+             'before': '   * The number of lines to read (optional)\n'
+                       '   */\n'
+                       '  limit?: number;\n'
+                       '\n'
+                       '  /**\n'
+                       '   * For PDF files, the page range to extract as text (e.g. '
+                       '"1-5", "3", "10-20").\n'
+                       '   * Pages are 1-indexed. Open-ended ranges like "3-" are not '
+                       'supported.\n'
+                       '   */\n'
+                       '  pages?: string;\n'
+                       '}\n'
+                       '\n'
+                       'class ReadFileToolInvocation extends BaseToolInvocation<\n',
+             'after': '   * The number of lines to read (optional)\n'
+                      '   */\n'
+                      '  limit?: number;\n'
+                      '}\n'
+                      '\n'
+                      'class ReadFileToolInvocation extends BaseToolInvocation<\n',
+             'review_before': '   * The number of lines to read (optional)\n'
+                              '   */\n'
+                              '  limit?: number;\n'
+                              '\n'
+                              '  /**\n'
+                              '   * For PDF files, the page range to extract as text '
+                              '(e.g. "1-5", "3", "10-20").\n'
+                              '   * Pages are 1-indexed. Open-ended ranges like "3-" '
+                              'are not supported.\n'
+                              '   */\n'
+                              '  pages?: string;\n'
+                              '}\n'
+                              '\n'
+                              'class ReadFileToolInvocation extends '
+                              'BaseToolInvocation<\n',
+             'review_after': '   * The number of lines to read (optional)\n'
+                             '   */\n'
+                             '  limit?: number;\n'
+                             '}\n'
+                             '\n'
+                             'class ReadFileToolInvocation extends '
+                             'BaseToolInvocation<\n'},
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-3',
+             'path': 'packages/core/src/tools/read-file.ts',
+             'before': '    );\n'
+                       '    const shortPath = shortenPath(relativePath);\n'
+                       '\n'
+                       '    if (this.params.pages) {\n'
+                       '      return `${shortPath} (pages ${this.params.pages})`;\n'
+                       '    }\n'
+                       '\n'
+                       '    const { offset, limit } = this.params;\n'
+                       '    if (offset !== undefined && limit !== undefined) {\n'
+                       '      return `${shortPath} (lines ${offset + 1}-${offset + '
+                       'limit})`;\n',
+             'after': '    );\n'
+                      '    const shortPath = shortenPath(relativePath);\n'
+                      '\n'
+                      '    const { offset, limit } = this.params;\n'
+                      '    if (offset !== undefined && limit !== undefined) {\n'
+                      '      return `${shortPath} (lines ${offset + 1}-${offset + '
+                      'limit})`;\n',
+             'review_before': '    );\n'
+                              '    const shortPath = shortenPath(relativePath);\n'
+                              '\n'
+                              '    if (this.params.pages) {\n'
+                              '      return `${shortPath} (pages '
+                              '${this.params.pages})`;\n'
+                              '    }\n'
+                              '\n'
+                              '    const { offset, limit } = this.params;\n'
+                              '    if (offset !== undefined && limit !== undefined) {\n'
+                              '      return `${shortPath} (lines ${offset + '
+                              '1}-${offset + limit})`;\n',
+             'review_after': '    );\n'
+                             '    const shortPath = shortenPath(relativePath);\n'
+                             '\n'
+                             '    const { offset, limit } = this.params;\n'
+                             '    if (offset !== undefined && limit !== undefined) {\n'
+                             '      return `${shortPath} (lines ${offset + 1}-${offset '
+                             '+ limit})`;\n'},
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-4',
+             'path': 'packages/core/src/tools/read-file.ts',
+             'before': '    const cacheEnabled = '
+                       '!this.config.getFileReadCacheDisabled();\n'
+                       '    const useFastPath = cacheEnabled && !isAutoMem;\n'
+                       '    const cache = this.config.getFileReadCache();\n'
+                       '    // A request-level "full" Read asks for the whole file: no '
+                       'offset,\n'
+                       '    // no limit, no PDF page range. The cache entry is only '
+                       'marked as\n'
+                       '    // full later if the produced content was not truncated.\n'
+                       '    const isFullRead =\n'
+                       '      this.params.offset === undefined &&\n'
+                       '      this.params.limit === undefined &&\n'
+                       '      this.params.pages === undefined;\n'
+                       '\n'
+                       '    // Stat up front so we can consult the cache before doing '
+                       'any heavy\n'
+                       '    // work. processSingleFileContent re-stats anyway; the '
+                       'extra syscall\n',
+             'after': '    const cacheEnabled = '
+                      '!this.config.getFileReadCacheDisabled();\n'
+                      '    const useFastPath = cacheEnabled && !isAutoMem;\n'
+                      '    const cache = this.config.getFileReadCache();\n'
+                      '    // A request-level "full" Read asks for the whole file: no '
+                      'offset and\n'
+                      '    // no limit. The cache entry is only marked as full later '
+                      'if the\n'
+                      '    // produced content was not truncated.\n'
+                      '    const isFullRead =\n'
+                      '      this.params.offset === undefined && this.params.limit === '
+                      'undefined;\n'
+                      '\n'
+                      '    // Stat up front so we can consult the cache before doing '
+                      'any heavy\n'
+                      '    // work. processSingleFileContent re-stats anyway; the '
+                      'extra syscall\n',
+             'review_before': '    const cacheEnabled = '
+                              '!this.config.getFileReadCacheDisabled();\n'
+                              '    const useFastPath = cacheEnabled && !isAutoMem;\n'
+                              '    const cache = this.config.getFileReadCache();\n'
+                              '    // A request-level "full" Read asks for the whole '
+                              'file: no offset,\n'
+                              '    // no limit, no PDF page range. The cache entry is '
+                              'only marked as\n'
+                              '    // full later if the produced content was not '
+                              'truncated.\n'
+                              '    const isFullRead =\n'
+                              '      this.params.offset === undefined &&\n'
+                              '      this.params.limit === undefined &&\n'
+                              '      this.params.pages === undefined;\n'
+                              '\n'
+                              '    // Stat up front so we can consult the cache before '
+                              'doing any heavy\n'
+                              '    // work. processSingleFileContent re-stats anyway; '
+                              'the extra syscall\n',
+             'review_after': '    const cacheEnabled = '
+                             '!this.config.getFileReadCacheDisabled();\n'
+                             '    const useFastPath = cacheEnabled && !isAutoMem;\n'
+                             '    const cache = this.config.getFileReadCache();\n'
+                             '    // A request-level "full" Read asks for the whole '
+                             'file: no offset and\n'
+                             '    // no limit. The cache entry is only marked as full '
+                             'later if the\n'
+                             '    // produced content was not truncated.\n'
+                             '    const isFullRead =\n'
+                             '      this.params.offset === undefined && '
+                             'this.params.limit === undefined;\n'
+                             '\n'
+                             '    // Stat up front so we can consult the cache before '
+                             'doing any heavy\n'
+                             '    // work. processSingleFileContent re-stats anyway; '
+                             'the extra syscall\n'},
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-5',
+             'path': 'packages/core/src/tools/read-file.ts',
+             'before': '      {\n'
+                       '        offset: this.params.offset,\n'
+                       '        limit: this.params.limit,\n'
+                       '        pages: this.params.pages,\n'
+                       '        preserveUnsupportedImage: prepareForVisionBridge,\n'
+                       '        preparePdfForVisionBridge: prepareForVisionBridge,\n'
+                       '        signal,\n',
+             'after': '      {\n'
+                      '        offset: this.params.offset,\n'
+                      '        limit: this.params.limit,\n'
+                      '        preserveUnsupportedImage: prepareForVisionBridge,\n'
+                      '        preparePdfForVisionBridge: prepareForVisionBridge,\n'
+                      '        signal,\n',
+             'review_before': '      {\n'
+                              '        offset: this.params.offset,\n'
+                              '        limit: this.params.limit,\n'
+                              '        pages: this.params.pages,\n'
+                              '        preserveUnsupportedImage: '
+                              'prepareForVisionBridge,\n'
+                              '        preparePdfForVisionBridge: '
+                              'prepareForVisionBridge,\n'
+                              '        signal,\n',
+             'review_after': '      {\n'
+                             '        offset: this.params.offset,\n'
+                             '        limit: this.params.limit,\n'
+                             '        preserveUnsupportedImage: '
+                             'prepareForVisionBridge,\n'
+                             '        preparePdfForVisionBridge: '
+                             'prepareForVisionBridge,\n'
+                             '        signal,\n'},
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-6',
+             'path': 'packages/core/src/tools/read-file.ts',
+             'before': '    //    (the truncate-tool-output limit made "fully read" '
+                       'an\n'
+                       '    //    impossible precondition on files past the limit, '
+                       'deadlocking\n'
+                       '    //    issue #3945). A "full" Read at the request level '
+                       '(no\n'
+                       '    //    offset / limit / pages) only counts as full at the '
+                       'cache\n'
+                       '    //    level if the produced content was not truncated, '
+                       'otherwise\n'
+                       '    //    the model only saw the head and a follow-up '
+                       '`file_unchanged`\n'
+                       '    //    placeholder would falsely imply "you\'ve already '
+                       'seen\n',
+             'after': '    //    (the truncate-tool-output limit made "fully read" an\n'
+                      '    //    impossible precondition on files past the limit, '
+                      'deadlocking\n'
+                      '    //    issue #3945). A "full" Read at the request level (no\n'
+                      '    //    offset / limit) only counts as full at the cache\n'
+                      '    //    level if the produced content was not truncated, '
+                      'otherwise\n'
+                      '    //    the model only saw the head and a follow-up '
+                      '`file_unchanged`\n'
+                      '    //    placeholder would falsely imply "you\'ve already '
+                      'seen\n',
+             'review_before': '    //    (the truncate-tool-output limit made "fully '
+                              'read" an\n'
+                              '    //    impossible precondition on files past the '
+                              'limit, deadlocking\n'
+                              '    //    issue #3945). A "full" Read at the request '
+                              'level (no\n'
+                              '    //    offset / limit / pages) only counts as full '
+                              'at the cache\n'
+                              '    //    level if the produced content was not '
+                              'truncated, otherwise\n'
+                              '    //    the model only saw the head and a follow-up '
+                              '`file_unchanged`\n'
+                              '    //    placeholder would falsely imply "you\'ve '
+                              'already seen\n',
+             'review_after': '    //    (the truncate-tool-output limit made "fully '
+                             'read" an\n'
+                             '    //    impossible precondition on files past the '
+                             'limit, deadlocking\n'
+                             '    //    issue #3945). A "full" Read at the request '
+                             'level (no\n'
+                             '    //    offset / limit) only counts as full at the '
+                             'cache\n'
+                             '    //    level if the produced content was not '
+                             'truncated, otherwise\n'
+                             '    //    the model only saw the head and a follow-up '
+                             '`file_unchanged`\n'
+                             '    //    placeholder would falsely imply "you\'ve '
+                             'already seen\n'},
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-7',
              'path': 'packages/core/src/tools/read-file.ts',
              'before': '    super(\n'
                        '      ReadFileTool.Name,\n'
@@ -36785,12 +39692,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'fallback. JPEG, WebP, GIF/APNG, BMP, grayscale, palette, '
                       '16-bit, RGB tRNS, over-limit, and corrupt image inputs are '
                       'rejected. PDF input is text extraction only; PDF pages are '
-                      'never silently rendered into lossy image substitutes. Use the '
-                      "'pages' parameter to extract a specific PDF range as text (e.g. "
-                      "'1-5'), at most ${PDF_MAX_PAGES_PER_READ} pages per request. "
-                      'Large or scanned PDFs fail with explicit narrower-range or '
-                      'conversion guidance. Jupyter notebooks (.ipynb) return '
-                      'structured cell content with outputs.`,\n'
+                      'never silently rendered into lossy image substitutes. This tool '
+                      'reads whole files and has exactly one range mechanism, '
+                      "'offset'/'limit', which applies to text files; there is no page "
+                      'parameter. A PDF too large to return in one read fails with '
+                      'explicit guidance to extract the pages you need in the shell '
+                      'with \\`pdftotext -layout -f FIRST -l LAST -- <absolute path> '
+                      '-\\`. Jupyter notebooks (.ipynb) return structured cell content '
+                      'with outputs.`,\n'
                       '      Kind.Read,\n'
                       '      {\n'
                       '        properties: {\n',
@@ -36848,61 +39757,227 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'palette, 16-bit, RGB tRNS, over-limit, and corrupt image '
                              'inputs are rejected. PDF input is text extraction only; '
                              'PDF pages are never silently rendered into lossy image '
-                             "substitutes. Use the 'pages' parameter to extract a "
-                             "specific PDF range as text (e.g. '1-5'), at most "
-                             '${PDF_MAX_PAGES_PER_READ} pages per request. Large or '
-                             'scanned PDFs fail with explicit narrower-range or '
-                             'conversion guidance. Jupyter notebooks (.ipynb) return '
-                             'structured cell content with outputs.`,\n'
+                             'substitutes. This tool reads whole files and has exactly '
+                             "one range mechanism, 'offset'/'limit', which applies to "
+                             'text files; there is no page parameter. A PDF too large '
+                             'to return in one read fails with explicit guidance to '
+                             'extract the pages you need in the shell with '
+                             '\\`pdftotext -layout -f FIRST -l LAST -- <absolute path> '
+                             '-\\`. Jupyter notebooks (.ipynb) return structured cell '
+                             'content with outputs.`,\n'
                              '      Kind.Read,\n'
                              '      {\n'
                              '        properties: {\n'},
-            {'name': 'packages/core/src/tools/read-file.ts:landmark-2',
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-8',
              'path': 'packages/core/src/tools/read-file.ts',
-             'before': "      return 'pages is not supported for Jupyter notebook "
+             'before': '              "Optional: For text files, maximum number of '
+                       "lines to read. Use with 'offset' to paginate through large "
+                       'files. If omitted, reads the entire file (if feasible, up to a '
+                       'default limit).",\n'
+                       "            type: 'integer',\n"
+                       '          },\n'
+                       '          pages: {\n'
+                       '            description: `Optional: For PDF files, the page '
+                       "range to extract as text (e.g., '1-5', '3', '10-20'). Pages "
+                       'are 1-indexed. Max ${PDF_MAX_PAGES_PER_READ} pages per '
+                       "request. Open-ended ranges like '3-' are not supported. Use "
+                       'this for large PDFs or when the model does not support native '
+                       'PDF input.`,\n'
+                       "            type: 'string',\n"
+                       '          },\n'
+                       '        },\n'
+                       "        required: ['file_path'],\n"
+                       "        type: 'object',\n",
+             'after': '              "Optional: For text files, maximum number of '
+                      "lines to read. Use with 'offset' to paginate through large "
+                      'files. If omitted, reads the entire file (if feasible, up to a '
+                      'default limit).",\n'
+                      "            type: 'integer',\n"
+                      '          },\n'
+                      '        },\n'
+                      "        required: ['file_path'],\n"
+                      "        type: 'object',\n",
+             'review_before': '              "Optional: For text files, maximum number '
+                              "of lines to read. Use with 'offset' to paginate through "
+                              'large files. If omitted, reads the entire file (if '
+                              'feasible, up to a default limit).",\n'
+                              "            type: 'integer',\n"
+                              '          },\n'
+                              '          pages: {\n'
+                              '            description: `Optional: For PDF files, the '
+                              "page range to extract as text (e.g., '1-5', '3', "
+                              "'10-20'). Pages are 1-indexed. Max "
+                              '${PDF_MAX_PAGES_PER_READ} pages per request. Open-ended '
+                              "ranges like '3-' are not supported. Use this for large "
+                              'PDFs or when the model does not support native PDF '
+                              'input.`,\n'
+                              "            type: 'string',\n"
+                              '          },\n'
+                              '        },\n'
+                              "        required: ['file_path'],\n"
+                              "        type: 'object',\n",
+             'review_after': '              "Optional: For text files, maximum number '
+                             "of lines to read. Use with 'offset' to paginate through "
+                             'large files. If omitted, reads the entire file (if '
+                             'feasible, up to a default limit).",\n'
+                             "            type: 'integer',\n"
+                             '          },\n'
+                             '        },\n'
+                             "        required: ['file_path'],\n"
+                             "        type: 'object',\n"},
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-9',
+             'path': 'packages/core/src/tools/read-file.ts',
+             'before': "      return 'Limit must be a positive integer';\n"
+                       '    }\n'
+                       '\n'
+                       '    if (params.pages !== undefined) {\n'
+                       '      const pages = params.pages.trim();\n'
+                       '      params.pages = pages.length > 0 ? pages : undefined;\n'
+                       '    }\n'
+                       '\n'
+                       '    const ext = path.extname(filePath).toLowerCase();\n',
+             'after': "      return 'Limit must be a positive integer';\n"
+                      '    }\n'
+                      '\n'
+                      "    // `pages` is not part of this tool's schema. A model can "
+                      'still put an\n'
+                      '    // undeclared key in a tool call, and silently dropping it '
+                      'would leave the\n'
+                      '    // model believing it had asked for a page range, so the '
+                      'argument is\n'
+                      '    // refused and pointed at the two mechanisms that do '
+                      'exist.\n'
+                      '    if ((params as { pages?: unknown }).pages !== undefined) {\n'
+                      "      return `read_file has no 'pages' parameter and reads "
+                      "whole files. Use 'offset' and 'limit' to page through a text "
+                      'file. ${PDF_PAGE_RANGE_REMEDY}`;\n'
+                      '    }\n'
+                      '\n'
+                      '    const ext = path.extname(filePath).toLowerCase();\n',
+             'review_before': "      return 'Limit must be a positive integer';\n"
+                              '    }\n'
+                              '\n'
+                              '    if (params.pages !== undefined) {\n'
+                              '      const pages = params.pages.trim();\n'
+                              '      params.pages = pages.length > 0 ? pages : '
+                              'undefined;\n'
+                              '    }\n'
+                              '\n'
+                              '    const ext = path.extname(filePath).toLowerCase();\n',
+             'review_after': "      return 'Limit must be a positive integer';\n"
+                             '    }\n'
+                             '\n'
+                             "    // `pages` is not part of this tool's schema. A "
+                             'model can still put an\n'
+                             '    // undeclared key in a tool call, and silently '
+                             'dropping it would leave the\n'
+                             '    // model believing it had asked for a page range, so '
+                             'the argument is\n'
+                             '    // refused and pointed at the two mechanisms that do '
+                             'exist.\n'
+                             '    if ((params as { pages?: unknown }).pages !== '
+                             'undefined) {\n'
+                             "      return `read_file has no 'pages' parameter and "
+                             "reads whole files. Use 'offset' and 'limit' to page "
+                             'through a text file. ${PDF_PAGE_RANGE_REMEDY}`;\n'
+                             '    }\n'
+                             '\n'
+                             '    const ext = path.extname(filePath).toLowerCase();\n'},
+            {'name': 'packages/core/src/tools/read-file.ts:landmark-10',
+             'path': 'packages/core/src/tools/read-file.ts',
+             'before': "      return 'offset and limit are not supported for Jupyter "
+                       'notebook (.ipynb) files. Notebooks are always read in full '
+                       "with structured cell output.';\n"
+                       '    }\n'
+                       '\n'
+                       "    if (params.pages !== undefined && ext === '.ipynb') {\n"
+                       "      return 'pages is not supported for Jupyter notebook "
                        '(.ipynb) files. Notebooks are always read in full with '
                        "structured cell output.';\n"
                        '    }\n'
                        '\n'
                        '    if (params.pages) {\n'
                        '      const parsed = parsePDFPageRange(params.pages);\n'
-                       '      if (!parsed) {\n',
-             'after': "      return 'pages is not supported for Jupyter notebook "
-                      '(.ipynb) files. Notebooks are always read in full with '
+                       '      if (!parsed) {\n'
+                       "        return `Invalid pages parameter: '${params.pages}'. "
+                       "Use formats like '5' or '1-10'.`;\n"
+                       '      }\n'
+                       '      if (parsed.lastPage === Infinity) {\n'
+                       "        return `Open-ended page ranges (e.g. '3-') are not "
+                       'supported; specify an explicit end page within the '
+                       "${PDF_MAX_PAGES_PER_READ}-page limit (e.g. '3-22').`;\n"
+                       '      }\n'
+                       '      const maxPages = PDF_MAX_PAGES_PER_READ;\n'
+                       '      if (parsed.lastPage - parsed.firstPage + 1 > maxPages) '
+                       '{\n'
+                       '        return `Pages range exceeds maximum of ${maxPages} '
+                       'pages per request.`;\n'
+                       '      }\n'
+                       '    }\n'
+                       '\n'
+                       '    const fileService = this.config.getFileService();\n'
+                       '    if (fileService.shouldQwenIgnoreFile(params.file_path)) {\n'
+                       "      return `File path '${filePath}' is ignored by "
+                       '${fileService.getQwenIgnoreFileDisplayForPath(params.file_path)} '
+                       'pattern(s).`;\n',
+             'after': "      return 'offset and limit are not supported for Jupyter "
+                      'notebook (.ipynb) files. Notebooks are always read in full with '
                       "structured cell output.';\n"
                       '    }\n'
                       '\n'
-                      "    if (params.pages !== undefined && ext !== '.pdf') {\n"
-                      "      return `The 'pages' parameter applies only to PDF files; "
-                      "'${path.basename(filePath)}' is not a PDF. For text files, use "
-                      "'offset' and 'limit' instead.`;\n"
-                      '    }\n'
-                      '\n'
-                      '    if (params.pages) {\n'
-                      '      const parsed = parsePDFPageRange(params.pages);\n'
-                      '      if (!parsed) {\n',
-             'review_before': "      return 'pages is not supported for Jupyter "
+                      '    const fileService = this.config.getFileService();\n'
+                      '    if (fileService.shouldQwenIgnoreFile(params.file_path)) {\n'
+                      "      return `File path '${filePath}' is ignored by "
+                      '${fileService.getQwenIgnoreFileDisplayForPath(params.file_path)} '
+                      'pattern(s).`;\n',
+             'review_before': "      return 'offset and limit are not supported for "
+                              'Jupyter notebook (.ipynb) files. Notebooks are always '
+                              "read in full with structured cell output.';\n"
+                              '    }\n'
+                              '\n'
+                              "    if (params.pages !== undefined && ext === '.ipynb') "
+                              '{\n'
+                              "      return 'pages is not supported for Jupyter "
                               'notebook (.ipynb) files. Notebooks are always read in '
                               "full with structured cell output.';\n"
                               '    }\n'
                               '\n'
                               '    if (params.pages) {\n'
                               '      const parsed = parsePDFPageRange(params.pages);\n'
-                              '      if (!parsed) {\n',
-             'review_after': "      return 'pages is not supported for Jupyter "
-                             'notebook (.ipynb) files. Notebooks are always read in '
-                             "full with structured cell output.';\n"
+                              '      if (!parsed) {\n'
+                              '        return `Invalid pages parameter: '
+                              "'${params.pages}'. Use formats like '5' or '1-10'.`;\n"
+                              '      }\n'
+                              '      if (parsed.lastPage === Infinity) {\n'
+                              "        return `Open-ended page ranges (e.g. '3-') are "
+                              'not supported; specify an explicit end page within the '
+                              "${PDF_MAX_PAGES_PER_READ}-page limit (e.g. '3-22').`;\n"
+                              '      }\n'
+                              '      const maxPages = PDF_MAX_PAGES_PER_READ;\n'
+                              '      if (parsed.lastPage - parsed.firstPage + 1 > '
+                              'maxPages) {\n'
+                              '        return `Pages range exceeds maximum of '
+                              '${maxPages} pages per request.`;\n'
+                              '      }\n'
+                              '    }\n'
+                              '\n'
+                              '    const fileService = this.config.getFileService();\n'
+                              '    if '
+                              '(fileService.shouldQwenIgnoreFile(params.file_path)) {\n'
+                              "      return `File path '${filePath}' is ignored by "
+                              '${fileService.getQwenIgnoreFileDisplayForPath(params.file_path)} '
+                              'pattern(s).`;\n',
+             'review_after': "      return 'offset and limit are not supported for "
+                             'Jupyter notebook (.ipynb) files. Notebooks are always '
+                             "read in full with structured cell output.';\n"
                              '    }\n'
                              '\n'
-                             "    if (params.pages !== undefined && ext !== '.pdf') {\n"
-                             "      return `The 'pages' parameter applies only to PDF "
-                             "files; '${path.basename(filePath)}' is not a PDF. For "
-                             "text files, use 'offset' and 'limit' instead.`;\n"
-                             '    }\n'
-                             '\n'
-                             '    if (params.pages) {\n'
-                             '      const parsed = parsePDFPageRange(params.pages);\n'
-                             '      if (!parsed) {\n'},
+                             '    const fileService = this.config.getFileService();\n'
+                             '    if '
+                             '(fileService.shouldQwenIgnoreFile(params.file_path)) {\n'
+                             "      return `File path '${filePath}' is ignored by "
+                             '${fileService.getQwenIgnoreFileDisplayForPath(params.file_path)} '
+                             'pattern(s).`;\n'},
             {'name': 'packages/core/src/tools/tools.ts:landmark-1',
              'path': 'packages/core/src/tools/tools.ts',
              'before': 'import { type AgentStatsSummary } from '
@@ -37054,16 +40129,248 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  toolCalls?: Array<{\n'
                              '    callId: string;\n'
                              '    name: string;\n'},
+            {'name': 'packages/core/src/tools/web-fetch.test.ts:landmark-1',
+             'path': 'packages/core/src/tools/web-fetch.test.ts',
+             'before': "      expect(receivedContent).not.toContain('�');\n"
+                       "      expect(result.llmContent).toContain('The rate is "
+                       "$718.00.');\n"
+                       '      expect(result.llmContent).toMatch(\n'
+                       '        /\\[Binary content \\(application\\/pdf, .+\\) saved '
+                       'to .+webfetch-.+\\.pdf\\. Use read_file to examine it \\(reads '
+                       'PDFs natively; pass pages for large files\\)\\.\\]/,\n'
+                       '      );\n'
+                       '      const savedPath = (result.llmContent as string).match(\n'
+                       '        /saved to (\\S+\\.pdf)\\./,\n',
+             'after': "      expect(receivedContent).not.toContain('�');\n"
+                      "      expect(result.llmContent).toContain('The rate is "
+                      "$718.00.');\n"
+                      '      expect(result.llmContent).toMatch(\n'
+                      '        /\\[Binary content \\(application\\/pdf, .+\\) saved to '
+                      '.+webfetch-.+\\.pdf\\. Use read_file to examine it \\(PDFs are '
+                      'returned as extracted text\\)\\.\\]/,\n'
+                      '      );\n'
+                      '      const savedPath = (result.llmContent as string).match(\n'
+                      '        /saved to (\\S+\\.pdf)\\./,\n',
+             'review_before': "      expect(receivedContent).not.toContain('�');\n"
+                              "      expect(result.llmContent).toContain('The rate is "
+                              "$718.00.');\n"
+                              '      expect(result.llmContent).toMatch(\n'
+                              '        /\\[Binary content \\(application\\/pdf, .+\\) '
+                              'saved to .+webfetch-.+\\.pdf\\. Use read_file to '
+                              'examine it \\(reads PDFs natively; pass pages for large '
+                              'files\\)\\.\\]/,\n'
+                              '      );\n'
+                              '      const savedPath = (result.llmContent as '
+                              'string).match(\n'
+                              '        /saved to (\\S+\\.pdf)\\./,\n',
+             'review_after': "      expect(receivedContent).not.toContain('�');\n"
+                             "      expect(result.llmContent).toContain('The rate is "
+                             "$718.00.');\n"
+                             '      expect(result.llmContent).toMatch(\n'
+                             '        /\\[Binary content \\(application\\/pdf, .+\\) '
+                             'saved to .+webfetch-.+\\.pdf\\. Use read_file to examine '
+                             'it \\(PDFs are returned as extracted text\\)\\.\\]/,\n'
+                             '      );\n'
+                             '      const savedPath = (result.llmContent as '
+                             'string).match(\n'
+                             '        /saved to (\\S+\\.pdf)\\./,\n'},
+            {'name': 'packages/core/src/tools/web-fetch.ts:landmark-1',
+             'path': 'packages/core/src/tools/web-fetch.ts',
+             'before': '// python, unzip) — a wrong hint sends it down a dead end.\n'
+                       'function readHintForPath(persistedPath: string): string {\n'
+                       "  if (persistedPath.endsWith('.pdf')) {\n"
+                       '    return ` Use ${ToolNames.READ_FILE} to examine it (reads '
+                       'PDFs natively; pass pages for large files).`;\n'
+                       '  }\n'
+                       '  if (/\\.(png|jpe?g|gif|webp)$/.test(persistedPath)) {\n'
+                       '    return ` Use ${ToolNames.READ_FILE} to view it.`;\n',
+             'after': '// python, unzip) — a wrong hint sends it down a dead end.\n'
+                      'function readHintForPath(persistedPath: string): string {\n'
+                      "  if (persistedPath.endsWith('.pdf')) {\n"
+                      '    return ` Use ${ToolNames.READ_FILE} to examine it (PDFs are '
+                      'returned as extracted text).`;\n'
+                      '  }\n'
+                      '  if (/\\.(png|jpe?g|gif|webp)$/.test(persistedPath)) {\n'
+                      '    return ` Use ${ToolNames.READ_FILE} to view it.`;\n',
+             'review_before': '// python, unzip) — a wrong hint sends it down a dead '
+                              'end.\n'
+                              'function readHintForPath(persistedPath: string): string '
+                              '{\n'
+                              "  if (persistedPath.endsWith('.pdf')) {\n"
+                              '    return ` Use ${ToolNames.READ_FILE} to examine it '
+                              '(reads PDFs natively; pass pages for large files).`;\n'
+                              '  }\n'
+                              '  if (/\\.(png|jpe?g|gif|webp)$/.test(persistedPath)) '
+                              '{\n'
+                              '    return ` Use ${ToolNames.READ_FILE} to view it.`;\n',
+             'review_after': '// python, unzip) — a wrong hint sends it down a dead '
+                             'end.\n'
+                             'function readHintForPath(persistedPath: string): string '
+                             '{\n'
+                             "  if (persistedPath.endsWith('.pdf')) {\n"
+                             '    return ` Use ${ToolNames.READ_FILE} to examine it '
+                             '(PDFs are returned as extracted text).`;\n'
+                             '  }\n'
+                             '  if (/\\.(png|jpe?g|gif|webp)$/.test(persistedPath)) {\n'
+                             '    return ` Use ${ToolNames.READ_FILE} to view it.`;\n'},
             {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-1',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
-             'before': "      expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
+             'before': '      );\n'
+                       '\n'
+                       '      '
+                       'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                       '      expect(result.llmContent).toContain("Use the \'pages\' '
+                       'parameter");\n'
+                       "      expect(result.returnDisplay).toContain('PDF requires "
+                       "page range');\n"
+                       '      expect(mockExecFile).toHaveBeenCalledTimes(2);\n'
+                       '      '
+                       "expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n",
+             'after': '      );\n'
+                      '\n'
+                      '      '
+                      'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                      "      expect(result.llmContent).toContain('pdftotext "
+                      "-layout');\n"
+                      "      expect(result.returnDisplay).toContain('PDF requires page "
+                      "range');\n"
+                      '      expect(mockExecFile).toHaveBeenCalledTimes(2);\n'
+                      "      expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n",
+             'review_before': '      );\n'
+                              '\n'
+                              '      '
+                              'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                              '      expect(result.llmContent).toContain("Use the '
+                              '\'pages\' parameter");\n'
+                              "      expect(result.returnDisplay).toContain('PDF "
+                              "requires page range');\n"
+                              '      expect(mockExecFile).toHaveBeenCalledTimes(2);\n'
+                              '      '
+                              "expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n",
+             'review_after': '      );\n'
+                             '\n'
+                             '      '
+                             'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                             "      expect(result.llmContent).toContain('pdftotext "
+                             "-layout');\n"
+                             "      expect(result.returnDisplay).toContain('PDF "
+                             "requires page range');\n"
+                             '      expect(mockExecFile).toHaveBeenCalledTimes(2);\n'
+                             '      '
+                             "expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-2',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': '\n'
+                       '      '
+                       'expect(result.errorType).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
+                       "      expect(result.llmContent).toContain('pdftotext is not "
+                       "installed');\n"
+                       '      expect(result.llmContent).not.toContain("Use the '
+                       '\'pages\' parameter");\n'
+                       "      expect(result.returnDisplay).toContain('Failed to read "
+                       "pdf');\n"
+                       '      expect(result.stats).toBeDefined();\n'
+                       '    });\n',
+             'after': '\n'
+                      '      '
+                      'expect(result.errorType).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
+                      "      expect(result.llmContent).toContain('pdftotext is not "
+                      "installed');\n"
+                      "      expect(result.llmContent).not.toContain('pdftotext "
+                      "-layout');\n"
+                      "      expect(result.returnDisplay).toContain('Failed to read "
+                      "pdf');\n"
+                      '      expect(result.stats).toBeDefined();\n'
+                      '    });\n',
+             'review_before': '\n'
+                              '      '
+                              'expect(result.errorType).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
+                              "      expect(result.llmContent).toContain('pdftotext is "
+                              "not installed');\n"
+                              '      expect(result.llmContent).not.toContain("Use the '
+                              '\'pages\' parameter");\n'
+                              "      expect(result.returnDisplay).toContain('Failed to "
+                              "read pdf');\n"
+                              '      expect(result.stats).toBeDefined();\n'
+                              '    });\n',
+             'review_after': '\n'
+                             '      '
+                             'expect(result.errorType).toBe(ToolErrorType.READ_CONTENT_FAILURE);\n'
+                             "      expect(result.llmContent).toContain('pdftotext is "
+                             "not installed');\n"
+                             "      expect(result.llmContent).not.toContain('pdftotext "
+                             "-layout');\n"
+                             "      expect(result.returnDisplay).toContain('Failed to "
+                             "read pdf');\n"
+                             '      expect(result.stats).toBeDefined();\n'
+                             '    });\n'},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-3',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': '      );\n'
+                       '\n'
+                       '      expect(result.error).toBeUndefined();\n'
+                       '      expect(result.llmContent).toContain("Use the \'pages\' '
+                       'parameter");\n'
+                       "      expect(result.returnDisplay).toContain('Referenced large "
+                       "PDF');\n"
+                       '      expect(result.stats).toBeDefined();\n'
+                       '    });\n',
+             'after': '      );\n'
+                      '\n'
+                      '      expect(result.error).toBeUndefined();\n'
+                      "      expect(result.llmContent).toContain('pdftotext "
+                      "-layout');\n"
+                      "      expect(result.returnDisplay).toContain('Referenced large "
+                      "PDF');\n"
+                      '      expect(result.stats).toBeDefined();\n'
+                      '    });\n',
+             'review_before': '      );\n'
+                              '\n'
+                              '      expect(result.error).toBeUndefined();\n'
+                              '      expect(result.llmContent).toContain("Use the '
+                              '\'pages\' parameter");\n'
+                              '      '
+                              "expect(result.returnDisplay).toContain('Referenced "
+                              "large PDF');\n"
+                              '      expect(result.stats).toBeDefined();\n'
+                              '    });\n',
+             'review_after': '      );\n'
+                             '\n'
+                             '      expect(result.error).toBeUndefined();\n'
+                             "      expect(result.llmContent).toContain('pdftotext "
+                             "-layout');\n"
+                             "      expect(result.returnDisplay).toContain('Referenced "
+                             "large PDF');\n"
+                             '      expect(result.stats).toBeDefined();\n'
+                             '    });\n'},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-4',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': '      );\n'
+                       '\n'
+                       '      expect(result.error).toBeUndefined();\n'
+                       '      expect(result.llmContent).toContain("Use the \'pages\' '
+                       'parameter");\n'
+                       "      expect(result.returnDisplay).toContain('Referenced large "
+                       "PDF');\n"
+                       '      expect(result.stats).toBeDefined();\n'
+                       '      expect(mockExecFile).toHaveBeenCalledTimes(1);\n'
+                       "      expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
                        '    });\n'
                        '\n'
                        "    it('keeps explicit pages reads on the pdftotext path', "
                        'async () => {\n'
                        '      actualNodeFs.writeFileSync(\n'
                        '        testPdfFilePath,\n',
-             'after': "      expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
+             'after': '      );\n'
+                      '\n'
+                      '      expect(result.error).toBeUndefined();\n'
+                      "      expect(result.llmContent).toContain('pdftotext "
+                      "-layout');\n"
+                      "      expect(result.returnDisplay).toContain('Referenced large "
+                      "PDF');\n"
+                      '      expect(result.stats).toBeDefined();\n'
+                      '      expect(mockExecFile).toHaveBeenCalledTimes(1);\n'
+                      "      expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
                       '    });\n'
                       '\n'
                       "    it('[pages-contract] rejects a pages parameter on a non-PDF "
@@ -37092,7 +40399,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'async () => {\n'
                       '      actualNodeFs.writeFileSync(\n'
                       '        testPdfFilePath,\n',
-             'review_before': '      '
+             'review_before': '      );\n'
+                              '\n'
+                              '      expect(result.error).toBeUndefined();\n'
+                              '      expect(result.llmContent).toContain("Use the '
+                              '\'pages\' parameter");\n'
+                              '      '
+                              "expect(result.returnDisplay).toContain('Referenced "
+                              "large PDF');\n"
+                              '      expect(result.stats).toBeDefined();\n'
+                              '      expect(mockExecFile).toHaveBeenCalledTimes(1);\n'
+                              '      '
                               "expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
                               '    });\n'
                               '\n'
@@ -37100,7 +40417,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               "path', async () => {\n"
                               '      actualNodeFs.writeFileSync(\n'
                               '        testPdfFilePath,\n',
-             'review_after': '      '
+             'review_after': '      );\n'
+                             '\n'
+                             '      expect(result.error).toBeUndefined();\n'
+                             "      expect(result.llmContent).toContain('pdftotext "
+                             "-layout');\n"
+                             "      expect(result.returnDisplay).toContain('Referenced "
+                             "large PDF');\n"
+                             '      expect(result.stats).toBeDefined();\n'
+                             '      expect(mockExecFile).toHaveBeenCalledTimes(1);\n'
+                             '      '
                              "expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"
                              '    });\n'
                              '\n'
@@ -37131,7 +40457,131 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "path', async () => {\n"
                              '      actualNodeFs.writeFileSync(\n'
                              '        testPdfFilePath,\n'},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-5',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': '\n'
+                       '        '
+                       'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                       "        expect(result.returnDisplay).toContain('PDF file too "
+                       "large');\n"
+                       '        expect(result.llmContent).toContain("Use the \'pages\' '
+                       'parameter");\n'
+                       "        expect(result.llmContent).toContain('split the "
+                       "document');\n"
+                       '        expect(result.stats).toBeDefined();\n'
+                       '        expect(mockExecFile).not.toHaveBeenCalled();\n'
+                       '      } finally {\n',
+             'after': '\n'
+                      '        '
+                      'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                      "        expect(result.returnDisplay).toContain('PDF file too "
+                      "large');\n"
+                      "        expect(result.llmContent).toContain('pdftotext "
+                      "-layout');\n"
+                      '        // The size gate, not the page-count gate: the message '
+                      'has to name the\n'
+                      '        // limit it tripped, or this test could pass on the '
+                      'wrong branch.\n'
+                      "        expect(result.llmContent).toContain('exceeds the 100MB "
+                      "limit');\n"
+                      '        expect(result.stats).toBeDefined();\n'
+                      '        expect(mockExecFile).not.toHaveBeenCalled();\n'
+                      '      } finally {\n',
+             'review_before': '\n'
+                              '        '
+                              'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                              "        expect(result.returnDisplay).toContain('PDF "
+                              "file too large');\n"
+                              '        expect(result.llmContent).toContain("Use the '
+                              '\'pages\' parameter");\n'
+                              "        expect(result.llmContent).toContain('split the "
+                              "document');\n"
+                              '        expect(result.stats).toBeDefined();\n'
+                              '        expect(mockExecFile).not.toHaveBeenCalled();\n'
+                              '      } finally {\n',
+             'review_after': '\n'
+                             '        '
+                             'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                             "        expect(result.returnDisplay).toContain('PDF file "
+                             "too large');\n"
+                             "        expect(result.llmContent).toContain('pdftotext "
+                             "-layout');\n"
+                             '        // The size gate, not the page-count gate: the '
+                             'message has to name the\n'
+                             '        // limit it tripped, or this test could pass on '
+                             'the wrong branch.\n'
+                             "        expect(result.llmContent).toContain('exceeds the "
+                             "100MB limit');\n"
+                             '        expect(result.stats).toBeDefined();\n'
+                             '        expect(mockExecFile).not.toHaveBeenCalled();\n'
+                             '      } finally {\n'},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-6',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': '        );\n'
+                       '\n'
+                       '        '
+                       'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                       '        expect(result.llmContent).toContain("Use the \'pages\' '
+                       'parameter");\n'
+                       '        expect(mockRender).not.toHaveBeenCalled();\n'
+                       '      });\n'
+                       '\n',
+             'after': '        );\n'
+                      '\n'
+                      '        '
+                      'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                      "        expect(result.llmContent).toContain('pdftotext "
+                      "-layout');\n"
+                      '        expect(mockRender).not.toHaveBeenCalled();\n'
+                      '      });\n'
+                      '\n',
+             'review_before': '        );\n'
+                              '\n'
+                              '        '
+                              'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                              '        expect(result.llmContent).toContain("Use the '
+                              '\'pages\' parameter");\n'
+                              '        expect(mockRender).not.toHaveBeenCalled();\n'
+                              '      });\n'
+                              '\n',
+             'review_after': '        );\n'
+                             '\n'
+                             '        '
+                             'expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
+                             "        expect(result.llmContent).toContain('pdftotext "
+                             "-layout');\n"
+                             '        expect(mockRender).not.toHaveBeenCalled();\n'
+                             '      });\n'
+                             '\n'},
             {'name': 'packages/core/src/utils/fileUtils.ts:landmark-1',
+             'path': 'packages/core/src/utils/fileUtils.ts',
+             'before': "import type { PDFRenderedImage } from './pdf.js';\n"
+                       'import {\n'
+                       '  buildLargePDFGuidance,\n'
+                       '  buildPDFTextTooLargeGuidance,\n'
+                       '  estimatePDFTextOutputTokens,\n'
+                       '  extractPDFText,\n',
+             'after': "import type { PDFRenderedImage } from './pdf.js';\n"
+                      'import {\n'
+                      '  buildLargePDFGuidance,\n'
+                      '  PDF_PAGE_RANGE_REMEDY,\n'
+                      '  buildPDFTextTooLargeGuidance,\n'
+                      '  estimatePDFTextOutputTokens,\n'
+                      '  extractPDFText,\n',
+             'review_before': "import type { PDFRenderedImage } from './pdf.js';\n"
+                              'import {\n'
+                              '  buildLargePDFGuidance,\n'
+                              '  buildPDFTextTooLargeGuidance,\n'
+                              '  estimatePDFTextOutputTokens,\n'
+                              '  extractPDFText,\n',
+             'review_after': "import type { PDFRenderedImage } from './pdf.js';\n"
+                             'import {\n'
+                             '  buildLargePDFGuidance,\n'
+                             '  PDF_PAGE_RANGE_REMEDY,\n'
+                             '  buildPDFTextTooLargeGuidance,\n'
+                             '  estimatePDFTextOutputTokens,\n'
+                             '  extractPDFText,\n'},
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-2',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': "} from './image-view.js';\n"
                        '\n'
@@ -37169,7 +40619,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '// Default values for encoding and separator format\n'
                              'export const DEFAULT_ENCODING: BufferEncoding = '
                              "'utf-8';\n"},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-2',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-3',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '      mime.getType(filePath) ??\n'
                        '      '
@@ -37310,7 +40760,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`preserveUnsupportedImage` also\n'
                              '    // keeps ordinary images available to a '
                              'bridge-capable caller, while\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-3',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-4',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '\n'
                        '    const fileSizeInMB = stats.size / (1024 * 1024);\n'
@@ -37364,7 +40814,63 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      | NonNullable<ReturnType<typeof '
                              'parsePDFPageRange>>\n'
                              '      | undefined;\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-4',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-5',
+             'path': 'packages/core/src/utils/fileUtils.ts',
+             'before': '      fileSizeInMB > PDF_FULL_TEXT_EXTRACTION_MAX_MB\n'
+                       '    ) {\n'
+                       '      return {\n'
+                       '        llmContent: `PDF file is too large for full text '
+                       'extraction: ${fileSizeInMB.toFixed(2)}MB exceeds the '
+                       "${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB limit. Use the 'pages' "
+                       'parameter to read a narrower range, or split the document into '
+                       'smaller files before retrying.`,\n'
+                       '        returnDisplay: `PDF file too large '
+                       '(${fileSizeInMB.toFixed(2)}MB > '
+                       '${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB).`,\n'
+                       '        error: `PDF exceeds extraction size limit: '
+                       '${displayPath} (${fileSizeInMB.toFixed(2)}MB)`,\n'
+                       '        errorType: ToolErrorType.FILE_TOO_LARGE,\n',
+             'after': '      fileSizeInMB > PDF_FULL_TEXT_EXTRACTION_MAX_MB\n'
+                      '    ) {\n'
+                      '      return {\n'
+                      '        llmContent: `PDF file is too large for full text '
+                      'extraction: ${fileSizeInMB.toFixed(2)}MB exceeds the '
+                      '${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB limit. '
+                      '${PDF_PAGE_RANGE_REMEDY}`,\n'
+                      '        returnDisplay: `PDF file too large '
+                      '(${fileSizeInMB.toFixed(2)}MB > '
+                      '${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB).`,\n'
+                      '        error: `PDF exceeds extraction size limit: '
+                      '${displayPath} (${fileSizeInMB.toFixed(2)}MB)`,\n'
+                      '        errorType: ToolErrorType.FILE_TOO_LARGE,\n',
+             'review_before': '      fileSizeInMB > PDF_FULL_TEXT_EXTRACTION_MAX_MB\n'
+                              '    ) {\n'
+                              '      return {\n'
+                              '        llmContent: `PDF file is too large for full '
+                              'text extraction: ${fileSizeInMB.toFixed(2)}MB exceeds '
+                              'the ${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB limit. Use the '
+                              "'pages' parameter to read a narrower range, or split "
+                              'the document into smaller files before retrying.`,\n'
+                              '        returnDisplay: `PDF file too large '
+                              '(${fileSizeInMB.toFixed(2)}MB > '
+                              '${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB).`,\n'
+                              '        error: `PDF exceeds extraction size limit: '
+                              '${displayPath} (${fileSizeInMB.toFixed(2)}MB)`,\n'
+                              '        errorType: ToolErrorType.FILE_TOO_LARGE,\n',
+             'review_after': '      fileSizeInMB > PDF_FULL_TEXT_EXTRACTION_MAX_MB\n'
+                             '    ) {\n'
+                             '      return {\n'
+                             '        llmContent: `PDF file is too large for full text '
+                             'extraction: ${fileSizeInMB.toFixed(2)}MB exceeds the '
+                             '${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB limit. '
+                             '${PDF_PAGE_RANGE_REMEDY}`,\n'
+                             '        returnDisplay: `PDF file too large '
+                             '(${fileSizeInMB.toFixed(2)}MB > '
+                             '${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB).`,\n'
+                             '        error: `PDF exceeds extraction size limit: '
+                             '${displayPath} (${fileSizeInMB.toFixed(2)}MB)`,\n'
+                             '        errorType: ToolErrorType.FILE_TOO_LARGE,\n'},
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-6',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '        };\n'
                        '      }\n'
@@ -37694,6 +41200,161 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      }\n'
                              "      case 'audio':\n"
                              "      case 'video': {\n"},
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-7',
+             'path': 'packages/core/src/utils/fileUtils.ts',
+             'before': '            // more pages may follow).\n'
+                       '            if (render.bytesTruncated) {\n'
+                       '              parts.push({\n'
+                       '                text: `[Rendered the first '
+                       '${render.images.length} page(s) of "${displayName}"; later '
+                       "pages were omitted to stay within size limits. Use the 'pages' "
+                       'parameter to read a specific range.]`,\n'
+                       '              });\n'
+                       '            } else if (\n'
+                       '              !pageRange &&\n'
+                       '              render.images.length >= PDF_MAX_PAGES_PER_READ\n'
+                       '            ) {\n'
+                       '              parts.push({\n'
+                       '                text: `[Rendered the first '
+                       '${render.images.length} page(s) (the per-read maximum) of '
+                       '"${displayName}". If the document has more pages, use the '
+                       "'pages' parameter to read a later range.]`,\n"
+                       '              });\n'
+                       '            }\n'
+                       '            return {\n',
+             'after': '            // more pages may follow).\n'
+                      '            if (render.bytesTruncated) {\n'
+                      '              parts.push({\n'
+                      '                text: `[Rendered the first '
+                      '${render.images.length} page(s) of "${displayName}"; later '
+                      'pages were omitted to stay within size limits. '
+                      '${PDF_PAGE_RANGE_REMEDY}]`,\n'
+                      '              });\n'
+                      '            } else if (\n'
+                      '              !pageRange &&\n'
+                      '              render.images.length >= PDF_MAX_PAGES_PER_READ\n'
+                      '            ) {\n'
+                      '              parts.push({\n'
+                      '                text: `[Rendered the first '
+                      '${render.images.length} page(s) (the per-read maximum) of '
+                      '"${displayName}". If the document has more pages, '
+                      '${PDF_PAGE_RANGE_REMEDY}]`,\n'
+                      '              });\n'
+                      '            }\n'
+                      '            return {\n',
+             'review_before': '            // more pages may follow).\n'
+                              '            if (render.bytesTruncated) {\n'
+                              '              parts.push({\n'
+                              '                text: `[Rendered the first '
+                              '${render.images.length} page(s) of "${displayName}"; '
+                              'later pages were omitted to stay within size limits. '
+                              "Use the 'pages' parameter to read a specific range.]`,\n"
+                              '              });\n'
+                              '            } else if (\n'
+                              '              !pageRange &&\n'
+                              '              render.images.length >= '
+                              'PDF_MAX_PAGES_PER_READ\n'
+                              '            ) {\n'
+                              '              parts.push({\n'
+                              '                text: `[Rendered the first '
+                              '${render.images.length} page(s) (the per-read maximum) '
+                              'of "${displayName}". If the document has more pages, '
+                              "use the 'pages' parameter to read a later range.]`,\n"
+                              '              });\n'
+                              '            }\n'
+                              '            return {\n',
+             'review_after': '            // more pages may follow).\n'
+                             '            if (render.bytesTruncated) {\n'
+                             '              parts.push({\n'
+                             '                text: `[Rendered the first '
+                             '${render.images.length} page(s) of "${displayName}"; '
+                             'later pages were omitted to stay within size limits. '
+                             '${PDF_PAGE_RANGE_REMEDY}]`,\n'
+                             '              });\n'
+                             '            } else if (\n'
+                             '              !pageRange &&\n'
+                             '              render.images.length >= '
+                             'PDF_MAX_PAGES_PER_READ\n'
+                             '            ) {\n'
+                             '              parts.push({\n'
+                             '                text: `[Rendered the first '
+                             '${render.images.length} page(s) (the per-read maximum) '
+                             'of "${displayName}". If the document has more pages, '
+                             '${PDF_PAGE_RANGE_REMEDY}]`,\n'
+                             '              });\n'
+                             '            }\n'
+                             '            return {\n'},
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-8',
+             'path': 'packages/core/src/utils/fileUtils.ts',
+             'before': '                const guidance = '
+                       'buildPDFTextTooLargeGuidance(\n'
+                       '                  displayName,\n'
+                       '                  estimatedTokens,\n'
+                       '                  normalizedPages,\n'
+                       '                );\n'
+                       '                fallback = {\n'
+                       '                  llmContent: guidance,\n',
+             'after': '                const guidance = buildPDFTextTooLargeGuidance(\n'
+                      '                  displayName,\n'
+                      '                  estimatedTokens,\n'
+                      '                );\n'
+                      '                fallback = {\n'
+                      '                  llmContent: guidance,\n',
+             'review_before': '                const guidance = '
+                              'buildPDFTextTooLargeGuidance(\n'
+                              '                  displayName,\n'
+                              '                  estimatedTokens,\n'
+                              '                  normalizedPages,\n'
+                              '                );\n'
+                              '                fallback = {\n'
+                              '                  llmContent: guidance,\n',
+             'review_after': '                const guidance = '
+                             'buildPDFTextTooLargeGuidance(\n'
+                             '                  displayName,\n'
+                             '                  estimatedTokens,\n'
+                             '                );\n'
+                             '                fallback = {\n'
+                             '                  llmContent: guidance,\n'},
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-9',
+             'path': 'packages/core/src/utils/fileUtils.ts',
+             'before': '          const guidance = buildPDFTextTooLargeGuidance(\n'
+                       '            displayName,\n'
+                       '            estimatedTokens,\n'
+                       '            normalizedPages,\n'
+                       '          );\n'
+                       '          debugLogger.debug(\n'
+                       '            `PDF text extraction output exceeds token limit: '
+                       'file=${relativePathForDisplay}, pages=${normalizedPages ?? '
+                       "'all'}, limit=${PDF_TEXT_RESULT_MAX_TOKENS}`,\n",
+             'after': '          const guidance = buildPDFTextTooLargeGuidance(\n'
+                      '            displayName,\n'
+                      '            estimatedTokens,\n'
+                      '          );\n'
+                      '          debugLogger.debug(\n'
+                      '            `PDF text extraction output exceeds token limit: '
+                      'file=${relativePathForDisplay}, pages=${normalizedPages ?? '
+                      "'all'}, limit=${PDF_TEXT_RESULT_MAX_TOKENS}`,\n",
+             'review_before': '          const guidance = '
+                              'buildPDFTextTooLargeGuidance(\n'
+                              '            displayName,\n'
+                              '            estimatedTokens,\n'
+                              '            normalizedPages,\n'
+                              '          );\n'
+                              '          debugLogger.debug(\n'
+                              '            `PDF text extraction output exceeds token '
+                              'limit: file=${relativePathForDisplay}, '
+                              "pages=${normalizedPages ?? 'all'}, "
+                              'limit=${PDF_TEXT_RESULT_MAX_TOKENS}`,\n',
+             'review_after': '          const guidance = '
+                             'buildPDFTextTooLargeGuidance(\n'
+                             '            displayName,\n'
+                             '            estimatedTokens,\n'
+                             '          );\n'
+                             '          debugLogger.debug(\n'
+                             '            `PDF text extraction output exceeds token '
+                             'limit: file=${relativePathForDisplay}, '
+                             "pages=${normalizedPages ?? 'all'}, "
+                             'limit=${PDF_TEXT_RESULT_MAX_TOKENS}`,\n'},
             {'name': 'packages/core/src/utils/image-view.test.ts:landmark-1',
              'path': 'packages/core/src/utils/image-view.test.ts',
              'before': '    await fs.rm(root, { recursive: true, force: true });\n'
@@ -38962,6 +42623,704 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '}\n'
                              '\n'
                              'export async function renderNormalizedImageCrop(\n'},
+            {'name': 'packages/core/src/utils/pdf.test.ts:landmark-1',
+             'path': 'packages/core/src/utils/pdf.test.ts',
+             'before': '          hadPdfInfo: true,\n'
+                       '        }),\n'
+                       '      ).toBe(\n'
+                       '        "PDF \\"paper.pdf\\" has 42 pages, which is too many '
+                       "to read at once. Use the 'pages' parameter to read a specific "
+                       'page range such as \'1-5\'. Maximum 20 pages per request.",\n'
+                       '      );\n'
+                       '      expect(\n'
+                       "        buildLargePDFGuidance('scan.pdf', {\n",
+             'after': '          hadPdfInfo: true,\n'
+                      '        }),\n'
+                      '      ).toBe(\n'
+                      '        \'PDF "paper.pdf" has 42 pages, which is too many to '
+                      "read at once. ' +\n"
+                      "          'Extract the pages you need as text in the shell with "
+                      "' +\n"
+                      "          '`pdftotext -layout -f FIRST -l LAST -- <absolute "
+                      "path> -`, then read that output.',\n"
+                      '      );\n'
+                      '      expect(\n'
+                      "        buildLargePDFGuidance('scan.pdf', {\n",
+             'review_before': '          hadPdfInfo: true,\n'
+                              '        }),\n'
+                              '      ).toBe(\n'
+                              '        "PDF \\"paper.pdf\\" has 42 pages, which is too '
+                              "many to read at once. Use the 'pages' parameter to read "
+                              "a specific page range such as '1-5'. Maximum 20 pages "
+                              'per request.",\n'
+                              '      );\n'
+                              '      expect(\n'
+                              "        buildLargePDFGuidance('scan.pdf', {\n",
+             'review_after': '          hadPdfInfo: true,\n'
+                             '        }),\n'
+                             '      ).toBe(\n'
+                             '        \'PDF "paper.pdf" has 42 pages, which is too '
+                             "many to read at once. ' +\n"
+                             "          'Extract the pages you need as text in the "
+                             "shell with ' +\n"
+                             "          '`pdftotext -layout -f FIRST -l LAST -- "
+                             "<absolute path> -`, then read that output.',\n"
+                             '      );\n'
+                             '      expect(\n'
+                             "        buildLargePDFGuidance('scan.pdf', {\n"},
+            {'name': 'packages/core/src/utils/pdf.test.ts:landmark-2',
+             'path': 'packages/core/src/utils/pdf.test.ts',
+             'before': '          hadPdfInfo: false,\n'
+                       '        }),\n'
+                       '      ).toBe(\n'
+                       '        "PDF \\"scan.pdf\\" appears to have about 21 pages, '
+                       "which is too many to read at once. Use the 'pages' parameter "
+                       "to read a specific page range such as '1-5'. Maximum 20 pages "
+                       'per request.",\n'
+                       '      );\n'
+                       '    });\n'
+                       '\n'
+                       "    it('builds exact dense-text guidance for range and "
+                       "single-page reads', () => {\n"
+                       '      const defaultRangeGuidance =\n'
+                       '        "PDF text extracted from \\"paper.pdf\\" is too large '
+                       'to return safely (12345 estimated tokens; limit 12000). Use '
+                       "the 'pages' parameter with a narrower range, for example '1-2' "
+                       'or a single page.";\n'
+                       '      const fivePageRangeGuidance =\n'
+                       '        "PDF text extracted from \\"paper.pdf\\" is too large '
+                       'to return safely (12345 estimated tokens; limit 12000). Use '
+                       "the 'pages' parameter with fewer pages, for example '1-3' or a "
+                       'single page.";\n'
+                       '      const twoPageRangeGuidance =\n'
+                       '        "PDF text extracted from \\"paper.pdf\\" is too large '
+                       'to return safely (12345 estimated tokens; limit 12000). Use '
+                       "the 'pages' parameter with a single page, for example "
+                       '\'1\'.";\n'
+                       '      const singlePageGuidance =\n'
+                       '        \'PDF text extracted from "paper.pdf" is too large to '
+                       'return safely (12345 estimated tokens; limit 12000). The '
+                       'selected page exceeds the output limit. Use a native '
+                       'PDF-capable model, split the page content externally, or '
+                       "extract a smaller section with another tool.';\n"
+                       '\n'
+                       "      expect(buildPDFTextTooLargeGuidance('paper.pdf', "
+                       '12_345)).toBe(\n'
+                       '        defaultRangeGuidance,\n'
+                       '      );\n'
+                       "      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, "
+                       "'1-5')).toBe(\n"
+                       '        fivePageRangeGuidance,\n'
+                       '      );\n'
+                       "      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, "
+                       "'1-2')).toBe(\n"
+                       '        twoPageRangeGuidance,\n'
+                       '      );\n'
+                       "      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, "
+                       "'1')).toBe(\n"
+                       '        singlePageGuidance,\n'
+                       '      );\n'
+                       "      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, "
+                       "'1-1')).toBe(\n"
+                       '        singlePageGuidance,\n'
+                       '      );\n'
+                       "      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, "
+                       "'1 - 1')).toBe(\n"
+                       '        singlePageGuidance,\n'
+                       '      );\n'
+                       '    });\n'
+                       '  });\n',
+             'after': '          hadPdfInfo: false,\n'
+                      '        }),\n'
+                      '      ).toBe(\n'
+                      '        \'PDF "scan.pdf" appears to have about 21 pages, which '
+                      "is too many to read at once. ' +\n"
+                      "          'Extract the pages you need as text in the shell with "
+                      "' +\n"
+                      "          '`pdftotext -layout -f FIRST -l LAST -- <absolute "
+                      "path> -`, then read that output.',\n"
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      "    it('builds exact dense-text guidance that names the one "
+                      "page-range mechanism', () => {\n"
+                      "      expect(buildPDFTextTooLargeGuidance('paper.pdf', "
+                      '12_345)).toBe(\n'
+                      '        \'PDF text extracted from "paper.pdf" is too large to '
+                      "return safely ' +\n"
+                      "          '(12345 estimated tokens; limit 12000). ' +\n"
+                      "          'Extract the pages you need as text in the shell with "
+                      "' +\n"
+                      "          '`pdftotext -layout -f FIRST -l LAST -- <absolute "
+                      "path> -`, then read that output.',\n"
+                      '      );\n'
+                      '    });\n'
+                      '  });\n',
+             'review_before': '          hadPdfInfo: false,\n'
+                              '        }),\n'
+                              '      ).toBe(\n'
+                              '        "PDF \\"scan.pdf\\" appears to have about 21 '
+                              'pages, which is too many to read at once. Use the '
+                              "'pages' parameter to read a specific page range such as "
+                              '\'1-5\'. Maximum 20 pages per request.",\n'
+                              '      );\n'
+                              '    });\n'
+                              '\n'
+                              "    it('builds exact dense-text guidance for range and "
+                              "single-page reads', () => {\n"
+                              '      const defaultRangeGuidance =\n'
+                              '        "PDF text extracted from \\"paper.pdf\\" is too '
+                              'large to return safely (12345 estimated tokens; limit '
+                              "12000). Use the 'pages' parameter with a narrower "
+                              'range, for example \'1-2\' or a single page.";\n'
+                              '      const fivePageRangeGuidance =\n'
+                              '        "PDF text extracted from \\"paper.pdf\\" is too '
+                              'large to return safely (12345 estimated tokens; limit '
+                              "12000). Use the 'pages' parameter with fewer pages, for "
+                              'example \'1-3\' or a single page.";\n'
+                              '      const twoPageRangeGuidance =\n'
+                              '        "PDF text extracted from \\"paper.pdf\\" is too '
+                              'large to return safely (12345 estimated tokens; limit '
+                              "12000). Use the 'pages' parameter with a single page, "
+                              'for example \'1\'.";\n'
+                              '      const singlePageGuidance =\n'
+                              '        \'PDF text extracted from "paper.pdf" is too '
+                              'large to return safely (12345 estimated tokens; limit '
+                              '12000). The selected page exceeds the output limit. Use '
+                              'a native PDF-capable model, split the page content '
+                              'externally, or extract a smaller section with another '
+                              "tool.';\n"
+                              '\n'
+                              "      expect(buildPDFTextTooLargeGuidance('paper.pdf', "
+                              '12_345)).toBe(\n'
+                              '        defaultRangeGuidance,\n'
+                              '      );\n'
+                              "      expect(buildPDFTextTooLargeGuidance('paper.pdf', "
+                              "12_345, '1-5')).toBe(\n"
+                              '        fivePageRangeGuidance,\n'
+                              '      );\n'
+                              "      expect(buildPDFTextTooLargeGuidance('paper.pdf', "
+                              "12_345, '1-2')).toBe(\n"
+                              '        twoPageRangeGuidance,\n'
+                              '      );\n'
+                              "      expect(buildPDFTextTooLargeGuidance('paper.pdf', "
+                              "12_345, '1')).toBe(\n"
+                              '        singlePageGuidance,\n'
+                              '      );\n'
+                              "      expect(buildPDFTextTooLargeGuidance('paper.pdf', "
+                              "12_345, '1-1')).toBe(\n"
+                              '        singlePageGuidance,\n'
+                              '      );\n'
+                              "      expect(buildPDFTextTooLargeGuidance('paper.pdf', "
+                              "12_345, '1 - 1')).toBe(\n"
+                              '        singlePageGuidance,\n'
+                              '      );\n'
+                              '    });\n'
+                              '  });\n',
+             'review_after': '          hadPdfInfo: false,\n'
+                             '        }),\n'
+                             '      ).toBe(\n'
+                             '        \'PDF "scan.pdf" appears to have about 21 pages, '
+                             "which is too many to read at once. ' +\n"
+                             "          'Extract the pages you need as text in the "
+                             "shell with ' +\n"
+                             "          '`pdftotext -layout -f FIRST -l LAST -- "
+                             "<absolute path> -`, then read that output.',\n"
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('builds exact dense-text guidance that names the "
+                             "one page-range mechanism', () => {\n"
+                             "      expect(buildPDFTextTooLargeGuidance('paper.pdf', "
+                             '12_345)).toBe(\n'
+                             '        \'PDF text extracted from "paper.pdf" is too '
+                             "large to return safely ' +\n"
+                             "          '(12345 estimated tokens; limit 12000). ' +\n"
+                             "          'Extract the pages you need as text in the "
+                             "shell with ' +\n"
+                             "          '`pdftotext -layout -f FIRST -l LAST -- "
+                             "<absolute path> -`, then read that output.',\n"
+                             '      );\n'
+                             '    });\n'
+                             '  });\n'},
+            {'name': 'packages/core/src/utils/pdf.test.ts:landmark-3',
+             'path': 'packages/core/src/utils/pdf.test.ts',
+             'before': '      if (result.success) {\n'
+                       '        expect(result.text.length).toBeLessThan(110000);\n'
+                       "        expect(result.text).toContain('text truncated at "
+                       "100000 characters');\n"
+                       '        expect(result.text).toContain("\'pages\' parameter");\n'
+                       '      }\n'
+                       '    });\n'
+                       '\n',
+             'after': '      if (result.success) {\n'
+                      '        expect(result.text.length).toBeLessThan(110000);\n'
+                      "        expect(result.text).toContain('text truncated at 100000 "
+                      "characters');\n"
+                      "        expect(result.text).toContain('pdftotext -layout');\n"
+                      '      }\n'
+                      '    });\n'
+                      '\n',
+             'review_before': '      if (result.success) {\n'
+                              '        '
+                              'expect(result.text.length).toBeLessThan(110000);\n'
+                              "        expect(result.text).toContain('text truncated "
+                              "at 100000 characters');\n"
+                              '        expect(result.text).toContain("\'pages\' '
+                              'parameter");\n'
+                              '      }\n'
+                              '    });\n'
+                              '\n',
+             'review_after': '      if (result.success) {\n'
+                             '        '
+                             'expect(result.text.length).toBeLessThan(110000);\n'
+                             "        expect(result.text).toContain('text truncated at "
+                             "100000 characters');\n"
+                             "        expect(result.text).toContain('pdftotext "
+                             "-layout');\n"
+                             '      }\n'
+                             '    });\n'
+                             '\n'},
+            {'name': 'packages/core/src/utils/pdf.test.ts:landmark-4',
+             'path': 'packages/core/src/utils/pdf.test.ts',
+             'before': '      if (result.success) {\n'
+                       '        expect(result.text.length).toBeLessThan(110000);\n'
+                       "        expect(result.text).toContain('text truncated');\n"
+                       '        expect(result.text).toContain("\'pages\' parameter");\n'
+                       '      }\n'
+                       '    });\n'
+                       '\n',
+             'after': '      if (result.success) {\n'
+                      '        expect(result.text.length).toBeLessThan(110000);\n'
+                      "        expect(result.text).toContain('text truncated');\n"
+                      "        expect(result.text).toContain('pdftotext -layout');\n"
+                      '      }\n'
+                      '    });\n'
+                      '\n',
+             'review_before': '      if (result.success) {\n'
+                              '        '
+                              'expect(result.text.length).toBeLessThan(110000);\n'
+                              "        expect(result.text).toContain('text "
+                              "truncated');\n"
+                              '        expect(result.text).toContain("\'pages\' '
+                              'parameter");\n'
+                              '      }\n'
+                              '    });\n'
+                              '\n',
+             'review_after': '      if (result.success) {\n'
+                             '        '
+                             'expect(result.text.length).toBeLessThan(110000);\n'
+                             "        expect(result.text).toContain('text "
+                             "truncated');\n"
+                             "        expect(result.text).toContain('pdftotext "
+                             "-layout');\n"
+                             '      }\n'
+                             '    });\n'
+                             '\n'},
+            {'name': 'packages/core/src/utils/pdf.test.ts:landmark-5',
+             'path': 'packages/core/src/utils/pdf.test.ts',
+             'before': "        expect(result.text).toContain('text truncated');\n"
+                       "        expect(result.text).toContain('PDF text buffer "
+                       "limit');\n"
+                       "        expect(result.text).not.toContain('100000 "
+                       "characters');\n"
+                       '        expect(result.text).toContain("\'pages\' parameter");\n'
+                       '      }\n'
+                       '    });\n'
+                       '\n',
+             'after': "        expect(result.text).toContain('text truncated');\n"
+                      "        expect(result.text).toContain('PDF text buffer "
+                      "limit');\n"
+                      "        expect(result.text).not.toContain('100000 "
+                      "characters');\n"
+                      "        expect(result.text).toContain('pdftotext -layout');\n"
+                      '      }\n'
+                      '    });\n'
+                      '\n',
+             'review_before': "        expect(result.text).toContain('text "
+                              "truncated');\n"
+                              "        expect(result.text).toContain('PDF text buffer "
+                              "limit');\n"
+                              "        expect(result.text).not.toContain('100000 "
+                              "characters');\n"
+                              '        expect(result.text).toContain("\'pages\' '
+                              'parameter");\n'
+                              '      }\n'
+                              '    });\n'
+                              '\n',
+             'review_after': "        expect(result.text).toContain('text "
+                             "truncated');\n"
+                             "        expect(result.text).toContain('PDF text buffer "
+                             "limit');\n"
+                             "        expect(result.text).not.toContain('100000 "
+                             "characters');\n"
+                             "        expect(result.text).toContain('pdftotext "
+                             "-layout');\n"
+                             '      }\n'
+                             '    });\n'
+                             '\n'},
+            {'name': 'packages/core/src/utils/pdf.ts:landmark-1',
+             'path': 'packages/core/src/utils/pdf.ts',
+             'before': 'export const PDF_TEXT_RESULT_MAX_TOKENS = 12_000;\n'
+                       'const PDF_TEXT_RESULT_WRAPPER_TOKEN_CHARS = 64;\n'
+                       'const PDF_TEXT_RESULT_CHARS_PER_TOKEN = 4;\n'
+                       'export const PDF_TEXT_EXTRACTION_UNAVAILABLE_MESSAGE =\n'
+                       "  'pdftotext is not installed. Install poppler-utils to enable "
+                       'PDF text extraction (e.g. `apt-get install poppler-utils` or '
+                       "`brew install poppler`).';\n"
+                       'export const PDF_RENDER_UNAVAILABLE_MESSAGE =\n',
+             'after': 'export const PDF_TEXT_RESULT_MAX_TOKENS = 12_000;\n'
+                      'const PDF_TEXT_RESULT_WRAPPER_TOKEN_CHARS = 64;\n'
+                      'const PDF_TEXT_RESULT_CHARS_PER_TOKEN = 4;\n'
+                      '/**\n'
+                      ' * The one way to select PDF pages in this deployment. '
+                      '`read_file` reads a\n'
+                      ' * whole file and has no page parameter: a parameter that is '
+                      'meaningful for a\n'
+                      ' * single file type is an affordance the model cannot evaluate '
+                      'from the tool\n'
+                      ' * schema, and production forensics measured it being used as a '
+                      'line range on\n'
+                      ' * source files 106 times in a single run. Page selection '
+                      'therefore happens\n'
+                      ' * where it is unambiguous — a page-ranged `pdftotext` run in '
+                      'the shell — and\n'
+                      ' * every message that has to send the model somewhere sends it '
+                      'here.\n'
+                      ' */\n'
+                      'export const PDF_PAGE_RANGE_REMEDY =\n'
+                      "  'Extract the pages you need as text in the shell with ' +\n"
+                      "  '`pdftotext -layout -f FIRST -l LAST -- <absolute path> -`, "
+                      "then read that output.';\n"
+                      '\n'
+                      'export const PDF_TEXT_EXTRACTION_UNAVAILABLE_MESSAGE =\n'
+                      "  'pdftotext is not installed. Install poppler-utils to enable "
+                      'PDF text extraction (e.g. `apt-get install poppler-utils` or '
+                      "`brew install poppler`).';\n"
+                      'export const PDF_RENDER_UNAVAILABLE_MESSAGE =\n',
+             'review_before': 'export const PDF_TEXT_RESULT_MAX_TOKENS = 12_000;\n'
+                              'const PDF_TEXT_RESULT_WRAPPER_TOKEN_CHARS = 64;\n'
+                              'const PDF_TEXT_RESULT_CHARS_PER_TOKEN = 4;\n'
+                              'export const PDF_TEXT_EXTRACTION_UNAVAILABLE_MESSAGE =\n'
+                              "  'pdftotext is not installed. Install poppler-utils to "
+                              'enable PDF text extraction (e.g. `apt-get install '
+                              "poppler-utils` or `brew install poppler`).';\n"
+                              'export const PDF_RENDER_UNAVAILABLE_MESSAGE =\n',
+             'review_after': 'export const PDF_TEXT_RESULT_MAX_TOKENS = 12_000;\n'
+                             'const PDF_TEXT_RESULT_WRAPPER_TOKEN_CHARS = 64;\n'
+                             'const PDF_TEXT_RESULT_CHARS_PER_TOKEN = 4;\n'
+                             '/**\n'
+                             ' * The one way to select PDF pages in this deployment. '
+                             '`read_file` reads a\n'
+                             ' * whole file and has no page parameter: a parameter '
+                             'that is meaningful for a\n'
+                             ' * single file type is an affordance the model cannot '
+                             'evaluate from the tool\n'
+                             ' * schema, and production forensics measured it being '
+                             'used as a line range on\n'
+                             ' * source files 106 times in a single run. Page '
+                             'selection therefore happens\n'
+                             ' * where it is unambiguous — a page-ranged `pdftotext` '
+                             'run in the shell — and\n'
+                             ' * every message that has to send the model somewhere '
+                             'sends it here.\n'
+                             ' */\n'
+                             'export const PDF_PAGE_RANGE_REMEDY =\n'
+                             "  'Extract the pages you need as text in the shell with "
+                             "' +\n"
+                             "  '`pdftotext -layout -f FIRST -l LAST -- <absolute "
+                             "path> -`, then read that output.';\n"
+                             '\n'
+                             'export const PDF_TEXT_EXTRACTION_UNAVAILABLE_MESSAGE =\n'
+                             "  'pdftotext is not installed. Install poppler-utils to "
+                             'enable PDF text extraction (e.g. `apt-get install '
+                             "poppler-utils` or `brew install poppler`).';\n"
+                             'export const PDF_RENDER_UNAVAILABLE_MESSAGE =\n'},
+            {'name': 'packages/core/src/utils/pdf.ts:landmark-2',
+             'path': 'packages/core/src/utils/pdf.ts',
+             'before': '  requirement: PDFPageRangeRequirement,\n'
+                       '): string {\n'
+                       "  const source = requirement.hadPdfInfo ? 'has' : 'appears to "
+                       "have about';\n"
+                       '  return `PDF "${displayName}" ${source} '
+                       '${requirement.effectivePageCount} pages, which is too many to '
+                       "read at once. Use the 'pages' parameter to read a specific "
+                       "page range such as '1-5'. Maximum ${PDF_MAX_PAGES_PER_READ} "
+                       'pages per request.`;\n'
+                       '}\n'
+                       '\n'
+                       'export function buildPDFTextTooLargeGuidance(\n'
+                       '  displayName: string,\n'
+                       '  estimatedTokens: number,\n'
+                       '  pagesUsed?: string,\n'
+                       '): string {\n'
+                       '  const pageRange = pagesUsed ? parsePDFPageRange(pagesUsed) : '
+                       'null;\n'
+                       '  const prefix = `PDF text extracted from "${displayName}" is '
+                       'too large to return safely (${estimatedTokens} estimated '
+                       'tokens; limit ${PDF_TEXT_RESULT_MAX_TOKENS}).`;\n'
+                       '  if (pageRange && pageRange.firstPage === pageRange.lastPage) '
+                       '{\n'
+                       '    return `${prefix} The selected page exceeds the output '
+                       'limit. Use a native PDF-capable model, split the page content '
+                       'externally, or extract a smaller section with another tool.`;\n'
+                       '  }\n'
+                       '  if (pageRange) {\n'
+                       '    const suggestedEnd = Math.floor(\n'
+                       '      (pageRange.firstPage + pageRange.lastPage) / 2,\n'
+                       '    );\n'
+                       '    if (suggestedEnd === pageRange.firstPage) {\n'
+                       "      return `${prefix} Use the 'pages' parameter with a "
+                       "single page, for example '${pageRange.firstPage}'.`;\n"
+                       '    }\n'
+                       "    return `${prefix} Use the 'pages' parameter with fewer "
+                       "pages, for example '${pageRange.firstPage}-${suggestedEnd}' or "
+                       'a single page.`;\n'
+                       '  }\n'
+                       "  return `${prefix} Use the 'pages' parameter with a narrower "
+                       "range, for example '1-2' or a single page.`;\n"
+                       '}\n'
+                       '\n'
+                       '/**\n',
+             'after': '  requirement: PDFPageRangeRequirement,\n'
+                      '): string {\n'
+                      "  const source = requirement.hadPdfInfo ? 'has' : 'appears to "
+                      "have about';\n"
+                      '  return `PDF "${displayName}" ${source} '
+                      '${requirement.effectivePageCount} pages, which is too many to '
+                      'read at once. ${PDF_PAGE_RANGE_REMEDY}`;\n'
+                      '}\n'
+                      '\n'
+                      'export function buildPDFTextTooLargeGuidance(\n'
+                      '  displayName: string,\n'
+                      '  estimatedTokens: number,\n'
+                      '): string {\n'
+                      '  return (\n'
+                      '    `PDF text extracted from "${displayName}" is too large to '
+                      'return safely ` +\n'
+                      '    `(${estimatedTokens} estimated tokens; limit '
+                      '${PDF_TEXT_RESULT_MAX_TOKENS}). ` +\n'
+                      '    PDF_PAGE_RANGE_REMEDY\n'
+                      '  );\n'
+                      '}\n'
+                      '\n'
+                      '/**\n',
+             'review_before': '  requirement: PDFPageRangeRequirement,\n'
+                              '): string {\n'
+                              "  const source = requirement.hadPdfInfo ? 'has' : "
+                              "'appears to have about';\n"
+                              '  return `PDF "${displayName}" ${source} '
+                              '${requirement.effectivePageCount} pages, which is too '
+                              "many to read at once. Use the 'pages' parameter to read "
+                              "a specific page range such as '1-5'. Maximum "
+                              '${PDF_MAX_PAGES_PER_READ} pages per request.`;\n'
+                              '}\n'
+                              '\n'
+                              'export function buildPDFTextTooLargeGuidance(\n'
+                              '  displayName: string,\n'
+                              '  estimatedTokens: number,\n'
+                              '  pagesUsed?: string,\n'
+                              '): string {\n'
+                              '  const pageRange = pagesUsed ? '
+                              'parsePDFPageRange(pagesUsed) : null;\n'
+                              '  const prefix = `PDF text extracted from '
+                              '"${displayName}" is too large to return safely '
+                              '(${estimatedTokens} estimated tokens; limit '
+                              '${PDF_TEXT_RESULT_MAX_TOKENS}).`;\n'
+                              '  if (pageRange && pageRange.firstPage === '
+                              'pageRange.lastPage) {\n'
+                              '    return `${prefix} The selected page exceeds the '
+                              'output limit. Use a native PDF-capable model, split the '
+                              'page content externally, or extract a smaller section '
+                              'with another tool.`;\n'
+                              '  }\n'
+                              '  if (pageRange) {\n'
+                              '    const suggestedEnd = Math.floor(\n'
+                              '      (pageRange.firstPage + pageRange.lastPage) / 2,\n'
+                              '    );\n'
+                              '    if (suggestedEnd === pageRange.firstPage) {\n'
+                              "      return `${prefix} Use the 'pages' parameter with "
+                              "a single page, for example '${pageRange.firstPage}'.`;\n"
+                              '    }\n'
+                              "    return `${prefix} Use the 'pages' parameter with "
+                              'fewer pages, for example '
+                              "'${pageRange.firstPage}-${suggestedEnd}' or a single "
+                              'page.`;\n'
+                              '  }\n'
+                              "  return `${prefix} Use the 'pages' parameter with a "
+                              "narrower range, for example '1-2' or a single page.`;\n"
+                              '}\n'
+                              '\n'
+                              '/**\n',
+             'review_after': '  requirement: PDFPageRangeRequirement,\n'
+                             '): string {\n'
+                             "  const source = requirement.hadPdfInfo ? 'has' : "
+                             "'appears to have about';\n"
+                             '  return `PDF "${displayName}" ${source} '
+                             '${requirement.effectivePageCount} pages, which is too '
+                             'many to read at once. ${PDF_PAGE_RANGE_REMEDY}`;\n'
+                             '}\n'
+                             '\n'
+                             'export function buildPDFTextTooLargeGuidance(\n'
+                             '  displayName: string,\n'
+                             '  estimatedTokens: number,\n'
+                             '): string {\n'
+                             '  return (\n'
+                             '    `PDF text extracted from "${displayName}" is too '
+                             'large to return safely ` +\n'
+                             '    `(${estimatedTokens} estimated tokens; limit '
+                             '${PDF_TEXT_RESULT_MAX_TOKENS}). ` +\n'
+                             '    PDF_PAGE_RANGE_REMEDY\n'
+                             '  );\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'},
+            {'name': 'packages/core/src/utils/pdf.ts:landmark-3',
+             'path': 'packages/core/src/utils/pdf.ts',
+             'before': '    if (timedOut) {\n'
+                       '      return {\n'
+                       '        success: false,\n'
+                       '        error: `pdftotext timed out after 30s. The PDF may be '
+                       "unusually large or complex; try the 'pages' parameter to "
+                       'narrow the range.`,\n'
+                       '      };\n'
+                       '    }\n'
+                       '\n',
+             'after': '    if (timedOut) {\n'
+                      '      return {\n'
+                      '        success: false,\n'
+                      '        error: `pdftotext timed out after 30s. The PDF may be '
+                      'unusually large or complex; ${PDF_PAGE_RANGE_REMEDY}`,\n'
+                      '      };\n'
+                      '    }\n'
+                      '\n',
+             'review_before': '    if (timedOut) {\n'
+                              '      return {\n'
+                              '        success: false,\n'
+                              '        error: `pdftotext timed out after 30s. The PDF '
+                              "may be unusually large or complex; try the 'pages' "
+                              'parameter to narrow the range.`,\n'
+                              '      };\n'
+                              '    }\n'
+                              '\n',
+             'review_after': '    if (timedOut) {\n'
+                             '      return {\n'
+                             '        success: false,\n'
+                             '        error: `pdftotext timed out after 30s. The PDF '
+                             'may be unusually large or complex; '
+                             '${PDF_PAGE_RANGE_REMEDY}`,\n'
+                             '      };\n'
+                             '    }\n'
+                             '\n'},
+            {'name': 'packages/core/src/utils/pdf.ts:landmark-4',
+             'path': 'packages/core/src/utils/pdf.ts',
+             'before': '        success: true,\n'
+                       '        text:\n'
+                       '          text +\n'
+                       '          `\\n\\n... [text truncated ${truncationReason}. Use '
+                       "the 'pages' parameter to read specific page ranges.]`,\n"
+                       '      };\n'
+                       '    }\n'
+                       '\n',
+             'after': '        success: true,\n'
+                      '        text:\n'
+                      '          text +\n'
+                      '          `\\n\\n... [text truncated ${truncationReason}. '
+                      '${PDF_PAGE_RANGE_REMEDY}]`,\n'
+                      '      };\n'
+                      '    }\n'
+                      '\n',
+             'review_before': '        success: true,\n'
+                              '        text:\n'
+                              '          text +\n'
+                              '          `\\n\\n... [text truncated '
+                              "${truncationReason}. Use the 'pages' parameter to read "
+                              'specific page ranges.]`,\n'
+                              '      };\n'
+                              '    }\n'
+                              '\n',
+             'review_after': '        success: true,\n'
+                             '        text:\n'
+                             '          text +\n'
+                             '          `\\n\\n... [text truncated '
+                             '${truncationReason}. ${PDF_PAGE_RANGE_REMEDY}]`,\n'
+                             '      };\n'
+                             '    }\n'
+                             '\n'},
+            {'name': 'packages/core/src/utils/pdf.ts:landmark-5',
+             'path': 'packages/core/src/utils/pdf.ts',
+             'before': '        success: true,\n'
+                       '        text:\n'
+                       '          stdout.substring(0, MAX_PDF_TEXT_OUTPUT_CHARS) +\n'
+                       '          `\\n\\n... [text truncated at '
+                       "${MAX_PDF_TEXT_OUTPUT_CHARS} characters. Use the 'pages' "
+                       'parameter to read specific page ranges.]`,\n'
+                       '      };\n'
+                       '    }\n'
+                       '\n',
+             'after': '        success: true,\n'
+                      '        text:\n'
+                      '          stdout.substring(0, MAX_PDF_TEXT_OUTPUT_CHARS) +\n'
+                      '          `\\n\\n... [text truncated at '
+                      '${MAX_PDF_TEXT_OUTPUT_CHARS} characters. '
+                      '${PDF_PAGE_RANGE_REMEDY}]`,\n'
+                      '      };\n'
+                      '    }\n'
+                      '\n',
+             'review_before': '        success: true,\n'
+                              '        text:\n'
+                              '          stdout.substring(0, '
+                              'MAX_PDF_TEXT_OUTPUT_CHARS) +\n'
+                              '          `\\n\\n... [text truncated at '
+                              '${MAX_PDF_TEXT_OUTPUT_CHARS} characters. Use the '
+                              "'pages' parameter to read specific page ranges.]`,\n"
+                              '      };\n'
+                              '    }\n'
+                              '\n',
+             'review_after': '        success: true,\n'
+                             '        text:\n'
+                             '          stdout.substring(0, MAX_PDF_TEXT_OUTPUT_CHARS) '
+                             '+\n'
+                             '          `\\n\\n... [text truncated at '
+                             '${MAX_PDF_TEXT_OUTPUT_CHARS} characters. '
+                             '${PDF_PAGE_RANGE_REMEDY}]`,\n'
+                             '      };\n'
+                             '    }\n'
+                             '\n'},
+            {'name': 'packages/core/src/utils/pdf.ts:landmark-6',
+             'path': 'packages/core/src/utils/pdf.ts',
+             'before': '        success: false,\n'
+                       '        error: `pdftoppm timed out after ${Math.round(\n'
+                       '          PDF_RENDER_TIMEOUT_MS / 1000,\n'
+                       '        )}s. The PDF may be unusually large or complex; try '
+                       "the 'pages' parameter to narrow the range.`,\n"
+                       '      };\n'
+                       '    }\n'
+                       '\n',
+             'after': '        success: false,\n'
+                      '        error: `pdftoppm timed out after ${Math.round(\n'
+                      '          PDF_RENDER_TIMEOUT_MS / 1000,\n'
+                      '        )}s. The PDF may be unusually large or complex; '
+                      '${PDF_PAGE_RANGE_REMEDY}`,\n'
+                      '      };\n'
+                      '    }\n'
+                      '\n',
+             'review_before': '        success: false,\n'
+                              '        error: `pdftoppm timed out after ${Math.round(\n'
+                              '          PDF_RENDER_TIMEOUT_MS / 1000,\n'
+                              '        )}s. The PDF may be unusually large or complex; '
+                              "try the 'pages' parameter to narrow the range.`,\n"
+                              '      };\n'
+                              '    }\n'
+                              '\n',
+             'review_after': '        success: false,\n'
+                             '        error: `pdftoppm timed out after ${Math.round(\n'
+                             '          PDF_RENDER_TIMEOUT_MS / 1000,\n'
+                             '        )}s. The PDF may be unusually large or complex; '
+                             '${PDF_PAGE_RANGE_REMEDY}`,\n'
+                             '      };\n'
+                             '    }\n'
+                             '\n'},
             {'name': 'packages/core/src/utils/qwen38-image-contract.test.ts:landmark-1',
              'path': 'packages/core/src/utils/qwen38-image-contract.test.ts',
              'before': '',
@@ -39244,6 +43603,48 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    expect(wideResult.error).toMatch(/30:1/);\n'
                              '  });\n'
                              '});\n'},
+            {'name': 'packages/core/src/utils/readManyFiles.test.ts:landmark-1',
+             'path': 'packages/core/src/utils/readManyFiles.test.ts',
+             'before': '      expect(result.files).toHaveLength(1);\n'
+                       '      expect(result.files[0]!.error).toBeUndefined();\n'
+                       "      expect(result.files[0]!.content).toContain('PDF "
+                       '"paper.pdf"\');\n'
+                       '      expect(content).toContain("Use the \'pages\' '
+                       'parameter");\n'
+                       '      expect(content.length).toBeLessThan(1000);\n'
+                       '      expect(mockGetPDFPageCount).toHaveBeenCalledTimes(1);\n'
+                       '      '
+                       'expect(mockGetPDFPageCount).toHaveBeenCalledWith(absolutePath);\n',
+             'after': '      expect(result.files).toHaveLength(1);\n'
+                      '      expect(result.files[0]!.error).toBeUndefined();\n'
+                      "      expect(result.files[0]!.content).toContain('PDF "
+                      '"paper.pdf"\');\n'
+                      "      expect(content).toContain('pdftotext -layout');\n"
+                      '      expect(content.length).toBeLessThan(1000);\n'
+                      '      expect(mockGetPDFPageCount).toHaveBeenCalledTimes(1);\n'
+                      '      '
+                      'expect(mockGetPDFPageCount).toHaveBeenCalledWith(absolutePath);\n',
+             'review_before': '      expect(result.files).toHaveLength(1);\n'
+                              '      expect(result.files[0]!.error).toBeUndefined();\n'
+                              "      expect(result.files[0]!.content).toContain('PDF "
+                              '"paper.pdf"\');\n'
+                              '      expect(content).toContain("Use the \'pages\' '
+                              'parameter");\n'
+                              '      expect(content.length).toBeLessThan(1000);\n'
+                              '      '
+                              'expect(mockGetPDFPageCount).toHaveBeenCalledTimes(1);\n'
+                              '      '
+                              'expect(mockGetPDFPageCount).toHaveBeenCalledWith(absolutePath);\n',
+             'review_after': '      expect(result.files).toHaveLength(1);\n'
+                             '      expect(result.files[0]!.error).toBeUndefined();\n'
+                             "      expect(result.files[0]!.content).toContain('PDF "
+                             '"paper.pdf"\');\n'
+                             "      expect(content).toContain('pdftotext -layout');\n"
+                             '      expect(content.length).toBeLessThan(1000);\n'
+                             '      '
+                             'expect(mockGetPDFPageCount).toHaveBeenCalledTimes(1);\n'
+                             '      '
+                             'expect(mockGetPDFPageCount).toHaveBeenCalledWith(absolutePath);\n'},
             {'name': 'packages/core/src/utils/shellContextEnv.test.ts:landmark-1',
              'path': 'packages/core/src/utils/shellContextEnv.test.ts',
              'before': "    expect(env['QWEN_CODE_AGENT_ID']).toBe('my-agent-42');\n"
@@ -39633,20 +44034,21 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/config/config.ts': 'c476125a2be618c868e8b38fdce4a77d53c882e8525ce33b20fb35947a38d7c0',
  'packages/cli/src/gemini.test.tsx': '2e547b0eb91c2e1746e3b966511cb286846cbc5495779056d0b1099776795166',
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',
- 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '8db491cfdef9a99c4dd5720967e5b6f822b41f3b8678c52a3699b459c982f819',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '4f8e5df8c5eadcc7630bdc2d8fee011fca11cbbfe3a02b5dd9d0b8aebfd4e882',
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863',
  'packages/cli/src/nonInteractive/types.ts': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e',
- 'packages/cli/src/nonInteractiveCli.ts': '559cbf3f8daa9d7943dea5ec09859fa25de68b25ecb624e66815a90d8a6b9932',
+ 'packages/cli/src/nonInteractiveCli.ts': 'ecdd192c690882e67189edc322d8d02b0af1cf25f13d5b218f567e071f25bec9',
  'packages/cli/src/ui/hooks/useGeminiStream.ts': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e',
- 'packages/cli/src/utils/nonInteractiveHelpers.test.ts': '9f524ee280510ed4d80e3e37907a942c368c7ead0dd02f3d37c9e697990ecf19',
+ 'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'f66258a3b847539dec79c84ec2c38a82646a2f1d89cf9d7b63e4f9feb26540fd',
  'packages/cli/src/utils/nonInteractiveHelpers.ts': '05bf1bb209b455a0fa1b386321198442d08c332cdd1a2f2c08fc05a9948e752c',
  'packages/core/src/agents/runtime/agent-context.test.ts': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a',
  'packages/core/src/agents/runtime/agent-context.ts': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6',
- 'packages/core/src/agents/runtime/agent-core.ts': '2a556372e4581ea51cd43ecc36ea5479069190c2263f1f4f0719870a37ccb53c',
- 'packages/core/src/agents/runtime/agent-events.ts': '94a3f2bda99cb2f5f3a64c374e0759a167368ec1b71dc10f5d633e9054001e0e',
- 'packages/core/src/agents/runtime/agent-headless.ts': '566427c59d72b3bc5f2e582e6b83a43388e5bb2d66642026d35951dd5b017f5c',
- 'packages/core/src/agents/subagent-result.test.ts': 'b0ff2c8c306c52b336b2382a6e70ef7f520a2b777908997966967056f5c7aa00',
- 'packages/core/src/agents/subagent-result.ts': '3a950d84ad4118335f7b13cd3bea5449420be1bd1e8a07e46389472a271a90f4',
+ 'packages/core/src/agents/runtime/agent-core.test.ts': '5ce2e138841cfd514818d12a56ce0a426974f633e81bbbaad4b0cf38cc0437de',
+ 'packages/core/src/agents/runtime/agent-core.ts': '787fa977687afead6306964aa5062163f2986f0dc3d2f62a9d5b115380a46ef2',
+ 'packages/core/src/agents/runtime/agent-events.ts': 'a34880c8ffa5ba33ebb5f045db3703093b5527ebc629f19ece83037e2b5b7603',
+ 'packages/core/src/agents/runtime/agent-headless.ts': '6de78e3741afc80ff928b7c6c2f3b22dec2d281363593b85fdb940618e9fabb3',
+ 'packages/core/src/agents/subagent-result.test.ts': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91',
+ 'packages/core/src/agents/subagent-result.ts': '6dc6f199ba394f6e0520aca1d54a5d7c529eea9b0d94f76ab0fffa29327b12e2',
  'packages/core/src/config/config.ts': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49',
  'packages/core/src/config/qwen38-agent-service-contract.test.ts': 'aacc0d3b15582dacc02c2d4e1291ed15a1f3a47460b09edc195ba8b1beac6417',
  'packages/core/src/core/baseLlmClient.test.ts': '3473d53774ef2b86869cf5af03bf2faf3433171e7630c4b4652a398ec6fc5d0d',
@@ -39654,16 +44056,16 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/contentGenerator.ts': '476242ed064c4980cec6789b84bb5496cb93a28d7763b659fb799f84fcd9bebc',
  'packages/core/src/core/coreToolScheduler.test.ts': 'd4c1005c66b7a2d5b332127874bb5b7847dc6c561d9bdddc7c9aec136d34d894',
  'packages/core/src/core/coreToolScheduler.ts': '9aca5b3131e9e089c30ca80b2a310a3d0da01623b55c2949c7d097348baf8756',
- 'packages/core/src/core/geminiChat.test.ts': '417a72c54062d140ec82392680c397ec5602535293d1ccd675d2ea0839bcfeca',
+ 'packages/core/src/core/geminiChat.test.ts': '44f96af12396270fb3cba0af6db7e23a85463c7e28a7ce8e3935c31bc97c311f',
  'packages/core/src/core/geminiChat.ts': 'ad16bac94914e60ad012884f45a06ecf9147f9c7d307f1a2a9783f0bbb00d407',
  'packages/core/src/core/genai-compat.ts': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81',
  'packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts': '39cb515dfc3afb39edfe8dbabd3956351dd4b7b71e82f2fd77e4f6dc2b8ce695',
  'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'bb73338e3cb074e243c5baf4c09159a638134210e0eabf816a90df3656e8da28',
  'packages/core/src/core/openaiContentGenerator/converter.ts': '28c729be63e9171b90b58c712c22808a9d529402ee1c5026436051059387ca51',
  'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1',
- 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': 'f43030a216b2f6194f4320001b5aa04a441faa696a1f0507adcf08376f116316',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': '31a0c872819e5b0ded6cc91c865e0b0614fee8a17e065a15f07a0efef3014ea6',
  'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888',
- 'packages/core/src/core/openaiContentGenerator/pipeline.ts': '5c9d2127e4e1abbad35fabb93cf4f7997c876669edfaa82798e5bae57a0c03bb',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.ts': 'eb39024c965025c6c9d35178d0ae8517bcbe954182e539ae640a8b97cd656f20',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
  'packages/core/src/core/prompts.ts': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c',
  'packages/core/src/core/qwen38-deployment-prompt.test.ts': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851',
@@ -39672,30 +44074,37 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/tokenLimits.test.ts': '0f4775ebb4abb3b3a7a38a2369b3c44995b97b2f256b04c56609c1ef0c01823c',
  'packages/core/src/core/tokenLimits.ts': '9a3bda80d944c61cae61197c018a10e4606a47187686f0a34b5ccf5624f978cb',
  'packages/core/src/core/toolOutcome.ts': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9',
- 'packages/core/src/core/turn.ts': 'cf1b6edc14b558b27098af0f8aefbea0a6e07cb98d1968001e286ceac05b3270',
+ 'packages/core/src/core/turn.ts': '0f82b31907e018ad75cd5ce0d793fab9e9f8a2f1c305676199decd480aca1572',
+ 'packages/core/src/index.ts': '6ce05101bad847681232aae4d4b738afa4e7d6206a495a6210df2a913b9dbcef',
  'packages/core/src/models/constants.ts': '11cf01eda085973eedc575e4b8cd0c7bf469ced519e66bbac72129c47e8b2d38',
  'packages/core/src/models/content-generator-config.ts': '6f8c6321a1171425eec010e05e72e5e71b6ae1f7415075779a935f4b58565503',
  'packages/core/src/models/types.ts': '36aeae5b246fb84e527d3d767e0ac4dd90288e6969240c982ac7488848ae844b',
  'packages/core/src/permissions/permission-manager.test.ts': 'd7d463b3c4eebf766656f881f9cc1ecd4a3758b86af7d8e49bbbe84a45389f92',
  'packages/core/src/permissions/permission-manager.ts': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779',
- 'packages/core/src/services/chatCompressionService.test.ts': '3a2cdee1b9fed150ada600d7c3005f5d89030e0c7514ddbf28559689e027757b',
- 'packages/core/src/services/chatCompressionService.ts': '75e64be7a5e28544fc9eba43b11346811a18fe66b0a186830707682533217523',
+ 'packages/core/src/services/chatCompressionService.test.ts': '28313a20cbfc6fc2fb92a32a34d607ae398b4fa75eaf4684ac050e4852406728',
+ 'packages/core/src/services/chatCompressionService.ts': '7fd7ee2d68e555a4a80f256f701c386950540809e19cf56806fa46d5732cef92',
+ 'packages/core/src/services/loopDetectionService.ts': '9e3b6457192b8bd6691ada479da2db67d10721778c3ad260e06409778217f99d',
  'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
- 'packages/core/src/tools/agent/agent.test.ts': 'effd65eff9899c8150ee2f002effbc3c15485b9d7bc0d627e76935bf3f50a74c',
- 'packages/core/src/tools/agent/agent.ts': '1b96052f1f5e7678f2a704d92e95668e3ce00b697d570b2673b35118163780ac',
+ 'packages/core/src/tools/agent/agent.test.ts': '6dcceb44938d59bd79f4d3b78010413ca0238a3339e7b80729d60611f898a4df',
+ 'packages/core/src/tools/agent/agent.ts': 'a278d5cee32be5984975d15c88dd3e76721f3e196953340730062cae76cb69e2',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.ts': '6f901a5cda41071d4237acdc3f3bfd9ba8cf92ef1db93d73ae1aabb038d53e46',
- 'packages/core/src/tools/read-file.test.ts': '3d8e74099403f77cd72fe749e547f8c2bec627b8c846f46ae41f1f97d9d7525b',
- 'packages/core/src/tools/read-file.ts': 'b2023049f4b50a1581ce502523c7c9aef8968c5eff05d363c158905d3d6aca8d',
+ 'packages/core/src/tools/read-file.test.ts': '6c246ccf7a3a6713e4544659f422dde00d683c45c6ab40f0720ce15e6c195279',
+ 'packages/core/src/tools/read-file.ts': 'dc584bf73e4cce40525ac8e6ab345c56d2f748442ec8eadf099e422d51a3592b',
  'packages/core/src/tools/tools.ts': '0f51fbfa7251b2f18878b5c5e64b9c331791e051b1d7120ee1a5735621a6ce5f',
- 'packages/core/src/utils/fileUtils.test.ts': '9f191c0db8201be82d3242e35855052f911684ef53569776f53175170b5584e8',
- 'packages/core/src/utils/fileUtils.ts': '1012d14b04390f147d46df13ebc8f578bcde0f9ebf60e5e93da3edeb7ac491e5',
+ 'packages/core/src/tools/web-fetch.test.ts': 'e97c6eb5800e66cd65538cf493e8ec7fb923a083fe2e7ed77c633a1c4bf46f2e',
+ 'packages/core/src/tools/web-fetch.ts': '73323a41757e2e5b217b2f6f3e7eb1401be1980ec066e05ae41231036eddf331',
+ 'packages/core/src/utils/fileUtils.test.ts': '4693ae0d9db34d0ff9d4df6f1b89b6df2f6994f04f27bdc16cea2a7096744349',
+ 'packages/core/src/utils/fileUtils.ts': '893932451f8b1582e12d7d80e5028a5171a98752bb17d974b89800670aa6334f',
  'packages/core/src/utils/image-view.test.ts': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d',
  'packages/core/src/utils/image-view.ts': '82383711baeb81895042e6fd865f2f509ca29756ff22b02378dc89c0b2c5e9ea',
+ 'packages/core/src/utils/pdf.test.ts': '09a180ec3eef8fe76bb124db660af16d6a0cc6cba7f218615214e584be28884a',
+ 'packages/core/src/utils/pdf.ts': 'ab834ab89f828a9c91d06b7e56634d109e23a509ea82f900f9f23145d8d7319e',
  'packages/core/src/utils/qwen38-image-contract.test.ts': '57972bb126651812bbd508ff26d87f3c7d5aab94603900b773e88a3e90a234c9',
+ 'packages/core/src/utils/readManyFiles.test.ts': 'e6d93fee96847e8a06e0b71995c7da0a1c5a06541d1b37e13d0f09e06aac9ca0',
  'packages/core/src/utils/shellContextEnv.test.ts': 'bd658f00ce587c0e42043ca76269e353bd4da76f68c3e00bc82d2527366c31cf',
  'packages/core/src/utils/shellContextEnv.ts': 'f06dd2a712457c9a5cc77a68cb3749c846af46405835dff530d9f1e7e86c6871',
  'scripts/generate-git-commit-info.js': '73ccd206f6e620dd0e47ee678fbcfcc58e10c2e724a7ca5ff57d13212e83ffac'}

@@ -23,6 +23,10 @@ pub struct AgentResult {
     pub response: String,
     pub duration_ms: u64,
     pub num_turns: u64,
+    /// Main-scope assistant events carrying billed usage: the turns the agent
+    /// both started and finished. Equal to `num_turns` on a run that ended
+    /// normally, one less when an error ended the run inside a turn.
+    pub billed_main_turns: u64,
 }
 
 // A session may have indefinitely many records, but one JSON event is a
@@ -191,9 +195,26 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
             "terminal result lacks array permission_denials".into(),
         ));
     }
-    if num_turns != main_assistant_events {
+    // `num_turns` counts the turns the agent started: the counter advances as
+    // a turn begins, while a billed assistant event — the thing counted above
+    // — is only written once that turn finishes. A run that ends normally has
+    // finished every turn it started, so the two must agree exactly. An error
+    // ends the run wherever it struck: between turns, leaving the counts
+    // equal, or inside the turn already counted, leaving exactly one started
+    // and unbilled turn behind. Anything outside that window means the result
+    // event does not describe this stream, which is what this check exists to
+    // catch.
+    let unbilled = num_turns.checked_sub(main_assistant_events);
+    let consistent = match unbilled {
+        Some(0) => true,
+        Some(1) => is_error,
+        _ => false,
+    };
+    if !consistent {
         return Err(ServiceError::AgentOutputMissing(format!(
-            "terminal num_turns={num_turns} does not match {main_assistant_events} main assistant event(s)"
+            "terminal num_turns={num_turns} is not consistent with {main_assistant_events} \
+             main assistant event(s): a run bills every turn it finishes, and only an error \
+             result may leave the one turn it interrupted unbilled"
         )));
     }
 
@@ -238,6 +259,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         response,
         duration_ms,
         num_turns,
+        billed_main_turns: main_assistant_events,
     })
 }
 
@@ -512,6 +534,48 @@ mod tests {
         // The subagent's billed turn is the subagent's own, so the session's
         // main-turn count and its terminal cross-check are unchanged by it.
         assert_eq!(parsed.num_turns, 1);
+    }
+
+    #[test]
+    fn reports_an_error_that_ended_the_run_inside_a_turn() {
+        // Test A: a stream error killed turn 236, so the terminal result
+        // counts 236 started turns against 235 billed ones. The +1 is the
+        // defined semantic, not corruption, and refusing the capture over it
+        // hid the real cause behind "agent_output_missing" and threw away the
+        // run's real timings.
+        let error_result = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":19180714,\"duration_api_ms\":18037819,\"num_turns\":2,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"[API Error: Context is too large to send safely after automatic compression.]\"}}\n";
+        let text = format!("{INIT}{MAIN_TURN}{error_result}");
+        let parsed = parse_text(&text).expect("an error result may leave its final turn unbilled");
+        assert!(parsed.is_error);
+        assert!(parsed.response.contains("Context is too large"));
+        assert_eq!(parsed.num_turns, 2);
+        assert_eq!(parsed.billed_main_turns, 1);
+        // The real timings survive; they were the whole point of parsing it.
+        assert_eq!(parsed.duration_ms, 19_180_714);
+    }
+
+    #[test]
+    fn an_error_between_turns_still_has_to_balance() {
+        let error_result = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":9,\"duration_api_ms\":8,\"num_turns\":1,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"boom\"}}\n";
+        let text = format!("{INIT}{MAIN_TURN}{error_result}");
+        let parsed = parse_text(&text).expect("equal counts are valid for an error too");
+        assert_eq!(parsed.num_turns, 1);
+        assert_eq!(parsed.billed_main_turns, 1);
+    }
+
+    #[test]
+    fn rejects_turn_counts_outside_the_defined_window() {
+        // The integrity check is unchanged everywhere it matters: a success
+        // must balance exactly, an error may be short by exactly one, and
+        // nothing may claim fewer turns than the stream billed.
+        let success_off_by_one = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":2,\"result\":\"ok\",\"usage\":{},\"permission_denials\":[]}\n";
+        let error_off_by_two = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":3,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"boom\"}}\n";
+        let error_under_count = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":0,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"boom\"}}\n";
+        for terminal in [success_off_by_one, error_off_by_two, error_under_count] {
+            let text = format!("{INIT}{MAIN_TURN}{terminal}");
+            let error = parse_text(&text).expect_err("inconsistent turn accounting is refused");
+            assert!(error.to_string().contains("is not consistent with"));
+        }
     }
 
     #[test]

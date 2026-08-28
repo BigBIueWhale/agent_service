@@ -152,11 +152,14 @@ pub struct SessionBody {
     #[serde(default)]
     pub progress_events: Vec<ProgressEvent>,
 
-    /// Number of distinct LLM invocations the agent has completed so far.
+    /// Number of distinct LLM invocations the agent has made so far.
     /// Live for running sessions, frozen at run-end for terminal ones.
     /// Counted from completed main-thread `"type":"assistant"` messages in
     /// `events.jsonl`; Qwen Code emits one complete assistant message per
-    /// model invocation when partial-message output is disabled.
+    /// model invocation when partial-message output is disabled. On a session
+    /// an error ended mid-turn the terminal result's own count is one higher,
+    /// because it counts the turn that started and never billed, and that
+    /// count is the one reported.
     pub num_turns: u64,
     pub last_event_at_unix: u64,
 

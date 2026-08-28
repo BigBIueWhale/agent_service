@@ -33,6 +33,25 @@ provide as one fail-closed mode:
   content, never after visible output or a potentially executable side effect;
 - exact, same-model compaction whose input and candidate output are both counted by
   vLLM and whose summary must end normally without tool calls;
+- a per-request maintenance phase budget that cannot be silently lost.
+  Compaction runs inside a fixed 20,000-token output ceiling and splits it
+  deliberately — a bounded thinking phase, and a reserved final-response
+  phase so the state snapshot has room to be written. The override was
+  applied to the per-request sampling parameters, but this deployment pins
+  both phase budgets in `extra_body`, which the provider hook merges over
+  the request, so the split never reached the wire: the summarizer ran at
+  the pinned 262,144-token thinking budget inside a 20,000-token cap.
+  Thought parts are filtered out of the response, so two consecutive
+  attempts each spent about 19,900 output tokens and produced no summary at
+  all; the session then died refusing to send 240,122 tokens against a
+  239,144-token limit. The existing ceiling guard could not have caught it:
+  it compared against the sampling-parameter layer, which never declares
+  those keys, so it read `undefined` and always passed. The budget is now
+  written onto the fully merged wire request, after every configuration
+  layer, and validated against the exact value it replaces — so the same
+  guard that could never fire now reads the pinned 262,144 and refuses
+  anything above it (two `[phase-budget]` tests execute both halves in the
+  build);
 - one universal tool allowlist covering core, dynamic, MCP, skill, and synthetic tools;
 - an explicit foreground-agents-only mode that exposes only `general-purpose` and `Explore`, returns results inline, and rejects forks, background work, teams, worktrees, custom agent types, and model overrides.
 - init metadata filtered through that same policy, so it does not advertise internal or uncallable agent types.
@@ -66,11 +85,28 @@ provide as one fail-closed mode:
   16,777,216-pixel, 30:1, and 100-MiB limits; no resize/transcode fallback;
 - chronological text-image-text tool results with `splitToolMedia=false`, plus
   fail-closed rejection of non-PNG and file/remote image transports;
-- rejection of the PDF-only `pages` parameter on non-PDF files at both the
-  validation and consumption layers, with an error that names `offset`/`limit`
-  as the text-file remedy — production forensics showed upstream's
-  syntax-first errors and silent ignore steering agents into identical-call
-  loops (three `[pages-contract]` tests execute this boundary in the build);
+- exactly one range mechanism on `read_file`. Upstream advertised the
+  PDF-only `pages` parameter on every file type. A tool schema is the
+  model's only map of what is callable, and a parameter whose applicability
+  depends on the value of another parameter cannot be read off that map, so
+  the model used it as a line range on source files. Making the refusal
+  accurate at both the validation and consumption layers, naming
+  `offset`/`limit` as the remedy, did not change the behaviour: it was
+  measured again afterwards, 106 refusals across 7 of 18 subagent scopes in
+  a single run, one subagent issuing 55 of them, and three subagents
+  repeating a byte-identical failing call until loop detection killed them.
+  The affordance itself was the defect. `read_file` now reads whole files
+  and advertises exactly `file_path`, `offset`, and `limit`; a `pages`
+  argument supplied anyway is refused whatever the file type — an
+  undeclared key survives JSON-schema validation, and a dropped page range
+  would leave the model believing it had asked for one — and the shared
+  consumption layer keeps its own fail-closed guard for callers that bypass
+  the tool. PDF page selection happens where it is unambiguous and where
+  this deployment's sealed contract already puts it, a page-ranged
+  `pdftotext` run in the shell, and one exported remedy string is what
+  every large-, truncated-, or overflowing-PDF message names, so no
+  guidance can point at a parameter that no longer exists (six
+  `[pages-contract]` cases execute this boundary in the build);
 - evidentiary stream-json tool results: the emitted record prefers the
   model-facing responseParts over the short human-facing display string, so
   captured event streams carry what the model actually received (two
@@ -136,7 +172,46 @@ provide as one fail-closed mode:
   what it means on the session's own: the model round-trips that scope
   completed, which is the number of assistant events the stream carries under
   that tool-call id (seven `[subagent-scope]` tests execute both halves in
-  the build).
+  the build);
+- how far it got on every terminate reason, and which rule stopped it. The
+  same channel still reported `num_turns: 0` for every subagent error
+  result — MAX_TURNS, TIMEOUT, ERROR, CANCELLED, and LOOP_DETECTED alike —
+  while the real counts in one capture were 11, 7, and 9. Nothing had lost
+  the count a second time: two writers flip the subagent display from
+  running to failed, and the one that wins is the terminal event fired from
+  the reasoning loop's own exit, which announced the status and the reason
+  but carried no count. The emitted record is built on the first
+  running-to-failed transition, so the later, complete update from the tool
+  body was never read and the emitter stamped its `?? 0` fallback. That
+  event now carries the terminal facts in full, so whichever writer is read
+  first is already right. It also carries which rule fired: `LOOP_DETECTED`
+  covers nine rules across two tiers, and the subagent path never consulted
+  the detector's last loop type, so a five-identical-call halt and an
+  exhausted per-turn tool-call budget reached both the operator and the
+  parent model as the same bare word — which is why diagnosing one of them
+  took a five-hour telemetry reconstruction. The rule labels moved out of
+  the CLI to sit beside the detector, so the headless session's message and
+  a subagent's record and report name the same cause in the same words (one
+  `[subagent-scope]` and four `[loop-attribution]` tests execute this in the
+  build);
+- a failed compaction that diagnoses itself from the standard bundle. The
+  compaction diagnostics — `[chat-compression] summary terminated with
+  MAX_TOKENS` and its siblings — go to the debug logger, and this deployment
+  enables no debug logging, so none of them reached `qwen.stderr`; the
+  truncated summary was discarded unpersisted, and a failed side query's
+  usage never reaches the billed event stream. The investigation into the
+  session above could therefore establish that the 20,000-token maintenance
+  budget had been exhausted but not how it split between hidden thinking and
+  the final response, which is the one fact that identifies the failure.
+  Turning on debug logging would be a second mode and would pollute the
+  captured stream, so the compaction event carries the accounting instead:
+  the ceiling, both phase budgets, the output tokens produced, how many of
+  them were reasoning, how much summary survived, and the provider's
+  terminal reason. It is attached to every outcome reachable after the
+  generation and left empty when the attempt was refused before it, so a
+  budget consumed entirely by reasoning stays distinguishable from a request
+  that never ran (three more `[compaction-event]` tests execute this in the
+  build).
 
 Verification performed in the pinned Node image:
 

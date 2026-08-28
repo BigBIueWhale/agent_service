@@ -163,6 +163,8 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && npx --no-install vitest run -t 'pages-contract' \
       packages/core/src/utils/fileUtils.test.ts \
       packages/core/src/tools/read-file.test.ts \
+ && npx --no-install vitest run -t 'loop-attribution' \
+      packages/core/src/agents/subagent-result.test.ts \
  && test "$(node scripts/cli-entry.js --version)" = '0.21.12' \
  && rm -rf node_modules/.vite /tmp/node-compile-cache
 

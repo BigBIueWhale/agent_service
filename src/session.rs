@@ -730,38 +730,51 @@ pub async fn run_one(
                 .into(),
         ))
     };
-    let (mut response, agent_duration_ms, num_turns, mut is_process_error, parsed_valid) =
-        match parsed {
-            Ok(result) => (
-                result.response,
-                result.duration_ms,
-                result.num_turns,
-                result.is_error,
+    let (
+        mut response,
+        agent_duration_ms,
+        num_turns,
+        billed_main_turns,
+        mut is_process_error,
+        parsed_valid,
+    ) = match parsed {
+        Ok(result) => (
+            result.response,
+            result.duration_ms,
+            result.num_turns,
+            result.billed_main_turns,
+            result.is_error,
+            true,
+        ),
+        Err(error) if status == SessionStatus::Cancelled => (
+            format!("session cancelled before a terminal result event was emitted: {error}"),
+            0,
+            0,
+            0,
+            false,
+            false,
+        ),
+        Err(error) => {
+            diagnostics.push(format!("strict event parse failed: {error}"));
+            (
+                format!("agent output was invalid: {error}; recent container logs:\n{logs}"),
+                0,
+                0,
+                0,
                 true,
-            ),
-            Err(error) if status == SessionStatus::Cancelled => (
-                format!("session cancelled before a terminal result event was emitted: {error}"),
-                0,
-                0,
                 false,
-                false,
-            ),
-            Err(error) => {
-                diagnostics.push(format!("strict event parse failed: {error}"));
-                (
-                    format!("agent output was invalid: {error}; recent container logs:\n{logs}"),
-                    0,
-                    0,
-                    true,
-                    false,
-                )
-            }
-        };
+            )
+        }
+    };
     let final_observed = match crate::runtime::read_running_progress(&paths.events_jsonl()) {
         Ok(observed) => {
-            if parsed_valid && observed.num_turns != num_turns {
+            // Both readers count the same thing — main-scope assistant events
+            // carrying billed usage — so they must agree exactly. Comparing
+            // against the terminal `num_turns` instead would compare finished
+            // turns with started ones and fire on every errored run.
+            if parsed_valid && observed.num_turns != billed_main_turns {
                 diagnostics.push(format!(
-                    "live/final turn-count mismatch: live reader observed {}, strict terminal parser observed {num_turns}",
+                    "live/final turn-count mismatch: live reader observed {}, strict terminal parser observed {billed_main_turns} billed of {num_turns} started",
                     observed.num_turns
                 ));
             }

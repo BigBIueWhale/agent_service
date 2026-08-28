@@ -503,7 +503,7 @@ index 72409fd..aced76c 100644
          : new ExtensionFileWatcher(config, undefined, extensionRefreshState);
      extensionFileWatcher?.startWatching();
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-index e687181..5d55add 100644
+index e687181..53f85af 100644
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 @@ -159,8 +159,16 @@ class TestJsonOutputAdapter extends BaseJsonOutputAdapter {
@@ -525,7 +525,7 @@ index e687181..5d55add 100644
    }
  }
  
-@@ -898,6 +906,63 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -898,6 +906,106 @@ describe('BaseJsonOutputAdapter', () => {
          text: 'First',
        });
      });
@@ -539,6 +539,7 @@ index e687181..5d55add 100644
 +          originalTokenCount: 214883,
 +          newTokenCount: 41207,
 +          triggerReason: 'token_limit',
++          output: null,
 +        },
 +      });
 +
@@ -556,6 +557,47 @@ index e687181..5d55add 100644
 +          originalTokenCount: 214883,
 +          newTokenCount: 41207,
 +          triggerReason: 'token_limit',
++          output: null,
++        });
++      }
++    });
++
++    it('[compaction-event] carries the failed attempt output accounting to the stream', () => {
++      adapter.processEvent({
++        type: GeminiEventType.ChatCompaction,
++        value: {
++          status: 'COMPRESSION_FAILED_OUTPUT_TRUNCATED',
++          succeeded: false,
++          originalTokenCount: 233926,
++          newTokenCount: 233926,
++          triggerReason: 'token_limit',
++          output: {
++            maxOutputTokens: 20000,
++            thinkingTokenBudget: 12000,
++            finalResponseTokenBudget: 8000,
++            outputTokens: 19900,
++            thinkingTokens: 19900,
++            summaryChars: 0,
++            finishReason: 'MAX_TOKENS',
++          },
++        },
++      });
++
++      const message = adapter.emittedMessages[0];
++      expect(message.type).toBe('system');
++      if (message.type === 'system') {
++        // No debug logging is enabled in the sealed runtime, so the captured
++        // stream is the only place this can survive. Reasoning consuming the
++        // entire maintenance budget and yielding no summary has to be
++        // readable from the bundle alone.
++        expect(message.data).toMatchObject({
++          status: 'COMPRESSION_FAILED_OUTPUT_TRUNCATED',
++          output: {
++            maxOutputTokens: 20000,
++            thinkingTokens: 19900,
++            summaryChars: 0,
++            finishReason: 'MAX_TOKENS',
++          },
 +        });
 +      }
 +    });
@@ -569,6 +611,7 @@ index e687181..5d55add 100644
 +          originalTokenCount: 214883,
 +          newTokenCount: 214883,
 +          triggerReason: 'token_limit',
++          output: null,
 +        },
 +      });
 +
@@ -589,7 +632,7 @@ index e687181..5d55add 100644
    });
  
    describe('finalizeAssistantMessage', () => {
-@@ -1247,6 +1312,26 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1247,6 +1355,26 @@ describe('BaseJsonOutputAdapter', () => {
          expect(message.subtype).toBe('test_subtype');
        }
      });
@@ -616,7 +659,7 @@ index e687181..5d55add 100644
    });
  
    describe('emitToolProgress', () => {
-@@ -1624,6 +1709,7 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1624,6 +1752,7 @@ describe('BaseJsonOutputAdapter', () => {
        const errorResult = adapter.exposeBuildSubagentErrorResult(
          'Error message',
          3,
@@ -624,7 +667,7 @@ index e687181..5d55add 100644
        );
  
        expect(errorResult.type).toBe('result');
-@@ -1635,6 +1721,75 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1635,6 +1764,75 @@ describe('BaseJsonOutputAdapter', () => {
          input_tokens: 0,
          output_tokens: 0,
        });
@@ -700,7 +743,7 @@ index e687181..5d55add 100644
      });
    });
  
-@@ -1767,6 +1922,38 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1767,6 +1965,38 @@ describe('BaseJsonOutputAdapter', () => {
          expect(result).toBe('Tool result');
        });
  
@@ -739,7 +782,7 @@ index e687181..5d55add 100644
        it('includes the vision bridge disclosure with tool content', () => {
          const response = {
            callId: 'pdf-success',
-@@ -1813,7 +2000,7 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1813,7 +2043,7 @@ describe('BaseJsonOutputAdapter', () => {
  
          expect(toolResultContent(response)).toBe(
            'Converted 1 image via qwen3-vl-plus (dashscope.aliyuncs.com).\n' +
@@ -919,10 +962,18 @@ index 53801c8..5a9d2a2 100644
    duration_ms: number;
    duration_api_ms: number;
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
-index 6dfe8f8..e7f730a 100644
+index 6dfe8f8..96aef12 100644
 --- a/packages/cli/src/nonInteractiveCli.ts
 +++ b/packages/cli/src/nonInteractiveCli.ts
-@@ -150,6 +150,7 @@ function suppressedOutputBody(structuredCaptured: boolean): string {
+@@ -32,6 +32,7 @@ import {
+   OutputFormat,
+   InputFormat,
+   LoopType,
++  describeLoopType,
+   ToolNames,
+   uiTelemetryService,
+   parseAndFormatApiError,
+@@ -150,6 +151,7 @@ function suppressedOutputBody(structuredCaptured: boolean): string {
  
  import {
    normalizePartList,
@@ -930,7 +981,49 @@ index 6dfe8f8..e7f730a 100644
    extractPartsFromUserMessage,
    buildSystemMessage,
    createToolProgressHandler,
-@@ -1113,7 +1114,7 @@ export async function runNonInteractive(
+@@ -159,37 +161,11 @@ import {
+   insertAfterFunctionResponses,
+ } from './utils/nonInteractiveHelpers.js';
+ 
+-// Human-readable labels for the detectors that can fire mid-stream.
+-// Surfaced to stderr in TEXT mode so a headless run that halts on a loop
+-// doesn't exit with empty stdout and no explanation — see PR #3236 review.
+-const LOOP_TYPE_LABELS: Record<LoopType, string> = {
+-  [LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS]:
+-    'the model repeated the same tool call with identical arguments',
+-  [LoopType.CHANTING_IDENTICAL_SENTENCES]:
+-    'the model repeated the same sentence in its output',
+-  [LoopType.REPETITIVE_THOUGHTS]:
+-    'the model repeated the same reasoning thought',
+-  [LoopType.READ_FILE_LOOP]:
+-    'the model spent too many consecutive calls reading files without making progress',
+-  [LoopType.ACTION_STAGNATION]:
+-    'the model kept calling the same tool without making progress',
+-  [LoopType.SHELL_COMMAND_STAGNATION]:
+-    'the model repeated similar shell inspection commands without making progress',
+-  [LoopType.GLOBAL_TOOL_CALL_DUPLICATE]:
+-    'the model repeated the same tool call across the turn, even when not back-to-back',
+-  [LoopType.ALTERNATING_TOOL_CALL_PATTERN]:
+-    'the model alternated between the same two tool calls in a repeating pattern',
+-  [LoopType.TURN_TOOL_CALL_CAP]:
+-    'the turn reached the per-turn tool-call limit',
+-  [LoopType.INVALID_TOOL_PARAMS_STAGNATION]:
+-    'the model repeatedly sent invalid tool parameters without correcting them',
+-  [LoopType.REPEATED_TOOL_EXECUTION_FAILURE]:
+-    'the same tool execution failure continued after a corrective reminder',
+-};
+-
+ function formatLoopDetectedMessage(loopType: LoopType | undefined): string {
+-  const reason = loopType ? LOOP_TYPE_LABELS[loopType] : undefined;
+-  const detail = reason ? ` (${loopType}: ${reason})` : '';
++  // The rule labels live beside the detector in core, so this message and a
++  // subagent's terminal record name the same cause in the same words.
++  const described = describeLoopType(loopType);
++  const detail = described ? ` (${described})` : '';
+   // The always-on guards run before the skipLoopDetection gate, so that
+   // setting can't disable them — don't suggest it for those loop types. The
+   // per-turn cap is also always-on but has its own knob, so it gets a
+@@ -1113,7 +1089,7 @@ export async function runNonInteractive(
  
        if (!initialPartList) {
          let slashHandled = false;
@@ -939,7 +1032,7 @@ index 6dfe8f8..e7f730a 100644
            const slashCommandResult = await handleSlashCommand(
              input,
              abortController,
-@@ -1321,7 +1322,7 @@ export async function runNonInteractive(
+@@ -1321,7 +1297,7 @@ export async function runNonInteractive(
        const recoveredAgentsNotice =
          resumedSessionData &&
          !options.continueInterrupted &&
@@ -948,7 +1041,7 @@ index 6dfe8f8..e7f730a 100644
            ? config.consumePendingRecoveredAgentsNotice()
            : null;
        if (recoveredAgentsNotice) {
-@@ -2360,19 +2361,21 @@ export async function runNonInteractive(
+@@ -2360,19 +2336,21 @@ export async function runNonInteractive(
              }
              loopDetected = true;
            }
@@ -978,7 +1071,7 @@ index 6dfe8f8..e7f730a 100644
              throw new AlreadyReportedError(errorText);
            }
          }
-@@ -2674,18 +2677,16 @@ export async function runNonInteractive(
+@@ -2674,18 +2652,16 @@ export async function runNonInteractive(
                    }
                    loopDetected = true;
                  }
@@ -1019,7 +1112,7 @@ index 27f4a60..e10b89a 100644
              case ServerGeminiEventType.ToolCallResponse:
                flushBufferedStreamEvents();
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
-index d0bb989..90ac151 100644
+index d0bb989..b42748c 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 @@ -24,6 +24,7 @@ import type {
@@ -1144,7 +1237,7 @@ index d0bb989..90ac151 100644
    it('should emit error result for cancelled task status', () => {
      const { handler } = createAgentToolProgressHandler(
        mockConfig,
-@@ -1079,6 +1165,62 @@ describe('createAgentToolProgressHandler', () => {
+@@ -1079,6 +1165,64 @@ describe('createAgentToolProgressHandler', () => {
      expect(mockAdapter.emitToolResult).not.toHaveBeenCalled();
    });
  
@@ -1161,6 +1254,7 @@ index d0bb989..90ac151 100644
 +      originalTokenCount: 198_400,
 +      newTokenCount: 32_118,
 +      triggerReason: 'token_limit' as const,
++      output: null,
 +    };
 +    const secondCompaction = {
 +      status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
@@ -1168,6 +1262,7 @@ index d0bb989..90ac151 100644
 +      originalTokenCount: 205_112,
 +      newTokenCount: 205_112,
 +      triggerReason: 'token_limit' as const,
++      output: null,
 +    };
 +
 +    const baseDisplay: AgentResultDisplay = {
@@ -1420,8 +1515,21 @@ index 433be1b..c5e89d4 100644
  /**
   * Returns the depth of the current agent context frame. 0 means we're
   * inside a top-level subagent (or no subagent at all — but in that case
+diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core/src/agents/runtime/agent-core.test.ts
+index c100f92..f32632a 100644
+--- a/packages/core/src/agents/runtime/agent-core.test.ts
++++ b/packages/core/src/agents/runtime/agent-core.test.ts
+@@ -210,7 +210,7 @@ describe('AgentCore.runInAgentFrames', () => {
+       '_runReasoningLoopInner',
+     ).mockImplementation(async () => {
+       observed = getInvocationContext();
+-      return { text: '', terminateMode: null, turnsUsed: 0 };
++      return { text: '', terminateMode: null, turnsUsed: 0, loopType: null };
+     });
+ 
+     await runWithInvocationContext(parentContext, () =>
 diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/agents/runtime/agent-core.ts
-index 191b5ab..fa2dfae 100644
+index 191b5ab..9a2c98f 100644
 --- a/packages/core/src/agents/runtime/agent-core.ts
 +++ b/packages/core/src/agents/runtime/agent-core.ts
 @@ -25,6 +25,7 @@ import type { Config } from '../../config/config.js';
@@ -1432,7 +1540,15 @@ index 191b5ab..fa2dfae 100644
    getRuntimeContentGenerator,
    isTopLevelSession,
    runWithAgentContext,
-@@ -69,6 +70,11 @@ import type {
+@@ -41,6 +42,7 @@ import {
+   type ToolCallRequestInfo,
+ } from '../../core/turn.js';
+ import { LoopDetectionService } from '../../services/loopDetectionService.js';
++import type { LoopType } from '../../telemetry/types.js';
+ import {
+   CoreToolScheduler,
+   type ToolCall,
+@@ -69,6 +71,11 @@ import type {
  } from '@google/genai';
  import { GeminiChat } from '../../core/geminiChat.js';
  import { assembleSystemPrompt } from '../../core/prompts.js';
@@ -1444,7 +1560,7 @@ index 191b5ab..fa2dfae 100644
  import {
    dedupeToolCallsById,
    getProviderToolCallId,
-@@ -83,6 +89,7 @@ import type {
+@@ -83,6 +90,7 @@ import type {
  } from './agent-types.js';
  import { AgentTerminateMode } from './agent-types.js';
  import type {
@@ -1452,7 +1568,29 @@ index 191b5ab..fa2dfae 100644
    AgentRoundEvent,
    AgentRoundTextEvent,
    AgentToolCallEvent,
-@@ -973,18 +980,33 @@ export class AgentCore {
+@@ -285,6 +293,13 @@ export interface ReasoningLoopResult {
+   terminateMode: AgentTerminateMode | null;
+   /** Number of model round-trips completed. */
+   turnsUsed: number;
++  /**
++   * Which loop-detection rule ended the run, when one did. `LOOP_DETECTED`
++   * covers nine rules across two tiers, and null on a LOOP_DETECTED result
++   * means the halt came from the duplicate-provider-tool-call guard rather
++   * than from the detector.
++   */
++  loopType: LoopType | null;
+ }
+ 
+ /**
+@@ -949,6 +964,7 @@ export class AgentCore {
+               text: finalText,
+               terminateMode: AgentTerminateMode.CANCELLED,
+               turnsUsed: turnCounter,
++              loopType: null,
+             };
+           }
+ 
+@@ -973,18 +989,33 @@ export class AgentCore {
              continue;
            }
  
@@ -1490,7 +1628,18 @@ index 191b5ab..fa2dfae 100644
            // Handle chunk events
            if (streamEvent.type === 'chunk') {
              const resp = streamEvent.value;
-@@ -2304,8 +2326,14 @@ Important Rules:
+@@ -1252,6 +1283,10 @@ export class AgentCore {
+       text: finalText,
+       terminateMode,
+       turnsUsed: turnCounter,
++      loopType:
++        terminateMode === AgentTerminateMode.LOOP_DETECTED
++          ? loopDetector.getLastLoopType()
++          : null,
+     };
+   }
+ 
+@@ -2304,8 +2339,14 @@ Important Rules:
  
      // Context files (QWEN.md + output-language.md) keep the subagent aligned
      // with project conventions; the volatile auto-memory section stays last.
@@ -1507,18 +1656,19 @@ index 191b5ab..fa2dfae 100644
        autoMemory: this.runtimeContext.getAutoMemoryPrompt(),
      });
 diff --git a/packages/core/src/agents/runtime/agent-events.ts b/packages/core/src/agents/runtime/agent-events.ts
-index 013ae52..4463b73 100644
+index 013ae52..c27cdaa 100644
 --- a/packages/core/src/agents/runtime/agent-events.ts
 +++ b/packages/core/src/agents/runtime/agent-events.ts
-@@ -20,6 +20,7 @@ import type {
+@@ -20,6 +20,8 @@ import type {
    ToolResultDisplay,
  } from '../../tools/tools.js';
  import type { Part, GenerateContentResponseUsageMetadata } from '@google/genai';
 +import type { CompactionRecord } from '../../core/turn.js';
++import type { LoopType } from '../../telemetry/types.js';
  import type { AgentStatus } from './agent-types.js';
  
  type WithoutConfirmationCallback<T> = T extends unknown
-@@ -44,6 +45,7 @@ export type AgentEvent =
+@@ -44,6 +46,7 @@ export type AgentEvent =
    | 'tool_waiting_approval'
    | 'usage_metadata'
    | 'external_message'
@@ -1526,7 +1676,7 @@ index 013ae52..4463b73 100644
    | 'finish'
    | 'error'
    | 'status_change';
-@@ -63,6 +65,8 @@ export enum AgentEventType {
+@@ -63,6 +66,8 @@ export enum AgentEventType {
    USAGE_METADATA = 'usage_metadata',
    /** External user message injected mid-run (e.g. via send_message). */
    EXTERNAL_MESSAGE = 'external_message',
@@ -1535,7 +1685,7 @@ index 013ae52..4463b73 100644
    FINISH = 'finish',
    ERROR = 'error',
    STATUS_CHANGE = 'status_change',
-@@ -199,6 +203,19 @@ export interface AgentExternalMessageEvent {
+@@ -199,9 +204,37 @@ export interface AgentExternalMessageEvent {
    timestamp: number;
  }
  
@@ -1555,7 +1705,25 @@ index 013ae52..4463b73 100644
  export interface AgentFinishEvent {
    subagentId: string;
    terminateReason: string;
-@@ -246,6 +263,7 @@ export interface AgentEventMap {
++  /**
++   * Model round-trips this run started. Required, because this event is what
++   * flips a consumer's view of the agent to its terminal state: a terminal
++   * announcement that omits the count leaves any later, fuller update
++   * unreadable to an edge-triggered consumer, which then has to invent a
++   * number. Distinct from `rounds`, which is the statistics collector's
++   * completed-round total and accumulates across continuations.
++   */
++  turnsUsed: number;
++  /**
++   * Which loop-detection rule ended the run, when one did. Null for every
++   * other terminate reason, and null on a LOOP_DETECTED finish that came from
++   * the duplicate-provider-tool-call guard rather than from the detector.
++   */
++  loopType: LoopType | null;
+   timestamp: number;
+   rounds?: number;
+   totalDurationMs?: number;
+@@ -246,6 +279,7 @@ export interface AgentEventMap {
    [AgentEventType.TOOL_WAITING_APPROVAL]: AgentApprovalRequestEvent;
    [AgentEventType.USAGE_METADATA]: AgentUsageEvent;
    [AgentEventType.EXTERNAL_MESSAGE]: AgentExternalMessageEvent;
@@ -1564,34 +1732,54 @@ index 013ae52..4463b73 100644
    [AgentEventType.ERROR]: AgentErrorEvent;
    [AgentEventType.STATUS_CHANGE]: AgentStatusChangeEvent;
 diff --git a/packages/core/src/agents/runtime/agent-headless.ts b/packages/core/src/agents/runtime/agent-headless.ts
-index 2870d4b..e325807 100644
+index 2870d4b..acc6263 100644
 --- a/packages/core/src/agents/runtime/agent-headless.ts
 +++ b/packages/core/src/agents/runtime/agent-headless.ts
-@@ -139,6 +139,7 @@ export class AgentHeadless {
+@@ -39,6 +39,7 @@ import type {
+ import { AgentTerminateMode } from './agent-types.js';
+ import { logSubagentExecution } from '../../telemetry/loggers.js';
+ import { SubagentExecutionEvent } from '../../telemetry/types.js';
++import type { LoopType } from '../../telemetry/types.js';
+ import { AgentCore, EXTERNAL_MESSAGE_PREFIX } from './agent-core.js';
+ import { DEFAULT_QWEN_MODEL } from '../../config/models.js';
+ 
+@@ -139,6 +140,8 @@ export class AgentHeadless {
    private readonly core: AgentCore;
    private finalText: string = '';
    private terminateMode: AgentTerminateMode = AgentTerminateMode.ERROR;
 +  private turnsUsed: number = 0;
++  private loopType: LoopType | null = null;
    private chat?: GeminiChat;
    private toolsList?: FunctionDeclaration[];
    private executing = false;
-@@ -217,6 +218,7 @@ export class AgentHeadless {
+@@ -217,6 +220,8 @@ export class AgentHeadless {
      this.executing = true;
      this.finalText = '';
      this.terminateMode = AgentTerminateMode.ERROR;
 +    this.turnsUsed = 0;
++    this.loopType = null;
      const resetStats = options.resetStats !== false;
      if (resetStats) {
        this.core.resetExecutionStats();
-@@ -377,6 +379,7 @@ export class AgentHeadless {
+@@ -377,6 +382,8 @@ export class AgentHeadless {
  
          this.finalText = result.text;
          this.terminateMode = result.terminateMode ?? AgentTerminateMode.GOAL;
 +        this.turnsUsed = result.turnsUsed;
++        this.loopType = result.loopType;
        } catch (error) {
          debugLogger.error('Error during subagent execution:', error);
          this.terminateMode = AgentTerminateMode.ERROR;
-@@ -474,6 +477,15 @@ export class AgentHeadless {
+@@ -394,6 +401,8 @@ export class AgentHeadless {
+         this.core.eventEmitter?.emit(AgentEventType.FINISH, {
+           subagentId: this.core.subagentId,
+           terminateReason: this.terminateMode,
++          turnsUsed: this.turnsUsed,
++          loopType: this.loopType,
+           timestamp: Date.now(),
+           rounds: summary.rounds,
+           totalDurationMs: summary.totalDurationMs,
+@@ -474,6 +483,25 @@ export class AgentHeadless {
      return this.terminateMode;
    }
  
@@ -1604,14 +1792,37 @@ index 2870d4b..e325807 100644
 +    return this.turnsUsed;
 +  }
 +
++  /**
++   * The loop-detection rule that ended this run, or null when the run did not
++   * end on one. `LOOP_DETECTED` spans nine rules across two tiers, so the
++   * reason alone cannot tell a five-identical-call halt from an exhausted
++   * per-turn tool-call budget.
++   */
++  getLoopType(): LoopType | null {
++    return this.loopType;
++  }
++
    /**
     * Sets a callback that the reasoning loop calls between tool rounds
     * to drain external messages (e.g. from SendMessage tool).
 diff --git a/packages/core/src/agents/subagent-result.test.ts b/packages/core/src/agents/subagent-result.test.ts
-index 691da33..2dbc8b9 100644
+index 691da33..1a33e6b 100644
 --- a/packages/core/src/agents/subagent-result.test.ts
 +++ b/packages/core/src/agents/subagent-result.test.ts
-@@ -55,8 +55,31 @@ describe('toModelVisibleSubagentResult', () => {
+@@ -6,7 +6,11 @@
+ 
+ import { describe, expect, it } from 'vitest';
+ import { AgentTerminateMode } from './runtime/agent-types.js';
+-import { toModelVisibleSubagentResult } from './subagent-result.js';
++import { LoopType } from '../telemetry/types.js';
++import {
++  describeSubagentTerminateReason,
++  toModelVisibleSubagentResult,
++} from './subagent-result.js';
+ 
+ describe('toModelVisibleSubagentResult', () => {
+   it.each([
+@@ -55,8 +59,80 @@ describe('toModelVisibleSubagentResult', () => {
    it('preserves raw diagnostics for non-goal terminations', () => {
      const raw = '<analysis>debug</analysis><summary>partial</summary>';
  
@@ -1627,7 +1838,7 @@ index 691da33..2dbc8b9 100644
 +      'partial findings',
 +      AgentTerminateMode.MAX_TURNS,
 +      400,
-     );
++    );
 +
 +    expect(text).toContain('exhausted its turn budget after 400 turns');
 +    expect(text).toContain('partial findings');
@@ -1643,17 +1854,91 @@ index 691da33..2dbc8b9 100644
 +    // Singular, and unmistakably not a conclusion the parent can build on.
 +    expect(text).toContain('after 1 turn and produced no report');
 +    expect(text).not.toContain('1 turns');
++  });
++
++  it('[loop-attribution] names the loop rule in the text the parent reads', () => {
++    const text = toModelVisibleSubagentResult(
++      '   ',
++      AgentTerminateMode.LOOP_DETECTED,
++      11,
++      LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,
++    );
++
++    expect(text).toContain(
++      'stopped as loop_detected (consecutive_identical_tool_calls: ' +
++        'the model repeated the same tool call with identical arguments) ' +
++        'after 11 turns',
+     );
    });
++
++  it('[loop-attribution] distinguishes a budget halt from a repetition halt', () => {
++    // Both are LOOP_DETECTED. Told apart, they call for different responses:
++    // one is a stuck model, the other an assignment larger than the budget.
++    expect(
++      describeSubagentTerminateReason(
++        AgentTerminateMode.LOOP_DETECTED,
++        LoopType.TURN_TOOL_CALL_CAP,
++      ),
++    ).toBe(
++      'LOOP_DETECTED (turn_tool_call_cap: the turn reached the per-turn ' +
++        'tool-call limit)',
++    );
++    expect(
++      describeSubagentTerminateReason(
++        AgentTerminateMode.LOOP_DETECTED,
++        LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,
++      ),
++    ).toBe(
++      'LOOP_DETECTED (consecutive_identical_tool_calls: the model repeated ' +
++        'the same tool call with identical arguments)',
++    );
++  });
++
++  it('[loop-attribution] leaves a non-loop terminate reason exactly as it was', () => {
++    expect(
++      describeSubagentTerminateReason(AgentTerminateMode.MAX_TURNS, null),
++    ).toBe('MAX_TURNS');
++    // A LOOP_DETECTED halt from the duplicate-provider guard fires no rule,
++    // so there is nothing to name and nothing is invented.
++    expect(
++      describeSubagentTerminateReason(AgentTerminateMode.LOOP_DETECTED, null),
++    ).toBe('LOOP_DETECTED');
++  });
  });
 diff --git a/packages/core/src/agents/subagent-result.ts b/packages/core/src/agents/subagent-result.ts
-index 588c7e6..1288e8a 100644
+index 588c7e6..554b54c 100644
 --- a/packages/core/src/agents/subagent-result.ts
 +++ b/packages/core/src/agents/subagent-result.ts
-@@ -145,9 +145,34 @@ function stripAnalysisOutsideSummary(text: string): string {
+@@ -5,6 +5,23 @@
+  */
+ 
+ import { AgentTerminateMode } from './runtime/agent-types.js';
++import { describeLoopType } from '../services/loopDetectionService.js';
++import type { LoopType } from '../telemetry/types.js';
++
++/**
++ * Why a subagent stopped, naming the loop-detection rule when one fired.
++ * `LOOP_DETECTED` alone covers nine rules across two tiers, so a five
++ * identical-tool-call halt and an exhausted per-turn tool-call budget are
++ * indistinguishable without it — the difference between "the model is stuck"
++ * and "the assignment was bigger than the budget".
++ */
++export function describeSubagentTerminateReason(
++  terminateMode: AgentTerminateMode,
++  loopType?: LoopType | null,
++): string {
++  const rule = describeLoopType(loopType);
++  return rule ? `${terminateMode} (${rule})` : String(terminateMode);
++}
+ 
+ function isClosingAnalysisTag(tag: string): boolean {
+   return tag.startsWith('</');
+@@ -145,9 +162,39 @@ function stripAnalysisOutsideSummary(text: string): string {
  export function toModelVisibleSubagentResult(
    text: string,
    terminateMode = AgentTerminateMode.GOAL,
 +  turnsUsed?: number,
++  loopType?: LoopType | null,
  ): string {
    if (terminateMode !== AgentTerminateMode.GOAL) {
 -    return text;
@@ -1668,6 +1953,10 @@ index 588c7e6..1288e8a 100644
 +      typeof turnsUsed === 'number' && turnsUsed > 0
 +        ? ` after ${turnsUsed} turn${turnsUsed === 1 ? '' : 's'}`
 +        : '';
++    // The rule that fired is as actionable as the count: it is the difference
++    // between a stuck model and an assignment larger than the budget.
++    const rule = describeLoopType(loopType);
++    const detail = rule ? ` (${rule})` : '';
 +    let reason: string;
 +    if (terminateMode === AgentTerminateMode.MAX_TURNS) {
 +      reason = `exhausted its turn budget${turns}`;
@@ -1676,7 +1965,7 @@ index 588c7e6..1288e8a 100644
 +    } else if (terminateMode === AgentTerminateMode.CANCELLED) {
 +      reason = `was cancelled${turns}`;
 +    } else {
-+      reason = `stopped as ${String(terminateMode).toLowerCase()}${turns}`;
++      reason = `stopped as ${String(terminateMode).toLowerCase()}${detail}${turns}`;
 +    }
 +    const partial = text.trim();
 +    return partial
@@ -2444,7 +2733,7 @@ index c224235..86ecf79 100644
            ),
          );
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
-index 5ae5029..c033ff4 100644
+index 5ae5029..c222433 100644
 --- a/packages/core/src/core/geminiChat.test.ts
 +++ b/packages/core/src/core/geminiChat.test.ts
 @@ -33,7 +33,11 @@ import type { OpenAICompatibleProvider } from './openaiContentGenerator/provider
@@ -2477,7 +2766,7 @@ index 5ae5029..c033ff4 100644
        const compressedHistory: Content[] = [
          { role: 'user', parts: [{ text: 'summary' }] },
          { role: 'model', parts: [{ text: 'ok' }] },
-@@ -3202,18 +3205,108 @@ describe('GeminiChat', async () => {
+@@ -3202,18 +3205,110 @@ describe('GeminiChat', async () => {
          events.push(event as { type: StreamEventType });
        }
  
@@ -2496,6 +2785,7 @@ index 5ae5029..c033ff4 100644
 +        originalTokenCount: 1000,
 +        newTokenCount: 200,
 +        triggerReason: null,
++        output: null,
 +      });
 +      // COMPRESSED keeps its narrower meaning: the history was replaced.
 +      expect(events[1].type).toBe(StreamEventType.COMPRESSED);
@@ -2550,6 +2840,7 @@ index 5ae5029..c033ff4 100644
 +        originalTokenCount: 1000,
 +        newTokenCount: 1000,
 +        triggerReason: null,
++        output: null,
 +      });
 +      expect(
 +        events.some((event) => event.type === StreamEventType.COMPRESSED),
@@ -2590,7 +2881,7 @@ index 5ae5029..c033ff4 100644
      it('forwards the pending user message and request config to compression', async () => {
        // The cheap-gate inside ChatCompressionService.compress uses
        // estimatePromptTokens(history, pendingUserMessage, lastPromptTokenCount)
-@@ -3254,11 +3347,15 @@ describe('GeminiChat', async () => {
+@@ -3254,11 +3349,15 @@ describe('GeminiChat', async () => {
          { message: userMessageText, config: { tools: requestTools } },
          'prompt-id-first-turn',
        );
@@ -2609,7 +2900,7 @@ index 5ae5029..c033ff4 100644
  
        // Drain the rest so the send-lock releases cleanly.
        for await (const _ of stream) {
-@@ -3279,139 +3376,6 @@ describe('GeminiChat', async () => {
+@@ -3279,139 +3378,6 @@ describe('GeminiChat', async () => {
        );
      });
  
@@ -2749,7 +3040,7 @@ index 5ae5029..c033ff4 100644
      it('clears consecutiveFailures after a forced successful compression', async () => {
        const compressSpy = vi.spyOn(
          ChatCompressionService.prototype,
-@@ -3544,9 +3508,12 @@ describe('GeminiChat', async () => {
+@@ -3544,9 +3510,12 @@ describe('GeminiChat', async () => {
          mockContentGenerator.generateContentStream,
        ).mock.calls[1]![0];
        expect(secondRequest.contents).toEqual(expectedRequestContents);
@@ -2765,7 +3056,7 @@ index 5ae5029..c033ff4 100644
        expect(
          events.some(
            (event) =>
-@@ -5253,6 +5220,77 @@ describe('GeminiChat', async () => {
+@@ -5253,6 +5222,77 @@ describe('GeminiChat', async () => {
        expect(requestConfig.maxOutputTokens).toBe(9_999);
      });
  
@@ -2843,7 +3134,7 @@ index 5ae5029..c033ff4 100644
      it('keeps the overhead pad after compression uses an estimated baseline', async () => {
        vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
          authType: AuthType.USE_GEMINI,
-@@ -5927,6 +5965,205 @@ describe('GeminiChat', async () => {
+@@ -5927,6 +5967,205 @@ describe('GeminiChat', async () => {
        }
      });
  
@@ -3049,7 +3340,7 @@ index 5ae5029..c033ff4 100644
      it('should fail after all retries on persistent invalid content and report metrics', async () => {
        vi.useFakeTimers();
        try {
-@@ -15129,6 +15366,41 @@ describe('GeminiChat', async () => {
+@@ -15129,6 +15368,41 @@ describe('GeminiChat', async () => {
        } as unknown as GenerateContentResponse;
      }
  
@@ -4225,7 +4516,7 @@ index f4166d4..c5ee9a3 100644
      request: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
-index fc0c21c..e5c5cab 100644
+index fc0c21c..2acd7ea 100644
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 @@ -26,7 +26,11 @@ import { OpenAIContentConverter } from './converter.js';
@@ -4241,7 +4532,7 @@ index fc0c21c..e5c5cab 100644
  import type { OpenAICompatibleProvider } from './provider/index.js';
  import { DefaultOpenAICompatibleProvider } from './provider/default.js';
  import { DashScopeOpenAICompatibleProvider } from './provider/dashscope.js';
-@@ -5005,6 +5009,130 @@ describe('ContentGenerationPipeline', () => {
+@@ -5005,6 +5009,237 @@ describe('ContentGenerationPipeline', () => {
          expect.objectContaining({ signal: undefined }),
        );
      });
@@ -4369,6 +4660,113 @@ index fc0c21c..e5c5cab 100644
 +      );
 +      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
 +    });
++
++    it('[phase-budget] overrides a phase budget pinned in extra_body, which the provider merges over the request', async () => {
++      // The deployed provider pins the phase budgets in `extra_body`, which
++      // DefaultOpenAICompatibleProvider merges over the request it is given.
++      // Run the real provider so the merge actually happens: a maintenance
++      // budget written before that merge is silently replaced by the pinned
++      // one, which is how a 20K compaction was run with an unbounded
++      // thinking budget and produced no summary at all.
++      mockContentGeneratorConfig = {
++        ...mockContentGeneratorConfig,
++        samplingParams: {
++          temperature: 1,
++          max_tokens: 262_144,
++        },
++        extra_body: {
++          reasoning_effort: 'xhigh',
++          thinking_token_budget: 262_144,
++          final_response_token_budget: 131_072,
++        },
++      } as ContentGeneratorConfig;
++      mockConfig = {
++        ...mockConfig,
++        contentGeneratorConfig: mockContentGeneratorConfig,
++      };
++      pipeline = new ContentGenerationPipeline(mockConfig);
++
++      const realProvider = new DefaultOpenAICompatibleProvider(
++        mockContentGeneratorConfig,
++        {} as unknown as Config,
++      );
++      (mockProvider.buildRequest as Mock).mockImplementation((req) =>
++        realProvider.buildRequest(req, 'compaction'),
++      );
++
++      const request: PromptCacheSharingParameters = {
++        model: 'test-model',
++        contents: [{ parts: [{ text: 'Summarize safely' }], role: 'user' }],
++        config: { maxOutputTokens: 20_000 },
++        phaseBudgetOverrides: {
++          thinkingTokenBudget: 12_000,
++          finalResponseTokenBudget: 8_000,
++        },
++      };
++      (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
++      (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
++        new GenerateContentResponse(),
++      );
++      (mockClient.chat.completions.create as Mock).mockResolvedValue({
++        id: 'test',
++        choices: [{ message: { content: 'summary' } }],
++      });
++
++      await pipeline.execute(request, 'compaction');
++
++      expect(
++        (mockClient.chat.completions.create as Mock).mock.calls[0][0],
++      ).toMatchObject({
++        max_tokens: 20_000,
++        thinking_token_budget: 12_000,
++        final_response_token_budget: 8_000,
++        // Every other pinned extra_body key still reaches the wire unchanged.
++        reasoning_effort: 'xhigh',
++      });
++    });
++
++    it('[phase-budget] refuses a phase budget above a ceiling pinned in extra_body', async () => {
++      mockContentGeneratorConfig = {
++        ...mockContentGeneratorConfig,
++        samplingParams: {
++          temperature: 1,
++          max_tokens: 262_144,
++        },
++        extra_body: {
++          thinking_token_budget: 11_999,
++          final_response_token_budget: 131_072,
++        },
++      } as ContentGeneratorConfig;
++      mockConfig = {
++        ...mockConfig,
++        contentGeneratorConfig: mockContentGeneratorConfig,
++      };
++      pipeline = new ContentGenerationPipeline(mockConfig);
++
++      const realProvider = new DefaultOpenAICompatibleProvider(
++        mockContentGeneratorConfig,
++        {} as unknown as Config,
++      );
++      (mockProvider.buildRequest as Mock).mockImplementation((req) =>
++        realProvider.buildRequest(req, 'compaction'),
++      );
++
++      const request: PromptCacheSharingParameters = {
++        model: 'test-model',
++        contents: [{ parts: [{ text: 'Summarize safely' }], role: 'user' }],
++        config: { maxOutputTokens: 20_000 },
++        phaseBudgetOverrides: {
++          thinkingTokenBudget: 12_000,
++          finalResponseTokenBudget: 8_000,
++        },
++      };
++      (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
++
++      await expect(pipeline.execute(request, 'compaction')).rejects.toThrow(
++        'must not exceed the pinned provider ceiling',
++      );
++      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
++    });
    });
  
    describe('createRequestContext', () => {
@@ -4443,7 +4841,7 @@ index 0000000..9e8125a
 +  });
 +});
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-index a7aaf90..7cc6735 100644
+index a7aaf90..d3b7c6f 100644
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 @@ -11,6 +11,7 @@ import {
@@ -4454,16 +4852,29 @@ index a7aaf90..7cc6735 100644
    PromptCacheSharingParameters,
  } from '../contentGenerator.js';
  import { OpenAIContentConverter } from './converter.js';
-@@ -223,6 +224,53 @@ function clampProviderOutputBudgetKeys(
+@@ -223,6 +224,65 @@ function clampProviderOutputBudgetKeys(
    return samplingParams;
  }
  
++/**
++ * Write the per-request maintenance phase budget onto the fully merged wire
++ * request, mutating and returning the passed object.
++ *
++ * This is deliberately the last transformation of the request. The phase
++ * budgets are ordinary wire keys that the pinned configuration also declares
++ * — in `samplingParams`, in a provider hook, or in `extra_body`, which
++ * providers merge over the request — so an override written before those
++ * layers have merged is silently replaced by the pinned value, and the
++ * ceiling check below compares against an absent value it can never refuse.
++ * Written here, the override is both the value that ships and the value
++ * validated against the one it replaces.
++ */
 +function applyPhaseBudgetOverrides(
-+  params: Record<string, unknown>,
++  wireRequest: Record<string, unknown>,
 +  overrides: PromptCacheSharingParameters['phaseBudgetOverrides'],
 +  requestMaxTokens: number | undefined,
 +): Record<string, unknown> {
-+  if (!overrides) return params;
++  if (!overrides) return wireRequest;
 +  const entries = [
 +    ['thinking_token_budget', overrides.thinkingTokenBudget],
 +    ['final_response_token_budget', overrides.finalResponseTokenBudget],
@@ -4474,7 +4885,7 @@ index a7aaf90..7cc6735 100644
 +        `Invalid ${wireKey} phase override: expected a positive safe integer.`,
 +      );
 +    }
-+    const configured = params[wireKey];
++    const configured = wireRequest[wireKey];
 +    if (
 +      configured !== undefined &&
 +      (typeof configured !== 'number' ||
@@ -4498,17 +4909,16 @@ index a7aaf90..7cc6735 100644
 +        `${overrides.finalResponseTokenBudget}, max=${requestMaxTokens}.`,
 +    );
 +  }
-+  return {
-+    ...params,
-+    thinking_token_budget: overrides.thinkingTokenBudget,
-+    final_response_token_budget: overrides.finalResponseTokenBudget,
-+  };
++  wireRequest['thinking_token_budget'] = overrides.thinkingTokenBudget;
++  wireRequest['final_response_token_budget'] =
++    overrides.finalResponseTokenBudget;
++  return wireRequest;
 +}
 +
  /**
   * Resolve a stream-guard timeout (ms). Precedence, for both guards: explicit
   * `ContentGeneratorConfig` field (programmatic, wins — including `0` to
-@@ -434,6 +482,72 @@ async function* withStreamGuards(
+@@ -434,6 +494,72 @@ async function* withStreamGuards(
  
  export type { PipelineConfig } from './types.js';
  
@@ -4581,7 +4991,7 @@ index a7aaf90..7cc6735 100644
  export class ContentGenerationPipeline {
    client: OpenAI;
    private contentGeneratorConfig: ContentGeneratorConfig;
-@@ -454,6 +568,50 @@ export class ContentGenerationPipeline {
+@@ -454,6 +580,50 @@ export class ContentGenerationPipeline {
      );
    }
  
@@ -4632,39 +5042,20 @@ index a7aaf90..7cc6735 100644
    async execute(
      request: PromptCacheSharingParameters,
      userPromptId: string,
-@@ -1252,10 +1410,14 @@ export class ContentGenerationPipeline {
-       // provider-specific output-budget key in the result is clamped to the
-       // window too — a config carrying both max_tokens and e.g.
-       // max_completion_tokens must not leak the provider key unclamped.
--      return clampProviderOutputBudgetKeys(
--        maxTokens !== undefined
--          ? { ...configSamplingParams, max_tokens: maxTokens }
--          : { ...configSamplingParams },
-+      return applyPhaseBudgetOverrides(
-+        clampProviderOutputBudgetKeys(
-+          maxTokens !== undefined
-+            ? { ...configSamplingParams, max_tokens: maxTokens }
-+            : { ...configSamplingParams },
-+          requestMaxTokens,
-+        ),
-+        (request as PromptCacheSharingParameters).phaseBudgetOverrides,
-         requestMaxTokens,
-       );
+@@ -1176,6 +1346,12 @@ export class ContentGenerationPipeline {
+       delete typed['tool_choice'];
      }
-@@ -1284,7 +1446,11 @@ export class ContentGenerationPipeline {
-       ...this.buildReasoningConfig(request),
-     };
  
--    return params;
-+    return applyPhaseBudgetOverrides(
-+      params,
-+      (request as PromptCacheSharingParameters).phaseBudgetOverrides,
++    applyPhaseBudgetOverrides(
++      typed,
++      request.phaseBudgetOverrides,
 +      request.config?.maxOutputTokens,
 +    );
++
+     return providerRequest;
    }
  
-   private buildReasoningConfig(
-@@ -1420,6 +1586,7 @@ export class ContentGenerationPipeline {
+@@ -1420,6 +1596,7 @@ export class ContentGenerationPipeline {
        model: effectiveModel,
        modalities: this.contentGeneratorConfig.modalities ?? {},
        startTime: Date.now(),
@@ -5150,7 +5541,7 @@ index 0000000..0e8e43d
 +  'persisted artifacts before deciding what to do next; do not blindly repeat ' +
 +  'a non-idempotent operation.';
 diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
-index d2801d0..81f188b 100644
+index d2801d0..60b7527 100644
 --- a/packages/core/src/core/turn.ts
 +++ b/packages/core/src/core/turn.ts
 @@ -80,6 +80,15 @@ export enum GeminiEventType {
@@ -5183,7 +5574,55 @@ index d2801d0..81f188b 100644
  }
  
  /**
-@@ -387,6 +403,53 @@ export type ServerGeminiChatCompressedEvent = {
+@@ -371,6 +387,38 @@ export type CompactionTriggerReason =
+   | 'image_overflow'
+   | 'manual';
+ 
++/**
++ * How one compaction generation spent its fixed output budget.
++ *
++ * A compaction runs inside a hard output ceiling that the thinking and
++ * final-response phases share. When it fails, the only question that matters
++ * is where that ceiling went: reasoning that produced no summary, a summary
++ * that was written and then rejected, or a request that never generated at
++ * all are three different defects with the same status. Without this the
++ * answer is unrecoverable — the summary is discarded and the usage of a
++ * failed side query never reaches the billed event stream.
++ */
++export interface CompactionOutputAccounting {
++  /** Hard output ceiling the attempt was given. */
++  maxOutputTokens: number;
++  /** Thinking-phase budget requested on the wire. */
++  thinkingTokenBudget: number;
++  /** Final-response budget requested on the wire. */
++  finalResponseTokenBudget: number;
++  /** Output tokens the model actually produced, across both phases. */
++  outputTokens: number;
++  /** Of those, the ones spent in the hidden reasoning channel. */
++  thinkingTokens: number;
++  /**
++   * Characters of usable summary the attempt yielded. Zero alongside a large
++   * `thinkingTokens` is the exact signature of reasoning consuming a
++   * maintenance budget and contributing nothing.
++   */
++  summaryChars: number;
++  /** The provider's terminal reason, e.g. `MAX_TOKENS`. */
++  finishReason: string | null;
++}
++
+ export interface ChatCompressionInfo {
+   originalTokenCount: number;
+   newTokenCount: number;
+@@ -380,6 +428,8 @@ export interface ChatCompressionInfo {
+   triggerReason?: CompactionTriggerReason;
+   /** Set when the compaction model was swapped for the main model at runtime. */
+   warning?: string;
++  /** Absent when the attempt was refused before any generation ran. */
++  output?: CompactionOutputAccounting;
+ }
+ 
+ export type ServerGeminiChatCompressedEvent = {
+@@ -387,6 +437,59 @@ export type ServerGeminiChatCompressedEvent = {
    value: ChatCompressionInfo | null;
  };
  
@@ -5209,6 +5648,11 @@ index d2801d0..81f188b 100644
 +  newTokenCount: number;
 +  /** Why the attempt fired, or null when the caller did not classify it. */
 +  triggerReason: CompactionTriggerReason | null;
++  /**
++   * How the attempt's output budget was spent, or null when it was refused
++   * before generating anything.
++   */
++  output: CompactionOutputAccounting | null;
 +}
 +
 +/**
@@ -5226,6 +5670,7 @@ index d2801d0..81f188b 100644
 +    originalTokenCount: info.originalTokenCount,
 +    newTokenCount: info.newTokenCount,
 +    triggerReason: info.triggerReason ?? null,
++    output: info.output ?? null,
 +  };
 +}
 +
@@ -5237,7 +5682,7 @@ index d2801d0..81f188b 100644
  export type ServerGeminiMaxSessionTurnsEvent = {
    type: GeminiEventType.MaxSessionTurns;
  };
-@@ -453,6 +516,7 @@ export type ServerGeminiGoalStateEvent = {
+@@ -453,6 +556,7 @@ export type ServerGeminiGoalStateEvent = {
  export type ServerGeminiStreamEvent =
    | ServerGeminiGoalStateEvent
    | ServerGeminiActiveGoalEvent
@@ -5245,7 +5690,7 @@ index d2801d0..81f188b 100644
    | ServerGeminiChatCompressedEvent
    | ServerGeminiCitationEvent
    | ServerGeminiContentEvent
-@@ -581,6 +645,21 @@ export class Turn {
+@@ -581,6 +685,21 @@ export class Turn {
            continue;
          }
  
@@ -5267,6 +5712,19 @@ index d2801d0..81f188b 100644
          // Surface auto-compaction that fired inside chat.sendMessageStream
          // as the top-level ChatCompressed event so existing UI handlers stay
          // connected. This bridge is the primary path for auto-compaction
+diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
+index 9ae7c40..998925b 100644
+--- a/packages/core/src/index.ts
++++ b/packages/core/src/index.ts
+@@ -284,6 +284,8 @@ export * from './services/gitWorktreeService.js';
+ export {
+   DEFAULT_MAX_TOOL_CALLS_PER_TURN,
+   GLOBAL_DUPLICATE_THRESHOLD,
++  LOOP_TYPE_LABELS,
++  describeLoopType,
+   getToolCallRepeatKey,
+   shouldHaltOnTurnToolCallCap,
+ } from './services/loopDetectionService.js';
 diff --git a/packages/core/src/models/constants.ts b/packages/core/src/models/constants.ts
 index 4f55526..0280a42 100644
 --- a/packages/core/src/models/constants.ts
@@ -5410,10 +5868,10 @@ index 8e53833..bfc063a 100644
      if (!this.isCoreTool(canonicalName)) {
        const decision = await this.evaluate({ toolName: canonicalName });
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
-index 59b9c51..4a79ef9 100644
+index 59b9c51..8e71e40 100644
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -4,4402 +4,671 @@
+@@ -4,4402 +4,721 @@
   * SPDX-License-Identifier: Apache-2.0
   */
  
@@ -6090,11 +6548,19 @@ index 59b9c51..4a79ef9 100644
 -        consecutiveFailures: 0,
 -        originalTokenCount: 50_000,
 -      });
--
++      ],
++    };
+ 
 -      expect(result.info.compressionStatus).toBe(CompressionStatus.NOOP);
 -      expect(generateText).not.toHaveBeenCalled();
--    });
--
++    await compress(harness, {
++      force: false,
++      trigger: 'auto',
++      pendingUserMessage: pending,
++      precomputedEffectiveTokens: 240_000,
++      originalTokenCount: 240_000,
+     });
+ 
 -    it('reads threshold + enable flag from QWEN_COMPACT_* env over settings', async () => {
 -      vi.mocked(mockChat.getHistory).mockReturnValue(historyWithToolImages(4));
 -      // Settings would NOT trigger (threshold 50); env lowers it to 4 and
@@ -6107,7 +6573,22 @@ index 59b9c51..4a79ef9 100644
 -      process.env['QWEN_COMPACT_SCREENSHOT_THRESHOLD'] = '4';
 -      setWindow128k();
 -      const generateText = mockSummarySideQuery();
--
++    const generated = harness.generateText.mock
++      .calls[0]![0] as GenerateTextOptions;
++    expect(generated.contents.slice(0, 3)).toEqual([
++      harness.history[0],
++      toolCall,
++      pending,
++    ]);
++    expect(harness.countCandidate.mock.calls[0]![1]).toBe(pending);
++    expect(harness.countCandidate.mock.calls[1]![1]).toBe(pending);
++    expect(attachments.composePostCompactHistory).toHaveBeenCalledWith(
++      harness.history,
++      snapshot(),
++      expect.any(Object),
++    );
++  });
+ 
 -      const result = await service.compress(mockChat, {
 -        promptId: mockPromptId,
 -        force: false,
@@ -6115,22 +6596,26 @@ index 59b9c51..4a79ef9 100644
 -        consecutiveFailures: 0,
 -        originalTokenCount: 50_000,
 -      });
-+      ],
++  it('keeps ordinary pending user text out of the summary but in both exact commit counts', async () => {
++    const harness = makeHarness();
++    const pending: Content = {
++      role: 'user',
++      parts: [{ text: 'This new request must survive compaction.' }],
 +    };
++    await compress(harness, { pendingUserMessage: pending });
  
 -      expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -      expect(generateText).toHaveBeenCalled();
 -      // Screenshot trigger → reason must be image_overflow (not token_limit)
 -      // so the UI notice is accurate when it fired below the token threshold.
 -      expect(result.info.triggerReason).toBe('image_overflow');
-+    await compress(harness, {
-+      force: false,
-+      trigger: 'auto',
-+      pendingUserMessage: pending,
-+      precomputedEffectiveTokens: 240_000,
-+      originalTokenCount: 240_000,
-     });
--  });
+-    });
++    const generated = harness.generateText.mock
++      .calls[0]![0] as GenerateTextOptions;
++    expect(generated.contents).not.toContain(pending);
++    expect(harness.countCandidate.mock.calls[0]![1]).toBe(pending);
++    expect(harness.countCandidate.mock.calls[1]![1]).toBe(pending);
+   });
  
 -  it('treats an all-<analysis> summary as empty (no [Summary unavailable] silent success)', async () => {
 -    // The side-query returns ONLY an <analysis> block (no <state_snapshot>).
@@ -6142,12 +6627,14 @@ index 59b9c51..4a79ef9 100644
 -      { role: 'model', parts: [{ text: 'working' }] },
 -      { role: 'user', parts: [{ text: 'continue' }] },
 -      { role: 'model', parts: [{ text: 'more' }] },
-+    const generated = harness.generateText.mock
-+      .calls[0]![0] as GenerateTextOptions;
-+    expect(generated.contents.slice(0, 3)).toEqual([
-+      harness.history[0],
-+      toolCall,
-+      pending,
++  it('preserves inline images in the cache-sharing request', async () => {
++    const harness = makeHarness();
++    const image = {
++      inlineData: { mimeType: 'image/png', data: 'aW1hZ2U=' },
++    };
++    harness.setHistory([
++      { role: 'user', parts: [{ text: 'Inspect this.' }, image] },
++      { role: 'model', parts: [{ text: 'I inspected it.' }] },
      ]);
 -    const generateText = vi.fn().mockResolvedValue({
 -      text: '<analysis>thinking, but I never produced a state_snapshot</analysis>',
@@ -6171,14 +6658,12 @@ index 59b9c51..4a79ef9 100644
 -
 -    expect(result.info.compressionStatus).toBe(
 -      CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
-+    expect(harness.countCandidate.mock.calls[0]![1]).toBe(pending);
-+    expect(harness.countCandidate.mock.calls[1]![1]).toBe(pending);
-+    expect(attachments.composePostCompactHistory).toHaveBeenCalledWith(
-+      harness.history,
-+      snapshot(),
-+      expect.any(Object),
-     );
+-    );
 -    expect(result.newHistory).toBeNull();
++    await compress(harness);
++    const generated = harness.generateText.mock
++      .calls[0]![0] as GenerateTextOptions;
++    expect(generated.contents[0]?.parts).toContainEqual(image);
    });
  
 -  it('manual /compress strips a trailing orphaned functionCall from the post-compact history', async () => {
@@ -6188,13 +6673,24 @@ index 59b9c51..4a79ef9 100644
 -    // text turn → API 400. The post-compact history must not end with it.
 -    vi.mocked(mockChat.getHistory).mockReturnValue([
 -      { role: 'user', parts: [{ text: 'read the file' }] },
--      {
--        role: 'model',
--        parts: [
++  it('closes a manual dangling tool call with an unknown-outcome result', async () => {
++    const harness = makeHarness();
++    harness.setHistory([
++      { role: 'user', parts: [{ text: 'Modify the file.' }] },
+       {
+         role: 'model',
+         parts: [
 -          { functionCall: { name: 'read_file', args: { file_path: '/x.ts' } } },
--        ],
--      },
--    ]);
++          {
++            functionCall: {
++              id: 'write-1',
++              name: 'write_file',
++              args: { path: 'a.ts' },
++            },
++          },
+         ],
+       },
+     ]);
 -    const generateText = vi.fn().mockResolvedValue({
 -      text: '<state_snapshot><primary_request_and_intent>read</primary_request_and_intent></state_snapshot>',
 -      usage: {
@@ -6206,32 +6702,35 @@ index 59b9c51..4a79ef9 100644
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText,
 -    } as unknown as BaseLlmClient);
--
+ 
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: true, // → compactTrigger 'manual'
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: 100_000,
--    });
-+  it('keeps ordinary pending user text out of the summary but in both exact commit counts', async () => {
-+    const harness = makeHarness();
-+    const pending: Content = {
-+      role: 'user',
-+      parts: [{ text: 'This new request must survive compaction.' }],
-+    };
-+    await compress(harness, { pendingUserMessage: pending });
- 
++    await compress(harness, { trigger: 'manual' });
++    const preHistory = harness.countCandidate.mock.calls[0]![0] as Content[];
++    const closure = preHistory.at(-1)?.parts?.[0]?.functionResponse;
++    expect(closure).toMatchObject({
++      id: 'write-1',
++      name: 'write_file',
++      response: { error: ORPHAN_TOOL_USE_REPAIR_REASON },
+     });
+-
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -    const last = result.newHistory![result.newHistory!.length - 1];
 -    const lastIsOrphanFc =
 -      last.role === 'model' && (last.parts ?? []).some((p) => !!p.functionCall);
 -    expect(lastIsOrphanFc).toBe(false);
-+    const generated = harness.generateText.mock
-+      .calls[0]![0] as GenerateTextOptions;
-+    expect(generated.contents).not.toContain(pending);
-+    expect(harness.countCandidate.mock.calls[0]![1]).toBe(pending);
-+    expect(harness.countCandidate.mock.calls[1]![1]).toBe(pending);
++    expect(String(closure?.response?.['error'])).toContain(
++      'do not blindly repeat a non-idempotent operation',
++    );
++    expect(attachments.composePostCompactHistory).toHaveBeenCalledWith(
++      preHistory,
++      snapshot(),
++      expect.any(Object),
++    );
    });
  
 -  it('degrades to summary+ack (folding trailing fc) when composePostCompactHistory throws', async () => {
@@ -6244,21 +6743,18 @@ index 59b9c51..4a79ef9 100644
 -      { role: 'user', parts: [{ text: 'go' }] },
 -      { role: 'model', parts: [{ text: 'thinking' }] },
 -      { role: 'user', parts: [{ text: 'go on' }] },
--      {
--        role: 'model',
++  it('refuses an unpairable dangling tool call without an id', async () => {
++    const harness = makeHarness();
++    harness.setHistory([
++      { role: 'user', parts: [{ text: 'Run it.' }] },
+       {
+         role: 'model',
 -        parts: [
 -          { text: 'let me read it' },
 -          { functionCall: { name: 'read_file', args: { file_path: '/x.ts' } } },
 -        ],
--      },
-+  it('preserves inline images in the cache-sharing request', async () => {
-+    const harness = makeHarness();
-+    const image = {
-+      inlineData: { mimeType: 'image/png', data: 'aW1hZ2U=' },
-+    };
-+    harness.setHistory([
-+      { role: 'user', parts: [{ text: 'Inspect this.' }, image] },
-+      { role: 'model', parts: [{ text: 'I inspected it.' }] },
++        parts: [{ functionCall: { name: 'run_shell_command', args: {} } }],
+       },
      ]);
 -    const generateText = vi.fn().mockResolvedValue({
 -      text: '<state_snapshot><primary_request_and_intent>x</primary_request_and_intent></state_snapshot>',
@@ -6295,8 +6791,13 @@ index 59b9c51..4a79ef9 100644
 -      .map((p) => (p as { text?: string }).text ?? '')
 -      .join(' ');
 -    expect(ackText).not.toContain('let me read it'); // trailing text dropped
--  });
--
++    const result = await compress(harness, { trigger: 'manual' });
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(harness.generateText).not.toHaveBeenCalled();
+   });
+ 
 -  it('silently ignores the deprecated chatCompression.contextPercentageThreshold = 0 (no longer disables compaction)', async () => {
 -    // Pre-PR #4168, setting contextPercentageThreshold = 0 short-circuited
 -    // compress() at the cheap-gate (NOOP). The field was removed from
@@ -6313,7 +6814,28 @@ index 59b9c51..4a79ef9 100644
 -    vi.mocked(mockChat.getHistory).mockReturnValue(history);
 -    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(
 -      110_000,
--    );
++  it.each([
++    ['different model', (h: Harness) => h.setCompactionModel('other-model')],
++    [
++      'no exact tokenizer',
++      (h: Harness) => {
++        delete h.contentGeneratorConfig.exactTokenCounting;
++      },
++    ],
++    [
++      'no cache-preserving provider mode',
++      (h: Harness) => {
++        h.contentGeneratorConfig.authType = AuthType.USE_OPENAI;
++        h.contentGeneratorConfig.enableCacheControl = false;
++      },
++    ],
++  ])('refuses the alternate mode: %s', async (_name, mutate) => {
++    const harness = makeHarness();
++    mutate(harness);
++    const result = await compress(harness);
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
+     );
 -    // The deprecated field is no longer in ChatCompressionSettings; cast so
 -    // we can simulate a leftover value coming from a stale settings.json.
 -    vi.mocked(mockConfig.getChatCompression).mockReturnValue({
@@ -6351,8 +6873,10 @@ index 59b9c51..4a79ef9 100644
 -    expect(mockGenerateContent).toHaveBeenCalled();
 -    // Crossed the token threshold (not the screenshot trigger) → token_limit.
 -    expect(result.info.triggerReason).toBe('token_limit');
--  });
--
++    expect(harness.countSideQuery).not.toHaveBeenCalled();
++    expect(harness.generateText).not.toHaveBeenCalled();
+   });
+ 
 -  it('should compress if over token threshold', async () => {
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'msg1' }] },
@@ -6379,14 +6903,25 @@ index 59b9c51..4a79ef9 100644
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateContent,
 -    } as unknown as BaseLlmClient);
--
++  it('fails closed when exact preflight rejects or the exact summary request does not fit', async () => {
++    const rejected = makeHarness();
++    rejected.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
++    expect((await compress(rejected)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(rejected.generateText).not.toHaveBeenCalled();
+ 
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: false,
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
++    const oversized = makeHarness();
++    oversized.countSideQuery.mockResolvedValueOnce({
++      totalTokens: WINDOW - COMPACT_MAX_OUTPUT_TOKENS + 1,
++      maxModelLen: WINDOW,
+     });
 -
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -    expect(result.info.newTokenCount).toBe(350); // 900 - (1600 - 1000) + 50
@@ -6396,25 +6931,21 @@ index 59b9c51..4a79ef9 100644
 -    expect(result.newHistory![0].parts![0].text).toContain('Summary');
 -    expect(mockGenerateContent).toHaveBeenCalled();
 -    expect(mockGetHookSystem).toHaveBeenCalled();
-+    await compress(harness);
-+    const generated = harness.generateText.mock
-+      .calls[0]![0] as GenerateTextOptions;
-+    expect(generated.contents[0]?.parts).toContainEqual(image);
++    expect((await compress(oversized)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(oversized.generateText).not.toHaveBeenCalled();
    });
  
 -  it('does not deep-clone full history while compressing', async () => {
 -    const largeToolOutput = 'x'.repeat(1024 * 1024);
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'review this PR' }] },
-+  it('closes a manual dangling tool call with an unknown-outcome result', async () => {
-+    const harness = makeHarness();
-+    harness.setHistory([
-+      { role: 'user', parts: [{ text: 'Modify the file.' }] },
-       {
-         role: 'model',
-         parts: [
-           {
-             functionCall: {
+-      {
+-        role: 'model',
+-        parts: [
+-          {
+-            functionCall: {
 -              id: 'read-1',
 -              name: 'read_file',
 -              args: { path: 'large.ts' },
@@ -6430,13 +6961,10 @@ index 59b9c51..4a79ef9 100644
 -              id: 'read-1',
 -              name: 'read_file',
 -              response: { output: largeToolOutput },
-+              id: 'write-1',
-+              name: 'write_file',
-+              args: { path: 'a.ts' },
-             },
-           },
-         ],
-       },
+-            },
+-          },
+-        ],
+-      },
 -      { role: 'model', parts: [{ text: 'analysis' }] },
 -    ];
 -    vi.mocked(mockChat.getHistory).mockImplementation(() => {
@@ -6460,246 +6988,18 @@ index 59b9c51..4a79ef9 100644
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateContent,
 -    } as unknown as BaseLlmClient);
-+    ]);
- 
+-
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: false,
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
-+    await compress(harness, { trigger: 'manual' });
-+    const preHistory = harness.countCandidate.mock.calls[0]![0] as Content[];
-+    const closure = preHistory.at(-1)?.parts?.[0]?.functionResponse;
-+    expect(closure).toMatchObject({
-+      id: 'write-1',
-+      name: 'write_file',
-+      response: { error: ORPHAN_TOOL_USE_REPAIR_REASON },
-     });
+-    });
 -
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -    expect(mockChat.getHistory).not.toHaveBeenCalled();
 -    expect(mockChat.getHistoryShallow).toHaveBeenCalledWith(true);
-+    expect(String(closure?.response?.['error'])).toContain(
-+      'do not blindly repeat a non-idempotent operation',
-+    );
-+    expect(attachments.composePostCompactHistory).toHaveBeenCalledWith(
-+      preHistory,
-+      snapshot(),
-+      expect.any(Object),
-+    );
-   });
- 
--  it('should force compress even if under threshold', async () => {
--    const history: Content[] = [
--      { role: 'user', parts: [{ text: 'msg1' }] },
--      { role: 'model', parts: [{ text: 'msg2' }] },
--      { role: 'user', parts: [{ text: 'msg3' }] },
--      { role: 'model', parts: [{ text: 'msg4' }] },
--    ];
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
--    vi.mocked(tokenLimit).mockReturnValue(1000);
--
--    // newTokenCount = 100 - (1100 - 1000) + 50 = 100 - 100 + 50 = 50 <= 100 (success)
--    const mockGenerateContent = vi.fn().mockResolvedValue({
--      text: 'Summary',
--      usage: {
--        promptTokenCount: 1100,
--        candidatesTokenCount: 50,
--        totalTokenCount: 1150,
-+  it('refuses an unpairable dangling tool call without an id', async () => {
-+    const harness = makeHarness();
-+    harness.setHistory([
-+      { role: 'user', parts: [{ text: 'Run it.' }] },
-+      {
-+        role: 'model',
-+        parts: [{ functionCall: { name: 'run_shell_command', args: {} } }],
-       },
--    });
--    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
--      generateText: mockGenerateContent,
--    } as unknown as BaseLlmClient);
--
--    const result = await service.compress(mockChat, {
--      promptId: mockPromptId,
--      force: true,
--      // forced
--      config: mockConfig,
--      consecutiveFailures: 0,
--      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
--
--    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
--    expect(result.newHistory).not.toBeNull();
-+    ]);
-+    const result = await compress(harness, { trigger: 'manual' });
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(harness.generateText).not.toHaveBeenCalled();
-   });
- 
--  it('does not append SessionStart additionalContext after successful compression', async () => {
--    const history: Content[] = [
--      { role: 'user', parts: [{ text: 'msg1' }] },
--      { role: 'model', parts: [{ text: 'msg2' }] },
--      { role: 'user', parts: [{ text: 'msg3' }] },
--      { role: 'model', parts: [{ text: 'msg4' }] },
--    ];
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
--    vi.mocked(tokenLimit).mockReturnValue(1000);
--
--    const mockGenerateContent = vi.fn().mockResolvedValue({
--      text: 'Summary',
--      usage: {
--        promptTokenCount: 1100,
--        candidatesTokenCount: 50,
--        totalTokenCount: 1150,
--      },
--    });
--    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
--      generateText: mockGenerateContent,
--    } as unknown as BaseLlmClient);
--
--    await service.compress(mockChat, {
--      promptId: mockPromptId,
--      force: true,
--      config: mockConfig,
--      consecutiveFailures: 0,
--      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
--
--    expect(mockGenerateContent).toHaveBeenCalled();
-+  it.each([
-+    ['different model', (h: Harness) => h.setCompactionModel('other-model')],
-+    [
-+      'no exact tokenizer',
-+      (h: Harness) => {
-+        delete h.contentGeneratorConfig.exactTokenCounting;
-+      },
-+    ],
-+    [
-+      'no cache-preserving provider mode',
-+      (h: Harness) => {
-+        h.contentGeneratorConfig.authType = AuthType.USE_OPENAI;
-+        h.contentGeneratorConfig.enableCacheControl = false;
-+      },
-+    ],
-+  ])('refuses the alternate mode: %s', async (_name, mutate) => {
-+    const harness = makeHarness();
-+    mutate(harness);
-+    const result = await compress(harness);
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(harness.countSideQuery).not.toHaveBeenCalled();
-+    expect(harness.generateText).not.toHaveBeenCalled();
-   });
- 
--  it('passes abort signal to summary generation', async () => {
--    const history: Content[] = [
--      { role: 'user', parts: [{ text: 'msg1' }] },
--      { role: 'model', parts: [{ text: 'msg2' }] },
--      { role: 'user', parts: [{ text: 'msg3' }] },
--      { role: 'model', parts: [{ text: 'msg4' }] },
--    ];
--    const abortController = new AbortController();
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
--    vi.mocked(tokenLimit).mockReturnValue(1000);
--
--    const mockGenerateText = vi.fn().mockResolvedValue({
--      text: 'Summary',
--      usage: {
--        promptTokenCount: 1100,
--        candidatesTokenCount: 50,
--        totalTokenCount: 1150,
--      },
--    });
--    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
--      generateText: mockGenerateText,
--    } as unknown as BaseLlmClient);
-+  it('fails closed when exact preflight rejects or the exact summary request does not fit', async () => {
-+    const rejected = makeHarness();
-+    rejected.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
-+    expect((await compress(rejected)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(rejected.generateText).not.toHaveBeenCalled();
- 
--    await service.compress(mockChat, {
--      promptId: mockPromptId,
--      force: true,
--      config: mockConfig,
--      consecutiveFailures: 0,
--      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--      signal: abortController.signal,
-+    const oversized = makeHarness();
-+    oversized.countSideQuery.mockResolvedValueOnce({
-+      totalTokens: WINDOW - COMPACT_MAX_OUTPUT_TOKENS + 1,
-+      maxModelLen: WINDOW,
-     });
--
--    expect(mockGenerateText).toHaveBeenCalledWith(
--      expect.objectContaining({
--        abortSignal: abortController.signal,
--      }),
-+    expect((await compress(oversized)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-     );
-+    expect(oversized.generateText).not.toHaveBeenCalled();
-   });
- 
--  it('strips inline media from side-query contents during compaction', async () => {
--    // Wire-up test: a real compaction should call slimCompactionInput
--    // before runSideQuery, so the base64 payload never reaches the
--    // summary model.
--    const history: Content[] = [
--      {
--        role: 'user',
--        parts: [
--          { text: 'context msg' },
--          { inlineData: { mimeType: 'image/png', data: 'AAAA'.repeat(2000) } },
--        ],
--      },
--      { role: 'model', parts: [{ text: 'ack' }] },
--      { role: 'user', parts: [{ text: 'final fresh user message' }] },
--      { role: 'model', parts: [{ text: 'final model reply' }] },
--    ];
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
--    vi.mocked(tokenLimit).mockReturnValue(1000);
--
--    const mockGenerateText = vi.fn().mockResolvedValue({
--      text: 'Summary',
--      usage: {
--        promptTokenCount: 200,
--        candidatesTokenCount: 50,
--        totalTokenCount: 250,
--      },
--    });
--    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
--      generateText: mockGenerateText,
--    } as unknown as BaseLlmClient);
--
--    await service.compress(mockChat, {
--      promptId: mockPromptId,
--      force: true,
--      config: mockConfig,
--      consecutiveFailures: 0,
--      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
--
--    // Inspect the actual contents passed to the summary model.
--    const call = mockGenerateText.mock.calls[0]?.[0] as { contents: Content[] };
--    expect(call).toBeDefined();
--    const serialized = JSON.stringify(call.contents);
--    // No base64 image bytes leaked through.
--    expect(serialized).not.toContain('AAAAAAAA');
--    // Placeholder is present.
--    expect(serialized).toContain('[image: image/png]');
 +  it.each([
 +    [
 +      'MAX_TOKENS',
@@ -6735,10 +7035,7 @@ index 59b9c51..4a79ef9 100644
 +    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
    });
  
--  it('passes getCompactionModel to runSideQuery for compression', async () => {
--    // Compression passes config.getCompactionModel?.() to runSideQuery so it uses
--    // the compaction model (falls back to the main model) instead of
--    // the expensive main model, reducing cost. See https://github.com/QwenLM/qwen-code/issues/5956
+-  it('should force compress even if under threshold', async () => {
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'msg1' }] },
 -      { role: 'model', parts: [{ text: 'msg2' }] },
@@ -6748,27 +7045,184 @@ index 59b9c51..4a79ef9 100644
 -    vi.mocked(mockChat.getHistory).mockReturnValue(history);
 -    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
 -    vi.mocked(tokenLimit).mockReturnValue(1000);
--    vi.mocked(mockConfig.getCompactionModel).mockReturnValue(
--      'compaction-model-v1',
-+  it('fails closed instead of fabricating history when composition fails', async () => {
++  it('[compaction-event] records where a truncated attempt spent its output budget', async () => {
 +    const harness = makeHarness();
-+    vi.mocked(attachments.composePostCompactHistory).mockRejectedValueOnce(
-+      new Error('workspace read failed'),
-     );
++    harness.generateText.mockResolvedValueOnce(
++      summaryResult({
++        text: '',
++        finishReason: FinishReason.MAX_TOKENS,
++        usage: {
++          promptTokenCount: 233_926,
++          candidatesTokenCount: 19_900,
++          thoughtsTokenCount: 19_900,
++          totalTokenCount: 253_826,
++        },
++      }),
++    );
+ 
+-    // newTokenCount = 100 - (1100 - 1000) + 50 = 100 - 100 + 50 = 50 <= 100 (success)
+-    const mockGenerateContent = vi.fn().mockResolvedValue({
+-      text: 'Summary',
+-      usage: {
+-        promptTokenCount: 1100,
+-        candidatesTokenCount: 50,
+-        totalTokenCount: 1150,
+-      },
+-    });
+-    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
+-      generateText: mockGenerateContent,
+-    } as unknown as BaseLlmClient);
 +    const result = await compress(harness);
-+    expect(result.newHistory).toBeNull();
+ 
+-    const result = await service.compress(mockChat, {
+-      promptId: mockPromptId,
+-      force: true,
+-      // forced
+-      config: mockConfig,
+-      consecutiveFailures: 0,
+-      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
++    );
++    // The whole maintenance budget went to hidden reasoning and produced no
++    // summary at all. The status alone cannot separate that from a request
++    // that never generated, and the summary itself is discarded, so this is
++    // the only surviving evidence of where the tokens went.
++    expect(result.info.output).toEqual({
++      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
++      thinkingTokenBudget: COMPACT_THINKING_TOKEN_BUDGET,
++      finalResponseTokenBudget: COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,
++      outputTokens: 19_900,
++      thinkingTokens: 19_900,
++      summaryChars: 0,
++      finishReason: FinishReason.MAX_TOKENS,
+     });
+-
+-    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
+-    expect(result.newHistory).not.toBeNull();
+   });
+ 
+-  it('does not append SessionStart additionalContext after successful compression', async () => {
+-    const history: Content[] = [
+-      { role: 'user', parts: [{ text: 'msg1' }] },
+-      { role: 'model', parts: [{ text: 'msg2' }] },
+-      { role: 'user', parts: [{ text: 'msg3' }] },
+-      { role: 'model', parts: [{ text: 'msg4' }] },
+-    ];
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
+-    vi.mocked(tokenLimit).mockReturnValue(1000);
+-
+-    const mockGenerateContent = vi.fn().mockResolvedValue({
+-      text: 'Summary',
+-      usage: {
+-        promptTokenCount: 1100,
+-        candidatesTokenCount: 50,
+-        totalTokenCount: 1150,
+-      },
+-    });
+-    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
+-      generateText: mockGenerateContent,
+-    } as unknown as BaseLlmClient);
++  it('[compaction-event] leaves the accounting null when no generation ran', async () => {
++    const harness = makeHarness();
++    harness.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
+ 
+-    await service.compress(mockChat, {
+-      promptId: mockPromptId,
+-      force: true,
+-      config: mockConfig,
+-      consecutiveFailures: 0,
+-      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
+-    });
++    const result = await compress(harness);
+ 
+-    expect(mockGenerateContent).toHaveBeenCalled();
 +    expect(result.info.compressionStatus).toBe(
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +    );
-+    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
-+  });
++    expect(harness.generateText).not.toHaveBeenCalled();
++    // No attempt, no accounting to invent: a refusal before generation and a
++    // generation that produced nothing must stay distinguishable.
++    expect(result.info.output).toBeUndefined();
+   });
  
+-  it('passes abort signal to summary generation', async () => {
+-    const history: Content[] = [
+-      { role: 'user', parts: [{ text: 'msg1' }] },
+-      { role: 'model', parts: [{ text: 'msg2' }] },
+-      { role: 'user', parts: [{ text: 'msg3' }] },
+-      { role: 'model', parts: [{ text: 'msg4' }] },
+-    ];
+-    const abortController = new AbortController();
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
+-    vi.mocked(tokenLimit).mockReturnValue(1000);
+-
 -    const mockGenerateText = vi.fn().mockResolvedValue({
 -      text: 'Summary',
 -      usage: {
 -        promptTokenCount: 1100,
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 1150,
+-      },
+-    });
+-    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
+-      generateText: mockGenerateText,
+-    } as unknown as BaseLlmClient);
+-
+-    await service.compress(mockChat, {
+-      promptId: mockPromptId,
+-      force: true,
+-      config: mockConfig,
+-      consecutiveFailures: 0,
+-      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
+-      signal: abortController.signal,
+-    });
+-
+-    expect(mockGenerateText).toHaveBeenCalledWith(
+-      expect.objectContaining({
+-        abortSignal: abortController.signal,
+-      }),
++  it('fails closed instead of fabricating history when composition fails', async () => {
++    const harness = makeHarness();
++    vi.mocked(attachments.composePostCompactHistory).mockRejectedValueOnce(
++      new Error('workspace read failed'),
++    );
++    const result = await compress(harness);
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
+     );
++    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
+   });
+ 
+-  it('strips inline media from side-query contents during compaction', async () => {
+-    // Wire-up test: a real compaction should call slimCompactionInput
+-    // before runSideQuery, so the base64 payload never reaches the
+-    // summary model.
+-    const history: Content[] = [
+-      {
+-        role: 'user',
+-        parts: [
+-          { text: 'context msg' },
+-          { inlineData: { mimeType: 'image/png', data: 'AAAA'.repeat(2000) } },
+-        ],
+-      },
+-      { role: 'model', parts: [{ text: 'ack' }] },
+-      { role: 'user', parts: [{ text: 'final fresh user message' }] },
+-      { role: 'model', parts: [{ text: 'final model reply' }] },
+-    ];
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
+-    vi.mocked(tokenLimit).mockReturnValue(1000);
+-
+-    const mockGenerateText = vi.fn().mockResolvedValue({
+-      text: 'Summary',
+-      usage: {
+-        promptTokenCount: 200,
+-        candidatesTokenCount: 50,
+-        totalTokenCount: 250,
 -      },
 -    });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
@@ -6800,6 +7254,68 @@ index 59b9c51..4a79ef9 100644
 +      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
 +    );
  
+-    // Inspect the actual contents passed to the summary model.
+-    const call = mockGenerateText.mock.calls[0]?.[0] as { contents: Content[] };
+-    expect(call).toBeDefined();
+-    const serialized = JSON.stringify(call.contents);
+-    // No base64 image bytes leaked through.
+-    expect(serialized).not.toContain('AAAAAAAA');
+-    // Placeholder is present.
+-    expect(serialized).toContain('[image: image/png]');
++    const noRoom = makeHarness();
++    noRoom.countCandidate
++      .mockReset()
++      .mockResolvedValueOnce({ totalTokens: 250_000, maxModelLen: WINDOW })
++      .mockResolvedValueOnce({ totalTokens: 245_000, maxModelLen: WINDOW });
++    expect((await compress(noRoom)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++    );
+   });
+ 
+-  it('passes getCompactionModel to runSideQuery for compression', async () => {
+-    // Compression passes config.getCompactionModel?.() to runSideQuery so it uses
+-    // the compaction model (falls back to the main model) instead of
+-    // the expensive main model, reducing cost. See https://github.com/QwenLM/qwen-code/issues/5956
+-    const history: Content[] = [
+-      { role: 'user', parts: [{ text: 'msg1' }] },
+-      { role: 'model', parts: [{ text: 'msg2' }] },
+-      { role: 'user', parts: [{ text: 'msg3' }] },
+-      { role: 'model', parts: [{ text: 'msg4' }] },
+-    ];
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
+-    vi.mocked(tokenLimit).mockReturnValue(1000);
+-    vi.mocked(mockConfig.getCompactionModel).mockReturnValue(
+-      'compaction-model-v1',
++  it('fails closed on pre- and post-compaction hook errors', async () => {
++    const pre = makeHarness();
++    pre.setHookSystem(true);
++    pre.firePreCompactEvent.mockRejectedValueOnce(new Error('pre hook failed'));
++    expect((await compress(pre)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
+     );
++    expect(pre.generateText).not.toHaveBeenCalled();
+ 
+-    const mockGenerateText = vi.fn().mockResolvedValue({
+-      text: 'Summary',
+-      usage: {
+-        promptTokenCount: 1100,
+-        candidatesTokenCount: 50,
+-        totalTokenCount: 1150,
+-      },
+-    });
+-    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
+-      generateText: mockGenerateText,
+-    } as unknown as BaseLlmClient);
+-
+-    await service.compress(mockChat, {
+-      promptId: mockPromptId,
+-      force: true,
+-      config: mockConfig,
+-      consecutiveFailures: 0,
+-      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
+-    });
+-
 -    // Thinking is intentionally disabled (per-provider budget semantics are
 -    // inconsistent) and the output is hard-capped by COMPACT_MAX_OUTPUT_TOKENS
 -    // so subsequent threshold math has a predictable reserve. maxAttempts=1
@@ -6814,13 +7330,15 @@ index 59b9c51..4a79ef9 100644
 -          maxOutputTokens: 20_000,
 -        }),
 -      }),
-+    const noRoom = makeHarness();
-+    noRoom.countCandidate
-+      .mockReset()
-+      .mockResolvedValueOnce({ totalTokens: 250_000, maxModelLen: WINDOW })
-+      .mockResolvedValueOnce({ totalTokens: 245_000, maxModelLen: WINDOW });
-+    expect((await compress(noRoom)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++    const post = makeHarness();
++    post.setHookSystem(true);
++    post.firePostCompactEvent.mockRejectedValueOnce(
++      new Error('post hook failed'),
++    );
++    const result = await compress(post);
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
      );
    });
  
@@ -6845,7 +7363,16 @@ index 59b9c51..4a79ef9 100644
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 1150,
 -      },
--    });
++  it('fires hooks in order and gives PostCompact the committed summary body', async () => {
++    const harness = makeHarness();
++    harness.setHookSystem(true);
++    const order: string[] = [];
++    harness.firePreCompactEvent.mockImplementation(async () => {
++      order.push('pre');
++      return {
++        getAdditionalContext: () => 'Retain exact file paths.',
++      };
+     });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateText,
 -    } as unknown as BaseLlmClient);
@@ -6856,29 +7383,26 @@ index 59b9c51..4a79ef9 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
-+  it('fails closed on pre- and post-compaction hook errors', async () => {
-+    const pre = makeHarness();
-+    pre.setHookSystem(true);
-+    pre.firePreCompactEvent.mockRejectedValueOnce(new Error('pre hook failed'));
-+    expect((await compress(pre)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(pre.generateText).not.toHaveBeenCalled();
- 
++    harness.firePostCompactEvent.mockImplementation(async () => {
++      order.push('post');
+     });
+-
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        model: 'test-model',
 -      }),
-+    const post = makeHarness();
-+    post.setHookSystem(true);
-+    post.firePostCompactEvent.mockRejectedValueOnce(
-+      new Error('post hook failed'),
++    await compress(harness, { customInstructions: 'Retain user intent.' });
++    expect(order).toEqual(['pre', 'post']);
++    expect(harness.firePostCompactEvent).toHaveBeenCalledWith(
++      'manual',
++      snapshot(),
++      undefined,
 +    );
-+    const result = await compress(post);
-+    expect(result.newHistory).toBeNull();
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    const generated = harness.generateText.mock
++      .calls[0]![0] as GenerateTextOptions;
++    const directive = generated.contents.at(-1)?.parts?.[0]?.text ?? '';
++    expect(directive.indexOf('Retain user intent.')).toBeLessThan(
++      directive.indexOf('Retain exact file paths.'),
      );
    });
  
@@ -6904,16 +7428,7 @@ index 59b9c51..4a79ef9 100644
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 1150,
 -      },
-+  it('fires hooks in order and gives PostCompact the committed summary body', async () => {
-+    const harness = makeHarness();
-+    harness.setHookSystem(true);
-+    const order: string[] = [];
-+    harness.firePreCompactEvent.mockImplementation(async () => {
-+      order.push('pre');
-+      return {
-+        getAdditionalContext: () => 'Retain exact file paths.',
-+      };
-     });
+-    });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateText,
 -    } as unknown as BaseLlmClient);
@@ -6924,31 +7439,17 @@ index 59b9c51..4a79ef9 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: 100,
-+    harness.firePostCompactEvent.mockImplementation(async () => {
-+      order.push('post');
-     });
+-    });
 -
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        model: 'test-model',
 -      }),
-+    await compress(harness, { customInstructions: 'Retain user intent.' });
-+    expect(order).toEqual(['pre', 'post']);
-+    expect(harness.firePostCompactEvent).toHaveBeenCalledWith(
-+      'manual',
-+      snapshot(),
-+      undefined,
-+    );
-+    const generated = harness.generateText.mock
-+      .calls[0]![0] as GenerateTextOptions;
-+    const directive = generated.contents.at(-1)?.parts?.[0]?.text ?? '';
-+    expect(directive.indexOf('Retain user intent.')).toBeLessThan(
-+      directive.indexOf('Retain exact file paths.'),
-     );
+-    );
 -    expect(result.info.warning).toBeDefined();
 -    expect(result.info.warning).toContain('too small');
-   });
- 
+-  });
+-
 -  it('uses the compaction model when its context window is large enough', async () => {
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'msg1' }] },
@@ -10398,10 +10899,10 @@ index 59b9c51..4a79ef9 100644
    });
  });
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
-index 9a37b9b..725f2c9 100644
+index 9a37b9b..52819b8 100644
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
-@@ -9,6 +9,10 @@ import type { Config } from '../config/config.js';
+@@ -9,56 +9,52 @@ import type { Config } from '../config/config.js';
  import { ApprovalMode } from '../config/config.js';
  import type { GenerateTextResult } from '../core/baseLlmClient.js';
  import { AuthType } from '../core/contentGenerator.js';
@@ -10412,7 +10913,9 @@ index 9a37b9b..725f2c9 100644
  import type { GeminiChat } from '../core/geminiChat.js';
  import {
    type ChatCompressionInfo,
-@@ -17,48 +21,39 @@ import {
++  type CompactionOutputAccounting,
+   type CompactionTriggerReason,
+   CompressionStatus,
  } from '../core/turn.js';
  import { DEFAULT_TOKEN_LIMIT } from '../core/tokenLimits.js';
  import { getCompressionPrompt } from '../core/prompts.js';
@@ -10475,7 +10978,7 @@ index 9a37b9b..725f2c9 100644
  
  /**
   * Default proportional auto-compaction threshold — the preferred trigger and an
-@@ -101,30 +96,6 @@ export const HARD_BUFFER = 3_000;
+@@ -101,30 +97,6 @@ export const HARD_BUFFER = 3_000;
   */
  export const MAX_CONSECUTIVE_FAILURES = 3;
  
@@ -10506,7 +11009,7 @@ index 9a37b9b..725f2c9 100644
  /**
   * Hard cap on the PreCompact hook's `additionalContext` once it is merged
   * into the side-query system prompt. The user-supplied `/compress` text is
-@@ -218,12 +189,10 @@ export interface CompressOptions {
+@@ -218,12 +190,10 @@ export interface CompressOptions {
     */
    consecutiveFailures: number;
    /**
@@ -10523,7 +11026,7 @@ index 9a37b9b..725f2c9 100644
     */
    originalTokenCount: number;
    /**
-@@ -234,18 +203,13 @@ export interface CompressOptions {
+@@ -234,18 +204,13 @@ export interface CompressOptions {
    trigger?: CompactTrigger;
    signal?: AbortSignal;
    /**
@@ -10546,7 +11049,7 @@ index 9a37b9b..725f2c9 100644
     */
    precomputedEffectiveTokens?: number;
    /** Per-request overrides used by the main turn, including transient tools. */
-@@ -369,7 +333,6 @@ export class ChatCompressionService {
+@@ -369,7 +334,6 @@ export class ChatCompressionService {
      let triggerReason: CompactionTriggerReason =
        compactTrigger === 'manual' ? 'manual' : 'token_limit';
      const chatCompressionSettings = config.getChatCompression();
@@ -10554,7 +11057,7 @@ index 9a37b9b..725f2c9 100644
      const tuning = resolveCompactionTuning(chatCompressionSettings);
      const contentGeneratorConfig = config.getContentGeneratorConfig();
      const contextLimit =
-@@ -390,6 +353,22 @@ export class ChatCompressionService {
+@@ -390,6 +354,22 @@ export class ChatCompressionService {
        };
      }
  
@@ -10577,7 +11080,7 @@ index 9a37b9b..725f2c9 100644
      if (!force) {
        // Thresholds run against the FULL window: the send-path output clamp
        // guarantees `prompt + max_tokens ≤ window`, so no output budget needs
-@@ -399,28 +378,34 @@ export class ChatCompressionService {
+@@ -399,28 +379,34 @@ export class ChatCompressionService {
          contextLimit,
          config.getAutoCompactThreshold(),
        );
@@ -10634,7 +11137,7 @@ index 9a37b9b..725f2c9 100644
        if (effectiveTokens < auto) {
          // Screenshot-overflow trigger: even below the token threshold,
          // compact once tool-returned images accumulate past the configured
-@@ -430,7 +415,7 @@ export class ChatCompressionService {
+@@ -430,7 +416,7 @@ export class ChatCompressionService {
          // only (countToolResponseImages), not user-pasted top-level images.
          const screenshotOverflow =
            tuning.enableScreenshotTrigger &&
@@ -10643,7 +11146,7 @@ index 9a37b9b..725f2c9 100644
              tuning.screenshotTriggerThreshold;
          if (!screenshotOverflow) {
            debugLogger.debug(
-@@ -451,23 +436,6 @@ export class ChatCompressionService {
+@@ -451,23 +437,6 @@ export class ChatCompressionService {
        }
      }
  
@@ -10667,7 +11170,7 @@ index 9a37b9b..725f2c9 100644
      // CLAUDE-CODE-STYLE FULL-HISTORY COMPRESSION: the entire curated
      // history is sent to the summary side-query (no split, no tail
      // preservation), and the post-compact history is assembled by
-@@ -520,608 +488,405 @@ export class ChatCompressionService {
+@@ -520,608 +489,429 @@ export class ChatCompressionService {
              .slice(0, MAX_HOOK_INSTRUCTIONS_CHARS);
          }
        } catch (err) {
@@ -11146,6 +11649,20 @@ index 9a37b9b..725f2c9 100644
 +    const processedSummary = stripAnalysisBlock(summary ?? '');
 +    const compressionOutputTokenCount =
 +      summaryResult.usage?.candidatesTokenCount;
++    // Every outcome from here on carries the same accounting, because the
++    // only way to tell these failures apart afterwards is where the fixed
++    // maintenance budget went. `getResponseText` drops thought parts, so a
++    // run whose reasoning consumed the whole ceiling and emitted no summary
++    // is otherwise indistinguishable from one that never generated.
++    const outputAccounting: CompactionOutputAccounting = {
++      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
++      thinkingTokenBudget: COMPACT_THINKING_TOKEN_BUDGET,
++      finalResponseTokenBudget: COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,
++      outputTokens: compressionOutputTokenCount ?? 0,
++      thinkingTokens: summaryResult.usage?.thoughtsTokenCount ?? 0,
++      summaryChars: processedSummary.length,
++      finishReason: summaryResult.finishReason ?? null,
++    };
  
 -    // Defensive guard: if the dedicated side-query hit
 -    // COMPACT_MAX_OUTPUT_TOKENS, the summary is likely truncated mid-content
@@ -11191,6 +11708,7 @@ index 9a37b9b..725f2c9 100644
 +          newTokenCount: exactOriginalTokenCount,
            compressionStatus:
              CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
++          output: outputAccounting,
          },
        };
      }
@@ -11274,6 +11792,7 @@ index 9a37b9b..725f2c9 100644
 +          newTokenCount: exactOriginalTokenCount,
 +          compressionStatus:
 +            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++          output: outputAccounting,
 +        },
 +      };
 +    }
@@ -11284,6 +11803,7 @@ index 9a37b9b..725f2c9 100644
 +          originalTokenCount: exactOriginalTokenCount,
 +          newTokenCount: exactOriginalTokenCount,
 +          compressionStatus: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
++          output: outputAccounting,
 +        },
 +      };
 +    }
@@ -11301,6 +11821,7 @@ index 9a37b9b..725f2c9 100644
 +          newTokenCount: exactOriginalTokenCount,
 +          compressionStatus:
 +            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++          output: outputAccounting,
 +        },
 +      };
 +    }
@@ -11409,6 +11930,7 @@ index 9a37b9b..725f2c9 100644
 +          newTokenCount: exactOriginalTokenCount,
 +          compressionStatus:
 +            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++          output: outputAccounting,
 +        },
 +      };
 +    }
@@ -11470,6 +11992,7 @@ index 9a37b9b..725f2c9 100644
 +          newTokenCount: exactOriginalTokenCount,
 +          compressionStatus:
 +            CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
++          output: outputAccounting,
 +        },
 +      };
      }
@@ -11509,6 +12032,7 @@ index 9a37b9b..725f2c9 100644
            compressionStatus:
 -            CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
 +            CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++          output: outputAccounting,
          },
        };
 -    } else if (newTokenCount > originalTokenCount) {
@@ -11529,6 +12053,7 @@ index 9a37b9b..725f2c9 100644
            newTokenCount,
            compressionStatus:
              CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++          output: outputAccounting,
          },
        };
 -    } else {
@@ -11581,6 +12106,7 @@ index 9a37b9b..725f2c9 100644
 +          newTokenCount: exactOriginalTokenCount,
 +          compressionStatus:
 +            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++          output: outputAccounting,
          },
        };
      }
@@ -11593,10 +12119,65 @@ index 9a37b9b..725f2c9 100644
 +        newTokenCountIsEstimated: false,
 +        compressionStatus: CompressionStatus.COMPRESSED,
 +        triggerReason,
++        output: outputAccounting,
 +      },
 +    };
    }
  }
+diff --git a/packages/core/src/services/loopDetectionService.ts b/packages/core/src/services/loopDetectionService.ts
+index 0749a7e..d88c5ad 100644
+--- a/packages/core/src/services/loopDetectionService.ts
++++ b/packages/core/src/services/loopDetectionService.ts
+@@ -155,6 +155,49 @@ export function shouldHaltOnTurnToolCallCap(
+   return isExplicitCap || totalCalls > hardCap || stuck;
+ }
+ 
++/**
++ * Human-readable explanation of each rule this service can fire, kept beside
++ * the rules themselves so every surface that reports a halt names the same
++ * cause. A halt is only actionable if it says which rule fired: a
++ * five-identical-call guard and an exhausted per-turn tool-call budget are
++ * different problems with different remedies, and `loop_detected` alone
++ * cannot tell them apart.
++ */
++export const LOOP_TYPE_LABELS: Record<LoopType, string> = {
++  [LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS]:
++    'the model repeated the same tool call with identical arguments',
++  [LoopType.CHANTING_IDENTICAL_SENTENCES]:
++    'the model repeated the same sentence in its output',
++  [LoopType.REPETITIVE_THOUGHTS]:
++    'the model repeated the same reasoning thought',
++  [LoopType.READ_FILE_LOOP]:
++    'the model spent too many consecutive calls reading files without making progress',
++  [LoopType.ACTION_STAGNATION]:
++    'the model kept calling the same tool without making progress',
++  [LoopType.SHELL_COMMAND_STAGNATION]:
++    'the model repeated similar shell inspection commands without making progress',
++  [LoopType.GLOBAL_TOOL_CALL_DUPLICATE]:
++    'the model repeated the same tool call across the turn, even when not back-to-back',
++  [LoopType.ALTERNATING_TOOL_CALL_PATTERN]:
++    'the model alternated between the same two tool calls in a repeating pattern',
++  [LoopType.TURN_TOOL_CALL_CAP]:
++    'the turn reached the per-turn tool-call limit',
++  [LoopType.INVALID_TOOL_PARAMS_STAGNATION]:
++    'the model repeatedly sent invalid tool parameters without correcting them',
++  [LoopType.REPEATED_TOOL_EXECUTION_FAILURE]:
++    'the same tool execution failure continued after a corrective reminder',
++};
++
++/**
++ * `"<loop_type>: <explanation>"` for the rule that fired, or undefined when
++ * the halt did not come from one of this service's rules.
++ */
++export function describeLoopType(
++  loopType: LoopType | null | undefined,
++): string | undefined {
++  return loopType ? `${loopType}: ${LOOP_TYPE_LABELS[loopType]}` : undefined;
++}
++
+ /**
+  * Service for detecting and preventing infinite loops in AI responses.
+  * Monitors tool call repetitions and content sentence repetitions.
 diff --git a/packages/core/src/subagents/builtin-agents.test.ts b/packages/core/src/subagents/builtin-agents.test.ts
 index 6948502..0895c5b 100644
 --- a/packages/core/src/subagents/builtin-agents.test.ts
@@ -11782,18 +12363,20 @@ index 8be0153..00aa6af 100644
      },
      {
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..c871f01 100644
+index 6d3fb50..add369d 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
-@@ -32,6 +32,7 @@ import {
+@@ -31,7 +31,9 @@ import {
+   ContextState,
  } from '../../agents/runtime/agent-headless.js';
  import { AgentEventType } from '../../agents/runtime/agent-events.js';
++import { LoopType } from '../../telemetry/types.js';
  import type {
 +  AgentCompactionEvent,
    AgentToolCallEvent,
    AgentToolResultEvent,
    AgentApprovalRequestEvent,
-@@ -205,6 +206,7 @@ describe('AgentTool', () => {
+@@ -205,6 +207,7 @@ describe('AgentTool', () => {
        getSessionId: vi.fn().mockReturnValue('test-session-id'),
        getCliVersion: vi.fn().mockReturnValue('test-version'),
        getSubagentManager: vi.fn(),
@@ -11801,7 +12384,7 @@ index 6d3fb50..c871f01 100644
        getGeminiClient: vi.fn().mockReturnValue(undefined),
        getHookSystem: vi.fn().mockReturnValue(undefined),
        getStopHookBlockingCap: vi.fn().mockReturnValue(8),
-@@ -449,6 +451,51 @@ describe('AgentTool', () => {
+@@ -449,6 +452,51 @@ describe('AgentTool', () => {
    });
  
    describe('schema generation', () => {
@@ -11853,15 +12436,16 @@ index 6d3fb50..c871f01 100644
      it('keeps subagent_type open when named subagents are available', () => {
        const schema = agentTool.schema;
        const properties = schema.parametersJsonSchema as {
-@@ -2045,6 +2092,7 @@ describe('AgentTool', () => {
+@@ -2045,6 +2093,8 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
 +        getTurnsUsed: vi.fn().mockReturnValue(2),
++        getLoopType: vi.fn().mockReturnValue(null),
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -2224,7 +2272,98 @@ describe('AgentTool', () => {
+@@ -2224,7 +2274,164 @@ describe('AgentTool', () => {
        ).createInvocation(params);
        const result = await invocation.execute();
  
@@ -11946,54 +12530,124 @@ index 6d3fb50..c871f01 100644
 +      const invocation = (
 +        agentTool as AgentToolWithProtectedMethods
 +      ).createInvocation(params);
++      // In the real runtime the reasoning loop announces the terminal state
++      // as it unwinds, before the tool body publishes its own fuller update
++      // for the same transition.
++      vi.mocked(mockAgent.execute).mockImplementation(async () => {
++        invocation.eventEmitter.emit(AgentEventType.FINISH, {
++          subagentId: 'sub-1',
++          terminateReason: AgentTerminateMode.MAX_TURNS,
++          turnsUsed: 3,
++          loopType: null,
++          timestamp: Date.now(),
++        });
++      });
 +      await invocation.execute(undefined, (output) => {
 +        snapshots.push(output as AgentResultDisplay);
 +      });
 +
-+      // The headless stream builds the subagent's error result from this
-+      // snapshot, so the turn count has to arrive in the same update as the
-+      // terminal status rather than in a later one.
++      // The headless stream builds the subagent's error result from the first
++      // running -> failed snapshot and ignores every later one, so the count
++      // has to be on all of them, not merely on the last.
 +      const terminal = snapshots.filter(
 +        (snapshot) => snapshot.status === 'failed',
 +      );
 +      expect(terminal.length).toBeGreaterThan(0);
-+      expect(terminal.at(-1)?.turnsUsed).toBe(3);
++      expect(terminal.map((snapshot) => snapshot.turnsUsed)).toEqual(
++        terminal.map(() => 3),
++      );
++    });
++
++    it('[loop-attribution] names the rule that halted a looping subagent', async () => {
++      vi.mocked(mockAgent.getFinalText).mockReturnValue('');
++      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(
++        AgentTerminateMode.LOOP_DETECTED,
++      );
++      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(11);
++      vi.mocked(mockAgent.getLoopType).mockReturnValue(
++        LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,
++      );
++
++      const params: AgentParams = {
++        description: 'Search files',
++        prompt: 'Find all TypeScript files',
++        subagent_type: 'file-search',
++        run_in_background: false,
++      };
++
++      const snapshots: AgentResultDisplay[] = [];
++      const invocation = (
++        agentTool as AgentToolWithProtectedMethods
++      ).createInvocation(params);
++      vi.mocked(mockAgent.execute).mockImplementation(async () => {
++        invocation.eventEmitter.emit(AgentEventType.FINISH, {
++          subagentId: 'sub-1',
++          terminateReason: AgentTerminateMode.LOOP_DETECTED,
++          turnsUsed: 11,
++          loopType: LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,
++          timestamp: Date.now(),
++        });
++      });
++      const result = await invocation.execute(undefined, (output) => {
++        snapshots.push(output as AgentResultDisplay);
++      });
++
++      // Nine rules across two tiers end in LOOP_DETECTED. Both the record the
++      // service reads and the text the parent model reads have to say which
++      // one fired: a five-identical-call halt and an exhausted per-turn
++      // tool-call budget need different responses.
++      const terminal = snapshots.filter(
++        (snapshot) => snapshot.status === 'failed',
++      );
++      expect(terminal.length).toBeGreaterThan(0);
++      for (const snapshot of terminal) {
++        expect(snapshot.terminateReason).toContain(
++          'consecutive_identical_tool_calls',
++        );
++      }
++      const modelVisible = JSON.stringify(result.llmContent);
++      expect(modelVisible).toContain('consecutive_identical_tool_calls');
++      expect(modelVisible).toContain('after 11 turns');
      });
  
      it('explains successful subagents with no model-visible output', async () => {
-@@ -3407,6 +3546,7 @@ describe('AgentTool', () => {
+@@ -3407,6 +3614,8 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
 +        getTurnsUsed: vi.fn().mockReturnValue(2),
++        getLoopType: vi.fn().mockReturnValue(null),
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -4670,6 +4810,7 @@ describe('AgentTool', () => {
+@@ -4670,6 +4879,8 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
 +        getTurnsUsed: vi.fn().mockReturnValue(2),
++        getLoopType: vi.fn().mockReturnValue(null),
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -4866,6 +5007,7 @@ describe('AgentTool', () => {
+@@ -4866,6 +5077,8 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
 +        getTurnsUsed: vi.fn().mockReturnValue(2),
++        getLoopType: vi.fn().mockReturnValue(null),
        } as unknown as AgentHeadless;
  
        mockContextState = {
-@@ -5217,6 +5359,7 @@ describe('AgentTool', () => {
+@@ -5217,6 +5430,8 @@ describe('AgentTool', () => {
            failedToolCalls: 0,
          }),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
 +        getTurnsUsed: vi.fn().mockReturnValue(2),
++        getLoopType: vi.fn().mockReturnValue(null),
        } as unknown as AgentHeadless;
  
        vi.mocked(mockAgent.execute).mockImplementation(async () => {
-@@ -5286,6 +5429,72 @@ describe('AgentTool', () => {
+@@ -5286,6 +5501,76 @@ describe('AgentTool', () => {
        expect(toolCall?.responseParts).toBe(responseParts);
      });
  
@@ -12011,6 +12665,7 @@ index 6d3fb50..c871f01 100644
 +            originalTokenCount: 198_400,
 +            newTokenCount: 32_118,
 +            triggerReason: 'token_limit',
++            output: null,
 +          },
 +          timestamp: Date.now(),
 +        } satisfies AgentCompactionEvent);
@@ -12024,6 +12679,7 @@ index 6d3fb50..c871f01 100644
 +            originalTokenCount: 205_112,
 +            newTokenCount: 205_112,
 +            triggerReason: 'token_limit',
++            output: null,
 +          },
 +          timestamp: Date.now(),
 +        } satisfies AgentCompactionEvent);
@@ -12046,6 +12702,7 @@ index 6d3fb50..c871f01 100644
 +          originalTokenCount: 198_400,
 +          newTokenCount: 32_118,
 +          triggerReason: 'token_limit',
++          output: null,
 +        },
 +        {
 +          status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
@@ -12053,6 +12710,7 @@ index 6d3fb50..c871f01 100644
 +          originalTokenCount: 205_112,
 +          newTokenCount: 205_112,
 +          triggerReason: 'token_limit',
++          output: null,
 +        },
 +      ]);
 +      const firstSnapshotWithCompaction = snapshots.find(
@@ -12066,16 +12724,17 @@ index 6d3fb50..c871f01 100644
      it('omits subagent protocol payloads from interactive display state', async () => {
        vi.mocked(config.isInteractive).mockReturnValue(true);
        const responseParts: Part[] = [{ text: 'raw protocol result' }];
-@@ -5593,6 +5802,7 @@ describe('AgentTool', () => {
+@@ -5593,6 +5878,8 @@ describe('AgentTool', () => {
          executeExternalInputs: vi.fn().mockResolvedValue(undefined),
          getFinalText: vi.fn().mockReturnValue('Monitor done'),
          getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
 +        getTurnsUsed: vi.fn().mockReturnValue(2),
++        getLoopType: vi.fn().mockReturnValue(null),
          getExecutionSummary: vi.fn().mockReturnValue({}),
          // Background spawn subscribes to the core's event emitter to
          // populate the entry's recentActivities buffer. Return a stub
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..2dd0bfc 100644
+index 4bcea69..4c17612 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -88,6 +88,7 @@ import {
@@ -12086,7 +12745,19 @@ index 4bcea69..2dd0bfc 100644
    AgentToolCallEvent,
    AgentToolResultEvent,
    AgentFinishEvent,
-@@ -130,6 +131,12 @@ import type {
+@@ -106,7 +107,10 @@ import {
+   appendStopHookBlockingCapWarning,
+   formatStopHookBlockingCapWarning,
+ } from '../../hooks/stopHookCap.js';
+-import { toModelVisibleSubagentResult } from '../../agents/subagent-result.js';
++import {
++  describeSubagentTerminateReason,
++  toModelVisibleSubagentResult,
++} from '../../agents/subagent-result.js';
+ import {
+   ApprovalMode,
+   Config,
+@@ -130,6 +134,12 @@ import type {
  } from '../../agents/background-tasks.js';
  import { buildModelIdContext, resolveModelId } from '../../utils/modelId.js';
  import type { AuthOverrides } from '../../models/content-generator-config.js';
@@ -12099,7 +12770,7 @@ index 4bcea69..2dd0bfc 100644
  
  function persistBackgroundCancellation(
    metaPath: string,
-@@ -1004,8 +1011,48 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1004,8 +1014,48 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
  </example>
  `;
  
@@ -12150,7 +12821,7 @@ index 4bcea69..2dd0bfc 100644
  
      // Update the parameter schema by modifying the existing object
      const schema = this.parameterSchema as {
-@@ -1035,7 +1082,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1035,7 +1085,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        const availableGrades = [
          ...this.subagentManager.getAvailableModelGrades().keys(),
        ];
@@ -12162,7 +12833,7 @@ index 4bcea69..2dd0bfc 100644
          schema.properties.model = {
            type: 'string',
            enum: availableGrades,
-@@ -1075,6 +1125,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1075,6 +1128,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        return 'Parameter "todo_id" must be a non-empty string of at most 500 characters.';
      }
  
@@ -12197,7 +12868,7 @@ index 4bcea69..2dd0bfc 100644
      if (params.subagent_type !== undefined) {
        if (
          typeof params.subagent_type !== 'string' ||
-@@ -1425,6 +1503,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1425,6 +1506,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
    readonly eventEmitter: AgentEventEmitter = new AgentEventEmitter();
    private currentDisplay: AgentResultDisplay | null = null;
    private currentToolCalls: AgentResultDisplay['toolCalls'] = [];
@@ -12207,7 +12878,7 @@ index 4bcea69..2dd0bfc 100644
    private callId?: string;
  
    constructor(
-@@ -1552,6 +1633,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1552,12 +1636,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
      });
  
@@ -12223,10 +12894,26 @@ index 4bcea69..2dd0bfc 100644
 +      );
 +    });
 +
++    // This is the first update that leaves `running`, so it is the one an
++    // edge-triggered consumer reads. It therefore has to carry the terminal
++    // facts in full: a later, richer update for the same transition is not
++    // read at all, and a consumer that finds no turn count on this one
++    // records that the subagent took no turns.
      this.eventEmitter.on(AgentEventType.FINISH, (...args: unknown[]) => {
        const event = args[0] as AgentFinishEvent;
        this.updateDisplay(
-@@ -2174,7 +2267,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+         {
+           status: event.terminateReason === 'GOAL' ? 'completed' : 'failed',
+-          terminateReason: event.terminateReason,
++          terminateReason: describeSubagentTerminateReason(
++            event.terminateReason as AgentTerminateMode,
++            event.loopType,
++          ),
++          turnsUsed: event.turnsUsed,
+         },
+         updateOutput,
+       );
+@@ -2174,7 +2279,12 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        const subagentRawText = subagent.getFinalText();
        const terminateMode = subagent.getTerminateMode();
        const finalText = appendStopHookBlockingCapWarning(
@@ -12235,11 +12922,12 @@ index 4bcea69..2dd0bfc 100644
 +          subagentRawText,
 +          terminateMode,
 +          subagent.getTurnsUsed(),
++          subagent.getLoopType(),
 +        ),
          stopHookWarning,
        );
        const success = terminateMode === AgentTerminateMode.GOAL;
-@@ -2199,12 +2296,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2199,12 +2309,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          }),
        );
  
@@ -12247,6 +12935,7 @@ index 4bcea69..2dd0bfc 100644
 +      // consumer that reacts to the status change reads how far the subagent
 +      // actually got from the same snapshot.
 +      const turnsUsed = subagent.getTurnsUsed();
++      const loopType = subagent.getLoopType();
        if (signal?.aborted) {
          this.updateDisplay(
            {
@@ -12257,15 +12946,22 @@ index 4bcea69..2dd0bfc 100644
            },
            updateOutput,
          );
-@@ -2215,6 +2317,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
-             terminateReason: terminateMode,
+@@ -2212,9 +2328,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+         this.updateDisplay(
+           {
+             status: success ? 'completed' : 'failed',
+-            terminateReason: terminateMode,
++            terminateReason: describeSubagentTerminateReason(
++              terminateMode,
++              loopType,
++            ),
              result: finalText,
              executionSummary,
 +            turnsUsed,
            },
            updateOutput,
          );
-@@ -2567,6 +2670,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2567,6 +2687,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      // background-agent concurrency caps (agents.maxParallelAgentsByModel).
      let subagentModelId: string | undefined;
      let subagentRuntimeAuthOverrides: AuthOverrides | undefined;
@@ -12273,7 +12969,7 @@ index 4bcea69..2dd0bfc 100644
      const releaseBackgroundSlotReservation = () => {
        if (backgroundSlotReservation && !backgroundSlotReservationConsumed) {
          this.config
-@@ -2696,8 +2800,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2696,8 +2817,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // Implicit background requests downgrade to an awaited foreground run
        // instead of orphaning the child's results. The runtime spawn guard
        // above rejects an explicit run_in_background: true request.
@@ -12285,7 +12981,7 @@ index 4bcea69..2dd0bfc 100644
            ? true
            : (this.params.run_in_background ??
              (subagentConfig.background === true ||
-@@ -3077,6 +3182,19 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3077,6 +3199,19 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            subagentRuntimeConfig as Config,
            {
              eventEmitter: backgroundEventEmitter ?? this.eventEmitter,
@@ -12305,7 +13001,7 @@ index 4bcea69..2dd0bfc 100644
              ...(shouldRunInBackground && subagentModelId
                ? { modelConfigOverrides: { model: subagentModelId } }
                : {}),
-@@ -3944,6 +4062,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3944,6 +4079,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
  
        const fgHookOpts = { ...hookOpts, signal: fgAbortController.signal };
@@ -12339,7 +13035,7 @@ index 4bcea69..2dd0bfc 100644
        // Wrap in qwen-code.subagent span (#3731 Phase 3). Foreground
        // invocations are child spans of the AGENT tool's `qwen-code.tool`
        // span, inheriting its traceId so the trace tree stays unified.
-@@ -3952,11 +4097,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3952,11 +4114,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            this.buildSubagentSpanSpec(hookOpts, subagentConfig, 'foreground'),
            fgAbortController.signal,
            (recordSpanOutcome) =>
@@ -12360,7 +13056,7 @@ index 4bcea69..2dd0bfc 100644
              ),
          );
  
-@@ -4112,12 +4261,52 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4112,12 +4278,53 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            depth: launchDepth,
          });
  
@@ -12412,13 +13108,14 @@ index 4bcea69..2dd0bfc 100644
 +              subagent.getFinalText(),
 +              terminateMode,
 +              subagent.getTurnsUsed(),
++              subagent.getLoopType(),
 +            ),
 +            stopHookWarning,
 +          ) + effectSuffix;
          const wtSuffix = formatWorktreeSuffix(await cleanupWorktreeIsolation());
          if (terminateMode === AgentTerminateMode.ERROR) {
            return {
-@@ -4266,8 +4455,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4266,8 +4473,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          terminateReason: `Failed to run subagent: ${errorMessage}`,
        };
  
@@ -13106,58 +13803,339 @@ index 0000000..7c9c492
 +  return root;
 +}
 diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools/read-file.test.ts
-index 4cbf249..a4edea5 100644
+index 4cbf249..7da1fc1 100644
 --- a/packages/core/src/tools/read-file.test.ts
 +++ b/packages/core/src/tools/read-file.test.ts
-@@ -1050,6 +1050,24 @@ describe('ReadFileTool', () => {
+@@ -264,13 +264,13 @@ describe('ReadFileTool', () => {
+     });
+ 
+     it('should reject pages for notebook files', () => {
+-      const params: ReadFileToolParams = {
++      const params = {
+         file_path: path.join(tempRootDir, 'test.ipynb'),
+         pages: '1',
+-      };
++      } as ReadFileToolParams;
+ 
+       expect(() => tool.build(params)).toThrow(
+-        'pages is not supported for Jupyter notebook (.ipynb) files',
++        "read_file has no 'pages' parameter",
+       );
+     });
+   });
+@@ -637,7 +637,6 @@ describe('ReadFileTool', () => {
+         await fsp.writeFile(pdfPath, Buffer.from('%PDF-1.7'));
+         const invocation = createTextOnlyTool().build({
+           file_path: pdfPath,
+-          pages: '20-25',
+         }) as ToolInvocation<ReadFileToolParams, ToolResult>;
+         return invocation.execute(signalOverride);
+       }
+@@ -651,9 +650,12 @@ describe('ReadFileTool', () => {
+ 
+       beforeEach(() => {
+         visionBridgeMocks.shouldRunVisionBridge.mockReturnValue(true);
++        // Under the full-text page limit, so the read reaches the bridge
++        // instead of stopping at the large-PDF gate.
++        pdfMocks.getPDFPageCount.mockResolvedValue(6);
+         pdfMocks.renderPDFPagesToImages.mockResolvedValue({
+           success: true,
+-          images: ['20', '21', '22', '23'].map((data) => ({
++          images: ['1', '2', '3', '4'].map((data) => ({
+             data,
+             mimeType: 'image/jpeg',
+           })),
+@@ -667,7 +669,7 @@ describe('ReadFileTool', () => {
+           status: 'ok',
+           parts: [
+             {
+-              text: '[Untrusted transcription]\nPage 20: heading\nPages 24-25 exist but were not transcribed; call read_file on the original PDF with a later page range to continue.',
++              text: '[Untrusted transcription]\nPage 1: heading\nPages 5-6 exist but were not transcribed.',
+             },
+           ],
+           convertedCount: 4,
+@@ -685,14 +687,14 @@ describe('ReadFileTool', () => {
+           'Untrusted transcription',
+         );
+         expect(JSON.stringify(result.llmContent)).toContain(
+-          'Pages 24-25 exist but were not transcribed',
++          'Pages 5-6 exist but were not transcribed',
+         );
+         expect(JSON.stringify(result.llmContent)).not.toContain(
+-          'pages 24-25 were not included',
++          'pages 5-6 were not included',
+         );
+         const display = bridgeDisplay(result);
+         expect(display.summary).toContain(
+-          'transcribed PDF pages 20-23; remaining pages 24-25',
++          'transcribed PDF pages 1-4; remaining pages 5-6',
+         );
+         expect(display.notice).toContain('qwen3-vl-plus');
+         expect(display.notice).toContain('dashscope.aliyuncs.com');
+@@ -700,11 +702,11 @@ describe('ReadFileTool', () => {
+           expect.objectContaining({
+             sourceContext: {
+               displayName: 'scanned.pdf',
+-              renderedRange: { firstPage: 20, lastPage: 23 },
++              renderedRange: { firstPage: 1, lastPage: 4 },
+               continuation: {
+                 certainty: 'known',
+-                firstPage: 24,
+-                lastPage: 25,
++                firstPage: 5,
++                lastPage: 6,
+               },
+             },
+           }),
+@@ -720,7 +722,7 @@ describe('ReadFileTool', () => {
+         visionBridgeMocks.runVisionBridge.mockResolvedValue({
+           applied: true,
+           status: 'ok',
+-          parts: [{ text: '[Untrusted transcription]\nPage 20: heading' }],
++          parts: [{ text: '[Untrusted transcription]\nPage 1: heading' }],
+           convertedCount: 4,
+           omittedCount: 0,
+           modelId: 'qwen3-vl-plus',
+@@ -732,16 +734,15 @@ describe('ReadFileTool', () => {
+ 
+         const display = bridgeDisplay(result);
+         expect(display.summary).toContain(
+-          'additional pages may exist from page 24 through page 25',
++          'additional pages may exist from page 5',
+         );
+-        expect(display.summary).not.toContain('remaining pages 24-25');
++        expect(display.summary).not.toContain('remaining pages');
+         expect(visionBridgeMocks.runVisionBridge).toHaveBeenCalledWith(
+           expect.objectContaining({
+             sourceContext: expect.objectContaining({
+               continuation: {
+                 certainty: 'possible',
+-                firstPage: 24,
+-                requestedLastPage: 25,
++                firstPage: 5,
+               },
+             }),
+           }),
+@@ -1050,50 +1051,43 @@ describe('ReadFileTool', () => {
        }
      });
  
-+    it('[pages-contract] rejects pages on a non-PDF file before any syntax validation', () => {
-+      const params: ReadFileToolParams = {
-+        file_path: '/tmp/Example.java',
-+        pages: '600-721',
-+      };
-+      expect(() => tool.build(params)).toThrow(
-+        "The 'pages' parameter applies only to PDF files",
-+      );
-+    });
-+
-+    it('[pages-contract] still accepts a bounded pages range on a PDF', () => {
-+      const params: ReadFileToolParams = {
-+        file_path: '/tmp/test.pdf',
-+        pages: '1-2',
-+      };
-+      expect(() => tool.build(params)).not.toThrow();
-+    });
-+
-     it('should reject invalid pages parameter', () => {
+-    it('should reject invalid pages parameter', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: '/tmp/test.pdf',
+-        pages: 'abc',
+-      };
+-      expect(() => tool.build(params)).toThrow('Invalid pages parameter');
+-    });
+-
+-    it('should reject pages range exceeding 20', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: '/tmp/test.pdf',
+-        pages: '1-25',
++    it('[pages-contract] advertises exactly one range mechanism and no pages parameter', () => {
++      const schema = tool.schema.parametersJsonSchema as {
++        properties: Record<string, unknown>;
+       };
+-      expect(() => tool.build(params)).toThrow(
+-        'Pages range exceeds maximum of 20',
+-      );
++      expect(Object.keys(schema.properties).sort()).toEqual([
++        'file_path',
++        'limit',
++        'offset',
++      ]);
++      expect(tool.schema.description).toContain('pdftotext -layout');
+     });
+ 
+-    it('should reject open-ended pages range', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: '/tmp/test.pdf',
+-        pages: '3-',
+-      };
+-      expect(() => tool.build(params)).toThrow('Open-ended page ranges');
+-    });
++    it.each([
++      ['a non-PDF source file', '/tmp/Example.java', '600-721'],
++      ['a PDF', '/tmp/test.pdf', '1-2'],
++      ['an empty value', '/tmp/notes.txt', ''],
++    ])(
++      '[pages-contract] refuses an undeclared pages argument on %s',
++      (_name, filePath, pages) => {
++        // Undeclared keys survive JSON-schema validation, so the refusal has
++        // to be explicit: a dropped page range would leave the model
++        // believing it had asked for one. The refusal does not depend on the
++        // file type, so it cannot be worked around by renaming the file.
++        const params = { file_path: filePath, pages } as ReadFileToolParams;
++        expect(() => tool.build(params)).toThrow(
++          "read_file has no 'pages' parameter",
++        );
++      },
++    );
+ 
+-    it('should accept valid pages parameter', () => {
++    it('[pages-contract] reads a PDF whole, with no page parameter to supply', () => {
        const params: ReadFileToolParams = {
-         file_path: '/tmp/test.pdf',
+         file_path: path.join(tempRootDir, 'test.pdf'),
+-        pages: '1-5',
+       };
+       expect(() => tool.build(params)).not.toThrow();
+     });
+ 
+-    it('should treat empty pages parameter as unset', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: path.join(tempRootDir, 'test.txt'),
+-        pages: '',
+-      };
+-      const invocation = tool.build(params);
+-
+-      expect(invocation.params.pages).toBeUndefined();
+-    });
+-
+     it('should support offset and limit for text files', async () => {
+       const filePath = path.join(tempRootDir, 'paginated.txt');
+       const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
+@@ -1203,7 +1197,7 @@ describe('ReadFileTool', () => {
+         expect(result.error?.type).toBe(ToolErrorType.FILE_TOO_LARGE);
+         expect(String(result.llmContent).length).toBeLessThan(1000);
+         expect(result.llmContent).toContain('has 31 pages');
+-        expect(result.llmContent).toContain("Use the 'pages' parameter");
++        expect(result.llmContent).toContain('pdftotext -layout');
+       });
+ 
+       it('returns the file_unchanged placeholder on a second full Read of an unchanged text file', async () => {
 diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read-file.ts
-index ab8f8f0..e3f2881 100644
+index ab8f8f0..57eca44 100644
 --- a/packages/core/src/tools/read-file.ts
 +++ b/packages/core/src/tools/read-file.ts
-@@ -540,7 +540,7 @@ export class ReadFileTool extends BaseDeclarativeTool<
+@@ -26,7 +26,7 @@ import {
+   type PDFVisionBridgeCandidate,
+   type ProcessedFileReadResult,
+ } from '../utils/fileUtils.js';
+-import { parsePDFPageRange, PDF_MAX_PAGES_PER_READ } from '../utils/pdf.js';
++import { PDF_PAGE_RANGE_REMEDY } from '../utils/pdf.js';
+ import type { Config } from '../config/config.js';
+ import { FileOperation } from '../telemetry/metrics.js';
+ import { getProgrammingLanguage } from '../telemetry/telemetry-utils.js';
+@@ -69,12 +69,6 @@ export interface ReadFileToolParams {
+    * The number of lines to read (optional)
+    */
+   limit?: number;
+-
+-  /**
+-   * For PDF files, the page range to extract as text (e.g. "1-5", "3", "10-20").
+-   * Pages are 1-indexed. Open-ended ranges like "3-" are not supported.
+-   */
+-  pages?: string;
+ }
+ 
+ class ReadFileToolInvocation extends BaseToolInvocation<
+@@ -95,10 +89,6 @@ class ReadFileToolInvocation extends BaseToolInvocation<
+     );
+     const shortPath = shortenPath(relativePath);
+ 
+-    if (this.params.pages) {
+-      return `${shortPath} (pages ${this.params.pages})`;
+-    }
+-
+     const { offset, limit } = this.params;
+     if (offset !== undefined && limit !== undefined) {
+       return `${shortPath} (lines ${offset + 1}-${offset + limit})`;
+@@ -151,13 +141,11 @@ class ReadFileToolInvocation extends BaseToolInvocation<
+     const cacheEnabled = !this.config.getFileReadCacheDisabled();
+     const useFastPath = cacheEnabled && !isAutoMem;
+     const cache = this.config.getFileReadCache();
+-    // A request-level "full" Read asks for the whole file: no offset,
+-    // no limit, no PDF page range. The cache entry is only marked as
+-    // full later if the produced content was not truncated.
++    // A request-level "full" Read asks for the whole file: no offset and
++    // no limit. The cache entry is only marked as full later if the
++    // produced content was not truncated.
+     const isFullRead =
+-      this.params.offset === undefined &&
+-      this.params.limit === undefined &&
+-      this.params.pages === undefined;
++      this.params.offset === undefined && this.params.limit === undefined;
+ 
+     // Stat up front so we can consult the cache before doing any heavy
+     // work. processSingleFileContent re-stats anyway; the extra syscall
+@@ -199,7 +187,6 @@ class ReadFileToolInvocation extends BaseToolInvocation<
+       {
+         offset: this.params.offset,
+         limit: this.params.limit,
+-        pages: this.params.pages,
+         preserveUnsupportedImage: prepareForVisionBridge,
+         preparePdfForVisionBridge: prepareForVisionBridge,
+         signal,
+@@ -245,7 +232,7 @@ class ReadFileToolInvocation extends BaseToolInvocation<
+     //    (the truncate-tool-output limit made "fully read" an
+     //    impossible precondition on files past the limit, deadlocking
+     //    issue #3945). A "full" Read at the request level (no
+-    //    offset / limit / pages) only counts as full at the cache
++    //    offset / limit) only counts as full at the cache
+     //    level if the produced content was not truncated, otherwise
+     //    the model only saw the head and a follow-up `file_unchanged`
+     //    placeholder would falsely imply "you've already seen
+@@ -540,7 +527,7 @@ export class ReadFileTool extends BaseDeclarativeTool<
      super(
        ReadFileTool.Name,
        ToolDisplayNames.READ_FILE,
 -      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. If the file is large, the content will be truncated. The tool's response will clearly indicate if truncation has occurred and will provide details on how to read more of the file using the 'offset' and 'limit' parameters. Handles text, images (PNG, JPG, GIF, WEBP, SVG, BMP), PDF files, and Jupyter notebooks (.ipynb). For text files, it can read specific line ranges. For PDF files, use the 'pages' parameter to extract specific page ranges as text (e.g. '1-5'). Max ${PDF_MAX_PAGES_PER_READ} pages per request. Large PDFs cannot be read all at once when the model does not support native PDF input; retry with narrower page ranges if the tool reports a PDF is too large. With a configured vision bridge, failed PDF text extraction or an irreducibly large single page may be transcribed automatically, at most four pages per call; this transcription is lossy and marked as untrusted. This tool can read Jupyter notebooks (.ipynb) and returns structured cell content with outputs.`,
-+      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. If a text file is large, the content will be truncated and the response will explain how to continue with 'offset' and 'limit'. Image input has one fail-closed full-quality contract: a static PNG with 8-bit RGB or RGBA source pixels, at most 16,777,216 pixels, aspect ratio at most 30:1, and at most 100 MB on disk. The exact original PNG bytes are sent losslessly with no resize, crop, orientation, JPEG transcode, or decoder fallback. JPEG, WebP, GIF/APNG, BMP, grayscale, palette, 16-bit, RGB tRNS, over-limit, and corrupt image inputs are rejected. PDF input is text extraction only; PDF pages are never silently rendered into lossy image substitutes. Use the 'pages' parameter to extract a specific PDF range as text (e.g. '1-5'), at most ${PDF_MAX_PAGES_PER_READ} pages per request. Large or scanned PDFs fail with explicit narrower-range or conversion guidance. Jupyter notebooks (.ipynb) return structured cell content with outputs.`,
++      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. If a text file is large, the content will be truncated and the response will explain how to continue with 'offset' and 'limit'. Image input has one fail-closed full-quality contract: a static PNG with 8-bit RGB or RGBA source pixels, at most 16,777,216 pixels, aspect ratio at most 30:1, and at most 100 MB on disk. The exact original PNG bytes are sent losslessly with no resize, crop, orientation, JPEG transcode, or decoder fallback. JPEG, WebP, GIF/APNG, BMP, grayscale, palette, 16-bit, RGB tRNS, over-limit, and corrupt image inputs are rejected. PDF input is text extraction only; PDF pages are never silently rendered into lossy image substitutes. This tool reads whole files and has exactly one range mechanism, 'offset'/'limit', which applies to text files; there is no page parameter. A PDF too large to return in one read fails with explicit guidance to extract the pages you need in the shell with \`pdftotext -layout -f FIRST -l LAST -- <absolute path> -\`. Jupyter notebooks (.ipynb) return structured cell content with outputs.`,
        Kind.Read,
        {
          properties: {
-@@ -616,6 +616,10 @@ export class ReadFileTool extends BaseDeclarativeTool<
-       return 'pages is not supported for Jupyter notebook (.ipynb) files. Notebooks are always read in full with structured cell output.';
+@@ -559,10 +546,6 @@ export class ReadFileTool extends BaseDeclarativeTool<
+               "Optional: For text files, maximum number of lines to read. Use with 'offset' to paginate through large files. If omitted, reads the entire file (if feasible, up to a default limit).",
+             type: 'integer',
+           },
+-          pages: {
+-            description: `Optional: For PDF files, the page range to extract as text (e.g., '1-5', '3', '10-20'). Pages are 1-indexed. Max ${PDF_MAX_PAGES_PER_READ} pages per request. Open-ended ranges like '3-' are not supported. Use this for large PDFs or when the model does not support native PDF input.`,
+-            type: 'string',
+-          },
+         },
+         required: ['file_path'],
+         type: 'object',
+@@ -599,9 +582,12 @@ export class ReadFileTool extends BaseDeclarativeTool<
+       return 'Limit must be a positive integer';
      }
  
-+    if (params.pages !== undefined && ext !== '.pdf') {
-+      return `The 'pages' parameter applies only to PDF files; '${path.basename(filePath)}' is not a PDF. For text files, use 'offset' and 'limit' instead.`;
-+    }
-+
-     if (params.pages) {
-       const parsed = parsePDFPageRange(params.pages);
-       if (!parsed) {
+-    if (params.pages !== undefined) {
+-      const pages = params.pages.trim();
+-      params.pages = pages.length > 0 ? pages : undefined;
++    // `pages` is not part of this tool's schema. A model can still put an
++    // undeclared key in a tool call, and silently dropping it would leave the
++    // model believing it had asked for a page range, so the argument is
++    // refused and pointed at the two mechanisms that do exist.
++    if ((params as { pages?: unknown }).pages !== undefined) {
++      return `read_file has no 'pages' parameter and reads whole files. Use 'offset' and 'limit' to page through a text file. ${PDF_PAGE_RANGE_REMEDY}`;
+     }
+ 
+     const ext = path.extname(filePath).toLowerCase();
+@@ -612,24 +598,6 @@ export class ReadFileTool extends BaseDeclarativeTool<
+       return 'offset and limit are not supported for Jupyter notebook (.ipynb) files. Notebooks are always read in full with structured cell output.';
+     }
+ 
+-    if (params.pages !== undefined && ext === '.ipynb') {
+-      return 'pages is not supported for Jupyter notebook (.ipynb) files. Notebooks are always read in full with structured cell output.';
+-    }
+-
+-    if (params.pages) {
+-      const parsed = parsePDFPageRange(params.pages);
+-      if (!parsed) {
+-        return `Invalid pages parameter: '${params.pages}'. Use formats like '5' or '1-10'.`;
+-      }
+-      if (parsed.lastPage === Infinity) {
+-        return `Open-ended page ranges (e.g. '3-') are not supported; specify an explicit end page within the ${PDF_MAX_PAGES_PER_READ}-page limit (e.g. '3-22').`;
+-      }
+-      const maxPages = PDF_MAX_PAGES_PER_READ;
+-      if (parsed.lastPage - parsed.firstPage + 1 > maxPages) {
+-        return `Pages range exceeds maximum of ${maxPages} pages per request.`;
+-      }
+-    }
+-
+     const fileService = this.config.getFileService();
+     if (fileService.shouldQwenIgnoreFile(params.file_path)) {
+       return `File path '${filePath}' is ignored by ${fileService.getQwenIgnoreFileDisplayForPath(params.file_path)} pattern(s).`;
 diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 index e98c50a..a337bf9 100644
 --- a/packages/core/src/tools/tools.ts
@@ -13200,11 +14178,72 @@ index e98c50a..a337bf9 100644
    toolCalls?: Array<{
      callId: string;
      name: string;
+diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools/web-fetch.test.ts
+index 090fa18..3d025a1 100644
+--- a/packages/core/src/tools/web-fetch.test.ts
++++ b/packages/core/src/tools/web-fetch.test.ts
+@@ -977,7 +977,7 @@ describe('WebFetchTool', () => {
+       expect(receivedContent).not.toContain('�');
+       expect(result.llmContent).toContain('The rate is $718.00.');
+       expect(result.llmContent).toMatch(
+-        /\[Binary content \(application\/pdf, .+\) saved to .+webfetch-.+\.pdf\. Use read_file to examine it \(reads PDFs natively; pass pages for large files\)\.\]/,
++        /\[Binary content \(application\/pdf, .+\) saved to .+webfetch-.+\.pdf\. Use read_file to examine it \(PDFs are returned as extracted text\)\.\]/,
+       );
+       const savedPath = (result.llmContent as string).match(
+         /saved to (\S+\.pdf)\./,
+diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-fetch.ts
+index 42705a8..1ec6c8e 100644
+--- a/packages/core/src/tools/web-fetch.ts
++++ b/packages/core/src/tools/web-fetch.ts
+@@ -185,7 +185,7 @@ function hostnameOf(url: string): string {
+ // python, unzip) — a wrong hint sends it down a dead end.
+ function readHintForPath(persistedPath: string): string {
+   if (persistedPath.endsWith('.pdf')) {
+-    return ` Use ${ToolNames.READ_FILE} to examine it (reads PDFs natively; pass pages for large files).`;
++    return ` Use ${ToolNames.READ_FILE} to examine it (PDFs are returned as extracted text).`;
+   }
+   if (/\.(png|jpe?g|gif|webp)$/.test(persistedPath)) {
+     return ` Use ${ToolNames.READ_FILE} to view it.`;
 diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils/fileUtils.test.ts
-index 4987635..ca0d047 100644
+index 4987635..ce0f7fa 100644
 --- a/packages/core/src/utils/fileUtils.test.ts
 +++ b/packages/core/src/utils/fileUtils.test.ts
-@@ -1747,6 +1747,24 @@ describe('fileUtils', () => {
+@@ -1595,7 +1595,7 @@ describe('fileUtils', () => {
+       );
+ 
+       expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);
+-      expect(result.llmContent).toContain("Use the 'pages' parameter");
++      expect(result.llmContent).toContain('pdftotext -layout');
+       expect(result.returnDisplay).toContain('PDF requires page range');
+       expect(mockExecFile).toHaveBeenCalledTimes(2);
+       expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');
+@@ -1681,7 +1681,7 @@ describe('fileUtils', () => {
+ 
+       expect(result.errorType).toBe(ToolErrorType.READ_CONTENT_FAILURE);
+       expect(result.llmContent).toContain('pdftotext is not installed');
+-      expect(result.llmContent).not.toContain("Use the 'pages' parameter");
++      expect(result.llmContent).not.toContain('pdftotext -layout');
+       expect(result.returnDisplay).toContain('Failed to read pdf');
+       expect(result.stats).toBeDefined();
+     });
+@@ -1711,7 +1711,7 @@ describe('fileUtils', () => {
+       );
+ 
+       expect(result.error).toBeUndefined();
+-      expect(result.llmContent).toContain("Use the 'pages' parameter");
++      expect(result.llmContent).toContain('pdftotext -layout');
+       expect(result.returnDisplay).toContain('Referenced large PDF');
+       expect(result.stats).toBeDefined();
+     });
+@@ -1740,13 +1740,31 @@ describe('fileUtils', () => {
+       );
+ 
+       expect(result.error).toBeUndefined();
+-      expect(result.llmContent).toContain("Use the 'pages' parameter");
++      expect(result.llmContent).toContain('pdftotext -layout');
+       expect(result.returnDisplay).toContain('Referenced large PDF');
+       expect(result.stats).toBeDefined();
+       expect(mockExecFile).toHaveBeenCalledTimes(1);
        expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');
      });
  
@@ -13229,11 +14268,41 @@ index 4987635..ca0d047 100644
      it('keeps explicit pages reads on the pdftotext path', async () => {
        actualNodeFs.writeFileSync(
          testPdfFilePath,
+@@ -1987,8 +2005,10 @@ describe('fileUtils', () => {
+ 
+         expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);
+         expect(result.returnDisplay).toContain('PDF file too large');
+-        expect(result.llmContent).toContain("Use the 'pages' parameter");
+-        expect(result.llmContent).toContain('split the document');
++        expect(result.llmContent).toContain('pdftotext -layout');
++        // The size gate, not the page-count gate: the message has to name the
++        // limit it tripped, or this test could pass on the wrong branch.
++        expect(result.llmContent).toContain('exceeds the 100MB limit');
+         expect(result.stats).toBeDefined();
+         expect(mockExecFile).not.toHaveBeenCalled();
+       } finally {
+@@ -2259,7 +2279,7 @@ describe('fileUtils', () => {
+         );
+ 
+         expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);
+-        expect(result.llmContent).toContain("Use the 'pages' parameter");
++        expect(result.llmContent).toContain('pdftotext -layout');
+         expect(mockRender).not.toHaveBeenCalled();
+       });
+ 
 diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/fileUtils.ts
-index 211be6c..2c302bf 100644
+index 211be6c..3489bf3 100644
 --- a/packages/core/src/utils/fileUtils.ts
 +++ b/packages/core/src/utils/fileUtils.ts
-@@ -53,11 +53,6 @@ import {
+@@ -22,6 +22,7 @@ import { detectEncodingFromBuffer } from './systemEncoding.js';
+ import type { PDFRenderedImage } from './pdf.js';
+ import {
+   buildLargePDFGuidance,
++  PDF_PAGE_RANGE_REMEDY,
+   buildPDFTextTooLargeGuidance,
+   estimatePDFTextOutputTokens,
+   extractPDFText,
+@@ -53,11 +54,6 @@ import {
  } from './image-view.js';
  
  const debugLogger = createDebugLogger('FILE_UTILS');
@@ -13245,7 +14314,7 @@ index 211be6c..2c302bf 100644
  
  // Default values for encoding and separator format
  export const DEFAULT_ENCODING: BufferEncoding = 'utf-8';
-@@ -1115,23 +1110,20 @@ export async function processSingleFileContent(
+@@ -1115,23 +1111,20 @@ export async function processSingleFileContent(
        mime.getType(filePath) ??
        MIME_LITE_MISSING_VIDEO_TYPES.get(path.extname(filePath).toLowerCase()) ??
        'application/octet-stream';
@@ -13277,7 +14346,7 @@ index 211be6c..2c302bf 100644
      // Text-only main model on a bridge-capable path: prepare bounded PDF page
      // images for the caller to transcribe. `preserveUnsupportedImage` also
      // keeps ordinary images available to a bridge-capable caller, while
-@@ -1144,6 +1136,15 @@ export async function processSingleFileContent(
+@@ -1144,6 +1137,15 @@ export async function processSingleFileContent(
  
      const fileSizeInMB = stats.size / (1024 * 1024);
      const normalizedPages = pages?.trim();
@@ -13293,7 +14362,16 @@ index 211be6c..2c302bf 100644
      let pageRange:
        | NonNullable<ReturnType<typeof parsePDFPageRange>>
        | undefined;
-@@ -1461,77 +1462,59 @@ export async function processSingleFileContent(
+@@ -1192,7 +1194,7 @@ export async function processSingleFileContent(
+       fileSizeInMB > PDF_FULL_TEXT_EXTRACTION_MAX_MB
+     ) {
+       return {
+-        llmContent: `PDF file is too large for full text extraction: ${fileSizeInMB.toFixed(2)}MB exceeds the ${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB limit. Use the 'pages' parameter to read a narrower range, or split the document into smaller files before retrying.`,
++        llmContent: `PDF file is too large for full text extraction: ${fileSizeInMB.toFixed(2)}MB exceeds the ${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB limit. ${PDF_PAGE_RANGE_REMEDY}`,
+         returnDisplay: `PDF file too large (${fileSizeInMB.toFixed(2)}MB > ${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB).`,
+         error: `PDF exceeds extraction size limit: ${displayPath} (${fileSizeInMB.toFixed(2)}MB)`,
+         errorType: ToolErrorType.FILE_TOO_LARGE,
+@@ -1461,77 +1463,59 @@ export async function processSingleFileContent(
          };
        }
        case 'image': {
@@ -13420,6 +14498,39 @@ index 211be6c..2c302bf 100644
        }
        case 'audio':
        case 'video': {
+@@ -1640,14 +1624,14 @@ export async function processSingleFileContent(
+             // more pages may follow).
+             if (render.bytesTruncated) {
+               parts.push({
+-                text: `[Rendered the first ${render.images.length} page(s) of "${displayName}"; later pages were omitted to stay within size limits. Use the 'pages' parameter to read a specific range.]`,
++                text: `[Rendered the first ${render.images.length} page(s) of "${displayName}"; later pages were omitted to stay within size limits. ${PDF_PAGE_RANGE_REMEDY}]`,
+               });
+             } else if (
+               !pageRange &&
+               render.images.length >= PDF_MAX_PAGES_PER_READ
+             ) {
+               parts.push({
+-                text: `[Rendered the first ${render.images.length} page(s) (the per-read maximum) of "${displayName}". If the document has more pages, use the 'pages' parameter to read a later range.]`,
++                text: `[Rendered the first ${render.images.length} page(s) (the per-read maximum) of "${displayName}". If the document has more pages, ${PDF_PAGE_RANGE_REMEDY}]`,
+               });
+             }
+             return {
+@@ -1771,7 +1755,6 @@ export async function processSingleFileContent(
+                 const guidance = buildPDFTextTooLargeGuidance(
+                   displayName,
+                   estimatedTokens,
+-                  normalizedPages,
+                 );
+                 fallback = {
+                   llmContent: guidance,
+@@ -1820,7 +1803,6 @@ export async function processSingleFileContent(
+           const guidance = buildPDFTextTooLargeGuidance(
+             displayName,
+             estimatedTokens,
+-            normalizedPages,
+           );
+           debugLogger.debug(
+             `PDF text extraction output exceeds token limit: file=${relativePathForDisplay}, pages=${normalizedPages ?? 'all'}, limit=${PDF_TEXT_RESULT_MAX_TOKENS}`,
 diff --git a/packages/core/src/utils/image-view.test.ts b/packages/core/src/utils/image-view.test.ts
 index fa1aa32..a251cc0 100644
 --- a/packages/core/src/utils/image-view.test.ts
@@ -13912,6 +15023,190 @@ index ba3d14d..cd4d3cc 100644
  }
  
  export async function renderNormalizedImageCrop(
+diff --git a/packages/core/src/utils/pdf.test.ts b/packages/core/src/utils/pdf.test.ts
+index 795c083..16f0d40 100644
+--- a/packages/core/src/utils/pdf.test.ts
++++ b/packages/core/src/utils/pdf.test.ts
+@@ -162,7 +162,9 @@ describe('pdf utilities', () => {
+           hadPdfInfo: true,
+         }),
+       ).toBe(
+-        "PDF \"paper.pdf\" has 42 pages, which is too many to read at once. Use the 'pages' parameter to read a specific page range such as '1-5'. Maximum 20 pages per request.",
++        'PDF "paper.pdf" has 42 pages, which is too many to read at once. ' +
++          'Extract the pages you need as text in the shell with ' +
++          '`pdftotext -layout -f FIRST -l LAST -- <absolute path> -`, then read that output.',
+       );
+       expect(
+         buildLargePDFGuidance('scan.pdf', {
+@@ -171,37 +173,18 @@ describe('pdf utilities', () => {
+           hadPdfInfo: false,
+         }),
+       ).toBe(
+-        "PDF \"scan.pdf\" appears to have about 21 pages, which is too many to read at once. Use the 'pages' parameter to read a specific page range such as '1-5'. Maximum 20 pages per request.",
++        'PDF "scan.pdf" appears to have about 21 pages, which is too many to read at once. ' +
++          'Extract the pages you need as text in the shell with ' +
++          '`pdftotext -layout -f FIRST -l LAST -- <absolute path> -`, then read that output.',
+       );
+     });
+ 
+-    it('builds exact dense-text guidance for range and single-page reads', () => {
+-      const defaultRangeGuidance =
+-        "PDF text extracted from \"paper.pdf\" is too large to return safely (12345 estimated tokens; limit 12000). Use the 'pages' parameter with a narrower range, for example '1-2' or a single page.";
+-      const fivePageRangeGuidance =
+-        "PDF text extracted from \"paper.pdf\" is too large to return safely (12345 estimated tokens; limit 12000). Use the 'pages' parameter with fewer pages, for example '1-3' or a single page.";
+-      const twoPageRangeGuidance =
+-        "PDF text extracted from \"paper.pdf\" is too large to return safely (12345 estimated tokens; limit 12000). Use the 'pages' parameter with a single page, for example '1'.";
+-      const singlePageGuidance =
+-        'PDF text extracted from "paper.pdf" is too large to return safely (12345 estimated tokens; limit 12000). The selected page exceeds the output limit. Use a native PDF-capable model, split the page content externally, or extract a smaller section with another tool.';
+-
++    it('builds exact dense-text guidance that names the one page-range mechanism', () => {
+       expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345)).toBe(
+-        defaultRangeGuidance,
+-      );
+-      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, '1-5')).toBe(
+-        fivePageRangeGuidance,
+-      );
+-      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, '1-2')).toBe(
+-        twoPageRangeGuidance,
+-      );
+-      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, '1')).toBe(
+-        singlePageGuidance,
+-      );
+-      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, '1-1')).toBe(
+-        singlePageGuidance,
+-      );
+-      expect(buildPDFTextTooLargeGuidance('paper.pdf', 12_345, '1 - 1')).toBe(
+-        singlePageGuidance,
++        'PDF text extracted from "paper.pdf" is too large to return safely ' +
++          '(12345 estimated tokens; limit 12000). ' +
++          'Extract the pages you need as text in the shell with ' +
++          '`pdftotext -layout -f FIRST -l LAST -- <absolute path> -`, then read that output.',
+       );
+     });
+   });
+@@ -551,7 +534,7 @@ describe('pdf utilities', () => {
+       if (result.success) {
+         expect(result.text.length).toBeLessThan(110000);
+         expect(result.text).toContain('text truncated at 100000 characters');
+-        expect(result.text).toContain("'pages' parameter");
++        expect(result.text).toContain('pdftotext -layout');
+       }
+     });
+ 
+@@ -575,7 +558,7 @@ describe('pdf utilities', () => {
+       if (result.success) {
+         expect(result.text.length).toBeLessThan(110000);
+         expect(result.text).toContain('text truncated');
+-        expect(result.text).toContain("'pages' parameter");
++        expect(result.text).toContain('pdftotext -layout');
+       }
+     });
+ 
+@@ -593,7 +576,7 @@ describe('pdf utilities', () => {
+         expect(result.text).toContain('text truncated');
+         expect(result.text).toContain('PDF text buffer limit');
+         expect(result.text).not.toContain('100000 characters');
+-        expect(result.text).toContain("'pages' parameter");
++        expect(result.text).toContain('pdftotext -layout');
+       }
+     });
+ 
+diff --git a/packages/core/src/utils/pdf.ts b/packages/core/src/utils/pdf.ts
+index c26c22a..79c721e 100644
+--- a/packages/core/src/utils/pdf.ts
++++ b/packages/core/src/utils/pdf.ts
+@@ -17,6 +17,19 @@ const PDF_PAGE_COUNT_SIZE_HEURISTIC_BYTES = 100 * 1024;
+ export const PDF_TEXT_RESULT_MAX_TOKENS = 12_000;
+ const PDF_TEXT_RESULT_WRAPPER_TOKEN_CHARS = 64;
+ const PDF_TEXT_RESULT_CHARS_PER_TOKEN = 4;
++/**
++ * The one way to select PDF pages in this deployment. `read_file` reads a
++ * whole file and has no page parameter: a parameter that is meaningful for a
++ * single file type is an affordance the model cannot evaluate from the tool
++ * schema, and production forensics measured it being used as a line range on
++ * source files 106 times in a single run. Page selection therefore happens
++ * where it is unambiguous — a page-ranged `pdftotext` run in the shell — and
++ * every message that has to send the model somewhere sends it here.
++ */
++export const PDF_PAGE_RANGE_REMEDY =
++  'Extract the pages you need as text in the shell with ' +
++  '`pdftotext -layout -f FIRST -l LAST -- <absolute path> -`, then read that output.';
++
+ export const PDF_TEXT_EXTRACTION_UNAVAILABLE_MESSAGE =
+   'pdftotext is not installed. Install poppler-utils to enable PDF text extraction (e.g. `apt-get install poppler-utils` or `brew install poppler`).';
+ export const PDF_RENDER_UNAVAILABLE_MESSAGE =
+@@ -77,29 +90,18 @@ export function buildLargePDFGuidance(
+   requirement: PDFPageRangeRequirement,
+ ): string {
+   const source = requirement.hadPdfInfo ? 'has' : 'appears to have about';
+-  return `PDF "${displayName}" ${source} ${requirement.effectivePageCount} pages, which is too many to read at once. Use the 'pages' parameter to read a specific page range such as '1-5'. Maximum ${PDF_MAX_PAGES_PER_READ} pages per request.`;
++  return `PDF "${displayName}" ${source} ${requirement.effectivePageCount} pages, which is too many to read at once. ${PDF_PAGE_RANGE_REMEDY}`;
+ }
+ 
+ export function buildPDFTextTooLargeGuidance(
+   displayName: string,
+   estimatedTokens: number,
+-  pagesUsed?: string,
+ ): string {
+-  const pageRange = pagesUsed ? parsePDFPageRange(pagesUsed) : null;
+-  const prefix = `PDF text extracted from "${displayName}" is too large to return safely (${estimatedTokens} estimated tokens; limit ${PDF_TEXT_RESULT_MAX_TOKENS}).`;
+-  if (pageRange && pageRange.firstPage === pageRange.lastPage) {
+-    return `${prefix} The selected page exceeds the output limit. Use a native PDF-capable model, split the page content externally, or extract a smaller section with another tool.`;
+-  }
+-  if (pageRange) {
+-    const suggestedEnd = Math.floor(
+-      (pageRange.firstPage + pageRange.lastPage) / 2,
+-    );
+-    if (suggestedEnd === pageRange.firstPage) {
+-      return `${prefix} Use the 'pages' parameter with a single page, for example '${pageRange.firstPage}'.`;
+-    }
+-    return `${prefix} Use the 'pages' parameter with fewer pages, for example '${pageRange.firstPage}-${suggestedEnd}' or a single page.`;
+-  }
+-  return `${prefix} Use the 'pages' parameter with a narrower range, for example '1-2' or a single page.`;
++  return (
++    `PDF text extracted from "${displayName}" is too large to return safely ` +
++    `(${estimatedTokens} estimated tokens; limit ${PDF_TEXT_RESULT_MAX_TOKENS}). ` +
++    PDF_PAGE_RANGE_REMEDY
++  );
+ }
+ 
+ /**
+@@ -356,7 +358,7 @@ export async function extractPDFText(
+     if (timedOut) {
+       return {
+         success: false,
+-        error: `pdftotext timed out after 30s. The PDF may be unusually large or complex; try the 'pages' parameter to narrow the range.`,
++        error: `pdftotext timed out after 30s. The PDF may be unusually large or complex; ${PDF_PAGE_RANGE_REMEDY}`,
+       };
+     }
+ 
+@@ -383,7 +385,7 @@ export async function extractPDFText(
+         success: true,
+         text:
+           text +
+-          `\n\n... [text truncated ${truncationReason}. Use the 'pages' parameter to read specific page ranges.]`,
++          `\n\n... [text truncated ${truncationReason}. ${PDF_PAGE_RANGE_REMEDY}]`,
+       };
+     }
+ 
+@@ -420,7 +422,7 @@ export async function extractPDFText(
+         success: true,
+         text:
+           stdout.substring(0, MAX_PDF_TEXT_OUTPUT_CHARS) +
+-          `\n\n... [text truncated at ${MAX_PDF_TEXT_OUTPUT_CHARS} characters. Use the 'pages' parameter to read specific page ranges.]`,
++          `\n\n... [text truncated at ${MAX_PDF_TEXT_OUTPUT_CHARS} characters. ${PDF_PAGE_RANGE_REMEDY}]`,
+       };
+     }
+ 
+@@ -546,7 +548,7 @@ export async function renderPDFPagesToImages(
+         success: false,
+         error: `pdftoppm timed out after ${Math.round(
+           PDF_RENDER_TIMEOUT_MS / 1000,
+-        )}s. The PDF may be unusually large or complex; try the 'pages' parameter to narrow the range.`,
++        )}s. The PDF may be unusually large or complex; ${PDF_PAGE_RANGE_REMEDY}`,
+       };
+     }
+ 
 diff --git a/packages/core/src/utils/qwen38-image-contract.test.ts b/packages/core/src/utils/qwen38-image-contract.test.ts
 new file mode 100644
 index 0000000..132eec8
@@ -14037,6 +15332,19 @@ index 0000000..132eec8
 +    expect(wideResult.error).toMatch(/30:1/);
 +  });
 +});
+diff --git a/packages/core/src/utils/readManyFiles.test.ts b/packages/core/src/utils/readManyFiles.test.ts
+index 6cb0844..e741e90 100644
+--- a/packages/core/src/utils/readManyFiles.test.ts
++++ b/packages/core/src/utils/readManyFiles.test.ts
+@@ -732,7 +732,7 @@ describe('readManyFiles', () => {
+       expect(result.files).toHaveLength(1);
+       expect(result.files[0]!.error).toBeUndefined();
+       expect(result.files[0]!.content).toContain('PDF "paper.pdf"');
+-      expect(content).toContain("Use the 'pages' parameter");
++      expect(content).toContain('pdftotext -layout');
+       expect(content.length).toBeLessThan(1000);
+       expect(mockGetPDFPageCount).toHaveBeenCalledTimes(1);
+       expect(mockGetPDFPageCount).toHaveBeenCalledWith(absolutePath);
 diff --git a/packages/core/src/utils/shellContextEnv.test.ts b/packages/core/src/utils/shellContextEnv.test.ts
 index b1b558f..ef9fe80 100644
 --- a/packages/core/src/utils/shellContextEnv.test.ts
