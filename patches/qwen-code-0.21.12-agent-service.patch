@@ -961,6 +961,23 @@ index 53801c8..5a9d2a2 100644
    is_error: true;
    duration_ms: number;
    duration_api_ms: number;
+diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonInteractiveCli.test.ts
+index e6950ce..5b2ae29 100644
+--- a/packages/cli/src/nonInteractiveCli.test.ts
++++ b/packages/cli/src/nonInteractiveCli.test.ts
+@@ -369,6 +369,12 @@ describe('runNonInteractive', () => {
+         currentModel = model;
+       }),
+       getExperimentalZedIntegration: vi.fn().mockReturnValue(false),
++      // `buildSystemMessage` consults this to decide whether to advertise a
++      // slash-command surface. The real Config has it; this hand-rolled mock
++      // did not, so every test that reached the init event died on a
++      // TypeError. False is the general-CLI answer -- the locked-mode branch
++      // is covered by nonInteractiveHelpers.test.ts.
++      getForegroundAgentsOnly: vi.fn().mockReturnValue(false),
+       isInteractive: vi.fn().mockReturnValue(false),
+       getHookSystem: vi.fn().mockReturnValue(undefined),
+       isCronEnabled: vi.fn().mockReturnValue(false),
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
 index 6dfe8f8..96aef12 100644
 --- a/packages/cli/src/nonInteractiveCli.ts
@@ -3139,7 +3156,7 @@ index 98d83dd..5388e14 100644
 +  });
 +});
 diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/core/coreToolScheduler.ts
-index c224235..aca7675 100644
+index c224235..1786226 100644
 --- a/packages/core/src/core/coreToolScheduler.ts
 +++ b/packages/core/src/core/coreToolScheduler.ts
 @@ -130,6 +130,11 @@ import {
@@ -3212,7 +3229,58 @@ index c224235..aca7675 100644
  export function convertToFunctionErrorResponse(
    toolName: string,
    callId: string,
-@@ -1741,7 +1785,7 @@ export class CoreToolScheduler {
+@@ -923,24 +967,33 @@ const createErrorResponse = (
+   executionStatus: ToolExecutionStatus,
+   artifacts?: ToolArtifact[],
+   resultDisplay?: ToolResultDisplay,
+-): CoreToolCallResponseInfo => ({
+-  callId: request.callId,
+-  error,
+-  responseParts: [
+-    {
+-      functionResponse: {
+-        id: request.callId,
+-        name: request.name,
+-        response: { error: error.message },
++  // What the model is told, when that differs from the operational summary.
++  // `error.message` keeps its own meaning: it is the text the scrollback
++  // shows, the hooks receive, and telemetry sanitizes, and folding the
++  // model-facing content into it leaked tool output into all three.
++  modelFacingText?: string,
++): CoreToolCallResponseInfo => {
++  const modelText = modelFacingText ?? error.message;
++  return {
++    callId: request.callId,
++    error,
++    responseParts: [
++      {
++        functionResponse: {
++          id: request.callId,
++          name: request.name,
++          response: { error: modelText },
++        },
+       },
+-    },
+-  ],
+-  resultDisplay: resultDisplay ?? error.message,
+-  errorType,
+-  executionStatus,
+-  contentLength: error.message.length,
+-  ...(artifacts && artifacts.length > 0 ? { artifacts } : {}),
+-});
++    ],
++    resultDisplay: resultDisplay ?? error.message,
++    errorType,
++    executionStatus,
++    // Accounting for what was sent to the model, so it follows the model text.
++    contentLength: modelText.length,
++    ...(artifacts && artifacts.length > 0 ? { artifacts } : {}),
++  };
++};
+ 
+ const createCancelledResponse = (
+   request: ToolCallRequestInfo,
+@@ -1741,7 +1794,7 @@ export class CoreToolScheduler {
      this.setStatusInternal(
        callId,
        'cancelled',
@@ -3221,7 +3289,7 @@ index c224235..aca7675 100644
        'not_started',
      );
      this.finalizeBlockedSpan(callId, 'aborted', 'system');
-@@ -2310,7 +2354,7 @@ export class CoreToolScheduler {
+@@ -2310,7 +2363,7 @@ export class CoreToolScheduler {
              request: reqInfo,
              response: createCancelledResponse(
                reqInfo,
@@ -3230,7 +3298,7 @@ index c224235..aca7675 100644
                'not_started',
              ),
              ...(resolvedTool ? { tool: resolvedTool } : {}),
-@@ -4493,7 +4537,7 @@ export class CoreToolScheduler {
+@@ -4493,7 +4546,7 @@ export class CoreToolScheduler {
            'cancelled',
            createCancelledResponse(
              scheduledCall.request,
@@ -3239,7 +3307,7 @@ index c224235..aca7675 100644
              'not_started',
            ),
          );
-@@ -4534,7 +4578,7 @@ export class CoreToolScheduler {
+@@ -4534,7 +4587,7 @@ export class CoreToolScheduler {
            'cancelled',
            createCancelledResponse(
              scheduledCall.request,
@@ -3248,23 +3316,48 @@ index c224235..aca7675 100644
              'not_started',
            ),
          );
-@@ -5332,7 +5376,15 @@ export class CoreToolScheduler {
-         // It is a failure
-         // PostToolUseFailure Hook
-         const operationalErrorMessage = toolResult.error.message;
--        let errorMessage = operationalErrorMessage;
+@@ -5475,6 +5528,33 @@ export class CoreToolScheduler {
+           );
+         }
+ 
 +        // The single seam where the model-facing text for a failed call is
-+        // decided. Everything below -- the hook append, large-result
-+        // persistence, `new Error(...)`, the scrollback string, and the
-+        // content length -- reads this one variable, so merging here is what
-+        // makes the guarantee general rather than per-tool.
-+        let errorMessage = mergeModelFacingFailureText(
++        // decided. `errorMessage` above is the operational summary and keeps
++        // its existing readers; this is the only value the model sees, so a
++        // remedy written into either half survives whichever one a tool used.
++        let modelFacingText = mergeModelFacingFailureText(
 +          toolResult.llmContent,
-+          operationalErrorMessage,
++          errorMessage,
 +        );
-         let errorPersistedOutputFiles = toolResult.persistedOutputFiles
-           ? [...toolResult.persistedOutputFiles]
-           : toolResult.persistedOutputFiles;
++        if (
++          modelFacingText.length > errorGateThreshold &&
++          !isAlreadyTruncated(modelFacingText)
++        ) {
++          const persistResult = await persistAndTruncateToolResult(
++            callId,
++            toolName,
++            modelFacingText,
++            this.config,
++          );
++          modelFacingText = persistResult.content;
++          errorPersistedOutputFiles = Array.from(
++            new Set([
++              ...(errorPersistedOutputFiles ?? []),
++              ...(persistResult.outputFile ? [persistResult.outputFile] : []),
++            ]),
++          );
++        }
++
+         const error = new Error(errorMessage);
+         let errorResponse = createErrorResponse(
+           scheduledCall.request,
+@@ -5487,6 +5567,7 @@ export class CoreToolScheduler {
+             : this.compactResultDisplayForInteractiveHistory(
+                 toolResult.returnDisplay,
+               ),
++          modelFacingText,
+         );
+         if (errorPersistedOutputFiles !== undefined) {
+           errorResponse.persistedOutputFiles = Array.from(
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
 index 5ae5029..c222433 100644
 --- a/packages/core/src/core/geminiChat.test.ts
@@ -4447,6 +4540,23 @@ index 8051292..8e7540b 100644
        streamError === null &&
        !hasToolCall &&
        hasFinishReason &&
+diff --git a/packages/core/src/core/genai-compat.test.ts b/packages/core/src/core/genai-compat.test.ts
+index ddb9329..1d27ded 100644
+--- a/packages/core/src/core/genai-compat.test.ts
++++ b/packages/core/src/core/genai-compat.test.ts
+@@ -24,8 +24,12 @@ describe('genai compatibility values', () => {
+       STOP: SdkFinishReason.STOP,
+       MAX_TOKENS: SdkFinishReason.MAX_TOKENS,
+     });
++    // NONE is required by chatCompressionService: the summarizer must run
++    // with tool calling disabled, so the compaction turn cannot end on a
++    // tool call it has no way to execute.
+     expect(FunctionCallingConfigMode).toEqual({
+       ANY: SdkFunctionCallingConfigMode.ANY,
++      NONE: SdkFunctionCallingConfigMode.NONE,
+     });
+   });
+ 
 diff --git a/packages/core/src/core/genai-compat.ts b/packages/core/src/core/genai-compat.ts
 index b22b365..06b9f95 100644
 --- a/packages/core/src/core/genai-compat.ts
@@ -5608,6 +5718,34 @@ index 134ecd7..1cc33ff 100644
    toolCallParser?: StreamingToolCallParser;
    responseParsingOptions?: OpenAIResponseParsingOptions;
    taggedThinkingParser?: TaggedThinkingParser;
+diff --git a/packages/core/src/core/prompts.test.ts b/packages/core/src/core/prompts.test.ts
+index b91a8f4..2fa7315 100644
+--- a/packages/core/src/core/prompts.test.ts
++++ b/packages/core/src/core/prompts.test.ts
+@@ -1036,12 +1036,18 @@ describe('getCompressionPrompt', () => {
+     expect(prompt).toContain('<next_step>');
+   });
+ 
+-  it('instructs the model to wrap reasoning in an <analysis> block', () => {
++  it('sends compaction reasoning to hidden thinking rather than an in-band block', () => {
+     const prompt = getCompressionPrompt();
+-    expect(prompt).toContain('<analysis>');
+-    // Must signal that <analysis> is stripped (so the model knows it is a
+-    // drafting scratchpad, not part of the final summary).
+-    expect(prompt).toMatch(/<analysis>.*stripped|stripped.*<analysis>/is);
++    // Upstream asked for an <analysis> scratchpad that the summarizer then
++    // stripped. This deployment thinks natively at xhigh, so an in-band
++    // block would spend the fixed maintenance output budget on text that is
++    // discarded -- the failure mode that produced two empty summaries and a
++    // dead session. The prompt now directs reasoning to hidden thinking and
++    // forbids the block in the response.
++    expect(prompt).toMatch(/native hidden reasoning/i);
++    expect(prompt).toMatch(
++      /Do not place reasoning or an <analysis> block in the final response/i,
++    );
+   });
+ 
+   it('asks for the <all_user_messages> section to be chronological and inclusive', () => {
 diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.ts
 index 72d1aa5..c16d183 100644
 --- a/packages/core/src/core/prompts.ts
@@ -13193,6 +13331,51 @@ index 8be0153..00aa6af 100644
        ],
      },
      {
+diff --git a/packages/core/src/test-utils/mock-tool.ts b/packages/core/src/test-utils/mock-tool.ts
+index 5266fbd..436d8ac 100644
+--- a/packages/core/src/test-utils/mock-tool.ts
++++ b/packages/core/src/test-utils/mock-tool.ts
+@@ -248,6 +248,18 @@ export class MockModifiableTool
+     });
+   }
+ 
++  /**
++   * `createUpdatedParams` below replaces the parameters with `newContent`,
++   * which the advertised schema does not declare. Every modifiable tool does
++   * something of this shape -- the modification flow re-enters `build()` with
++   * the runtime's own bookkeeping -- so each one declares the names it
++   * introduces rather than the validator carving out an exception for the
++   * modify path.
++   */
++  protected override get runtimeOnlyParams(): readonly string[] {
++    return ['newContent'];
++  }
++
+   getModifyContext(
+     _abortSignal: AbortSignal,
+   ): ModifyContext<Record<string, unknown>> {
+diff --git a/packages/core/src/tools/__snapshots__/shell.test.ts.snap b/packages/core/src/tools/__snapshots__/shell.test.ts.snap
+index ecd9117..7031b5a 100644
+--- a/packages/core/src/tools/__snapshots__/shell.test.ts.snap
++++ b/packages/core/src/tools/__snapshots__/shell.test.ts.snap
+@@ -30,7 +30,7 @@ IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO N
+   - NEVER use unescaped single quotes inside single-quoted strings (e.g. \`'it\\'s'\` is wrong; use \`$'it\\'s'\` or \`"it's"\` instead).
+   - If unsure, prefer double-quoting arguments and escape inner double-quotes as \`\\"\`.
+ - When issuing multiple commands:
+-  - If the commands are independent and can run in parallel, make multiple run_shell_command tool calls in a single message. For example, if you need to run "git status" and "git diff", send a single message with two run_shell_command tool calls in parallel.
++  - Tool calls run one at a time; there is no parallel dispatch. Issue independent commands as successive run_shell_command calls, or combine them into one command using this shell's command separator.
+   - If the commands depend on each other and must run sequentially, use a single run_shell_command call with '&&' to chain them together (e.g., \`git add . && git commit -m "message" && git push\`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before run_shell_command for git operations, or git add before git commit), run these operations sequentially instead.
+   - Use ';' only when you need to run commands sequentially but don't care if earlier commands fail.
+   - DO NOT use newlines to separate commands (newlines are ok in quoted strings).
+@@ -86,7 +86,7 @@ IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO N
+   - Be careful with \`%VAR%\` environment-variable expansion; avoid literal \`%...%\` unless expansion is intended.
+   - Do NOT use Bash-only forms such as ANSI-C quoting (\`$'...'\`) or Bash heredocs.
+ - When issuing multiple commands:
+-  - If the commands are independent and can run in parallel, make multiple run_shell_command tool calls in a single message. For example, if you need to run "git status" and "git diff", send a single message with two run_shell_command tool calls in parallel.
++  - Tool calls run one at a time; there is no parallel dispatch. Issue independent commands as successive run_shell_command calls, or combine them into one command using this shell's command separator.
+   - If the commands depend on each other and must run sequentially, use a single run_shell_command call with '&&' to chain them together (e.g., \`git add . && git commit -m "message" && git push\`).
+   - Use '&' only when you need to run commands sequentially but don't care if earlier commands fail.
+   - DO NOT use ';' or newlines to separate commands in cmd.exe.
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
 index 6d3fb50..add369d 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
@@ -13565,7 +13748,7 @@ index 6d3fb50..add369d 100644
          // Background spawn subscribes to the core's event emitter to
          // populate the entry's recentActivities buffer. Return a stub
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..837d3b9 100644
+index 4bcea69..ab71bff 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -6,7 +6,12 @@
@@ -13615,7 +13798,38 @@ index 4bcea69..837d3b9 100644
  
  function persistBackgroundCancellation(
    metaPath: string,
-@@ -1004,8 +1019,48 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -862,6 +877,30 @@ export class AgentTool extends BaseDeclarativeTool<AgentParams, ToolResult> {
+       true, // canUpdateOutput - Enable live output updates for real-time progress
+     );
+ 
++    // The advertised schema is trimmed after construction -- foreground-only
++    // mode deletes the fork/team/worktree fields, and team fields come and go
++    // with `isAgentTeamEnabled()` -- so the trimmed set describes what the
++    // model is *shown*, not every name this tool can ever accept. Refusing
++    // against the trimmed set would reject `name` or `plan_mode_required` on
++    // a runtime that supports them whenever the schema had not been rebuilt
++    // since the config changed. The full set is snapshotted here, before any
++    // trimming, so the refusal only ever fires on a name that does not exist
++    // at all; a name that exists upstream but is disabled here is refused by
++    // the specific checks in validateToolParams, which say why.
++    this.everyDeclaredParam = Object.freeze([
++      ...Object.keys(
++        (initialSchema as { properties?: Record<string, unknown> }).properties ??
++          {},
++      ),
++      // The four `updateDescriptionAndSchema` adds back when the runtime
++      // supports them. Whether they are advertised depends on team mode and
++      // available model grades; whether they exist does not.
++      'name',
++      'plan_mode_required',
++      'read_only',
++      'model',
++    ]);
++
+     this.subagentManager = config.getSubagentManager();
+     this.removeChangeListener = this.subagentManager.addChangeListener(() => {
+       void this.refreshSubagents();
+@@ -1004,8 +1043,48 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
  </example>
  `;
  
@@ -13666,7 +13880,7 @@ index 4bcea69..837d3b9 100644
  
      // Update the parameter schema by modifying the existing object
      const schema = this.parameterSchema as {
-@@ -1035,7 +1090,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1035,7 +1114,10 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        const availableGrades = [
          ...this.subagentManager.getAvailableModelGrades().keys(),
        ];
@@ -13678,7 +13892,17 @@ index 4bcea69..837d3b9 100644
          schema.properties.model = {
            type: 'string',
            enum: availableGrades,
-@@ -1075,6 +1133,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1048,6 +1130,9 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+     }
+   }
+ 
++  /** Every parameter name this tool can accept, before schema trimming. */
++  private readonly everyDeclaredParam: readonly string[];
++
+   override validateToolParams(params: AgentParams): string | null {
+     // Validate required fields
+     if (
+@@ -1075,6 +1160,34 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        return 'Parameter "todo_id" must be a non-empty string of at most 500 characters.';
      }
  
@@ -13713,7 +13937,7 @@ index 4bcea69..837d3b9 100644
      if (params.subagent_type !== undefined) {
        if (
          typeof params.subagent_type !== 'string' ||
-@@ -1284,7 +1370,17 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1284,7 +1397,22 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
        }
      }
  
@@ -13723,16 +13947,21 @@ index 4bcea69..837d3b9 100644
 +    // be the one tool that still drops a name it never declared. It runs
 +    // last so that the checks above -- which explain *why* a parameter that
 +    // exists upstream is unavailable here -- keep precedence over the
-+    // generic "no such parameter" refusal.
++    // generic "no such parameter" refusal, and it is measured against every
++    // name the tool can ever accept rather than the trimmed advertised set.
++    const everyName: Record<string, true> = {};
++    for (const key of this.everyDeclaredParam) {
++      everyName[key] = true;
++    }
 +    return undeclaredToolParamsError(
 +      this.name,
-+      this.schema.parametersJsonSchema,
++      { properties: everyName },
 +      params,
 +    );
    }
  
    protected createInvocation(params: AgentParams) {
-@@ -1425,6 +1521,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1425,6 +1553,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
    readonly eventEmitter: AgentEventEmitter = new AgentEventEmitter();
    private currentDisplay: AgentResultDisplay | null = null;
    private currentToolCalls: AgentResultDisplay['toolCalls'] = [];
@@ -13742,7 +13971,7 @@ index 4bcea69..837d3b9 100644
    private callId?: string;
  
    constructor(
-@@ -1552,12 +1651,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1552,12 +1683,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
      });
  
@@ -13777,7 +14006,7 @@ index 4bcea69..837d3b9 100644
          },
          updateOutput,
        );
-@@ -2174,7 +2294,12 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2174,7 +2326,12 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        const subagentRawText = subagent.getFinalText();
        const terminateMode = subagent.getTerminateMode();
        const finalText = appendStopHookBlockingCapWarning(
@@ -13791,7 +14020,7 @@ index 4bcea69..837d3b9 100644
          stopHookWarning,
        );
        const success = terminateMode === AgentTerminateMode.GOAL;
-@@ -2199,12 +2324,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2199,12 +2356,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          }),
        );
  
@@ -13810,7 +14039,7 @@ index 4bcea69..837d3b9 100644
            },
            updateOutput,
          );
-@@ -2212,9 +2343,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2212,9 +2375,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          this.updateDisplay(
            {
              status: success ? 'completed' : 'failed',
@@ -13825,7 +14054,7 @@ index 4bcea69..837d3b9 100644
            },
            updateOutput,
          );
-@@ -2259,10 +2394,10 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2259,10 +2426,10 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // the AgentTool's success count). This deliberately routes the denial
        // through the scheduler's failure path (error-formatted model
        // response, failure-path hooks): a blocked spawn IS a failed tool call.
@@ -13840,7 +14069,7 @@ index 4bcea69..837d3b9 100644
        error: { message: llmContent },
        returnDisplay: {
          type: 'task_execution' as const,
-@@ -2567,6 +2702,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2567,6 +2734,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      // background-agent concurrency caps (agents.maxParallelAgentsByModel).
      let subagentModelId: string | undefined;
      let subagentRuntimeAuthOverrides: AuthOverrides | undefined;
@@ -13848,7 +14077,7 @@ index 4bcea69..837d3b9 100644
      const releaseBackgroundSlotReservation = () => {
        if (backgroundSlotReservation && !backgroundSlotReservationConsumed) {
          this.config
-@@ -2696,8 +2832,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2696,8 +2864,9 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // Implicit background requests downgrade to an awaited foreground run
        // instead of orphaning the child's results. The runtime spawn guard
        // above rejects an explicit run_in_background: true request.
@@ -13860,7 +14089,7 @@ index 4bcea69..837d3b9 100644
            ? true
            : (this.params.run_in_background ??
              (subagentConfig.background === true ||
-@@ -3077,6 +3214,19 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3077,6 +3246,19 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            subagentRuntimeConfig as Config,
            {
              eventEmitter: backgroundEventEmitter ?? this.eventEmitter,
@@ -13880,7 +14109,7 @@ index 4bcea69..837d3b9 100644
              ...(shouldRunInBackground && subagentModelId
                ? { modelConfigOverrides: { model: subagentModelId } }
                : {}),
-@@ -3944,6 +4094,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3944,6 +4126,33 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
  
        const fgHookOpts = { ...hookOpts, signal: fgAbortController.signal };
@@ -13914,7 +14143,7 @@ index 4bcea69..837d3b9 100644
        // Wrap in qwen-code.subagent span (#3731 Phase 3). Foreground
        // invocations are child spans of the AGENT tool's `qwen-code.tool`
        // span, inheriting its traceId so the trace tree stays unified.
-@@ -3952,11 +4129,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3952,11 +4161,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            this.buildSubagentSpanSpec(hookOpts, subagentConfig, 'foreground'),
            fgAbortController.signal,
            (recordSpanOutcome) =>
@@ -13935,7 +14164,7 @@ index 4bcea69..837d3b9 100644
              ),
          );
  
-@@ -4112,12 +4293,53 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4112,12 +4325,53 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            depth: launchDepth,
          });
  
@@ -13994,7 +14223,7 @@ index 4bcea69..837d3b9 100644
          const wtSuffix = formatWorktreeSuffix(await cleanupWorktreeIsolation());
          if (terminateMode === AgentTerminateMode.ERROR) {
            return {
-@@ -4266,8 +4488,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4266,8 +4520,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          terminateReason: `Failed to run subagent: ${errorMessage}`,
        };
  
@@ -14747,7 +14976,7 @@ index eee97c1..b89a876 100644
        },
      );
 diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools/read-file.test.ts
-index 4cbf249..f40f537 100644
+index 4cbf249..c104172 100644
 --- a/packages/core/src/tools/read-file.test.ts
 +++ b/packages/core/src/tools/read-file.test.ts
 @@ -20,39 +20,17 @@ import { FileReadCache } from '../services/fileReadCache.js';
@@ -14886,7 +15115,34 @@ index 4cbf249..f40f537 100644
        );
      });
    });
-@@ -602,328 +600,6 @@ describe('ReadFileTool', () => {
+@@ -563,21 +561,23 @@ describe('ReadFileTool', () => {
+       >;
+ 
+       const result = await invocation.execute(abortSignal);
++      // The JPEG overview pipeline is gone: an accepted PNG is sent as its
++      // exact original bytes, and anything else is refused.
+       expect(result.llmContent).toEqual([
+         {
+           text: expect.stringMatching(
+-            /Image overview: 20x10; oriented source: 20x10.*tool_search.*zoom_image.*0 to 1000/,
++            /Full-quality original PNG: 20x10.*lossless source bytes preserved exactly/s,
+           ),
+         },
+         {
+           inlineData: {
+             data: expect.any(String),
+-            mimeType: 'image/jpeg',
++            mimeType: 'image/png',
+             displayName: 'image.png',
+           },
+         },
+       ]);
+-      expect(result.returnDisplay).toBe('Read image file: image.png');
++      expect(result.returnDisplay).toBe('Read full-quality PNG: image.png');
+     });
+ 
+     it('should handle PDF file and return appropriate content', async () => {
+@@ -602,328 +602,6 @@ describe('ReadFileTool', () => {
        expect(result.returnDisplay).toBe('Read pdf file: document.pdf');
      });
  
@@ -15215,7 +15471,7 @@ index 4cbf249..f40f537 100644
      it('should handle binary file and skip content', async () => {
        const binPath = path.join(tempRootDir, 'binary.bin');
        // Binary data with null bytes
-@@ -1050,50 +726,107 @@ describe('ReadFileTool', () => {
+@@ -1050,50 +728,107 @@ describe('ReadFileTool', () => {
        }
      });
  
@@ -15352,7 +15608,7 @@ index 4cbf249..f40f537 100644
      it('should support offset and limit for text files', async () => {
        const filePath = path.join(tempRootDir, 'paginated.txt');
        const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
-@@ -1203,7 +936,7 @@ describe('ReadFileTool', () => {
+@@ -1203,7 +938,7 @@ describe('ReadFileTool', () => {
          expect(result.error?.type).toBe(ToolErrorType.FILE_TOO_LARGE);
          expect(String(result.llmContent).length).toBeLessThan(1000);
          expect(result.llmContent).toContain('has 31 pages');
@@ -16147,7 +16403,7 @@ index 9ef1b47..f75ca00 100644
      params: WriteFileToolParams,
    ): string | null {
 diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils/fileUtils.test.ts
-index 4987635..8c23a73 100644
+index 4987635..d6d4518 100644
 --- a/packages/core/src/utils/fileUtils.test.ts
 +++ b/packages/core/src/utils/fileUtils.test.ts
 @@ -42,12 +42,7 @@ import { LargeNonUtf8TextError } from './read-text-range.js';
@@ -16196,7 +16452,308 @@ index 4987635..8c23a73 100644
        // Ensure files exist for statSync checks before readFile might be mocked
        if (actualNodeFs.existsSync(testTextFilePath))
          actualNodeFs.unlinkSync(testTextFilePath);
-@@ -1595,7 +1574,7 @@ describe('fileUtils', () => {
+@@ -1179,14 +1158,9 @@ describe('fileUtils', () => {
+       expect(result.returnDisplay).toContain('Simulated image read error');
+     });
+ 
+-    it('should process an image file', async () => {
++    it('[image-contract] emits an accepted PNG as its exact original bytes', async () => {
+       await sharp({
+-        create: {
+-          width: 20,
+-          height: 10,
+-          channels: 3,
+-          background: '#306090',
+-        },
++        create: { width: 20, height: 10, channels: 3, background: '#306090' },
+       })
+         .png()
+         .toFile(testImageFilePath);
+@@ -1196,61 +1170,22 @@ describe('fileUtils', () => {
+         mockConfig,
+       );
+       const parts = result.llmContent as Part[];
+-      expect(parts[0]).toEqual({
+-        text:
+-          'Image overview: 20x10; oriented source: 20x10. ' +
+-          'If details are too small, use tool_search for "zoom image", then ' +
+-          'call zoom_image with coordinates normalized from 0 to 1000.',
+-      });
++      // The JPEG overview pipeline this used to assert -- resize, orientation,
++      // a zoom_image follow-up hint -- is gone: this deployment sends the
++      // original PNG bytes or refuses the file.
++      expect(parts[0]?.text).toContain('Full-quality original PNG: 20x10');
++      expect(parts[0]?.text).toContain('lossless source bytes preserved exactly');
+       expect(parts[1]).toEqual({
+         inlineData: {
+-          mimeType: 'image/jpeg',
++          mimeType: 'image/png',
+           data: expect.any(String),
+           displayName: 'image.png',
+         },
+       });
+-      const metadata = await sharp(
+-        Buffer.from(parts[1]!.inlineData!.data!, 'base64'),
+-      ).metadata();
+-      expect(metadata).toMatchObject({ width: 20, height: 10 });
+-      expect(result.returnDisplay).toContain('Read image file: image.png');
+-    });
+-
+-    it('returns a bounded overview when a PNG exceeds the old data URI limit', async () => {
+-      const largeImagePath = path.join(tempRootDir, 'large.png');
+-      await sharp({
+-        create: {
+-          width: 2200,
+-          height: 1800,
+-          channels: 3,
+-          background: '#306090',
+-        },
+-      })
+-        .png({ compressionLevel: 0 })
+-        .toFile(largeImagePath);
+-      expect(actualNodeFs.statSync(largeImagePath).size).toBeGreaterThan(
+-        9.9 * 1024 * 1024,
+-      );
+-      mockMimeGetType.mockReturnValue('image/png');
+-
+-      const result = await processSingleFileContent(largeImagePath, mockConfig);
+-
+-      expect(result.error).toBeUndefined();
+-      const parts = result.llmContent as Part[];
+-      const overview = parts[1]!.inlineData!;
+-      const metadata = await sharp(
+-        Buffer.from(overview.data!, 'base64'),
+-      ).metadata();
+-      expect(overview.mimeType).toBe('image/jpeg');
+-      expect(Buffer.from(overview.data!, 'base64').length).toBeLessThanOrEqual(
+-        9 * 1024 * 1024,
++      expect(Buffer.from(parts[1]!.inlineData!.data!, 'base64')).toEqual(
++        actualNodeFs.readFileSync(testImageFilePath),
+       );
+-      expect(Math.max(metadata.width!, metadata.height!)).toBeLessThanOrEqual(
+-        1568,
+-      );
+-      expect(
+-        Math.ceil(metadata.width! / 28) * Math.ceil(metadata.height! / 28),
+-      ).toBeLessThanOrEqual(1568);
++      expect(result.returnDisplay).toContain('Read full-quality PNG: image.png');
+     });
+ 
+     it('rejects canonical image sources above 100 MB before decoding', async () => {
+@@ -1266,146 +1201,53 @@ describe('fileUtils', () => {
+       expect(result.llmContent).toContain('100 MB source limit');
+     });
+ 
+-    it('forwards a corrupt canonical image verbatim instead of failing the read', async () => {
+-      const corruptPath = path.join(tempRootDir, 'corrupt.png');
+-      const bytes = Buffer.from('not a real png');
+-      await fsPromises.writeFile(corruptPath, bytes);
+-      mockMimeGetType.mockReturnValue('image/png');
+-
+-      const result = await processSingleFileContent(corruptPath, mockConfig);
+-
+-      expect(result.error).toBeUndefined();
+-      expect(result.llmContent).toEqual({
+-        inlineData: {
+-          data: bytes.toString('base64'),
+-          mimeType: 'image/png',
+-          displayName: 'corrupt.png',
+-        },
+-      });
+-      expect(result.returnDisplay).toContain('Read image file: corrupt.png');
+-    });
+-
+-    it('forwards an animated canonical image verbatim instead of failing the read', async () => {
+-      const twoFrameGif = Buffer.from(
+-        '47494638396101000100800000000000ffffff21f90400010000002c000000000100010000020244010021f90400010000002c00000000010001000002024c01003b',
+-        'hex',
+-      );
+-      const animatedPath = path.join(tempRootDir, 'animated.webp');
+-      await sharp(twoFrameGif, { animated: true }).webp().toFile(animatedPath);
+-      mockMimeGetType.mockReturnValue('image/webp');
+-
+-      const result = await processSingleFileContent(animatedPath, mockConfig);
+-
+-      const onDisk = await fsPromises.readFile(animatedPath);
+-      expect(result.error).toBeUndefined();
+-      expect(result.llmContent).toEqual({
+-        inlineData: {
+-          data: onDisk.toString('base64'),
+-          mimeType: 'image/webp',
+-          displayName: 'animated.webp',
+-        },
+-      });
+-      expect(result.returnDisplay).toContain('Read image file: animated.webp');
+-    });
+-
+-    it('forwards non-canonical content behind a canonical extension verbatim', async () => {
+-      const gifBytes = Buffer.from(
+-        '47494638396101000100800000000000ffffff21f90400010000002c000000000100010000020244010021f90400010000002c00000000010001000002024c01003b',
+-        'hex',
+-      );
+-      const mismatchPath = path.join(tempRootDir, 'mismatch.png');
+-      await fsPromises.writeFile(mismatchPath, gifBytes);
++    it('[image-contract] refuses a corrupt image instead of forwarding it verbatim', async () => {
++      const filePath = path.join(tempRootDir, 'corrupt.png');
++      actualNodeFs.writeFileSync(filePath, Buffer.from('not a png at all'));
+       mockMimeGetType.mockReturnValue('image/png');
+ 
+-      const result = await processSingleFileContent(mismatchPath, mockConfig);
++      const result = await processSingleFileContent(filePath, mockConfig);
+ 
+-      expect(result.error).toBeUndefined();
+-      expect(result.llmContent).toEqual({
+-        inlineData: {
+-          data: gifBytes.toString('base64'),
+-          mimeType: 'image/png',
+-          displayName: 'mismatch.png',
+-        },
+-      });
++      expect(typeof result.llmContent).toBe('string');
++      expect(result.llmContent).toContain('Image violates the Qwen3.8');
++      expect(result.error).toBeDefined();
+     });
+ 
+-    it('applies EXIF orientation before describing and rendering an overview', async () => {
+-      const orientedPath = path.join(tempRootDir, 'oriented.jpg');
+-      await sharp({
+-        create: {
+-          width: 60,
+-          height: 40,
+-          channels: 3,
+-          background: '#306090',
+-        },
++    it('[image-contract] refuses non-PNG content behind a .png extension', async () => {
++      const filePath = path.join(tempRootDir, 'actually-jpeg.png');
++      const jpeg = await sharp({
++        create: { width: 4, height: 4, channels: 3, background: '#204060' },
+       })
+         .jpeg()
+-        .withMetadata({ orientation: 6 })
+-        .toFile(orientedPath);
+-      mockMimeGetType.mockReturnValue('image/jpeg');
+-
+-      const result = await processSingleFileContent(orientedPath, mockConfig);
+-      const parts = result.llmContent as Part[];
+-      const metadata = await sharp(
+-        Buffer.from(parts[1]!.inlineData!.data!, 'base64'),
+-      ).metadata();
+-
+-      expect(parts[0]?.text).toContain('oriented source: 40x60');
+-      expect(metadata).toMatchObject({ width: 40, height: 60 });
+-    });
++        .toBuffer();
++      actualNodeFs.writeFileSync(filePath, jpeg);
++      mockMimeGetType.mockReturnValue('image/png');
+ 
+-    it('flattens transparent overview pixels onto white', async () => {
+-      const transparentPath = path.join(tempRootDir, 'transparent.webp');
+-      await sharp({
+-        create: {
+-          width: 20,
+-          height: 20,
+-          channels: 4,
+-          background: { r: 0, g: 0, b: 0, alpha: 0 },
+-        },
+-      })
+-        .webp()
+-        .toFile(transparentPath);
+-      mockMimeGetType.mockReturnValue('image/webp');
++      const result = await processSingleFileContent(filePath, mockConfig);
+ 
+-      const result = await processSingleFileContent(
+-        transparentPath,
+-        mockConfig,
+-      );
+-      const parts = result.llmContent as Part[];
+-      const { data, info } = await sharp(
+-        Buffer.from(parts[1]!.inlineData!.data!, 'base64'),
+-      )
+-        .raw()
+-        .toBuffer({ resolveWithObject: true });
+-      const center =
+-        (Math.floor(info.height / 2) * info.width +
+-          Math.floor(info.width / 2)) *
+-        info.channels;
+-
+-      expect(Array.from(data.subarray(center, center + 3))).toEqual([
+-        255, 255, 255,
+-      ]);
++      // The extension is not the contract; the bytes are.
++      expect(typeof result.llmContent).toBe('string');
++      expect(result.llmContent).toContain('Image violates the Qwen3.8');
++      expect(result.error).toBeDefined();
+     });
+ 
+     it.each([
+       ['animated GIF', 'animation.gif', 'image/gif'],
+       ['BMP', 'bitmap.bmp', 'image/bmp'],
+-    ])('keeps %s image bytes unchanged', async (_label, name, mimeType) => {
++    ])('[image-contract] refuses %s rather than passing its bytes through', async (
++      _label,
++      name,
++      mimeType,
++    ) => {
+       const filePath = path.join(tempRootDir, name);
+-      const bytes = Buffer.from('unchanged image bytes');
+-      actualNodeFs.writeFileSync(filePath, bytes);
++      actualNodeFs.writeFileSync(filePath, Buffer.from('unchanged image bytes'));
+       mockMimeGetType.mockReturnValue(mimeType);
+ 
+       const result = await processSingleFileContent(filePath, mockConfig);
+ 
+-      expect(result.llmContent).toEqual({
+-        inlineData: {
+-          data: bytes.toString('base64'),
+-          mimeType,
+-          displayName: name,
+-        },
+-      });
++      expect(typeof result.llmContent).toBe('string');
++      expect(result.llmContent).toContain('Image violates the Qwen3.8');
++      expect(result.error).toBeDefined();
+     });
+ 
+     it('should reject image files when model does not support image', async () => {
+@@ -1428,14 +1270,9 @@ describe('fileUtils', () => {
+       expect(result.returnDisplay).toContain('Skipped image file');
+     });
+ 
+-    it('keeps image inline when preserveUnsupportedImage is true', async () => {
++    it('[image-contract] keeps an accepted PNG inline when preserveUnsupportedImage is true', async () => {
+       await sharp({
+-        create: {
+-          width: 8,
+-          height: 8,
+-          channels: 3,
+-          background: '#306090',
+-        },
++        create: { width: 8, height: 8, channels: 3, background: '#306090' },
+       })
+         .png()
+         .toFile(testImageFilePath);
+@@ -1451,15 +1288,16 @@ describe('fileUtils', () => {
+         mockConfigNoImage,
+         { preserveUnsupportedImage: true },
+       );
+-      expect(typeof result.llmContent).toBe('object');
+       const parts = result.llmContent as Part[];
+-      expect(parts[0]?.text).toContain('Image overview');
++      // Preserved for a bridge-capable caller, but still through the one
++      // validator: an image that reaches a caller is an accepted PNG.
++      expect(parts[0]?.text).toContain('Full-quality original PNG: 8x8');
+       expect(parts[1]?.inlineData).toMatchObject({
+-        mimeType: 'image/jpeg',
++        mimeType: 'image/png',
+         data: expect.any(String),
+         displayName: 'image.png',
+       });
+-      expect(result.returnDisplay).toContain('Read image file');
++      expect(result.returnDisplay).toContain('Read full-quality PNG');
+     });
+ 
+     it('still strips image for agent reads without the preserve flag', async () => {
+@@ -1595,7 +1433,7 @@ describe('fileUtils', () => {
        );
  
        expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);
@@ -16205,7 +16762,7 @@ index 4987635..8c23a73 100644
        expect(result.returnDisplay).toContain('PDF requires page range');
        expect(mockExecFile).toHaveBeenCalledTimes(2);
        expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');
-@@ -1681,7 +1660,7 @@ describe('fileUtils', () => {
+@@ -1681,7 +1519,7 @@ describe('fileUtils', () => {
  
        expect(result.errorType).toBe(ToolErrorType.READ_CONTENT_FAILURE);
        expect(result.llmContent).toContain('pdftotext is not installed');
@@ -16214,7 +16771,7 @@ index 4987635..8c23a73 100644
        expect(result.returnDisplay).toContain('Failed to read pdf');
        expect(result.stats).toBeDefined();
      });
-@@ -1711,7 +1690,7 @@ describe('fileUtils', () => {
+@@ -1711,7 +1549,7 @@ describe('fileUtils', () => {
        );
  
        expect(result.error).toBeUndefined();
@@ -16223,7 +16780,7 @@ index 4987635..8c23a73 100644
        expect(result.returnDisplay).toContain('Referenced large PDF');
        expect(result.stats).toBeDefined();
      });
-@@ -1740,114 +1719,67 @@ describe('fileUtils', () => {
+@@ -1740,114 +1578,67 @@ describe('fileUtils', () => {
        );
  
        expect(result.error).toBeUndefined();
@@ -16354,16 +16911,16 @@ index 4987635..8c23a73 100644
 -        stderr: '',
 -        code: 0,
 -      });
+-
+-      const mockConfigNoPdf = {
+-        ...mockConfig,
+-        getContentGeneratorConfig: () => ({ modalities: { image: true } }),
+-      } as unknown as Config;
 +    it('[param-contract] leaves a whole-file read of a non-text file alone', async () => {
 +      const filePath = path.join(tempRootDir, 'plain.bin');
 +      actualNodeFs.writeFileSync(filePath, '\u0000\u0001\u0002');
 +      mockMimeGetType.mockReturnValue('application/octet-stream');
  
--      const mockConfigNoPdf = {
--        ...mockConfig,
--        getContentGeneratorConfig: () => ({ modalities: { image: true } }),
--      } as unknown as Config;
--
 -      const result = await processSingleFileContent(
 -        testPdfFilePath,
 -        mockConfigNoPdf,
@@ -16378,7 +16935,7 @@ index 4987635..8c23a73 100644
      });
  
      it('rejects dense no-pages PDF extraction after exact page count allows full reads', async () => {
-@@ -1906,29 +1838,6 @@ describe('fileUtils', () => {
+@@ -1906,29 +1697,6 @@ describe('fileUtils', () => {
        expect(result.llmContent).toContain('too large to return safely');
      });
  
@@ -16408,7 +16965,7 @@ index 4987635..8c23a73 100644
      it('allows full PDF text extraction at the full-text size cap', async () => {
        actualNodeFs.writeFileSync(testPdfFilePath, Buffer.from('%PDF-1.7'));
        mockMimeGetType.mockReturnValue('application/pdf');
-@@ -1987,117 +1896,10 @@ describe('fileUtils', () => {
+@@ -1987,117 +1755,10 @@ describe('fileUtils', () => {
  
          expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);
          expect(result.returnDisplay).toContain('PDF file too large');
@@ -16530,7 +17087,7 @@ index 4987635..8c23a73 100644
          expect(result.stats).toBeDefined();
          expect(mockExecFile).not.toHaveBeenCalled();
        } finally {
-@@ -2161,691 +1963,6 @@ describe('fileUtils', () => {
+@@ -2161,691 +1822,6 @@ describe('fileUtils', () => {
        expect(result.returnDisplay).toContain('Read pdf file');
      });
  
@@ -17222,10 +17779,25 @@ index 4987635..8c23a73 100644
      it('should read an SVG file as text when under 1MB', async () => {
        const svgContent = `
      <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
-@@ -3361,41 +2478,6 @@ describe('fileUtils', () => {
-       expect(result.llmContent).toContain('File size exceeds the 10MB limit');
+@@ -3347,53 +2323,18 @@ describe('fileUtils', () => {
+       expect(result.isTruncated).toBe(false);
      });
  
+-    it('should still return an error if an inline media file exceeds 10MB', async () => {
++    it('[image-contract] refuses an oversized non-PNG image by the image contract, not the generic size gate', async () => {
+       const largeGifPath = path.join(tempRootDir, 'large.gif');
+       mockMimeGetType.mockReturnValue('image/gif');
+       actualNodeFs.writeFileSync(largeGifPath, Buffer.alloc(11 * 1024 * 1024));
+ 
+       const result = await processSingleFileContent(largeGifPath, mockConfig);
+ 
+-      expect(result.error).toContain('File size exceeds the 10MB limit');
+-      expect(result.returnDisplay).toContain(
+-        'File size exceeds the 10MB limit',
+-      );
+-      expect(result.llmContent).toContain('File size exceeds the 10MB limit');
+-    });
+-
 -    it('should allow explicit page ranges above the full-PDF text-extraction size cap', async () => {
 -      const fakePdfData = Buffer.from('fake pdf data');
 -      actualNodeFs.writeFileSync(testPdfFilePath, fakePdfData);
@@ -17259,13 +17831,16 @@ index 4987635..8c23a73 100644
 -      } finally {
 -        statSpy.mockRestore();
 -      }
--    });
--
-     it('should reject non-regular files (FIFOs, devices, sockets)', async () => {
-       actualNodeFs.writeFileSync(testTextFilePath, 'placeholder');
++      // Raster images no longer reach the 10MB inline-data gate: every one of
++      // them enters the PNG validator first, which refuses this on format.
++      expect(typeof result.llmContent).toBe('string');
++      expect(result.llmContent).toContain('Image violates the Qwen3.8');
++      expect(result.error).toBeDefined();
+     });
  
+     it('should reject non-regular files (FIFOs, devices, sockets)', async () => {
 diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/fileUtils.ts
-index 211be6c..ccb2aa0 100644
+index 211be6c..1f2d552 100644
 --- a/packages/core/src/utils/fileUtils.ts
 +++ b/packages/core/src/utils/fileUtils.ts
 @@ -8,7 +8,7 @@ import fs from 'node:fs';
@@ -17825,12 +18400,10 @@ index 211be6c..ccb2aa0 100644
                errorType: ToolErrorType.FILE_TOO_LARGE,
              };
            }
-@@ -1583,257 +1525,38 @@ export async function processSingleFileContent(
-                 displayName,
+@@ -1584,256 +1526,37 @@ export async function processSingleFileContent(
                },
              },
--            returnDisplay: `Read pdf file: ${relativePathForDisplay}`,
-+            returnDisplay: `Read pdf: ${relativePathForDisplay}`,
+             returnDisplay: `Read pdf file: ${relativePathForDisplay}`,
 +            stats,
            };
          }
@@ -19632,9 +20205,36 @@ index 0000000..132eec8
 +  });
 +});
 diff --git a/packages/core/src/utils/readManyFiles.test.ts b/packages/core/src/utils/readManyFiles.test.ts
-index 6cb0844..e741e90 100644
+index 6cb0844..f05aafd 100644
 --- a/packages/core/src/utils/readManyFiles.test.ts
 +++ b/packages/core/src/utils/readManyFiles.test.ts
+@@ -503,7 +503,7 @@ describe('readManyFiles', () => {
+       expect(result.files[0]!.filePath).toBe(absolutePath);
+     });
+ 
+-    it('renders canonical images through the overview pipeline even when the bridge handoff flag is set', async () => {
++    it('[image-contract] sends the original PNG bytes even when the bridge handoff flag is set', async () => {
+       const relativePath = 'screenshot.png';
+       const absolutePath = path.join(tempRootDir, relativePath);
+       await sharp({
+@@ -529,7 +529,7 @@ describe('readManyFiles', () => {
+         (imagePart as { inlineData: { mimeType: string; data: string } })
+           .inlineData,
+       ).toMatchObject({
+-        mimeType: 'image/jpeg',
++        mimeType: 'image/png',
+         data: expect.any(String),
+         displayName: 'screenshot.png',
+       });
+@@ -539,7 +539,7 @@ describe('readManyFiles', () => {
+         `\nContent from ${absolutePath}:\n`,
+       );
+       expect(parts[imageIndex - 1]?.text).toContain(
+-        'Image overview: 20x10; oriented source: 20x10',
++        'Full-quality original PNG: 20x10',
+       );
+       expect(result.files).toHaveLength(1);
+       expect(result.files[0]!.content).toEqual([
 @@ -732,7 +732,7 @@ describe('readManyFiles', () => {
        expect(result.files).toHaveLength(1);
        expect(result.files[0]!.error).toBeUndefined();

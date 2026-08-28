@@ -2047,10 +2047,19 @@ def _validate_model_facing_failure_after(state: State) -> None:
         scheduler,
         (
             "export function mergeModelFacingFailureText(",
-            "        let errorMessage = mergeModelFacingFailureText(\n"
+            "        let modelFacingText = mergeModelFacingFailureText(\n"
             "          toolResult.llmContent,\n"
-            "          operationalErrorMessage,\n"
+            "          errorMessage,\n"
             "        );",
+            # The merged text reaches the model and nothing else. Folding it
+            # into `errorMessage` instead leaked tool output into the
+            # scrollback, the PostToolUseFailure hook and the sanitized
+            # telemetry span -- three readers that want the operational
+            # summary, not the model's copy.
+            "  modelFacingText?: string,",
+            "  const modelText = modelFacingText ?? error.message;",
+            "        response: { error: modelText },",
+            "    resultDisplay: resultDisplay ?? error.message,",
         ),
         label=label,
     )
@@ -2059,11 +2068,20 @@ def _validate_model_facing_failure_after(state: State) -> None:
     _require_ordered(
         source,
         (
-            "let errorMessage = mergeModelFacingFailureText(",
+            "let modelFacingText = mergeModelFacingFailureText(",
             "const error = new Error(errorMessage);",
+            "          modelFacingText,",
         ),
         label=label,
         location=scheduler,
+    )
+    # The operational message keeps its own identity at the seam.
+    require_text(
+        state,
+        scheduler,
+        "        const operationalErrorMessage = toolResult.error.message;\n"
+        "        let errorMessage = operationalErrorMessage;",
+        label=label,
     )
     # The per-tool warnings that documented the discard are retired with it.
     forbid_text(

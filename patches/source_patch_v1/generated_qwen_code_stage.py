@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '76ee86b5440895c3923a5946ed7c508dc8138f2d76307ac3e6d8c3e8ef7ccbf8',
+  'review_sha256': 'f2623f4223d5b2a6fd123427e41f9355a7445e27eba4b2b239df24f15ca95b9f',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -35,6 +35,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/cli/src/nonInteractive/types.ts',
              'before_sha256': '6ad4da59e11d6a84d2b9bd03376b834d1737edfc7a8dc9af1e90783ccab2acdf',
              'after_sha256': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e'},
+            {'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before_sha256': 'b2974af70f9b5f4beadaa1e9d632e95ff6eac1ee3aab8c3b366db8ce64d73afc',
+             'after_sha256': 'aa23d0f6f919d85a047a439433e98746f58b02b7b031a3843e54bb607143d34a'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
              'after_sha256': 'ecdd192c690882e67189edc322d8d02b0af1cf25f13d5b218f567e071f25bec9'},
@@ -94,13 +97,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '12eba16dcc425b350902b0609243eaafa0462751f739508d6f939a4e7a65e161'},
             {'path': 'packages/core/src/core/coreToolScheduler.ts',
              'before_sha256': '3badb303e2b463aa03ce4c6a083319a209789122286cbf756ecf379518dcc7dc',
-             'after_sha256': '95b62def3cc49a610f2255c0cc9b5fb59d59237f1d152095845b3b72bd8f2dce'},
+             'after_sha256': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e'},
             {'path': 'packages/core/src/core/geminiChat.test.ts',
              'before_sha256': 'c3ec701c78d99698ad538c188e08d10b78b266c372b850907def72f9badb8830',
              'after_sha256': '44f96af12396270fb3cba0af6db7e23a85463c7e28a7ce8e3935c31bc97c311f'},
             {'path': 'packages/core/src/core/geminiChat.ts',
              'before_sha256': '384de52c73dc5c387d3147713046713d34de0b6724b12feb00574508a4d7cc6c',
              'after_sha256': 'ad16bac94914e60ad012884f45a06ecf9147f9c7d307f1a2a9783f0bbb00d407'},
+            {'path': 'packages/core/src/core/genai-compat.test.ts',
+             'before_sha256': 'b454f3c146c1be79cbc43aadceda5010756ada9f80a5ec33186c9826feaccf76',
+             'after_sha256': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50'},
             {'path': 'packages/core/src/core/genai-compat.ts',
              'before_sha256': 'aedda72dcd33427fd6a26e044e911a3a34fc67b6db7d90a59407b9b8c2b6d576',
              'after_sha256': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81'},
@@ -128,6 +134,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/core/openaiContentGenerator/types.ts',
              'before_sha256': '0b827511f3ccefbc74aa7d14eaccf7502e1a2aaed846983b982ac9191827aa51',
              'after_sha256': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c'},
+            {'path': 'packages/core/src/core/prompts.test.ts',
+             'before_sha256': '228fffaa1c483415f9ded4bba43f88e6f0b6fc29bc5df334a06ed5507c5e9467',
+             'after_sha256': 'd8ac425fff4a8543f48099edac3b13d540c0139325a44b84d898045bae75ad78'},
             {'path': 'packages/core/src/core/prompts.ts',
              'before_sha256': '239516527b43809f5889d62ac28260abe6262de16b2225aff30a9e32d90b57e1',
              'after_sha256': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c'},
@@ -191,12 +200,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/subagents/builtin-agents.ts',
              'before_sha256': '45a3d85fe166cda3f8e165582c37defdcc004b0e74898c9669f9baa5559fc7d7',
              'after_sha256': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7'},
+            {'path': 'packages/core/src/test-utils/mock-tool.ts',
+             'before_sha256': 'c060fa0f9e18dede253ad2cc367eb767349a546afee7c4a5ccbc767e27c177ec',
+             'after_sha256': '2d986e625264006e124e2762e70d3202cda49804f9645325dbf9c5481a3ef24d'},
+            {'path': 'packages/core/src/tools/__snapshots__/shell.test.ts.snap',
+             'before_sha256': '63e85703326b2c7dea325775a29f2da7391a842db8eb9a5bca8fb4f77e6fdd9f',
+             'after_sha256': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
              'after_sha256': '6dcceb44938d59bd79f4d3b78010413ca0238a3339e7b80729d60611f898a4df'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': '99b52b6fc327a2ac3dcef2f83aeb4148a8273b02a4859c4dd7f4a1e0d057fbbb'},
+             'after_sha256': 'f89157f1ed09857b767af70c745b23cf6c896c0b74fa96f701ad0cedbde0b864'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -220,7 +235,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'af17b0e5adcf846dd2646ec17cef72986ff162059552e75753b57ff614ca4b93'},
             {'path': 'packages/core/src/tools/read-file.test.ts',
              'before_sha256': '03e21f96d35d1c07c9d7532e7b8340b7aca2707c3ac920e349655148cd965fc8',
-             'after_sha256': '407f30d35a7ed426efdd570fa31f0cb38780d06bc4b83ce918aff016408d7809'},
+             'after_sha256': '94b6ade631525a7fc2620f8901bae6e2f8a9ae17139fd1ae243e062266272ed6'},
             {'path': 'packages/core/src/tools/read-file.ts',
              'before_sha256': '2aad58d97ebc1ba94b3f0020d690b46d7409c9dba4103eb5dfb01ece38f9049b',
              'after_sha256': '03502a828247c4ab081d5fdf8e2d9149ba1496bce6031f2df7fda961cd007a0f'},
@@ -250,10 +265,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '489c781e917f80e1f457a350e96f3ec89a730b9aa8cd963cd8e378238b231273'},
             {'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before_sha256': '88bf6740ee046a7a75116659df85ece80338247c88f5fc48833fd4053e3d19b1',
-             'after_sha256': 'b190005c7ff21844b8692056cc576779f57a3b7d6a871c142d673aab421b2c29'},
+             'after_sha256': '8ef4b413aa86c43925c59962377e52c1659450ce65f041356385cba3e48ac719'},
             {'path': 'packages/core/src/utils/fileUtils.ts',
              'before_sha256': '2199d050fa06f801f8da8947b3768dd517c9b14abc9d0d015244475b2139e016',
-             'after_sha256': '2ac37dbbb36b3442c7ca7fc6958c808ee13d83b2fd200533cbf45cef5ac24330'},
+             'after_sha256': '3b767cc3c7169e1a5ba464552441626c594f4440af8eabd9f827d0c5ba4cb7a5'},
             {'path': 'packages/core/src/utils/image-view.test.ts',
              'before_sha256': 'b2bdc3799926ccc1c3ce56ca62b6b2154031a97e59be151c10b0781f2c6b5dd9',
              'after_sha256': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d'},
@@ -271,7 +286,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '57972bb126651812bbd508ff26d87f3c7d5aab94603900b773e88a3e90a234c9'},
             {'path': 'packages/core/src/utils/readManyFiles.test.ts',
              'before_sha256': '634b29c8570086526acea37a9513331ee6a8a7447af9d16e49f9f6d1faa839b1',
-             'after_sha256': 'e6d93fee96847e8a06e0b71995c7da0a1c5a06541d1b37e13d0f09e06aac9ca0'},
+             'after_sha256': 'f10ac01e0dafc3ce60bfcb98245e6c3bb3687aff83aabf84909091190741b17f'},
             {'path': 'packages/core/src/utils/schemaValidator.test.ts',
              'before_sha256': 'f605848a981f52ee4b3bcf28f36fc3f3495a68c8c7666ac937470d0cb2c0577c',
              'after_sha256': '8c2df3db3f3665d9cf172db625d45abb0825c561e01c85bbb895f02e04bf2980'},
@@ -3179,6 +3194,59 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  is_error: true;\n'
                              '  duration_ms: number;\n'
                              '  duration_api_ms: number;\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-1',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '        currentModel = model;\n'
+                       '      }),\n'
+                       '      getExperimentalZedIntegration: '
+                       'vi.fn().mockReturnValue(false),\n'
+                       '      isInteractive: vi.fn().mockReturnValue(false),\n'
+                       '      getHookSystem: vi.fn().mockReturnValue(undefined),\n'
+                       '      isCronEnabled: vi.fn().mockReturnValue(false),\n',
+             'after': '        currentModel = model;\n'
+                      '      }),\n'
+                      '      getExperimentalZedIntegration: '
+                      'vi.fn().mockReturnValue(false),\n'
+                      '      // `buildSystemMessage` consults this to decide whether '
+                      'to advertise a\n'
+                      '      // slash-command surface. The real Config has it; this '
+                      'hand-rolled mock\n'
+                      '      // did not, so every test that reached the init event '
+                      'died on a\n'
+                      '      // TypeError. False is the general-CLI answer -- the '
+                      'locked-mode branch\n'
+                      '      // is covered by nonInteractiveHelpers.test.ts.\n'
+                      '      getForegroundAgentsOnly: vi.fn().mockReturnValue(false),\n'
+                      '      isInteractive: vi.fn().mockReturnValue(false),\n'
+                      '      getHookSystem: vi.fn().mockReturnValue(undefined),\n'
+                      '      isCronEnabled: vi.fn().mockReturnValue(false),\n',
+             'review_before': '        currentModel = model;\n'
+                              '      }),\n'
+                              '      getExperimentalZedIntegration: '
+                              'vi.fn().mockReturnValue(false),\n'
+                              '      isInteractive: vi.fn().mockReturnValue(false),\n'
+                              '      getHookSystem: '
+                              'vi.fn().mockReturnValue(undefined),\n'
+                              '      isCronEnabled: vi.fn().mockReturnValue(false),\n',
+             'review_after': '        currentModel = model;\n'
+                             '      }),\n'
+                             '      getExperimentalZedIntegration: '
+                             'vi.fn().mockReturnValue(false),\n'
+                             '      // `buildSystemMessage` consults this to decide '
+                             'whether to advertise a\n'
+                             '      // slash-command surface. The real Config has it; '
+                             'this hand-rolled mock\n'
+                             '      // did not, so every test that reached the init '
+                             'event died on a\n'
+                             '      // TypeError. False is the general-CLI answer -- '
+                             'the locked-mode branch\n'
+                             '      // is covered by nonInteractiveHelpers.test.ts.\n'
+                             '      getForegroundAgentsOnly: '
+                             'vi.fn().mockReturnValue(false),\n'
+                             '      isInteractive: vi.fn().mockReturnValue(false),\n'
+                             '      getHookSystem: '
+                             'vi.fn().mockReturnValue(undefined),\n'
+                             '      isCronEnabled: vi.fn().mockReturnValue(false),\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-1',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '  OutputFormat,\n'
@@ -10265,6 +10333,136 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  callId: string,\n'},
             {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-4',
              'path': 'packages/core/src/core/coreToolScheduler.ts',
+             'before': '  executionStatus: ToolExecutionStatus,\n'
+                       '  artifacts?: ToolArtifact[],\n'
+                       '  resultDisplay?: ToolResultDisplay,\n'
+                       '): CoreToolCallResponseInfo => ({\n'
+                       '  callId: request.callId,\n'
+                       '  error,\n'
+                       '  responseParts: [\n'
+                       '    {\n'
+                       '      functionResponse: {\n'
+                       '        id: request.callId,\n'
+                       '        name: request.name,\n'
+                       '        response: { error: error.message },\n'
+                       '      },\n'
+                       '    },\n'
+                       '  ],\n'
+                       '  resultDisplay: resultDisplay ?? error.message,\n'
+                       '  errorType,\n'
+                       '  executionStatus,\n'
+                       '  contentLength: error.message.length,\n'
+                       '  ...(artifacts && artifacts.length > 0 ? { artifacts } : '
+                       '{}),\n'
+                       '});\n'
+                       '\n'
+                       'const createCancelledResponse = (\n'
+                       '  request: ToolCallRequestInfo,\n',
+             'after': '  executionStatus: ToolExecutionStatus,\n'
+                      '  artifacts?: ToolArtifact[],\n'
+                      '  resultDisplay?: ToolResultDisplay,\n'
+                      '  // What the model is told, when that differs from the '
+                      'operational summary.\n'
+                      '  // `error.message` keeps its own meaning: it is the text the '
+                      'scrollback\n'
+                      '  // shows, the hooks receive, and telemetry sanitizes, and '
+                      'folding the\n'
+                      '  // model-facing content into it leaked tool output into all '
+                      'three.\n'
+                      '  modelFacingText?: string,\n'
+                      '): CoreToolCallResponseInfo => {\n'
+                      '  const modelText = modelFacingText ?? error.message;\n'
+                      '  return {\n'
+                      '    callId: request.callId,\n'
+                      '    error,\n'
+                      '    responseParts: [\n'
+                      '      {\n'
+                      '        functionResponse: {\n'
+                      '          id: request.callId,\n'
+                      '          name: request.name,\n'
+                      '          response: { error: modelText },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ],\n'
+                      '    resultDisplay: resultDisplay ?? error.message,\n'
+                      '    errorType,\n'
+                      '    executionStatus,\n'
+                      '    // Accounting for what was sent to the model, so it follows '
+                      'the model text.\n'
+                      '    contentLength: modelText.length,\n'
+                      '    ...(artifacts && artifacts.length > 0 ? { artifacts } : '
+                      '{}),\n'
+                      '  };\n'
+                      '};\n'
+                      '\n'
+                      'const createCancelledResponse = (\n'
+                      '  request: ToolCallRequestInfo,\n',
+             'review_before': '  executionStatus: ToolExecutionStatus,\n'
+                              '  artifacts?: ToolArtifact[],\n'
+                              '  resultDisplay?: ToolResultDisplay,\n'
+                              '): CoreToolCallResponseInfo => ({\n'
+                              '  callId: request.callId,\n'
+                              '  error,\n'
+                              '  responseParts: [\n'
+                              '    {\n'
+                              '      functionResponse: {\n'
+                              '        id: request.callId,\n'
+                              '        name: request.name,\n'
+                              '        response: { error: error.message },\n'
+                              '      },\n'
+                              '    },\n'
+                              '  ],\n'
+                              '  resultDisplay: resultDisplay ?? error.message,\n'
+                              '  errorType,\n'
+                              '  executionStatus,\n'
+                              '  contentLength: error.message.length,\n'
+                              '  ...(artifacts && artifacts.length > 0 ? { artifacts } '
+                              ': {}),\n'
+                              '});\n'
+                              '\n'
+                              'const createCancelledResponse = (\n'
+                              '  request: ToolCallRequestInfo,\n',
+             'review_after': '  executionStatus: ToolExecutionStatus,\n'
+                             '  artifacts?: ToolArtifact[],\n'
+                             '  resultDisplay?: ToolResultDisplay,\n'
+                             '  // What the model is told, when that differs from the '
+                             'operational summary.\n'
+                             '  // `error.message` keeps its own meaning: it is the '
+                             'text the scrollback\n'
+                             '  // shows, the hooks receive, and telemetry sanitizes, '
+                             'and folding the\n'
+                             '  // model-facing content into it leaked tool output '
+                             'into all three.\n'
+                             '  modelFacingText?: string,\n'
+                             '): CoreToolCallResponseInfo => {\n'
+                             '  const modelText = modelFacingText ?? error.message;\n'
+                             '  return {\n'
+                             '    callId: request.callId,\n'
+                             '    error,\n'
+                             '    responseParts: [\n'
+                             '      {\n'
+                             '        functionResponse: {\n'
+                             '          id: request.callId,\n'
+                             '          name: request.name,\n'
+                             '          response: { error: modelText },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ],\n'
+                             '    resultDisplay: resultDisplay ?? error.message,\n'
+                             '    errorType,\n'
+                             '    executionStatus,\n'
+                             '    // Accounting for what was sent to the model, so it '
+                             'follows the model text.\n'
+                             '    contentLength: modelText.length,\n'
+                             '    ...(artifacts && artifacts.length > 0 ? { artifacts '
+                             '} : {}),\n'
+                             '  };\n'
+                             '};\n'
+                             '\n'
+                             'const createCancelledResponse = (\n'
+                             '  request: ToolCallRequestInfo,\n'},
+            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-5',
+             'path': 'packages/core/src/core/coreToolScheduler.ts',
              'before': '    this.setStatusInternal(\n'
                        '      callId,\n'
                        "      'cancelled',\n"
@@ -10295,7 +10493,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    );\n'
                              "    this.finalizeBlockedSpan(callId, 'aborted', "
                              "'system');\n"},
-            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-5',
+            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-6',
              'path': 'packages/core/src/core/coreToolScheduler.ts',
              'before': '            request: reqInfo,\n'
                        '            response: createCancelledResponse(\n'
@@ -10327,7 +10525,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            ),\n'
                              '            ...(resolvedTool ? { tool: resolvedTool } : '
                              '{}),\n'},
-            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-6',
+            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-7',
              'path': 'packages/core/src/core/coreToolScheduler.ts',
              'before': '      if (signal.aborted) {\n'
                        '        this.setStatusInternal(\n'
@@ -10369,7 +10567,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "            'not_started',\n"
                              '          ),\n'
                              '        );\n'},
-            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-7',
+            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-8',
              'path': 'packages/core/src/core/coreToolScheduler.ts',
              'before': '      ) {\n'
                        '        this.setStatusInternal(\n'
@@ -10411,69 +10609,132 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "            'not_started',\n"
                              '          ),\n'
                              '        );\n'},
-            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-8',
+            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-9',
              'path': 'packages/core/src/core/coreToolScheduler.ts',
-             'before': '        // It is a failure\n'
-                       '        // PostToolUseFailure Hook\n'
-                       '        const operationalErrorMessage = '
-                       'toolResult.error.message;\n'
-                       '        let errorMessage = operationalErrorMessage;\n'
-                       '        let errorPersistedOutputFiles = '
-                       'toolResult.persistedOutputFiles\n'
-                       '          ? [...toolResult.persistedOutputFiles]\n'
-                       '          : toolResult.persistedOutputFiles;\n',
-             'after': '        // It is a failure\n'
-                      '        // PostToolUseFailure Hook\n'
-                      '        const operationalErrorMessage = '
-                      'toolResult.error.message;\n'
+             'before': '          );\n'
+                       '        }\n'
+                       '\n'
+                       '        const error = new Error(errorMessage);\n'
+                       '        let errorResponse = createErrorResponse(\n'
+                       '          scheduledCall.request,\n',
+             'after': '          );\n'
+                      '        }\n'
+                      '\n'
                       '        // The single seam where the model-facing text for a '
                       'failed call is\n'
-                      '        // decided. Everything below -- the hook append, '
-                      'large-result\n'
-                      '        // persistence, `new Error(...)`, the scrollback '
-                      'string, and the\n'
-                      '        // content length -- reads this one variable, so '
-                      'merging here is what\n'
-                      '        // makes the guarantee general rather than per-tool.\n'
-                      '        let errorMessage = mergeModelFacingFailureText(\n'
+                      '        // decided. `errorMessage` above is the operational '
+                      'summary and keeps\n'
+                      '        // its existing readers; this is the only value the '
+                      'model sees, so a\n'
+                      '        // remedy written into either half survives whichever '
+                      'one a tool used.\n'
+                      '        let modelFacingText = mergeModelFacingFailureText(\n'
                       '          toolResult.llmContent,\n'
-                      '          operationalErrorMessage,\n'
+                      '          errorMessage,\n'
                       '        );\n'
-                      '        let errorPersistedOutputFiles = '
-                      'toolResult.persistedOutputFiles\n'
-                      '          ? [...toolResult.persistedOutputFiles]\n'
-                      '          : toolResult.persistedOutputFiles;\n',
-             'review_before': '        // It is a failure\n'
-                              '        // PostToolUseFailure Hook\n'
-                              '        const operationalErrorMessage = '
-                              'toolResult.error.message;\n'
-                              '        let errorMessage = operationalErrorMessage;\n'
-                              '        let errorPersistedOutputFiles = '
-                              'toolResult.persistedOutputFiles\n'
-                              '          ? [...toolResult.persistedOutputFiles]\n'
-                              '          : toolResult.persistedOutputFiles;\n',
-             'review_after': '        // It is a failure\n'
-                             '        // PostToolUseFailure Hook\n'
-                             '        const operationalErrorMessage = '
-                             'toolResult.error.message;\n'
+                      '        if (\n'
+                      '          modelFacingText.length > errorGateThreshold &&\n'
+                      '          !isAlreadyTruncated(modelFacingText)\n'
+                      '        ) {\n'
+                      '          const persistResult = await '
+                      'persistAndTruncateToolResult(\n'
+                      '            callId,\n'
+                      '            toolName,\n'
+                      '            modelFacingText,\n'
+                      '            this.config,\n'
+                      '          );\n'
+                      '          modelFacingText = persistResult.content;\n'
+                      '          errorPersistedOutputFiles = Array.from(\n'
+                      '            new Set([\n'
+                      '              ...(errorPersistedOutputFiles ?? []),\n'
+                      '              ...(persistResult.outputFile ? '
+                      '[persistResult.outputFile] : []),\n'
+                      '            ]),\n'
+                      '          );\n'
+                      '        }\n'
+                      '\n'
+                      '        const error = new Error(errorMessage);\n'
+                      '        let errorResponse = createErrorResponse(\n'
+                      '          scheduledCall.request,\n',
+             'review_before': '          );\n'
+                              '        }\n'
+                              '\n'
+                              '        const error = new Error(errorMessage);\n'
+                              '        let errorResponse = createErrorResponse(\n'
+                              '          scheduledCall.request,\n',
+             'review_after': '          );\n'
+                             '        }\n'
+                             '\n'
                              '        // The single seam where the model-facing text '
                              'for a failed call is\n'
-                             '        // decided. Everything below -- the hook append, '
-                             'large-result\n'
-                             '        // persistence, `new Error(...)`, the scrollback '
-                             'string, and the\n'
-                             '        // content length -- reads this one variable, so '
-                             'merging here is what\n'
-                             '        // makes the guarantee general rather than '
-                             'per-tool.\n'
-                             '        let errorMessage = mergeModelFacingFailureText(\n'
+                             '        // decided. `errorMessage` above is the '
+                             'operational summary and keeps\n'
+                             '        // its existing readers; this is the only value '
+                             'the model sees, so a\n'
+                             '        // remedy written into either half survives '
+                             'whichever one a tool used.\n'
+                             '        let modelFacingText = '
+                             'mergeModelFacingFailureText(\n'
                              '          toolResult.llmContent,\n'
-                             '          operationalErrorMessage,\n'
+                             '          errorMessage,\n'
                              '        );\n'
-                             '        let errorPersistedOutputFiles = '
-                             'toolResult.persistedOutputFiles\n'
-                             '          ? [...toolResult.persistedOutputFiles]\n'
-                             '          : toolResult.persistedOutputFiles;\n'},
+                             '        if (\n'
+                             '          modelFacingText.length > errorGateThreshold '
+                             '&&\n'
+                             '          !isAlreadyTruncated(modelFacingText)\n'
+                             '        ) {\n'
+                             '          const persistResult = await '
+                             'persistAndTruncateToolResult(\n'
+                             '            callId,\n'
+                             '            toolName,\n'
+                             '            modelFacingText,\n'
+                             '            this.config,\n'
+                             '          );\n'
+                             '          modelFacingText = persistResult.content;\n'
+                             '          errorPersistedOutputFiles = Array.from(\n'
+                             '            new Set([\n'
+                             '              ...(errorPersistedOutputFiles ?? []),\n'
+                             '              ...(persistResult.outputFile ? '
+                             '[persistResult.outputFile] : []),\n'
+                             '            ]),\n'
+                             '          );\n'
+                             '        }\n'
+                             '\n'
+                             '        const error = new Error(errorMessage);\n'
+                             '        let errorResponse = createErrorResponse(\n'
+                             '          scheduledCall.request,\n'},
+            {'name': 'packages/core/src/core/coreToolScheduler.ts:landmark-10',
+             'path': 'packages/core/src/core/coreToolScheduler.ts',
+             'before': '            : this.compactResultDisplayForInteractiveHistory(\n'
+                       '                toolResult.returnDisplay,\n'
+                       '              ),\n'
+                       '        );\n'
+                       '        if (errorPersistedOutputFiles !== undefined) {\n'
+                       '          errorResponse.persistedOutputFiles = Array.from(\n',
+             'after': '            : this.compactResultDisplayForInteractiveHistory(\n'
+                      '                toolResult.returnDisplay,\n'
+                      '              ),\n'
+                      '          modelFacingText,\n'
+                      '        );\n'
+                      '        if (errorPersistedOutputFiles !== undefined) {\n'
+                      '          errorResponse.persistedOutputFiles = Array.from(\n',
+             'review_before': '            : '
+                              'this.compactResultDisplayForInteractiveHistory(\n'
+                              '                toolResult.returnDisplay,\n'
+                              '              ),\n'
+                              '        );\n'
+                              '        if (errorPersistedOutputFiles !== undefined) {\n'
+                              '          errorResponse.persistedOutputFiles = '
+                              'Array.from(\n',
+             'review_after': '            : '
+                             'this.compactResultDisplayForInteractiveHistory(\n'
+                             '                toolResult.returnDisplay,\n'
+                             '              ),\n'
+                             '          modelFacingText,\n'
+                             '        );\n'
+                             '        if (errorPersistedOutputFiles !== undefined) {\n'
+                             '          errorResponse.persistedOutputFiles = '
+                             'Array.from(\n'},
             {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-1',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': "import type { Config } from '../config/config.js';\n"
@@ -14091,6 +14352,52 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      streamError === null &&\n'
                              '      !hasToolCall &&\n'
                              '      hasFinishReason &&\n'},
+            {'name': 'packages/core/src/core/genai-compat.test.ts:landmark-1',
+             'path': 'packages/core/src/core/genai-compat.test.ts',
+             'before': '      STOP: SdkFinishReason.STOP,\n'
+                       '      MAX_TOKENS: SdkFinishReason.MAX_TOKENS,\n'
+                       '    });\n'
+                       '    expect(FunctionCallingConfigMode).toEqual({\n'
+                       '      ANY: SdkFunctionCallingConfigMode.ANY,\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n',
+             'after': '      STOP: SdkFinishReason.STOP,\n'
+                      '      MAX_TOKENS: SdkFinishReason.MAX_TOKENS,\n'
+                      '    });\n'
+                      '    // NONE is required by chatCompressionService: the '
+                      'summarizer must run\n'
+                      '    // with tool calling disabled, so the compaction turn '
+                      'cannot end on a\n'
+                      '    // tool call it has no way to execute.\n'
+                      '    expect(FunctionCallingConfigMode).toEqual({\n'
+                      '      ANY: SdkFunctionCallingConfigMode.ANY,\n'
+                      '      NONE: SdkFunctionCallingConfigMode.NONE,\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n',
+             'review_before': '      STOP: SdkFinishReason.STOP,\n'
+                              '      MAX_TOKENS: SdkFinishReason.MAX_TOKENS,\n'
+                              '    });\n'
+                              '    expect(FunctionCallingConfigMode).toEqual({\n'
+                              '      ANY: SdkFunctionCallingConfigMode.ANY,\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n',
+             'review_after': '      STOP: SdkFinishReason.STOP,\n'
+                             '      MAX_TOKENS: SdkFinishReason.MAX_TOKENS,\n'
+                             '    });\n'
+                             '    // NONE is required by chatCompressionService: the '
+                             'summarizer must run\n'
+                             '    // with tool calling disabled, so the compaction '
+                             'turn cannot end on a\n'
+                             '    // tool call it has no way to execute.\n'
+                             '    expect(FunctionCallingConfigMode).toEqual({\n'
+                             '      ANY: SdkFunctionCallingConfigMode.ANY,\n'
+                             '      NONE: SdkFunctionCallingConfigMode.NONE,\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'},
             {'name': 'packages/core/src/core/genai-compat.ts:landmark-1',
              'path': 'packages/core/src/core/genai-compat.ts',
              'before': 'export type FunctionCallingConfigMode = '
@@ -17158,6 +17465,93 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  responseParsingOptions?: '
                              'OpenAIResponseParsingOptions;\n'
                              '  taggedThinkingParser?: TaggedThinkingParser;\n'},
+            {'name': 'packages/core/src/core/prompts.test.ts:landmark-1',
+             'path': 'packages/core/src/core/prompts.test.ts',
+             'before': "    expect(prompt).toContain('<next_step>');\n"
+                       '  });\n'
+                       '\n'
+                       "  it('instructs the model to wrap reasoning in an <analysis> "
+                       "block', () => {\n"
+                       '    const prompt = getCompressionPrompt();\n'
+                       "    expect(prompt).toContain('<analysis>');\n"
+                       '    // Must signal that <analysis> is stripped (so the model '
+                       'knows it is a\n'
+                       '    // drafting scratchpad, not part of the final summary).\n'
+                       '    '
+                       'expect(prompt).toMatch(/<analysis>.*stripped|stripped.*<analysis>/is);\n'
+                       '  });\n'
+                       '\n'
+                       "  it('asks for the <all_user_messages> section to be "
+                       "chronological and inclusive', () => {\n",
+             'after': "    expect(prompt).toContain('<next_step>');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('sends compaction reasoning to hidden thinking rather than "
+                      "an in-band block', () => {\n"
+                      '    const prompt = getCompressionPrompt();\n'
+                      '    // Upstream asked for an <analysis> scratchpad that the '
+                      'summarizer then\n'
+                      '    // stripped. This deployment thinks natively at xhigh, so '
+                      'an in-band\n'
+                      '    // block would spend the fixed maintenance output budget on '
+                      'text that is\n'
+                      '    // discarded -- the failure mode that produced two empty '
+                      'summaries and a\n'
+                      '    // dead session. The prompt now directs reasoning to hidden '
+                      'thinking and\n'
+                      '    // forbids the block in the response.\n'
+                      '    expect(prompt).toMatch(/native hidden reasoning/i);\n'
+                      '    expect(prompt).toMatch(\n'
+                      '      /Do not place reasoning or an <analysis> block in the '
+                      'final response/i,\n'
+                      '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('asks for the <all_user_messages> section to be "
+                      "chronological and inclusive', () => {\n",
+             'review_before': "    expect(prompt).toContain('<next_step>');\n"
+                              '  });\n'
+                              '\n'
+                              "  it('instructs the model to wrap reasoning in an "
+                              "<analysis> block', () => {\n"
+                              '    const prompt = getCompressionPrompt();\n'
+                              "    expect(prompt).toContain('<analysis>');\n"
+                              '    // Must signal that <analysis> is stripped (so the '
+                              'model knows it is a\n'
+                              '    // drafting scratchpad, not part of the final '
+                              'summary).\n'
+                              '    '
+                              'expect(prompt).toMatch(/<analysis>.*stripped|stripped.*<analysis>/is);\n'
+                              '  });\n'
+                              '\n'
+                              "  it('asks for the <all_user_messages> section to be "
+                              "chronological and inclusive', () => {\n",
+             'review_after': "    expect(prompt).toContain('<next_step>');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('sends compaction reasoning to hidden thinking "
+                             "rather than an in-band block', () => {\n"
+                             '    const prompt = getCompressionPrompt();\n'
+                             '    // Upstream asked for an <analysis> scratchpad that '
+                             'the summarizer then\n'
+                             '    // stripped. This deployment thinks natively at '
+                             'xhigh, so an in-band\n'
+                             '    // block would spend the fixed maintenance output '
+                             'budget on text that is\n'
+                             '    // discarded -- the failure mode that produced two '
+                             'empty summaries and a\n'
+                             '    // dead session. The prompt now directs reasoning to '
+                             'hidden thinking and\n'
+                             '    // forbids the block in the response.\n'
+                             '    expect(prompt).toMatch(/native hidden reasoning/i);\n'
+                             '    expect(prompt).toMatch(\n'
+                             '      /Do not place reasoning or an <analysis> block in '
+                             'the final response/i,\n'
+                             '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('asks for the <all_user_messages> section to be "
+                             "chronological and inclusive', () => {\n"},
             {'name': 'packages/core/src/core/prompts.ts:landmark-1',
              'path': 'packages/core/src/core/prompts.ts',
              'before': "import type { GenerateContentConfig } from '@google/genai';\n"
@@ -37180,6 +37574,233 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      ],\n'
                              '    },\n'
                              '    {\n'},
+            {'name': 'packages/core/src/test-utils/mock-tool.ts:landmark-1',
+             'path': 'packages/core/src/test-utils/mock-tool.ts',
+             'before': '    });\n'
+                       '  }\n'
+                       '\n'
+                       '  getModifyContext(\n'
+                       '    _abortSignal: AbortSignal,\n'
+                       '  ): ModifyContext<Record<string, unknown>> {\n',
+             'after': '    });\n'
+                      '  }\n'
+                      '\n'
+                      '  /**\n'
+                      '   * `createUpdatedParams` below replaces the parameters with '
+                      '`newContent`,\n'
+                      '   * which the advertised schema does not declare. Every '
+                      'modifiable tool does\n'
+                      '   * something of this shape -- the modification flow re-enters '
+                      '`build()` with\n'
+                      "   * the runtime's own bookkeeping -- so each one declares the "
+                      'names it\n'
+                      '   * introduces rather than the validator carving out an '
+                      'exception for the\n'
+                      '   * modify path.\n'
+                      '   */\n'
+                      '  protected override get runtimeOnlyParams(): readonly string[] '
+                      '{\n'
+                      "    return ['newContent'];\n"
+                      '  }\n'
+                      '\n'
+                      '  getModifyContext(\n'
+                      '    _abortSignal: AbortSignal,\n'
+                      '  ): ModifyContext<Record<string, unknown>> {\n',
+             'review_before': '    });\n'
+                              '  }\n'
+                              '\n'
+                              '  getModifyContext(\n'
+                              '    _abortSignal: AbortSignal,\n'
+                              '  ): ModifyContext<Record<string, unknown>> {\n',
+             'review_after': '    });\n'
+                             '  }\n'
+                             '\n'
+                             '  /**\n'
+                             '   * `createUpdatedParams` below replaces the parameters '
+                             'with `newContent`,\n'
+                             '   * which the advertised schema does not declare. Every '
+                             'modifiable tool does\n'
+                             '   * something of this shape -- the modification flow '
+                             're-enters `build()` with\n'
+                             "   * the runtime's own bookkeeping -- so each one "
+                             'declares the names it\n'
+                             '   * introduces rather than the validator carving out an '
+                             'exception for the\n'
+                             '   * modify path.\n'
+                             '   */\n'
+                             '  protected override get runtimeOnlyParams(): readonly '
+                             'string[] {\n'
+                             "    return ['newContent'];\n"
+                             '  }\n'
+                             '\n'
+                             '  getModifyContext(\n'
+                             '    _abortSignal: AbortSignal,\n'
+                             '  ): ModifyContext<Record<string, unknown>> {\n'},
+            {'name': 'packages/core/src/tools/__snapshots__/shell.test.ts.snap:landmark-1',
+             'path': 'packages/core/src/tools/__snapshots__/shell.test.ts.snap',
+             'before': '  - NEVER use unescaped single quotes inside single-quoted '
+                       "strings (e.g. \\`'it\\\\'s'\\` is wrong; use \\`$'it\\\\'s'\\` "
+                       'or \\`"it\'s"\\` instead).\n'
+                       '  - If unsure, prefer double-quoting arguments and escape '
+                       'inner double-quotes as \\`\\\\"\\`.\n'
+                       '- When issuing multiple commands:\n'
+                       '  - If the commands are independent and can run in parallel, '
+                       'make multiple run_shell_command tool calls in a single '
+                       'message. For example, if you need to run "git status" and "git '
+                       'diff", send a single message with two run_shell_command tool '
+                       'calls in parallel.\n'
+                       '  - If the commands depend on each other and must run '
+                       "sequentially, use a single run_shell_command call with '&&' to "
+                       'chain them together (e.g., \\`git add . && git commit -m '
+                       '"message" && git push\\`). For instance, if one operation must '
+                       'complete before another starts (like mkdir before cp, Write '
+                       'before run_shell_command for git operations, or git add before '
+                       'git commit), run these operations sequentially instead.\n'
+                       "  - Use ';' only when you need to run commands sequentially "
+                       "but don't care if earlier commands fail.\n"
+                       '  - DO NOT use newlines to separate commands (newlines are ok '
+                       'in quoted strings).\n',
+             'after': '  - NEVER use unescaped single quotes inside single-quoted '
+                      "strings (e.g. \\`'it\\\\'s'\\` is wrong; use \\`$'it\\\\'s'\\` "
+                      'or \\`"it\'s"\\` instead).\n'
+                      '  - If unsure, prefer double-quoting arguments and escape inner '
+                      'double-quotes as \\`\\\\"\\`.\n'
+                      '- When issuing multiple commands:\n'
+                      '  - Tool calls run one at a time; there is no parallel '
+                      'dispatch. Issue independent commands as successive '
+                      'run_shell_command calls, or combine them into one command using '
+                      "this shell's command separator.\n"
+                      '  - If the commands depend on each other and must run '
+                      "sequentially, use a single run_shell_command call with '&&' to "
+                      'chain them together (e.g., \\`git add . && git commit -m '
+                      '"message" && git push\\`). For instance, if one operation must '
+                      'complete before another starts (like mkdir before cp, Write '
+                      'before run_shell_command for git operations, or git add before '
+                      'git commit), run these operations sequentially instead.\n'
+                      "  - Use ';' only when you need to run commands sequentially but "
+                      "don't care if earlier commands fail.\n"
+                      '  - DO NOT use newlines to separate commands (newlines are ok '
+                      'in quoted strings).\n',
+             'review_before': '  - NEVER use unescaped single quotes inside '
+                              "single-quoted strings (e.g. \\`'it\\\\'s'\\` is wrong; "
+                              'use \\`$\'it\\\\\'s\'\\` or \\`"it\'s"\\` instead).\n'
+                              '  - If unsure, prefer double-quoting arguments and '
+                              'escape inner double-quotes as \\`\\\\"\\`.\n'
+                              '- When issuing multiple commands:\n'
+                              '  - If the commands are independent and can run in '
+                              'parallel, make multiple run_shell_command tool calls in '
+                              'a single message. For example, if you need to run "git '
+                              'status" and "git diff", send a single message with two '
+                              'run_shell_command tool calls in parallel.\n'
+                              '  - If the commands depend on each other and must run '
+                              'sequentially, use a single run_shell_command call with '
+                              "'&&' to chain them together (e.g., \\`git add . && git "
+                              'commit -m "message" && git push\\`). For instance, if '
+                              'one operation must complete before another starts (like '
+                              'mkdir before cp, Write before run_shell_command for git '
+                              'operations, or git add before git commit), run these '
+                              'operations sequentially instead.\n'
+                              "  - Use ';' only when you need to run commands "
+                              "sequentially but don't care if earlier commands fail.\n"
+                              '  - DO NOT use newlines to separate commands (newlines '
+                              'are ok in quoted strings).\n',
+             'review_after': '  - NEVER use unescaped single quotes inside '
+                             "single-quoted strings (e.g. \\`'it\\\\'s'\\` is wrong; "
+                             'use \\`$\'it\\\\\'s\'\\` or \\`"it\'s"\\` instead).\n'
+                             '  - If unsure, prefer double-quoting arguments and '
+                             'escape inner double-quotes as \\`\\\\"\\`.\n'
+                             '- When issuing multiple commands:\n'
+                             '  - Tool calls run one at a time; there is no parallel '
+                             'dispatch. Issue independent commands as successive '
+                             'run_shell_command calls, or combine them into one '
+                             "command using this shell's command separator.\n"
+                             '  - If the commands depend on each other and must run '
+                             'sequentially, use a single run_shell_command call with '
+                             "'&&' to chain them together (e.g., \\`git add . && git "
+                             'commit -m "message" && git push\\`). For instance, if '
+                             'one operation must complete before another starts (like '
+                             'mkdir before cp, Write before run_shell_command for git '
+                             'operations, or git add before git commit), run these '
+                             'operations sequentially instead.\n'
+                             "  - Use ';' only when you need to run commands "
+                             "sequentially but don't care if earlier commands fail.\n"
+                             '  - DO NOT use newlines to separate commands (newlines '
+                             'are ok in quoted strings).\n'},
+            {'name': 'packages/core/src/tools/__snapshots__/shell.test.ts.snap:landmark-2',
+             'path': 'packages/core/src/tools/__snapshots__/shell.test.ts.snap',
+             'before': '  - Be careful with \\`%VAR%\\` environment-variable '
+                       'expansion; avoid literal \\`%...%\\` unless expansion is '
+                       'intended.\n'
+                       '  - Do NOT use Bash-only forms such as ANSI-C quoting '
+                       "(\\`$'...'\\`) or Bash heredocs.\n"
+                       '- When issuing multiple commands:\n'
+                       '  - If the commands are independent and can run in parallel, '
+                       'make multiple run_shell_command tool calls in a single '
+                       'message. For example, if you need to run "git status" and "git '
+                       'diff", send a single message with two run_shell_command tool '
+                       'calls in parallel.\n'
+                       '  - If the commands depend on each other and must run '
+                       "sequentially, use a single run_shell_command call with '&&' to "
+                       'chain them together (e.g., \\`git add . && git commit -m '
+                       '"message" && git push\\`).\n'
+                       "  - Use '&' only when you need to run commands sequentially "
+                       "but don't care if earlier commands fail.\n"
+                       "  - DO NOT use ';' or newlines to separate commands in "
+                       'cmd.exe.\n',
+             'after': '  - Be careful with \\`%VAR%\\` environment-variable expansion; '
+                      'avoid literal \\`%...%\\` unless expansion is intended.\n'
+                      '  - Do NOT use Bash-only forms such as ANSI-C quoting '
+                      "(\\`$'...'\\`) or Bash heredocs.\n"
+                      '- When issuing multiple commands:\n'
+                      '  - Tool calls run one at a time; there is no parallel '
+                      'dispatch. Issue independent commands as successive '
+                      'run_shell_command calls, or combine them into one command using '
+                      "this shell's command separator.\n"
+                      '  - If the commands depend on each other and must run '
+                      "sequentially, use a single run_shell_command call with '&&' to "
+                      'chain them together (e.g., \\`git add . && git commit -m '
+                      '"message" && git push\\`).\n'
+                      "  - Use '&' only when you need to run commands sequentially but "
+                      "don't care if earlier commands fail.\n"
+                      "  - DO NOT use ';' or newlines to separate commands in "
+                      'cmd.exe.\n',
+             'review_before': '  - Be careful with \\`%VAR%\\` environment-variable '
+                              'expansion; avoid literal \\`%...%\\` unless expansion '
+                              'is intended.\n'
+                              '  - Do NOT use Bash-only forms such as ANSI-C quoting '
+                              "(\\`$'...'\\`) or Bash heredocs.\n"
+                              '- When issuing multiple commands:\n'
+                              '  - If the commands are independent and can run in '
+                              'parallel, make multiple run_shell_command tool calls in '
+                              'a single message. For example, if you need to run "git '
+                              'status" and "git diff", send a single message with two '
+                              'run_shell_command tool calls in parallel.\n'
+                              '  - If the commands depend on each other and must run '
+                              'sequentially, use a single run_shell_command call with '
+                              "'&&' to chain them together (e.g., \\`git add . && git "
+                              'commit -m "message" && git push\\`).\n'
+                              "  - Use '&' only when you need to run commands "
+                              "sequentially but don't care if earlier commands fail.\n"
+                              "  - DO NOT use ';' or newlines to separate commands in "
+                              'cmd.exe.\n',
+             'review_after': '  - Be careful with \\`%VAR%\\` environment-variable '
+                             'expansion; avoid literal \\`%...%\\` unless expansion is '
+                             'intended.\n'
+                             '  - Do NOT use Bash-only forms such as ANSI-C quoting '
+                             "(\\`$'...'\\`) or Bash heredocs.\n"
+                             '- When issuing multiple commands:\n'
+                             '  - Tool calls run one at a time; there is no parallel '
+                             'dispatch. Issue independent commands as successive '
+                             'run_shell_command calls, or combine them into one '
+                             "command using this shell's command separator.\n"
+                             '  - If the commands depend on each other and must run '
+                             'sequentially, use a single run_shell_command call with '
+                             "'&&' to chain them together (e.g., \\`git add . && git "
+                             'commit -m "message" && git push\\`).\n'
+                             "  - Use '&' only when you need to run commands "
+                             "sequentially but don't care if earlier commands fail.\n"
+                             "  - DO NOT use ';' or newlines to separate commands in "
+                             'cmd.exe.\n'},
             {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-1',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '  ContextState,\n'
@@ -38681,6 +39302,116 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  metaPath: string,\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-5',
              'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '      true, // canUpdateOutput - Enable live output updates '
+                       'for real-time progress\n'
+                       '    );\n'
+                       '\n'
+                       '    this.subagentManager = config.getSubagentManager();\n'
+                       '    this.removeChangeListener = '
+                       'this.subagentManager.addChangeListener(() => {\n'
+                       '      void this.refreshSubagents();\n',
+             'after': '      true, // canUpdateOutput - Enable live output updates for '
+                      'real-time progress\n'
+                      '    );\n'
+                      '\n'
+                      '    // The advertised schema is trimmed after construction -- '
+                      'foreground-only\n'
+                      '    // mode deletes the fork/team/worktree fields, and team '
+                      'fields come and go\n'
+                      '    // with `isAgentTeamEnabled()` -- so the trimmed set '
+                      'describes what the\n'
+                      '    // model is *shown*, not every name this tool can ever '
+                      'accept. Refusing\n'
+                      '    // against the trimmed set would reject `name` or '
+                      '`plan_mode_required` on\n'
+                      '    // a runtime that supports them whenever the schema had not '
+                      'been rebuilt\n'
+                      '    // since the config changed. The full set is snapshotted '
+                      'here, before any\n'
+                      '    // trimming, so the refusal only ever fires on a name that '
+                      'does not exist\n'
+                      '    // at all; a name that exists upstream but is disabled here '
+                      'is refused by\n'
+                      '    // the specific checks in validateToolParams, which say '
+                      'why.\n'
+                      '    this.everyDeclaredParam = Object.freeze([\n'
+                      '      ...Object.keys(\n'
+                      '        (initialSchema as { properties?: Record<string, '
+                      'unknown> }).properties ??\n'
+                      '          {},\n'
+                      '      ),\n'
+                      '      // The four `updateDescriptionAndSchema` adds back when '
+                      'the runtime\n'
+                      '      // supports them. Whether they are advertised depends on '
+                      'team mode and\n'
+                      '      // available model grades; whether they exist does not.\n'
+                      "      'name',\n"
+                      "      'plan_mode_required',\n"
+                      "      'read_only',\n"
+                      "      'model',\n"
+                      '    ]);\n'
+                      '\n'
+                      '    this.subagentManager = config.getSubagentManager();\n'
+                      '    this.removeChangeListener = '
+                      'this.subagentManager.addChangeListener(() => {\n'
+                      '      void this.refreshSubagents();\n',
+             'review_before': '      true, // canUpdateOutput - Enable live output '
+                              'updates for real-time progress\n'
+                              '    );\n'
+                              '\n'
+                              '    this.subagentManager = '
+                              'config.getSubagentManager();\n'
+                              '    this.removeChangeListener = '
+                              'this.subagentManager.addChangeListener(() => {\n'
+                              '      void this.refreshSubagents();\n',
+             'review_after': '      true, // canUpdateOutput - Enable live output '
+                             'updates for real-time progress\n'
+                             '    );\n'
+                             '\n'
+                             '    // The advertised schema is trimmed after '
+                             'construction -- foreground-only\n'
+                             '    // mode deletes the fork/team/worktree fields, and '
+                             'team fields come and go\n'
+                             '    // with `isAgentTeamEnabled()` -- so the trimmed set '
+                             'describes what the\n'
+                             '    // model is *shown*, not every name this tool can '
+                             'ever accept. Refusing\n'
+                             '    // against the trimmed set would reject `name` or '
+                             '`plan_mode_required` on\n'
+                             '    // a runtime that supports them whenever the schema '
+                             'had not been rebuilt\n'
+                             '    // since the config changed. The full set is '
+                             'snapshotted here, before any\n'
+                             '    // trimming, so the refusal only ever fires on a '
+                             'name that does not exist\n'
+                             '    // at all; a name that exists upstream but is '
+                             'disabled here is refused by\n'
+                             '    // the specific checks in validateToolParams, which '
+                             'say why.\n'
+                             '    this.everyDeclaredParam = Object.freeze([\n'
+                             '      ...Object.keys(\n'
+                             '        (initialSchema as { properties?: Record<string, '
+                             'unknown> }).properties ??\n'
+                             '          {},\n'
+                             '      ),\n'
+                             '      // The four `updateDescriptionAndSchema` adds back '
+                             'when the runtime\n'
+                             '      // supports them. Whether they are advertised '
+                             'depends on team mode and\n'
+                             '      // available model grades; whether they exist does '
+                             'not.\n'
+                             "      'name',\n"
+                             "      'plan_mode_required',\n"
+                             "      'read_only',\n"
+                             "      'model',\n"
+                             '    ]);\n'
+                             '\n'
+                             '    this.subagentManager = config.getSubagentManager();\n'
+                             '    this.removeChangeListener = '
+                             'this.subagentManager.addChangeListener(() => {\n'
+                             '      void this.refreshSubagents();\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-6',
+             'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '</example>\n'
                        '`;\n'
                        '\n'
@@ -38833,7 +39564,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // Update the parameter schema by modifying the '
                              'existing object\n'
                              '    const schema = this.parameterSchema as {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-6',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-7',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      const availableGrades = [\n'
                        '        '
@@ -38873,7 +39604,46 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        schema.properties.model = {\n'
                              "          type: 'string',\n"
                              '          enum: availableGrades,\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-7',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-8',
+             'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '    }\n'
+                       '  }\n'
+                       '\n'
+                       '  override validateToolParams(params: AgentParams): string | '
+                       'null {\n'
+                       '    // Validate required fields\n'
+                       '    if (\n',
+             'after': '    }\n'
+                      '  }\n'
+                      '\n'
+                      '  /** Every parameter name this tool can accept, before schema '
+                      'trimming. */\n'
+                      '  private readonly everyDeclaredParam: readonly string[];\n'
+                      '\n'
+                      '  override validateToolParams(params: AgentParams): string | '
+                      'null {\n'
+                      '    // Validate required fields\n'
+                      '    if (\n',
+             'review_before': '    }\n'
+                              '  }\n'
+                              '\n'
+                              '  override validateToolParams(params: AgentParams): '
+                              'string | null {\n'
+                              '    // Validate required fields\n'
+                              '    if (\n',
+             'review_after': '    }\n'
+                             '  }\n'
+                             '\n'
+                             '  /** Every parameter name this tool can accept, before '
+                             'schema trimming. */\n'
+                             '  private readonly everyDeclaredParam: readonly '
+                             'string[];\n'
+                             '\n'
+                             '  override validateToolParams(params: AgentParams): '
+                             'string | null {\n'
+                             '    // Validate required fields\n'
+                             '    if (\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      return \'Parameter "todo_id" must be a non-empty string '
                        "of at most 500 characters.';\n"
@@ -38970,7 +39740,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    if (params.subagent_type !== undefined) {\n'
                              '      if (\n'
                              "        typeof params.subagent_type !== 'string' ||\n"},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-8',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '    }\n'
@@ -38992,10 +39762,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'parameter that\n'
                       '    // exists upstream is unavailable here -- keep precedence '
                       'over the\n'
-                      '    // generic "no such parameter" refusal.\n'
+                      '    // generic "no such parameter" refusal, and it is measured '
+                      'against every\n'
+                      '    // name the tool can ever accept rather than the trimmed '
+                      'advertised set.\n'
+                      '    const everyName: Record<string, true> = {};\n'
+                      '    for (const key of this.everyDeclaredParam) {\n'
+                      '      everyName[key] = true;\n'
+                      '    }\n'
                       '    return undeclaredToolParamsError(\n'
                       '      this.name,\n'
-                      '      this.schema.parametersJsonSchema,\n'
+                      '      { properties: everyName },\n'
                       '      params,\n'
                       '    );\n'
                       '  }\n'
@@ -39021,16 +39798,23 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '*why* a parameter that\n'
                              '    // exists upstream is unavailable here -- keep '
                              'precedence over the\n'
-                             '    // generic "no such parameter" refusal.\n'
+                             '    // generic "no such parameter" refusal, and it is '
+                             'measured against every\n'
+                             '    // name the tool can ever accept rather than the '
+                             'trimmed advertised set.\n'
+                             '    const everyName: Record<string, true> = {};\n'
+                             '    for (const key of this.everyDeclaredParam) {\n'
+                             '      everyName[key] = true;\n'
+                             '    }\n'
                              '    return undeclaredToolParamsError(\n'
                              '      this.name,\n'
-                             '      this.schema.parametersJsonSchema,\n'
+                             '      { properties: everyName },\n'
                              '      params,\n'
                              '    );\n'
                              '  }\n'
                              '\n'
                              '  protected createInvocation(params: AgentParams) {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '  readonly eventEmitter: AgentEventEmitter = new '
                        'AgentEventEmitter();\n'
@@ -39072,7 +39856,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  private callId?: string;\n'
                              '\n'
                              '  constructor(\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '    });\n'
@@ -39188,7 +39972,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        },\n'
                              '        updateOutput,\n'
                              '      );\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      const subagentRawText = subagent.getFinalText();\n'
                        '      const terminateMode = subagent.getTerminateMode();\n'
@@ -39238,7 +40022,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '      const success = terminateMode === '
                              'AgentTerminateMode.GOAL;\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        }),\n'
                        '      );\n'
@@ -39306,7 +40090,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          },\n'
                              '          updateOutput,\n'
                              '        );\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        this.updateDisplay(\n'
                        '          {\n'
@@ -39353,7 +40137,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          },\n'
                              '          updateOutput,\n'
                              '        );\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-16',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': "      // the AgentTool's success count). This deliberately "
                        'routes the denial\n'
@@ -39421,7 +40205,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      error: { message: llmContent },\n'
                              '      returnDisplay: {\n'
                              "        type: 'task_execution' as const,\n"},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-17',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '    // background-agent concurrency caps '
                        '(agents.maxParallelAgentsByModel).\n'
@@ -39461,7 +40245,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      if (backgroundSlotReservation && '
                              '!backgroundSlotReservationConsumed) {\n'
                              '        this.config\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-16',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-18',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      // Implicit background requests downgrade to an awaited '
                        'foreground run\n'
@@ -39511,7 +40295,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ? true\n'
                              '          : (this.params.run_in_background ??\n'
                              '            (subagentConfig.background === true ||\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-17',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-19',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          subagentRuntimeConfig as Config,\n'
                        '          {\n'
@@ -39585,7 +40369,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              ? { modelConfigOverrides: { model: '
                              'subagentModelId } }\n'
                              '              : {}),\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-18',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-20',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '\n'
@@ -39694,7 +40478,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`qwen-code.tool`\n'
                              '      // span, inheriting its traceId so the trace tree '
                              'stays unified.\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-19',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-21',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          this.buildSubagentSpanSpec(hookOpts, subagentConfig, '
                        "'foreground'),\n"
@@ -39757,7 +40541,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            ),\n'
                              '        );\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-20',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-22',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          depth: launchDepth,\n'
                        '        });\n'
@@ -39915,7 +40699,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        if (terminateMode === AgentTerminateMode.ERROR) '
                              '{\n'
                              '          return {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-21',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-23',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        terminateReason: `Failed to run subagent: '
                        '${errorMessage}`,\n'
@@ -42106,6 +42890,113 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  });\n'},
             {'name': 'packages/core/src/tools/read-file.test.ts:landmark-6',
              'path': 'packages/core/src/tools/read-file.test.ts',
+             'before': '      >;\n'
+                       '\n'
+                       '      const result = await invocation.execute(abortSignal);\n'
+                       '      expect(result.llmContent).toEqual([\n'
+                       '        {\n'
+                       '          text: expect.stringMatching(\n'
+                       '            /Image overview: 20x10; oriented source: '
+                       '20x10.*tool_search.*zoom_image.*0 to 1000/,\n'
+                       '          ),\n'
+                       '        },\n'
+                       '        {\n'
+                       '          inlineData: {\n'
+                       '            data: expect.any(String),\n'
+                       "            mimeType: 'image/jpeg',\n"
+                       "            displayName: 'image.png',\n"
+                       '          },\n'
+                       '        },\n'
+                       '      ]);\n'
+                       "      expect(result.returnDisplay).toBe('Read image file: "
+                       "image.png');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('should handle PDF file and return appropriate "
+                       "content', async () => {\n",
+             'after': '      >;\n'
+                      '\n'
+                      '      const result = await invocation.execute(abortSignal);\n'
+                      '      // The JPEG overview pipeline is gone: an accepted PNG is '
+                      'sent as its\n'
+                      '      // exact original bytes, and anything else is refused.\n'
+                      '      expect(result.llmContent).toEqual([\n'
+                      '        {\n'
+                      '          text: expect.stringMatching(\n'
+                      '            /Full-quality original PNG: 20x10.*lossless source '
+                      'bytes preserved exactly/s,\n'
+                      '          ),\n'
+                      '        },\n'
+                      '        {\n'
+                      '          inlineData: {\n'
+                      '            data: expect.any(String),\n'
+                      "            mimeType: 'image/png',\n"
+                      "            displayName: 'image.png',\n"
+                      '          },\n'
+                      '        },\n'
+                      '      ]);\n'
+                      "      expect(result.returnDisplay).toBe('Read full-quality PNG: "
+                      "image.png');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('should handle PDF file and return appropriate content', "
+                      'async () => {\n',
+             'review_before': '      >;\n'
+                              '\n'
+                              '      const result = await '
+                              'invocation.execute(abortSignal);\n'
+                              '      expect(result.llmContent).toEqual([\n'
+                              '        {\n'
+                              '          text: expect.stringMatching(\n'
+                              '            /Image overview: 20x10; oriented source: '
+                              '20x10.*tool_search.*zoom_image.*0 to 1000/,\n'
+                              '          ),\n'
+                              '        },\n'
+                              '        {\n'
+                              '          inlineData: {\n'
+                              '            data: expect.any(String),\n'
+                              "            mimeType: 'image/jpeg',\n"
+                              "            displayName: 'image.png',\n"
+                              '          },\n'
+                              '        },\n'
+                              '      ]);\n'
+                              "      expect(result.returnDisplay).toBe('Read image "
+                              "file: image.png');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('should handle PDF file and return appropriate "
+                              "content', async () => {\n",
+             'review_after': '      >;\n'
+                             '\n'
+                             '      const result = await '
+                             'invocation.execute(abortSignal);\n'
+                             '      // The JPEG overview pipeline is gone: an accepted '
+                             'PNG is sent as its\n'
+                             '      // exact original bytes, and anything else is '
+                             'refused.\n'
+                             '      expect(result.llmContent).toEqual([\n'
+                             '        {\n'
+                             '          text: expect.stringMatching(\n'
+                             '            /Full-quality original PNG: 20x10.*lossless '
+                             'source bytes preserved exactly/s,\n'
+                             '          ),\n'
+                             '        },\n'
+                             '        {\n'
+                             '          inlineData: {\n'
+                             '            data: expect.any(String),\n'
+                             "            mimeType: 'image/png',\n"
+                             "            displayName: 'image.png',\n"
+                             '          },\n'
+                             '        },\n'
+                             '      ]);\n'
+                             "      expect(result.returnDisplay).toBe('Read "
+                             "full-quality PNG: image.png');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('should handle PDF file and return appropriate "
+                             "content', async () => {\n"},
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-7',
+             'path': 'packages/core/src/tools/read-file.test.ts',
              'before': "      expect(result.returnDisplay).toBe('Read pdf file: "
                        "document.pdf');\n"
                        '    });\n'
@@ -42950,7 +43841,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const binPath = path.join(tempRootDir, '
                              "'binary.bin');\n"
                              '      // Binary data with null bytes\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-7',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-8',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '      }\n'
                        '    });\n'
@@ -43344,7 +44235,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'paginated.txt');\n"
                              '      const lines = Array.from({ length: 20 }, (_, i) => '
                              '`Line ${i + 1}`);\n'},
-            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-8',
+            {'name': 'packages/core/src/tools/read-file.test.ts:landmark-9',
              'path': 'packages/core/src/tools/read-file.test.ts',
              'before': '        '
                        'expect(result.error?.type).toBe(ToolErrorType.FILE_TOO_LARGE);\n'
@@ -46102,6 +46993,896 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        actualNodeFs.unlinkSync(testTextFilePath);\n'},
             {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-4',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': "      expect(result.returnDisplay).toContain('Simulated image "
+                       "read error');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('should process an image file', async () => {\n"
+                       '      await sharp({\n'
+                       '        create: {\n'
+                       '          width: 20,\n'
+                       '          height: 10,\n'
+                       '          channels: 3,\n'
+                       "          background: '#306090',\n"
+                       '        },\n'
+                       '      })\n'
+                       '        .png()\n'
+                       '        .toFile(testImageFilePath);\n',
+             'after': "      expect(result.returnDisplay).toContain('Simulated image "
+                      "read error');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('[image-contract] emits an accepted PNG as its exact "
+                      "original bytes', async () => {\n"
+                      '      await sharp({\n'
+                      '        create: { width: 20, height: 10, channels: 3, '
+                      "background: '#306090' },\n"
+                      '      })\n'
+                      '        .png()\n'
+                      '        .toFile(testImageFilePath);\n',
+             'review_before': "      expect(result.returnDisplay).toContain('Simulated "
+                              "image read error');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('should process an image file', async () => {\n"
+                              '      await sharp({\n'
+                              '        create: {\n'
+                              '          width: 20,\n'
+                              '          height: 10,\n'
+                              '          channels: 3,\n'
+                              "          background: '#306090',\n"
+                              '        },\n'
+                              '      })\n'
+                              '        .png()\n'
+                              '        .toFile(testImageFilePath);\n',
+             'review_after': "      expect(result.returnDisplay).toContain('Simulated "
+                             "image read error');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('[image-contract] emits an accepted PNG as its "
+                             "exact original bytes', async () => {\n"
+                             '      await sharp({\n'
+                             '        create: { width: 20, height: 10, channels: 3, '
+                             "background: '#306090' },\n"
+                             '      })\n'
+                             '        .png()\n'
+                             '        .toFile(testImageFilePath);\n'},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-5',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': '        mockConfig,\n'
+                       '      );\n'
+                       '      const parts = result.llmContent as Part[];\n'
+                       '      expect(parts[0]).toEqual({\n'
+                       '        text:\n'
+                       "          'Image overview: 20x10; oriented source: 20x10. ' +\n"
+                       "          'If details are too small, use tool_search for "
+                       '"zoom image", then \' +\n'
+                       "          'call zoom_image with coordinates normalized from 0 "
+                       "to 1000.',\n"
+                       '      });\n'
+                       '      expect(parts[1]).toEqual({\n'
+                       '        inlineData: {\n'
+                       "          mimeType: 'image/jpeg',\n"
+                       '          data: expect.any(String),\n'
+                       "          displayName: 'image.png',\n"
+                       '        },\n'
+                       '      });\n'
+                       '      const metadata = await sharp(\n'
+                       "        Buffer.from(parts[1]!.inlineData!.data!, 'base64'),\n"
+                       '      ).metadata();\n'
+                       '      expect(metadata).toMatchObject({ width: 20, height: 10 '
+                       '});\n'
+                       "      expect(result.returnDisplay).toContain('Read image file: "
+                       "image.png');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('returns a bounded overview when a PNG exceeds the old "
+                       "data URI limit', async () => {\n"
+                       '      const largeImagePath = path.join(tempRootDir, '
+                       "'large.png');\n"
+                       '      await sharp({\n'
+                       '        create: {\n'
+                       '          width: 2200,\n'
+                       '          height: 1800,\n'
+                       '          channels: 3,\n'
+                       "          background: '#306090',\n"
+                       '        },\n'
+                       '      })\n'
+                       '        .png({ compressionLevel: 0 })\n'
+                       '        .toFile(largeImagePath);\n'
+                       '      '
+                       'expect(actualNodeFs.statSync(largeImagePath).size).toBeGreaterThan(\n'
+                       '        9.9 * 1024 * 1024,\n'
+                       '      );\n'
+                       "      mockMimeGetType.mockReturnValue('image/png');\n"
+                       '\n'
+                       '      const result = await '
+                       'processSingleFileContent(largeImagePath, mockConfig);\n'
+                       '\n'
+                       '      expect(result.error).toBeUndefined();\n'
+                       '      const parts = result.llmContent as Part[];\n'
+                       '      const overview = parts[1]!.inlineData!;\n'
+                       '      const metadata = await sharp(\n'
+                       "        Buffer.from(overview.data!, 'base64'),\n"
+                       '      ).metadata();\n'
+                       "      expect(overview.mimeType).toBe('image/jpeg');\n"
+                       '      expect(Buffer.from(overview.data!, '
+                       "'base64').length).toBeLessThanOrEqual(\n"
+                       '        9 * 1024 * 1024,\n'
+                       '      );\n'
+                       '      expect(Math.max(metadata.width!, '
+                       'metadata.height!)).toBeLessThanOrEqual(\n'
+                       '        1568,\n'
+                       '      );\n'
+                       '      expect(\n'
+                       '        Math.ceil(metadata.width! / 28) * '
+                       'Math.ceil(metadata.height! / 28),\n'
+                       '      ).toBeLessThanOrEqual(1568);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('rejects canonical image sources above 100 MB before "
+                       "decoding', async () => {\n",
+             'after': '        mockConfig,\n'
+                      '      );\n'
+                      '      const parts = result.llmContent as Part[];\n'
+                      '      // The JPEG overview pipeline this used to assert -- '
+                      'resize, orientation,\n'
+                      '      // a zoom_image follow-up hint -- is gone: this '
+                      'deployment sends the\n'
+                      '      // original PNG bytes or refuses the file.\n'
+                      "      expect(parts[0]?.text).toContain('Full-quality original "
+                      "PNG: 20x10');\n"
+                      "      expect(parts[0]?.text).toContain('lossless source bytes "
+                      "preserved exactly');\n"
+                      '      expect(parts[1]).toEqual({\n'
+                      '        inlineData: {\n'
+                      "          mimeType: 'image/png',\n"
+                      '          data: expect.any(String),\n'
+                      "          displayName: 'image.png',\n"
+                      '        },\n'
+                      '      });\n'
+                      '      expect(Buffer.from(parts[1]!.inlineData!.data!, '
+                      "'base64')).toEqual(\n"
+                      '        actualNodeFs.readFileSync(testImageFilePath),\n'
+                      '      );\n'
+                      "      expect(result.returnDisplay).toContain('Read full-quality "
+                      "PNG: image.png');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('rejects canonical image sources above 100 MB before "
+                      "decoding', async () => {\n",
+             'review_before': '        mockConfig,\n'
+                              '      );\n'
+                              '      const parts = result.llmContent as Part[];\n'
+                              '      expect(parts[0]).toEqual({\n'
+                              '        text:\n'
+                              "          'Image overview: 20x10; oriented source: "
+                              "20x10. ' +\n"
+                              "          'If details are too small, use tool_search "
+                              'for "zoom image", then \' +\n'
+                              "          'call zoom_image with coordinates normalized "
+                              "from 0 to 1000.',\n"
+                              '      });\n'
+                              '      expect(parts[1]).toEqual({\n'
+                              '        inlineData: {\n'
+                              "          mimeType: 'image/jpeg',\n"
+                              '          data: expect.any(String),\n'
+                              "          displayName: 'image.png',\n"
+                              '        },\n'
+                              '      });\n'
+                              '      const metadata = await sharp(\n'
+                              '        Buffer.from(parts[1]!.inlineData!.data!, '
+                              "'base64'),\n"
+                              '      ).metadata();\n'
+                              '      expect(metadata).toMatchObject({ width: 20, '
+                              'height: 10 });\n'
+                              "      expect(result.returnDisplay).toContain('Read "
+                              "image file: image.png');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('returns a bounded overview when a PNG exceeds "
+                              "the old data URI limit', async () => {\n"
+                              '      const largeImagePath = path.join(tempRootDir, '
+                              "'large.png');\n"
+                              '      await sharp({\n'
+                              '        create: {\n'
+                              '          width: 2200,\n'
+                              '          height: 1800,\n'
+                              '          channels: 3,\n'
+                              "          background: '#306090',\n"
+                              '        },\n'
+                              '      })\n'
+                              '        .png({ compressionLevel: 0 })\n'
+                              '        .toFile(largeImagePath);\n'
+                              '      '
+                              'expect(actualNodeFs.statSync(largeImagePath).size).toBeGreaterThan(\n'
+                              '        9.9 * 1024 * 1024,\n'
+                              '      );\n'
+                              "      mockMimeGetType.mockReturnValue('image/png');\n"
+                              '\n'
+                              '      const result = await '
+                              'processSingleFileContent(largeImagePath, mockConfig);\n'
+                              '\n'
+                              '      expect(result.error).toBeUndefined();\n'
+                              '      const parts = result.llmContent as Part[];\n'
+                              '      const overview = parts[1]!.inlineData!;\n'
+                              '      const metadata = await sharp(\n'
+                              "        Buffer.from(overview.data!, 'base64'),\n"
+                              '      ).metadata();\n'
+                              "      expect(overview.mimeType).toBe('image/jpeg');\n"
+                              '      expect(Buffer.from(overview.data!, '
+                              "'base64').length).toBeLessThanOrEqual(\n"
+                              '        9 * 1024 * 1024,\n'
+                              '      );\n'
+                              '      expect(Math.max(metadata.width!, '
+                              'metadata.height!)).toBeLessThanOrEqual(\n'
+                              '        1568,\n'
+                              '      );\n'
+                              '      expect(\n'
+                              '        Math.ceil(metadata.width! / 28) * '
+                              'Math.ceil(metadata.height! / 28),\n'
+                              '      ).toBeLessThanOrEqual(1568);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('rejects canonical image sources above 100 MB "
+                              "before decoding', async () => {\n",
+             'review_after': '        mockConfig,\n'
+                             '      );\n'
+                             '      const parts = result.llmContent as Part[];\n'
+                             '      // The JPEG overview pipeline this used to assert '
+                             '-- resize, orientation,\n'
+                             '      // a zoom_image follow-up hint -- is gone: this '
+                             'deployment sends the\n'
+                             '      // original PNG bytes or refuses the file.\n'
+                             "      expect(parts[0]?.text).toContain('Full-quality "
+                             "original PNG: 20x10');\n"
+                             "      expect(parts[0]?.text).toContain('lossless source "
+                             "bytes preserved exactly');\n"
+                             '      expect(parts[1]).toEqual({\n'
+                             '        inlineData: {\n'
+                             "          mimeType: 'image/png',\n"
+                             '          data: expect.any(String),\n'
+                             "          displayName: 'image.png',\n"
+                             '        },\n'
+                             '      });\n'
+                             '      expect(Buffer.from(parts[1]!.inlineData!.data!, '
+                             "'base64')).toEqual(\n"
+                             '        actualNodeFs.readFileSync(testImageFilePath),\n'
+                             '      );\n'
+                             "      expect(result.returnDisplay).toContain('Read "
+                             "full-quality PNG: image.png');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('rejects canonical image sources above 100 MB "
+                             "before decoding', async () => {\n"},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-6',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': "      expect(result.llmContent).toContain('100 MB source "
+                       "limit');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('forwards a corrupt canonical image verbatim instead of "
+                       "failing the read', async () => {\n"
+                       '      const corruptPath = path.join(tempRootDir, '
+                       "'corrupt.png');\n"
+                       "      const bytes = Buffer.from('not a real png');\n"
+                       '      await fsPromises.writeFile(corruptPath, bytes);\n'
+                       "      mockMimeGetType.mockReturnValue('image/png');\n"
+                       '\n'
+                       '      const result = await '
+                       'processSingleFileContent(corruptPath, mockConfig);\n'
+                       '\n'
+                       '      expect(result.error).toBeUndefined();\n'
+                       '      expect(result.llmContent).toEqual({\n'
+                       '        inlineData: {\n'
+                       "          data: bytes.toString('base64'),\n"
+                       "          mimeType: 'image/png',\n"
+                       "          displayName: 'corrupt.png',\n"
+                       '        },\n'
+                       '      });\n'
+                       "      expect(result.returnDisplay).toContain('Read image file: "
+                       "corrupt.png');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('forwards an animated canonical image verbatim instead "
+                       "of failing the read', async () => {\n"
+                       '      const twoFrameGif = Buffer.from(\n'
+                       '        '
+                       "'47494638396101000100800000000000ffffff21f90400010000002c000000000100010000020244010021f90400010000002c00000000010001000002024c01003b',\n"
+                       "        'hex',\n"
+                       '      );\n'
+                       '      const animatedPath = path.join(tempRootDir, '
+                       "'animated.webp');\n"
+                       '      await sharp(twoFrameGif, { animated: true '
+                       '}).webp().toFile(animatedPath);\n'
+                       "      mockMimeGetType.mockReturnValue('image/webp');\n"
+                       '\n'
+                       '      const result = await '
+                       'processSingleFileContent(animatedPath, mockConfig);\n'
+                       '\n'
+                       '      const onDisk = await fsPromises.readFile(animatedPath);\n'
+                       '      expect(result.error).toBeUndefined();\n'
+                       '      expect(result.llmContent).toEqual({\n'
+                       '        inlineData: {\n'
+                       "          data: onDisk.toString('base64'),\n"
+                       "          mimeType: 'image/webp',\n"
+                       "          displayName: 'animated.webp',\n"
+                       '        },\n'
+                       '      });\n'
+                       "      expect(result.returnDisplay).toContain('Read image file: "
+                       "animated.webp');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('forwards non-canonical content behind a canonical "
+                       "extension verbatim', async () => {\n"
+                       '      const gifBytes = Buffer.from(\n'
+                       '        '
+                       "'47494638396101000100800000000000ffffff21f90400010000002c000000000100010000020244010021f90400010000002c00000000010001000002024c01003b',\n"
+                       "        'hex',\n"
+                       '      );\n'
+                       '      const mismatchPath = path.join(tempRootDir, '
+                       "'mismatch.png');\n"
+                       '      await fsPromises.writeFile(mismatchPath, gifBytes);\n'
+                       "      mockMimeGetType.mockReturnValue('image/png');\n"
+                       '\n'
+                       '      const result = await '
+                       'processSingleFileContent(mismatchPath, mockConfig);\n'
+                       '\n'
+                       '      expect(result.error).toBeUndefined();\n'
+                       '      expect(result.llmContent).toEqual({\n'
+                       '        inlineData: {\n'
+                       "          data: gifBytes.toString('base64'),\n"
+                       "          mimeType: 'image/png',\n"
+                       "          displayName: 'mismatch.png',\n"
+                       '        },\n'
+                       '      });\n'
+                       '    });\n'
+                       '\n'
+                       "    it('applies EXIF orientation before describing and "
+                       "rendering an overview', async () => {\n"
+                       '      const orientedPath = path.join(tempRootDir, '
+                       "'oriented.jpg');\n"
+                       '      await sharp({\n'
+                       '        create: {\n'
+                       '          width: 60,\n'
+                       '          height: 40,\n'
+                       '          channels: 3,\n'
+                       "          background: '#306090',\n"
+                       '        },\n'
+                       '      })\n'
+                       '        .jpeg()\n'
+                       '        .withMetadata({ orientation: 6 })\n'
+                       '        .toFile(orientedPath);\n'
+                       "      mockMimeGetType.mockReturnValue('image/jpeg');\n"
+                       '\n'
+                       '      const result = await '
+                       'processSingleFileContent(orientedPath, mockConfig);\n'
+                       '      const parts = result.llmContent as Part[];\n'
+                       '      const metadata = await sharp(\n'
+                       "        Buffer.from(parts[1]!.inlineData!.data!, 'base64'),\n"
+                       '      ).metadata();\n'
+                       '\n'
+                       "      expect(parts[0]?.text).toContain('oriented source: "
+                       "40x60');\n"
+                       '      expect(metadata).toMatchObject({ width: 40, height: 60 '
+                       '});\n'
+                       '    });\n'
+                       '\n'
+                       "    it('flattens transparent overview pixels onto white', "
+                       'async () => {\n'
+                       '      const transparentPath = path.join(tempRootDir, '
+                       "'transparent.webp');\n"
+                       '      await sharp({\n'
+                       '        create: {\n'
+                       '          width: 20,\n'
+                       '          height: 20,\n'
+                       '          channels: 4,\n'
+                       '          background: { r: 0, g: 0, b: 0, alpha: 0 },\n'
+                       '        },\n'
+                       '      })\n'
+                       '        .webp()\n'
+                       '        .toFile(transparentPath);\n'
+                       "      mockMimeGetType.mockReturnValue('image/webp');\n"
+                       '\n'
+                       '      const result = await processSingleFileContent(\n'
+                       '        transparentPath,\n'
+                       '        mockConfig,\n'
+                       '      );\n'
+                       '      const parts = result.llmContent as Part[];\n'
+                       '      const { data, info } = await sharp(\n'
+                       "        Buffer.from(parts[1]!.inlineData!.data!, 'base64'),\n"
+                       '      )\n'
+                       '        .raw()\n'
+                       '        .toBuffer({ resolveWithObject: true });\n'
+                       '      const center =\n'
+                       '        (Math.floor(info.height / 2) * info.width +\n'
+                       '          Math.floor(info.width / 2)) *\n'
+                       '        info.channels;\n'
+                       '\n'
+                       '      expect(Array.from(data.subarray(center, center + '
+                       '3))).toEqual([\n'
+                       '        255, 255, 255,\n'
+                       '      ]);\n'
+                       '    });\n'
+                       '\n'
+                       '    it.each([\n'
+                       "      ['animated GIF', 'animation.gif', 'image/gif'],\n"
+                       "      ['BMP', 'bitmap.bmp', 'image/bmp'],\n"
+                       "    ])('keeps %s image bytes unchanged', async (_label, name, "
+                       'mimeType) => {\n'
+                       '      const filePath = path.join(tempRootDir, name);\n'
+                       "      const bytes = Buffer.from('unchanged image bytes');\n"
+                       '      actualNodeFs.writeFileSync(filePath, bytes);\n'
+                       '      mockMimeGetType.mockReturnValue(mimeType);\n'
+                       '\n'
+                       '      const result = await processSingleFileContent(filePath, '
+                       'mockConfig);\n'
+                       '\n'
+                       '      expect(result.llmContent).toEqual({\n'
+                       '        inlineData: {\n'
+                       "          data: bytes.toString('base64'),\n"
+                       '          mimeType,\n'
+                       '          displayName: name,\n'
+                       '        },\n'
+                       '      });\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should reject image files when model does not support "
+                       "image', async () => {\n",
+             'after': "      expect(result.llmContent).toContain('100 MB source "
+                      "limit');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('[image-contract] refuses a corrupt image instead of "
+                      "forwarding it verbatim', async () => {\n"
+                      "      const filePath = path.join(tempRootDir, 'corrupt.png');\n"
+                      "      actualNodeFs.writeFileSync(filePath, Buffer.from('not a "
+                      "png at all'));\n"
+                      "      mockMimeGetType.mockReturnValue('image/png');\n"
+                      '\n'
+                      '      const result = await processSingleFileContent(filePath, '
+                      'mockConfig);\n'
+                      '\n'
+                      "      expect(typeof result.llmContent).toBe('string');\n"
+                      "      expect(result.llmContent).toContain('Image violates the "
+                      "Qwen3.8');\n"
+                      '      expect(result.error).toBeDefined();\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[image-contract] refuses non-PNG content behind a .png "
+                      "extension', async () => {\n"
+                      '      const filePath = path.join(tempRootDir, '
+                      "'actually-jpeg.png');\n"
+                      '      const jpeg = await sharp({\n'
+                      '        create: { width: 4, height: 4, channels: 3, background: '
+                      "'#204060' },\n"
+                      '      })\n'
+                      '        .jpeg()\n'
+                      '        .toBuffer();\n'
+                      '      actualNodeFs.writeFileSync(filePath, jpeg);\n'
+                      "      mockMimeGetType.mockReturnValue('image/png');\n"
+                      '\n'
+                      '      const result = await processSingleFileContent(filePath, '
+                      'mockConfig);\n'
+                      '\n'
+                      '      // The extension is not the contract; the bytes are.\n'
+                      "      expect(typeof result.llmContent).toBe('string');\n"
+                      "      expect(result.llmContent).toContain('Image violates the "
+                      "Qwen3.8');\n"
+                      '      expect(result.error).toBeDefined();\n'
+                      '    });\n'
+                      '\n'
+                      '    it.each([\n'
+                      "      ['animated GIF', 'animation.gif', 'image/gif'],\n"
+                      "      ['BMP', 'bitmap.bmp', 'image/bmp'],\n"
+                      "    ])('[image-contract] refuses %s rather than passing its "
+                      "bytes through', async (\n"
+                      '      _label,\n'
+                      '      name,\n'
+                      '      mimeType,\n'
+                      '    ) => {\n'
+                      '      const filePath = path.join(tempRootDir, name);\n'
+                      '      actualNodeFs.writeFileSync(filePath, '
+                      "Buffer.from('unchanged image bytes'));\n"
+                      '      mockMimeGetType.mockReturnValue(mimeType);\n'
+                      '\n'
+                      '      const result = await processSingleFileContent(filePath, '
+                      'mockConfig);\n'
+                      '\n'
+                      "      expect(typeof result.llmContent).toBe('string');\n"
+                      "      expect(result.llmContent).toContain('Image violates the "
+                      "Qwen3.8');\n"
+                      '      expect(result.error).toBeDefined();\n'
+                      '    });\n'
+                      '\n'
+                      "    it('should reject image files when model does not support "
+                      "image', async () => {\n",
+             'review_before': "      expect(result.llmContent).toContain('100 MB "
+                              "source limit');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('forwards a corrupt canonical image verbatim "
+                              "instead of failing the read', async () => {\n"
+                              '      const corruptPath = path.join(tempRootDir, '
+                              "'corrupt.png');\n"
+                              "      const bytes = Buffer.from('not a real png');\n"
+                              '      await fsPromises.writeFile(corruptPath, bytes);\n'
+                              "      mockMimeGetType.mockReturnValue('image/png');\n"
+                              '\n'
+                              '      const result = await '
+                              'processSingleFileContent(corruptPath, mockConfig);\n'
+                              '\n'
+                              '      expect(result.error).toBeUndefined();\n'
+                              '      expect(result.llmContent).toEqual({\n'
+                              '        inlineData: {\n'
+                              "          data: bytes.toString('base64'),\n"
+                              "          mimeType: 'image/png',\n"
+                              "          displayName: 'corrupt.png',\n"
+                              '        },\n'
+                              '      });\n'
+                              "      expect(result.returnDisplay).toContain('Read "
+                              "image file: corrupt.png');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('forwards an animated canonical image verbatim "
+                              "instead of failing the read', async () => {\n"
+                              '      const twoFrameGif = Buffer.from(\n'
+                              '        '
+                              "'47494638396101000100800000000000ffffff21f90400010000002c000000000100010000020244010021f90400010000002c00000000010001000002024c01003b',\n"
+                              "        'hex',\n"
+                              '      );\n'
+                              '      const animatedPath = path.join(tempRootDir, '
+                              "'animated.webp');\n"
+                              '      await sharp(twoFrameGif, { animated: true '
+                              '}).webp().toFile(animatedPath);\n'
+                              "      mockMimeGetType.mockReturnValue('image/webp');\n"
+                              '\n'
+                              '      const result = await '
+                              'processSingleFileContent(animatedPath, mockConfig);\n'
+                              '\n'
+                              '      const onDisk = await '
+                              'fsPromises.readFile(animatedPath);\n'
+                              '      expect(result.error).toBeUndefined();\n'
+                              '      expect(result.llmContent).toEqual({\n'
+                              '        inlineData: {\n'
+                              "          data: onDisk.toString('base64'),\n"
+                              "          mimeType: 'image/webp',\n"
+                              "          displayName: 'animated.webp',\n"
+                              '        },\n'
+                              '      });\n'
+                              "      expect(result.returnDisplay).toContain('Read "
+                              "image file: animated.webp');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('forwards non-canonical content behind a "
+                              "canonical extension verbatim', async () => {\n"
+                              '      const gifBytes = Buffer.from(\n'
+                              '        '
+                              "'47494638396101000100800000000000ffffff21f90400010000002c000000000100010000020244010021f90400010000002c00000000010001000002024c01003b',\n"
+                              "        'hex',\n"
+                              '      );\n'
+                              '      const mismatchPath = path.join(tempRootDir, '
+                              "'mismatch.png');\n"
+                              '      await fsPromises.writeFile(mismatchPath, '
+                              'gifBytes);\n'
+                              "      mockMimeGetType.mockReturnValue('image/png');\n"
+                              '\n'
+                              '      const result = await '
+                              'processSingleFileContent(mismatchPath, mockConfig);\n'
+                              '\n'
+                              '      expect(result.error).toBeUndefined();\n'
+                              '      expect(result.llmContent).toEqual({\n'
+                              '        inlineData: {\n'
+                              "          data: gifBytes.toString('base64'),\n"
+                              "          mimeType: 'image/png',\n"
+                              "          displayName: 'mismatch.png',\n"
+                              '        },\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('applies EXIF orientation before describing and "
+                              "rendering an overview', async () => {\n"
+                              '      const orientedPath = path.join(tempRootDir, '
+                              "'oriented.jpg');\n"
+                              '      await sharp({\n'
+                              '        create: {\n'
+                              '          width: 60,\n'
+                              '          height: 40,\n'
+                              '          channels: 3,\n'
+                              "          background: '#306090',\n"
+                              '        },\n'
+                              '      })\n'
+                              '        .jpeg()\n'
+                              '        .withMetadata({ orientation: 6 })\n'
+                              '        .toFile(orientedPath);\n'
+                              "      mockMimeGetType.mockReturnValue('image/jpeg');\n"
+                              '\n'
+                              '      const result = await '
+                              'processSingleFileContent(orientedPath, mockConfig);\n'
+                              '      const parts = result.llmContent as Part[];\n'
+                              '      const metadata = await sharp(\n'
+                              '        Buffer.from(parts[1]!.inlineData!.data!, '
+                              "'base64'),\n"
+                              '      ).metadata();\n'
+                              '\n'
+                              "      expect(parts[0]?.text).toContain('oriented "
+                              "source: 40x60');\n"
+                              '      expect(metadata).toMatchObject({ width: 40, '
+                              'height: 60 });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('flattens transparent overview pixels onto "
+                              "white', async () => {\n"
+                              '      const transparentPath = path.join(tempRootDir, '
+                              "'transparent.webp');\n"
+                              '      await sharp({\n'
+                              '        create: {\n'
+                              '          width: 20,\n'
+                              '          height: 20,\n'
+                              '          channels: 4,\n'
+                              '          background: { r: 0, g: 0, b: 0, alpha: 0 },\n'
+                              '        },\n'
+                              '      })\n'
+                              '        .webp()\n'
+                              '        .toFile(transparentPath);\n'
+                              "      mockMimeGetType.mockReturnValue('image/webp');\n"
+                              '\n'
+                              '      const result = await processSingleFileContent(\n'
+                              '        transparentPath,\n'
+                              '        mockConfig,\n'
+                              '      );\n'
+                              '      const parts = result.llmContent as Part[];\n'
+                              '      const { data, info } = await sharp(\n'
+                              '        Buffer.from(parts[1]!.inlineData!.data!, '
+                              "'base64'),\n"
+                              '      )\n'
+                              '        .raw()\n'
+                              '        .toBuffer({ resolveWithObject: true });\n'
+                              '      const center =\n'
+                              '        (Math.floor(info.height / 2) * info.width +\n'
+                              '          Math.floor(info.width / 2)) *\n'
+                              '        info.channels;\n'
+                              '\n'
+                              '      expect(Array.from(data.subarray(center, center + '
+                              '3))).toEqual([\n'
+                              '        255, 255, 255,\n'
+                              '      ]);\n'
+                              '    });\n'
+                              '\n'
+                              '    it.each([\n'
+                              "      ['animated GIF', 'animation.gif', 'image/gif'],\n"
+                              "      ['BMP', 'bitmap.bmp', 'image/bmp'],\n"
+                              "    ])('keeps %s image bytes unchanged', async (_label, "
+                              'name, mimeType) => {\n'
+                              '      const filePath = path.join(tempRootDir, name);\n'
+                              "      const bytes = Buffer.from('unchanged image "
+                              "bytes');\n"
+                              '      actualNodeFs.writeFileSync(filePath, bytes);\n'
+                              '      mockMimeGetType.mockReturnValue(mimeType);\n'
+                              '\n'
+                              '      const result = await '
+                              'processSingleFileContent(filePath, mockConfig);\n'
+                              '\n'
+                              '      expect(result.llmContent).toEqual({\n'
+                              '        inlineData: {\n'
+                              "          data: bytes.toString('base64'),\n"
+                              '          mimeType,\n'
+                              '          displayName: name,\n'
+                              '        },\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should reject image files when model does not "
+                              "support image', async () => {\n",
+             'review_after': "      expect(result.llmContent).toContain('100 MB source "
+                             "limit');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('[image-contract] refuses a corrupt image instead "
+                             "of forwarding it verbatim', async () => {\n"
+                             '      const filePath = path.join(tempRootDir, '
+                             "'corrupt.png');\n"
+                             '      actualNodeFs.writeFileSync(filePath, '
+                             "Buffer.from('not a png at all'));\n"
+                             "      mockMimeGetType.mockReturnValue('image/png');\n"
+                             '\n'
+                             '      const result = await '
+                             'processSingleFileContent(filePath, mockConfig);\n'
+                             '\n'
+                             "      expect(typeof result.llmContent).toBe('string');\n"
+                             "      expect(result.llmContent).toContain('Image "
+                             "violates the Qwen3.8');\n"
+                             '      expect(result.error).toBeDefined();\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[image-contract] refuses non-PNG content behind "
+                             "a .png extension', async () => {\n"
+                             '      const filePath = path.join(tempRootDir, '
+                             "'actually-jpeg.png');\n"
+                             '      const jpeg = await sharp({\n'
+                             '        create: { width: 4, height: 4, channels: 3, '
+                             "background: '#204060' },\n"
+                             '      })\n'
+                             '        .jpeg()\n'
+                             '        .toBuffer();\n'
+                             '      actualNodeFs.writeFileSync(filePath, jpeg);\n'
+                             "      mockMimeGetType.mockReturnValue('image/png');\n"
+                             '\n'
+                             '      const result = await '
+                             'processSingleFileContent(filePath, mockConfig);\n'
+                             '\n'
+                             '      // The extension is not the contract; the bytes '
+                             'are.\n'
+                             "      expect(typeof result.llmContent).toBe('string');\n"
+                             "      expect(result.llmContent).toContain('Image "
+                             "violates the Qwen3.8');\n"
+                             '      expect(result.error).toBeDefined();\n'
+                             '    });\n'
+                             '\n'
+                             '    it.each([\n'
+                             "      ['animated GIF', 'animation.gif', 'image/gif'],\n"
+                             "      ['BMP', 'bitmap.bmp', 'image/bmp'],\n"
+                             "    ])('[image-contract] refuses %s rather than passing "
+                             "its bytes through', async (\n"
+                             '      _label,\n'
+                             '      name,\n'
+                             '      mimeType,\n'
+                             '    ) => {\n'
+                             '      const filePath = path.join(tempRootDir, name);\n'
+                             '      actualNodeFs.writeFileSync(filePath, '
+                             "Buffer.from('unchanged image bytes'));\n"
+                             '      mockMimeGetType.mockReturnValue(mimeType);\n'
+                             '\n'
+                             '      const result = await '
+                             'processSingleFileContent(filePath, mockConfig);\n'
+                             '\n'
+                             "      expect(typeof result.llmContent).toBe('string');\n"
+                             "      expect(result.llmContent).toContain('Image "
+                             "violates the Qwen3.8');\n"
+                             '      expect(result.error).toBeDefined();\n'
+                             '    });\n'
+                             '\n'
+                             "    it('should reject image files when model does not "
+                             "support image', async () => {\n"},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-7',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': "      expect(result.returnDisplay).toContain('Skipped image "
+                       "file');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('keeps image inline when preserveUnsupportedImage is "
+                       "true', async () => {\n"
+                       '      await sharp({\n'
+                       '        create: {\n'
+                       '          width: 8,\n'
+                       '          height: 8,\n'
+                       '          channels: 3,\n'
+                       "          background: '#306090',\n"
+                       '        },\n'
+                       '      })\n'
+                       '        .png()\n'
+                       '        .toFile(testImageFilePath);\n',
+             'after': "      expect(result.returnDisplay).toContain('Skipped image "
+                      "file');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('[image-contract] keeps an accepted PNG inline when "
+                      "preserveUnsupportedImage is true', async () => {\n"
+                      '      await sharp({\n'
+                      '        create: { width: 8, height: 8, channels: 3, background: '
+                      "'#306090' },\n"
+                      '      })\n'
+                      '        .png()\n'
+                      '        .toFile(testImageFilePath);\n',
+             'review_before': "      expect(result.returnDisplay).toContain('Skipped "
+                              "image file');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('keeps image inline when "
+                              "preserveUnsupportedImage is true', async () => {\n"
+                              '      await sharp({\n'
+                              '        create: {\n'
+                              '          width: 8,\n'
+                              '          height: 8,\n'
+                              '          channels: 3,\n'
+                              "          background: '#306090',\n"
+                              '        },\n'
+                              '      })\n'
+                              '        .png()\n'
+                              '        .toFile(testImageFilePath);\n',
+             'review_after': "      expect(result.returnDisplay).toContain('Skipped "
+                             "image file');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('[image-contract] keeps an accepted PNG inline "
+                             "when preserveUnsupportedImage is true', async () => {\n"
+                             '      await sharp({\n'
+                             '        create: { width: 8, height: 8, channels: 3, '
+                             "background: '#306090' },\n"
+                             '      })\n'
+                             '        .png()\n'
+                             '        .toFile(testImageFilePath);\n'},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-8',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
+             'before': '        mockConfigNoImage,\n'
+                       '        { preserveUnsupportedImage: true },\n'
+                       '      );\n'
+                       "      expect(typeof result.llmContent).toBe('object');\n"
+                       '      const parts = result.llmContent as Part[];\n'
+                       "      expect(parts[0]?.text).toContain('Image overview');\n"
+                       '      expect(parts[1]?.inlineData).toMatchObject({\n'
+                       "        mimeType: 'image/jpeg',\n"
+                       '        data: expect.any(String),\n'
+                       "        displayName: 'image.png',\n"
+                       '      });\n'
+                       "      expect(result.returnDisplay).toContain('Read image "
+                       "file');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('still strips image for agent reads without the "
+                       "preserve flag', async () => {\n",
+             'after': '        mockConfigNoImage,\n'
+                      '        { preserveUnsupportedImage: true },\n'
+                      '      );\n'
+                      '      const parts = result.llmContent as Part[];\n'
+                      '      // Preserved for a bridge-capable caller, but still '
+                      'through the one\n'
+                      '      // validator: an image that reaches a caller is an '
+                      'accepted PNG.\n'
+                      "      expect(parts[0]?.text).toContain('Full-quality original "
+                      "PNG: 8x8');\n"
+                      '      expect(parts[1]?.inlineData).toMatchObject({\n'
+                      "        mimeType: 'image/png',\n"
+                      '        data: expect.any(String),\n'
+                      "        displayName: 'image.png',\n"
+                      '      });\n'
+                      "      expect(result.returnDisplay).toContain('Read full-quality "
+                      "PNG');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('still strips image for agent reads without the preserve "
+                      "flag', async () => {\n",
+             'review_before': '        mockConfigNoImage,\n'
+                              '        { preserveUnsupportedImage: true },\n'
+                              '      );\n'
+                              "      expect(typeof result.llmContent).toBe('object');\n"
+                              '      const parts = result.llmContent as Part[];\n'
+                              "      expect(parts[0]?.text).toContain('Image "
+                              "overview');\n"
+                              '      expect(parts[1]?.inlineData).toMatchObject({\n'
+                              "        mimeType: 'image/jpeg',\n"
+                              '        data: expect.any(String),\n'
+                              "        displayName: 'image.png',\n"
+                              '      });\n'
+                              "      expect(result.returnDisplay).toContain('Read "
+                              "image file');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('still strips image for agent reads without the "
+                              "preserve flag', async () => {\n",
+             'review_after': '        mockConfigNoImage,\n'
+                             '        { preserveUnsupportedImage: true },\n'
+                             '      );\n'
+                             '      const parts = result.llmContent as Part[];\n'
+                             '      // Preserved for a bridge-capable caller, but '
+                             'still through the one\n'
+                             '      // validator: an image that reaches a caller is an '
+                             'accepted PNG.\n'
+                             "      expect(parts[0]?.text).toContain('Full-quality "
+                             "original PNG: 8x8');\n"
+                             '      expect(parts[1]?.inlineData).toMatchObject({\n'
+                             "        mimeType: 'image/png',\n"
+                             '        data: expect.any(String),\n'
+                             "        displayName: 'image.png',\n"
+                             '      });\n'
+                             "      expect(result.returnDisplay).toContain('Read "
+                             "full-quality PNG');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('still strips image for agent reads without the "
+                             "preserve flag', async () => {\n"},
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-9',
+             'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before': '      );\n'
                        '\n'
                        '      '
@@ -46145,7 +47926,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      expect(mockExecFile).toHaveBeenCalledTimes(2);\n'
                              '      '
                              "expect(mockExecFile.mock.calls[0]![0]).toBe('pdfinfo');\n"},
-            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-5',
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-10',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before': '\n'
                        '      '
@@ -46191,7 +47972,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "read pdf');\n"
                              '      expect(result.stats).toBeDefined();\n'
                              '    });\n'},
-            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-6',
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-11',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before': '      );\n'
                        '\n'
@@ -46230,7 +48011,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "large PDF');\n"
                              '      expect(result.stats).toBeDefined();\n'
                              '    });\n'},
-            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-7',
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-12',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before': '      );\n'
                        '\n'
@@ -46713,7 +48494,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              "    it('rejects dense no-pages PDF extraction after "
                              "exact page count allows full reads', async () => {\n"},
-            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-8',
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-13',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before': "      expect(result.llmContent).toContain('too large to return "
                        "safely');\n"
@@ -46817,7 +48598,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "Buffer.from('%PDF-1.7'));\n"
                              '      '
                              "mockMimeGetType.mockReturnValue('application/pdf');\n"},
-            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-9',
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-14',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before': '\n'
                        '        '
@@ -47144,7 +48925,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        expect(result.stats).toBeDefined();\n'
                              '        expect(mockExecFile).not.toHaveBeenCalled();\n'
                              '      } finally {\n'},
-            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-10',
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-15',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
              'before': "      expect(result.returnDisplay).toContain('Read pdf "
                        "file');\n"
@@ -49029,9 +50810,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const svgContent = `\n'
                              '    <svg xmlns="http://www.w3.org/2000/svg" width="100" '
                              'height="100">\n'},
-            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-11',
+            {'name': 'packages/core/src/utils/fileUtils.test.ts:landmark-16',
              'path': 'packages/core/src/utils/fileUtils.test.ts',
-             'before': "      expect(result.llmContent).toContain('File size exceeds "
+             'before': '      expect(result.isTruncated).toBe(false);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should still return an error if an inline media file "
+                       "exceeds 10MB', async () => {\n"
+                       '      const largeGifPath = path.join(tempRootDir, '
+                       "'large.gif');\n"
+                       "      mockMimeGetType.mockReturnValue('image/gif');\n"
+                       '      actualNodeFs.writeFileSync(largeGifPath, Buffer.alloc(11 '
+                       '* 1024 * 1024));\n'
+                       '\n'
+                       '      const result = await '
+                       'processSingleFileContent(largeGifPath, mockConfig);\n'
+                       '\n'
+                       "      expect(result.error).toContain('File size exceeds the "
+                       "10MB limit');\n"
+                       '      expect(result.returnDisplay).toContain(\n'
+                       "        'File size exceeds the 10MB limit',\n"
+                       '      );\n'
+                       "      expect(result.llmContent).toContain('File size exceeds "
                        "the 10MB limit');\n"
                        '    });\n'
                        '\n'
@@ -49077,20 +50877,53 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '    });\n'
                        '\n'
                        "    it('should reject non-regular files (FIFOs, devices, "
-                       "sockets)', async () => {\n"
-                       '      actualNodeFs.writeFileSync(testTextFilePath, '
-                       "'placeholder');\n"
-                       '\n',
-             'after': "      expect(result.llmContent).toContain('File size exceeds "
-                      "the 10MB limit');\n"
+                       "sockets)', async () => {\n",
+             'after': '      expect(result.isTruncated).toBe(false);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[image-contract] refuses an oversized non-PNG image by "
+                      "the image contract, not the generic size gate', async () => {\n"
+                      '      const largeGifPath = path.join(tempRootDir, '
+                      "'large.gif');\n"
+                      "      mockMimeGetType.mockReturnValue('image/gif');\n"
+                      '      actualNodeFs.writeFileSync(largeGifPath, Buffer.alloc(11 '
+                      '* 1024 * 1024));\n'
+                      '\n'
+                      '      const result = await '
+                      'processSingleFileContent(largeGifPath, mockConfig);\n'
+                      '\n'
+                      '      // Raster images no longer reach the 10MB inline-data '
+                      'gate: every one of\n'
+                      '      // them enters the PNG validator first, which refuses '
+                      'this on format.\n'
+                      "      expect(typeof result.llmContent).toBe('string');\n"
+                      "      expect(result.llmContent).toContain('Image violates the "
+                      "Qwen3.8');\n"
+                      '      expect(result.error).toBeDefined();\n'
                       '    });\n'
                       '\n'
                       "    it('should reject non-regular files (FIFOs, devices, "
-                      "sockets)', async () => {\n"
-                      '      actualNodeFs.writeFileSync(testTextFilePath, '
-                      "'placeholder');\n"
-                      '\n',
-             'review_before': "      expect(result.llmContent).toContain('File size "
+                      "sockets)', async () => {\n",
+             'review_before': '      expect(result.isTruncated).toBe(false);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should still return an error if an inline media "
+                              "file exceeds 10MB', async () => {\n"
+                              '      const largeGifPath = path.join(tempRootDir, '
+                              "'large.gif');\n"
+                              "      mockMimeGetType.mockReturnValue('image/gif');\n"
+                              '      actualNodeFs.writeFileSync(largeGifPath, '
+                              'Buffer.alloc(11 * 1024 * 1024));\n'
+                              '\n'
+                              '      const result = await '
+                              'processSingleFileContent(largeGifPath, mockConfig);\n'
+                              '\n'
+                              "      expect(result.error).toContain('File size exceeds "
+                              "the 10MB limit');\n"
+                              '      expect(result.returnDisplay).toContain(\n'
+                              "        'File size exceeds the 10MB limit',\n"
+                              '      );\n'
+                              "      expect(result.llmContent).toContain('File size "
                               "exceeds the 10MB limit');\n"
                               '    });\n'
                               '\n'
@@ -49139,19 +50972,34 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '    });\n'
                               '\n'
                               "    it('should reject non-regular files (FIFOs, "
-                              "devices, sockets)', async () => {\n"
-                              '      actualNodeFs.writeFileSync(testTextFilePath, '
-                              "'placeholder');\n"
-                              '\n',
-             'review_after': "      expect(result.llmContent).toContain('File size "
-                             "exceeds the 10MB limit');\n"
+                              "devices, sockets)', async () => {\n",
+             'review_after': '      expect(result.isTruncated).toBe(false);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[image-contract] refuses an oversized non-PNG "
+                             "image by the image contract, not the generic size gate', "
+                             'async () => {\n'
+                             '      const largeGifPath = path.join(tempRootDir, '
+                             "'large.gif');\n"
+                             "      mockMimeGetType.mockReturnValue('image/gif');\n"
+                             '      actualNodeFs.writeFileSync(largeGifPath, '
+                             'Buffer.alloc(11 * 1024 * 1024));\n'
+                             '\n'
+                             '      const result = await '
+                             'processSingleFileContent(largeGifPath, mockConfig);\n'
+                             '\n'
+                             '      // Raster images no longer reach the 10MB '
+                             'inline-data gate: every one of\n'
+                             '      // them enters the PNG validator first, which '
+                             'refuses this on format.\n'
+                             "      expect(typeof result.llmContent).toBe('string');\n"
+                             "      expect(result.llmContent).toContain('Image "
+                             "violates the Qwen3.8');\n"
+                             '      expect(result.error).toBeDefined();\n'
                              '    });\n'
                              '\n'
                              "    it('should reject non-regular files (FIFOs, devices, "
-                             "sockets)', async () => {\n"
-                             '      actualNodeFs.writeFileSync(testTextFilePath, '
-                             "'placeholder');\n"
-                             '\n'},
+                             "sockets)', async () => {\n"},
             {'name': 'packages/core/src/utils/fileUtils.ts:landmark-1',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': "import fsPromises from 'node:fs/promises';\n"
@@ -51069,8 +52917,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          }\n'},
             {'name': 'packages/core/src/utils/fileUtils.ts:landmark-14',
              'path': 'packages/core/src/utils/fileUtils.ts',
-             'before': '                displayName,\n'
-                       '              },\n'
+             'before': '              },\n'
                        '            },\n'
                        '            returnDisplay: `Read pdf file: '
                        '${relativePathForDisplay}`,\n'
@@ -51397,10 +53244,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '            llmContent: guidance,\n'
                        '            returnDisplay: `PDF text too large: '
                        '${relativePathForDisplay}`,\n',
-             'after': '                displayName,\n'
-                      '              },\n'
+             'after': '              },\n'
                       '            },\n'
-                      '            returnDisplay: `Read pdf: '
+                      '            returnDisplay: `Read pdf file: '
                       '${relativePathForDisplay}`,\n'
                       '            stats,\n'
                       '          };\n'
@@ -51444,8 +53290,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            llmContent: guidance,\n'
                       '            returnDisplay: `PDF text too large: '
                       '${relativePathForDisplay}`,\n',
-             'review_before': '                displayName,\n'
-                              '              },\n'
+             'review_before': '              },\n'
                               '            },\n'
                               '            returnDisplay: `Read pdf file: '
                               '${relativePathForDisplay}`,\n'
@@ -51793,10 +53638,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '            llmContent: guidance,\n'
                               '            returnDisplay: `PDF text too large: '
                               '${relativePathForDisplay}`,\n',
-             'review_after': '                displayName,\n'
-                             '              },\n'
+             'review_after': '              },\n'
                              '            },\n'
-                             '            returnDisplay: `Read pdf: '
+                             '            returnDisplay: `Read pdf file: '
                              '${relativePathForDisplay}`,\n'
                              '            stats,\n'
                              '          };\n'
@@ -56089,6 +57933,113 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  });\n'
                              '});\n'},
             {'name': 'packages/core/src/utils/readManyFiles.test.ts:landmark-1',
+             'path': 'packages/core/src/utils/readManyFiles.test.ts',
+             'before': '      expect(result.files[0]!.filePath).toBe(absolutePath);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('renders canonical images through the overview pipeline "
+                       "even when the bridge handoff flag is set', async () => {\n"
+                       "      const relativePath = 'screenshot.png';\n"
+                       '      const absolutePath = path.join(tempRootDir, '
+                       'relativePath);\n'
+                       '      await sharp({\n',
+             'after': '      expect(result.files[0]!.filePath).toBe(absolutePath);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[image-contract] sends the original PNG bytes even when "
+                      "the bridge handoff flag is set', async () => {\n"
+                      "      const relativePath = 'screenshot.png';\n"
+                      '      const absolutePath = path.join(tempRootDir, '
+                      'relativePath);\n'
+                      '      await sharp({\n',
+             'review_before': '      '
+                              'expect(result.files[0]!.filePath).toBe(absolutePath);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('renders canonical images through the overview "
+                              "pipeline even when the bridge handoff flag is set', "
+                              'async () => {\n'
+                              "      const relativePath = 'screenshot.png';\n"
+                              '      const absolutePath = path.join(tempRootDir, '
+                              'relativePath);\n'
+                              '      await sharp({\n',
+             'review_after': '      '
+                             'expect(result.files[0]!.filePath).toBe(absolutePath);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[image-contract] sends the original PNG bytes "
+                             "even when the bridge handoff flag is set', async () => "
+                             '{\n'
+                             "      const relativePath = 'screenshot.png';\n"
+                             '      const absolutePath = path.join(tempRootDir, '
+                             'relativePath);\n'
+                             '      await sharp({\n'},
+            {'name': 'packages/core/src/utils/readManyFiles.test.ts:landmark-2',
+             'path': 'packages/core/src/utils/readManyFiles.test.ts',
+             'before': '        (imagePart as { inlineData: { mimeType: string; data: '
+                       'string } })\n'
+                       '          .inlineData,\n'
+                       '      ).toMatchObject({\n'
+                       "        mimeType: 'image/jpeg',\n"
+                       '        data: expect.any(String),\n'
+                       "        displayName: 'screenshot.png',\n"
+                       '      });\n',
+             'after': '        (imagePart as { inlineData: { mimeType: string; data: '
+                      'string } })\n'
+                      '          .inlineData,\n'
+                      '      ).toMatchObject({\n'
+                      "        mimeType: 'image/png',\n"
+                      '        data: expect.any(String),\n'
+                      "        displayName: 'screenshot.png',\n"
+                      '      });\n',
+             'review_before': '        (imagePart as { inlineData: { mimeType: string; '
+                              'data: string } })\n'
+                              '          .inlineData,\n'
+                              '      ).toMatchObject({\n'
+                              "        mimeType: 'image/jpeg',\n"
+                              '        data: expect.any(String),\n'
+                              "        displayName: 'screenshot.png',\n"
+                              '      });\n',
+             'review_after': '        (imagePart as { inlineData: { mimeType: string; '
+                             'data: string } })\n'
+                             '          .inlineData,\n'
+                             '      ).toMatchObject({\n'
+                             "        mimeType: 'image/png',\n"
+                             '        data: expect.any(String),\n'
+                             "        displayName: 'screenshot.png',\n"
+                             '      });\n'},
+            {'name': 'packages/core/src/utils/readManyFiles.test.ts:landmark-3',
+             'path': 'packages/core/src/utils/readManyFiles.test.ts',
+             'before': '        `\\nContent from ${absolutePath}:\\n`,\n'
+                       '      );\n'
+                       '      expect(parts[imageIndex - 1]?.text).toContain(\n'
+                       "        'Image overview: 20x10; oriented source: 20x10',\n"
+                       '      );\n'
+                       '      expect(result.files).toHaveLength(1);\n'
+                       '      expect(result.files[0]!.content).toEqual([\n',
+             'after': '        `\\nContent from ${absolutePath}:\\n`,\n'
+                      '      );\n'
+                      '      expect(parts[imageIndex - 1]?.text).toContain(\n'
+                      "        'Full-quality original PNG: 20x10',\n"
+                      '      );\n'
+                      '      expect(result.files).toHaveLength(1);\n'
+                      '      expect(result.files[0]!.content).toEqual([\n',
+             'review_before': '        `\\nContent from ${absolutePath}:\\n`,\n'
+                              '      );\n'
+                              '      expect(parts[imageIndex - 1]?.text).toContain(\n'
+                              "        'Image overview: 20x10; oriented source: "
+                              "20x10',\n"
+                              '      );\n'
+                              '      expect(result.files).toHaveLength(1);\n'
+                              '      expect(result.files[0]!.content).toEqual([\n',
+             'review_after': '        `\\nContent from ${absolutePath}:\\n`,\n'
+                             '      );\n'
+                             '      expect(parts[imageIndex - 1]?.text).toContain(\n'
+                             "        'Full-quality original PNG: 20x10',\n"
+                             '      );\n'
+                             '      expect(result.files).toHaveLength(1);\n'
+                             '      expect(result.files[0]!.content).toEqual([\n'},
+            {'name': 'packages/core/src/utils/readManyFiles.test.ts:landmark-4',
              'path': 'packages/core/src/utils/readManyFiles.test.ts',
              'before': '      expect(result.files).toHaveLength(1);\n'
                        '      expect(result.files[0]!.error).toBeUndefined();\n'
@@ -65569,6 +67520,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '4f8e5df8c5eadcc7630bdc2d8fee011fca11cbbfe3a02b5dd9d0b8aebfd4e882',
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863',
  'packages/cli/src/nonInteractive/types.ts': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e',
+ 'packages/cli/src/nonInteractiveCli.test.ts': 'aa23d0f6f919d85a047a439433e98746f58b02b7b031a3843e54bb607143d34a',
  'packages/cli/src/nonInteractiveCli.ts': 'ecdd192c690882e67189edc322d8d02b0af1cf25f13d5b218f567e071f25bec9',
  'packages/cli/src/ui/hooks/useGeminiStream.ts': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e',
  'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'f66258a3b847539dec79c84ec2c38a82646a2f1d89cf9d7b63e4f9feb26540fd',
@@ -65588,9 +67540,10 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/baseLlmClient.ts': '408fcec52d262c12fc8c2327eb9826aeb7005f7bb5566817276ea918ff140459',
  'packages/core/src/core/contentGenerator.ts': '476242ed064c4980cec6789b84bb5496cb93a28d7763b659fb799f84fcd9bebc',
  'packages/core/src/core/coreToolScheduler.test.ts': '12eba16dcc425b350902b0609243eaafa0462751f739508d6f939a4e7a65e161',
- 'packages/core/src/core/coreToolScheduler.ts': '95b62def3cc49a610f2255c0cc9b5fb59d59237f1d152095845b3b72bd8f2dce',
+ 'packages/core/src/core/coreToolScheduler.ts': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e',
  'packages/core/src/core/geminiChat.test.ts': '44f96af12396270fb3cba0af6db7e23a85463c7e28a7ce8e3935c31bc97c311f',
  'packages/core/src/core/geminiChat.ts': 'ad16bac94914e60ad012884f45a06ecf9147f9c7d307f1a2a9783f0bbb00d407',
+ 'packages/core/src/core/genai-compat.test.ts': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50',
  'packages/core/src/core/genai-compat.ts': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81',
  'packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts': '39cb515dfc3afb39edfe8dbabd3956351dd4b7b71e82f2fd77e4f6dc2b8ce695',
  'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'bb73338e3cb074e243c5baf4c09159a638134210e0eabf816a90df3656e8da28',
@@ -65600,6 +67553,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888',
  'packages/core/src/core/openaiContentGenerator/pipeline.ts': 'eb39024c965025c6c9d35178d0ae8517bcbe954182e539ae640a8b97cd656f20',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
+ 'packages/core/src/core/prompts.test.ts': 'd8ac425fff4a8543f48099edac3b13d540c0139325a44b84d898045bae75ad78',
  'packages/core/src/core/prompts.ts': 'e54774a12a820118d079ea0c98dff2c068b06f2b2e13cf87428a7c075984cf5c',
  'packages/core/src/core/qwen38-deployment-prompt.test.ts': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851',
  'packages/core/src/core/qwen38-deployment-prompt.ts': '0397a0cf6e4c71f9df3d0f04a2058c9703ae6b8507cd5cbcd9682603a993b24a',
@@ -65621,8 +67575,10 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/services/visionBridge/vision-bridge-service.ts': '42cb9a783943cd0246c3f674cf16807dcd8d396ed1a00c52b6c1aea7ee830972',
  'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
+ 'packages/core/src/test-utils/mock-tool.ts': '2d986e625264006e124e2762e70d3202cda49804f9645325dbf9c5481a3ef24d',
+ 'packages/core/src/tools/__snapshots__/shell.test.ts.snap': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41',
  'packages/core/src/tools/agent/agent.test.ts': '6dcceb44938d59bd79f4d3b78010413ca0238a3339e7b80729d60611f898a4df',
- 'packages/core/src/tools/agent/agent.ts': '99b52b6fc327a2ac3dcef2f83aeb4148a8273b02a4859c4dd7f4a1e0d057fbbb',
+ 'packages/core/src/tools/agent/agent.ts': 'f89157f1ed09857b767af70c745b23cf6c896c0b74fa96f701ad0cedbde0b864',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',
@@ -65630,7 +67586,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/tools/edit.ts': '1d18e71c745cf7deaeb9734a10c54e4846220c7c96b77fa72b72b949b961089a',
  'packages/core/src/tools/glob.ts': '02d64b99f75da85f521b3b20a9c445f9cab027494005dd7ee30e640df5079748',
  'packages/core/src/tools/ls.ts': 'af17b0e5adcf846dd2646ec17cef72986ff162059552e75753b57ff614ca4b93',
- 'packages/core/src/tools/read-file.test.ts': '407f30d35a7ed426efdd570fa31f0cb38780d06bc4b83ce918aff016408d7809',
+ 'packages/core/src/tools/read-file.test.ts': '94b6ade631525a7fc2620f8901bae6e2f8a9ae17139fd1ae243e062266272ed6',
  'packages/core/src/tools/read-file.ts': '03502a828247c4ab081d5fdf8e2d9149ba1496bce6031f2df7fda961cd007a0f',
  'packages/core/src/tools/ripGrep.ts': '0d4d8e23d8f6a7bc0d5886dc149afc13d366ef8ab78f1404317e23b498fc900e',
  'packages/core/src/tools/shell.test.ts': '27302193eb8bc6205446be402edcae84082b6ca4bce91d446b01b0aeb6ee101d',
@@ -65640,14 +67596,14 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/tools/web-fetch.test.ts': 'e97c6eb5800e66cd65538cf493e8ec7fb923a083fe2e7ed77c633a1c4bf46f2e',
  'packages/core/src/tools/web-fetch.ts': '73323a41757e2e5b217b2f6f3e7eb1401be1980ec066e05ae41231036eddf331',
  'packages/core/src/tools/write-file.ts': '489c781e917f80e1f457a350e96f3ec89a730b9aa8cd963cd8e378238b231273',
- 'packages/core/src/utils/fileUtils.test.ts': 'b190005c7ff21844b8692056cc576779f57a3b7d6a871c142d673aab421b2c29',
- 'packages/core/src/utils/fileUtils.ts': '2ac37dbbb36b3442c7ca7fc6958c808ee13d83b2fd200533cbf45cef5ac24330',
+ 'packages/core/src/utils/fileUtils.test.ts': '8ef4b413aa86c43925c59962377e52c1659450ce65f041356385cba3e48ac719',
+ 'packages/core/src/utils/fileUtils.ts': '3b767cc3c7169e1a5ba464552441626c594f4440af8eabd9f827d0c5ba4cb7a5',
  'packages/core/src/utils/image-view.test.ts': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d',
  'packages/core/src/utils/image-view.ts': '82383711baeb81895042e6fd865f2f509ca29756ff22b02378dc89c0b2c5e9ea',
  'packages/core/src/utils/pdf.test.ts': '067d3a0bd38b30448a8844ad3b9b4602e562cf6a4fa02f7ff7dbb83b8f88477e',
  'packages/core/src/utils/pdf.ts': '5ed63159e8c22c8f87548aaad6cea010a3f787dbcb664f5ffd1b994c1b160937',
  'packages/core/src/utils/qwen38-image-contract.test.ts': '57972bb126651812bbd508ff26d87f3c7d5aab94603900b773e88a3e90a234c9',
- 'packages/core/src/utils/readManyFiles.test.ts': 'e6d93fee96847e8a06e0b71995c7da0a1c5a06541d1b37e13d0f09e06aac9ca0',
+ 'packages/core/src/utils/readManyFiles.test.ts': 'f10ac01e0dafc3ce60bfcb98245e6c3bb3687aff83aabf84909091190741b17f',
  'packages/core/src/utils/schemaValidator.test.ts': '8c2df3db3f3665d9cf172db625d45abb0825c561e01c85bbb895f02e04bf2980',
  'packages/core/src/utils/schemaValidator.ts': '8ff14f84d35833e5256ba2aef2347d08e51948a0b1ff26472e26f5e1839dd0e5',
  'packages/core/src/utils/shellContextEnv.test.ts': 'bd658f00ce587c0e42043ca76269e353bd4da76f68c3e00bc82d2527366c31cf',

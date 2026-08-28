@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `76ee86b5440895c3923a5946ed7c508dc8138f2d76307ac3e6d8c3e8ef7ccbf8`
+- Review-diff SHA-256: `f2623f4223d5b2a6fd123427e41f9355a7445e27eba4b2b239df24f15ca95b9f`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `69f4435e7de5a6a07d9c1cb09b3eaa9dda5ed3364a7ef70103a398b830e99ac3`
+- Transformer-manifest SHA-256: `2a47af04650c074996eece0b30aa09b540f1b49db8db6d300d8ccc2a1057025c`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -185,9 +185,12 @@ provide as one fail-closed mode:
   next author. Neither half can simply win: `llmContent` usually carries the
   remedy but often omits the path, while `error.message` is sometimes the only
   operational fact there is, such as a shell timeout summary against unrelated
-  output. Both are now merged at the one seam every downstream reader passes
-  through, so a tool added later cannot reintroduce the loss whichever half it
-  writes, and the per-tool workarounds are retired.
+  output. Both are now merged, once, into the value that reaches the model and
+  only that value: `error.message` keeps its own readers -- the scrollback,
+  the PostToolUseFailure hook and the sanitized telemetry span -- because
+  folding the model's copy into it leaked tool output into all three. A tool
+  added later cannot reintroduce the loss whichever half it writes, and the
+  per-tool workarounds are retired.
 - PDF reading with no image fallback at all. Three paths rendered pages to
   JPEGs: for a vision-capable model on text overflow, again on extraction
   failure, and again to feed a text-only model's vision bridge. A rendered
