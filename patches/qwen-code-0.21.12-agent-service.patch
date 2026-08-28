@@ -17265,9 +17265,18 @@ index 4987635..8c23a73 100644
        actualNodeFs.writeFileSync(testTextFilePath, 'placeholder');
  
 diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/fileUtils.ts
-index 211be6c..9810589 100644
+index 211be6c..ccb2aa0 100644
 --- a/packages/core/src/utils/fileUtils.ts
 +++ b/packages/core/src/utils/fileUtils.ts
+@@ -8,7 +8,7 @@ import fs from 'node:fs';
+ import fsPromises from 'node:fs/promises';
+ import type { FileHandle } from 'node:fs/promises';
+ import path from 'node:path';
+-import type { Part, PartListUnion } from '@google/genai';
++import type { PartListUnion } from '@google/genai';
+ import mime from 'mime/lite';
+ import { isUtf8CompatibleEncoding } from './encoding.js';
+ import { loadIconvLite } from './load-iconv-lite.js';
 @@ -19,23 +19,18 @@ import { createDebugLogger } from './debugLogger.js';
  import { getErrorMessage, isAbortError, isNodeError } from './errors.js';
  import type { InputModalities } from '../core/contentGenerator.js';
@@ -17318,6 +17327,19 @@ index 211be6c..9810589 100644
  
  // --- Unicode BOM detection & decoding helpers --------------------------------
  
+@@ -893,9 +881,9 @@ export async function detectFileType(filePath: string): Promise<FileType> {
+ }
+ 
+ export interface ProcessedFileReadResult {
+-  // string for text; a single Part for image / native-PDF / unreadable binary;
+-  // an array of image Parts when a PDF is rendered page-by-page (vision
+-  // fallback / bridge transcription).
++  // string for text and for extracted PDF text; a single Part for an image or
++  // a natively supported PDF; a string note for unreadable binary. A PDF is
++  // never returned as page images -- there is no renderer.
+   llmContent: PartListUnion;
+   returnDisplay: string;
+   error?: string; // Optional error message for the LLM if file processing failed
 @@ -904,6 +892,17 @@ export interface ProcessedFileReadResult {
    originalLineCountExact?: boolean; // False when a large range read stopped before EOF
    isTruncated?: boolean; // Indicates if displayed content was truncated

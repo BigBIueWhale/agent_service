@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'e72fc428d6dc4874ca407bda616ab4cbb61c97028e6404ad1f6a1a66a1c1ecfd',
+  'review_sha256': '76ee86b5440895c3923a5946ed7c508dc8138f2d76307ac3e6d8c3e8ef7ccbf8',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -253,7 +253,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'b190005c7ff21844b8692056cc576779f57a3b7d6a871c142d673aab421b2c29'},
             {'path': 'packages/core/src/utils/fileUtils.ts',
              'before_sha256': '2199d050fa06f801f8da8947b3768dd517c9b14abc9d0d015244475b2139e016',
-             'after_sha256': '48380af761d71dcb3a2bc0f5b7554f91e3ac32ed6a4b72c883b0dd27fadf324f'},
+             'after_sha256': '2ac37dbbb36b3442c7ca7fc6958c808ee13d83b2fd200533cbf45cef5ac24330'},
             {'path': 'packages/core/src/utils/image-view.test.ts',
              'before_sha256': 'b2bdc3799926ccc1c3ce56ca62b6b2154031a97e59be151c10b0781f2c6b5dd9',
              'after_sha256': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d'},
@@ -49154,6 +49154,39 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'},
             {'name': 'packages/core/src/utils/fileUtils.ts:landmark-1',
              'path': 'packages/core/src/utils/fileUtils.ts',
+             'before': "import fsPromises from 'node:fs/promises';\n"
+                       "import type { FileHandle } from 'node:fs/promises';\n"
+                       "import path from 'node:path';\n"
+                       "import type { Part, PartListUnion } from '@google/genai';\n"
+                       "import mime from 'mime/lite';\n"
+                       "import { isUtf8CompatibleEncoding } from './encoding.js';\n"
+                       "import { loadIconvLite } from './load-iconv-lite.js';\n",
+             'after': "import fsPromises from 'node:fs/promises';\n"
+                      "import type { FileHandle } from 'node:fs/promises';\n"
+                      "import path from 'node:path';\n"
+                      "import type { PartListUnion } from '@google/genai';\n"
+                      "import mime from 'mime/lite';\n"
+                      "import { isUtf8CompatibleEncoding } from './encoding.js';\n"
+                      "import { loadIconvLite } from './load-iconv-lite.js';\n",
+             'review_before': "import fsPromises from 'node:fs/promises';\n"
+                              "import type { FileHandle } from 'node:fs/promises';\n"
+                              "import path from 'node:path';\n"
+                              'import type { Part, PartListUnion } from '
+                              "'@google/genai';\n"
+                              "import mime from 'mime/lite';\n"
+                              'import { isUtf8CompatibleEncoding } from '
+                              "'./encoding.js';\n"
+                              "import { loadIconvLite } from './load-iconv-lite.js';\n",
+             'review_after': "import fsPromises from 'node:fs/promises';\n"
+                             "import type { FileHandle } from 'node:fs/promises';\n"
+                             "import path from 'node:path';\n"
+                             "import type { PartListUnion } from '@google/genai';\n"
+                             "import mime from 'mime/lite';\n"
+                             'import { isUtf8CompatibleEncoding } from '
+                             "'./encoding.js';\n"
+                             "import { loadIconvLite } from './load-iconv-lite.js';\n"},
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-2',
+             'path': 'packages/core/src/utils/fileUtils.ts',
              'before': 'import { getErrorMessage, isAbortError, isNodeError } from '
                        "'./errors.js';\n"
                        'import type { InputModalities } from '
@@ -49254,7 +49287,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'./notebook.js';\n"
                              'import {\n'
                              '  readTextRange,\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-2',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-3',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': "} from './image-view.js';\n"
                        '\n'
@@ -49352,7 +49385,58 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '// --- Unicode BOM detection & decoding helpers '
                              '--------------------------------\n'
                              '\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-3',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-4',
+             'path': 'packages/core/src/utils/fileUtils.ts',
+             'before': '}\n'
+                       '\n'
+                       'export interface ProcessedFileReadResult {\n'
+                       '  // string for text; a single Part for image / native-PDF / '
+                       'unreadable binary;\n'
+                       '  // an array of image Parts when a PDF is rendered '
+                       'page-by-page (vision\n'
+                       '  // fallback / bridge transcription).\n'
+                       '  llmContent: PartListUnion;\n'
+                       '  returnDisplay: string;\n'
+                       '  error?: string; // Optional error message for the LLM if '
+                       'file processing failed\n',
+             'after': '}\n'
+                      '\n'
+                      'export interface ProcessedFileReadResult {\n'
+                      '  // string for text and for extracted PDF text; a single Part '
+                      'for an image or\n'
+                      '  // a natively supported PDF; a string note for unreadable '
+                      'binary. A PDF is\n'
+                      '  // never returned as page images -- there is no renderer.\n'
+                      '  llmContent: PartListUnion;\n'
+                      '  returnDisplay: string;\n'
+                      '  error?: string; // Optional error message for the LLM if file '
+                      'processing failed\n',
+             'review_before': '}\n'
+                              '\n'
+                              'export interface ProcessedFileReadResult {\n'
+                              '  // string for text; a single Part for image / '
+                              'native-PDF / unreadable binary;\n'
+                              '  // an array of image Parts when a PDF is rendered '
+                              'page-by-page (vision\n'
+                              '  // fallback / bridge transcription).\n'
+                              '  llmContent: PartListUnion;\n'
+                              '  returnDisplay: string;\n'
+                              '  error?: string; // Optional error message for the LLM '
+                              'if file processing failed\n',
+             'review_after': '}\n'
+                             '\n'
+                             'export interface ProcessedFileReadResult {\n'
+                             '  // string for text and for extracted PDF text; a '
+                             'single Part for an image or\n'
+                             '  // a natively supported PDF; a string note for '
+                             'unreadable binary. A PDF is\n'
+                             '  // never returned as page images -- there is no '
+                             'renderer.\n'
+                             '  llmContent: PartListUnion;\n'
+                             '  returnDisplay: string;\n'
+                             '  error?: string; // Optional error message for the LLM '
+                             'if file processing failed\n'},
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-5',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '  originalLineCountExact?: boolean; // False when a large '
                        'range read stopped before EOF\n'
@@ -49434,7 +49518,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'before the\n'
                              '   * actual content read. Surfaced so the FileReadCache '
                              'can record\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-4',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-6',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '   * mutated file rather than the file the read returned.\n'
                        '   */\n'
@@ -49521,7 +49605,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '}\n'
                              '\n'
                              '/**\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-5',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-7',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': 'export interface ProcessSingleFileContentOptions {\n'
                        '  offset?: number;\n'
@@ -49625,7 +49709,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '   */\n'
                              "  largePdfBehavior?: 'error' | 'reference';\n"
                              '  displayPath?: string;\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-6',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-8',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '  config: Config,\n'
                        '  offset?: number,\n'
@@ -49685,7 +49769,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  const options =\n'
                              "    typeof optionsOrOffset === 'object' && "
                              'optionsOrOffset !== null\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-7',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-9',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '      : {\n'
                        '          offset: optionsOrOffset,\n'
@@ -49737,7 +49821,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    signal,\n'
                              "    largePdfBehavior = 'error',\n"
                              '    displayPath = filePath,\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-8',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-10',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '    const fileType = options.textFileHandle\n'
                        "      ? 'text'\n"
@@ -50433,7 +50517,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "          largePdfBehavior === 'reference'\n"
                              '            ? `Referenced large PDF: '
                              '${relativePathForDisplay}`\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-9',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-11',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '          }\n'
                        '        }\n'
@@ -50479,7 +50563,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        return {\n'
                              '          llmContent,\n'
                              '          returnDisplay,\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-10',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-12',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '          originalLineCount,\n'
                        '          originalLineCountExact,\n'
@@ -50842,7 +50926,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      }\n'
                              "      case 'audio':\n"
                              "      case 'video': {\n"},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-11',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-13',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '        };\n'
                        '      }\n'
@@ -50983,7 +51067,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              errorType: ToolErrorType.FILE_TOO_LARGE,\n'
                              '            };\n'
                              '          }\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-12',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-14',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '                displayName,\n'
                        '              },\n'
@@ -51759,7 +51843,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            llmContent: guidance,\n'
                              '            returnDisplay: `PDF text too large: '
                              '${relativePathForDisplay}`,\n'},
-            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-13',
+            {'name': 'packages/core/src/utils/fileUtils.ts:landmark-15',
              'path': 'packages/core/src/utils/fileUtils.ts',
              'before': '          };\n'
                        '        }\n'
@@ -65557,7 +65641,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/tools/web-fetch.ts': '73323a41757e2e5b217b2f6f3e7eb1401be1980ec066e05ae41231036eddf331',
  'packages/core/src/tools/write-file.ts': '489c781e917f80e1f457a350e96f3ec89a730b9aa8cd963cd8e378238b231273',
  'packages/core/src/utils/fileUtils.test.ts': 'b190005c7ff21844b8692056cc576779f57a3b7d6a871c142d673aab421b2c29',
- 'packages/core/src/utils/fileUtils.ts': '48380af761d71dcb3a2bc0f5b7554f91e3ac32ed6a4b72c883b0dd27fadf324f',
+ 'packages/core/src/utils/fileUtils.ts': '2ac37dbbb36b3442c7ca7fc6958c808ee13d83b2fd200533cbf45cef5ac24330',
  'packages/core/src/utils/image-view.test.ts': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d',
  'packages/core/src/utils/image-view.ts': '82383711baeb81895042e6fd865f2f509ca29756ff22b02378dc89c0b2c5e9ea',
  'packages/core/src/utils/pdf.test.ts': '067d3a0bd38b30448a8844ad3b9b4602e562cf6a4fa02f7ff7dbb83b8f88477e',
