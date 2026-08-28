@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'f2623f4223d5b2a6fd123427e41f9355a7445e27eba4b2b239df24f15ca95b9f',
+  'review_sha256': '4844c7bf10a623f848e34abea39e2bb950b33e99860248b9649323ed1a8aa21b',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -37,7 +37,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e'},
             {'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before_sha256': 'b2974af70f9b5f4beadaa1e9d632e95ff6eac1ee3aab8c3b366db8ce64d73afc',
-             'after_sha256': 'aa23d0f6f919d85a047a439433e98746f58b02b7b031a3843e54bb607143d34a'},
+             'after_sha256': '36499ab60a63edfb90c470d3593014c9c07499fe07d56b9ed3aaf9395ac0c52a'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
              'after_sha256': 'ecdd192c690882e67189edc322d8d02b0af1cf25f13d5b218f567e071f25bec9'},
@@ -94,7 +94,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '476242ed064c4980cec6789b84bb5496cb93a28d7763b659fb799f84fcd9bebc'},
             {'path': 'packages/core/src/core/coreToolScheduler.test.ts',
              'before_sha256': '3ae4d9d1847dbce344c3018cececedb6ff25b0e035333237bac067f2df84d006',
-             'after_sha256': '12eba16dcc425b350902b0609243eaafa0462751f739508d6f939a4e7a65e161'},
+             'after_sha256': 'de21e1f4528091327c67e81ea7acd5a159b4cbd83189f09f3ddc5ed28b71943e'},
             {'path': 'packages/core/src/core/coreToolScheduler.ts',
              'before_sha256': '3badb303e2b463aa03ce4c6a083319a209789122286cbf756ecf379518dcc7dc',
              'after_sha256': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e'},
@@ -3196,6 +3196,34 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  duration_api_ms: number;\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-1',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '  PLAN_MODE_ENTRY_SIBLING_SKIP_MESSAGE,\n'
+                       '  createGoalRuntime,\n'
+                       '  GoalPersistenceUnavailableError,\n'
+                       "} from '@qwen-code/qwen-code-core';\n"
+                       "import type { Part } from '@google/genai';\n"
+                       "import { EventEmitter } from 'node:events';\n",
+             'after': '  PLAN_MODE_ENTRY_SIBLING_SKIP_MESSAGE,\n'
+                      '  createGoalRuntime,\n'
+                      '  GoalPersistenceUnavailableError,\n'
+                      '  ORPHAN_TOOL_USE_REPAIR_REASON,\n'
+                      "} from '@qwen-code/qwen-code-core';\n"
+                      "import type { Part } from '@google/genai';\n"
+                      "import { EventEmitter } from 'node:events';\n",
+             'review_before': '  PLAN_MODE_ENTRY_SIBLING_SKIP_MESSAGE,\n'
+                              '  createGoalRuntime,\n'
+                              '  GoalPersistenceUnavailableError,\n'
+                              "} from '@qwen-code/qwen-code-core';\n"
+                              "import type { Part } from '@google/genai';\n"
+                              "import { EventEmitter } from 'node:events';\n",
+             'review_after': '  PLAN_MODE_ENTRY_SIBLING_SKIP_MESSAGE,\n'
+                             '  createGoalRuntime,\n'
+                             '  GoalPersistenceUnavailableError,\n'
+                             '  ORPHAN_TOOL_USE_REPAIR_REASON,\n'
+                             "} from '@qwen-code/qwen-code-core';\n"
+                             "import type { Part } from '@google/genai';\n"
+                             "import { EventEmitter } from 'node:events';\n"},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-2',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        currentModel = model;\n'
                        '      }),\n'
                        '      getExperimentalZedIntegration: '
@@ -3247,6 +3275,111 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      getHookSystem: '
                              'vi.fn().mockReturnValue(undefined),\n'
                              '      isCronEnabled: vi.fn().mockReturnValue(false),\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-3',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '        functionResponse: {\n'
+                       "          id: 'call-1',\n"
+                       "          name: 'shell',\n"
+                       "          response: { error: expect.stringContaining('not "
+                       "recorded') },\n"
+                       '        },\n'
+                       '      },\n'
+                       '    ]);\n',
+             'after': '        functionResponse: {\n'
+                      "          id: 'call-1',\n"
+                      "          name: 'shell',\n"
+                      '          response: { error: ORPHAN_TOOL_USE_REPAIR_REASON },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ]);\n',
+             'review_before': '        functionResponse: {\n'
+                              "          id: 'call-1',\n"
+                              "          name: 'shell',\n"
+                              '          response: { error: '
+                              "expect.stringContaining('not recorded') },\n"
+                              '        },\n'
+                              '      },\n'
+                              '    ]);\n',
+             'review_after': '        functionResponse: {\n'
+                             "          id: 'call-1',\n"
+                             "          name: 'shell',\n"
+                             '          response: { error: '
+                             'ORPHAN_TOOL_USE_REPAIR_REASON },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ]);\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-4',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '          functionResponse: {\n'
+                       "            id: 'call-1',\n"
+                       "            name: 'shell',\n"
+                       "            response: { error: expect.stringContaining('not "
+                       "recorded') },\n"
+                       '          },\n'
+                       '        },\n'
+                       '      ]);\n',
+             'after': '          functionResponse: {\n'
+                      "            id: 'call-1',\n"
+                      "            name: 'shell',\n"
+                      '            response: { error: ORPHAN_TOOL_USE_REPAIR_REASON '
+                      '},\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]);\n',
+             'review_before': '          functionResponse: {\n'
+                              "            id: 'call-1',\n"
+                              "            name: 'shell',\n"
+                              '            response: { error: '
+                              "expect.stringContaining('not recorded') },\n"
+                              '          },\n'
+                              '        },\n'
+                              '      ]);\n',
+             'review_after': '          functionResponse: {\n'
+                             "            id: 'call-1',\n"
+                             "            name: 'shell',\n"
+                             '            response: { error: '
+                             'ORPHAN_TOOL_USE_REPAIR_REASON },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]);\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-5',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '          functionResponse: {\n'
+                       "            id: 'call-1',\n"
+                       "            name: 'shell',\n"
+                       "            response: { error: expect.stringContaining('not "
+                       "recorded') },\n"
+                       '          },\n'
+                       '        },\n'
+                       '        { text: expect.stringContaining(SYSTEM_REMINDER_OPEN) '
+                       '},\n',
+             'after': '          functionResponse: {\n'
+                      "            id: 'call-1',\n"
+                      "            name: 'shell',\n"
+                      '            response: { error: ORPHAN_TOOL_USE_REPAIR_REASON '
+                      '},\n'
+                      '          },\n'
+                      '        },\n'
+                      '        { text: expect.stringContaining(SYSTEM_REMINDER_OPEN) '
+                      '},\n',
+             'review_before': '          functionResponse: {\n'
+                              "            id: 'call-1',\n"
+                              "            name: 'shell',\n"
+                              '            response: { error: '
+                              "expect.stringContaining('not recorded') },\n"
+                              '          },\n'
+                              '        },\n'
+                              '        { text: '
+                              'expect.stringContaining(SYSTEM_REMINDER_OPEN) },\n',
+             'review_after': '          functionResponse: {\n'
+                             "            id: 'call-1',\n"
+                             "            name: 'shell',\n"
+                             '            response: { error: '
+                             'ORPHAN_TOOL_USE_REPAIR_REASON },\n'
+                             '          },\n'
+                             '        },\n'
+                             '        { text: '
+                             'expect.stringContaining(SYSTEM_REMINDER_OPEN) },\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-1',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '  OutputFormat,\n'
@@ -9714,6 +9847,98 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  isToolCallConcurrencySafe,\n'},
             {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-2',
              'path': 'packages/core/src/core/coreToolScheduler.test.ts',
+             'before': '    expect(completedCalls[0]).toMatchObject({\n'
+                       "      status: 'error',\n"
+                       '      response: {\n'
+                       '        resultDisplay,\n'
+                       "        error: { message: 'No extractable text layer.' },\n"
+                       '        responseParts: [\n'
+                       '          {\n'
+                       '            functionResponse: {\n'
+                       "              response: { error: 'No extractable text layer.' "
+                       '},\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ],\n',
+             'after': '    expect(completedCalls[0]).toMatchObject({\n'
+                      "      status: 'error',\n"
+                      '      response: {\n'
+                      '        // The structured display and the operational summary '
+                      'are unchanged:\n'
+                      '        // the scrollback, the PostToolUseFailure hook and the '
+                      'sanitized\n'
+                      '        // telemetry span all read these, and none of them '
+                      "wants the model's\n"
+                      '        // copy of the tool output.\n'
+                      '        resultDisplay,\n'
+                      "        error: { message: 'No extractable text layer.' },\n"
+                      '        // What the model is told did change. It used to be the '
+                      'operational\n'
+                      '        // summary alone, so `llmContent` -- the half a tool '
+                      'writes *for the\n'
+                      '        // model* -- was discarded on every failure. Both '
+                      'halves are sent now,\n'
+                      '        // deduplicated when a tool already writes the same '
+                      'text into each.\n'
+                      '        responseParts: [\n'
+                      '          {\n'
+                      '            functionResponse: {\n'
+                      '              response: {\n'
+                      '                error:\n'
+                      "                  'original PDF extraction error\\nNo "
+                      "extractable text layer.',\n"
+                      '              },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ],\n',
+             'review_before': '    expect(completedCalls[0]).toMatchObject({\n'
+                              "      status: 'error',\n"
+                              '      response: {\n'
+                              '        resultDisplay,\n'
+                              "        error: { message: 'No extractable text layer.' "
+                              '},\n'
+                              '        responseParts: [\n'
+                              '          {\n'
+                              '            functionResponse: {\n'
+                              "              response: { error: 'No extractable text "
+                              "layer.' },\n"
+                              '            },\n'
+                              '          },\n'
+                              '        ],\n',
+             'review_after': '    expect(completedCalls[0]).toMatchObject({\n'
+                             "      status: 'error',\n"
+                             '      response: {\n'
+                             '        // The structured display and the operational '
+                             'summary are unchanged:\n'
+                             '        // the scrollback, the PostToolUseFailure hook '
+                             'and the sanitized\n'
+                             '        // telemetry span all read these, and none of '
+                             "them wants the model's\n"
+                             '        // copy of the tool output.\n'
+                             '        resultDisplay,\n'
+                             "        error: { message: 'No extractable text layer.' "
+                             '},\n'
+                             '        // What the model is told did change. It used to '
+                             'be the operational\n'
+                             '        // summary alone, so `llmContent` -- the half a '
+                             'tool writes *for the\n'
+                             '        // model* -- was discarded on every failure. '
+                             'Both halves are sent now,\n'
+                             '        // deduplicated when a tool already writes the '
+                             'same text into each.\n'
+                             '        responseParts: [\n'
+                             '          {\n'
+                             '            functionResponse: {\n'
+                             '              response: {\n'
+                             '                error:\n'
+                             "                  'original PDF extraction error\\nNo "
+                             "extractable text layer.',\n"
+                             '              },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ],\n'},
+            {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-3',
+             'path': 'packages/core/src/core/coreToolScheduler.test.ts',
              'before': '    });\n'
                        '  });\n'
                        '\n'
@@ -9778,7 +10003,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const abortController = new AbortController();\n'
                              '    const { completedCalls } = await runSingleTool({\n'
                              '      abortController,\n'},
-            {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-3',
+            {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-4',
              'path': 'packages/core/src/core/coreToolScheduler.test.ts',
              'before': "    expect(completedCall.status).toBe('cancelled');\n"
                        '    '
@@ -9845,7 +10070,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const abortController = new AbortController();\n'
                              '    const { completedCalls } = await runSingleTool({\n'
                              '      abortController,\n'},
-            {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-4',
+            {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-5',
              'path': 'packages/core/src/core/coreToolScheduler.test.ts',
              'before': "    expect(completedCall.status).toBe('cancelled');\n"
                        '    '
@@ -9899,7 +10124,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '  // A post-execution cancellation drops the '
                              'model-visible output, but the\n'},
-            {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-5',
+            {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-6',
              'path': 'packages/core/src/core/coreToolScheduler.test.ts',
              'before': '    const tool = new StrictStringTool();\n'
                        '    const { scheduler, onToolCallsUpdate } = '
@@ -9939,7 +10164,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "      [makeRequest('c1', 'strictStringTool', { value: {} "
                              '})],\n'
                              '      new AbortController().signal,\n'},
-            {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-6',
+            {'name': 'packages/core/src/core/coreToolScheduler.test.ts:landmark-7',
              'path': 'packages/core/src/core/coreToolScheduler.test.ts',
              'before': '      expect(onAllToolCallsComplete).toHaveBeenCalled();\n'
                        '    });\n'
@@ -67520,7 +67745,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '4f8e5df8c5eadcc7630bdc2d8fee011fca11cbbfe3a02b5dd9d0b8aebfd4e882',
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863',
  'packages/cli/src/nonInteractive/types.ts': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e',
- 'packages/cli/src/nonInteractiveCli.test.ts': 'aa23d0f6f919d85a047a439433e98746f58b02b7b031a3843e54bb607143d34a',
+ 'packages/cli/src/nonInteractiveCli.test.ts': '36499ab60a63edfb90c470d3593014c9c07499fe07d56b9ed3aaf9395ac0c52a',
  'packages/cli/src/nonInteractiveCli.ts': 'ecdd192c690882e67189edc322d8d02b0af1cf25f13d5b218f567e071f25bec9',
  'packages/cli/src/ui/hooks/useGeminiStream.ts': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e',
  'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'f66258a3b847539dec79c84ec2c38a82646a2f1d89cf9d7b63e4f9feb26540fd',
@@ -67539,7 +67764,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/baseLlmClient.test.ts': '3473d53774ef2b86869cf5af03bf2faf3433171e7630c4b4652a398ec6fc5d0d',
  'packages/core/src/core/baseLlmClient.ts': '408fcec52d262c12fc8c2327eb9826aeb7005f7bb5566817276ea918ff140459',
  'packages/core/src/core/contentGenerator.ts': '476242ed064c4980cec6789b84bb5496cb93a28d7763b659fb799f84fcd9bebc',
- 'packages/core/src/core/coreToolScheduler.test.ts': '12eba16dcc425b350902b0609243eaafa0462751f739508d6f939a4e7a65e161',
+ 'packages/core/src/core/coreToolScheduler.test.ts': 'de21e1f4528091327c67e81ea7acd5a159b4cbd83189f09f3ddc5ed28b71943e',
  'packages/core/src/core/coreToolScheduler.ts': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e',
  'packages/core/src/core/geminiChat.test.ts': '44f96af12396270fb3cba0af6db7e23a85463c7e28a7ce8e3935c31bc97c311f',
  'packages/core/src/core/geminiChat.ts': 'ad16bac94914e60ad012884f45a06ecf9147f9c7d307f1a2a9783f0bbb00d407',

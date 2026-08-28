@@ -962,10 +962,18 @@ index 53801c8..5a9d2a2 100644
    duration_ms: number;
    duration_api_ms: number;
 diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonInteractiveCli.test.ts
-index e6950ce..5b2ae29 100644
+index e6950ce..6f978bc 100644
 --- a/packages/cli/src/nonInteractiveCli.test.ts
 +++ b/packages/cli/src/nonInteractiveCli.test.ts
-@@ -369,6 +369,12 @@ describe('runNonInteractive', () => {
+@@ -45,6 +45,7 @@ import {
+   PLAN_MODE_ENTRY_SIBLING_SKIP_MESSAGE,
+   createGoalRuntime,
+   GoalPersistenceUnavailableError,
++  ORPHAN_TOOL_USE_REPAIR_REASON,
+ } from '@qwen-code/qwen-code-core';
+ import type { Part } from '@google/genai';
+ import { EventEmitter } from 'node:events';
+@@ -369,6 +370,12 @@ describe('runNonInteractive', () => {
          currentModel = model;
        }),
        getExperimentalZedIntegration: vi.fn().mockReturnValue(false),
@@ -978,6 +986,33 @@ index e6950ce..5b2ae29 100644
        isInteractive: vi.fn().mockReturnValue(false),
        getHookSystem: vi.fn().mockReturnValue(undefined),
        isCronEnabled: vi.fn().mockReturnValue(false),
+@@ -1574,7 +1581,7 @@ describe('runNonInteractive', () => {
+         functionResponse: {
+           id: 'call-1',
+           name: 'shell',
+-          response: { error: expect.stringContaining('not recorded') },
++          response: { error: ORPHAN_TOOL_USE_REPAIR_REASON },
+         },
+       },
+     ]);
+@@ -1812,7 +1819,7 @@ describe('runNonInteractive', () => {
+           functionResponse: {
+             id: 'call-1',
+             name: 'shell',
+-            response: { error: expect.stringContaining('not recorded') },
++            response: { error: ORPHAN_TOOL_USE_REPAIR_REASON },
+           },
+         },
+       ]);
+@@ -1859,7 +1866,7 @@ describe('runNonInteractive', () => {
+           functionResponse: {
+             id: 'call-1',
+             name: 'shell',
+-            response: { error: expect.stringContaining('not recorded') },
++            response: { error: ORPHAN_TOOL_USE_REPAIR_REASON },
+           },
+         },
+         { text: expect.stringContaining(SYSTEM_REMINDER_OPEN) },
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
 index 6dfe8f8..96aef12 100644
 --- a/packages/cli/src/nonInteractiveCli.ts
@@ -3032,7 +3067,7 @@ index 7216c26..3c92b3f 100644
      request: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
 diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/src/core/coreToolScheduler.test.ts
-index 98d83dd..5388e14 100644
+index 98d83dd..c4fe594 100644
 --- a/packages/core/src/core/coreToolScheduler.test.ts
 +++ b/packages/core/src/core/coreToolScheduler.test.ts
 @@ -50,6 +50,7 @@ import type {
@@ -3043,7 +3078,32 @@ index 98d83dd..5388e14 100644
    convertToFunctionResponse,
    extractToolFilePaths,
    isToolCallConcurrencySafe,
-@@ -11623,12 +11624,11 @@ describe('CoreToolScheduler telemetry spans', () => {
+@@ -11061,12 +11062,23 @@ describe('CoreToolScheduler telemetry spans', () => {
+     expect(completedCalls[0]).toMatchObject({
+       status: 'error',
+       response: {
++        // The structured display and the operational summary are unchanged:
++        // the scrollback, the PostToolUseFailure hook and the sanitized
++        // telemetry span all read these, and none of them wants the model's
++        // copy of the tool output.
+         resultDisplay,
+         error: { message: 'No extractable text layer.' },
++        // What the model is told did change. It used to be the operational
++        // summary alone, so `llmContent` -- the half a tool writes *for the
++        // model* -- was discarded on every failure. Both halves are sent now,
++        // deduplicated when a tool already writes the same text into each.
+         responseParts: [
+           {
+             functionResponse: {
+-              response: { error: 'No extractable text layer.' },
++              response: {
++                error:
++                  'original PDF extraction error\nNo extractable text layer.',
++              },
+             },
+           },
+         ],
+@@ -11623,12 +11635,11 @@ describe('CoreToolScheduler telemetry spans', () => {
      });
    });
  
@@ -3060,7 +3120,7 @@ index 98d83dd..5388e14 100644
      const abortController = new AbortController();
      const { completedCalls } = await runSingleTool({
        abortController,
-@@ -11649,11 +11649,13 @@ describe('CoreToolScheduler telemetry spans', () => {
+@@ -11649,11 +11660,13 @@ describe('CoreToolScheduler telemetry spans', () => {
      expect(completedCall.status).toBe('cancelled');
      expect(completedCall.response.executionStatus).toBe('cancelled');
      const responseText = JSON.stringify(completedCall.response.responseParts);
@@ -3077,7 +3137,7 @@ index 98d83dd..5388e14 100644
      const abortController = new AbortController();
      const { completedCalls } = await runSingleTool({
        abortController,
-@@ -11667,8 +11669,8 @@ describe('CoreToolScheduler telemetry spans', () => {
+@@ -11667,8 +11680,8 @@ describe('CoreToolScheduler telemetry spans', () => {
      expect(completedCall.status).toBe('cancelled');
      expect(completedCall.response.executionStatus).toBe('cancelled');
      const responseText = JSON.stringify(completedCall.response.responseParts);
@@ -3088,7 +3148,7 @@ index 98d83dd..5388e14 100644
    });
  
    // A post-execution cancellation drops the model-visible output, but the
-@@ -16373,7 +16375,7 @@ describe('CoreToolScheduler validation retry loop detection', () => {
+@@ -16373,7 +16386,7 @@ describe('CoreToolScheduler validation retry loop detection', () => {
      const tool = new StrictStringTool();
      const { scheduler, onToolCallsUpdate } = createSchedulerWithTool(tool);
  
@@ -3097,7 +3157,7 @@ index 98d83dd..5388e14 100644
      await scheduler.schedule(
        [makeRequest('c1', 'strictStringTool', { value: {} })],
        new AbortController().signal,
-@@ -18351,3 +18353,57 @@ describe('CoreToolScheduler prompt_id propagation', () => {
+@@ -18351,3 +18364,57 @@ describe('CoreToolScheduler prompt_id propagation', () => {
      });
    });
  });

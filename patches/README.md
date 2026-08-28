@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `f2623f4223d5b2a6fd123427e41f9355a7445e27eba4b2b239df24f15ca95b9f`
+- Review-diff SHA-256: `4844c7bf10a623f848e34abea39e2bb950b33e99860248b9649323ed1a8aa21b`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `2a47af04650c074996eece0b30aa09b540f1b49db8db6d300d8ccc2a1057025c`
+- Transformer-manifest SHA-256: `c13b4914db59b7cfbe84ac7128c26e77b210b5c42f2343696215b3a3bb7ebcc0`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
