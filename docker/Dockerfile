@@ -135,36 +135,26 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
       packages/core/src/generated/git-commit.ts \
  && DEV=true node esbuild.config.js \
  && node scripts/copy_bundle_assets.js \
- && npx --no-install vitest run \
-      packages/cli/src/config/auth.test.ts \
-      packages/core/src/core/geminiChat.test.ts \
-      packages/core/src/core/baseLlmClient.test.ts \
-      packages/core/src/core/coreToolScheduler.test.ts \
-      packages/core/src/core/openaiContentGenerator/converter.test.ts \
-      packages/core/src/core/openaiContentGenerator/pipeline.test.ts \
-      packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts \
-      packages/core/src/core/qwen38-deployment-prompt.test.ts \
-      packages/core/src/core/tokenLimits.test.ts \
-      packages/core/src/config/qwen38-agent-service-contract.test.ts \
-      packages/core/src/agents/runtime/agent-context.test.ts \
-      packages/core/src/permissions/permission-manager.test.ts \
-      packages/core/src/services/chatCompressionService.test.ts \
-      packages/core/src/subagents/builtin-agents.test.ts \
-      packages/core/src/tools/agent/agent.test.ts \
-      packages/core/src/tools/agent/qwen38-effect-journal.test.ts \
-      packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts \
-      packages/core/src/utils/image-view.test.ts \
-      packages/core/src/utils/qwen38-image-contract.test.ts \
-      packages/core/src/utils/shellContextEnv.test.ts \
-      packages/cli/src/config/config.test.ts \
-      packages/cli/src/gemini.test.tsx \
-      packages/cli/src/utils/nonInteractiveHelpers.test.ts \
-      packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts \
- && npx --no-install vitest run -t 'pages-contract' \
-      packages/core/src/utils/fileUtils.test.ts \
-      packages/core/src/tools/read-file.test.ts \
- && npx --no-install vitest run -t 'loop-attribution' \
-      packages/core/src/agents/subagent-result.test.ts \
+ && grep '^diff --git' \
+      /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch \
+      | sed 's|diff --git a/||; s| b/.*||' | sort -u > /tmp/patched-files.txt \
+ && grep -E '\.test\.tsx?$' /tmp/patched-files.txt > /tmp/patched-tests.txt \
+ && grep -vE '\.test\.tsx?$' /tmp/patched-files.txt \
+      | grep -E '\.tsx?$' \
+      | sed -E 's/\.(tsx?)$/.test.\1/' > /tmp/adjacent-tests.txt \
+ && while read -r f; do \
+      test -f "/src/$f" \
+        || { echo "patched test file is missing from the tree: $f"; exit 1; }; \
+    done < /tmp/patched-tests.txt \
+ && { while read -r f; do \
+        test -f "/src/$f" && echo "$f"; \
+      done < /tmp/adjacent-tests.txt || true; } > /tmp/adjacent-present.txt \
+ && sort -u /tmp/patched-tests.txt /tmp/adjacent-present.txt \
+      > /tmp/qwen-test-files.txt \
+ && test -s /tmp/qwen-test-files.txt \
+ && echo "executing $(wc -l < /tmp/qwen-test-files.txt) test files in full:" \
+ && cat /tmp/qwen-test-files.txt \
+ && xargs npx --no-install vitest run < /tmp/qwen-test-files.txt \
  && test "$(node scripts/cli-entry.js --version)" = '0.21.12' \
  && rm -rf node_modules/.vite /tmp/node-compile-cache
 

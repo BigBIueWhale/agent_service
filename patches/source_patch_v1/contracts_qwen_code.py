@@ -804,7 +804,6 @@ def _validate_image_after(state: State) -> None:
         files,
         (
             "const shouldRenderImageOverview = fileType === 'image';",
-            "const willRenderPdfImages = false;",
             "Raster image did not enter the required PNG validator.",
             "const view = await renderImageOverview(",
             "data: view.bytes.toString('base64')",
@@ -1614,52 +1613,56 @@ def _validate_pages_affordance_after(state: State) -> None:
         and tool_source.count("          file_path: {") == 1,
         f"{label}: {tool} must advertise exactly file_path, offset, and limit",
     )
-    # A supplied argument is refused rather than silently dropped, and the
-    # refusal does not depend on the file type, so it cannot be evaded by
-    # renaming the file.
+    # A supplied argument is refused rather than silently dropped. The refusal
+    # is no longer a special case for one name: the schema is closed, so
+    # `pages` is one instance of the general rule that a tool does not accept
+    # a parameter it does not declare.
+    require_text(state, tool, "        additionalProperties: false,", label=label)
     require_text(
         state,
-        tool,
-        "if ((params as { pages?: unknown }).pages !== undefined) {",
-        label=label,
-    )
-    require_text(
-        state,
-        tool,
-        "read_file has no 'pages' parameter and reads whole files.",
+        "packages/core/src/tools/tools.ts",
+        "export function undeclaredToolParamsError(",
         label=label,
     )
 
     # One remedy, declared once and used by every message that has to send
-    # the model somewhere, so no guidance names a parameter that is gone.
-    require_text(state, pdf, "export const PDF_PAGE_RANGE_REMEDY =", label=label)
+    # the model somewhere, so no guidance names a parameter that is gone --
+    # and rendered for the file the caller actually named, so the command can
+    # be run as written.
+    require_text(state, pdf, "export function pdfPageRangeRemedy(", label=label)
+    require_text(
+        state, pdf, "export const PDF_PAGE_RANGE_REMEDY_TEMPLATE =", label=label
+    )
+    forbid_text(state, pdf, "export const PDF_PAGE_RANGE_REMEDY =", label=label)
     forbid_text(state, pdf, "'pages' parameter", label=label)
     forbid_text(state, files, "'pages' parameter to", label=label)
     _require(
-        _source(state, pdf, label=label).count("${PDF_PAGE_RANGE_REMEDY}") == 5
-        and _source(state, files, label=label).count("${PDF_PAGE_RANGE_REMEDY}") == 3,
+        _source(state, pdf, label=label).count("pdfPageRangeRemedy(") == 7
+        and _source(state, files, label=label).count("pdfPageRangeRemedy(") == 1,
         f"{label}: every large/truncated PDF message must name the one remedy",
     )
-    # The consumption layer keeps its fail-closed guard: a `pages` option
-    # supplied to the shared utility on a non-PDF is refused, never ignored.
-    require_text(
+    # No message may send the model to a read_file page range that read_file
+    # refuses. This one did, and it was reachable for any text-only model.
+    forbid_text(state, files, "read_file on the original PDF with pages", label=label)
+    forbid_text(
         state,
-        files,
-        "if (normalizedPages !== undefined && fileType !== 'pdf') {",
+        "packages/core/src/services/visionBridge/vision-bridge-service.ts",
+        "read_file on the original PDF with a later page range",
         label=label,
     )
+    # The shared consumption layer no longer has a `pages` option to guard.
+    # A runtime guard was the weaker form of this: it left the parameter
+    # representable and relied on a check to refuse it. The option is gone, so
+    # a caller cannot express a page range at all.
+    forbid_text(state, files, "normalizedPages", label=label)
+    forbid_text(state, files, "  pages?: string;", label=label)
+    forbid_text(state, files, "parsePDFPageRange", label=label)
+    forbid_text(state, pdf, "export function parsePDFPageRange(", label=label)
     require_text(
         state,
         files,
         "errorType: ToolErrorType.INVALID_TOOL_PARAMS,",
-        count=2,
-        label=label,
-    )
-    # PDF page extraction itself is byte-for-byte untouched.
-    require_text(
-        state,
-        files,
-        "if (fileType === 'pdf' && normalizedPages !== undefined) {",
+        count=1,
         label=label,
     )
     require_text(
@@ -1680,10 +1683,529 @@ def _validate_pages_affordance_after(state: State) -> None:
         "[pages-contract] reads a PDF whole, with no page parameter to supply",
         label=label,
     )
+
+
+# Nine of the ten native tools; notebook_edit already declared its schema
+# closed upstream, so this transformation does not touch it and it is not in
+# the validator's view of the tree. The [param-contract] case in
+# qwen38-agent-service-contract.test.ts reads all ten from the built source
+# and is the check that covers it.
+_NATIVE_TOOL_SOURCES: tuple[str, ...] = (
+    "packages/core/src/tools/agent/agent.ts",
+    "packages/core/src/tools/edit.ts",
+    "packages/core/src/tools/glob.ts",
+    "packages/core/src/tools/ls.ts",
+    "packages/core/src/tools/read-file.ts",
+    "packages/core/src/tools/ripGrep.ts",
+    "packages/core/src/tools/shell.ts",
+    "packages/core/src/tools/todoWrite.ts",
+    "packages/core/src/tools/write-file.ts",
+)
+
+
+def _validate_param_contract_before(state: State) -> None:
+    label = "closed tool-parameter schema precondition"
+    tools = "packages/core/src/tools/tools.ts"
+    read_file = "packages/core/src/tools/read-file.ts"
+    files = "packages/core/src/utils/fileUtils.ts"
+    glob = "packages/core/src/tools/glob.ts"
+    shell = "packages/core/src/tools/shell.ts"
+    # Upstream validates against the schema and nothing more, so a name the
+    # schema does not declare is accepted and then dropped.
+    forbid_text(state, tools, "undeclaredToolParamsError", label=label)
+    require_text(
+        state,
+        tools,
+        "    const errors = SchemaValidator.validate(\n"
+        "      this.schema.parametersJsonSchema,\n"
+        "      params,\n"
+        "    );",
+        label=label,
+    )
+    # Seven of the ten native tools leave their schema open.
+    for path in (
+        read_file,
+        "packages/core/src/tools/edit.ts",
+        "packages/core/src/tools/write-file.ts",
+        glob,
+        "packages/core/src/tools/ripGrep.ts",
+        "packages/core/src/tools/ls.ts",
+        shell,
+    ):
+        forbid_text(state, path, "additionalProperties: false", label=label)
+    # `offset`/`limit` are read only by the text branch; every other branch
+    # drops them without a word, and only `.ipynb` is refused, by guessing
+    # from the extension before the file type is known.
+    require_text(
+        state,
+        read_file,
+        "offset and limit are not supported for Jupyter notebook (.ipynb) files.",
+        label=label,
+    )
+    require_text(state, read_file, "Requires 'limit' to be set.", label=label)
+    forbid_text(
+        state,
+        files,
+        "if (fileType !== 'text' && (offset !== undefined || limit !== undefined)) {",
+        label=label,
+    )
+    # Two live tool descriptions instruct the model to batch parallel calls.
+    require_text(
+        state, glob, "call multiple tools in a single response", label=label
+    )
+    require_text(
+        state, shell, "run_shell_command tool calls in parallel.", label=label
+    )
+
+
+def _validate_param_contract_after(state: State) -> None:
+    label = "closed tool-parameter schema result"
+    tools = "packages/core/src/tools/tools.ts"
+    read_file = "packages/core/src/tools/read-file.ts"
+    files = "packages/core/src/utils/fileUtils.ts"
+    glob = "packages/core/src/tools/glob.ts"
+    shell = "packages/core/src/tools/shell.ts"
+    contract_test = "packages/core/src/config/qwen38-agent-service-contract.test.ts"
+    tool_test = "packages/core/src/tools/read-file.test.ts"
+    files_test = "packages/core/src/utils/fileUtils.test.ts"
+
+    # One shared rule, applied before schema validation so the refusal names
+    # the offending key and the accepted set rather than Ajv's anonymous
+    # "must NOT have additional properties".
+    source = _require_all(
+        state,
+        tools,
+        (
+            "export function undeclaredToolParamsError(",
+            "const undeclared = undeclaredToolParamsError(",
+            "It accepts exactly: ",
+            "Re-send the call using only those parameters.",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        source,
+        (
+            "const undeclared = undeclaredToolParamsError(",
+            "const errors = SchemaValidator.validate(",
+        ),
+        label=label,
+        location=tools,
+    )
+
+    # Every one of the ten declares its schema closed. The schema is the
+    # surface that teaches, because it is re-rendered into every request.
+    for path in _NATIVE_TOOL_SOURCES:
+        _require(
+            "additionalProperties: false" in _source(state, path, label=label),
+            f"{label}: {path} must declare its parameter schema closed",
+        )
+
+    # The modification flow re-enters build() with the runtime's own
+    # bookkeeping. Those names are enumerated in one place and removed before
+    # the schema check rather than declared in the schema, which would put
+    # them in front of the model.
+    for path in (
+        "packages/core/src/tools/edit.ts",
+        "packages/core/src/tools/write-file.ts",
+    ):
+        require_text(
+            state,
+            path,
+            "  protected override get runtimeOnlyParams(): readonly string[] {",
+            label=label,
+        )
+        require_text(
+            state,
+            path,
+            "    return ['ai_proposed_content', 'modified_by_user'];",
+            label=label,
+        )
+    require_text(
+        state,
+        tools,
+        "  protected get runtimeOnlyParams(): readonly string[] {",
+        label=label,
+    )
+    # No other native tool opens one; notebook_edit keeps its bookkeeping in a
+    # side map instead of the parameter object.
+    for path in _NATIVE_TOOL_SOURCES:
+        if path in (
+            "packages/core/src/tools/edit.ts",
+            "packages/core/src/tools/write-file.ts",
+        ):
+            continue
+        forbid_text(state, path, "runtimeOnlyParams", label=label)
+    require_text(
+        state,
+        contract_test,
+        "[param-contract] no other native tool opens a runtime channel",
+        label=label,
+    )
+
+    # The two tools that replace validateToolParams wholesale never run Ajv,
+    # so they have to apply the shared rule themselves or they stay the only
+    # tools that drop an undeclared name.
+    for path in (
+        "packages/core/src/tools/agent/agent.ts",
+        "packages/core/src/tools/todoWrite.ts",
+    ):
+        require_text(state, path, "undeclaredToolParamsError(", label=label)
+
+    # One range rule for every non-text type, decided where the type is known.
+    require_text(
+        state,
+        files,
+        "if (fileType !== 'text' && (offset !== undefined || limit !== undefined)) {",
+        label=label,
+    )
+    require_text(
+        state,
+        files,
+        "select a range of lines and apply to text files only; ",
+        label=label,
+    )
+    forbid_text(
+        state,
+        read_file,
+        "offset and limit are not supported for Jupyter notebook (.ipynb) files.",
+        label=label,
+    )
+    # The schema no longer requires a `limit` the code never required.
+    forbid_text(state, read_file, "Requires 'limit' to be set.", label=label)
+    require_text(state, read_file, "Optional: text files only.", count=2, label=label)
+
+    # A truncated read carries the call that continues it, with the caller's
+    # own path and the exact resume line, rather than naming two parameters
+    # and leaving the arithmetic to the reader.
+    require_text(
+        state,
+        read_file,
+        "To continue from where this read stopped, call read_file with file_path: ",
+        label=label,
+    )
+    require_text(state, files, "nextRead?: { offset: number; limit: number };", label=label)
+
+    # No tool description advertises a dispatch this build does not have.
+    for path in (glob, shell):
+        require_text(
+            state,
+            path,
+            "Tool calls run one at a time; there is no parallel dispatch.",
+            label=label,
+        )
+    forbid_text(state, glob, "call multiple tools in a single response", label=label)
+    forbid_text(state, shell, "run_shell_command tool calls in parallel.", label=label)
+
+    # Executable evidence, in the suites the image runs.
+    require_text(
+        state,
+        contract_test,
+        "[param-contract] %s declares its parameter schema closed",
+        label=label,
+    )
+    require_text(
+        state,
+        contract_test,
+        "[param-contract] the shared refusal runs before schema validation for every tool",
+        label=label,
+    )
+    require_text(
+        state,
+        contract_test,
+        "[param-contract] %s does not advertise a parallel dispatch this build does not have",
+        label=label,
+    )
+    require_text(
+        state,
+        tool_test,
+        "[param-contract] refuses %s instead of dropping it",
+        label=label,
+    )
+    require_text(
+        state,
+        tool_test,
+        "[param-contract] a truncated read carries the exact call that continues it",
+        label=label,
+    )
     require_text(
         state,
         files_test,
-        "[pages-contract] rejects a pages parameter on a non-PDF file instead of ignoring it",
+        "[param-contract] refuses a line range on %s instead of ignoring it",
+        label=label,
+    )
+
+
+def _validate_no_repair_validation_before(state: State) -> None:
+    label = "schema validation repair precondition"
+    validator = "packages/core/src/utils/schemaValidator.ts"
+    # Four coercion passes rewrite the caller's arguments and re-validate, so
+    # a call that violated the schema still executes.
+    _require_all(
+        state,
+        validator,
+        (
+            "// --- Four-pass coercion ---",
+            "fixBooleanValues(",
+            "fixStringValues(",
+            "fixStringifiedJsonValues(",
+            "fixNumericValues(",
+            "valid = validate(data);",
+        ),
+        label=label,
+    )
+    # And a schema that will not compile disables validation entirely, with
+    # the only notice going to a debug logger this deployment never enables.
+    require_text(
+        state,
+        validator,
+        "      // Skip validation rather than blocking tool usage.",
+        label=label,
+    )
+    require_text(state, validator, "'Skipping parameter validation.',", label=label)
+
+
+def _validate_no_repair_validation_after(state: State) -> None:
+    label = "schema validation repair result"
+    validator = "packages/core/src/utils/schemaValidator.ts"
+    validator_test = "packages/core/src/utils/schemaValidator.test.ts"
+    shell_test = "packages/core/src/tools/shell.test.ts"
+
+    # The repair passes and every helper that existed only to serve them are
+    # gone: a wrong call fails, and the message names the parameter.
+    for needle in (
+        "fixBooleanValues",
+        "fixStringValues",
+        "fixStringifiedJsonValues",
+        "fixNumericValues",
+        "getAcceptedTypes",
+        "getEffectiveProperties",
+        "typeIsAccepted",
+        "resolveRef",
+        "Four-pass coercion",
+    ):
+        forbid_text(state, validator, needle, label=label)
+    # A schema that cannot be compiled cannot be checked, and an unchecked
+    # call is not a safe call. The guard no longer switches itself off.
+    forbid_text(state, validator, "Skipping parameter validation.", label=label)
+    forbid_text(state, validator, "debugLogger", label=label)
+    require_text(
+        state,
+        validator,
+        "Parameters cannot be validated, so the call is refused.",
+        label=label,
+    )
+    require_text(
+        state,
+        validator_test,
+        "[param-contract] reports violations without repairing them",
+        label=label,
+    )
+    require_text(
+        state,
+        validator_test,
+        "[param-contract] refuses a schema version it cannot compile",
+        label=label,
+    )
+    require_text(
+        state,
+        shell_test,
+        "[param-contract] is_background is not coerced",
+        label=label,
+    )
+
+
+def _validate_model_facing_failure_before(state: State) -> None:
+    label = "model-facing failure text precondition"
+    scheduler = "packages/core/src/core/coreToolScheduler.ts"
+    # The failure path forwards only the operational summary; the half named
+    # for the model is read for images and otherwise discarded.
+    require_text(
+        state,
+        scheduler,
+        "        const operationalErrorMessage = toolResult.error.message;\n"
+        "        let errorMessage = operationalErrorMessage;",
+        label=label,
+    )
+    forbid_text(state, scheduler, "mergeModelFacingFailureText", label=label)
+    # Two tools carry in-source warnings that exist only because of it.
+    require_text(
+        state,
+        "packages/core/src/tools/shell.ts",
+        "model-facing functionResponse from `error.message`, NOT from",
+        label=label,
+    )
+
+
+def _validate_model_facing_failure_after(state: State) -> None:
+    label = "model-facing failure text result"
+    scheduler = "packages/core/src/core/coreToolScheduler.ts"
+    scheduler_test = "packages/core/src/core/coreToolScheduler.test.ts"
+
+    source = _require_all(
+        state,
+        scheduler,
+        (
+            "export function mergeModelFacingFailureText(",
+            "        let errorMessage = mergeModelFacingFailureText(\n"
+            "          toolResult.llmContent,\n"
+            "          operationalErrorMessage,\n"
+            "        );",
+        ),
+        label=label,
+    )
+    # One seam, before everything that reads the message, so the guarantee is
+    # general rather than a habit each tool has to remember.
+    _require_ordered(
+        source,
+        (
+            "let errorMessage = mergeModelFacingFailureText(",
+            "const error = new Error(errorMessage);",
+        ),
+        label=label,
+        location=scheduler,
+    )
+    # The per-tool warnings that documented the discard are retired with it.
+    forbid_text(
+        state,
+        "packages/core/src/tools/shell.ts",
+        "model-facing functionResponse from `error.message`, NOT from",
+        label=label,
+    )
+    forbid_text(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        "(`llmContent` is discarded there)",
+        label=label,
+    )
+    require_text(
+        state,
+        scheduler_test,
+        "[error-envelope] mergeModelFacingFailureText",
+        label=label,
+    )
+
+
+def _validate_pdf_text_only_before(state: State) -> None:
+    label = "PDF text-only precondition"
+    files = "packages/core/src/utils/fileUtils.ts"
+    pdf = "packages/core/src/utils/pdf.ts"
+    bridge = "packages/core/src/services/visionBridge/vision-bridge-service.ts"
+    # A page renderer exists and three separate paths fall back to it.
+    require_text(state, pdf, "export async function renderPDFPagesToImages(", label=label)
+    require_text(state, pdf, "export async function isPdftoppmAvailable(", label=label)
+    _require(
+        _source(state, files, label=label).count("renderPDFPagesToImages") == 3,
+        f"{label}: {files} must import and call the page renderer",
+    )
+    require_text(
+        state,
+        bridge,
+        "export interface VisionBridgePdfSourceContext {",
+        label=label,
+    )
+
+
+def _validate_pdf_text_only_after(state: State) -> None:
+    label = "PDF text-only result"
+    files = "packages/core/src/utils/fileUtils.ts"
+    pdf = "packages/core/src/utils/pdf.ts"
+    read_file = "packages/core/src/tools/read-file.ts"
+    bridge = "packages/core/src/services/visionBridge/vision-bridge-service.ts"
+
+    # Neutralising the renderer behind a `false` constant left forty lines of
+    # unreachable fallback that the compiler cannot flag. It is deleted.
+    for path, needles in (
+        (
+            pdf,
+            (
+                "renderPDFPagesToImages",
+                "isPdftoppmAvailable",
+                "resetPdftoppmCache",
+                "PDFRenderedImage",
+                "PDF_RENDER_",
+                "PDF_MAX_PAGES_PER_READ",
+            ),
+        ),
+        (
+            files,
+            (
+                "renderPDFPagesToImages",
+                "willRenderPdfImages",
+                "renderForBridge",
+                "preparePdfForVisionBridge",
+                "PDFVisionBridgeCandidate",
+                "pdfVisionBridgeCandidate",
+                "VISION_BRIDGE_MAX_IMAGES",
+            ),
+        ),
+        (
+            read_file,
+            (
+                "transcribePdfCandidate",
+                "restorePdfFallback",
+                "pdfVisionBridgeNotice",
+                "runVisionBridge",
+            ),
+        ),
+        (bridge, ("VisionBridgePdfSourceContext", "inferPdfSourceContext")),
+    ):
+        for needle in needles:
+            forbid_text(state, path, needle, label=label)
+
+    # The boundary is stated where the renderer used to be, so the next reader
+    # is told why there is no fallback rather than inferring it from absence.
+    require_text(
+        state, pdf, "// PDF support ends at text extraction.", label=label
+    )
+    # The image bridge itself survives: it serves ordinary images, and only
+    # its PDF-specific half is removed.
+    require_text(state, bridge, "export async function runVisionBridge(", label=label)
+    _require(
+        _source(state, files, label=label).count("preserveUnsupportedImage") == 3,
+        f"{label}: {files} must keep the image bridge's option intact",
+    )
+
+
+def _validate_turn_count_owner_before(state: State) -> None:
+    label = "subagent turn-count ownership precondition"
+    core = "packages/core/src/agents/runtime/agent-core.ts"
+    headless = "packages/core/src/agents/runtime/agent-headless.ts"
+    # Upstream keeps the count in the reasoning loop's activation record and
+    # nowhere else: no field on the core, and no accessor for a caller that
+    # needs it after the loop has unwound.
+    require_text(state, core, "    let turnCounter = 0;", label=label)
+    forbid_text(state, core, "reasoningTurnsUsed", label=label)
+    forbid_text(state, headless, "getReasoningTurnsUsed", label=label)
+
+
+def _validate_turn_count_owner_after(state: State) -> None:
+    label = "subagent turn-count ownership result"
+    core = "packages/core/src/agents/runtime/agent-core.ts"
+    headless = "packages/core/src/agents/runtime/agent-headless.ts"
+    headless_test = "packages/core/src/agents/runtime/agent-headless.test.ts"
+
+    # The counter belongs to the object that outlives the throw, and there is
+    # exactly one of it: the mirror that could disagree is gone.
+    require_text(state, core, "  private reasoningTurnsUsed = 0;", label=label)
+    require_text(state, core, "  getReasoningTurnsUsed(): number {", label=label)
+    require_text(state, core, "  resetReasoningTurns(): void {", label=label)
+    forbid_text(state, core, "turnCounter", label=label)
+    forbid_text(state, headless, "private turnsUsed", label=label)
+    forbid_text(state, headless, "this.turnsUsed", label=label)
+    require_text(
+        state,
+        headless,
+        "    return this.core.getReasoningTurnsUsed();",
+        label=label,
+    )
+    # Reset where a logical turn begins, not inside the loop: a throw from
+    # chat creation or tool preparation never reaches the loop.
+    require_text(state, headless, "    this.core.resetReasoningTurns();", label=label)
+    require_text(
+        state,
+        headless_test,
+        "[subagent-scope] reports the turns a thrown run had started",
         label=label,
     )
 
@@ -1746,7 +2268,8 @@ def _validate_subagent_progress_after(state: State) -> None:
     require_text(
         state,
         headless,
-        "          turnsUsed: this.turnsUsed,\n          loopType: this.loopType,",
+        "          turnsUsed: this.core.getReasoningTurnsUsed(),\n"
+        "          loopType: this.loopType,",
         label=label,
     )
     require_text(state, headless, "  getLoopType(): LoopType | null {", label=label)
@@ -2142,6 +2665,154 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_pages_affordance_before,
         validate_after=_validate_pages_affordance_after,
+    ),
+    SemanticConcern(
+        name="closed-tool-parameter-schemas",
+        rationale=(
+            "A tool schema is the model's only map of what is callable, and "
+            "it is re-rendered into the tools block of every request, so it "
+            "is the surface that teaches. JSON Schema permits an undeclared "
+            "property by default, so an invented, misremembered, or stale "
+            "parameter name passed validation and was then dropped: the tool "
+            "did something other than what was asked and said nothing. Only "
+            "read_file refused one name, `pages`, and only as a special case "
+            "written after the fact. The same shape ran one layer down -- "
+            "`offset`/`limit` were read by the text branch alone and silently "
+            "ignored on PDFs, images, audio, video, SVG, notebooks, and "
+            "binaries, with `.ipynb` the sole refusal and that one decided by "
+            "guessing from the extension before the file type was known. Two "
+            "live tool descriptions compounded it by instructing the model to "
+            "batch parallel tool calls in a build where parallel_tool_calls "
+            "is false, which the sealed prompt contradicts once while the "
+            "schema repeats it on every request. Every one of the ten native "
+            "schemas is now closed, a shared rule refuses an undeclared name "
+            "before schema validation and names both the offending key and "
+            "the accepted set, the range rule is decided once at the layer "
+            "that knows the file type, and a truncated read carries the exact "
+            "call that continues it instead of naming two parameters and "
+            "leaving the arithmetic to the reader."
+        ),
+        removal_condition=(
+            "Remove only when upstream closes every advertised tool schema, "
+            "refuses an undeclared parameter rather than dropping it, refuses "
+            "a parameter that is valid for only a subset of the inputs a tool "
+            "accepts, and does not advertise a dispatch mode the runtime "
+            "denies."
+        ),
+        validate_before=_validate_param_contract_before,
+        validate_after=_validate_param_contract_after,
+    ),
+    SemanticConcern(
+        name="validation-refuses-rather-than-repairs",
+        rationale=(
+            "Every tool call passed through a validator that repaired it. "
+            "Four coercion passes rewrote the caller's arguments -- "
+            "\"true\"/\"false\" to boolean, a number to a string, a "
+            "JSON-looking string to an array or object, \"3\" to 3 -- and "
+            "re-validated the mutated object, so a call that violated the "
+            "advertised schema still executed. That is the same defect as "
+            "accepting a parameter and ignoring it, one layer earlier: the "
+            "caller is told its call was well-formed, learns a shape the "
+            "schema does not describe, and nothing downstream can observe "
+            "the difference, which is why it never surfaced as a failure. "
+            "The same function also disabled itself: a schema Ajv could not "
+            "compile skipped validation entirely and warned to a debug "
+            "logger this deployment does not enable, so the guard failed "
+            "open in silence. Both are gone. A violation is reported with "
+            "the parameter and constraint that failed, and an uncompilable "
+            "schema refuses the call rather than waving it through."
+        ),
+        removal_condition=(
+            "Remove only when upstream validates tool parameters without "
+            "mutating them and treats an uncompilable schema as a refusal "
+            "rather than a skipped check."
+        ),
+        validate_before=_validate_no_repair_validation_before,
+        validate_after=_validate_no_repair_validation_after,
+    ),
+    SemanticConcern(
+        name="model-facing-failure-text",
+        rationale=(
+            "A ToolResult carries two strings: llmContent, written for the "
+            "model, and error.message, an operational summary for telemetry "
+            "and the scrollback. On the failure path the scheduler forwarded "
+            "only error.message and read llmContent for images alone, so any "
+            "remedy a tool wrote into the half named for the model was "
+            "discarded before the model saw it. Tools worked around it one "
+            "at a time by copying llmContent into error.message, and the "
+            "ones that did not silently lost their guidance -- the agent "
+            "tool's 'Use TeamCreate to start a team first' and the teammate "
+            "name in its spawn failures reached nobody. Two in-source "
+            "comments existed only to warn the next author. Neither half can "
+            "simply win: llmContent usually carries the remedy but often "
+            "omits the path, while error.message is sometimes the only "
+            "operational fact there is. Both are now sent, merged at the one "
+            "seam every downstream reader passes through, so a tool added "
+            "later cannot reintroduce the loss whichever half it writes."
+        ),
+        removal_condition=(
+            "Remove only when upstream sends a failing tool call's "
+            "model-facing content to the model rather than the operational "
+            "error summary alone."
+        ),
+        validate_before=_validate_model_facing_failure_before,
+        validate_after=_validate_model_facing_failure_after,
+    ),
+    SemanticConcern(
+        name="pdf-text-extraction-without-a-renderer",
+        rationale=(
+            "PDF reads had three image fallbacks: render pages for a "
+            "vision-capable model on text overflow or extraction failure, "
+            "and render them again to feed a text-only model's vision "
+            "bridge. A rendered page is a lossy JPEG substituted for the "
+            "document that was asked for and an unannounced modality change, "
+            "and it cannot satisfy the static original-PNG contract this "
+            "deployment pins. Pinning `willRenderPdfImages = false` "
+            "neutralised the first path but left the code: a typed boolean "
+            "constant the compiler cannot flag, forty lines of unreachable "
+            "fallback, a bridge path still reachable for any caller running "
+            "a text-only model, and continuation guidance inside it that "
+            "told the model to reopen the PDF with a `pages` argument "
+            "read_file refuses -- a guaranteed dead end. A dormant fallback "
+            "is a trap for the next change, so the renderer, the bridge's "
+            "PDF half, and the page-range option that fed them are deleted "
+            "rather than disabled. The image bridge itself is untouched: it "
+            "serves ordinary images and only its PDF-specific half is gone."
+        ),
+        removal_condition=(
+            "Remove only when upstream reads a PDF as text or as a natively "
+            "supported document and never substitutes a rendered image for "
+            "it, with no configuration that re-enables the substitution."
+        ),
+        validate_before=_validate_pdf_text_only_before,
+        validate_after=_validate_pdf_text_only_after,
+    ),
+    SemanticConcern(
+        name="subagent-turn-count-ownership",
+        rationale=(
+            "The reasoning loop's turn counter was a stack local and the "
+            "loop has no catch. Every terminate reason reported the true "
+            "count because each of them returns; a throw -- from the model "
+            "stream, a tool call, or a synchronous event listener -- unwound "
+            "past the single line that copied the count onto the headless "
+            "wrapper, and the terminal event then emitted the zero that "
+            "wrapper had initialised. A subagent that died mid-run was "
+            "recorded as having taken no turns at all, which is the one case "
+            "where the count matters most. The earlier fix made every "
+            "non-throwing exit carry the count, which is why only the throw "
+            "path was left. Reading the count out of the exception path "
+            "would be a special case each new throw site has to remember; "
+            "the counter now belongs to the core, which outlives the throw, "
+            "and the wrapper's mirror -- a second writer that could "
+            "disagree -- is removed rather than kept in step."
+        ),
+        removal_condition=(
+            "Remove only when upstream's subagent terminal event reports the "
+            "run's completed turn count on every exit including a thrown "
+            "one, from state that survives the unwind."
+        ),
+        validate_before=_validate_turn_count_owner_before,
+        validate_after=_validate_turn_count_owner_after,
     ),
     SemanticConcern(
         name="headless-stream-evidence",

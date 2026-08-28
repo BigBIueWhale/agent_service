@@ -22,6 +22,11 @@ pub struct AgentResult {
     pub is_error: bool,
     pub response: String,
     pub duration_ms: u64,
+    /// Wall time the agent spent inside model API calls, as the terminal
+    /// result reports it. Already required and type-checked here; carrying it
+    /// is what separates a run that stalled on the backend from one that
+    /// churned in local tool execution, which `duration_ms` alone cannot.
+    pub api_duration_ms: u64,
     pub num_turns: u64,
     /// Main-scope assistant events carrying billed usage: the turns the agent
     /// both started and finished. Equal to `num_turns` on a run that ended
@@ -178,7 +183,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
     let subtype = required_string(&result, "subtype", terminal_line)?;
     let duration_ms = required_u64(&result, "duration_ms")?;
     let num_turns = required_u64(&result, "num_turns")?;
-    required_u64(&result, "duration_api_ms")?;
+    let api_duration_ms = required_u64(&result, "duration_api_ms")?;
     if !result
         .get("usage")
         .is_some_and(serde_json::Value::is_object)
@@ -258,6 +263,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         is_error,
         response,
         duration_ms,
+        api_duration_ms,
         num_turns,
         billed_main_turns: main_assistant_events,
     })
@@ -552,6 +558,33 @@ mod tests {
         assert_eq!(parsed.billed_main_turns, 1);
         // The real timings survive; they were the whole point of parsing it.
         assert_eq!(parsed.duration_ms, 19_180_714);
+        // Including the API half. This run spent 18,037,819 ms of its
+        // 19,180,714 ms inside model calls -- the fact that separates a
+        // backend stall from a local tool loop. It was required and
+        // type-checked and then dropped, so the terminal record could report
+        // how long the run took but never where the time went.
+        assert_eq!(parsed.api_duration_ms, 18_037_819);
+    }
+
+    #[test]
+    fn refuses_a_terminal_result_whose_api_duration_is_not_a_count() {
+        // Carrying the value does not weaken the check that produced it: the
+        // field stays required and stays fail-closed.
+        for bad in [
+            "\"duration_api_ms\":-1",
+            "\"duration_api_ms\":\"18037819\"",
+            "\"duration_api_ms\":null",
+        ] {
+            let terminal = format!(
+                "{{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,{bad},\"num_turns\":1,\"result\":\"ok\",\"usage\":{{}},\"permission_denials\":[]}}\n"
+            );
+            let text = format!("{INIT}{MAIN_TURN}{terminal}");
+            let error =
+                parse_text(&text).expect_err("duration_api_ms must be a non-negative integer");
+            assert!(error
+                .to_string()
+                .contains("terminal result lacks non-negative integer duration_api_ms"));
+        }
     }
 
     #[test]

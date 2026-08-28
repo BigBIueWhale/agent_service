@@ -186,7 +186,24 @@ pub struct SessionBody {
     /// false. Inspect `response` for wire-error envelopes if needed.
     pub is_process_error: bool,
     pub response: String,
-    pub agent_duration_ms: u64,
+    /// Wall time the agent itself reported, or `None` when no terminal
+    /// result was parsed and there is therefore nothing to report. The field
+    /// was a bare `u64` and every path that never saw a terminal result wrote
+    /// `0` into it, which is indistinguishable from a genuine zero and reads
+    /// as "the agent ran for no time" rather than "the agent never told us".
+    /// `Option` makes the fabricated value unrepresentable: absent is the
+    /// only way to say nothing was measured.
+    pub agent_duration_ms: Option<u64>,
+    /// Of `agent_duration_ms`, the wall time spent inside model API calls.
+    /// The terminal result has always been required to carry it and the
+    /// parser has always type-checked it; it was then discarded, leaving an
+    /// operator unable to tell a backend stall from a local tool loop.
+    // Terminal records committed before this field existed cannot supply it,
+    // and absent is its one semantically valid migration value: those runs
+    // report no API time because none was recorded. This is an explicit
+    // persisted-data schema migration, not a runtime behavior fallback.
+    #[serde(default)]
+    pub agent_api_duration_ms: Option<u64>,
     /// SHA-256 of the published `bundle.tar.zst`, computed at bundle
     /// acceptance. Empty exactly when no bundle was accepted; the bundle
     /// itself is retrieved over the connection from the bundle endpoint,
@@ -1794,7 +1811,8 @@ fn running_body(
         agent_exit_code: 0,
         is_process_error: false,
         response: String::new(),
-        agent_duration_ms: 0,
+        agent_duration_ms: None,
+        agent_api_duration_ms: None,
         bundle_sha256: String::new(),
         bundle_compressed_bytes: 0,
         bundle_uncompressed_bytes: 0,
@@ -4265,7 +4283,8 @@ mod tests {
             agent_exit_code: 0,
             is_process_error: false,
             response: "done".to_string(),
-            agent_duration_ms: 1,
+            agent_duration_ms: Some(1),
+            agent_api_duration_ms: Some(1),
             bundle_sha256: String::new(),
             bundle_compressed_bytes: 0,
             bundle_uncompressed_bytes: 0,
@@ -4274,6 +4293,49 @@ mod tests {
             raw_session_tree_retained: false,
             teardown_diagnostics: Vec::new(),
         }
+    }
+
+    #[test]
+    fn unmeasured_agent_durations_are_absent_rather_than_zero() {
+        // Every path that never parses a terminal result used to write 0 into
+        // both duration fields, which reads as "the agent ran instantly"
+        // rather than "the agent never reported". `Option` removes the
+        // fabricated value: a run that reported nothing serializes null, and
+        // there is no way to write a zero without meaning it.
+        let mut unreported = body("s-00000000000000000000000000000000");
+        unreported.agent_duration_ms = None;
+        unreported.agent_api_duration_ms = None;
+        let json = serde_json::to_value(&unreported).expect("serialize");
+        assert!(json["agent_duration_ms"].is_null());
+        assert!(json["agent_api_duration_ms"].is_null());
+
+        let reported = body("s-11111111111111111111111111111111");
+        let json = serde_json::to_value(&reported).expect("serialize");
+        assert_eq!(json["agent_duration_ms"], serde_json::json!(1));
+        assert_eq!(json["agent_api_duration_ms"], serde_json::json!(1));
+
+        // A genuine zero stays representable and stays distinct from absent.
+        let mut instant = body("s-22222222222222222222222222222222");
+        instant.agent_duration_ms = Some(0);
+        instant.agent_api_duration_ms = Some(0);
+        let json = serde_json::to_value(&instant).expect("serialize");
+        assert_eq!(json["agent_duration_ms"], serde_json::json!(0));
+        assert!(!json["agent_duration_ms"].is_null());
+    }
+
+    #[test]
+    fn a_record_written_before_the_api_duration_field_reads_as_unmeasured() {
+        // Historical committed records cannot supply the newer field. Absent
+        // is its one valid migration value; defaulting it to 0 would claim a
+        // measurement that was never taken.
+        let mut json = serde_json::to_value(body("s-33333333333333333333333333333333"))
+            .expect("serialize");
+        json.as_object_mut()
+            .expect("object")
+            .remove("agent_api_duration_ms");
+        let restored: SessionBody = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(restored.agent_api_duration_ms, None);
+        assert_eq!(restored.agent_duration_ms, Some(1));
     }
 
     fn test_config(state_dir: PathBuf, results_dir: PathBuf) -> Config {

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `85b6bbf74ea0070af4a00fc23534fbb6786acd95c773f0030379ca3f4fe7892a`
+- Review-diff SHA-256: `e72fc428d6dc4874ca407bda616ab4cbb61c97028e6404ad1f6a1a66a1c1ecfd`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `b70de96802a4a9a8bef5cff320c899b42fc78af7c968b3896f02dadc221eae48`
+- Transformer-manifest SHA-256: `9d453a5f3b5b7f7837de808116b5326f051f0abe04144da247a803ab7f40fe76`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -85,28 +85,148 @@ provide as one fail-closed mode:
   16,777,216-pixel, 30:1, and 100-MiB limits; no resize/transcode fallback;
 - chronological text-image-text tool results with `splitToolMedia=false`, plus
   fail-closed rejection of non-PNG and file/remote image transports;
-- exactly one range mechanism on `read_file`. Upstream advertised the
-  PDF-only `pages` parameter on every file type. A tool schema is the
-  model's only map of what is callable, and a parameter whose applicability
-  depends on the value of another parameter cannot be read off that map, so
-  the model used it as a line range on source files. Making the refusal
-  accurate at both the validation and consumption layers, naming
-  `offset`/`limit` as the remedy, did not change the behaviour: it was
-  measured again afterwards, 106 refusals across 7 of 18 subagent scopes in
-  a single run, one subagent issuing 55 of them, and three subagents
-  repeating a byte-identical failing call until loop detection killed them.
-  The affordance itself was the defect. `read_file` now reads whole files
-  and advertises exactly `file_path`, `offset`, and `limit`; a `pages`
-  argument supplied anyway is refused whatever the file type — an
-  undeclared key survives JSON-schema validation, and a dropped page range
-  would leave the model believing it had asked for one — and the shared
-  consumption layer keeps its own fail-closed guard for callers that bypass
-  the tool. PDF page selection happens where it is unambiguous and where
-  this deployment's sealed contract already puts it, a page-ranged
-  `pdftotext` run in the shell, and one exported remedy string is what
-  every large-, truncated-, or overflowing-PDF message names, so no
-  guidance can point at a parameter that no longer exists (six
-  `[pages-contract]` cases execute this boundary in the build);
+- one closed parameter contract for every advertised tool. A tool schema is
+  the model's only map of what is callable and it is re-rendered into the
+  tools block of every request, so it is the surface that teaches; a single
+  error message is one line of history competing with it. JSON Schema permits
+  an undeclared property by default, so an invented, misremembered, or stale
+  parameter name passed validation and was then dropped -- the tool did
+  something other than what was asked and said nothing. `read_file` refused
+  exactly one such name, `pages`, as a special case written after the fact,
+  and every other tool dropped every other name. All ten native schemas now
+  declare `additionalProperties: false`, and one shared rule refuses an
+  undeclared name before schema validation, naming both the offending key and
+  the complete accepted set: `read_file has no parameter 'pages'. It accepts
+  exactly: 'file_path', 'offset', 'limit'. Re-send the call using only those
+  parameters.` `agent` and `todo_write` replace `validateToolParams`
+  wholesale and so never run Ajv at all; both now apply the same rule, in
+  `agent`'s case after its specific refusals so that "this parameter exists
+  upstream and is disabled here" keeps precedence over "no such parameter".
+  The `pages` special case is gone: it was one instance of the general rule.
+- the same defect one layer down. `offset` and `limit` were read only by the
+  text branch and were silently ignored on PDFs, images, audio, video, SVGs,
+  notebooks, and binaries -- a plausible wrong answer rather than an error,
+  and worse than the `pages` case because nothing downstream could observe
+  it. Only `.ipynb` was refused, and only by guessing from the extension at
+  the tool layer before the file type was known. One rule now covers every
+  non-text type and fires at the first point in the read that knows what the
+  file is, so the refusal can name it: `'offset' and 'limit' select a range
+  of lines and apply to text files only; docs/spec.pdf is a pdf file, which
+  is read whole. Re-send the call with only 'file_path'.` The extension guess
+  is deleted. The advertised schema was corrected to match what the code
+  actually does: `offset` no longer claims to require `limit` (it never did --
+  a missing `limit` takes the default window), and both parameters now state
+  that they are text-only and refused elsewhere.
+- a truncated read that carries the call which continues it. The `read_file`
+  description promised that a truncated response "will explain how to
+  continue with 'offset' and 'limit'"; the notice said only `Showing lines
+  1-2000 of 40000 total lines.` Naming the parameters is not explaining how
+  to continue -- the reader still has to derive a 0-based resume line from a
+  1-based display range, and a line the character budget cut short makes that
+  arithmetic wrong in a way that silently skips content. The resume point is
+  computed where that is knowable, and the notice carries the actual next
+  call: `To continue from where this read stopped, call read_file with
+  file_path: "/workspace/src/main.rs", offset: 2000, limit: 2000.` A read
+  that reached the end of the file carries nothing.
+- PDF page selection named for the file that was asked for. One exported
+  remedy already sent every large-, truncated-, or overflowing-PDF message to
+  the same place, but it named `<absolute path>`, a value the message already
+  had. It is now a function of the path, so the command can be run as
+  written; `FIRST` and `LAST` stay placeholders because they are the caller's
+  decision, and a template form derived from the same function serves the
+  tool description, which is fed to `/tokenize` with the rest of the tools
+  block and must stay byte-stable. The 100 MB full-text gate put that remedy
+  in `llmContent`, which the scheduler discards on a result carrying `error`:
+  the model saw only the size complaint. It is in both halves now. Two
+  continuation messages on the text-only vision-bridge path told the model to
+  call `read_file` on the original PDF "with pages" or "with a later page
+  range" -- a call `read_file` refuses, so a guaranteed dead end for any
+  caller running a text-only model. They now give the `pdftotext` command in
+  full.
+- no tool description that advertises a dispatch this build does not have.
+  `parallel_tool_calls` is false and both sealed prompts say tool calls are
+  sequential, but `glob` told the model "You have the capability to call
+  multiple tools in a single response. It is always better to speculatively
+  perform multiple searches as a batch", and `run_shell_command` told it to
+  "send a single message with two run_shell_command tool calls in parallel".
+  Those descriptions are re-rendered into every request; the sealed prompt
+  says the opposite once. Both now state the runtime fact. Nine
+  `[param-contract]` cases execute this boundary in the build, over the
+  closed schemas of all ten tools, the ordering of the shared refusal against
+  schema validation, the non-text range refusal, the truncation
+  continuation, and the two descriptions.
+- tool-parameter validation that reports rather than repairs. Every tool call
+  passed through a validator that ran four coercion passes over the caller's
+  arguments -- `"true"`/`"false"` to boolean, a number to a string, a
+  JSON-looking string to an array or object, `"3"` to `3` -- and re-validated
+  the mutated object, so a call that violated the advertised schema still
+  executed. That is the parameter-ignoring defect one layer earlier, and it
+  never surfaced as a failure precisely because it made wrong calls succeed.
+  The same function also disabled itself: a schema Ajv could not compile
+  skipped validation entirely and warned to a debug logger this deployment
+  does not enable, so the guard failed open in silence. Both are gone, with
+  the ~1,100 lines of coercion machinery they needed. A violation is reported
+  as `params/<path> must <constraint>`, and an uncompilable schema refuses the
+  call. The modification flow, which re-enters the tool with the runtime's own
+  bookkeeping alongside the edited parameters, routes those two names through
+  a channel declared on the tool and removed before the schema check, so they
+  are never advertised and every other undeclared name is still refused
+  (`notebook_edit` needs no channel: it already keeps its bookkeeping in a
+  side map, which is the shape that retires the channel entirely).
+- one model-facing field for a failed tool call. A `ToolResult` carries
+  `llmContent`, written for the model, and `error.message`, an operational
+  summary for telemetry and the scrollback; on the failure path the scheduler
+  forwarded only `error.message` and read `llmContent` for images alone. Any
+  remedy written into the half named for the model was discarded before the
+  model saw it -- the `agent` tool's "Use TeamCreate to start a team first",
+  the teammate name in its spawn failures, the `pdftotext` command on an
+  oversized PDF. Tools worked around it one at a time by copying `llmContent`
+  into `error.message`, and two in-source comments existed only to warn the
+  next author. Neither half can simply win: `llmContent` usually carries the
+  remedy but often omits the path, while `error.message` is sometimes the only
+  operational fact there is, such as a shell timeout summary against unrelated
+  output. Both are now merged at the one seam every downstream reader passes
+  through, so a tool added later cannot reintroduce the loss whichever half it
+  writes, and the per-tool workarounds are retired.
+- PDF reading with no image fallback at all. Three paths rendered pages to
+  JPEGs: for a vision-capable model on text overflow, again on extraction
+  failure, and again to feed a text-only model's vision bridge. A rendered
+  page is a lossy image substituted for the document that was asked for and an
+  unannounced modality change, and it cannot satisfy the static original-PNG
+  contract this deployment pins. Pinning `willRenderPdfImages = false`
+  neutralised the first path but left the code: a typed boolean constant the
+  compiler cannot flag, forty lines of unreachable fallback, a bridge path
+  still reachable for any caller running a text-only model, and continuation
+  guidance inside it that told the model to reopen the PDF with a `pages`
+  argument `read_file` refuses -- a guaranteed dead end. The renderer, the
+  bridge's PDF half, the page-range option on the shared read utility, and the
+  parser that fed them are deleted rather than disabled, together with their
+  tests; the image bridge itself is untouched. `pdf.ts` states the boundary
+  where the renderer used to be, so the next reader is told why there is no
+  fallback instead of inferring it from absence.
+- a subagent turn count that survives a throw. The reasoning loop's counter
+  was a stack local and the loop has no `catch`. Every terminate reason
+  reported the true count because each of them returns; a throw -- from the
+  model stream, a tool call, or a synchronous event listener -- unwound past
+  the single line that copied the count onto the headless wrapper, and the
+  terminal event emitted the zero that wrapper had initialised. A subagent
+  that died mid-run was recorded as having taken no turns at all, which is the
+  case where the count matters most. The counter now belongs to the core,
+  which outlives the throw, and the wrapper's mirror -- a second writer that
+  could disagree -- is removed rather than kept in step. Reading the count out
+  of the exception path was rejected: it is a special case each new throw site
+  would have to remember.
+- a build that runs the tests it claims to. The image executed a fixed list of
+  24 files plus two `-t` filters, so `fileUtils.test.ts`, `read-file.test.ts`
+  and `subagent-result.test.ts` never ran in full and `agent-core.test.ts`,
+  `web-fetch.test.ts` and `readManyFiles.test.ts` never ran at all -- which is
+  why roughly thirty assertions pinning the deleted PDF renderer sat broken
+  and invisible. The list is now derived at build time from the hashed patch
+  itself: every test file the patch modifies must exist and is executed in
+  full, and so is the test file adjacent to every source file the patch
+  modifies, when one exists. A patched test file that is missing fails the
+  build. There are no `-t` filters left, so a test the build does not run is
+  no longer a reachable state; coverage rises from 28 files to 54.
 - evidentiary stream-json tool results: the emitted record prefers the
   model-facing responseParts over the short human-facing display string, so
   captured event streams carry what the model actually received (two
