@@ -730,12 +730,18 @@ pub async fn run_one(
                 .into(),
         ))
     };
+    // Subagent scopes exist only as parser output: a session whose stream
+    // was never strictly parsed (cancelled before terminal, capture or parse
+    // refused) reports an empty scope list, because an unparsed stream can
+    // prove nothing about subagents and a fabricated row would read as
+    // evidence.
     let (
         mut response,
         agent_duration_ms,
         agent_api_duration_ms,
         num_turns,
         billed_main_turns,
+        subagent_scopes,
         mut is_process_error,
         parsed_valid,
     ) = match parsed {
@@ -745,6 +751,7 @@ pub async fn run_one(
             Some(result.api_duration_ms),
             result.num_turns,
             result.billed_main_turns,
+            result.scopes,
             result.is_error,
             true,
         ),
@@ -754,6 +761,7 @@ pub async fn run_one(
             None,
             0,
             0,
+            Vec::new(),
             false,
             false,
         ),
@@ -765,6 +773,7 @@ pub async fn run_one(
                 None,
                 0,
                 0,
+                Vec::new(),
                 true,
                 false,
             )
@@ -857,6 +866,11 @@ pub async fn run_one(
         is_process_error = true;
     }
 
+    let subagent_scope_count = subagent_scopes.len() as u64;
+    let subagent_error_count = subagent_scopes
+        .iter()
+        .filter(|scope| scope.is_error == Some(true))
+        .count() as u64;
     let mut body = SessionBody {
         session_id: session_id.to_string(),
         status,
@@ -887,6 +901,9 @@ pub async fn run_one(
         response,
         agent_duration_ms,
         agent_api_duration_ms,
+        subagent_scopes,
+        subagent_scope_count,
+        subagent_error_count,
         bundle_sha256,
         bundle_compressed_bytes: compressed,
         bundle_uncompressed_bytes: uncompressed,
@@ -1225,6 +1242,9 @@ pub async fn recover_after_execution_panic(
         response,
         agent_duration_ms: None,
         agent_api_duration_ms: None,
+        subagent_scopes: Vec::new(),
+        subagent_scope_count: 0,
+        subagent_error_count: 0,
         bundle_sha256,
         bundle_compressed_bytes: compressed,
         bundle_uncompressed_bytes: uncompressed,
@@ -1405,6 +1425,9 @@ pub async fn recover_after_service_restart(
         response,
         agent_duration_ms: None,
         agent_api_duration_ms: None,
+        subagent_scopes: Vec::new(),
+        subagent_scope_count: 0,
+        subagent_error_count: 0,
         bundle_sha256,
         bundle_compressed_bytes: compressed,
         bundle_uncompressed_bytes: uncompressed,
@@ -1998,6 +2021,9 @@ async fn finalize_setup_failure(
         response,
         agent_duration_ms: None,
         agent_api_duration_ms: None,
+        subagent_scopes: Vec::new(),
+        subagent_scope_count: 0,
+        subagent_error_count: 0,
         bundle_sha256,
         bundle_compressed_bytes: compressed,
         bundle_uncompressed_bytes: uncompressed,

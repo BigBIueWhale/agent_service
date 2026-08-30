@@ -3185,6 +3185,9 @@ mod tests {
             response: "fixture terminal".to_string(),
             agent_duration_ms: None,
             agent_api_duration_ms: None,
+            subagent_scopes: Vec::new(),
+            subagent_scope_count: 0,
+            subagent_error_count: 0,
             bundle_sha256: String::new(),
             bundle_compressed_bytes: 0,
             bundle_uncompressed_bytes: 0,
@@ -3684,5 +3687,23 @@ mod tests {
             .remove("raw_session_tree_retained");
         let migrated: SessionBody = serde_json::from_value(value).expect("decode historical body");
         assert!(!migrated.raw_session_tree_retained);
+    }
+
+    #[test]
+    fn historical_terminal_without_subagent_fields_has_only_empty_migration_value() {
+        // Records committed before subagent surfacing ran through the same
+        // strict parser, which validated scope shape and then discarded the
+        // accounting; an empty table is the only migration value that does
+        // not invent evidence for them.
+        let body = terminal("s-88888888888888888888888888888888", false);
+        let mut value = serde_json::to_value(&body).expect("serialize historical fixture");
+        let object = value.as_object_mut().expect("terminal object");
+        object.remove("subagent_scopes");
+        object.remove("subagent_scope_count");
+        object.remove("subagent_error_count");
+        let migrated: SessionBody = serde_json::from_value(value).expect("decode historical body");
+        assert!(migrated.subagent_scopes.is_empty());
+        assert_eq!(migrated.subagent_scope_count, 0);
+        assert_eq!(migrated.subagent_error_count, 0);
     }
 }

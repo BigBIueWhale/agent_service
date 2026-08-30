@@ -204,6 +204,30 @@ pub struct SessionBody {
     // persisted-data schema migration, not a runtime behavior fallback.
     #[serde(default)]
     pub agent_api_duration_ms: Option<u64>,
+    /// Per-subagent accounting from the strict terminal parse, in order of
+    /// first appearance in the stream. Each row is one scope: the id-resolved
+    /// `tool_use` call that spawned it, the turns the stream billed to it,
+    /// and the terminal record it reported for itself, if any. Empty when the
+    /// run delegated nothing — and empty on any session whose stream was
+    /// never strictly parsed (cancelled before terminal, capture unproved),
+    /// because an unparsed stream can prove nothing about subagents and a
+    /// fabricated row would read as evidence.
+    // Terminal records committed before subagent surfacing existed carry no
+    // scope rows and ran through the same parser, which validated and then
+    // discarded exactly this information; empty is their only semantically
+    // valid migration value. This is an explicit persisted-data schema
+    // migration, not a runtime behavior fallback.
+    #[serde(default)]
+    pub subagent_scopes: Vec<crate::result_parse::AgentScope>,
+    /// Summary counts over `subagent_scopes`, precomputed so a caller can
+    /// read delegation volume and failure count without walking the array.
+    /// A scope counts as an error only when its own terminal record reported
+    /// `is_error: true`: a scope that never reported is surfaced as absent
+    /// evidence, never inflated into a failure.
+    #[serde(default)]
+    pub subagent_scope_count: u64,
+    #[serde(default)]
+    pub subagent_error_count: u64,
     /// SHA-256 of the published `bundle.tar.zst`, computed at bundle
     /// acceptance. Empty exactly when no bundle was accepted; the bundle
     /// itself is retrieved over the connection from the bundle endpoint,
@@ -1813,6 +1837,9 @@ fn running_body(
         response: String::new(),
         agent_duration_ms: None,
         agent_api_duration_ms: None,
+        subagent_scopes: Vec::new(),
+        subagent_scope_count: 0,
+        subagent_error_count: 0,
         bundle_sha256: String::new(),
         bundle_compressed_bytes: 0,
         bundle_uncompressed_bytes: 0,
@@ -4285,6 +4312,9 @@ mod tests {
             response: "done".to_string(),
             agent_duration_ms: Some(1),
             agent_api_duration_ms: Some(1),
+            subagent_scopes: Vec::new(),
+            subagent_scope_count: 0,
+            subagent_error_count: 0,
             bundle_sha256: String::new(),
             bundle_compressed_bytes: 0,
             bundle_uncompressed_bytes: 0,

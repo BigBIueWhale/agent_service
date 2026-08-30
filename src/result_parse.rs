@@ -1,9 +1,15 @@
 //! Strict parser for pinned Qwen Code 0.21.12 stream-JSON.
 //!
 //! Every event names its scope in `parent_tool_use_id`: null (or absent) is
-//! the main session, an `agent` tool-call id is that subagent. A subagent that
-//! stops without a report emits its own `result` under its tool-call id, so
-//! `result` alone does not mean the session ended.
+//! the main session, a non-empty string is the id of the `tool_use` content
+//! block that spawned that subagent. Correlation is by id and stream order
+//! alone — never by tool name — so a non-null scope must resolve to a
+//! `tool_use` already issued by an assistant message, and one that does not
+//! is rejected rather than pooled into some "unknown subagent" bucket. Every
+//! scope, the main session included, is one row of the same accounting
+//! table: billed turns, plus at most one terminal `result`. A subagent that
+//! stops emits its own `result` under its tool-call id, so `result` alone
+//! does not mean the session ended.
 //!
 //! Exactly one terminal `result` object *for the main session* is required and
 //! it must be the final non-empty line. Every line must be a JSON object with
@@ -11,9 +17,12 @@
 //! This deliberately rejects partial, duplicated, recovered, or post-terminal
 //! output rather than choosing a convenient-looking last result.
 
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
+
+use serde::{Deserialize, Serialize};
 
 use crate::error::{io_msg, ServiceError, ServiceResult};
 
@@ -32,6 +41,59 @@ pub struct AgentResult {
     /// both started and finished. Equal to `num_turns` on a run that ended
     /// normally, one less when an error ended the run inside a turn.
     pub billed_main_turns: u64,
+    /// Every subagent scope the stream resolved, in order of first
+    /// appearance. Empty exactly when the run delegated nothing.
+    pub scopes: Vec<AgentScope>,
+}
+
+/// One resolved subagent scope. Identification follows the Claude Code CLI
+/// convention: a scope is the id of the `tool_use` content block that spawned
+/// it, so consumers never need to know which tool performs delegation — and
+/// this parser never assumes one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentScope {
+    /// Id of the spawning `tool_use` block; the exact value every event in
+    /// the scope carried in `parent_tool_use_id`.
+    pub tool_use_id: String,
+    /// Name of that spawning tool call. Recorded as evidence for the reader,
+    /// never used as a correlation key: resolution is by id alone.
+    pub tool_name: String,
+    /// Assistant events in this scope carrying billed usage — the turns the
+    /// subagent both started and finished, counted by this parser.
+    pub billed_turns: u64,
+    /// What the scope's own terminal record reported, verbatim. All four are
+    /// `None` exactly when the scope never emitted a terminal record (the
+    /// subagent was still running, or was torn down, when the session ended);
+    /// `error_message` is additionally `None` when the record carried no
+    /// error. `reported_num_turns` is deliberately never reconciled against
+    /// `billed_turns` — see `finish_subagent_scope` for why.
+    pub reported_num_turns: Option<u64>,
+    pub is_error: Option<bool>,
+    pub subtype: Option<String>,
+    pub error_message: Option<String>,
+}
+
+/// A `tool_use` content block an assistant message already issued: the only
+/// thing a later `parent_tool_use_id` may legally name. The recorded values
+/// are what a scope needs at assembly (`name`) and what a rejection needs to
+/// point back at the spawning call (`line`, issuing `scope`).
+struct RecordedToolUse {
+    name: String,
+    line: usize,
+    scope: Option<String>,
+}
+
+/// Accounting for one scope. The main session is the row keyed `None`,
+/// created before the first event is read, so "main" is a key in the one
+/// table rather than a parallel code path — there is exactly one accounting
+/// mechanism for every scope in the stream.
+struct ScopeState {
+    tool_use_id: Option<String>,
+    billed_turns: u64,
+    /// The scope's terminal `result` record and its line. At most one may
+    /// exist: a scope that has reported is finished, and any later event in
+    /// it is post-terminal output.
+    terminal: Option<(usize, serde_json::Map<String, serde_json::Value>)>,
 }
 
 // A session may have indefinitely many records, but one JSON event is a
@@ -77,11 +139,18 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
     let mut reader = BufReader::new(file.take(metadata.len()));
 
     let mut stream_session_id: Option<String> = None;
-    let mut result: Option<serde_json::Map<String, serde_json::Value>> = None;
-    let mut main_assistant_events = 0u64;
+    // The scope table. Row 0 is the main session, keyed `None`; a subagent
+    // row is created the moment its first event resolves. The vector keeps
+    // stream order of first appearance, the index map keeps lookup exact.
+    let mut scope_states = vec![ScopeState {
+        tool_use_id: None,
+        billed_turns: 0,
+        terminal: None,
+    }];
+    let mut scope_rows: HashMap<String, usize> = HashMap::new();
+    let mut tool_uses: HashMap<String, RecordedToolUse> = HashMap::new();
     let mut physical_line = 0usize;
     let mut event_count = 0usize;
-    let mut terminal_line = 0usize;
     let mut record = Vec::new();
 
     loop {
@@ -104,7 +173,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         if line.iter().all(|byte| byte.is_ascii_whitespace()) {
             continue;
         }
-        if result.is_some() {
+        if let Some((terminal_line, _)) = &scope_states[0].terminal {
             return Err(ServiceError::AgentOutputMissing(format!(
                 "events.jsonl terminal result at line {terminal_line} is followed by another event at line {physical_line}"
             )));
@@ -144,21 +213,59 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
             _ => {}
         }
 
-        require_parent_scope(object, physical_line)?;
-
-        if is_completed_main_turn(object) {
-            main_assistant_events = main_assistant_events.checked_add(1).ok_or_else(|| {
-                ServiceError::AgentOutputMissing(
-                    "events.jsonl completed main-turn count overflowed".into(),
-                )
-            })?;
+        let scope = required_scope(object, physical_line)?;
+        // Resolve the event to its scope row. A non-null scope id is only
+        // admissible if the stream has already issued the `tool_use` block it
+        // names: resolution is by id and stream order, never by tool name,
+        // and an id with no earlier issuance is contradictory evidence.
+        // There is deliberately no "unknown scope" bucket to absorb it.
+        let row = match scope {
+            None => 0,
+            Some(id) => match scope_rows.get(id) {
+                Some(row) => *row,
+                None => {
+                    if !tool_uses.contains_key(id) {
+                        return Err(ServiceError::AgentOutputMissing(format!(
+                            "events.jsonl line {physical_line} names parent_tool_use_id {id:?}, which no earlier assistant message issued as a tool_use id"
+                        )));
+                    }
+                    let row = scope_states.len();
+                    scope_rows.insert(id.to_string(), row);
+                    scope_states.push(ScopeState {
+                        tool_use_id: Some(id.to_string()),
+                        billed_turns: 0,
+                        terminal: None,
+                    });
+                    row
+                }
+            },
+        };
+        // A scope that has emitted its terminal record is finished. The main
+        // session's record ends the whole stream (checked above, before the
+        // event is even parsed); a subagent's ends only its own scope, and a
+        // later event still claiming that scope is post-terminal output.
+        if let Some((scope_terminal_line, _)) = &scope_states[row].terminal {
+            return Err(ServiceError::AgentOutputMissing(format!(
+                "events.jsonl line {physical_line} continues {} after its terminal result at line {scope_terminal_line}",
+                scope_display(scope)
+            )));
         }
-        // A subagent's own terminal record is scoped to its agent tool call
-        // and is not the end of the session. Only the main session's result
-        // terminates the stream; anything after it is post-terminal output.
-        if event_type == "result" && is_main_session_event(object) {
-            terminal_line = physical_line;
-            result = Some(object.clone());
+        if event_type == "assistant" {
+            record_tool_uses(object, physical_line, scope, &mut tool_uses)?;
+            if has_billed_usage(object) {
+                let billed = &mut scope_states[row].billed_turns;
+                *billed = billed.checked_add(1).ok_or_else(|| {
+                    ServiceError::AgentOutputMissing(format!(
+                        "events.jsonl billed turn count overflowed in {}",
+                        scope_display(scope)
+                    ))
+                })?;
+            }
+        } else if event_type == "result" {
+            // A subagent's own terminal record is scoped to its spawning tool
+            // call and is not the end of the session. Only the main session's
+            // result terminates the stream.
+            scope_states[row].terminal = Some((physical_line, object.clone()));
         }
     }
 
@@ -169,11 +276,19 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         )));
     }
 
-    let result = result.ok_or_else(|| {
+    let mut rows = scope_states.into_iter();
+    let main = rows
+        .next()
+        .expect("the main scope row is created before the first event is read");
+    let billed_main_turns = main.billed_turns;
+    let (terminal_line, result) = main.terminal.ok_or_else(|| {
         ServiceError::AgentOutputMissing(format!(
             "events.jsonl has {event_count} event(s) but no main-session terminal result"
         ))
     })?;
+    let scopes = rows
+        .map(|state| finish_subagent_scope(state, &tool_uses))
+        .collect::<ServiceResult<Vec<_>>>()?;
     let is_error = result
         .get("is_error")
         .and_then(serde_json::Value::as_bool)
@@ -209,7 +324,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
     // and unbilled turn behind. Anything outside that window means the result
     // event does not describe this stream, which is what this check exists to
     // catch.
-    let unbilled = num_turns.checked_sub(main_assistant_events);
+    let unbilled = num_turns.checked_sub(billed_main_turns);
     let consistent = match unbilled {
         Some(0) => true,
         Some(1) => is_error,
@@ -217,7 +332,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
     };
     if !consistent {
         return Err(ServiceError::AgentOutputMissing(format!(
-            "terminal num_turns={num_turns} is not consistent with {main_assistant_events} \
+            "terminal num_turns={num_turns} is not consistent with {billed_main_turns} \
              main assistant event(s): a run bills every turn it finishes, and only an error \
              result may leave the one turn it interrupted unbilled"
         )));
@@ -265,7 +380,8 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         duration_ms,
         api_duration_ms,
         num_turns,
-        billed_main_turns: main_assistant_events,
+        billed_main_turns,
+        scopes,
     })
 }
 
@@ -404,34 +520,209 @@ fn is_main_session_event(object: &serde_json::Map<String, serde_json::Value>) ->
         .is_none_or(serde_json::Value::is_null)
 }
 
-/// Refuse an event whose scope is neither the main session nor an agent
-/// tool-call id. Which record terminates the stream is decided from this
-/// field, so a value of an unexpected shape is contradictory evidence and is
-/// rejected here rather than silently read as "some subagent".
-fn require_parent_scope(
+/// Read an event's scope: `None` is the main session, `Some(id)` the
+/// spawning tool-call id. Which record terminates the stream and which row
+/// absorbs the billing are both decided from this field, so a value of an
+/// unexpected shape is contradictory evidence and is rejected here rather
+/// than silently read as "some subagent".
+fn required_scope(
     object: &serde_json::Map<String, serde_json::Value>,
     line: usize,
-) -> ServiceResult<()> {
+) -> ServiceResult<Option<&str>> {
     match object.get("parent_tool_use_id") {
-        None | Some(serde_json::Value::Null) => Ok(()),
-        Some(serde_json::Value::String(id)) if !id.is_empty() => Ok(()),
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(id)) if !id.is_empty() => Ok(Some(id)),
         Some(other) => Err(ServiceError::AgentOutputMissing(format!(
             "events.jsonl line {line} has parent_tool_use_id {other}, which is neither null nor a non-empty agent tool-call id"
         ))),
     }
 }
 
+/// Name a scope the way a rejection message needs to: by what the reader can
+/// find in the stream, not by a row index that exists only in this parser.
+fn scope_display(scope: Option<&str>) -> String {
+    match scope {
+        None => "the main session".into(),
+        Some(id) => format!("subagent scope {id:?}"),
+    }
+}
+
+/// Record every `tool_use` content block an assistant message issues:
+/// id → (tool name, line, issuing scope). This table is the sole resolution
+/// authority for `parent_tool_use_id`, which is why a block that claims to
+/// be a tool_use but lacks a usable id or name is refused instead of
+/// skipped: skipping it would orphan every event of the scope it was about
+/// to spawn. A duplicate id is refused for the same reason — correlation is
+/// by id, and a second issuance would make every later reference ambiguous.
+fn record_tool_uses(
+    object: &serde_json::Map<String, serde_json::Value>,
+    line: usize,
+    scope: Option<&str>,
+    tool_uses: &mut HashMap<String, RecordedToolUse>,
+) -> ServiceResult<()> {
+    let Some(blocks) = object
+        .get("message")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|message| message.get("content"))
+        .and_then(serde_json::Value::as_array)
+    else {
+        return Ok(());
+    };
+    for block in blocks {
+        let Some(block) = block.as_object() else {
+            continue;
+        };
+        if block.get("type").and_then(serde_json::Value::as_str) != Some("tool_use") {
+            continue;
+        }
+        let required = |key: &str| -> ServiceResult<&str> {
+            block
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    ServiceError::AgentOutputMissing(format!(
+                        "events.jsonl line {line} has a tool_use block lacking non-empty string {key}"
+                    ))
+                })
+        };
+        let id = required("id")?;
+        let name = required("name")?;
+        if let Some(previous) = tool_uses.get(id) {
+            return Err(ServiceError::AgentOutputMissing(format!(
+                "events.jsonl line {line} re-issues tool_use id {id:?}, first issued at line {} in {}",
+                previous.line,
+                scope_display(previous.scope.as_deref())
+            )));
+        }
+        tool_uses.insert(
+            id.to_string(),
+            RecordedToolUse {
+                name: name.to_string(),
+                line,
+                scope: scope.map(str::to_string),
+            },
+        );
+    }
+    Ok(())
+}
+
+/// Convert an accumulated subagent row into its public record.
+///
+/// Deliberate asymmetry with the main-scope `num_turns` cross-check in
+/// `parse_events_jsonl`: a subagent's reported `num_turns` is recorded
+/// verbatim and never reconciled against the turns this parser billed to the
+/// scope. The pinned runner has a known defect here — a subagent terminated
+/// by a thrown error reports `num_turns: 0` over genuinely billed turns, and
+/// a MAX_TURNS abort reports every started turn while the stream billed
+/// fewer — so applying the main-scope window would refuse real production
+/// streams. Surfacing both numbers side by side is what lets a reader see
+/// the contradiction; enforcing agreement would discard the very runs that
+/// exhibit it.
+fn finish_subagent_scope(
+    state: ScopeState,
+    tool_uses: &HashMap<String, RecordedToolUse>,
+) -> ServiceResult<AgentScope> {
+    let tool_use_id = state
+        .tool_use_id
+        .expect("only the pre-created main row carries no tool_use id");
+    let tool_name = tool_uses
+        .get(&tool_use_id)
+        .expect("a scope row is created only after its spawning tool_use was recorded")
+        .name
+        .clone();
+    let Some((line, terminal)) = state.terminal else {
+        // The scope never reported: the subagent was still running, or was
+        // torn down, when the main session ended. That is an observable
+        // production state, not corruption — absent is the only honest value
+        // for every terminal-record field, and inventing one would be the
+        // exact fabrication this parser exists to refuse.
+        return Ok(AgentScope {
+            tool_use_id,
+            tool_name,
+            billed_turns: state.billed_turns,
+            reported_num_turns: None,
+            is_error: None,
+            subtype: None,
+            error_message: None,
+        });
+    };
+    let subtype = required_string(&terminal, "subtype", line)?.to_string();
+    let is_error = terminal
+        .get("is_error")
+        .and_then(serde_json::Value::as_bool)
+        .ok_or_else(|| {
+            ServiceError::AgentOutputMissing(format!(
+                "subagent result at line {line} (scope {tool_use_id:?}) lacks boolean is_error"
+            ))
+        })?;
+    let num_turns = terminal
+        .get("num_turns")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| {
+            ServiceError::AgentOutputMissing(format!(
+                "subagent result at line {line} (scope {tool_use_id:?}) lacks non-negative integer num_turns"
+            ))
+        })?;
+    // `error.message` is recorded when present. An absent error object (or an
+    // error object without a message) is a real state on a non-error result;
+    // a present-but-malformed one is contradictory evidence and is refused
+    // rather than read as "no message".
+    let error_message = match terminal.get("error") {
+        None => None,
+        Some(error) => {
+            let error = error.as_object().ok_or_else(|| {
+                ServiceError::AgentOutputMissing(format!(
+                    "subagent result at line {line} (scope {tool_use_id:?}) has a non-object error field"
+                ))
+            })?;
+            match error.get("message") {
+                None => None,
+                Some(message) => Some(
+                    message
+                        .as_str()
+                        .filter(|message| !message.is_empty())
+                        .ok_or_else(|| {
+                            ServiceError::AgentOutputMissing(format!(
+                                "subagent result at line {line} (scope {tool_use_id:?}) has a non-string or empty error.message"
+                            ))
+                        })?
+                        .to_string(),
+                ),
+            }
+        }
+    };
+    Ok(AgentScope {
+        tool_use_id,
+        tool_name,
+        billed_turns: state.billed_turns,
+        reported_num_turns: Some(num_turns),
+        is_error: Some(is_error),
+        subtype: Some(subtype),
+        error_message,
+    })
+}
+
+/// True when the assistant message carries billed usage: the mark of a turn
+/// that both started and finished. One definition, shared by the strict
+/// terminal parser (per scope) and the live progress reader (main scope), so
+/// the two counters can never drift on what a billed turn is — finalization
+/// cross-checks their agreement.
+fn has_billed_usage(object: &serde_json::Map<String, serde_json::Value>) -> bool {
+    object
+        .get("message")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|message| message.get("usage"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|usage| usage.get("input_tokens"))
+        .and_then(serde_json::Value::as_u64)
+        .is_some_and(|tokens| tokens > 0)
+}
+
 pub(crate) fn is_completed_main_turn(object: &serde_json::Map<String, serde_json::Value>) -> bool {
     object.get("type").and_then(serde_json::Value::as_str) == Some("assistant")
         && is_main_session_event(object)
-        && object
-            .get("message")
-            .and_then(serde_json::Value::as_object)
-            .and_then(|message| message.get("usage"))
-            .and_then(serde_json::Value::as_object)
-            .and_then(|usage| usage.get("input_tokens"))
-            .and_then(serde_json::Value::as_u64)
-            .is_some_and(|tokens| tokens > 0)
+        && has_billed_usage(object)
 }
 
 fn required_string<'a>(
@@ -485,11 +776,13 @@ mod tests {
 
     const INIT: &str = "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n";
 
-    // One completed main turn, one completed subagent turn under the agent
-    // tool call that owns it, that subagent's own terminal record, and the
-    // session's own terminal record. The subagent turn is deliberately billed
-    // so that only the scope rule can exclude it from the main-turn count.
-    const MAIN_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42}}}\n";
+    // One completed main turn that issues the delegating tool_use, one
+    // completed subagent turn under that tool call, the subagent's own
+    // terminal record, and the session's own terminal record. The subagent
+    // turn is deliberately billed so that only the scope rule can exclude it
+    // from the main-turn count, and the subagent scope resolves only because
+    // the main turn issued the tool_use id its events name.
+    const MAIN_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"chatcmpl-tool-9d45d85b\",\"name\":\"agent\",\"input\":{}}],\"usage\":{\"input_tokens\":42}}}\n";
     const SUBAGENT_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"message\":{\"usage\":{\"input_tokens\":11}}}\n";
     const SUBAGENT_RESULT: &str = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"is_error\":true,\"duration_ms\":0,\"duration_api_ms\":0,\"num_turns\":3,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"MAX_TURNS\"}}\n";
     const MAIN_RESULT: &str = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{},\"permission_denials\":[]}\n";
@@ -525,6 +818,10 @@ mod tests {
         let parsed = parse_text(&text).expect("strict valid stream parses");
         assert_eq!(parsed.response, "ok");
         assert_eq!(parsed.num_turns, 1);
+        assert_eq!(parsed.billed_main_turns, 1);
+        // A run that delegated nothing reports no scopes, not a fabricated
+        // main-scope row: the main session is accounting, not a subagent.
+        assert!(parsed.scopes.is_empty());
     }
 
     #[test]
@@ -540,6 +837,20 @@ mod tests {
         // The subagent's billed turn is the subagent's own, so the session's
         // main-turn count and its terminal cross-check are unchanged by it.
         assert_eq!(parsed.num_turns, 1);
+        assert_eq!(parsed.billed_main_turns, 1);
+        // The same events that used to be validated and discarded are now the
+        // scope's account: the spawning call, the turn billed under it, and
+        // the terminal record it reported for itself — including the reported
+        // num_turns of 3 that legitimately disagrees with the 1 billed turn.
+        assert_eq!(parsed.scopes.len(), 1);
+        let scope = &parsed.scopes[0];
+        assert_eq!(scope.tool_use_id, "chatcmpl-tool-9d45d85b");
+        assert_eq!(scope.tool_name, "agent");
+        assert_eq!(scope.billed_turns, 1);
+        assert_eq!(scope.reported_num_turns, Some(3));
+        assert_eq!(scope.is_error, Some(true));
+        assert_eq!(scope.subtype.as_deref(), Some("error_during_execution"));
+        assert_eq!(scope.error_message.as_deref(), Some("MAX_TURNS"));
     }
 
     #[test]
@@ -626,6 +937,142 @@ mod tests {
         let error =
             parse_text(&text).expect_err("nothing may follow the session's own terminal result");
         assert!(error.to_string().contains("is followed by another event"));
+    }
+
+    #[test]
+    fn rejects_an_orphan_subagent_scope() {
+        // Without the spawning main turn, the subagent's scope id names a
+        // tool_use no assistant message ever issued. Identification is by id
+        // against recorded evidence, so an unresolvable scope is refused by
+        // line and id — never absorbed into an "unknown subagent" bucket.
+        let text = format!("{INIT}{SUBAGENT_TURN}{MAIN_RESULT}");
+        let error = parse_text(&text).expect_err("an orphan scope is contradictory evidence");
+        let message = error.to_string();
+        assert!(message.contains("line 2"));
+        assert!(message.contains("chatcmpl-tool-9d45d85b"));
+        assert!(message.contains("no earlier assistant message issued"));
+    }
+
+    #[test]
+    fn rejects_a_scope_spawned_only_later_in_the_stream() {
+        // The tool_use the scope names does appear — but only after the
+        // scoped event. The stream is causal and the parse is one forward
+        // pass: an event cannot ride a delegation that has not happened yet,
+        // so resolution against a later issuance is refused at the line
+        // where the premature reference occurred.
+        let text = format!("{INIT}{SUBAGENT_TURN}{MAIN_TURN}{MAIN_RESULT}");
+        let error = parse_text(&text).expect_err("a scope cannot borrow a future tool call");
+        let message = error.to_string();
+        assert!(message.contains("line 2"));
+        assert!(message.contains("no earlier assistant message issued"));
+    }
+
+    #[test]
+    fn resolves_a_subagent_scope_by_id_alone() {
+        // The delegating call carries a name this parser has never heard of.
+        // That is the point: Claude Code's convention correlates scopes by
+        // tool_use id, never by tool name, so the scope must resolve and the
+        // name must come back as recorded evidence, not as a filter.
+        let spawn = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-77\",\"name\":\"workspace_janitor\",\"input\":{}}],\"usage\":{\"input_tokens\":9}}}\n";
+        let sub_turn_one = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-77\",\"message\":{\"usage\":{\"input_tokens\":5}}}\n";
+        let sub_turn_two = "{\"type\":\"assistant\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-77\",\"message\":{\"usage\":{\"input_tokens\":6}}}\n";
+        let sub_result = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-77\",\"is_error\":false,\"duration_ms\":4,\"duration_api_ms\":3,\"num_turns\":5,\"result\":\"sub done\",\"usage\":{},\"permission_denials\":[]}\n";
+        let text = format!("{INIT}{spawn}{sub_turn_one}{sub_turn_two}{sub_result}{MAIN_RESULT}");
+        let parsed = parse_text(&text).expect("an id-resolved scope parses");
+        assert_eq!(parsed.billed_main_turns, 1);
+        assert_eq!(parsed.scopes.len(), 1);
+        let scope = &parsed.scopes[0];
+        assert_eq!(scope.tool_use_id, "call-77");
+        assert_eq!(scope.tool_name, "workspace_janitor");
+        assert_eq!(scope.billed_turns, 2);
+        // Recorded verbatim, not reconciled: the scope reports 5 started
+        // turns over 2 billed ones and the stream is still valid.
+        assert_eq!(scope.reported_num_turns, Some(5));
+        assert_eq!(scope.is_error, Some(false));
+        assert_eq!(scope.subtype.as_deref(), Some("success"));
+        assert_eq!(scope.error_message, None);
+    }
+
+    #[test]
+    fn accounts_two_subagent_scopes_separately() {
+        let spawn = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-a\",\"name\":\"agent\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"call-b\",\"name\":\"background_probe\",\"input\":{}}],\"usage\":{\"input_tokens\":42}}}\n";
+        let a_turn = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-a\",\"message\":{\"usage\":{\"input_tokens\":3}}}\n";
+        let b_turn_one = "{\"type\":\"assistant\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-b\",\"message\":{\"usage\":{\"input_tokens\":4}}}\n";
+        let b_turn_two = "{\"type\":\"assistant\",\"uuid\":\"u5\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-b\",\"message\":{\"usage\":{\"input_tokens\":5}}}\n";
+        let a_result = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u6\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-a\",\"is_error\":true,\"duration_ms\":1,\"duration_api_ms\":1,\"num_turns\":1,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"boom-a\"}}\n";
+        let text = format!("{INIT}{spawn}{a_turn}{b_turn_one}{b_turn_two}{a_result}{MAIN_RESULT}");
+        let parsed = parse_text(&text).expect("independent scopes account independently");
+        assert_eq!(parsed.billed_main_turns, 1);
+        assert_eq!(parsed.scopes.len(), 2);
+        // Stream order of first appearance, and strictly separate billing.
+        let first = &parsed.scopes[0];
+        assert_eq!(first.tool_use_id, "call-a");
+        assert_eq!(first.tool_name, "agent");
+        assert_eq!(first.billed_turns, 1);
+        assert_eq!(first.is_error, Some(true));
+        assert_eq!(first.error_message.as_deref(), Some("boom-a"));
+        // The second scope never reported: it was still running when the
+        // session ended. Absent terminal fields are the only honest account
+        // of that — a scope is not required to have finished to be real.
+        let second = &parsed.scopes[1];
+        assert_eq!(second.tool_use_id, "call-b");
+        assert_eq!(second.tool_name, "background_probe");
+        assert_eq!(second.billed_turns, 2);
+        assert_eq!(second.reported_num_turns, None);
+        assert_eq!(second.is_error, None);
+        assert_eq!(second.subtype, None);
+        assert_eq!(second.error_message, None);
+    }
+
+    #[test]
+    fn rejects_any_event_in_a_scope_after_its_terminal_result() {
+        // A scope that has reported is finished. A second result and a
+        // billed turn after the scope's result are the same defect: output
+        // attributed to a scope that already declared its outcome.
+        let second_result = SUBAGENT_RESULT.replace("\"uuid\":\"u4\"", "\"uuid\":\"u9\"");
+        let late_turn = SUBAGENT_TURN.replace("\"uuid\":\"u3\"", "\"uuid\":\"u9\"");
+        for post_terminal in [second_result, late_turn] {
+            let text = format!(
+                "{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{post_terminal}{MAIN_RESULT}"
+            );
+            let error = parse_text(&text).expect_err("a reported scope accepts no further output");
+            let message = error.to_string();
+            assert!(message.contains("subagent scope \"chatcmpl-tool-9d45d85b\""));
+            assert!(message.contains("after its terminal result at line 4"));
+        }
+    }
+
+    #[test]
+    fn accepts_a_subagent_that_reports_zero_turns_over_billed_ones() {
+        // Known upstream defect: a subagent terminated by a thrown error
+        // reports num_turns: 0 even though it genuinely billed turns. The
+        // main-scope consistency window would refuse this stream, which is
+        // exactly why subagent scopes record the reported value instead of
+        // validating it — rejecting here would throw away real production
+        // runs to defend an invariant the upstream runner does not honor.
+        let thrown = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"is_error\":true,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":0,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"Error: fetch failed\"}}\n";
+        let text = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{thrown}{MAIN_RESULT}");
+        let parsed = parse_text(&text).expect("a zero-turn error report is recorded, not judged");
+        assert_eq!(parsed.scopes.len(), 1);
+        let scope = &parsed.scopes[0];
+        assert_eq!(scope.billed_turns, 1);
+        assert_eq!(scope.reported_num_turns, Some(0));
+        assert_eq!(scope.is_error, Some(true));
+        assert_eq!(scope.error_message.as_deref(), Some("Error: fetch failed"));
+    }
+
+    #[test]
+    fn rejects_a_duplicate_tool_use_id() {
+        // Correlation is by id; a re-issued id would make every later scope
+        // reference ambiguous, so the second issuance is refused outright
+        // instead of letting first-wins or last-wins pick a scope silently.
+        let spawn_twice = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-dup\",\"name\":\"agent\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"call-dup\",\"name\":\"agent\",\"input\":{}}],\"usage\":{\"input_tokens\":7}}}\n";
+        let text = format!("{INIT}{spawn_twice}{MAIN_RESULT}");
+        let error =
+            parse_text(&text).expect_err("a duplicated tool_use id is ambiguity, not reuse");
+        assert!(error
+            .to_string()
+            .contains("re-issues tool_use id \"call-dup\""));
     }
 
     #[test]
