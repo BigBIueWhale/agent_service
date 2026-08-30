@@ -5,7 +5,7 @@
   "build_inputs_manifest_sha256": "2f919cc0f3cca738c29f7029fb1535d2eb0906c61a13fe0fdb8590ff99e1cdd2",
   "stack_lock_sha256": "59c6db283d890a8bf6b59c61631f8dbce544b88e39b04e63800c2b98eea0d7e0",
   "images": {
-    "agent": "sha256:a37396808b578f1ebfe9511e0bace8fbc0228a939ecaa1fbff774b82b13cd2f9",
+    "agent": "sha256:48663779334f8618a68676108cc5eee800101cc96f5fb876b049093168fb190a",
     "capture": "sha256:2d38ea4ae0f33894740a1a067c7fa8e3e3d864ff58ef439d6d432fd4739b9aef",
     "relay": "sha256:5153a46bc03fa920b0d09000eca1848af255010bda99cc50e8a6110ebcd02690",
     "broker": "sha256:de9f6a144ef100a8e09899c75ce6b6d22b86d87a904c5ae72cb42d2dcb0c3549",
