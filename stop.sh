@@ -127,6 +127,56 @@ if ! session_objects="$({
   abort_preserving_dependencies "session-container absence could not be proved"
 fi
 if [[ -n "${session_objects}" ]]; then
+  # A session container that outlived its service is either an exited remnant of
+  # a crash -- a power loss leaves the whole topology stopped at once -- or a
+  # still-running agent, which means work may be in flight and is never removed
+  # here. Reclaim only the first kind, and only when this project's ownership is
+  # proved rather than assumed: our profile label, a session label, one of the
+  # image IDs this release pins, and every mount inside our own state directory.
+  # Anything failing any of those is untouched and still aborts the teardown,
+  # so the refusal keeps its meaning for the cases it was written for. Without
+  # this, an exited remnant deadlocks recovery outright: teardown preserves it
+  # as a dependency while startup refuses to replace the stopped components
+  # beside it, and neither can proceed.
+  session_state_root="$(cd -- "$(lock_value '.service.state_dir')" 2>/dev/null && pwd -P)" ||
+    session_state_root=""
+  reclaimable=()
+  for session_container in ${session_objects}; do
+    container_running="$(docker inspect --format '{{.State.Running}}' "${session_container}" 2>/dev/null || printf unknown)"
+    container_image="$(docker inspect --format '{{.Image}}' "${session_container}" 2>/dev/null || printf unknown)"
+    container_session="$(docker inspect --format '{{index .Config.Labels "agent_service.session"}}' "${session_container}" 2>/dev/null || printf '')"
+    container_mounts="$(docker inspect --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' "${session_container}" 2>/dev/null || printf '')"
+    [[ "${container_running}" == false ]] || continue
+    [[ "${container_session}" =~ ^s-[0-9a-f]{64}$ ]] || continue
+    case "${container_image}" in
+      "$(lock_value '.agent.image_id')" | "$(lock_value '.relay.image_id')" | "$(lock_value '.capture.image_id')") ;;
+      *) continue ;;
+    esac
+    [[ -n "${session_state_root}" ]] || continue
+    mounts_contained=true
+    while IFS= read -r mount_source; do
+      [[ -n "${mount_source}" ]] || continue
+      [[ "${mount_source}" == "${session_state_root}/"* ]] || mounts_contained=false
+    done <<<"${container_mounts}"
+    [[ "${mounts_contained}" == true ]] || continue
+    reclaimable+=("${session_container}")
+  done
+  # Each entry proved its own ownership, so reclaim exactly those. Anything that
+  # did not is still present below and still aborts the teardown.
+  if ((${#reclaimable[@]} > 0)); then
+    printf 'Reclaiming %d exited session container(s) this release owns...\n' "${#reclaimable[@]}"
+    for session_container in "${reclaimable[@]}"; do
+      docker rm "${session_container}" >/dev/null ||
+        diagnostics+=("remove exited owned session container ${session_container}")
+    done
+    session_objects="$({
+      docker ps -aq --no-trunc \
+        --filter "label=agent_service.profile=${PROFILE}" \
+        --filter label=agent_service.session
+    } 2>&1 || true)"
+  fi
+fi
+if [[ -n "${session_objects}" ]]; then
   session_evidence="$(
     docker ps -a --no-trunc \
       --filter "label=agent_service.profile=${PROFILE}" \
