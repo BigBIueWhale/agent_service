@@ -276,7 +276,7 @@ fn validate_policy(policy: &Policy) -> Result<(), String> {
         || policy.service_container_name != "qwen38-agent-service"
         || policy.backend_container_name != "qwen38-agent-native"
         || policy.backend_cache_volume
-            != "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v15"
+            != "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v16"
         || policy.backend_cache_mount != "/home/vllm/.cache/vllm"
         || policy.backend_cache_owner_mode != "2000:0:770"
         || policy.model_bridge_container_name != "qwen38-model-bridge"

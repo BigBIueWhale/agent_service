@@ -18,7 +18,7 @@
   "model_socket_dir": "/home/user/Desktop/agent_service/.runtime/model-socket",
   "service_container_name": "qwen38-agent-service",
   "backend_container_name": "qwen38-agent-native",
-  "backend_cache_volume": "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v15",
+  "backend_cache_volume": "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v16",
   "backend_cache_mount": "/home/vllm/.cache/vllm",
   "backend_cache_owner_mode": "2000:0:770",
   "model_bridge_container_name": "qwen38-model-bridge",
