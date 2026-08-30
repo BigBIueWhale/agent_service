@@ -267,12 +267,20 @@ check_pinned_inputs() {
   require_equal "runtime contract KV offload role" \
     "$(contract_value '.model.kv_offload_role')" \
     "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_role')"
-  require_equal "runtime contract KV offload host bytes" \
-    "$(contract_value '.model.kv_offload_host_bytes | tostring')" \
-    "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_connector_extra_config.cpu_bytes_to_use | tostring')"
-  require_equal "runtime contract KV offload eviction policy" \
-    "$(contract_value '.model.kv_offload_eviction_policy')" \
-    "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_connector_extra_config.eviction_policy')"
+  # Host-tier capacity is declared in resident user contexts and eviction is
+  # scope-aware with no selectable policy; the superseded byte and policy
+  # keys must be absent from the launch command, not merely unequal.
+  require_equal "runtime contract KV offload host user contexts" \
+    "$(contract_value '.model.kv_offload_host_user_contexts | tostring')" \
+    "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_connector_extra_config.cpu_kv_cache_users | tostring')"
+  require_equal "runtime contract KV offload scope eviction" \
+    "$(contract_value '.model.kv_offload_scope_eviction | tostring')" true
+  require_equal "superseded KV offload byte budget absent from backend command" \
+    "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_connector_extra_config | has("cpu_bytes_to_use") | tostring')" \
+    false
+  require_equal "superseded KV eviction policy absent from backend command" \
+    "$(printf '%s' "${kv_transfer_config}" | jq -r '.kv_connector_extra_config | has("eviction_policy") | tostring')" \
+    false
   # The turn budget is the only locked limit a caller may vary per session, and
   # it is stated in two locked documents: the service reads the lock, and the
   # in-image verifier reads the contract. The in-image verifier proves the

@@ -68,8 +68,8 @@
     "kv_offload": true,
     "kv_offload_connector": "OffloadingConnector",
     "kv_offload_role": "kv_both",
-    "kv_offload_host_bytes": 7747584000,
-    "kv_offload_eviction_policy": "arc"
+    "kv_offload_host_user_contexts": 1,
+    "kv_offload_scope_eviction": true
   },
   "generation": {
     "thinking_enabled": true,
