@@ -69,7 +69,7 @@ readonly SUITE_ROOT="${BENCH_ROOT}/full-suite-v1"
 # tools exist or that extracting inside the workspace pollutes the graded patch,
 # and three sessions did exactly that. All three are fixed here and in the
 # warmer, so this pass measures the model rather than the harness.
-readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v9"
+readonly PASS_ROOT="${BENCH_ROOT}/full-suite-v10"
 readonly RUNS_ROOT="${PASS_ROOT}/runs"
 readonly PROVENANCE_ROOT="${PASS_ROOT}/release-provenance"
 readonly PREAMBLE_FILE="${BENCH_ROOT}/prompt-preamble.md"
