@@ -9,6 +9,14 @@ require_no_arguments "./scripts/verify-published-release.sh" "$@"
 check_pinned_inputs
 require_release_commit
 require_published_release
+# The offline archive is the release's only cross-host transport and its
+# disaster-recovery path; a published release whose archive is absent,
+# misnamed, corrupt, or carrying different images than the pins is not
+# verified. (The archive is gitignored, so this runs where the release was
+# cut or restored — the same boundary the backend's archive discipline has.)
+verify_service_archive
+verify_service_archive_contents \
+  "${PROJECT_DIR}/artifacts/$(release_value '.archive.name')"
 
 printf 'PUBLISHED RELEASE VERIFIED\n'
 printf 'remote https://github.com/BigBIueWhale/agent_service\n'

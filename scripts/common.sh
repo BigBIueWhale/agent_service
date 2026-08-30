@@ -42,17 +42,102 @@ contract_value() {
 }
 
 validate_release_lock() {
+  # Accepts an optional path so the release test harness can prove the
+  # refusals against copies; every production caller validates the real lock.
+  local lock_path="${1:-${RELEASE_LOCK}}"
   jq -e '
     type == "object" and
-    (keys == ["build_inputs_manifest_sha256", "images", "implementation_commit", "profile", "schema_version", "stack_lock_sha256"]) and
+    (keys == ["archive", "build_inputs_manifest_sha256", "images", "implementation_commit", "profile", "schema_version", "stack_lock_sha256"]) and
     .schema_version == 1 and
     .profile == "qwen38-agent-service-v3" and
     (.implementation_commit | type == "string" and test("^[0-9a-f]{40}$")) and
     (.build_inputs_manifest_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.stack_lock_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.images | type == "object" and (keys == ["agent", "broker", "capture", "relay", "service"])) and
-    ([.images[] | type == "string" and test("^sha256:[0-9a-f]{64}$")] | all)
-  ' "${RELEASE_LOCK}" >/dev/null || die "Release lock violates its exact schema or one-mode identity contract"
+    ([.images[] | type == "string" and test("^sha256:[0-9a-f]{64}$")] | all) and
+    (.archive | type == "object" and (keys == ["name", "sha256"])) and
+    (.archive.name | type == "string" and test("^agent-service-images-[0-9a-f]{12}[.]tar$")) and
+    (.archive.sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+  ' "${lock_path}" >/dev/null || die "Release lock violates its exact schema or one-mode identity contract"
+}
+
+# The archive is named by the release it snapshots: the implementation commit
+# is the one identity that survives archive repinning (adopting the archive
+# hash touches only the release lock, which is not a build input), so the
+# name cannot go stale between the build and the bundle.
+service_archive_name_for_commit() {
+  local commit="$1"
+  printf 'agent-service-images-%s.tar' "${commit:0:12}"
+}
+
+# Fail closed on a missing, misnamed, or byte-drifted archive before anything
+# consumes it. Mirrors the backend archive discipline: the pinned SHA is the
+# only trust anchor, and a stale archive from an earlier release fails on its
+# name before its hash.
+verify_service_archive() {
+  local archive expected_name recorded_name
+  expected_name="$(service_archive_name_for_commit "$(release_value '.implementation_commit')")"
+  recorded_name="$(release_value '.archive.name')"
+  require_equal "release archive name derives from the implementation commit"     "${recorded_name}" "${expected_name}"
+  archive="${PROJECT_DIR}/artifacts/${recorded_name}"
+  [[ -f "${archive}" && ! -L "${archive}" ]] ||     die "The pinned release image archive is missing or not a regular file."       "Expected: ${archive}"       "Cut it with ./release.sh on the machine that built this release."
+  printf '%s  %s
+' "$(release_value '.archive.sha256')" "${archive}" |     sha256sum --check --strict >/dev/null ||     die "The release image archive does not match its pinned SHA256."       "Archive: ${archive}"
+}
+
+# Prove the archive CONTAINS the release it claims to, without loading it.
+# Under the containerd image store every docker-save tar is an OCI layout
+# whose index.json records, per bundled image, the OCI manifest digest —
+# which IS the Docker image ID — alongside the containerd image name. That
+# equality was verified empirically against this deployment's images before
+# being relied on. A tar without index.json is a different Docker's export
+# format and is refused rather than half-trusted: one archive form, checked
+# exactly. A release whose bundle disagrees with the pins it just wrote must
+# fail at the bundling step, not at some later restore.
+verify_service_archive_contents() {
+  local archive="$1"
+  python3 - "${archive}" \
+    "$(lock_value '.agent.image_tag')" "$(release_value '.images.agent')" \
+    "$(lock_value '.relay.image_tag')" "$(release_value '.images.relay')" \
+    "$(lock_value '.capture.image_tag')" "$(release_value '.images.capture')" \
+    "$(lock_value '.broker.image_tag')" "$(release_value '.images.broker')" \
+    "$(lock_value '.service.image_tag')" "$(release_value '.images.service')" <<'PY'
+import json, sys, tarfile
+
+archive = sys.argv[1]
+pairs = sys.argv[2:]
+expected = {tag: image_id for tag, image_id in zip(pairs[0::2], pairs[1::2])}
+
+with tarfile.open(archive) as tar:
+    try:
+        member = tar.extractfile("index.json")
+    except KeyError:
+        member = None
+    if member is None:
+        sys.exit(
+            f"{archive}: no OCI index.json; this is not the one supported "
+            "docker-save layout, and its contents cannot be proved"
+        )
+    index = json.load(member)
+
+observed = {}
+for entry in index.get("manifests", []):
+    name = (entry.get("annotations") or {}).get("io.containerd.image.name", "")
+    if name.startswith("docker.io/library/"):
+        name = name[len("docker.io/library/"):]
+    if not name:
+        sys.exit(f"{archive}: index entry carries no containerd image name: {entry}")
+    observed[name] = entry.get("digest", "")
+
+if observed != expected:
+    lines = [f"{archive}: archive contents disagree with the release pins"]
+    for tag in sorted(expected.keys() | observed.keys()):
+        lines.append(
+            f"  {tag}: pinned {expected.get(tag, '<absent>')} "
+            f"bundled {observed.get(tag, '<absent>')}"
+        )
+    sys.exit(chr(10).join(lines))
+PY
 }
 
 sha256_file() {
