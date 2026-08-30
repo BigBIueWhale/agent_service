@@ -55,34 +55,39 @@ validate_release_lock() {
     (.stack_lock_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.images | type == "object" and (keys == ["agent", "broker", "capture", "relay", "service"])) and
     ([.images[] | type == "string" and test("^sha256:[0-9a-f]{64}$")] | all) and
-    (.archive | type == "object" and (keys == ["name", "sha256"])) and
-    (.archive.name | type == "string" and test("^agent-service-images-[0-9a-f]{12}[.]tar$")) and
+    (.archive | type == "object" and (keys == ["sha256"])) and
     (.archive.sha256 | type == "string" and test("^[0-9a-f]{64}$"))
   ' "${lock_path}" >/dev/null || die "Release lock violates its exact schema or one-mode identity contract"
 }
 
-# The archive is named by the release it snapshots: the implementation commit
-# is the one identity that survives archive repinning (adopting the archive
-# hash touches only the release lock, which is not a build input), so the
-# name cannot go stale between the build and the bundle.
-service_archive_name_for_commit() {
-  local commit="$1"
-  printf 'agent-service-images-%s.tar' "${commit:0:12}"
-}
+# The archive has exactly ONE name, deliberately carrying no release identity.
+# A name derived from release state invites a gate that asserts the
+# derivation, and any such gate reachable from the build wedges the release
+# loop: seal() advances implementation_commit at the FIRST round of an
+# input-changing release, while the bundle that could satisfy an archive
+# assertion exists only after the LAST round converges — a failure adoption
+# cannot repair. The commit already lives in the lock beside the hash, so a
+# derived name would duplicate information while buying that coupling. One
+# fixed name also means a release REPLACES the previous bundle (only after
+# proving the new one), so artifacts/ never accumulates stale tars for a
+# wrong restore to reach.
+readonly SERVICE_ARCHIVE_PATH="${PROJECT_DIR}/artifacts/agent-service-images.tar"
 
-# Fail closed on a missing, misnamed, or byte-drifted archive before anything
-# consumes it. Mirrors the backend archive discipline: the pinned SHA is the
-# only trust anchor, and a stale archive from an earlier release fails on its
-# name before its hash.
+# Fail closed on a missing or byte-drifted archive before anything consumes
+# it. The pinned SHA256 is the archive's only trust anchor: a stale bundle
+# from an earlier release and a corrupt copy die identically on their hash,
+# and a bundle that hashes correctly cannot carry the wrong images, because
+# the hash is adopted only after the bundle's own OCI index is proved against
+# the pins.
 verify_service_archive() {
-  local archive expected_name recorded_name
-  expected_name="$(service_archive_name_for_commit "$(release_value '.implementation_commit')")"
-  recorded_name="$(release_value '.archive.name')"
-  require_equal "release archive name derives from the implementation commit"     "${recorded_name}" "${expected_name}"
-  archive="${PROJECT_DIR}/artifacts/${recorded_name}"
-  [[ -f "${archive}" && ! -L "${archive}" ]] ||     die "The pinned release image archive is missing or not a regular file."       "Expected: ${archive}"       "Cut it with ./release.sh on the machine that built this release."
-  printf '%s  %s
-' "$(release_value '.archive.sha256')" "${archive}" |     sha256sum --check --strict >/dev/null ||     die "The release image archive does not match its pinned SHA256."       "Archive: ${archive}"
+  [[ -f "${SERVICE_ARCHIVE_PATH}" && ! -L "${SERVICE_ARCHIVE_PATH}" ]] || \
+    die "The pinned release image archive is missing or not a regular file." \
+      "Expected: ${SERVICE_ARCHIVE_PATH}" \
+      "Cut it with ./release.sh on the machine that built this release."
+  printf '%s  %s\n' "$(release_value '.archive.sha256')" "${SERVICE_ARCHIVE_PATH}" | \
+    sha256sum --check --strict >/dev/null || \
+    die "The release image archive does not match its pinned SHA256." \
+      "Archive: ${SERVICE_ARCHIVE_PATH}"
 }
 
 # Prove the archive CONTAINS the release it claims to, without loading it.

@@ -5,7 +5,6 @@
   "build_inputs_manifest_sha256": "b0873fa845dc82d56b0f7898aa9613ab2eb166d5d8d6a81b9086a681a111e9cc",
   "stack_lock_sha256": "90644f873bd54c3cf816dffb169977b87bc79d231c3fa564754fd7e9c7b91ff4",
   "archive": {
-    "name": "agent-service-images-68fcbba159ce.tar",
     "sha256": "7c1f30b016ba60fe200b0e0689406e77719326f1a2e27687cbecaf2d3499b65a"
   },
   "images": {

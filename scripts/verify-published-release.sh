@@ -11,12 +11,11 @@ require_release_commit
 require_published_release
 # The offline archive is the release's only cross-host transport and its
 # disaster-recovery path; a published release whose archive is absent,
-# misnamed, corrupt, or carrying different images than the pins is not
-# verified. (The archive is gitignored, so this runs where the release was
-# cut or restored — the same boundary the backend's archive discipline has.)
+# corrupt, or carrying different images than the pins is not verified. (The
+# archive is gitignored, so this runs where the release was cut or restored —
+# the same boundary the backend's archive discipline has.)
 verify_service_archive
-verify_service_archive_contents \
-  "${PROJECT_DIR}/artifacts/$(release_value '.archive.name')"
+verify_service_archive_contents "${SERVICE_ARCHIVE_PATH}"
 
 printf 'PUBLISHED RELEASE VERIFIED\n'
 printf 'remote https://github.com/BigBIueWhale/agent_service\n'

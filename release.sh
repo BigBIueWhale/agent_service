@@ -217,45 +217,50 @@ seal() {
 # only run after the loop has converged, because the bundle contains the
 # service image whose ID is the loop's terminal adoption.
 #
-# Termination: the archive's name and SHA live exclusively in
+# Termination: the archive's SHA lives exclusively in
 # config/release.lock.json, exactly like the service image ID, and the tar
-# itself lives under artifacts/ — both are excluded by
+# itself lives under gitignored artifacts/ — both are excluded by
 # scripts/list-build-inputs.sh. Adopting the archive therefore moves no build
 # input, seal() does not advance implementation_commit, and the build the
-# release just agreed with still agrees. If either pin ever migrated into a
+# release just agreed with still agrees. If the pin ever migrated into a
 # build input, pinning the archive would change the inputs, which would
 # change the service image's baked SOURCE_COMMIT, which would change the
-# bundle bytes — a chase with no fixed point. The release-test harness
-# asserts the exclusion so that property cannot rot silently.
+# bundle bytes — a chase with no fixed point. The same ordering rule is why
+# the archive's NAME is a constant rather than derived from the release:
+# implementation_commit advances at the FIRST seal of an input-changing
+# release, the bundle exists only after the LAST build agrees, and a
+# build-input test once asserted the derivation between them — a failure the
+# loop cannot repair by adoption, wedging every release that changed source.
+# Nothing reachable from the build may assert anything about this bundle.
+# The release-test harness proves the exclusions and that ordering so they
+# cannot rot silently.
 bundle_release_archive() {
-  local commit archive_name archive_path staging component tag
+  local staging component tag
   local -a save_tags=()
-  commit="$(json_value "${RELEASE_LOCK_PATH}" '.implementation_commit')"
-  archive_name="$(service_archive_name_for_commit "${commit}")"
-  archive_path="${PROJECT_DIR}/artifacts/${archive_name}"
   install --directory --mode=0755 "${PROJECT_DIR}/artifacts"
   for component in "${COMPONENTS[@]}"; do
     tag="$(lock_value "$(component_tag_path "${component}")")"
     save_tags+=("${tag}")
   done
-  printf 'Bundling the release archive: %s
-' "${archive_name}"
-  staging="${archive_path}.releasing"
+  printf 'Bundling the release archive: %s\n' "$(basename "${SERVICE_ARCHIVE_PATH}")"
+  staging="${SERVICE_ARCHIVE_PATH}.releasing"
   rm -f -- "${staging}"
   docker save --output "${staging}" "${save_tags[@]}" ||
     die "docker save failed; a release without its offline archive is not a release"
   # The bundle must contain exactly the images whose IDs this release just
-  # pinned — verified from the tar's own manifest before anything is adopted.
+  # pinned — verified from the tar's own manifest before anything is adopted
+  # and before the previous release's proven bundle is replaced.
   verify_service_archive_contents "${staging}" ||
     die "the freshly bundled archive disagrees with the pins this release wrote"
-  mv -- "${staging}" "${archive_path}"
-  replace_exact_value "${RELEASE_LOCK_PATH}" '.archive.name'     "$(json_value "${RELEASE_LOCK_PATH}" '.archive.name')" "${archive_name}"
-  replace_exact_value "${RELEASE_LOCK_PATH}" '.archive.sha256'     "$(json_value "${RELEASE_LOCK_PATH}" '.archive.sha256')"     "$(sha256_file "${archive_path}")"
-  # Re-read the adopted pins through the same gate every consumer uses, so a
+  mv -- "${staging}" "${SERVICE_ARCHIVE_PATH}"
+  replace_exact_value "${RELEASE_LOCK_PATH}" '.archive.sha256' \
+    "$(json_value "${RELEASE_LOCK_PATH}" '.archive.sha256')" \
+    "$(sha256_file "${SERVICE_ARCHIVE_PATH}")"
+  # Re-read the adopted pin through the same gate every consumer uses, so a
   # release cannot end with an archive its own verifier would refuse.
   verify_service_archive
-  printf '  archive %s sha256 %s
-' "${archive_name}"     "$(json_value "${RELEASE_LOCK_PATH}" '.archive.sha256' | cut -c1-12)"
+  printf '  archive %s sha256 %s\n' "$(basename "${SERVICE_ARCHIVE_PATH}")" \
+    "$(json_value "${RELEASE_LOCK_PATH}" '.archive.sha256' | cut -c1-12)"
 }
 
 # The invariant the whole release turns on, asserted against the repository
@@ -319,7 +324,7 @@ main() {
       done
       printf '  commit   %s\n' "$(json_value "${RELEASE_LOCK_PATH}" '.implementation_commit')"
       printf '  archive  artifacts/%s sha256:%s\n' \
-        "$(json_value "${RELEASE_LOCK_PATH}" '.archive.name')" \
+        "$(basename "${SERVICE_ARCHIVE_PATH}")" \
         "$(json_value "${RELEASE_LOCK_PATH}" '.archive.sha256')"
       printf 'Deploy it with ./start.sh; restore its images elsewhere with ./scripts/restore-service-images.sh.\n'
       printf 'Verify a checkout of this commit with ./build.sh.\n'

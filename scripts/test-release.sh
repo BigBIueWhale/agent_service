@@ -60,17 +60,18 @@ if "${PROJECT_DIR}/scripts/list-build-inputs.sh" | tr '\0' '\n' |
 fi
 
 # The archive extends the same stop condition: it contains the service image,
-# so its bytes exist only after the loop converges, and its name and SHA are
-# recorded only in the release lock. If the tar or its pins ever became build
-# inputs, pinning the archive would move the inputs, rebake the service
-# image's SOURCE_COMMIT, and change the bundle — a chase with no fixed point.
+# so its bytes exist only after the loop converges, and its SHA is recorded
+# only in the release lock. If the tar or its pin ever became build inputs,
+# pinning the archive would move the inputs, rebake the service image's
+# SOURCE_COMMIT, and change the bundle — a chase with no fixed point.
 if "${PROJECT_DIR}/scripts/list-build-inputs.sh" | tr '\0' '\n' |
   grep -q '^artifacts/'; then
   fail 'artifacts/ entries are build inputs; bundling the archive would unsettle the release loop'
 fi
-archive_pin_mentions="$(grep -rl 'agent-service-images-' "${PROJECT_DIR}/config" 2>/dev/null | sort || true)"
+archive_pin="$(jq -er '.archive.sha256' "${PROJECT_DIR}/config/release.lock.json")"
+archive_pin_mentions="$(grep -rl "${archive_pin}" "${PROJECT_DIR}/config" 2>/dev/null | sort || true)"
 [[ "${archive_pin_mentions}" == "${PROJECT_DIR}/config/release.lock.json" ]] ||
-  fail "archive pins leaked outside the release lock: ${archive_pin_mentions}"
+  fail "the archive pin leaked outside the release lock: ${archive_pin_mentions}"
 
 # ---------------------------------------------------------------------------
 # replace_exact_value rewrites one value and nothing else, and refuses when the
@@ -131,10 +132,12 @@ computed_policy="$(sha256sum "${PROJECT_DIR}/config/broker-policy-v1.json" | cut
 printf 'RELEASE_CONTRACT_OK pin-locations=proved unique-substitution=enforced ambiguity=refused termination=release-lock-excluded tree=self-consistent\n'
 
 # ---------------------------------------------------------------------------
-# The release lock's exact schema now includes the archive identity, and every
-# malformed shape is refused: a lock without the archive keys, a name that
-# does not follow the release naming, and a hash that is not a SHA256. The
-# real checked-in lock must pass the same gate.
+# The release lock's exact schema includes the archive identity, and every
+# malformed shape is refused: a lock without the archive pin, one that
+# records an archive name (the name is a constant, not release state — a
+# recorded name is exactly what a derivation gate grows back from), and a
+# hash that is not a SHA256. The real checked-in lock must pass the same
+# gate.
 # ---------------------------------------------------------------------------
 validate_release_lock >/dev/null || fail 'the checked-in release lock violates its own schema'
 lock_copy="${TEST_DIR}/release.lock.json"
@@ -142,21 +145,47 @@ jq 'del(.archive)' "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
 if (validate_release_lock "${lock_copy}") >/dev/null 2>&1; then
   fail 'a release lock without the archive identity was accepted'
 fi
-jq '.archive.name = "agent-service-images-latest.tar"'   "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
+jq '.archive.name = "agent-service-images.tar"' \
+  "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
 if (validate_release_lock "${lock_copy}") >/dev/null 2>&1; then
-  fail 'a release lock with a non-release-derived archive name was accepted'
+  fail 'a release lock recording an archive name was accepted'
 fi
 jq '.archive.sha256 = "not-a-hash"'   "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
 if (validate_release_lock "${lock_copy}") >/dev/null 2>&1; then
   fail 'a release lock with a malformed archive hash was accepted'
 fi
 
-# The recorded name must derive from the recorded implementation commit;
-# anything else is a stale bundle wearing this release's pins.
-recorded_archive_name="$(jq -er '.archive.name' "${PROJECT_DIR}/config/release.lock.json")"
-derived_archive_name="$(service_archive_name_for_commit   "$(jq -er '.implementation_commit' "${PROJECT_DIR}/config/release.lock.json")")"
-[[ "${recorded_archive_name}" == "${derived_archive_name}" ]] ||
-  fail "the recorded archive name ${recorded_archive_name} does not derive from the implementation commit (${derived_archive_name})"
+# ---------------------------------------------------------------------------
+# A release that changes any build input advances implementation_commit at
+# its FIRST seal — before the loop's next build, and rounds before the
+# converged images can be bundled and the archive pin adopted. Every build
+# inside the loop therefore runs against a lock whose archive pin still
+# names the PREVIOUS release's bundle, and every gate the build applies to
+# the lock must accept exactly that shape. A gate that tied the archive pin
+# to implementation_commit shipped once: it failed inside the loop, was not
+# an image-ID disagreement, so adoption could not repair it, and the
+# bundling step that would have satisfied it sat unreachable behind the
+# failing build — no input-changing release could be cut. Exercised on a
+# copy with the release's own edit primitive: first the seal-step commit
+# advance with the archive pin left behind (mid-loop shape), then the
+# bundle-step hash adoption (converged shape); the lock gate must accept
+# both.
+# ---------------------------------------------------------------------------
+advancing_lock="${TEST_DIR}/advancing.lock.json"
+cp -- "${PROJECT_DIR}/config/release.lock.json" "${advancing_lock}"
+sealed_commit="$(jq -er '.implementation_commit' "${advancing_lock}")"
+advanced_commit="0000000000000000000000000000000000000000"
+[[ "${advanced_commit}" != "${sealed_commit}" ]] ||
+  fail 'the advanced-commit probe collided with the recorded implementation commit'
+replace_exact_value "${advancing_lock}" '.implementation_commit' \
+  "${sealed_commit}" "${advanced_commit}" >/dev/null
+validate_release_lock "${advancing_lock}" >/dev/null ||
+  fail 'a mid-release lock (implementation_commit advanced, archive pin not yet re-adopted) was refused; no input-changing release could be cut'
+replace_exact_value "${advancing_lock}" '.archive.sha256' \
+  "$(jq -er '.archive.sha256' "${advancing_lock}")" \
+  "$(printf 'a%.0s' {1..64})" >/dev/null
+validate_release_lock "${advancing_lock}" >/dev/null ||
+  fail 'adopting a freshly bundled archive hash was refused by the lock gate'
 
 # ---------------------------------------------------------------------------
 # verify_service_archive_contents proves a bundle carries exactly the pinned
@@ -215,19 +244,17 @@ if (verify_service_archive_contents "${probe_tar}") >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# When the pinned archive is present (it is gitignored, so a fresh clone
-# legitimately lacks it until ./release.sh or a restore produces it), its
-# bytes and contents must agree with the pins; verify_service_archive must
-# also refuse a corrupted copy.
+# Deliberately absent: any assertion about the tar under artifacts/. This
+# harness is a build input and runs inside every build of the release loop,
+# where the tar on disk is legitimately the PREVIOUS release's bundle (the
+# new one is produced only after the loop converges, and mid-loop the lock's
+# image pins have already moved past it). An on-disk check here is an
+# assertion about a post-convergence artifact from inside the loop — the
+# wedge class the advancing-release probe above proves refused. The tar is
+# verified where it is produced (./release.sh, before and after the pin is
+# adopted) and everywhere it is consumed (scripts/restore-service-images.sh,
+# scripts/verify-published-release.sh) — every path that touches its bytes,
+# none of which run inside the build.
 # ---------------------------------------------------------------------------
-pinned_archive="${PROJECT_DIR}/artifacts/${recorded_archive_name}"
-if [[ -f "${pinned_archive}" ]]; then
-  verify_service_archive >/dev/null || fail 'the checked-in archive pins refuse the archive on disk'
-  verify_service_archive_contents "${pinned_archive}" >/dev/null ||
-    fail 'the archive on disk does not carry the pinned images'
-  printf 'archive-on-disk=verified\n'
-else
-  printf 'archive-on-disk=absent (gitignored; produced by ./release.sh, transported by restore)\n'
-fi
 
-printf 'RELEASE_ARCHIVE_OK schema=exact name=commit-derived contents=proved termination=artifacts-excluded\n'
+printf 'RELEASE_ARCHIVE_OK schema=exact identity=sha256-only contents=proved advancing-release=accepted termination=artifacts-excluded\n'
