@@ -23,7 +23,6 @@ class VerifyRuntimeContractTests(unittest.TestCase):
         cls.paths = [
             cls.project / "config" / "agent-runtime-contract-v1.json",
             cls.project / "docker" / "config" / "settings.json",
-            cls.project / "docker" / "config" / "settings-preserved.json",
             cls.project / "docker" / "config" / "QWEN.md",
             cls.project / "docker" / "config" / "system.md",
             cls.project / "docker" / "config" / "deployment-contract.md",
@@ -65,61 +64,33 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             paths = [contract_path, settings_path, *self.paths[2:]]
             with self.assertRaisesRegex(
                 MODULE.ContractError,
-                "differ only in preserve_thinking|settings reasoning effort drift",
+                "settings reasoning effort drift",
             ):
                 MODULE.verify(paths)
 
-    def test_rejects_a_second_difference_in_preserved_settings(self) -> None:
+    def test_rejects_turn_budget_drift_even_if_settings_are_resealed(self) -> None:
+        # The default turn budget is cross-checked in several places. Resealing
+        # the settings file and the contract together still leaves the
+        # launcher's own compiled default, which is what the agent actually
+        # runs under.
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            settings = json.loads(self.paths[2].read_text(encoding="utf-8"))
-            settings["modelProviders"]["openai"][0]["generationConfig"][
-                "maxRetries"
-            ] = 1
-            settings_path = root / "settings-preserved.json"
+            contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+            contract["execution"]["max_session_turns"] = 401
+            settings = json.loads(self.paths[1].read_text(encoding="utf-8"))
+            settings["model"]["maxSessionTurns"] = 401
+            settings_path = root / "settings.json"
             settings_path.write_text(
                 json.dumps(settings, indent=2) + "\n", encoding="utf-8"
             )
-            contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
-            contract["components"]["preserved_settings_sha256"] = MODULE.sha256(
+            contract["components"]["settings_sha256"] = MODULE.sha256(
                 settings_path.read_bytes()
             )
             contract_path = root / "contract.json"
             contract_path.write_text(
                 json.dumps(contract, indent=2) + "\n", encoding="utf-8"
             )
-            paths = [contract_path, self.paths[1], settings_path, *self.paths[3:]]
-            with self.assertRaisesRegex(
-                MODULE.ContractError, "differ only in preserve_thinking"
-            ):
-                MODULE.verify(paths)
-
-    def test_rejects_turn_budget_drift_even_if_settings_are_resealed(self) -> None:
-        # The default turn budget is cross-checked in six places. Resealing the
-        # settings pair and the contract together still leaves the launcher's
-        # own compiled default, which is what the agent actually runs under.
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
-            contract["execution"]["max_session_turns"] = 401
-            settings_paths = []
-            for index, name in ((1, "settings.json"), (2, "settings-preserved.json")):
-                settings = json.loads(self.paths[index].read_text(encoding="utf-8"))
-                settings["model"]["maxSessionTurns"] = 401
-                path = root / name
-                path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
-                settings_paths.append(path)
-            contract["components"]["settings_sha256"] = MODULE.sha256(
-                settings_paths[0].read_bytes()
-            )
-            contract["components"]["preserved_settings_sha256"] = MODULE.sha256(
-                settings_paths[1].read_bytes()
-            )
-            contract_path = root / "contract.json"
-            contract_path.write_text(
-                json.dumps(contract, indent=2) + "\n", encoding="utf-8"
-            )
-            paths = [contract_path, *settings_paths, *self.paths[3:]]
+            paths = [contract_path, settings_path, *self.paths[2:]]
             with self.assertRaisesRegex(
                 MODULE.ContractError, "agent_exec default max session turns drift"
             ):
@@ -187,7 +158,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
         # budget, so the flag's per-session form is pinned.
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            source = self.paths[8].read_text(encoding="utf-8")
+            source = self.paths[7].read_text(encoding="utf-8")
             resealed = source.replace(
                 '.arg(format!("--max-session-turns={max_session_turns}"))',
                 '.arg(format!("--max-session-turns={DEFAULT_MAX_SESSION_TURNS}"))',
@@ -203,7 +174,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             contract_path.write_text(
                 json.dumps(contract, indent=2) + "\n", encoding="utf-8"
             )
-            paths = [contract_path, *self.paths[1:8], source_path]
+            paths = [contract_path, *self.paths[1:7], source_path]
             with self.assertRaisesRegex(
                 MODULE.ContractError, "missing canonical fragment"
             ):

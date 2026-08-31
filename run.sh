@@ -8,25 +8,21 @@ readonly SCRIPT_DIR
 source "${SCRIPT_DIR}/scripts/submission-common.sh"
 
 usage() {
-  printf 'Usage: ./run.sh /absolute/canonical/folder /absolute/task-prompt.txt [--preserve-thinking=true|false] [--max-session-turns=N]\n' >&2
-  printf '  --preserve-thinking  historical-thinking policy for this session; omitted selects the deployment default.\n' >&2
+  printf 'Usage: ./run.sh /absolute/canonical/folder /absolute/task-prompt.txt [--max-session-turns=N]\n' >&2
   printf '  --max-session-turns  turn budget for this session and every subagent it starts, 1..%s; omitted selects the locked default of %s.\n' \
     "${SUBMISSION_MAX_SESSION_TURNS_CEILING}" "${SUBMISSION_DEFAULT_MAX_SESSION_TURNS}" >&2
   exit 2
 }
 
-# The two optional creation-body fields are named rather than positional: their
-# one accepted spelling is the field's own name, so a submission reads as what
-# the service receives and neither can be supplied by accident in the other's
-# place. Their values are not judged here -- the submission library owns those
-# rules and reads the ceiling from the stack lock, so this client cannot refuse
-# a budget the service admits or offer one it refuses.
-PRESERVE_THINKING=""
+# The optional creation-body field is named rather than positional: its one
+# accepted spelling is the field's own name, so a submission reads as what the
+# service receives. Its value is not judged here -- the submission library owns
+# that rule and reads the ceiling from the stack lock, so this client cannot
+# refuse a budget the service admits or offer one it refuses.
 MAX_SESSION_TURNS=""
 POSITIONAL=()
 while (( $# > 0 )); do
   case "$1" in
-    --preserve-thinking=*) PRESERVE_THINKING="${1#*=}" ;;
     --max-session-turns=*) MAX_SESSION_TURNS="${1#*=}" ;;
     --*)
       printf 'ERROR: unknown option: %s\n' "$1" >&2
@@ -36,7 +32,7 @@ while (( $# > 0 )); do
   esac
   shift
 done
-readonly PRESERVE_THINKING MAX_SESSION_TURNS
+readonly MAX_SESSION_TURNS
 (( ${#POSITIONAL[@]} == 2 )) || usage
 readonly FOLDER="${POSITIONAL[0]}"
 readonly PROMPT_FILE="${POSITIONAL[1]}"
@@ -71,7 +67,7 @@ readonly HANDLE_HEX
 }
 readonly SESSION_ID="s-${HANDLE_HEX}"
 REQUEST_FILE="$(submission_create_receipt "${SESSION_ID}" "${FOLDER}" "${PROMPT_FILE}" \
-  "${PRESERVE_THINKING}" "${MAX_SESSION_TURNS}")"
+  "${MAX_SESSION_TURNS}")"
 readonly REQUEST_FILE
 
 printf 'Session handle: %s\n' "${SESSION_ID}"

@@ -46,7 +46,6 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
     }
     for required in [
         "control/prompt.txt",
-        "control/history-policy.json",
         "control/turn-budget.json",
         "output/ready.json",
         "output/events.jsonl",
@@ -729,10 +728,6 @@ mod tests {
         for (relative, bytes) in [
             ("control/prompt.txt", b"prompt\n".as_slice()),
             (
-                "control/history-policy.json",
-                b"{\"preserve_thinking\":false}\n".as_slice(),
-            ),
-            (
                 "control/turn-budget.json",
                 b"{\"max_session_turns\":400}\n".as_slice(),
             ),
@@ -756,7 +751,7 @@ mod tests {
         symlink("../staged/dangling", session.join("artifacts/link-chain"))
             .expect("create link chain");
         let snapshot = snapshot_selected(&session).expect("snapshot accepts opaque links");
-        assert_eq!(snapshot.file_count, 12);
+        assert_eq!(snapshot.file_count, 11);
         assert_eq!(snapshot.artifacts_file_count, 1);
         assert!(snapshot.uncompressed_bytes >= 3);
 

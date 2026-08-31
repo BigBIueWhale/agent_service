@@ -526,9 +526,9 @@ mod tests {
             "{\"max_session_turns\":0400}\n".to_string(),
             "{\"max_session_turns\":+400}\n".to_string(),
             "{\"max_session_turns\":\"400\"}\n".to_string(),
-            "{\"max_session_turns\":400,\"preserve_thinking\":false}\n".to_string(),
+            "{\"max_session_turns\":400,\"unrelated_field\":false}\n".to_string(),
             // A different sealed record must never be read as a budget.
-            "{\"preserve_thinking\":false}\n".to_string(),
+            "{\"unrelated_record\":false}\n".to_string(),
             String::new(),
             // Outside the accepted range.
             "{\"max_session_turns\":0}\n".to_string(),

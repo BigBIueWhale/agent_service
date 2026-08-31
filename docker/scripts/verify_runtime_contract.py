@@ -79,21 +79,12 @@ def require_fragments(label: str, text: str, fragments: list[str]) -> None:
             raise ContractError(f"{label} is missing canonical fragment: {fragment!r}")
 
 
-def verify_settings(
-    contract: dict[str, Any], settings: dict[str, Any], preserve_thinking: bool
-) -> None:
+def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
     model = contract["model"]
     generation = contract["generation"]
     vision = contract["vision"]
     execution = contract["execution"]
     network = contract["network"]
-
-    require_equal("default preserved-thinking policy", generation["preserve_thinking"], False)
-    require_equal(
-        "supported preserved-thinking policies",
-        generation["preserve_thinking_supported_values"],
-        [False, True],
-    )
 
     require_equal("settings model name", settings["model"]["name"], model["served_name"])
     require_equal(
@@ -199,7 +190,6 @@ def verify_settings(
             "final_response_token_budget": generation["final_response_token_budget"],
             "chat_template_kwargs": {
                 "enable_thinking": generation["thinking_enabled"],
-                "preserve_thinking": preserve_thinking,
                 "reasoning_effort": generation["reasoning_effort"],
                 "add_vision_id": False,
             },
@@ -248,8 +238,6 @@ def verify_prompts(
             "TurboQuant K8V4: FP8 keys and packed 4-bit values",
             f"{model['context_window_tokens']:,} total tokens",
             f"Thinking is always enabled at `{generation['reasoning_effort']}`",
-            "default is `preserve_thinking=false`",
-            "explicit non-default is `preserve_thinking=true`",
             f"Reasoning ceiling is {generation['thinking_token_budget']:,} tokens",
             f"final-response ceiling is {generation['final_response_token_budget']:,}",
             f"at most {vision['max_source_pixels_per_image']:,} pixels",
@@ -274,7 +262,6 @@ def verify_prompts(
         [
             "Explore is investigative in purpose, not mechanically read-only.",
             "There is no character estimate, byte division, padding margin, or token-count fallback.",
-            "Historical-thinking retention is selected by the trusted per-session policy",
             "PDF is handled with deliberate offline computation, not direct PDF transport.",
             "Journal failure makes the tool call fail; useful changes are not",
         ],
@@ -375,9 +362,7 @@ def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:
         [
             f"readonly SYSTEM_PROMPT_SOURCE={sealed['system_prompt_path']}",
             f"readonly DEPLOYMENT_CONTRACT_SOURCE={sealed['deployment_contract_path']}",
-            f"readonly DEFAULT_QWEN_HOME={sealed['qwen_home']}",
-            f"readonly PRESERVED_QWEN_HOME={sealed['preserved_qwen_home']}",
-            f"readonly HISTORY_POLICY_FILE={sealed['history_policy_path']}",
+            f"readonly QWEN_HOME={sealed['qwen_home']}",
             f"readonly MODEL_BASE={network['model_base_url'].removesuffix('/v1')}",
             f"readonly EXPECTED_INTERFACE={network['interfaces'][0]}",
             f"readonly EXPECTED_IPV4_ADDRESS={network['ipv4_addresses'][0]}",
@@ -500,8 +485,7 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
 def verify(paths: list[Path]) -> None:
     (
         contract_path,
-        default_settings_path,
-        preserved_settings_path,
+        settings_path,
         instructions_path,
         system_path,
         deployment_path,
@@ -519,10 +503,7 @@ def verify(paths: list[Path]) -> None:
     require_equal("runtime contract id", contract["contract_id"], "qwen38-agent-runtime-v1")
     require_equal("runtime profile", contract["profile"], "qwen38-agent-service-v3")
 
-    default_settings_raw = require_regular_file(default_settings_path, "default settings")
-    preserved_settings_raw = require_regular_file(
-        preserved_settings_path, "preserved-thinking settings"
-    )
+    settings_raw = require_regular_file(settings_path, "settings")
     instructions_raw = require_regular_file(instructions_path, "instructions")
     system_raw = require_regular_file(system_path, "system prompt")
     deployment_raw = require_regular_file(deployment_path, "deployment contract")
@@ -531,8 +512,7 @@ def verify(paths: list[Path]) -> None:
     agent_exec_source_raw = require_regular_file(agent_exec_source_path, "agent_exec source")
     components = contract["components"]
     for key, raw in (
-        ("settings_sha256", default_settings_raw),
-        ("preserved_settings_sha256", preserved_settings_raw),
+        ("settings_sha256", settings_raw),
         ("instructions_sha256", instructions_raw),
         ("system_prompt_sha256", system_raw),
         ("deployment_contract_sha256", deployment_raw),
@@ -545,25 +525,14 @@ def verify(paths: list[Path]) -> None:
             raise ContractError(f"runtime contract component hash is malformed: {key}")
         require_equal(key, sha256(raw), expected)
 
-    default_settings = json.loads(default_settings_raw)
-    preserved_settings = json.loads(preserved_settings_raw)
-    normalized_preserved = json.loads(json.dumps(preserved_settings))
-    normalized_preserved["modelProviders"]["openai"][0]["generationConfig"][
-        "extra_body"
-    ]["chat_template_kwargs"]["preserve_thinking"] = False
-    require_equal(
-        "the two immutable Qwen settings differ only in preserve_thinking",
-        normalized_preserved,
-        default_settings,
-    )
+    settings = json.loads(settings_raw)
     toolchain = json.loads(toolchain_raw)
     require_equal(
         "toolchain apt lock identity",
         toolchain["apt_lock_sha256"],
         contract["toolchain"]["apt_lock_sha256"],
     )
-    verify_settings(contract, default_settings, False)
-    verify_settings(contract, preserved_settings, True)
+    verify_settings(contract, settings)
     verify_prompts(
         contract,
         instructions_raw.decode("utf-8"),
@@ -575,10 +544,9 @@ def verify(paths: list[Path]) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 10:
+    if len(sys.argv) != 9:
         print(
-            "usage: verify_runtime_contract.py CONTRACT DEFAULT_SETTINGS "
-            "PRESERVED_SETTINGS INSTRUCTIONS "
+            "usage: verify_runtime_contract.py CONTRACT SETTINGS INSTRUCTIONS "
             "SYSTEM DEPLOYMENT TOOLCHAIN WRAPPER AGENT_EXEC_SOURCE",
             file=sys.stderr,
         )

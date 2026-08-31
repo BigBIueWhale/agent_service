@@ -32,7 +32,6 @@ use crate::validation::ValidatedRequest;
 struct FailureContext<'a> {
     session_id: &'a str,
     prompt_preview: &'a str,
-    preserve_thinking: bool,
     max_session_turns: u32,
     archive_bytes: u64,
     archive_sha256: &'a str,
@@ -210,7 +209,6 @@ pub async fn run_one(
     let failure_context = FailureContext {
         session_id,
         prompt_preview: &prompt_preview,
-        preserve_thinking: req.preserve_thinking,
         max_session_turns: req.max_session_turns,
         archive_bytes: req.archive.bytes,
         archive_sha256: &req.archive.sha256,
@@ -429,7 +427,7 @@ pub async fn run_one(
     // exact-owned topology creation committed before any task code can pass
     // the gate.
     let creation = {
-        let create = docker_ops::create_session(cfg, session_id, req.preserve_thinking);
+        let create = docker_ops::create_session(cfg, session_id);
         tokio::pin!(create);
         tokio::select! {
             result = &mut create => match result {
@@ -574,15 +572,7 @@ pub async fn run_one(
         .await;
     }
 
-    let ready = match wait_for_agent_ready(
-        cfg,
-        session_id,
-        &paths,
-        &cancel,
-        req.preserve_thinking,
-    )
-    .await
-    {
+    let ready = match wait_for_agent_ready(cfg, session_id, &paths, &cancel).await {
         Ok(value) => value,
         Err(error) => {
             return finalize_started_setup_failure(
@@ -606,8 +596,8 @@ pub async fn run_one(
     if let Err(error) = progress.publish(
         ProgressPhase::RunningAgent,
         format!(
-            "agent readiness proved: model={}, context_window={}, tokenizer_probe_tokens={}, preserve_thinking={}",
-            ready.model, ready.context_window, ready.token_count, ready.preserve_thinking
+            "agent readiness proved: model={}, context_window={}, tokenizer_probe_tokens={}",
+            ready.model, ready.context_window, ready.token_count
         ),
         staged_counters,
     ) {
@@ -877,7 +867,6 @@ pub async fn run_one(
         started_at_unix,
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
-        preserve_thinking: req.preserve_thinking,
         max_session_turns: req.max_session_turns,
         archive_bytes: req.archive.bytes,
         archive_sha256: req.archive.sha256.clone(),
@@ -922,7 +911,6 @@ struct ReadyFile {
     model: String,
     context_window: u64,
     token_count: u64,
-    preserve_thinking: bool,
     sandbox: String,
 }
 
@@ -931,7 +919,6 @@ async fn wait_for_agent_ready(
     session_id: &str,
     paths: &SessionPaths,
     cancel: &CancellationToken,
-    expected_preserve_thinking: bool,
 ) -> ServiceResult<ReadyFile> {
     let event_wait = docker_ops::wait_agent_ready(cfg, session_id);
     tokio::pin!(event_wait);
@@ -947,13 +934,11 @@ async fn wait_for_agent_ready(
         model: broker_ready.model,
         context_window: broker_ready.context_window,
         token_count: broker_ready.token_count,
-        preserve_thinking: broker_ready.preserve_thinking,
         sandbox: broker_ready.sandbox,
     };
     if ready.model != cfg.vllm_model_name
         || ready.context_window != cfg.lock.backend.max_model_len
         || ready.token_count == 0
-        || ready.preserve_thinking != expected_preserve_thinking
         || ready.sandbox
             != "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
     {
@@ -1041,7 +1026,6 @@ pub async fn recover_after_execution_panic(
     session_id: &str,
     full_prompt: &str,
     prompt_preview: &str,
-    preserve_thinking: bool,
     max_session_turns: u32,
     archive_bytes: u64,
     archive_sha256: &str,
@@ -1118,11 +1102,6 @@ pub async fn recover_after_execution_panic(
             if let Err(error) = ensure_prompt_record(&paths, full_prompt) {
                 diagnostics.push(format!(
                     "preserve prompt after execution-task failure: {error}"
-                ));
-            }
-            if let Err(error) = ensure_history_policy_record(&paths, preserve_thinking) {
-                diagnostics.push(format!(
-                    "preserve history policy after execution-task failure: {error}"
                 ));
             }
             if let Err(error) = ensure_turn_budget_record(&paths, max_session_turns) {
@@ -1218,7 +1197,6 @@ pub async fn recover_after_execution_panic(
         started_at_unix,
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
-        preserve_thinking,
         max_session_turns,
         archive_bytes,
         archive_sha256: archive_sha256.to_string(),
@@ -1270,7 +1248,6 @@ pub async fn recover_after_service_restart(
     let paths = SessionPaths::new(&cfg.state_dir, session_id);
     paths.ensure_recovery_dirs()?;
     ensure_prompt_record(&paths, &acceptance.prompt)?;
-    ensure_history_policy_record(&paths, acceptance.preserve_thinking)?;
     ensure_turn_budget_record(&paths, acceptance.max_session_turns)?;
 
     let status = if cancellation_was_durable {
@@ -1401,7 +1378,6 @@ pub async fn recover_after_service_restart(
         started_at_unix: acceptance.accepted_at_unix,
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
-        preserve_thinking: acceptance.preserve_thinking,
         max_session_turns: acceptance.max_session_turns,
         archive_bytes: acceptance.archive_bytes,
         archive_sha256: acceptance.archive_sha256.clone(),
@@ -1488,57 +1464,6 @@ fn ensure_prompt_record(paths: &SessionPaths, prompt: &str) -> ServiceResult<()>
         }
         Err(error) => Err(ServiceError::Internal(format!(
             "stat prompt record {}: {error}",
-            path.display()
-        ))),
-    }
-}
-
-fn ensure_history_policy_record(
-    paths: &SessionPaths,
-    preserve_thinking: bool,
-) -> ServiceResult<()> {
-    let path = paths.control.join("history-policy.json");
-    let expected: &[u8] = if preserve_thinking {
-        b"{\"preserve_thinking\":true}\n"
-    } else {
-        b"{\"preserve_thinking\":false}\n"
-    };
-    match std::fs::symlink_metadata(&path) {
-        Ok(metadata)
-            if metadata.is_file()
-                && !metadata.file_type().is_symlink()
-                && metadata.uid() == 1000
-                && metadata.gid() == 1000
-                && metadata.permissions().mode() & 0o777 == 0o444 =>
-        {
-            let existing = read_exact_owned_regular_file(
-                &path,
-                0o444,
-                64,
-                "panic-recovery history policy",
-            )?;
-            if existing == expected {
-                Ok(())
-            } else {
-                Err(ServiceError::Internal(format!(
-                    "existing panic-recovery history policy {} contradicts the submitted preserve_thinking={preserve_thinking}",
-                    path.display()
-                )))
-            }
-        }
-        Ok(metadata) => Err(ServiceError::Internal(format!(
-            "{} is not the exact regular 1000:1000 mode-0444 history-policy record: type={:?} uid={} gid={} mode={:o}",
-            path.display(),
-            metadata.file_type(),
-            metadata.uid(),
-            metadata.gid(),
-            metadata.permissions().mode() & 0o777
-        ))),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            paths.write_history_policy(preserve_thinking).map(|_| ())
-        }
-        Err(error) => Err(ServiceError::Internal(format!(
-            "stat panic-recovery history policy {}: {error}",
             path.display()
         ))),
     }
@@ -1997,7 +1922,6 @@ async fn finalize_setup_failure(
         started_at_unix: context.started_at_unix,
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
-        preserve_thinking: context.preserve_thinking,
         max_session_turns: context.max_session_turns,
         archive_bytes: context.archive_bytes,
         archive_sha256: context.archive_sha256.to_string(),

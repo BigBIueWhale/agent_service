@@ -125,7 +125,6 @@
             "final_response_token_budget": 131072,
             "chat_template_kwargs": {
               "enable_thinking": true,
-              "preserve_thinking": false,
               "reasoning_effort": "xhigh",
               "add_vision_id": false
             }

@@ -18,8 +18,7 @@ line_of() {
 }
 
 TERM_TRAP_LINE="$(line_of "trap 'forward_termination 143' TERM")"
-READY_LINE="$(line_of "printf 'AGENT_READY model=%s context=262144 network=loopback-only token_count=%s preserve_thinking=%s sandbox=%s\\n'")"
-HISTORY_POLICY_LINE="$(line_of 'history_policy_payload="$(<"${HISTORY_POLICY_FILE}")"')"
+READY_LINE="$(line_of "printf 'AGENT_READY model=%s context=262144 network=loopback-only token_count=%s sandbox=%s\\n'")"
 # These are deliberately literal source landmarks; expansion would make the
 # contract test search for this test process's environment instead.
 # shellcheck disable=SC2016
@@ -37,7 +36,6 @@ AGENT_EXEC_LINE="$(line_of 'setsid "${AGENT_EXEC}"')"
 ATTEST_LINE="$(line_of 'expected_attestation="AGENT_EXEC_READY sandbox=${AGENT_EXEC_SANDBOX}"')"
 RELEASE_LINE="$(line_of "if ! printf 'EXEC\\n'")"
 readonly TERM_TRAP_LINE READY_LINE AGENT_EXEC_LINE ATTEST_LINE RELEASE_LINE
-readonly HISTORY_POLICY_LINE
 readonly TOOLCHAIN_VERIFY_LINE EFFECT_ROOT_LINE SCRATCH_ROOT_LINE
 readonly RUNTIME_CONTRACT_VERIFY_LINE
 readonly START_GATE_LINE
@@ -53,10 +51,6 @@ readonly DEVPTS_LINE
 }
 (( RUNTIME_CONTRACT_VERIFY_LINE < TOOLCHAIN_VERIFY_LINE )) || {
   printf 'canonical runtime contract must precede toolchain validation and readiness\n' >&2
-  exit 1
-}
-(( HISTORY_POLICY_LINE < RUNTIME_CONTRACT_VERIFY_LINE )) || {
-  printf 'the canonical history policy must select an immutable Qwen home before contract validation\n' >&2
   exit 1
 }
 (( EFFECT_ROOT_LINE < READY_LINE && SCRATCH_ROOT_LINE < READY_LINE )) || {

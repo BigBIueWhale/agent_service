@@ -26,8 +26,6 @@ pub struct SpooledArchive {
 #[derive(Debug)]
 pub struct ValidatedRequest {
     pub prompt: String,
-    /// Exact typed history policy selected by the trusted API decoder.
-    pub preserve_thinking: bool,
     /// Exact turn budget this session runs under: the locked default unless
     /// the creation body named another one inside the pinned ceiling. The
     /// launcher passes it to Qwen Code, so every foreground subagent this
@@ -40,7 +38,6 @@ pub struct ValidatedRequest {
 
 pub fn validate(
     prompt: &str,
-    preserve_thinking: bool,
     max_session_turns: u32,
     archive: SpooledArchive,
 ) -> ServiceResult<ValidatedRequest> {
@@ -49,7 +46,6 @@ pub fn validate(
     let archive = validate_spooled_archive(archive)?;
     Ok(ValidatedRequest {
         prompt,
-        preserve_thinking,
         max_session_turns,
         archive,
     })

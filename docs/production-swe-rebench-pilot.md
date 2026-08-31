@@ -2,46 +2,40 @@
 
 ## Result
 
-The accepted `agent_service` release solved the pinned SWE-rebench pilot task in
-both history-policy variants. This was an end-to-end production-agent test, not a
-direct model benchmark: every model-bearing turn ran inside the pinned Qwen Code
-agent image after a real `POST /v1/agent/sessions`, and completion was obtained from
-the production `/wait` endpoint. Harbor supplied the task and the immutable
-post-session evaluator only. It was never configured as a model adapter and never
-called vLLM.
+The accepted `agent_service` release solved the pinned SWE-rebench pilot task.
+This was an end-to-end production-agent test, not a direct model benchmark: every
+model-bearing turn ran inside the pinned Qwen Code agent image after a real
+`POST /v1/agent/sessions`, and completion was obtained from the production
+`/wait` endpoint. Harbor supplied the task and the immutable post-session
+evaluator only. It was never configured as a model adapter and never called vLLM.
 
-The supported production policy remains `preserve_thinking=false`. The `true` run
-was an explicitly typed diagnostic comparison, not a second deployment mode.
+| Measurement | Production session |
+|---|---:|
+| Production session | `s-133dfd0c3b2643fa8291ab45c9508116` |
+| Terminal status | completed |
+| Evaluator reward | 1 |
+| Evaluator tests | 11 passed, 0 failed/error/skipped |
+| Model turns | 61 |
+| Native tool calls/results | 60 / 60 |
+| Tool-result errors handled in-thread | 5 |
+| Wall duration | 1,090,658 ms |
+| Agent duration | 1,084,315 ms |
+| Qwen Code aggregate input tokens | 3,407,979 |
+| Qwen Code aggregate output tokens | 38,461 |
+| Qwen Code aggregate total tokens | 3,446,440 |
+| Candidate patch bytes | 5,301 |
+| Candidate patch SHA-256 | `d4e69c838e9349ff20189893def6e5c1d3e5301efd07c822cacbf74dac08fe36` |
+| Production bundle SHA-256 | `4ac6f5729017a111cb5dde1c30110a7d5520af1059c7e529234073d42c519f3a` |
 
-| Measurement | Production default (`false`) | Diagnostic comparison (`true`) |
-|---|---:|---:|
-| Production session | `s-133dfd0c3b2643fa8291ab45c9508116` | `s-c7dad910a01847ecad7833599d9ade69` |
-| Terminal status | completed | completed |
-| Evaluator reward | 1 | 1 |
-| Evaluator tests | 11 passed, 0 failed/error/skipped | 11 passed, 0 failed/error/skipped |
-| Model turns | 61 | 83 |
-| Native tool calls/results | 60 / 60 | 82 / 82 |
-| Tool-result errors handled in-thread | 5 | 9 |
-| Wall duration | 1,090,658 ms | 1,081,835 ms |
-| Agent duration | 1,084,315 ms | 1,075,932 ms |
-| Qwen Code aggregate input tokens | 3,407,979 | 5,044,492 |
-| Qwen Code aggregate output tokens | 38,461 | 36,861 |
-| Qwen Code aggregate total tokens | 3,446,440 | 5,081,353 |
-| Candidate patch bytes | 5,301 | 7,164 |
-| Candidate patch SHA-256 | `d4e69c838e9349ff20189893def6e5c1d3e5301efd07c822cacbf74dac08fe36` | `11391d08400bb5de4ebc2cc181ba009944d0240916e3becc312db6a93064e75d` |
-| Production bundle SHA-256 | `4ac6f5729017a111cb5dde1c30110a7d5520af1059c7e529234073d42c519f3a` | `c38bc7e71c6badddfdb40eeda92ba0fb0e5ed0dec48f618a62fbfca2e80a7265` |
+One completed task is a lifecycle proof for the production pair — real session
+creation, real turns, a clean terminal bundle, and an independent evaluator
+pass — not a benchmark-suite score and not a population-level quality or
+latency claim.
 
-On this one task, preserved history used 22 more model/tool turns and 1,636,513
-more aggregate input tokens. That is 36.1% more turns and 48.0% more input-token
-traffic than the production default. Wall time differed by only 8.823 seconds
-(0.8%) and both patches passed the evaluator, so this pilot supports the efficiency
-of the selected default but does not establish a population-level quality or
-latency difference. It is one paired sampled task, not a benchmark-suite score.
-
-The Qwen Code result object's `cache_read_input_tokens` compatibility field was zero
-in both runs. This deployment already treats that frontend field as non-authoritative;
+The Qwen Code result object's `cache_read_input_tokens` compatibility field was
+zero. This deployment already treats that frontend field as non-authoritative;
 the backend's own metrics are the authority for physical prefix-cache hits. The
-aggregate input figures above describe rendered request traffic and must not be
+aggregate input figure above describes rendered request traffic and must not be
 misreported as the amount of attention computation or cache misses.
 
 ## Immutable inputs and production release
@@ -77,7 +71,7 @@ misreported as the amount of attention computation or cache misses.
   `sha256:8f8d4b2e68bf47c9d92c6c5c0f77fdbf60d0056ef32155a34ecc96357dfd41f4`
 
 The complete per-file task hashes, exact evaluator materialization observation,
-timeouts, CPU/memory limits, and comparison invariants are in the tracked benchmark
+timeouts, CPU/memory limits, and invariants are in the tracked benchmark
 lock. The evaluator image is the rerun authority: its Dockerfile downloaded the
 `uv` installer over HTTPS, and that installer explicitly reported that it had no
 checksums to verify. Repeating that mutable network fetch would not reproduce the
@@ -91,26 +85,25 @@ The executed harness performs these steps and fails on any mismatch:
    lock, image IDs, live production status, task hashes, and absence of a running
    session.
 2. Copy the exact base-commit checkout into a fresh source directory for the run.
-3. Submit `{folder, prompt, preserve_thinking}` to production
-   `POST /v1/agent/sessions` and verify the returned model, context, and typed
-   history policy.
+3. Submit `{folder, prompt}` to production `POST /v1/agent/sessions` and verify
+   the returned model and context.
 4. Wait through production `/v1/agent/sessions/{id}/wait`. A transport deadline may
    request production cancellation, but it cannot reinterpret a partial run as a
    model result.
 5. Require a clean completed terminal record, zero process error, exit code zero,
-   zero teardown diagnostics, the expected history policy, and a complete bundle.
+   zero teardown diagnostics, and a complete bundle.
 6. Copy and hash that exact production bundle, extract it without following
    symlinks, calculate the candidate patch from its staged workspace, and only then
    run the immutable evaluator with `--network none`.
 7. Remove the evaluator container and require its structured report and reward.
 
-The copied benchmark bundles were byte-identical to the durable archives under
-`.runtime/results/<session-id>/`. Both production sessions left no agent, model
+The copied benchmark bundle was byte-identical to the durable archive under
+`.runtime/results/<session-id>/`. The production session left no agent, model
 relay, or capture container. The only project TCP listeners remained the two fixed
 loopback relays on `127.0.0.1:8000` and `127.0.0.1:8090`.
 
 The task required Go 1.25.10 while the deliberately sealed production agent image
-contains Go 1.22.2 and no network/module cache. Both agents correctly disclosed
+contains Go 1.22.2 and no network/module cache. The agent correctly disclosed
 that limitation rather than claiming to have run unavailable tests. The pinned
 post-session evaluator contains the task's intended toolchain and proved the
 candidate behavior with 11 passing tests. This is part of the production-agent
@@ -137,11 +130,11 @@ contract. The pinned Rust build then passed 44 service, 9 broker, 3 relay, 2 cap
 and 2 agent-exec tests. A complete clean release build reproduced every locked image.
 A real five-turn production smoke session (`s-b8f334fc047a474dac79d7b9a28a607c`)
 proved that a late capture-complete event now becomes a clean terminal bundle before
-the paired benchmark was accepted.
+the benchmark was accepted.
 
 ## Tracked and local evidence
 
-The exact harness that ran, its benchmark lock, and its paired structured result are
+The exact harness that ran, its benchmark lock, and its structured result are
 tracked under `artifacts/swe-rebench-2026-07-production-service/`. Large production
 bundles, evaluator archives, materialized workspaces, logs, and older failure bundles
 remain in that ignored local evidence root and in `.runtime/results/`; they are not
@@ -151,7 +144,7 @@ silently deleted or added to Git.
   `eae987cf91a7ddd37a170d6caea88b9121e55d753811ed981aab74b6e6478ba6`
 - Benchmark-lock file SHA-256:
   `12989a928eb17473b9a03f666c4a15bd8cdea201b9b4e85b590483d3c34c2887`
-- Paired-result file SHA-256:
+- Result file SHA-256:
   `0bb5d56b4b6e0e33f3b790c56c9fccb255c21b1111126a838f1be63f30cf49b1`
 
 To rerun on this exact workstation after verifying the live release:
@@ -163,5 +156,5 @@ cd /home/user/Desktop/agent_service
 ```
 
 The harness intentionally refuses existing final run directories. Preserving the
-accepted result and rerunning therefore requires an explicitly named new run pair or
+accepted result and rerunning therefore requires an explicitly named new run or
 an operator-authorized archival decision; it never overwrites evidence.

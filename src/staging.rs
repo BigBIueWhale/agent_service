@@ -10,7 +10,6 @@
 //!                   returned to the operator. Bundled at end-of-run.
 //! control/        ← bind-mounted into agent container as /run/agent (ro)
 //!   prompt.txt
-//!   history-policy.json
 //!   turn-budget.json
 //!   start-gate.lock
 //! streams/        ← capture component rw; Qwen container ro
@@ -173,48 +172,6 @@ impl SessionPaths {
             .map_err(|e| ServiceError::Staging(io_msg("flush/sync prompt.txt", &p, &e)))?;
         sync_directory(&self.control, "sync prompt publication")?;
         Ok(p)
-    }
-
-    /// Publish the one canonical per-session history-policy record. The API
-    /// has already required a JSON boolean; this file is deliberately
-    /// canonical byte data so the broker and agent wrapper can independently
-    /// prove that the selected immutable Qwen home matches the request.
-    pub fn write_history_policy(&self, preserve_thinking: bool) -> ServiceResult<PathBuf> {
-        let path = self.control.join("history-policy.json");
-        let contents: &[u8] = if preserve_thinking {
-            b"{\"preserve_thinking\":true}\n"
-        } else {
-            b"{\"preserve_thinking\":false}\n"
-        };
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)
-            .map_err(|error| {
-                ServiceError::Staging(io_msg("open history-policy.json", &path, &error))
-            })?;
-        file.write_all(contents).map_err(|error| {
-            ServiceError::Staging(io_msg("write history-policy.json", &path, &error))
-        })?;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o444)).map_err(
-            |error| {
-                ServiceError::Staging(io_msg(
-                    "chmod 0444 history-policy.json",
-                    &path,
-                    &error,
-                ))
-            },
-        )?;
-        file.flush().and_then(|_| file.sync_all()).map_err(|error| {
-            ServiceError::Staging(io_msg(
-                "flush/sync history-policy.json",
-                &path,
-                &error,
-            ))
-        })?;
-        sync_directory(&self.control, "sync history-policy publication")?;
-        Ok(path)
     }
 
     /// Publish the one canonical per-session turn-budget record.
@@ -1179,47 +1136,6 @@ mod tests {
     }
 
     #[test]
-    fn history_policy_records_are_canonical_no_clobber_byte_data() {
-        for (preserve, expected) in [
-            (false, b"{\"preserve_thinking\":false}\n".as_slice()),
-            (true, b"{\"preserve_thinking\":true}\n".as_slice()),
-        ] {
-            let root = std::env::temp_dir().join(format!(
-                "qwen38-history-policy-{preserve}-{}",
-                uuid::Uuid::new_v4().simple()
-            ));
-            std::fs::create_dir_all(root.join("sessions"))
-                .expect("create fixed sessions parent");
-            let paths = SessionPaths::new(
-                &root,
-                if preserve {
-                    "s-11111111111111111111111111111111"
-                } else {
-                    "s-00000000000000000000000000000000"
-                },
-            );
-            paths.create_dirs().expect("create fixture layout");
-            let path = paths
-                .write_history_policy(preserve)
-                .expect("publish canonical policy");
-            assert_eq!(std::fs::read(&path).expect("read policy"), expected);
-            assert_eq!(
-                std::fs::metadata(&path)
-                    .expect("stat policy")
-                    .permissions()
-                    .mode()
-                    & 0o777,
-                0o444
-            );
-            assert!(
-                paths.write_history_policy(preserve).is_err(),
-                "policy publication silently overwrote an existing record"
-            );
-            std::fs::remove_dir_all(&root).expect("remove fixture");
-        }
-    }
-
-    #[test]
     fn turn_budget_records_are_canonical_no_clobber_byte_data() {
         for turns in [1u32, DEFAULT_MAX_SESSION_TURNS, MAX_SESSION_TURNS_CEILING] {
             let root = std::env::temp_dir().join(format!(
@@ -1263,9 +1179,9 @@ mod tests {
             "{\"max_session_turns\":0400}\n".as_bytes(),
             "{\"max_session_turns\":+400}\n".as_bytes(),
             "{\"max_session_turns\":400}\n\n".as_bytes(),
-            "{\"max_session_turns\":400,\"preserve_thinking\":false}\n".as_bytes(),
+            "{\"max_session_turns\":400,\"unrelated_field\":false}\n".as_bytes(),
             "{\"max_session_turns\":\"400\"}\n".as_bytes(),
-            "{\"preserve_thinking\":false}\n".as_bytes(),
+            "{\"unrelated_record\":false}\n".as_bytes(),
             "{\"max_session_turns\":0}\n".as_bytes(),
             "{\"max_session_turns\":-1}\n".as_bytes(),
             format!("{{\"max_session_turns\":{}}}\n", MAX_SESSION_TURNS_CEILING + 1).as_bytes(),

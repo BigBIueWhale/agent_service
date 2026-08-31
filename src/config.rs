@@ -236,7 +236,6 @@ pub struct AgentLock {
     pub tmpfs_tmp: String,
     pub tmpfs_qwen_runtime: String,
     pub settings_sha256: String,
-    pub preserved_settings_sha256: String,
     pub instructions_sha256: String,
     pub system_prompt_sha256: String,
     pub deployment_contract_sha256: String,
@@ -317,7 +316,6 @@ pub struct VisionLock {
 pub struct AgentDefaultsLock {
     pub enable_thinking: bool,
     pub reasoning_effort: String,
-    pub preserve_thinking: bool,
     pub add_vision_id: bool,
     pub temperature: f64,
     pub top_p: f64,
@@ -693,7 +691,6 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     }
     if [
         lock.agent.settings_sha256.as_str(),
-        lock.agent.preserved_settings_sha256.as_str(),
         lock.agent.instructions_sha256.as_str(),
         lock.agent.system_prompt_sha256.as_str(),
         lock.agent.deployment_contract_sha256.as_str(),
@@ -800,7 +797,6 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     let defaults = &lock.backend.agent_defaults;
     if !defaults.enable_thinking
         || defaults.reasoning_effort != "xhigh"
-        || defaults.preserve_thinking
         || defaults.add_vision_id
         || defaults.temperature != 1.0
         || defaults.top_p != 0.95
@@ -1199,17 +1195,13 @@ mod tests {
     }
 
     #[test]
-    fn weaker_thinking_or_preserved_history_is_rejected() {
+    fn weakened_thinking_policy_is_rejected() {
         let mut lock = checked_in_lock();
         lock.backend.agent_defaults.enable_thinking = false;
         assert_agent_policy_rejected(lock);
 
         let mut lock = checked_in_lock();
         lock.backend.agent_defaults.reasoning_effort = "medium".into();
-        assert_agent_policy_rejected(lock);
-
-        let mut lock = checked_in_lock();
-        lock.backend.agent_defaults.preserve_thinking = true;
         assert_agent_policy_rejected(lock);
 
         let mut lock = checked_in_lock();

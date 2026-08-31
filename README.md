@@ -42,7 +42,6 @@ The fixed stack is:
 | Image transport | Lossless inline PNG; static 8-bit RGB/RGBA only; video/audio rejected |
 | MTP/speculative decoding | Disabled |
 | Thinking | Required, `xhigh` |
-| Historical thinking | `preserve_thinking=false` |
 | Qwen Code | `0.21.12`, commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38` |
 | Agent image | `sha256:0d6d47d0516964c1f952b2d1506ba33614aad47e16899611b7ac0dedfd68b013` |
 | Service | Rust, one session at a time, Docker-only; implementation commit `46af008ad9673ec2fcbc7bd84b8d95867d3e90e2` |
@@ -142,15 +141,8 @@ patched server and client still enforce:
 rendered prompt + reasoning + tools + final response <= 262144
 ```
 
-Completed hidden reasoning is deliberately not replayed into every later request:
-`preserve_thinking=false`. Visible answers, native tool calls, typed tool results,
-and the current turn's reasoning remain. This is the selected long-horizon policy:
-it spends the scarce context window on the continuing task rather than repeatedly
-paying for every old hidden trace. The setting does not disable thinking.
-
 These are defaults at both layers, not suggestions in prose. vLLM defaults omitted
-request fields to thinking enabled, xhigh, unpreserved historical thinking, and the
-exact tuple above. The pinned Qwen Code settings send the same values explicitly,
+request fields to thinking enabled, xhigh, and the exact tuple above. The pinned Qwen Code settings send the same values explicitly,
 including `thinking_token_budget=262144`,
 `final_response_token_budget=131072`, and `add_vision_id=false`. The backend maps
 high and max to the canonical xhigh rendering and rejects medium, low, or disabled
@@ -396,8 +388,8 @@ Before compaction, old image-bearing tool results remain at their chronological
 positions. vLLM can reuse both the unchanged rendered prefix and the SHA-256-keyed
 multimodal processor entry. On compaction, `maxRecentImagesToRetain=0`: old raw
 pixels are removed with the compacted history rather than moved into a false recent
-turn. The visible summary can preserve findings, while completed hidden thinking is
-also omitted. This is the selected long-thread policy.
+turn. The visible summary can preserve findings; the replaced turns' hidden
+thinking is not carried into it, because the turns themselves are gone.
 
 The limit is fifteen images in one rendered request, not fifteen over the lifetime
 of a session. Their visual expansion still counts inside the same native 262,144
@@ -725,12 +717,12 @@ Run one task and wait through a server-side notification, without client polling
 ./run.sh /home/user/Desktop/my_project /home/user/Desktop/task-prompt.txt
 ```
 
-Both optional creation-body fields are named options, and omitting one selects
+The optional creation-body field is a named option, and omitting it selects
 the deployment default rather than sending it explicitly:
 
 ```bash
 ./run.sh /home/user/Desktop/my_project /home/user/Desktop/task-prompt.txt \
-  --preserve-thinking=true --max-session-turns=700
+  --max-session-turns=700
 ```
 
 Cancel a known session:
@@ -767,17 +759,16 @@ All endpoints listen only on `127.0.0.1:8090`:
 | `DELETE` | `/v1/agent/sessions/{id}` | Delete one terminal record and bundle |
 
 The creation body is exactly two ordered `multipart/form-data` parts: part 1
-`request` (`application/json` — `{"prompt", "preserve_thinking"?,
-"max_session_turns"?, "archive_bytes", "archive_sha256"}`, at most 2 MiB) and
-part 2 `archive` (`application/zip` — the exact workspace bytes, streamed to a
-disk spool while hashed, bounded only by the explicit 200 GiB +
-container-overhead archive cap). A required caller-generated 256-bit
-`Idempotency-Key` names the operation. Both optional fields are typed, not
-profile names: `preserve_thinking` is a JSON boolean and `max_session_turns` is
-a JSON integer in `1..=800`. Omitting one selects the locked default (`false`
-and 400 turns); a bad value is refused by name before the archive part is
-spooled, and a replay under the same handle must repeat the same values or it is
-a 409 rather than a second operation.
+`request` (`application/json` — `{"prompt", "max_session_turns"?,
+"archive_bytes", "archive_sha256"}`, at most 2 MiB) and part 2 `archive`
+(`application/zip` — the exact workspace bytes, streamed to a disk spool while
+hashed, bounded only by the explicit 200 GiB + container-overhead archive cap).
+A required caller-generated 256-bit `Idempotency-Key` names the operation. The
+optional field is typed, not a profile name: `max_session_turns` is a JSON
+integer in `1..=800`. Omitting it selects the locked default of 400 turns; a
+bad value is refused by name before the archive part is spooled, and a replay
+under the same handle must repeat the same values or it is a 409 rather than a
+second operation.
 There is no serving-capacity gate: sessions run concurrently, each in its own
 isolated topology, because whether more than one should run at once is a
 placement decision for whatever sits above this service. Concurrent sessions
@@ -864,23 +855,20 @@ reject an alternate mode before changing state.
 
 ## Production SWE-rebench pilot
 
-The final paired pilot ran through this production service itself. It did not use a
+The final pilot ran through this production service itself. It did not use a
 Harbor/Qwen model adapter and did not call vLLM directly: the harness submitted each
 task with `POST /v1/agent/sessions`, awaited the production `/wait` notification,
 required the clean terminal bundle, and only then ran the pinned SWE-rebench
 evaluator with no network.
 
-On task `Gentleman-Programming__gentle-ai-595`, the supported
-`preserve_thinking=false` policy resolved all 11 evaluator checks in 61 turns. The
-explicit `preserve_thinking=true` diagnostic also resolved all 11 checks, in 83
-turns. The diagnostic consumed 1,636,513 more aggregate Qwen Code input tokens
-(48.0% more) and 22 more tool/model turns (36.1% more), while wall durations were
-within 0.8%. This one paired sampled task supports the selected default's context
-efficiency; it does not prove a population-level quality or latency difference.
+On task `Gentleman-Programming__gentle-ai-595`, the production session resolved
+all 11 evaluator checks in 61 turns. One completed task is a lifecycle proof for
+the deployed pair — real session creation, real turns, a clean terminal bundle,
+and an independent evaluator pass — not a benchmark-suite score.
 
 The first two attempts are retained and classified as infrastructure failures, not
 model scores. The second is the run that exposed the `--since 0s` capture race above.
-The accepted pair used release commit
+The accepted pilot used release commit
 `7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc`, agent image
 `sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec`,
 broker image

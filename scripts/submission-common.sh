@@ -111,19 +111,17 @@ submission_validate_receipt() {
   ((archive_bytes > 0 && archive_bytes <= SUBMISSION_MAX_ARCHIVE_BYTES)) ||
     submission_die "receipt archive is ${archive_bytes} bytes; required range is 1..${SUBMISSION_MAX_ARCHIVE_BYTES}" || return
 
-  # `keys` is sorted, so subtracting the two optional fields leaves exactly the
+  # `keys` is sorted, so subtracting the one optional field leaves exactly the
   # three required ones: every required key present, no unknown key admitted,
-  # and each optional field, when present, of its one accepted type and range.
+  # and the optional field, when present, of its one accepted type and range.
   jq -e --argjson archive_bytes "${archive_bytes}" \
     --argjson turn_ceiling "${SUBMISSION_MAX_SESSION_TURNS_CEILING}" '
     type == "object" and
-    ((keys - ["max_session_turns", "preserve_thinking"]) ==
+    ((keys - ["max_session_turns"]) ==
       ["archive_bytes", "archive_sha256", "prompt"]) and
     (.prompt | type == "string" and length > 0) and
     (.archive_bytes == $archive_bytes) and
     (.archive_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-    ((has("preserve_thinking") | not) or
-     (.preserve_thinking | type == "boolean")) and
     ((has("max_session_turns") | not) or
      (.max_session_turns | type == "number" and . == floor and . >= 1 and . <= $turn_ceiling))
   ' "${request_file}" >/dev/null ||
@@ -144,11 +142,8 @@ submission_validate_receipt() {
 }
 
 submission_create_receipt() {
-  local session_id="$1" folder="$2" prompt_file="$3" preserve_thinking="${4-}"
-  local max_session_turns="${5-}"
+  local session_id="$1" folder="$2" prompt_file="$3" max_session_turns="${4-}"
   submission_require_handle "${session_id}" || return
-  [[ -z "${preserve_thinking}" || "${preserve_thinking}" == true || "${preserve_thinking}" == false ]] ||
-    submission_die "preserve_thinking must be omitted, true, or false; got ${preserve_thinking@Q}" || return
   # The ceiling comes from the stack lock, never a hand-copied mirror, so this
   # client cannot refuse a budget the service admits or offer one it refuses.
   [[ -z "${max_session_turns}" ||
@@ -208,11 +203,9 @@ submission_create_receipt() {
   # exactly what a later replay resends.
   jq -n --argjson archive_bytes "${archive_bytes}" \
     --arg archive_sha256 "${archive_sha256}" \
-    --argjson preserve_thinking "${preserve_thinking:-null}" \
     --argjson max_session_turns "${max_session_turns:-null}" \
     --rawfile prompt "${prompt_file}" \
     '{prompt:$prompt}
-     + (if $preserve_thinking == null then {} else {preserve_thinking:$preserve_thinking} end)
      + (if $max_session_turns == null then {} else {max_session_turns:$max_session_turns} end)
      + {archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' >"${request_next}" ||
     submission_die "cannot serialize exact request receipt for ${session_id}" || return
@@ -272,7 +265,6 @@ submission_response_is_valid() {
       (.progress_events | type == "array") and
       (.model | type == "string" and length > 0) and
       (.context_window | type == "number" and . == 262144) and
-      (.preserve_thinking | type == "boolean") and
       (.max_session_turns | type == "number" and . == floor and . >= 1) and
       (.archive_bytes == $archive_bytes) and
       (.archive_sha256 == $archive_sha256)

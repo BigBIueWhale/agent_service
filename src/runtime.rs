@@ -100,10 +100,6 @@ pub struct SessionBody {
     pub started_at_unix: u64,
     pub model: String,
     pub context_window: u64,
-    /// Exact per-session historical-reasoning policy. False is the default;
-    /// true must have been explicitly requested as a JSON boolean.
-    #[serde(default)]
-    pub preserve_thinking: bool,
     /// Exact per-session turn budget this session was accepted with, and the
     /// number the launcher passed to Qwen Code, so an operator reading a
     /// finished session can tell what bound it actually ran under instead of
@@ -263,7 +259,6 @@ pub struct RunningSnapshot {
     pub prompt_preview: String,
     pub model: String,
     pub context_window: u64,
-    pub preserve_thinking: bool,
     pub max_session_turns: u32,
     pub archive_bytes: u64,
     pub archive_sha256: String,
@@ -276,8 +271,10 @@ fn default_recorded_max_session_turns() -> u32 {
     crate::config::DEFAULT_MAX_SESSION_TURNS
 }
 
+// The record persists for the resource's whole lifetime and is read
+// tolerantly: a field another record generation carries is ignored, never
+// honoured, so every committed record on disk stays readable.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct AcceptanceRecord {
     /// Version 2 records the streamed-archive commitment. Version 1 recorded
     /// a shared-filesystem `folder` path, but that transport predates durable
@@ -291,7 +288,6 @@ pub struct AcceptanceRecord {
     pub archive_bytes: u64,
     pub archive_sha256: String,
     pub prompt: String,
-    pub preserve_thinking: bool,
     // Acceptance records committed before the budget became a request field
     // were accepted under the locked default, which is their one
     // semantically valid migration value. Version 2 stays the only version
@@ -310,7 +306,6 @@ impl AcceptanceRecord {
             archive_bytes: req.archive.bytes,
             archive_sha256: req.archive.sha256.clone(),
             prompt: req.prompt.clone(),
-            preserve_thinking: req.preserve_thinking,
             max_session_turns: req.max_session_turns,
         }
     }
@@ -320,14 +315,12 @@ impl AcceptanceRecord {
         prompt: &str,
         archive_bytes: u64,
         archive_sha256: &str,
-        preserve_thinking: bool,
         max_session_turns: u32,
     ) -> bool {
         self.schema_version == 2
             && self.archive_bytes == archive_bytes
             && self.archive_sha256 == archive_sha256
             && self.prompt == prompt
-            && self.preserve_thinking == preserve_thinking
             && self.max_session_turns == max_session_turns
     }
 }
@@ -879,7 +872,6 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
         }
     }
     let expected_control = BTreeSet::from([
-        "history-policy.json".to_string(),
         "prompt.txt".to_string(),
         "turn-budget.json".to_string(),
     ]);
@@ -890,24 +882,14 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
         )));
     }
     let prompt_path = paths.control.join("prompt.txt");
-    let history_path = paths.control.join("history-policy.json");
     let turn_budget_path = paths.control.join("turn-budget.json");
     let prompt = validate_uncommitted_regular_file(&prompt_path, 0o644, 1_048_576)?;
-    let history = validate_uncommitted_regular_file(&history_path, 0o444, 64)?;
     let turn_budget = validate_uncommitted_regular_file(&turn_budget_path, 0o444, 64)?;
     if prompt.is_empty() || prompt.len() > 1_048_576 {
         return Err(ServiceError::Internal(format!(
             "uncommitted prompt {} has invalid byte length {}",
             prompt_path.display(),
             prompt.len()
-        )));
-    }
-    if history != b"{\"preserve_thinking\":false}\n"
-        && history != b"{\"preserve_thinking\":true}\n"
-    {
-        return Err(ServiceError::Internal(format!(
-            "uncommitted history policy {} is not canonical",
-            history_path.display()
         )));
     }
     if crate::staging::parse_turn_budget_record(&turn_budget).is_none() {
@@ -917,15 +899,9 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
         )));
     }
     if let Some(acceptance) = acceptance {
-        let expected_history: &[u8] = if acceptance.preserve_thinking {
-            b"{\"preserve_thinking\":true}\n"
-        } else {
-            b"{\"preserve_thinking\":false}\n"
-        };
         let expected_turn_budget =
             crate::staging::turn_budget_record(acceptance.max_session_turns);
         if prompt != acceptance.prompt.as_bytes()
-            || history != expected_history
             || turn_budget != expected_turn_budget.as_bytes()
         {
             return Err(ServiceError::Internal(format!(
@@ -1032,7 +1008,6 @@ impl Manager {
         &self,
         session_id: String,
         prompt: String,
-        preserve_thinking: bool,
         max_session_turns: u32,
         archive: crate::validation::SpooledArchive,
     ) -> ServiceResult<SubmitOutcome> {
@@ -1043,13 +1018,7 @@ impl Manager {
             async move {
                 let _lifecycle = lifecycle;
                 manager
-                    .submit_server_owned(
-                        session_id,
-                        prompt,
-                        preserve_thinking,
-                        max_session_turns,
-                        archive,
-                    )
+                    .submit_server_owned(session_id, prompt, max_session_turns, archive)
                     .await
             },
             operation,
@@ -1065,7 +1034,6 @@ impl Manager {
         &self,
         session_id: String,
         prompt: String,
-        preserve_thinking: bool,
         max_session_turns: u32,
         archive: crate::validation::SpooledArchive,
     ) -> ServiceResult<SubmitOutcome> {
@@ -1095,7 +1063,6 @@ impl Manager {
                 &prompt,
                 archive.bytes,
                 &archive.sha256,
-                preserve_thinking,
                 max_session_turns,
             )?;
             return Ok(SubmitOutcome {
@@ -1110,7 +1077,6 @@ impl Manager {
                 &prompt,
                 archive.bytes,
                 &archive.sha256,
-                preserve_thinking,
                 max_session_turns,
             )?;
             return Ok(SubmitOutcome {
@@ -1131,12 +1097,7 @@ impl Manager {
         // the deliberately await-free acceptance window below.
         let validation_prompt = prompt.clone();
         let req = tokio::task::spawn_blocking(move || {
-            let req = validation::validate(
-                &validation_prompt,
-                preserve_thinking,
-                max_session_turns,
-                archive,
-            )?;
+            let req = validation::validate(&validation_prompt, max_session_turns, archive)?;
             crate::staging::validate_archive_structure(&req.archive.path).map(drop)?;
             Ok::<_, ServiceError>(req)
         })
@@ -1150,14 +1111,12 @@ impl Manager {
             session_id,
             archive_bytes = req.archive.bytes,
             archive_sha256 = %req.archive.sha256,
-            preserve_thinking = req.preserve_thinking,
             max_session_turns = req.max_session_turns,
             "new operation passed archive-commitment and archive-structure validation"
         );
 
         let session_cancel = self.shutdown_token.child_token();
         let prompt_preview = preview(&req.prompt);
-        let preserve_thinking = req.preserve_thinking;
         let started_at_unix = unix_now();
         let snapshot = RunningSnapshot {
             session_id: session_id.clone(),
@@ -1165,7 +1124,6 @@ impl Manager {
             prompt_preview: prompt_preview.clone(),
             model: self.cfg.vllm_model_name.clone(),
             context_window: self.cfg.lock.backend.max_model_len,
-            preserve_thinking,
             max_session_turns: req.max_session_turns,
             archive_bytes: req.archive.bytes,
             archive_sha256: req.archive.sha256.clone(),
@@ -1219,7 +1177,6 @@ impl Manager {
         let launch_decision_for_task = Arc::clone(&entry.launch_decision);
         let prompt_preview_for_task = prompt_preview.clone();
         let supervisor_prompt = req.prompt.clone();
-        let supervisor_preserve_thinking = req.preserve_thinking;
         let supervisor_max_session_turns = req.max_session_turns;
         let supervisor_archive_bytes = req.archive.bytes;
         let supervisor_archive_sha256 = req.archive.sha256.clone();
@@ -1266,7 +1223,6 @@ impl Manager {
                         &session_id_for_task,
                         &supervisor_prompt,
                         &prompt_preview_for_task,
-                        supervisor_preserve_thinking,
                         supervisor_max_session_turns,
                         supervisor_archive_bytes,
                         &supervisor_archive_sha256,
@@ -1811,7 +1767,6 @@ fn running_body(
         started_at_unix: s.started_at_unix,
         model: s.model.clone(),
         context_window: s.context_window,
-        preserve_thinking: s.preserve_thinking,
         max_session_turns: s.max_session_turns,
         archive_bytes: s.archive_bytes,
         archive_sha256: s.archive_sha256.clone(),
@@ -2131,7 +2086,6 @@ fn prepare_durable_acceptance(
         paths.create_dirs()?;
         state_created = true;
         paths.write_prompt(&acceptance.prompt)?;
-        paths.write_history_policy(acceptance.preserve_thinking)?;
         paths.write_turn_budget(acceptance.max_session_turns)?;
         place_input_archive(paths, input_archive_spool)?;
 
@@ -2437,21 +2391,14 @@ fn require_matching_acceptance(
     prompt: &str,
     archive_bytes: u64,
     archive_sha256: &str,
-    preserve_thinking: bool,
     max_session_turns: u32,
 ) -> ServiceResult<()> {
-    if acceptance.matches_wire(
-        prompt,
-        archive_bytes,
-        archive_sha256,
-        preserve_thinking,
-        max_session_turns,
-    ) {
+    if acceptance.matches_wire(prompt, archive_bytes, archive_sha256, max_session_turns) {
         return Ok(());
     }
     Err(ServiceError::IdempotencyConflict {
         session_id: acceptance.session_id.clone(),
-        detail: "the supplied Idempotency-Key already owns a different archive commitment, prompt, preserve_thinking, or max_session_turns value; generate a fresh 32-byte CSPRNG handle for a different operation".to_string(),
+        detail: "the supplied Idempotency-Key already owns a different archive commitment, prompt, or max_session_turns value; generate a fresh 32-byte CSPRNG handle for a different operation".to_string(),
     })
 }
 
@@ -4094,7 +4041,6 @@ fn validate_terminal_resource(
     if is_current_session_id(session_id) {
         let acceptance = read_acceptance(&cfg.results_dir, session_id)?;
         if acceptance.accepted_at_unix != body.started_at_unix
-            || acceptance.preserve_thinking != body.preserve_thinking
             || acceptance.max_session_turns != body.max_session_turns
             || preview(&acceptance.prompt) != body.prompt_preview
         {
@@ -4288,7 +4234,6 @@ mod tests {
             started_at_unix: 1,
             model: "qwen3.8-27b-nvfp4-k8v4".to_string(),
             context_window: 262_144,
-            preserve_thinking: false,
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
@@ -4415,7 +4360,6 @@ mod tests {
                 prompt_preview: "running-read deadlock regression fixture".to_string(),
                 model: cfg.vllm_model_name.clone(),
                 context_window: 262_144,
-                preserve_thinking: false,
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
                 archive_bytes: 22,
                 archive_sha256: "0".repeat(64),
@@ -4427,7 +4371,6 @@ mod tests {
                 archive_bytes: 22,
                 archive_sha256: "0".repeat(64),
                 prompt: "running-read deadlock regression fixture".to_string(),
-                preserve_thinking: false,
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
             },
             progress,
@@ -4496,7 +4439,6 @@ mod tests {
             archive_bytes: 22,
             archive_sha256: "3".repeat(64),
             prompt: terminal.prompt_preview.clone(),
-            preserve_thinking: terminal.preserve_thinking,
             max_session_turns: terminal.max_session_turns,
         };
         private_write(
@@ -4766,7 +4708,6 @@ mod tests {
             archive_bytes: 24,
             archive_sha256: "2".repeat(64),
             prompt: "restart terminal fixture".to_string(),
-            preserve_thinking: false,
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
         };
         let spool_dir = tree.0.join("spool-fixture");
@@ -4810,7 +4751,6 @@ mod tests {
             &paths.streams,
             &paths.output,
             &paths.control.join("prompt.txt"),
-            &paths.control.join("history-policy.json"),
             &paths.control.join("turn-budget.json"),
             &results.join(session_id),
             &results.join(session_id).join("accepted.json"),

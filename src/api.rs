@@ -13,7 +13,7 @@
 //!
 //! - `POST /v1/agent/sessions` — idempotently accept. The body is exactly
 //!   two ordered `multipart/form-data` parts: part 1 `request`
-//!   (`application/json` — `{prompt, preserve_thinking?, max_session_turns?,
+//!   (`application/json` — `{prompt, max_session_turns?,
 //!   archive_bytes, archive_sha256}`) and part 2 `archive` (`application/zip` — the exact
 //!   workspace bytes, streamed to a disk spool while hashed). A required
 //!   caller-generated 256-bit `Idempotency-Key` names the operation.
@@ -93,10 +93,6 @@ pub fn router(state: AppState) -> axum::Router {
 #[serde(deny_unknown_fields)]
 pub struct CreateRequest {
     pub prompt: String,
-    /// Non-default history-retention policy. This is deliberately a JSON
-    /// boolean rather than a profile name or ambient environment knob.
-    #[serde(default)]
-    pub preserve_thinking: bool,
     /// Non-default session turn budget. Omission selects the locked default;
     /// a present value must be a JSON integer inside the pinned ceiling and
     /// is refused by name otherwise. It is carried as a raw JSON number so
@@ -145,7 +141,7 @@ async fn create_session(
     .await?;
     let body: CreateRequest = serde_json::from_slice(&request_bytes).map_err(|error| {
         ServiceError::InvalidRequest(format!(
-            "part `request` must be exactly one JSON object with string prompt, optional boolean preserve_thinking, optional integer max_session_turns, integer archive_bytes, and string archive_sha256: {error}"
+            "part `request` must be exactly one JSON object with string prompt, optional integer max_session_turns, integer archive_bytes, and string archive_sha256: {error}"
         ))
     })?;
     crate::validation::validate_archive_commitment(body.archive_bytes, &body.archive_sha256)?;
@@ -160,7 +156,6 @@ async fn create_session(
         prompt_chars = body.prompt.chars().count(),
         archive_bytes = body.archive_bytes,
         archive_sha256 = %body.archive_sha256,
-        preserve_thinking = body.preserve_thinking,
         max_session_turns,
         "POST /v1/agent/sessions: caller-known handle and archive commitment parsed; streaming the archive part to the spool"
     );
@@ -198,7 +193,6 @@ async fn create_session(
         .submit(
             session_id,
             body.prompt,
-            body.preserve_thinking,
             max_session_turns,
             SpooledArchive {
                 path: spool.archive_path.clone(),
@@ -2286,8 +2280,8 @@ fn sweep_state_dir(
                 // but that fact alone is not deletion authority for an
                 // arbitrary directory bearing a session-shaped name.  Only
                 // remove the exact, empty pre-acceptance layout created by
-                // our own transaction, including its canonical prompt,
-                // history-policy, and turn-budget controls.  Any copied
+                // our own transaction, including its canonical prompt and
+                // turn-budget controls.  Any copied
                 // workspace, output, unexpected entry, mode/owner drift, or
                 // partially written control remains intact and blocks
                 // readiness for explicit recovery instead of being guessed
@@ -3163,7 +3157,6 @@ mod tests {
             context_window: 262_144,
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
-            preserve_thinking: false,
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
             prompt_preview: "fixture".to_string(),
             progress_revision: 1,
@@ -3263,27 +3256,6 @@ mod tests {
     }
 
     #[test]
-    fn create_request_has_one_typed_non_default_history_policy() {
-        let default = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa"}"#,
-        )
-        .expect("omission must select the documented false default");
-        assert!(!default.preserve_thinking);
-
-        let preserved = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","preserve_thinking":true}"#,
-        )
-        .expect("an explicit JSON true must select preserved history");
-        assert!(preserved.preserve_thinking);
-
-        let error = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","preserve_thinking":"true"}"#,
-        )
-        .expect_err("string policy coercion must fail closed");
-        assert!(error.to_string().contains("invalid type"));
-    }
-
-    #[test]
     fn create_request_carries_one_optional_typed_turn_budget() {
         let default = serde_json::from_str::<CreateRequest>(
             r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa"}"#,
@@ -3327,8 +3299,7 @@ mod tests {
             );
         }
 
-        // A non-number remains a decoder-level shape error, exactly as a
-        // non-boolean preserve_thinking is.
+        // A non-number remains a decoder-level shape error.
         let error = serde_json::from_str::<CreateRequest>(
             r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","max_session_turns":"700"}"#,
         )
@@ -3607,9 +3578,6 @@ mod tests {
         paths.create_dirs().expect("create exact session layout");
         paths.write_prompt("uncommitted prompt").expect("write exact prompt");
         paths
-            .write_history_policy(false)
-            .expect("write exact history policy");
-        paths
             .write_turn_budget(crate::config::DEFAULT_MAX_SESSION_TURNS)
             .expect("write exact turn budget");
         for path in [
@@ -3620,7 +3588,6 @@ mod tests {
             &paths.streams,
             &paths.output,
             &paths.control.join("prompt.txt"),
-            &paths.control.join("history-policy.json"),
             &paths.control.join("turn-budget.json"),
         ] {
             make_service_owned(path);

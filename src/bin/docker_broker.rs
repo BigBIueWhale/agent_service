@@ -109,10 +109,7 @@ struct CapturePolicy {
 enum Request {
     Preflight,
     SweepOrphans,
-    CreateSession {
-        session_id: String,
-        preserve_thinking: bool,
-    },
+    CreateSession { session_id: String },
     ProveSessionQuiescent { session_id: String },
     SessionLogs { session_id: String },
     WaitSession { session_id: String },
@@ -497,8 +494,8 @@ fn parse_request(bytes: &[u8]) -> Result<Request, String> {
         .ok_or_else(|| "broker request op must be a string".to_string())?;
     let expected = match operation {
         "preflight" | "sweep_orphans" => ["op"].as_slice(),
-        "create_session" => ["op", "preserve_thinking", "session_id"].as_slice(),
-        "prove_session_quiescent"
+        "create_session"
+        | "prove_session_quiescent"
         | "session_logs"
         | "wait_session"
         | "wait_agent_ready"
@@ -530,12 +527,9 @@ async fn execute(request: Request, policy: &Policy) -> Result<Value, String> {
             sweep_orphans(policy).await?;
             Ok(json!({}))
         }
-        Request::CreateSession {
-            session_id,
-            preserve_thinking,
-        } => {
+        Request::CreateSession { session_id } => {
             validate_session_id(&session_id)?;
-            create_session(policy, &session_id, preserve_thinking).await?;
+            create_session(policy, &session_id).await?;
             Ok(json!({
                 "agent": agent_name(&session_id),
                 "relay": relay_name(&session_id),
@@ -693,7 +687,6 @@ async fn execute(request: Request, policy: &Policy) -> Result<Value, String> {
                 "model": "qwen3.8-27b-nvfp4-k8v4",
                 "context_window": 262144,
                 "token_count": ready.token_count,
-                "preserve_thinking": ready.preserve_thinking,
                 "sandbox": policy.agent.sandbox,
             }))
         }
@@ -1040,12 +1033,8 @@ async fn verify_self(policy: &Policy) -> Result<(), String> {
     Ok(())
 }
 
-async fn create_session(
-    policy: &Policy,
-    session_id: &str,
-    preserve_thinking: bool,
-) -> Result<(), String> {
-    validate_session_paths(policy, session_id, preserve_thinking)?;
+async fn create_session(policy: &Policy, session_id: &str) -> Result<(), String> {
+    validate_session_paths(policy, session_id)?;
     let agent = agent_name(session_id);
     let relay = relay_name(session_id);
     let capture = capture_name(session_id);
@@ -1084,8 +1073,6 @@ async fn create_session(
         format!("agent_service.profile={}", policy.profile),
         "--label".into(),
         format!("agent_service.component={}", Component::Agent.label()),
-        "--label".into(),
-        format!("agent_service.preserve-thinking={preserve_thinking}"),
         "--network".into(),
         "none".into(),
         "--restart".into(),
@@ -1120,7 +1107,7 @@ async fn create_session(
         policy.agent.image_id.clone(),
     ];
     docker_os(agent_args, "create_agent", Some(DOCKER_TIMEOUT)).await?;
-    if let Err(error) = verify_agent(policy, session_id, preserve_thinking).await {
+    if let Err(error) = verify_agent(policy, session_id).await {
         let cleanup = remove_session(policy, session_id).await;
         return Err(format!(
             "agent verification failed: {error}; cleanup={cleanup:?}"
@@ -1349,30 +1336,15 @@ fn docker_log_follow_args(name: &str) -> [&str; 5] {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct AgentReady {
     token_count: u64,
-    preserve_thinking: bool,
 }
 
 fn parse_agent_ready(line: &str, policy: &Policy) -> Result<AgentReady, String> {
     let remainder = line
         .strip_prefix(&policy.agent.ready_event_prefix)
         .ok_or_else(|| format!("agent readiness record has the wrong prefix: {line:?}"))?;
-    let (prefix, sandbox) = remainder
+    let (token_count, sandbox) = remainder
         .split_once(" sandbox=")
         .ok_or_else(|| format!("agent readiness record lacks exact sandbox field: {line:?}"))?;
-    let (token_count, preserve_thinking) = prefix
-        .split_once(" preserve_thinking=")
-        .ok_or_else(|| {
-            format!("agent readiness record lacks exact preserve_thinking field: {line:?}")
-        })?;
-    let preserve_thinking = match preserve_thinking {
-        "true" => true,
-        "false" => false,
-        value => {
-            return Err(format!(
-                "agent readiness preserve_thinking is not canonical: {value:?}"
-            ));
-        }
-    };
     if sandbox != policy.agent.sandbox || token_count.is_empty() {
         return Err(format!(
             "agent readiness record drift: token_count={token_count:?} sandbox={sandbox:?}"
@@ -1384,10 +1356,7 @@ fn parse_agent_ready(line: &str, policy: &Policy) -> Result<AgentReady, String> 
     if token_count == 0 {
         return Err("agent readiness token count must be positive".into());
     }
-    Ok(AgentReady {
-        token_count,
-        preserve_thinking,
-    })
+    Ok(AgentReady { token_count })
 }
 
 fn parse_capture_complete(line: &str, policy: &Policy) -> Result<(u64, u64), String> {
@@ -1415,11 +1384,7 @@ fn parse_capture_complete(line: &str, policy: &Policy) -> Result<(u64, u64), Str
     ))
 }
 
-fn validate_session_paths(
-    policy: &Policy,
-    session_id: &str,
-    preserve_thinking: bool,
-) -> Result<(), String> {
+fn validate_session_paths(policy: &Policy, session_id: &str) -> Result<(), String> {
     let root = Path::new(&policy.state_dir)
         .join("sessions")
         .join(session_id);
@@ -1458,7 +1423,7 @@ fn validate_session_paths(
     }
     for (leaf, mode) in [
         ("prompt.txt", 0o644),
-        ("history-policy.json", 0o444),
+        ("turn-budget.json", 0o444),
         ("start-gate.lock", 0o600),
     ] {
         let path = root.join("control").join(leaf);
@@ -1484,31 +1449,10 @@ fn validate_session_paths(
             ));
         }
     }
-    let history_policy = root.join("control/history-policy.json");
-    let expected: &[u8] = if preserve_thinking {
-        b"{\"preserve_thinking\":true}\n"
-    } else {
-        b"{\"preserve_thinking\":false}\n"
-    };
-    let observed = std::fs::read(&history_policy).map_err(|error| {
-        format!(
-            "cannot read exact session history policy {}: {error}",
-            history_policy.display()
-        )
-    })?;
-    if observed != expected {
-        return Err(format!(
-            "session history policy contradicts typed create request: preserve_thinking={preserve_thinking}, observed={observed:?}"
-        ));
-    }
     Ok(())
 }
 
-async fn verify_agent(
-    policy: &Policy,
-    session_id: &str,
-    preserve_thinking: bool,
-) -> Result<(), String> {
+async fn verify_agent(policy: &Policy, session_id: &str) -> Result<(), String> {
     let value = require_owned(
         &agent_name(session_id),
         policy,
@@ -1525,12 +1469,6 @@ async fn verify_agent(
         "agent configured image ID",
     )?;
     require_string(&value, "/Config/User", "1000:1000", "agent user")?;
-    require_string(
-        &value,
-        "/Config/Labels/agent_service.preserve-thinking",
-        if preserve_thinking { "true" } else { "false" },
-        "agent preserve-thinking label",
-    )?;
     require_string(
         &value,
         "/Config/WorkingDir",
@@ -2681,12 +2619,12 @@ mod tests {
         assert!(matches!(&quiescence, Request::ProveSessionQuiescent { .. }));
         assert!(!quiescence.requires_mutation_lock());
         let create = parse_request(
-            b"{\"op\":\"create_session\",\"preserve_thinking\":false,\"session_id\":\"s-0123456789abcdef0123456789abcdef\"}\n",
+            b"{\"op\":\"create_session\",\"session_id\":\"s-0123456789abcdef0123456789abcdef\"}\n",
         )
         .expect("create must parse");
         assert!(create.requires_mutation_lock());
         assert!(parse_request(
-            b"{\"op\":\"create_session\",\"preserve_thinking\":\"false\",\"session_id\":\"s-0123456789abcdef0123456789abcdef\"}\n"
+            b"{\"op\":\"create_session\",\"unexpected\":false,\"session_id\":\"s-0123456789abcdef0123456789abcdef\"}\n"
         )
         .is_err());
     }
@@ -2695,28 +2633,25 @@ mod tests {
     fn dynamic_readiness_and_capture_records_are_exactly_parsed() {
         let policy = load_policy().expect("load exact policy");
         let ready = format!(
-            "{}42 preserve_thinking=false sandbox={}",
+            "{}42 sandbox={}",
             policy.agent.ready_event_prefix, policy.agent.sandbox
         );
         assert_eq!(
             parse_agent_ready(&ready, &policy).expect("parse exact agent readiness"),
-            super::AgentReady {
-                token_count: 42,
-                preserve_thinking: false,
-            }
+            super::AgentReady { token_count: 42 }
         );
         for drift in [
             format!(
-                "{}0 preserve_thinking=false sandbox={}",
+                "{}0 sandbox={}",
                 policy.agent.ready_event_prefix, policy.agent.sandbox
             ),
             format!(
-                "{}42 preserve_thinking=false sandbox={} extra=x",
+                "{}42 sandbox={} extra=x",
                 policy.agent.ready_event_prefix, policy.agent.sandbox
             ),
             format!("{}42", policy.agent.ready_event_prefix),
             format!(
-                "{}42 preserve_thinking=0 sandbox={}",
+                "{}four sandbox={}",
                 policy.agent.ready_event_prefix, policy.agent.sandbox
             ),
         ] {

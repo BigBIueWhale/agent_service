@@ -174,5 +174,5 @@ printf '  model:   http://127.0.0.1:8000 (%s)\n' "$(lock_value '.backend.served_
 printf '  context: %s total tokens; KV: %s; vision: %s full-quality PNGs\n' \
   "$(lock_value '.backend.max_model_len')" "$(lock_value '.backend.kv_cache_dtype')" \
   "$(lock_value '.backend.vision.max_images')"
-printf '  client:  Qwen Code %s, xhigh thinking, preserved historical thinking off\n' \
+printf '  client:  Qwen Code %s, xhigh thinking\n' \
   "$(lock_value '.agent.qwen_code.version')"

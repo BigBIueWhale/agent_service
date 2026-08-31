@@ -71,7 +71,6 @@ pub struct ReadyData {
     pub model: String,
     pub context_window: u64,
     pub token_count: u64,
-    pub preserve_thinking: bool,
     pub sandbox: String,
 }
 
@@ -96,7 +95,6 @@ pub async fn sweep_orphans(cfg: &Config) -> ServiceResult<()> {
 pub async fn create_session(
     cfg: &Config,
     session_id: &str,
-    preserve_thinking: bool,
 ) -> ServiceResult<SessionNames> {
     validate_session_id(session_id)?;
     let value = call(
@@ -104,7 +102,6 @@ pub async fn create_session(
         json!({
             "op": "create_session",
             "session_id": session_id,
-            "preserve_thinking": preserve_thinking,
         }),
         Some(BROKER_OP_TIMEOUT),
     )

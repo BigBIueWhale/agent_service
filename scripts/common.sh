@@ -316,9 +316,6 @@ check_pinned_inputs() {
   require_equal "Qwen settings SHA256" \
     "$(sha256_file "${PROJECT_DIR}/docker/config/settings.json")" \
     "$(lock_value '.agent.settings_sha256')"
-  require_equal "Qwen preserved-thinking settings SHA256" \
-    "$(sha256_file "${PROJECT_DIR}/docker/config/settings-preserved.json")" \
-    "$(lock_value '.agent.preserved_settings_sha256')"
   require_equal "Qwen instructions SHA256" \
     "$(sha256_file "${PROJECT_DIR}/docker/config/QWEN.md")" \
     "$(lock_value '.agent.instructions_sha256')"
@@ -512,9 +509,6 @@ require_agent_image_contract() {
     "$(lock_value '.agent.qwen_code.source_patch_manifest_sha256')"
   require_equal "agent image settings label" \
     "$(image_label "${image}" agent_service.settings.sha256)" "$(lock_value '.agent.settings_sha256')"
-  require_equal "agent image preserved-thinking settings label" \
-    "$(image_label "${image}" agent_service.settings-preserved.sha256)" \
-    "$(lock_value '.agent.preserved_settings_sha256')"
   require_equal "agent image instructions label" \
     "$(image_label "${image}" agent_service.instructions.sha256)" "$(lock_value '.agent.instructions_sha256')"
   require_equal "agent image system prompt label" \
