@@ -1856,13 +1856,13 @@ def _validate_param_contract_after(state: State) -> None:
     require_text(
         state,
         files,
-        "if (fileType !== 'text' && (offset !== undefined || limit !== undefined)) {",
+        "if (fileType !== 'text' && (offsetSelectsRange || limit !== undefined)) {",
         label=label,
     )
     require_text(
         state,
         files,
-        "select a range of lines and apply to text files only; ",
+        "a range of lines, and a line range applies to text ",
         label=label,
     )
     forbid_text(
@@ -1873,7 +1873,7 @@ def _validate_param_contract_after(state: State) -> None:
     )
     # The schema no longer requires a `limit` the code never required.
     forbid_text(state, read_file, "Requires 'limit' to be set.", label=label)
-    require_text(state, read_file, "Optional: text files only.", count=2, label=label)
+    require_text(state, read_file, "Optional: text files only.", count=1, label=label)
 
     # A truncated read carries the call that continues it, with the caller's
     # own path and the exact resume line, rather than naming two parameters
@@ -1932,6 +1932,143 @@ def _validate_param_contract_after(state: State) -> None:
         state,
         files_test,
         "[param-contract] refuses a line range on %s instead of ignoring it",
+        label=label,
+    )
+
+
+def _validate_required_read_offset_before(state: State) -> None:
+    label = "required read offset precondition"
+    tool = "packages/core/src/tools/read-file.ts"
+    # Upstream advertises `offset` as optional, so a serialization that drops
+    # it is schema-legal and executes as a silent restart from line 1.
+    require_text(state, tool, "  offset?: number;", label=label)
+    require_text(state, tool, "        required: ['file_path'],", label=label)
+    require_text(
+        state,
+        tool,
+        "Optional: For text files, the 0-based line number to start reading",
+        label=label,
+    )
+
+
+def _validate_required_read_offset_after(state: State) -> None:
+    label = "required read offset result"
+    tool = "packages/core/src/tools/read-file.ts"
+    files = "packages/core/src/utils/fileUtils.ts"
+    tool_test = "packages/core/src/tools/read-file.test.ts"
+    contract_test = "packages/core/src/config/qwen38-agent-service-contract.test.ts"
+
+    # The schema is the enforcement surface: with `offset` in `required`, the
+    # armed decode-time grammar refuses the omission in-span, and Ajv refuses
+    # it for any call that reaches the harness another way. 0 is the explicit
+    # spelling of "from the beginning".
+    require_text(
+        state, tool, "        required: ['file_path', 'offset'],", label=label
+    )
+    require_text(state, tool, "  offset: number;", label=label)
+    forbid_text(state, tool, "offset?: number;", label=label)
+    require_text(state, tool, "pass 0 to start at the beginning", label=label)
+    require_text(
+        state,
+        tool,
+        "every read states where it starts: 'offset' is required",
+        label=label,
+    )
+    # A whole-file read is offset 0 with no limit: the cache fast path and
+    # the non-text range refusal both key on that spelling, so an explicit 0
+    # stays exactly as acceptable as the absence used to be.
+    require_text(
+        state,
+        tool,
+        "const isFullRead = this.params.offset === 0 && this.params.limit === undefined;",
+        label=label,
+    )
+    require_text(
+        state,
+        files,
+        "const offsetSelectsRange = offset !== undefined && offset !== 0;",
+        label=label,
+    )
+    require_text(
+        state, files, "Re-send the call with offset: 0 and no limit.", label=label
+    )
+    forbid_text(
+        state, files, "Re-send the call with only 'file_path'.", label=label
+    )
+    # Executable evidence, in the suites the image runs.
+    require_text(
+        state,
+        tool_test,
+        "[param-contract] requires offset so an omitted range cannot execute as line 1",
+        label=label,
+    )
+    require_text(
+        state,
+        tool_test,
+        "[param-contract] offset 0 is the whole-file read and negatives stay refused",
+        label=label,
+    )
+    require_text(
+        state,
+        contract_test,
+        "[param-contract] read_file requires offset so an omitted range cannot execute as line 1",
+        label=label,
+    )
+
+
+def _validate_residue_quarantine_before(state: State) -> None:
+    label = "residue quarantine precondition"
+    chat = "packages/core/src/core/geminiChat.ts"
+    # Upstream commits the streamed text parts to history verbatim; nothing
+    # between the stream and the push inspects prose for call syntax.
+    require_text(
+        state, chat, "const consolidatedHistoryParts: Part[] = [];", label=label
+    )
+    forbid_text(state, chat, "stripTrailingToolCallResidue", label=label)
+
+
+def _validate_residue_quarantine_after(state: State) -> None:
+    label = "residue quarantine result"
+    chat = "packages/core/src/core/geminiChat.ts"
+    residue = "packages/core/src/utils/toolCallResidue.ts"
+    residue_test = "packages/core/src/utils/toolCallResidue.test.ts"
+    chat_test = "packages/core/src/core/geminiChat.test.ts"
+
+    require_text(
+        state, residue, "export function stripTrailingToolCallResidue(", label=label
+    )
+    # The strip runs once, between the transport-continuation merge and the
+    # durable record, so in-memory history and the JSONL record derive from
+    # the same cleaned parts; and only on turns that carried a call, because
+    # the discharge signature exists only beside a call in the same
+    # completion and a final answer must never be rewritten.
+    source = _source(state, chat, label=label)
+    _require(
+        source.count("stripTrailingToolCallResidue(") == 1
+        and "if (hasToolCall) {" in source,
+        f"{label}: {chat} must apply the strip exactly once, gated on a tool call",
+    )
+    _require_ordered(
+        source,
+        (
+            "if (streamError === null && transportContinuationPrefix) {",
+            "stripTrailingToolCallResidue(",
+            "this.chatRecordingService?.recordAssistantTurn(recordArgs);",
+        ),
+        label=label,
+        location=chat,
+    )
+    require_text(
+        state,
+        residue_test,
+        "[residue-quarantine] keeps the prose and removes only the trailing fragment",
+        label=label,
+    )
+    require_text(state, residue_test, "false-positive control", count=4, label=label)
+    require_text(
+        state,
+        chat_test,
+        "[residue-quarantine] a turn without tool calls is never rewritten",
         label=label,
     )
 
@@ -2988,6 +3125,72 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_session_time_before,
         validate_after=_validate_session_time_after,
+    ),
+    SemanticConcern(
+        name="required-read-offset",
+        rationale=(
+            "Benchmark forensics over five event logs (1,277 tool calls) "
+            "found 184 read_file calls that executed without `offset` while "
+            "the model's own reasoning named the resume line it intended: "
+            "the sampler occasionally discharges a pending parameter into "
+            "the prose channel just before the `<tool_call>` trigger fires, "
+            "and a call that omits an *optional* parameter is a perfectly "
+            "legal serialization of a wrong request, so every casualty "
+            "silently restarted the file from line 1 -- the byte-identical "
+            "re-reads behind the consecutive_identical_tool_calls session "
+            "deaths. The model already writes an explicit offset on 660 of "
+            "851 reads, so requiring it is with the training grain: the "
+            "armed decode-time grammar refuses the omission in-span "
+            "(verified against the pinned runtime: rejection at the token "
+            "that would skip the parameter), Ajv refuses it for any call "
+            "arriving another way, and 0 is the explicit spelling of a "
+            "whole-file read -- for every file kind, so non-text files stay "
+            "readable and only a range-selecting nonzero offset or a limit "
+            "is refused on them. `limit` stays optional deliberately: its "
+            "omission is fail-visible (the truncation notice carries the "
+            "exact continuation call), while an omitted offset was "
+            "fail-silent."
+        ),
+        removal_condition=(
+            "Remove only when the serving stack guarantees at the turn "
+            "level that a parameter the model resolved cannot be silently "
+            "dropped from the serialized call, or upstream makes `offset` "
+            "required itself."
+        ),
+        validate_before=_validate_required_read_offset_before,
+        validate_after=_validate_required_read_offset_after,
+    ),
+    SemanticConcern(
+        name="residue-quarantine",
+        rationale=(
+            "The same discharge leaves a visible trace in about 4% of "
+            "cases: a fragment of call syntax -- foreign and Qwen closers "
+            "first, sometimes carrying the very parameter the call then "
+            "omitted -- lands in the assistant's visible text beside the "
+            "executed call. History re-renders assistant text verbatim "
+            "into every later prompt, so the fragment becomes a serialized "
+            "exemplar of exactly the malformed shape it came from, and the "
+            "chat template renders it ahead of the turn's re-rendered tool "
+            "calls -- one bad serialization teaching the next. The "
+            "trailing fragment is stripped from what history and the JSONL "
+            "record keep, on tool-call turns only; the emitted event "
+            "stream has already carried the raw text, so ground truth "
+            "stays observable, and executability is never touched -- a "
+            "detector this rare (4 fragments in 3,278 events) must degrade "
+            "gracefully on a false positive, not spend a turn. All four "
+            "corpus fragments strip; the corpus's legitimate call-syntax "
+            "quoting (inline prose mentions and thinking-channel "
+            "self-diagnosis) does not match the trailing closers-first "
+            "shape and is untouched."
+        ),
+        removal_condition=(
+            "Remove only when the serving stack itself refuses to place "
+            "tool-call syntax in the prose channel of a turn that carries "
+            "structured tool calls, or re-rendered history stops being the "
+            "model's serialization exemplar."
+        ),
+        validate_before=_validate_residue_quarantine_before,
+        validate_after=_validate_residue_quarantine_after,
     ),
 )
 

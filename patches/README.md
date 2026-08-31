@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `4844c7bf10a623f848e34abea39e2bb950b33e99860248b9649323ed1a8aa21b`
+- Review-diff SHA-256: `c89fcacbc25c9027d0a87831c50b15b44517693291618291bc4c7f73a3a174e5`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `c13b4914db59b7cfbe84ac7128c26e77b210b5c42f2343696215b3a3bb7ebcc0`
+- Transformer-manifest SHA-256: `4b0ab3d7546dfd2fcd2779527fdb8e00ac45a577af78c7a660ef1cd7234e1ee0`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -111,12 +111,65 @@ provide as one fail-closed mode:
   the tool layer before the file type was known. One rule now covers every
   non-text type and fires at the first point in the read that knows what the
   file is, so the refusal can name it: `'offset' and 'limit' select a range
-  of lines and apply to text files only; docs/spec.pdf is a pdf file, which
-  is read whole. Re-send the call with only 'file_path'.` The extension guess
-  is deleted. The advertised schema was corrected to match what the code
-  actually does: `offset` no longer claims to require `limit` (it never did --
-  a missing `limit` takes the default window), and both parameters now state
-  that they are text-only and refused elsewhere.
+  of lines, and a line range applies to text files only; docs/spec.pdf is a
+  pdf file, which is read whole. Re-send the call with offset: 0 and no
+  limit.` Because `offset` is required (below), 0 is how a non-text read is
+  spelled: it selects no range and passes, so only a range-selecting nonzero
+  offset or a `limit` is refused. The extension guess is deleted, and the
+  schema was corrected to match what the code actually does: `offset` no
+  longer claims to require `limit` (it never did -- a missing `limit` takes
+  the default window), and a line range is stated to be text-only and
+  refused elsewhere.
+- a required `offset`, so an omitted range cannot execute as line 1.
+  Benchmark forensics over five event logs (1,277 tool calls) found 184
+  `read_file` calls that executed without `offset` while the model's own
+  reasoning named the resume line it intended: the sampler occasionally
+  discharges a pending parameter into the prose channel just before the
+  `<tool_call>` trigger fires, and a call omitting an *optional* parameter
+  is a perfectly grammatical serialization of a wrong request -- the armed
+  decode grammar has nothing to refuse, the read silently restarts at line
+  1, and the loop guard eventually kills the session on the byte-identical
+  re-reads. Requiring the parameter turns that omission from a legal wrong
+  call into an impossible one: the grammar refuses it in-span (verified
+  against the pinned runtime image -- rejection lands on the first token
+  that would skip the parameter, and a duplicated parameter name is
+  likewise unserializable), Ajv refuses it with `params must have required
+  property 'offset'` for any call that arrives another way, and 0 is the
+  explicit spelling of "from the beginning" for every file kind, so
+  non-text files stay readable. It is also with the training grain: 660 of
+  851 observed reads already carried an explicit offset. `limit` stays
+  optional deliberately -- its omission is fail-visible, because the
+  truncation notice carries the exact continuation call, while an omitted
+  offset was fail-silent; and every historical exemplar re-rendered into
+  later prompts now shows the offset, so context teaches the required
+  shape instead of the wrong one. Three `[param-contract]` cases execute
+  the required schema, the Ajv refusal, the offset-0 whole read, and the
+  negative-value refusal in the build.
+- quarantine for tool-call syntax discharged into prose. The visible half
+  of the same failure: in 4 of 3,278 events an assistant text block
+  carried a fragment of call serialization -- foreign and Qwen closers
+  first (`</invoke>`, `</function_calls>`, `</parameter>`), sometimes with
+  the very `<parameter=offset>` value the adjacent call then omitted.
+  History re-renders assistant text verbatim into every later prompt, so
+  the fragment became a clean-looking exemplar of exactly the malformed
+  shape it came from, rendered immediately before that turn's re-rendered
+  tool calls -- one bad serialization teaching the next. A structural
+  detector now strips the trailing fragment from what history and the
+  durable JSONL record keep, on tool-call turns only: a maximal trailing
+  run of closer/opener/value lines that opens and closes with a closing
+  tag. Execution is never touched -- the calls in such turns are complete
+  and the strict resample window has already closed by the time prose is
+  visible, so a refusal here would spend a turn on cosmetic noise, which
+  is the loop-guard mistake one layer down. The live event stream carries
+  the raw text before the strip, so captured sessions keep the forensic
+  ground truth. Against the full corpus the detector strips all four
+  fragments and nothing else; inline prose mentions, fenced quotes, a lone
+  quoted closer, and opener-first examples are all structurally excluded,
+  and a false positive would only shorten one message's re-rendered copy.
+  Eleven `[residue-quarantine]` cases -- the four real fragments verbatim,
+  four false-positive controls, plain and empty text, the history seam
+  keeping the prose beside the executed call, and the never-rewrite rule
+  for turns without calls -- execute this in the build.
 - a truncated read that carries the call which continues it. The `read_file`
   description promised that a truncated response "will explain how to
   continue with 'offset' and 'limit'"; the notice said only `Showing lines
@@ -342,15 +395,14 @@ Verification performed in the pinned Node image:
   idempotence, new-file handling, source/output drift, intermediate-state refusal,
   review-diff drift, time-of-check/time-of-use mutation, and transactional rollback;
 - the complete patched TypeScript/CLI build passed;
-- twenty-one focused core files passed, including base-client finish reasons,
-  exact auto-compaction, scheduler recovery, the complete Agent suite, strict
-  PNG/container/decode tests, chronological media, runtime isolation, and the
-  deployment-prompt contract;
-- all five focused CLI suites passed, covering locked auth revalidation,
-  configuration, initialization metadata, literal leading-slash prompts, the
-  stream-json output adapter, and the non-interactive path;
-- total focused behavioral tests: 2,550 passed across twenty-six suites, zero
-  failed, with 259 environment-gated cases skipped;
+- the full build-derived suite passed: all 49 core test files (4,169 tests;
+  4,149 in the bare pinned image, the 20 git/ripgrep-dependent cases with
+  those tools present as the production image provides them) and all 7 CLI
+  suites (951 passed, 1 environment-skip), plus the fileReadCache pair (62)
+  adjacent to the required-offset change -- zero failures;
+- the same 20 environment-gated failures reproduce byte-identically on the
+  unmodified reviewed tree in the bare image, so they are properties of the
+  runner, not of any change;
 - a sealed runtime capture observed two `/tokenize` calls followed by one streaming `/v1/chat/completions` call;
 - the three requests carried identical messages, tools, and chat-template kwargs;
 - a synthetic exact prompt count of 12,345 produced `max_tokens: 249799` for the 262,144-token deployed context;
