@@ -379,8 +379,8 @@ def _validate_exact_tokens_after(state: State) -> None:
             "`${promptId}:auto-threshold`",
             "await chat.countRequestTokensForCandidateHistory(",
             "COMPRESSION_FAILED_TOKEN_COUNT_ERROR",
-            "COMPACT_THINKING_TOKEN_BUDGET = 12_000",
-            "COMPACT_FINAL_RESPONSE_TOKEN_BUDGET = 8_000",
+            "COMPACT_THINKING_TOKEN_BUDGET = 16_000",
+            "COMPACT_FINAL_RESPONSE_TOKEN_BUDGET = 16_000",
             "summaryResult.finishReason === FinishReason.MAX_TOKENS",
             "summaryResult.finishReason !== FinishReason.STOP",
             "newTokenCountIsEstimated: false",
@@ -929,7 +929,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "uses one cache-preserving main-model request with explicit phase budgets",
             "rejects unusable summary output",
             "summaryResult({ hadToolCall: true })",
-            "requires an exact shrinking candidate with 20K of next-turn room",
+            "requires an exact shrinking candidate with the full output reserve of next-turn room",
         ),
         "packages/core/src/core/baseLlmClient.test.ts": (
             "uses the authoritative tokenizer and forwards the identical rendered-request options",
@@ -1140,8 +1140,9 @@ def _validate_compaction_event_after(state: State) -> None:
         f"{label}: {chat} no longer reports the reactive overflow rescue",
     )
     _require(
-        chat_source.count("type: StreamEventType.COMPACTION,") == 2,
-        f"{label}: {chat} must report both compaction sites",
+        chat_source.count("type: StreamEventType.COMPACTION,") == 3,
+        f"{label}: {chat} must report the pre-stream attempt, the hard-tier "
+        "deterministic fallback, and the reactive overflow rescue",
     )
 
     # Subagent attribution: the agent event carries the record to the agent
@@ -2533,6 +2534,152 @@ def _validate_subagent_progress_after(state: State) -> None:
     )
 
 
+def _validate_compaction_fit_before(state: State) -> None:
+    label = "compaction fit-and-failure-path precondition"
+    service = "packages/core/src/services/chatCompressionService.ts"
+    chat = "packages/core/src/core/geminiChat.ts"
+    prompts = "packages/core/src/core/prompts.ts"
+    # The pre-state is the breaker-and-full-history shape this concern
+    # replaces: a three-strike suppression counter, a summary request that
+    # must fit whole or be refused, and the nine-section snapshot schema.
+    require_text(
+        state, service, "export const MAX_CONSECUTIVE_FAILURES = 3;", label=label
+    )
+    require_text(state, chat, "private consecutiveFailures = 0;", label=label)
+    require_text(state, prompts, "<all_user_messages>", label=label)
+    for marker in (
+        "summaryRequestBudget",
+        "cleanSplitIndices",
+        "carriedTail",
+        "MAX_TRUNCATION_BACKOFF",
+        "COMPACT_PHASE_DELIMITER_ALLOWANCE",
+    ):
+        forbid_text(state, service, marker, label=label)
+    forbid_text(state, chat, "hard_limit_fallback", label=label)
+
+
+def _validate_compaction_fit_after(state: State) -> None:
+    label = "compaction fit-and-failure-path result"
+    service = "packages/core/src/services/chatCompressionService.ts"
+    service_test = "packages/core/src/services/chatCompressionService.test.ts"
+    chat = "packages/core/src/core/geminiChat.ts"
+    chat_test = "packages/core/src/core/geminiChat.test.ts"
+    prompts = "packages/core/src/core/prompts.ts"
+    prompts_test = "packages/core/src/core/prompts.test.ts"
+    attachments = "packages/core/src/services/postCompactAttachments.ts"
+    attachments_test = "packages/core/src/services/postCompactAttachments.test.ts"
+
+    # The output ceiling is the exact phase partition, so MAX_TOKENS on a
+    # compaction response always names the final phase; the input side is
+    # sized to fit by construction, with a truncation-halved budget.
+    service_source = _require_all(
+        state,
+        service,
+        (
+            "export const COMPACT_MAX_OUTPUT_TOKENS =\n"
+            "  COMPACT_THINKING_TOKEN_BUDGET +\n"
+            "  COMPACT_FINAL_RESPONSE_TOKEN_BUDGET +\n"
+            "  COMPACT_PHASE_DELIMITER_ALLOWANCE;",
+            "export const COMPACT_PHASE_DELIMITER_ALLOWANCE = 64;",
+            "export const MAX_TRUNCATION_BACKOFF = 2;",
+            "export function summaryRequestBudget(",
+            "export function cleanSplitIndices(",
+            "carriedTail = historyForSummary.slice(fitted.index);",
+            "truncationBackoff: number;",
+        ),
+        label=label,
+    )
+    _require(
+        "MAX_CONSECUTIVE_FAILURES" not in service_source,
+        f"{label}: {service} kept the retired failure breaker",
+    )
+    # The chat owns the strike counter, feeds it to the service, and the
+    # hard tier ends every over-limit send with a deterministic fallback
+    # rather than a skip.
+    chat_source = _require_all(
+        state,
+        chat,
+        (
+            "private consecutiveTruncationFailures = 0;",
+            "truncationBackoff: this.consecutiveTruncationFailures,",
+            "trigger: 'hard_limit_fallback',",
+            "deferPersistence: true,",
+        ),
+        label=label,
+    )
+    for retired in ("hardRescueFailureCount", "MAX_CONSECUTIVE_FAILURES"):
+        _require(
+            retired not in chat_source,
+            f"{label}: {chat} kept retired suppression state '{retired}'",
+        )
+    # The snapshot schema gives each kind of fact one home and names the
+    # real final-phase budget; the retired nine-section schema gave one code
+    # snippet four homes and its summaries grew until they were truncated.
+    _require_all(
+        state,
+        prompts,
+        (
+            "<intent>",
+            "<environment>",
+            "<completed>",
+            "<in_progress>",
+            "<learnings>",
+            "<next_step>",
+            "hard-capped at ${finalResponseTokenBudget} tokens",
+            "exactly once",
+        ),
+        label=label,
+    )
+    forbid_text(state, prompts, "<all_user_messages>", label=label)
+    forbid_text(state, prompts, "<files_and_code_sections>", label=label)
+    require_text(state, attachments, "carriedTail = [],", label=label)
+    # Executable evidence: the growth case (history outgrows the reserve),
+    # the backoff case, the fallback case, and the truncation-dominates-
+    # content ordering case must all run in the build.
+    require_text(
+        state,
+        service_test,
+        "[compaction-growth] summarizes the largest fitting prefix",
+        label=label,
+    )
+    require_text(
+        state,
+        service_test,
+        "[compaction-growth] a truncation strike forces a smaller prefix",
+        label=label,
+    )
+    require_text(
+        state,
+        service_test,
+        "discards a truncated response even when its text parses as a complete snapshot",
+        label=label,
+    )
+    require_text(
+        state,
+        chat_test,
+        "falls back to deterministic microcompaction when the snapshot attempt cannot shrink a hard-tier send",
+        label=label,
+    )
+    require_text(
+        state,
+        chat_test,
+        "attempts rescue on every hard-tier send",
+        label=label,
+    )
+    require_text(
+        state,
+        attachments_test,
+        "appends the tail after the attachment block",
+        label=label,
+    )
+    require_text(
+        state,
+        prompts_test,
+        "states the writing contract: generous, dense, deduplicated by structure",
+        label=label,
+    )
+
+
 def _validate_compaction_accounting_before(state: State) -> None:
     label = "compaction output-accounting precondition"
     turn = "packages/core/src/core/turn.ts"
@@ -2572,6 +2719,8 @@ def _validate_compaction_accounting_after(state: State) -> None:
             "  thinkingTokens: number;",
             "  summaryChars: number;",
             "  finishReason: string | null;",
+            "  summaryRequestTokens: number;",
+            "  carriedTailContents: number;",
             "  output: CompactionOutputAccounting | null;",
             "    output: info.output ?? null,",
         ),
@@ -3108,6 +3257,44 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_compaction_accounting_before,
         validate_after=_validate_compaction_accounting_after,
+    ),
+    SemanticConcern(
+        name="compaction-fit-and-failure-path",
+        rationale=(
+            "Compaction quality was bounded by an 8,000-token final phase "
+            "and its failure path made every retry worse. Measured over a "
+            "136-turn production session: summaries grew 18,092 to 30,098 "
+            "chars across five attempts, the last three pressed against "
+            "the final-phase budget and were discarded as MAX_TOKENS, and "
+            "each retry re-ran the identical request against a larger "
+            "history because the consecutive-failure breaker suppressed "
+            "attempts while the context kept growing. The session died "
+            "refusing to send 252,945 tokens: past window minus reserve, "
+            "no full-history side query can even be issued, so nothing "
+            "above the hard tier could shrink the context. The final phase "
+            "is now sized at roughly double the observed clipped demand "
+            "and the thinking phase above its observed forced ceiling, "
+            "with the total output ceiling derived as their exact "
+            "partition; the summary request is sized to fit by "
+            "construction, summarizing the largest clean prefix and "
+            "carrying the remainder verbatim behind the snapshot; a "
+            "truncated attempt halves its successor's request budget "
+            "instead of being suppressed; the snapshot schema gives every "
+            "fact exactly one home and states the real final-phase budget; "
+            "and a hard-tier send that still cannot shrink falls back to "
+            "deterministic microcompaction before the terminal refusal, "
+            "so a sampler failure degrades memory instead of ending the "
+            "run."
+        ),
+        removal_condition=(
+            "Remove only when upstream sizes compaction output from "
+            "measured summary demand, guarantees the summary request fits "
+            "the window at any history size, and converts repeated "
+            "compaction failures into smaller attempts or a deterministic "
+            "fallback rather than suppressed retries."
+        ),
+        validate_before=_validate_compaction_fit_before,
+        validate_after=_validate_compaction_fit_after,
     ),
     SemanticConcern(
         name="session-time-anchor",

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `c89fcacbc25c9027d0a87831c50b15b44517693291618291bc4c7f73a3a174e5`
+- Review-diff SHA-256: `ad3309caddaf64388f26f0cfd98db53957fd491fefe3a1cdcfc61c6ab7a748ae`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `4b0ab3d7546dfd2fcd2779527fdb8e00ac45a577af78c7a660ef1cd7234e1ee0`
+- Transformer-manifest SHA-256: `8e2bcf9bc7e3d7c689fb220cd5d908ca09f8af473ac49fcc426f2c9c24a9c6d5`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -387,7 +387,45 @@ provide as one fail-closed mode:
   generation and left empty when the attempt was refused before it, so a
   budget consumed entirely by reasoning stays distinguishable from a request
   that never ran (three more `[compaction-event]` tests execute this in the
-  build).
+  build);
+- compaction that cannot outgrow its own window, sized from its measured
+  failure. The accounting above, over a 136-turn production session, showed
+  summaries growing 18,092 → 30,098 chars across five attempts; the last
+  three terminated MAX_TOKENS pressing against the 8,000-token final phase
+  (the largest a clipped floor, not a demand measurement), thinking hit its
+  12,000-token forced ceiling twice, and every retry re-ran the identical
+  request against a larger history because the consecutive-failure breaker
+  suppressed attempts while the context kept growing — until the prompt
+  passed `window − reserve`, where no full-history side query can even be
+  issued, and the session died refusing 252,945 tokens. Five changes, one
+  mode: the phases are now 16,000 thinking + 16,000 final, with the total
+  ceiling *derived* as their exact partition (plus a named 64-token
+  allowance for the reasoning-end delimiter that belongs to neither phase),
+  so a MAX_TOKENS stop always names the final phase; the summary request is
+  sized to fit by construction — when history + directive no longer fit
+  beside the reserve, the side query summarizes the largest clean prefix
+  (binary search over model-turn boundaries, exact `/tokenize` counts) and
+  the remainder rides verbatim behind the snapshot, which also keeps the
+  prefix cache shared; a truncated attempt halves its successor's request
+  budget (two strikes maximum) instead of being suppressed, so retries
+  strictly shrink; the snapshot schema was rebuilt around one home per
+  fact — intent, environment, completed, in_progress, learnings, next_step —
+  because the previous nine sections gave one code snippet four legitimate
+  homes and duplication, not content, is what grows under budget pressure;
+  and the prompt now states the real final-phase budget, interpolated from
+  the enforced constant, since the three truncated summaries were written
+  against a ceiling the model was never told about. On failure, nothing is
+  latched: a fluke retries at the next natural trigger, and a hard-tier
+  send that still cannot shrink falls back to deterministic
+  microcompaction — old tool results cleared, nothing fabricated — before
+  the terminal refusal, so a sampler failure degrades memory instead of
+  ending the run. The auto threshold moves from 229,144 to 217,080 tokens:
+  12,064 tokens of working window (5.3%) deliberately traded for a summary
+  budget that double-covers the observed clipped demand, because a
+  truncated summary costs the whole attempt and, previously, the session
+  (two `[compaction-growth]` tests, the truncation-dominates-content
+  ordering test, the carried-tail composition tests, and the
+  deterministic-fallback test execute this in the build).
 
 Verification performed in the pinned Node image:
 
@@ -395,11 +433,10 @@ Verification performed in the pinned Node image:
   idempotence, new-file handling, source/output drift, intermediate-state refusal,
   review-diff drift, time-of-check/time-of-use mutation, and transactional rollback;
 - the complete patched TypeScript/CLI build passed;
-- the full build-derived suite passed: all 49 core test files (4,169 tests;
-  4,149 in the bare pinned image, the 20 git/ripgrep-dependent cases with
-  those tools present as the production image provides them) and all 7 CLI
-  suites (951 passed, 1 environment-skip), plus the fileReadCache pair (62)
-  adjacent to the required-offset change -- zero failures;
+- the full build-derived suite passed: all 58 derived test files (5,318
+  tests: 5,297 passed and 1 environment-skip in the bare pinned image, the
+  20 git-dependent cases with git present as the production image provides
+  it) -- zero failures;
 - the same 20 environment-gated failures reproduce byte-identically on the
   unmodified reviewed tree in the bare image, so they are properties of the
   runner, not of any change;
