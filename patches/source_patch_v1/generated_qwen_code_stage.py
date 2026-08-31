@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'ad3309caddaf64388f26f0cfd98db53957fd491fefe3a1cdcfc61c6ab7a748ae',
+  'review_sha256': 'f4c2c5fd012a2c7f291b32dd18853a82c45a78d719ec5bf2ee664b996ddf0696',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -187,7 +187,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '937086585da78d4e580c5b327abc8f59b6efb495ad9722744656165d9e7d925f'},
             {'path': 'packages/core/src/services/chatCompressionService.ts',
              'before_sha256': 'ce64d44a40510b3eb83c00345a7e6bb6caee0ffcb9f959fbe1a91a804b03899f',
-             'after_sha256': 'cf20f56db912600f66c2e3d1efd950c6cc160f48b605c52e3d9d10e8b094057d'},
+             'after_sha256': '1b900017067d4b9a679b41045d5bc220ad344e0cea2d1cc36f934e977f642ce2'},
             {'path': 'packages/core/src/services/fileReadCache.integration.test.ts',
              'before_sha256': 'b9e0afd8d2a79c13f45d0108df2e4ce5980e303da4f315c83a389f9e58f294e8',
              'after_sha256': '310b8d5c9d81bec445100ffddf8bc89e2841ef7f5917d267fd4df55c8104a775'},
@@ -48555,6 +48555,258 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-4',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '\n'
+                       'export interface CompactionThresholds {\n'
+                       '  /** Token count at which UI warn tier triggers. */\n'
+                       '  readonly warn: number;\n'
+                       '  /** Token count at which auto-compaction triggers. */\n'
+                       '  readonly auto: number;\n'
+                       '  /** Token count at which auto-compaction is force-triggered '
+                       '(bypasses the consecutive-failure breaker). */\n'
+                       '  readonly hard: number;\n'
+                       '  /** Window minus SUMMARY_RESERVE; the budget available for '
+                       'input + summary. */\n'
+                       '  readonly effectiveWindow: number;\n'
+                       '}\n'
+                       '\n'
+                       '/**\n'
+                       ' * Compute the three-tier threshold ladder for a given context '
+                       'window.\n'
+                       ' *\n'
+                       ' * The absolute term (effectiveWindow - AUTOCOMPACT_BUFFER) is '
+                       'a *ceiling* —\n'
+                       ' * "compact by here, or the summarization side-query has no '
+                       'room to run" — so\n'
+                       ' * it is combined with the proportional preference via `min`, '
+                       'not `max`:\n'
+                       ' *   auto = absoluteCeiling > 0 ? min(pct * window, '
+                       'absoluteCeiling) : pct * window\n'
+                       ' *   warn = max(0, auto - WARN_BUFFER)\n'
+                       ' *   hard = min(window, max(effectiveWindow - HARD_BUFFER, '
+                       'auto + HARD_BUFFER))\n'
+                       ' *\n'
+                       ' * So large windows compact at ~pct (never crowding the '
+                       'ceiling), smaller\n'
+                       ' * windows compact at the ceiling (leaving room for the '
+                       'summary), and a window\n',
+             'after': '\n'
+                      'export interface CompactionThresholds {\n'
+                      '  /** Token count at which UI warn tier triggers. */\n'
+                      '  readonly warn: number;\n'
+                      '  /** Token count at which auto-compaction triggers. */\n'
+                      '  readonly auto: number;\n'
+                      '  /** Token count at which auto-compaction is force-triggered '
+                      'on the send itself. */\n'
+                      '  readonly hard: number;\n'
+                      '  /** Window minus SUMMARY_RESERVE; the budget available for '
+                      'input + summary. */\n'
+                      '  readonly effectiveWindow: number;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * Compute the three-tier threshold ladder for a given context '
+                      'window.\n'
+                      ' *\n'
+                      ' * The absolute term (effectiveWindow - AUTOCOMPACT_BUFFER) is '
+                      'a *ceiling* —\n'
+                      ' * "compact by here, or the side query must start splitting off '
+                      'a prefix\n'
+                      ' * instead of covering the whole history in one snapshot" — so '
+                      'it is\n'
+                      ' * combined with the proportional preference via `min`, not '
+                      '`max`:\n'
+                      ' *   auto = absoluteCeiling > 0 ? min(pct * window, '
+                      'absoluteCeiling) : pct * window\n'
+                      ' *   warn = max(0, auto - WARN_BUFFER)\n'
+                      ' *   hard = min(window, max(effectiveWindow - HARD_BUFFER, auto '
+                      '+ HARD_BUFFER))\n'
+                      ' *\n'
+                      ' * So large windows compact at ~pct (never crowding the '
+                      'ceiling), smaller\n'
+                      ' * windows compact at the ceiling (leaving room for the '
+                      'summary), and a window\n',
+             'review_before': '\n'
+                              'export interface CompactionThresholds {\n'
+                              '  /** Token count at which UI warn tier triggers. */\n'
+                              '  readonly warn: number;\n'
+                              '  /** Token count at which auto-compaction triggers. '
+                              '*/\n'
+                              '  readonly auto: number;\n'
+                              '  /** Token count at which auto-compaction is '
+                              'force-triggered (bypasses the consecutive-failure '
+                              'breaker). */\n'
+                              '  readonly hard: number;\n'
+                              '  /** Window minus SUMMARY_RESERVE; the budget '
+                              'available for input + summary. */\n'
+                              '  readonly effectiveWindow: number;\n'
+                              '}\n'
+                              '\n'
+                              '/**\n'
+                              ' * Compute the three-tier threshold ladder for a given '
+                              'context window.\n'
+                              ' *\n'
+                              ' * The absolute term (effectiveWindow - '
+                              'AUTOCOMPACT_BUFFER) is a *ceiling* —\n'
+                              ' * "compact by here, or the summarization side-query '
+                              'has no room to run" — so\n'
+                              ' * it is combined with the proportional preference via '
+                              '`min`, not `max`:\n'
+                              ' *   auto = absoluteCeiling > 0 ? min(pct * window, '
+                              'absoluteCeiling) : pct * window\n'
+                              ' *   warn = max(0, auto - WARN_BUFFER)\n'
+                              ' *   hard = min(window, max(effectiveWindow - '
+                              'HARD_BUFFER, auto + HARD_BUFFER))\n'
+                              ' *\n'
+                              ' * So large windows compact at ~pct (never crowding the '
+                              'ceiling), smaller\n'
+                              ' * windows compact at the ceiling (leaving room for the '
+                              'summary), and a window\n',
+             'review_after': '\n'
+                             'export interface CompactionThresholds {\n'
+                             '  /** Token count at which UI warn tier triggers. */\n'
+                             '  readonly warn: number;\n'
+                             '  /** Token count at which auto-compaction triggers. */\n'
+                             '  readonly auto: number;\n'
+                             '  /** Token count at which auto-compaction is '
+                             'force-triggered on the send itself. */\n'
+                             '  readonly hard: number;\n'
+                             '  /** Window minus SUMMARY_RESERVE; the budget available '
+                             'for input + summary. */\n'
+                             '  readonly effectiveWindow: number;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * Compute the three-tier threshold ladder for a given '
+                             'context window.\n'
+                             ' *\n'
+                             ' * The absolute term (effectiveWindow - '
+                             'AUTOCOMPACT_BUFFER) is a *ceiling* —\n'
+                             ' * "compact by here, or the side query must start '
+                             'splitting off a prefix\n'
+                             ' * instead of covering the whole history in one '
+                             'snapshot" — so it is\n'
+                             ' * combined with the proportional preference via `min`, '
+                             'not `max`:\n'
+                             ' *   auto = absoluteCeiling > 0 ? min(pct * window, '
+                             'absoluteCeiling) : pct * window\n'
+                             ' *   warn = max(0, auto - WARN_BUFFER)\n'
+                             ' *   hard = min(window, max(effectiveWindow - '
+                             'HARD_BUFFER, auto + HARD_BUFFER))\n'
+                             ' *\n'
+                             ' * So large windows compact at ~pct (never crowding the '
+                             'ceiling), smaller\n'
+                             ' * windows compact at the ceiling (leaving room for the '
+                             'summary), and a window\n'},
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-5',
+             'path': 'packages/core/src/services/chatCompressionService.ts',
+             'before': '    Math.max(0, pct !== undefined && Number.isFinite(pct) ? '
+                       'pct : DEFAULT_PCT),\n'
+                       '  );\n'
+                       '  // Clamp to 0 for tiny windows (window < SUMMARY_RESERVE) so '
+                       'the surfaced\n'
+                       '  // value in `/context` stays meaningful.\n'
+                       '  const effectiveWindow = Math.max(0, window - '
+                       'SUMMARY_RESERVE);\n'
+                       '\n'
+                       '  // The absolute term is a ceiling: compact before the prompt '
+                       'leaves too little\n'
+                       '  // room for the summarization side-query (which needs up to '
+                       'SUMMARY_RESERVE of\n'
+                       '  // output). Combine it with the proportional preference via '
+                       '`min`. When the\n'
+                       '  // window is so small the ceiling is non-positive, fall back '
+                       'to the\n'
+                       '  // proportional value as a floor so the trigger stays '
+                       'usable.\n'
+                       '  const proportional = effectivePct * window;\n'
+                       '  const absoluteCeiling = effectiveWindow - '
+                       'AUTOCOMPACT_BUFFER;\n'
+                       '  const auto =\n'
+                       '    absoluteCeiling > 0\n'
+                       '      ? Math.min(proportional, absoluteCeiling)\n'
+                       '      : proportional;\n',
+             'after': '    Math.max(0, pct !== undefined && Number.isFinite(pct) ? pct '
+                      ': DEFAULT_PCT),\n'
+                      '  );\n'
+                      '  // Clamp to 0 for tiny windows (window < SUMMARY_RESERVE) so '
+                      'the surfaced\n'
+                      '  // value in `/context` stays meaningful.\n'
+                      '  const effectiveWindow = Math.max(0, window - '
+                      'SUMMARY_RESERVE);\n'
+                      '\n'
+                      '  // The absolute term is a ceiling: compact while the whole '
+                      'history still\n'
+                      '  // fits beside SUMMARY_RESERVE, so the ordinary snapshot '
+                      'covers everything\n'
+                      '  // and the prefix-splitting fallback stays the exception. '
+                      'Combine it with\n'
+                      '  // the proportional preference via `min`. When the window is '
+                      'so small the\n'
+                      '  // ceiling is non-positive, fall back to the proportional '
+                      'value as a floor\n'
+                      '  // so the trigger stays usable.\n'
+                      '  const proportional = effectivePct * window;\n'
+                      '  const absoluteCeiling = effectiveWindow - '
+                      'AUTOCOMPACT_BUFFER;\n'
+                      '  const auto =\n'
+                      '    absoluteCeiling > 0\n'
+                      '      ? Math.min(proportional, absoluteCeiling)\n'
+                      '      : proportional;\n',
+             'review_before': '    Math.max(0, pct !== undefined && '
+                              'Number.isFinite(pct) ? pct : DEFAULT_PCT),\n'
+                              '  );\n'
+                              '  // Clamp to 0 for tiny windows (window < '
+                              'SUMMARY_RESERVE) so the surfaced\n'
+                              '  // value in `/context` stays meaningful.\n'
+                              '  const effectiveWindow = Math.max(0, window - '
+                              'SUMMARY_RESERVE);\n'
+                              '\n'
+                              '  // The absolute term is a ceiling: compact before the '
+                              'prompt leaves too little\n'
+                              '  // room for the summarization side-query (which needs '
+                              'up to SUMMARY_RESERVE of\n'
+                              '  // output). Combine it with the proportional '
+                              'preference via `min`. When the\n'
+                              '  // window is so small the ceiling is non-positive, '
+                              'fall back to the\n'
+                              '  // proportional value as a floor so the trigger stays '
+                              'usable.\n'
+                              '  const proportional = effectivePct * window;\n'
+                              '  const absoluteCeiling = effectiveWindow - '
+                              'AUTOCOMPACT_BUFFER;\n'
+                              '  const auto =\n'
+                              '    absoluteCeiling > 0\n'
+                              '      ? Math.min(proportional, absoluteCeiling)\n'
+                              '      : proportional;\n',
+             'review_after': '    Math.max(0, pct !== undefined && '
+                             'Number.isFinite(pct) ? pct : DEFAULT_PCT),\n'
+                             '  );\n'
+                             '  // Clamp to 0 for tiny windows (window < '
+                             'SUMMARY_RESERVE) so the surfaced\n'
+                             '  // value in `/context` stays meaningful.\n'
+                             '  const effectiveWindow = Math.max(0, window - '
+                             'SUMMARY_RESERVE);\n'
+                             '\n'
+                             '  // The absolute term is a ceiling: compact while the '
+                             'whole history still\n'
+                             '  // fits beside SUMMARY_RESERVE, so the ordinary '
+                             'snapshot covers everything\n'
+                             '  // and the prefix-splitting fallback stays the '
+                             'exception. Combine it with\n'
+                             '  // the proportional preference via `min`. When the '
+                             'window is so small the\n'
+                             '  // ceiling is non-positive, fall back to the '
+                             'proportional value as a floor\n'
+                             '  // so the trigger stays usable.\n'
+                             '  const proportional = effectivePct * window;\n'
+                             '  const absoluteCeiling = effectiveWindow - '
+                             'AUTOCOMPACT_BUFFER;\n'
+                             '  const auto =\n'
+                             '    absoluteCeiling > 0\n'
+                             '      ? Math.min(proportional, absoluteCeiling)\n'
+                             '      : proportional;\n'},
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-6',
+             'path': 'packages/core/src/services/chatCompressionService.ts',
+             'before': '\n'
                        'export interface CompressOptions {\n'
                        '  promptId: string;\n'
                        '  force: boolean;\n'
@@ -48802,7 +49054,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  /**\n'
                              '   * User-supplied focus directives passed to the '
                              'compression side-query.\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-5',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-7',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': ' * explicit user intent outranks a global hook policy when '
                        'both speak.\n'
@@ -48866,7 +49118,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  }\n'
                              '  if (hookInstructions.length > 0) {\n'
                              '    parts.push(hookInstructions);\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-6',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-8',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '    start >= 0 &&\n'
                        '    end > start + startTag.length &&\n'
@@ -49209,7 +49461,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          originalTokenCount,\n'
                              '          newTokenCount: originalTokenCount,\n'
                              '          compressionStatus: CompressionStatus.NOOP,\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-7',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-9',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '      // to be reserved out of the window here (this replaced '
                        'the\n'
@@ -49460,7 +49712,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              `auto=${auto}, '
                              'contextLimit=${contextLimit}`,\n'
                              '          );\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-8',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-10',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '        }\n'
                        '        // Below the token threshold but the screenshot '
@@ -49573,7 +49825,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'ack + recent\n'
                              '    // file restores + recent image restore).\n'
                              '\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-9',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-11',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '          // side-query prompt past a recoverable size.\n'
                        '          hookExtraInstructions = merged\n'
@@ -95128,7 +95380,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/permissions/permission-manager.test.ts': 'd7d463b3c4eebf766656f881f9cc1ecd4a3758b86af7d8e49bbbe84a45389f92',
  'packages/core/src/permissions/permission-manager.ts': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779',
  'packages/core/src/services/chatCompressionService.test.ts': '937086585da78d4e580c5b327abc8f59b6efb495ad9722744656165d9e7d925f',
- 'packages/core/src/services/chatCompressionService.ts': 'cf20f56db912600f66c2e3d1efd950c6cc160f48b605c52e3d9d10e8b094057d',
+ 'packages/core/src/services/chatCompressionService.ts': '1b900017067d4b9a679b41045d5bc220ad344e0cea2d1cc36f934e977f642ce2',
  'packages/core/src/services/fileReadCache.integration.test.ts': '310b8d5c9d81bec445100ffddf8bc89e2841ef7f5917d267fd4df55c8104a775',
  'packages/core/src/services/loopDetectionService.ts': '9e3b6457192b8bd6691ada479da2db67d10721778c3ad260e06409778217f99d',
  'packages/core/src/services/postCompactAttachments.test.ts': 'bf91b560b24006a8dc41bb55d2853c9cfeeca17bac2e2904ba81469813ad0daa',

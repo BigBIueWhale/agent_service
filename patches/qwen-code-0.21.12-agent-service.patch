@@ -15447,7 +15447,7 @@ index 59b9c51..da2aa8e 100644
    });
  });
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
-index 9a37b9b..6d23790 100644
+index 9a37b9b..ea53ec3 100644
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
 @@ -6,62 +6,78 @@
@@ -15619,7 +15619,60 @@ index 9a37b9b..6d23790 100644
   * into the side-query system prompt. The user-supplied `/compress` text is
   * already capped at `MAX_COMPRESS_INSTRUCTIONS_CHARS` (2000) in
   * compressCommand.ts for exactly this reason — the side-query has no
-@@ -209,46 +204,41 @@ export type CompactTrigger = 'manual' | 'auto';
+@@ -139,24 +134,25 @@ export const MAX_HOOK_INSTRUCTIONS_CHARS = 4000;
+ 
+ export interface CompactionThresholds {
+   /** Token count at which UI warn tier triggers. */
+   readonly warn: number;
+   /** Token count at which auto-compaction triggers. */
+   readonly auto: number;
+-  /** Token count at which auto-compaction is force-triggered (bypasses the consecutive-failure breaker). */
++  /** Token count at which auto-compaction is force-triggered on the send itself. */
+   readonly hard: number;
+   /** Window minus SUMMARY_RESERVE; the budget available for input + summary. */
+   readonly effectiveWindow: number;
+ }
+ 
+ /**
+  * Compute the three-tier threshold ladder for a given context window.
+  *
+  * The absolute term (effectiveWindow - AUTOCOMPACT_BUFFER) is a *ceiling* —
+- * "compact by here, or the summarization side-query has no room to run" — so
+- * it is combined with the proportional preference via `min`, not `max`:
++ * "compact by here, or the side query must start splitting off a prefix
++ * instead of covering the whole history in one snapshot" — so it is
++ * combined with the proportional preference via `min`, not `max`:
+  *   auto = absoluteCeiling > 0 ? min(pct * window, absoluteCeiling) : pct * window
+  *   warn = max(0, auto - WARN_BUFFER)
+  *   hard = min(window, max(effectiveWindow - HARD_BUFFER, auto + HARD_BUFFER))
+  *
+  * So large windows compact at ~pct (never crowding the ceiling), smaller
+  * windows compact at the ceiling (leaving room for the summary), and a window
+@@ -176,17 +172,18 @@ export function computeThresholds(
+     Math.max(0, pct !== undefined && Number.isFinite(pct) ? pct : DEFAULT_PCT),
+   );
+   // Clamp to 0 for tiny windows (window < SUMMARY_RESERVE) so the surfaced
+   // value in `/context` stays meaningful.
+   const effectiveWindow = Math.max(0, window - SUMMARY_RESERVE);
+ 
+-  // The absolute term is a ceiling: compact before the prompt leaves too little
+-  // room for the summarization side-query (which needs up to SUMMARY_RESERVE of
+-  // output). Combine it with the proportional preference via `min`. When the
+-  // window is so small the ceiling is non-positive, fall back to the
+-  // proportional value as a floor so the trigger stays usable.
++  // The absolute term is a ceiling: compact while the whole history still
++  // fits beside SUMMARY_RESERVE, so the ordinary snapshot covers everything
++  // and the prefix-splitting fallback stays the exception. Combine it with
++  // the proportional preference via `min`. When the window is so small the
++  // ceiling is non-positive, fall back to the proportional value as a floor
++  // so the trigger stays usable.
+   const proportional = effectivePct * window;
+   const absoluteCeiling = effectiveWindow - AUTOCOMPACT_BUFFER;
+   const auto =
+     absoluteCeiling > 0
+       ? Math.min(proportional, absoluteCeiling)
+       : proportional;
+@@ -209,46 +206,41 @@ export type CompactTrigger = 'manual' | 'auto';
  
  export interface CompressOptions {
    promptId: string;
@@ -15680,7 +15733,7 @@ index 9a37b9b..6d23790 100644
    requestGenerationConfig?: GenerateContentConfig;
    /**
     * User-supplied focus directives passed to the compression side-query.
-@@ -305,13 +295,13 @@ function collectActiveSubagents(config: Config): SubagentSnapshot[] {
+@@ -305,13 +297,13 @@ function collectActiveSubagents(config: Config): SubagentSnapshot[] {
   * explicit user intent outranks a global hook policy when both speak.
   */
  function buildCompressionSystemPrompt(
@@ -15695,7 +15748,7 @@ index 9a37b9b..6d23790 100644
    }
    if (hookInstructions.length > 0) {
      parts.push(hookInstructions);
-@@ -345,44 +335,82 @@ function hasStateSnapshot(summary: string): boolean {
+@@ -345,44 +337,82 @@ function hasStateSnapshot(summary: string): boolean {
      start >= 0 &&
      end > start + startTag.length &&
      stripped.slice(start + startTag.length, end).trim().length > 0
@@ -15785,7 +15838,7 @@ index 9a37b9b..6d23790 100644
            originalTokenCount,
            newTokenCount: originalTokenCount,
            compressionStatus: CompressionStatus.NOOP,
-@@ -396,44 +424,50 @@ export class ChatCompressionService {
+@@ -396,44 +426,50 @@ export class ChatCompressionService {
        // to be reserved out of the window here (this replaced the
        // #5957/#6266 reservedOutputTokens machinery).
        const { auto } = computeThresholds(
@@ -15859,7 +15912,7 @@ index 9a37b9b..6d23790 100644
              `[compaction] cheap-gate NOOP: effectiveTokens=${effectiveTokens}, ` +
                `auto=${auto}, contextLimit=${contextLimit}`,
            );
-@@ -448,29 +482,12 @@ export class ChatCompressionService {
+@@ -448,29 +484,12 @@ export class ChatCompressionService {
          }
          // Below the token threshold but the screenshot trigger fired.
          triggerReason = 'image_overflow';
@@ -15889,7 +15942,7 @@ index 9a37b9b..6d23790 100644
      // composePostCompactHistory below (summary + model ack + recent
      // file restores + recent image restore).
  
-@@ -517,611 +534,500 @@ export class ChatCompressionService {
+@@ -517,611 +536,500 @@ export class ChatCompressionService {
            // side-query prompt past a recoverable size.
            hookExtraInstructions = merged
              .trim()
