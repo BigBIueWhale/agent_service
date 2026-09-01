@@ -379,8 +379,7 @@ def _validate_exact_tokens_after(state: State) -> None:
             "`${promptId}:auto-threshold`",
             "await chat.countRequestTokensForCandidateHistory(",
             "COMPRESSION_FAILED_TOKEN_COUNT_ERROR",
-            "COMPACT_THINKING_TOKEN_BUDGET = 16_000",
-            "COMPACT_FINAL_RESPONSE_TOKEN_BUDGET = 16_000",
+            "COMPACT_MAX_OUTPUT_TOKENS = 49_152",
             "summaryResult.finishReason === FinishReason.MAX_TOKENS",
             "summaryResult.finishReason !== FinishReason.STOP",
             "newTokenCountIsEstimated: false",
@@ -926,7 +925,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "keeps XML text non-executable in strict tool-calling mode",
         ),
         "packages/core/src/services/chatCompressionService.test.ts": (
-            "uses one cache-preserving main-model request with explicit phase budgets",
+            "sends the ENTIRE history to one cache-preserving main-model request",
             "rejects unusable summary output",
             "summaryResult({ hadToolCall: true })",
             "requires an exact shrinking candidate with the full output reserve of next-turn room",
@@ -935,10 +934,6 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "uses the authoritative tokenizer and forwards the identical rendered-request options",
             "fails closed when exact counting is required but the generator lacks it",
             "returns the terminal streaming finish reason",
-        ),
-        "packages/core/src/core/openaiContentGenerator/pipeline.test.ts": (
-            "applies bounded maintenance phase budgets to the OpenAI-compatible wire request",
-            "combined phases above the request output ceiling",
         ),
         "packages/core/src/core/openaiContentGenerator/converter.test.ts": (
             "preserves text-image-text chronology inside the originating tool result",
@@ -1140,9 +1135,8 @@ def _validate_compaction_event_after(state: State) -> None:
         f"{label}: {chat} no longer reports the reactive overflow rescue",
     )
     _require(
-        chat_source.count("type: StreamEventType.COMPACTION,") == 3,
-        f"{label}: {chat} must report the pre-stream attempt, the hard-tier "
-        "deterministic fallback, and the reactive overflow rescue",
+        chat_source.count("type: StreamEventType.COMPACTION,") == 2,
+        f"{label}: {chat} must report both compaction sites",
     )
 
     # Subagent attribution: the agent event carries the record to the agent
@@ -1473,94 +1467,6 @@ def _validate_subagent_result_scope_after(state: State) -> None:
         agent_tool_test,
         "[subagent-scope] publishes the turn count with the terminal display "
         "status",
-        label=label,
-    )
-
-
-def _validate_phase_budget_before(state: State) -> None:
-    label = "maintenance phase-budget precondition"
-    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
-    # There is no per-request phase budget at all. The layer one would have to
-    # survive is the provider hook called below, which merges the pinned
-    # `extra_body` over whatever this file built.
-    forbid_text(state, pipeline, "phaseBudgetOverrides", label=label)
-    require_text(
-        state,
-        pipeline,
-        "    let providerRequest = this.config.provider.buildRequest(",
-        label=label,
-    )
-    # The single exit of the sampling-parameter branch, which the budget must
-    # not be attached to, and the end of the wire request, where it must.
-    require_text(
-        state,
-        pipeline,
-        "      return clampProviderOutputBudgetKeys(",
-        label=label,
-    )
-    require_text(state, pipeline, "    return providerRequest;", label=label)
-
-
-def _validate_phase_budget_after(state: State) -> None:
-    label = "maintenance phase-budget result"
-    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
-    pipeline_test = "packages/core/src/core/openaiContentGenerator/pipeline.test.ts"
-
-    source = _require_all(
-        state,
-        pipeline,
-        (
-            "function applyPhaseBudgetOverrides(\n  wireRequest: Record<string, unknown>,",
-            "  const configured = wireRequest[wireKey];",
-            "  wireRequest['thinking_token_budget'] = overrides.thinkingTokenBudget;",
-            "  wireRequest['final_response_token_budget'] =",
-        ),
-        label=label,
-    )
-    # Exactly one application, and it is the last thing done to the request,
-    # after the provider hook has merged every pinned configuration layer.
-    _require(
-        source.count("applyPhaseBudgetOverrides(") == 2,
-        f"{label}: {pipeline} must declare and apply the phase budget exactly once",
-    )
-    _require_ordered(
-        source,
-        (
-            "let providerRequest = this.config.provider.buildRequest(",
-            "applyPhaseBudgetOverrides(\n      typed,\n      request.phaseBudgetOverrides,\n"
-            "      request.config?.maxOutputTokens,\n    );",
-            "return providerRequest;",
-        ),
-        label=label,
-        location=pipeline,
-    )
-    # The sampling-parameter layer no longer writes it, so it cannot be
-    # overwritten downstream.
-    forbid_text(
-        state,
-        pipeline,
-        "(request as PromptCacheSharingParameters).phaseBudgetOverrides",
-        label=label,
-    )
-    # The ceiling guard is unchanged in wording and now reads the merged wire
-    # value, so a per-request budget above the pinned one is refused.
-    require_text(
-        state,
-        pipeline,
-        "budget must not exceed the pinned provider ceiling",
-        label=label,
-    )
-    require_text(
-        state,
-        pipeline_test,
-        "[phase-budget] overrides a phase budget pinned in extra_body, "
-        "which the provider merges over the request",
-        label=label,
-    )
-    require_text(
-        state,
-        pipeline_test,
-        "[phase-budget] refuses a phase budget above a ceiling pinned in extra_body",
         label=label,
     )
 
@@ -2534,87 +2440,101 @@ def _validate_subagent_progress_after(state: State) -> None:
     )
 
 
-def _validate_compaction_fit_before(state: State) -> None:
-    label = "compaction fit-and-failure-path precondition"
+def _validate_compaction_budget_before(state: State) -> None:
+    label = "compaction output-budget precondition"
     service = "packages/core/src/services/chatCompressionService.ts"
-    chat = "packages/core/src/core/geminiChat.ts"
     prompts = "packages/core/src/core/prompts.ts"
-    # The pre-state is the breaker-and-full-history shape this concern
-    # replaces: a three-strike suppression counter, a summary request that
-    # must fit whole or be refused, and the nine-section snapshot schema.
+    # Upstream sizes compaction at claude-code's 20,000-token summary cap and
+    # writes the snapshot into nine overlapping sections.
     require_text(
-        state, service, "export const MAX_CONSECUTIVE_FAILURES = 3;", label=label
+        state, service, "export const COMPACT_MAX_OUTPUT_TOKENS = 20_000;", label=label
     )
-    require_text(state, chat, "private consecutiveFailures = 0;", label=label)
     require_text(state, prompts, "<all_user_messages>", label=label)
-    for marker in (
-        "summaryRequestBudget",
-        "cleanSplitIndices",
-        "carriedTail",
-        "MAX_TRUNCATION_BACKOFF",
-        "COMPACT_PHASE_DELIMITER_ALLOWANCE",
-    ):
-        forbid_text(state, service, marker, label=label)
-    forbid_text(state, chat, "hard_limit_fallback", label=label)
 
 
-def _validate_compaction_fit_after(state: State) -> None:
-    label = "compaction fit-and-failure-path result"
+def _validate_compaction_budget_after(state: State) -> None:
+    label = "compaction output-budget result"
     service = "packages/core/src/services/chatCompressionService.ts"
     service_test = "packages/core/src/services/chatCompressionService.test.ts"
-    chat = "packages/core/src/core/geminiChat.ts"
-    chat_test = "packages/core/src/core/geminiChat.test.ts"
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    generator = "packages/core/src/core/contentGenerator.ts"
     prompts = "packages/core/src/core/prompts.ts"
     prompts_test = "packages/core/src/core/prompts.test.ts"
-    attachments = "packages/core/src/services/postCompactAttachments.ts"
-    attachments_test = "packages/core/src/services/postCompactAttachments.test.ts"
 
-    # The output ceiling is the exact phase partition, so MAX_TOKENS on a
-    # compaction response always names the final phase; the input side is
-    # sized to fit by construction, with a truncation-halved budget.
+    # One number sizes compaction: it is the request's output ceiling and the
+    # reserve the thresholds keep free, so input + output cannot exceed the
+    # window.
     service_source = _require_all(
         state,
         service,
         (
-            "export const COMPACT_MAX_OUTPUT_TOKENS =\n"
-            "  COMPACT_THINKING_TOKEN_BUDGET +\n"
-            "  COMPACT_FINAL_RESPONSE_TOKEN_BUDGET +\n"
-            "  COMPACT_PHASE_DELIMITER_ALLOWANCE;",
-            "export const COMPACT_PHASE_DELIMITER_ALLOWANCE = 64;",
-            "export const MAX_TRUNCATION_BACKOFF = 2;",
-            "export function summaryRequestBudget(",
-            "export function cleanSplitIndices(",
-            "carriedTail = historyForSummary.slice(fitted.index);",
-            "truncationBackoff: number;",
+            "export const COMPACT_MAX_OUTPUT_TOKENS = 49_152;",
+            "export const SUMMARY_RESERVE = COMPACT_MAX_OUTPUT_TOKENS;",
+            "        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,",
+            "if (summaryRequestTokenCount + COMPACT_MAX_OUTPUT_TOKENS > contextLimit) {",
         ),
         label=label,
     )
-    _require(
-        "MAX_CONSECUTIVE_FAILURES" not in service_source,
-        f"{label}: {service} kept the retired failure breaker",
-    )
-    # The chat owns the strike counter, feeds it to the service, and the
-    # hard tier ends every over-limit send with a deterministic fallback
-    # rather than a skip.
-    chat_source = _require_all(
-        state,
-        chat,
-        (
-            "private consecutiveTruncationFailures = 0;",
-            "truncationBackoff: this.consecutiveTruncationFailures,",
-            "trigger: 'hard_limit_fallback',",
-            "deferPersistence: true,",
-        ),
-        label=label,
-    )
-    for retired in ("hardRescueFailureCount", "MAX_CONSECUTIVE_FAILURES"):
+    # The compaction request is an ordinary one. Nothing splits the output
+    # budget into phases, nothing shrinks or splits the input, and nothing
+    # converges a failed attempt into a smaller retry.
+    for retired in (
+        "COMPACT_THINKING_TOKEN_BUDGET",
+        "COMPACT_FINAL_RESPONSE_TOKEN_BUDGET",
+        "COMPACT_PHASE_DELIMITER_ALLOWANCE",
+        "MAX_TRUNCATION_BACKOFF",
+        "MAX_CONSECUTIVE_FAILURES",
+        "summaryRequestBudget",
+        "cleanSplitIndices",
+        "carriedTail",
+        "phaseBudgetOverrides",
+    ):
         _require(
-            retired not in chat_source,
-            f"{label}: {chat} kept retired suppression state '{retired}'",
+            retired not in service_source,
+            f"{label}: {service} kept retired compaction machinery '{retired}'",
         )
-    # The snapshot schema gives each kind of fact one home and names the
-    # real final-phase budget; the retired nine-section schema gave one code
-    # snippet four homes and its summaries grew until they were truncated.
+    # The per-request phase-budget apparatus is gone from the layers that
+    # carried it, so no caller can reintroduce a split budget.
+    for path in (pipeline, generator):
+        forbid_text(state, path, "phaseBudgetOverrides", label=label)
+    # The request stays a pure extension of the conversation already in the
+    # provider's prefix cache: same contents, same order, one appended
+    # directive. Reshaping it would re-prefill the whole history.
+    _require_all(
+        state,
+        service,
+        (
+            "      contents: [...sideQueryHistory, directiveContent],",
+            "      promptCacheSharing: true,",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        service_test,
+        "sends the ENTIRE history to one cache-preserving main-model request",
+        label=label,
+    )
+    # A truncated snapshot is refused before its content is examined, so one
+    # that superficially parses complete can never be committed.
+    _require_ordered(
+        service_source,
+        (
+            "if (summaryResult.finishReason === FinishReason.MAX_TOKENS) {",
+            "COMPRESSION_FAILED_OUTPUT_TRUNCATED",
+            "if (!processedSummary) {",
+        ),
+        label=label,
+        location=service,
+    )
+    require_text(
+        state,
+        service_test,
+        "discards a truncated response even when its text parses as a complete snapshot",
+        label=label,
+    )
+    # The snapshot schema gives each kind of fact one home; the retired
+    # nine-section schema gave one code snippet four.
     _require_all(
         state,
         prompts,
@@ -2625,53 +2545,12 @@ def _validate_compaction_fit_after(state: State) -> None:
             "<in_progress>",
             "<learnings>",
             "<next_step>",
-            "hard-capped at ${finalResponseTokenBudget} tokens",
             "exactly once",
         ),
         label=label,
     )
     forbid_text(state, prompts, "<all_user_messages>", label=label)
     forbid_text(state, prompts, "<files_and_code_sections>", label=label)
-    require_text(state, attachments, "carriedTail = [],", label=label)
-    # Executable evidence: the growth case (history outgrows the reserve),
-    # the backoff case, the fallback case, and the truncation-dominates-
-    # content ordering case must all run in the build.
-    require_text(
-        state,
-        service_test,
-        "[compaction-growth] summarizes the largest fitting prefix",
-        label=label,
-    )
-    require_text(
-        state,
-        service_test,
-        "[compaction-growth] a truncation strike forces a smaller prefix",
-        label=label,
-    )
-    require_text(
-        state,
-        service_test,
-        "discards a truncated response even when its text parses as a complete snapshot",
-        label=label,
-    )
-    require_text(
-        state,
-        chat_test,
-        "falls back to deterministic microcompaction when the snapshot attempt cannot shrink a hard-tier send",
-        label=label,
-    )
-    require_text(
-        state,
-        chat_test,
-        "attempts rescue on every hard-tier send",
-        label=label,
-    )
-    require_text(
-        state,
-        attachments_test,
-        "appends the tail after the attachment block",
-        label=label,
-    )
     require_text(
         state,
         prompts_test,
@@ -2704,23 +2583,19 @@ def _validate_compaction_accounting_after(state: State) -> None:
     service_test = "packages/core/src/services/chatCompressionService.test.ts"
     adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
 
-    # The record answers "where did the output budget go": the ceiling, both
-    # phase budgets, what was produced, how much of it was hidden reasoning,
-    # how much summary survived, and why generation stopped.
+    # The record answers "where did the output budget go": the ceiling, what
+    # was produced, how much of it was hidden reasoning, how much summary
+    # survived, and why generation stopped.
     _require_all(
         state,
         turn,
         (
             "export interface CompactionOutputAccounting {",
             "  maxOutputTokens: number;",
-            "  thinkingTokenBudget: number;",
-            "  finalResponseTokenBudget: number;",
             "  outputTokens: number;",
             "  thinkingTokens: number;",
             "  summaryChars: number;",
             "  finishReason: string | null;",
-            "  summaryRequestTokens: number;",
-            "  carriedTailContents: number;",
             "  output: CompactionOutputAccounting | null;",
             "    output: info.output ?? null,",
         ),
@@ -2908,38 +2783,6 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_behavioral_evidence_before,
         validate_after=_validate_behavioral_evidence_after,
-    ),
-    SemanticConcern(
-        name="wire-level-maintenance-phase-budget",
-        rationale=(
-            "Automatic compaction runs inside a fixed 20,000-token output "
-            "ceiling and splits it deliberately: a bounded thinking phase "
-            "and a reserved final-response phase, so the state snapshot has "
-            "room to be written. The override was applied to the "
-            "per-request sampling parameters, but the pinned deployment "
-            "declares both phase budgets in extra_body, which the provider "
-            "hook merges over the request. The split therefore never "
-            "reached the wire: the summarizer ran at the pinned 262,144-"
-            "token thinking budget inside a 20,000-token cap, and since "
-            "thought parts are filtered out of the response, two "
-            "consecutive attempts each spent ~19,900 output tokens and "
-            "produced no summary at all. The session then died refusing to "
-            "send 240,122 tokens against a 239,144-token limit. The "
-            "existing ceiling guard could not catch it either: it compared "
-            "against the sampling-parameter layer, which never declares "
-            "these keys, so it read undefined and always passed. A "
-            "per-request budget must be written where every configuration "
-            "layer has already merged, and validated against the exact "
-            "value it replaces."
-        ),
-        removal_condition=(
-            "Remove only when upstream applies per-request phase budgets to "
-            "the final wire request and validates them against the merged "
-            "configured value, so no provider hook can silently restore the "
-            "pinned budget."
-        ),
-        validate_before=_validate_phase_budget_before,
-        validate_after=_validate_phase_budget_after,
     ),
     SemanticConcern(
         name="read-file-single-range-mechanism",
@@ -3259,42 +3102,32 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         validate_after=_validate_compaction_accounting_after,
     ),
     SemanticConcern(
-        name="compaction-fit-and-failure-path",
+        name="compaction-output-budget",
         rationale=(
-            "Compaction quality was bounded by an 8,000-token final phase "
-            "and its failure path made every retry worse. Measured over a "
-            "136-turn production session: summaries grew 18,092 to 30,098 "
-            "chars across five attempts, the last three pressed against "
-            "the final-phase budget and were discarded as MAX_TOKENS, and "
-            "each retry re-ran the identical request against a larger "
-            "history because the consecutive-failure breaker suppressed "
-            "attempts while the context kept growing. The session died "
-            "refusing to send 252,945 tokens: past window minus reserve, "
-            "no full-history side query can even be issued, so nothing "
-            "above the hard tier could shrink the context. The final phase "
-            "is now sized at roughly double the observed clipped demand "
-            "and the thinking phase above its observed forced ceiling, "
-            "with the total output ceiling derived as their exact "
-            "partition; the summary request is sized to fit by "
-            "construction, summarizing the largest clean prefix and "
-            "carrying the remainder verbatim behind the snapshot; a "
-            "truncated attempt halves its successor's request budget "
-            "instead of being suppressed; the snapshot schema gives every "
-            "fact exactly one home and states the real final-phase budget; "
-            "and a hard-tier send that still cannot shrink falls back to "
-            "deterministic microcompaction before the terminal refusal, "
-            "so a sampler failure degrades memory instead of ending the "
-            "run."
+            "Upstream sizes compaction at claude-code's 20,000-token summary "
+            "cap, which this deployment measured as too small. Across ten "
+            "accounted production compactions hidden reasoning alone ran to "
+            "11,720 tokens and snapshots were clipped at ~30,100 chars; one "
+            "136-turn session had three consecutive attempts discarded as "
+            "MAX_TOKENS and died refusing to send 252,945 tokens. The cap "
+            "is one number because it is two things at once: the request's "
+            "output ceiling and the reserve the thresholds keep free, so "
+            "input plus output cannot exceed max_model_len. The request is "
+            "otherwise ordinary - it declares no phase budgets, so the model "
+            "thinks to a natural stop and writes the snapshot under the "
+            "pinned provider ceilings, and the reasoning-end marker is never "
+            "forced. The snapshot schema gives every fact exactly one home, "
+            "because the previous nine sections gave one code snippet four "
+            "and duplication is what grew under budget pressure."
         ),
         removal_condition=(
-            "Remove only when upstream sizes compaction output from "
-            "measured summary demand, guarantees the summary request fits "
-            "the window at any history size, and converts repeated "
-            "compaction failures into smaller attempts or a deterministic "
-            "fallback rather than suppressed retries."
+            "Remove only when upstream sizes the compaction output ceiling "
+            "from measured demand on this window and reserves it from the "
+            "compaction trigger, so input plus output provably fits "
+            "max_model_len."
         ),
-        validate_before=_validate_compaction_fit_before,
-        validate_after=_validate_compaction_fit_after,
+        validate_before=_validate_compaction_budget_before,
+        validate_after=_validate_compaction_budget_after,
     ),
     SemanticConcern(
         name="session-time-anchor",

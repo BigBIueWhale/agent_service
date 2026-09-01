@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'f4c2c5fd012a2c7f291b32dd18853a82c45a78d719ec5bf2ee664b996ddf0696',
+  'review_sha256': '8ca47e044e3958b3af224edaff33a8f953e292ebb2ad4f0eb508fc8c1fa8ead7',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -28,7 +28,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before_sha256': '17e660b5b946d5647814af611bc5b6aaf43c597e7b329e4926d90b8bf7fa72e8',
-             'after_sha256': '096f79b80302e0c73c0a466232b685700ed0fc30eda1fff322b419b62176ebb6'},
+             'after_sha256': '3ca41ffb0c577065f99d6d88a32ab5df694900f015e7416d0942c4bfe5749ed5'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before_sha256': 'd389950daa67e5b2578ed5da8e340e417d7f696486c81ed78f3aca735e22c0bd',
              'after_sha256': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863'},
@@ -85,16 +85,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '1bea1f3fecc42a4e1ece933d9b7e88e9cf32f0d7386928c9260b91b611bb19ad'},
             {'path': 'packages/core/src/core/baseLlmClient.test.ts',
              'before_sha256': 'a415bd5a4cc091acc2ac5cffd347f364871ae623fa6f277bc6478011ed71faab',
-             'after_sha256': '3473d53774ef2b86869cf5af03bf2faf3433171e7630c4b4652a398ec6fc5d0d'},
+             'after_sha256': '643b5f7c90bbb9a63300c3ec02cffea86f4ecdbb65f06b1ec94eb18fda7e7674'},
             {'path': 'packages/core/src/core/baseLlmClient.ts',
              'before_sha256': '5f4dc1d1d88c9d062f59d9adb25b174ed5b12cf0e8ac64f8356a4b279927776b',
-             'after_sha256': '408fcec52d262c12fc8c2327eb9826aeb7005f7bb5566817276ea918ff140459'},
+             'after_sha256': '14a959fbbeeffd507b9ebd2bb4d6b564d3a88feb4e46a406afcf2555fa791a9b'},
             {'path': 'packages/core/src/core/client.test.ts',
              'before_sha256': '00f0f1c4ff0e705ab43235fc9368609e63b441df4e2bc81cd3ce63e4cb9771e4',
-             'after_sha256': '1666cbe38b695e86e71a61e78626438c9469d9d43b9ba872757b776fffe17944'},
+             'after_sha256': '672a46838231a8799545260380cc65c10782779b2a344660342b1dd1d3b57c89'},
             {'path': 'packages/core/src/core/contentGenerator.ts',
              'before_sha256': '7bbdb216d8bbde513ce99d4f1160746942b6fc3c388ef222c1d47cc324a15247',
-             'after_sha256': '476242ed064c4980cec6789b84bb5496cb93a28d7763b659fb799f84fcd9bebc'},
+             'after_sha256': '27fa593f8dbf0e75106b2d4aa8f9d22801dcf016b112d56046542ed4fd3ff303'},
             {'path': 'packages/core/src/core/coreToolScheduler.test.ts',
              'before_sha256': '3ae4d9d1847dbce344c3018cececedb6ff25b0e035333237bac067f2df84d006',
              'after_sha256': 'de21e1f4528091327c67e81ea7acd5a159b4cbd83189f09f3ddc5ed28b71943e'},
@@ -103,10 +103,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e'},
             {'path': 'packages/core/src/core/geminiChat.test.ts',
              'before_sha256': 'c3ec701c78d99698ad538c188e08d10b78b266c372b850907def72f9badb8830',
-             'after_sha256': 'd522e0b9a5c19cdb22365e601f3b1f82dc6dd08c301b04ca7cb1e9ac4faa9d63'},
+             'after_sha256': '8f610f05483369dc12bca6658413259d16d629430f8c77acf4dd380d47d0d377'},
             {'path': 'packages/core/src/core/geminiChat.ts',
              'before_sha256': '384de52c73dc5c387d3147713046713d34de0b6724b12feb00574508a4d7cc6c',
-             'after_sha256': '4426d9e1632f852b048c16750cb902e5927a7d822490e99943da0cc355a0b622'},
+             'after_sha256': '513fc09bd4b44a1000f56fe50c449604f6c77afa3e7ea9527631855fea4ca9a8'},
             {'path': 'packages/core/src/core/genai-compat.test.ts',
              'before_sha256': 'b454f3c146c1be79cbc43aadceda5010756ada9f80a5ec33186c9826feaccf76',
              'after_sha256': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50'},
@@ -127,22 +127,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts',
              'before_sha256': '45a51e9f9f3e0a87c903b960847d7e17faf768d129e2706f6df9c731e69e2f2b',
-             'after_sha256': '31a0c872819e5b0ded6cc91c865e0b0614fee8a17e065a15f07a0efef3014ea6'},
+             'after_sha256': '6ddd4b092ec9130e5c90c799c23969da0e1ff07208b5efc765d691283e015c82'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts',
              'before_sha256': None,
              'after_sha256': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before_sha256': 'fd6061e56956d1072885a4a8e40be6ed148623d791a5586f3669bbf325c1d09c',
-             'after_sha256': 'eb39024c965025c6c9d35178d0ae8517bcbe954182e539ae640a8b97cd656f20'},
+             'after_sha256': 'a9abde6f3ae36ee4447159fc72a63301e131a008a05695be000ca6a5ce1f6966'},
             {'path': 'packages/core/src/core/openaiContentGenerator/types.ts',
              'before_sha256': '0b827511f3ccefbc74aa7d14eaccf7502e1a2aaed846983b982ac9191827aa51',
              'after_sha256': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c'},
             {'path': 'packages/core/src/core/prompts.test.ts',
              'before_sha256': '228fffaa1c483415f9ded4bba43f88e6f0b6fc29bc5df334a06ed5507c5e9467',
-             'after_sha256': 'c2a6fdbdd9d3eaa3058b3618edaa1e3d2f6fa1212a66123faf157ba1089c748d'},
+             'after_sha256': '415b3b6491fd759d6b8df89161576319c4fd7f6965d9b76f8e9a26bafa4a891c'},
             {'path': 'packages/core/src/core/prompts.ts',
              'before_sha256': '239516527b43809f5889d62ac28260abe6262de16b2225aff30a9e32d90b57e1',
-             'after_sha256': '9e62d9c9ab0306f8149ea1bcf2e06275ef134637d61e8b4d5e8357c13be35384'},
+             'after_sha256': 'c195557edf2fc0bb340aa2c0f1d9fe9c03ac3a28c986b6455944a70dfdc58477'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.test.ts',
              'before_sha256': None,
              'after_sha256': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851'},
@@ -163,7 +163,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9'},
             {'path': 'packages/core/src/core/turn.ts',
              'before_sha256': 'f1be47023cae4b9e3a4fd9fd756c28bf36724f772bd9759e8ecd72e73cdea6b7',
-             'after_sha256': '451de8d5cfec7fd0d08500e0acee7f18a5b48dee8752e42e01c9a46f7e3b361b'},
+             'after_sha256': '6c2707d2ebf84fb82cc2fe2b0e7be92275a5e09a330d527a52000a32035add72'},
             {'path': 'packages/core/src/index.ts',
              'before_sha256': '27213fe57ba91831bad52f0b07700aae9240bc636c1bab83f144d726514e3b6b',
              'after_sha256': '6ce05101bad847681232aae4d4b738afa4e7d6206a495a6210df2a913b9dbcef'},
@@ -184,22 +184,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779'},
             {'path': 'packages/core/src/services/chatCompressionService.test.ts',
              'before_sha256': 'dca73e970a07ea2c8e819976dc758b57426754e89be5ec230954fda06a2b03db',
-             'after_sha256': '937086585da78d4e580c5b327abc8f59b6efb495ad9722744656165d9e7d925f'},
+             'after_sha256': 'f3e53999112f482b0f5c9c4e59bb11de5ada425cc68250777b3111269d33b965'},
             {'path': 'packages/core/src/services/chatCompressionService.ts',
              'before_sha256': 'ce64d44a40510b3eb83c00345a7e6bb6caee0ffcb9f959fbe1a91a804b03899f',
-             'after_sha256': '1b900017067d4b9a679b41045d5bc220ad344e0cea2d1cc36f934e977f642ce2'},
+             'after_sha256': '07f7c18031236116fa73d39c4bb15111c4f364c597a9d3cdd1e09b81b7886ae0'},
             {'path': 'packages/core/src/services/fileReadCache.integration.test.ts',
              'before_sha256': 'b9e0afd8d2a79c13f45d0108df2e4ce5980e303da4f315c83a389f9e58f294e8',
              'after_sha256': '310b8d5c9d81bec445100ffddf8bc89e2841ef7f5917d267fd4df55c8104a775'},
             {'path': 'packages/core/src/services/loopDetectionService.ts',
              'before_sha256': 'fa854927e7b6c9998ae2ee147942a2732671855dbeddb6d9a0d7c9a25c063d16',
              'after_sha256': '9e3b6457192b8bd6691ada479da2db67d10721778c3ad260e06409778217f99d'},
-            {'path': 'packages/core/src/services/postCompactAttachments.test.ts',
-             'before_sha256': 'f64045a97c7f5c62d20a39034f93ed5dff4fe3b627ade6851558151151a83036',
-             'after_sha256': 'bf91b560b24006a8dc41bb55d2853c9cfeeca17bac2e2904ba81469813ad0daa'},
-            {'path': 'packages/core/src/services/postCompactAttachments.ts',
-             'before_sha256': 'e4a15cbda47ca9c781bb18147ee5c59fc4b2c4090328634383e39282b09a4ccb',
-             'after_sha256': '52e5503f962dda10155262604315c879d0a9635c57055ae9573d4f489b446140'},
             {'path': 'packages/core/src/services/visionBridge/vision-bridge-service.test.ts',
              'before_sha256': 'a549dadb1e4607c80e03d89f4f151ce946a974821a5c5c23ffd1a18b4a0671c0',
              'after_sha256': '35135d73b65c44e88135024f40720ad178d861e90ca3dd64db0ab40633aaabe6'},
@@ -2671,15 +2665,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          newTokenCount: 233926,\n'
                       "          triggerReason: 'token_limit',\n"
                       '          output: {\n'
-                      '            maxOutputTokens: 20000,\n'
-                      '            thinkingTokenBudget: 12000,\n'
-                      '            finalResponseTokenBudget: 8000,\n'
-                      '            outputTokens: 19900,\n'
-                      '            thinkingTokens: 19900,\n'
+                      '            maxOutputTokens: 49152,\n'
+                      '            outputTokens: 49152,\n'
+                      '            thinkingTokens: 49152,\n'
                       '            summaryChars: 0,\n'
                       "            finishReason: 'MAX_TOKENS',\n"
-                      '            summaryRequestTokens: 233926,\n'
-                      '            carriedTailContents: 0,\n'
                       '          },\n'
                       '        },\n'
                       '      });\n'
@@ -2697,8 +2687,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        expect(message.data).toMatchObject({\n'
                       "          status: 'COMPRESSION_FAILED_OUTPUT_TRUNCATED',\n"
                       '          output: {\n'
-                      '            maxOutputTokens: 20000,\n'
-                      '            thinkingTokens: 19900,\n'
+                      '            maxOutputTokens: 49152,\n'
+                      '            thinkingTokens: 49152,\n'
                       '            summaryChars: 0,\n'
                       "            finishReason: 'MAX_TOKENS',\n"
                       '          },\n'
@@ -2807,15 +2797,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          newTokenCount: 233926,\n'
                              "          triggerReason: 'token_limit',\n"
                              '          output: {\n'
-                             '            maxOutputTokens: 20000,\n'
-                             '            thinkingTokenBudget: 12000,\n'
-                             '            finalResponseTokenBudget: 8000,\n'
-                             '            outputTokens: 19900,\n'
-                             '            thinkingTokens: 19900,\n'
+                             '            maxOutputTokens: 49152,\n'
+                             '            outputTokens: 49152,\n'
+                             '            thinkingTokens: 49152,\n'
                              '            summaryChars: 0,\n'
                              "            finishReason: 'MAX_TOKENS',\n"
-                             '            summaryRequestTokens: 233926,\n'
-                             '            carriedTailContents: 0,\n'
                              '          },\n'
                              '        },\n'
                              '      });\n'
@@ -2834,8 +2820,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          status: '
                              "'COMPRESSION_FAILED_OUTPUT_TRUNCATED',\n"
                              '          output: {\n'
-                             '            maxOutputTokens: 20000,\n'
-                             '            thinkingTokens: 19900,\n'
+                             '            maxOutputTokens: 49152,\n'
+                             '            thinkingTokens: 49152,\n'
                              '            summaryChars: 0,\n'
                              "            finishReason: 'MAX_TOKENS',\n"
                              '          },\n'
@@ -12315,8 +12301,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      expect(result.hadToolCall).toBe(false);\n'
                       '    });\n'
                       '\n'
-                      "    it('forwards maintenance phase budgets and returns the "
-                      "terminal streaming finish reason', async () => {\n"
+                      "    it('returns the terminal streaming finish reason', async () "
+                      '=> {\n'
                       '      async function* finishedStream(): '
                       'AsyncGenerator<GenerateContentResponse> {\n'
                       "        const chunk = createMockTextResponse('summary');\n"
@@ -12335,21 +12321,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        abortSignal: abortController.signal,\n'
                       "        promptId: 'compaction',\n"
                       '        stream: true,\n'
-                      '        phaseBudgetOverrides: {\n'
-                      '          thinkingTokenBudget: 12_000,\n'
-                      '          finalResponseTokenBudget: 8_000,\n'
-                      '        },\n'
                       '      });\n'
                       '\n'
-                      '      expect(mockGenerateContentStream).toHaveBeenCalledWith(\n'
-                      '        expect.objectContaining({\n'
-                      '          phaseBudgetOverrides: {\n'
-                      '            thinkingTokenBudget: 12_000,\n'
-                      '            finalResponseTokenBudget: 8_000,\n'
-                      '          },\n'
-                      '        }),\n'
-                      "        'compaction',\n"
-                      '      );\n'
                       "      expect(result.finishReason).toBe('STOP');\n"
                       '    });\n'
                       '\n'
@@ -12382,8 +12355,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      expect(result.hadToolCall).toBe(false);\n'
                              '    });\n'
                              '\n'
-                             "    it('forwards maintenance phase budgets and returns "
-                             "the terminal streaming finish reason', async () => {\n"
+                             "    it('returns the terminal streaming finish reason', "
+                             'async () => {\n'
                              '      async function* finishedStream(): '
                              'AsyncGenerator<GenerateContentResponse> {\n'
                              '        const chunk = '
@@ -12404,22 +12377,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        abortSignal: abortController.signal,\n'
                              "        promptId: 'compaction',\n"
                              '        stream: true,\n'
-                             '        phaseBudgetOverrides: {\n'
-                             '          thinkingTokenBudget: 12_000,\n'
-                             '          finalResponseTokenBudget: 8_000,\n'
-                             '        },\n'
                              '      });\n'
                              '\n'
-                             '      '
-                             'expect(mockGenerateContentStream).toHaveBeenCalledWith(\n'
-                             '        expect.objectContaining({\n'
-                             '          phaseBudgetOverrides: {\n'
-                             '            thinkingTokenBudget: 12_000,\n'
-                             '            finalResponseTokenBudget: 8_000,\n'
-                             '          },\n'
-                             '        }),\n'
-                             "        'compaction',\n"
-                             '      );\n'
                              "      expect(result.finishReason).toBe('STOP');\n"
                              '    });\n'
                              '\n'
@@ -12624,10 +12583,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "'system' }] },\n"
                       '        config: { tools },\n'
                       '        promptCacheSharing: true,\n'
-                      '        phaseBudgetOverrides: {\n'
-                      '          thinkingTokenBudget: 12_000,\n'
-                      '          finalResponseTokenBudget: 8_000,\n'
-                      '        },\n'
                       '      });\n'
                       '\n'
                       '      expect(result).toEqual({ totalTokens: 1234, maxModelLen: '
@@ -12646,10 +12601,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            },\n'
                       '          },\n'
                       '          promptCacheSharing: true,\n'
-                      '          phaseBudgetOverrides: {\n'
-                      '            thinkingTokenBudget: 12_000,\n'
-                      '            finalResponseTokenBudget: 8_000,\n'
-                      '          },\n'
                       '        },\n'
                       "        'compaction-count',\n"
                       '      );\n'
@@ -12751,10 +12702,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "text: 'system' }] },\n"
                              '        config: { tools },\n'
                              '        promptCacheSharing: true,\n'
-                             '        phaseBudgetOverrides: {\n'
-                             '          thinkingTokenBudget: 12_000,\n'
-                             '          finalResponseTokenBudget: 8_000,\n'
-                             '        },\n'
                              '      });\n'
                              '\n'
                              '      expect(result).toEqual({ totalTokens: 1234, '
@@ -12774,10 +12721,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            },\n'
                              '          },\n'
                              '          promptCacheSharing: true,\n'
-                             '          phaseBudgetOverrides: {\n'
-                             '            thinkingTokenBudget: 12_000,\n'
-                             '            finalResponseTokenBudget: 8_000,\n'
-                             '          },\n'
                              '        },\n'
                              "        'compaction-count',\n"
                              '      );\n'
@@ -12901,96 +12844,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'import {\n'},
             {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-2',
              'path': 'packages/core/src/core/baseLlmClient.ts',
-             'before': '  /**\n'
-                       '   * Let the OpenAI adapter mark the unchanged history prefix '
-                       'for cache reuse.\n'
-                       '   * This is only for requests ending in a non-reusable '
-                       'trailing directive;\n'
-                       '   * the adapter deliberately excludes the final message from '
-                       'cache marking.\n'
-                       '   */\n'
-                       '  promptCacheSharing?: boolean;\n'
-                       '  /**\n'
-                       '   * When true, throw instead of silently falling back to the '
-                       'main generator if\n'
-                       "   * a distinct generator for `model` can't be created (model "
-                       'not registered, or\n'
-                       '   * generator creation fails — e.g. a missing cross-provider '
-                       'credential). The\n'
-                       '   * vision bridge sets this so image payloads are never '
-                       'routed at the text-only\n'
-                       '   * primary while a notice names a different vision endpoint; '
-                       'it fails the\n',
-             'after': '  /**\n'
-                      '   * Let the OpenAI adapter mark the unchanged history prefix '
-                      'for cache reuse.\n'
-                      '   * This is only for requests ending in a non-reusable '
-                      'trailing directive;\n'
-                      '   * the adapter deliberately excludes the final message from '
-                      'cache marking.\n'
-                      '   */\n'
-                      '  promptCacheSharing?: boolean;\n'
-                      '  /** Maintenance-only lower ceilings for Qwen reasoning and '
-                      'final phases. */\n'
-                      '  phaseBudgetOverrides?: '
-                      "PromptCacheSharingParameters['phaseBudgetOverrides'];\n"
-                      '  /**\n'
-                      '   * When true, throw instead of silently falling back to the '
-                      'main generator if\n'
-                      "   * a distinct generator for `model` can't be created (model "
-                      'not registered, or\n'
-                      '   * generator creation fails — e.g. a missing cross-provider '
-                      'credential). The\n'
-                      '   * vision bridge sets this so image payloads are never routed '
-                      'at the text-only\n'
-                      '   * primary while a notice names a different vision endpoint; '
-                      'it fails the\n',
-             'review_before': '  /**\n'
-                              '   * Let the OpenAI adapter mark the unchanged history '
-                              'prefix for cache reuse.\n'
-                              '   * This is only for requests ending in a non-reusable '
-                              'trailing directive;\n'
-                              '   * the adapter deliberately excludes the final '
-                              'message from cache marking.\n'
-                              '   */\n'
-                              '  promptCacheSharing?: boolean;\n'
-                              '  /**\n'
-                              '   * When true, throw instead of silently falling back '
-                              'to the main generator if\n'
-                              "   * a distinct generator for `model` can't be created "
-                              '(model not registered, or\n'
-                              '   * generator creation fails — e.g. a missing '
-                              'cross-provider credential). The\n'
-                              '   * vision bridge sets this so image payloads are '
-                              'never routed at the text-only\n'
-                              '   * primary while a notice names a different vision '
-                              'endpoint; it fails the\n',
-             'review_after': '  /**\n'
-                             '   * Let the OpenAI adapter mark the unchanged history '
-                             'prefix for cache reuse.\n'
-                             '   * This is only for requests ending in a non-reusable '
-                             'trailing directive;\n'
-                             '   * the adapter deliberately excludes the final message '
-                             'from cache marking.\n'
-                             '   */\n'
-                             '  promptCacheSharing?: boolean;\n'
-                             '  /** Maintenance-only lower ceilings for Qwen reasoning '
-                             'and final phases. */\n'
-                             '  phaseBudgetOverrides?: '
-                             "PromptCacheSharingParameters['phaseBudgetOverrides'];\n"
-                             '  /**\n'
-                             '   * When true, throw instead of silently falling back '
-                             'to the main generator if\n'
-                             "   * a distinct generator for `model` can't be created "
-                             '(model not registered, or\n'
-                             '   * generator creation fails — e.g. a missing '
-                             'cross-provider credential). The\n'
-                             '   * vision bridge sets this so image payloads are never '
-                             'routed at the text-only\n'
-                             '   * primary while a notice names a different vision '
-                             'endpoint; it fails the\n'},
-            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-3',
-             'path': 'packages/core/src/core/baseLlmClient.ts',
              'before': ' */\n'
                        'export interface GenerateTextResult {\n'
                        '  text: string;\n'
@@ -13063,7 +12916,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'of calling the\n'
                              ' * registered tool. Strips a leading ```json / ``` '
                              'fence, then takes the\n'},
-            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-4',
+            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-3',
              'path': 'packages/core/src/core/baseLlmClient.ts',
              'before': '        `Failed to generate JSON content${promptId ? ` '
                        "(${promptId})` : ''}: ${getErrorMessage(error)}`,\n"
@@ -13136,9 +12989,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      contents: requestContents,\n'
                       '      ...(options.promptCacheSharing && { promptCacheSharing: '
                       'true }),\n'
-                      '      ...(options.phaseBudgetOverrides && {\n'
-                      '        phaseBudgetOverrides: options.phaseBudgetOverrides,\n'
-                      '      }),\n'
                       '    };\n'
                       '    return contentGenerator.countRequestTokens(request, '
                       "options.promptId ?? '');\n"
@@ -13227,10 +13077,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      contents: requestContents,\n'
                              '      ...(options.promptCacheSharing && { '
                              'promptCacheSharing: true }),\n'
-                             '      ...(options.phaseBudgetOverrides && {\n'
-                             '        phaseBudgetOverrides: '
-                             'options.phaseBudgetOverrides,\n'
-                             '      }),\n'
                              '    };\n'
                              '    return contentGenerator.countRequestTokens(request, '
                              "options.promptId ?? '');\n"
@@ -13246,84 +13092,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`systemInstruction` is sent\n'
                              '   * through verbatim — no `getCustomSystemPrompt` '
                              'wrapping (which would append\n'},
-            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-5',
-             'path': 'packages/core/src/core/baseLlmClient.ts',
-             'before': '    try {\n'
-                       '      const request: PromptCacheSharingParameters = {\n'
-                       '        model: requestModel,\n'
-                       '        config: requestConfig,\n'
-                       '        contents: requestContents,\n'
-                       '        ...(options.promptCacheSharing && { '
-                       'promptCacheSharing: true }),\n'
-                       '      };\n'
-                       '\n'
-                       '      // Both branches resolve to the same `{ text, usage }` '
-                       'shape so a single\n'
-                       '      // retryWithBackoff governs the whole request (a '
-                       'mid-stream failure retries\n'
-                       '      // the entire call — side queries are idempotent). '
-                       'Streaming keeps the HTTP\n'
-                       "      // connection alive so a slow inference can't be killed "
-                       "by a gateway's\n",
-             'after': '    try {\n'
-                      '      const request: PromptCacheSharingParameters = {\n'
-                      '        model: requestModel,\n'
-                      '        config: requestConfig,\n'
-                      '        contents: requestContents,\n'
-                      '        ...(options.promptCacheSharing && { promptCacheSharing: '
-                      'true }),\n'
-                      '        ...(options.phaseBudgetOverrides && {\n'
-                      '          phaseBudgetOverrides: options.phaseBudgetOverrides,\n'
-                      '        }),\n'
-                      '      };\n'
-                      '\n'
-                      '      // Both branches resolve to the same `{ text, usage }` '
-                      'shape so a single\n'
-                      '      // retryWithBackoff governs the whole request (a '
-                      'mid-stream failure retries\n'
-                      '      // the entire call — side queries are idempotent). '
-                      'Streaming keeps the HTTP\n'
-                      "      // connection alive so a slow inference can't be killed "
-                      "by a gateway's\n",
-             'review_before': '    try {\n'
-                              '      const request: PromptCacheSharingParameters = {\n'
-                              '        model: requestModel,\n'
-                              '        config: requestConfig,\n'
-                              '        contents: requestContents,\n'
-                              '        ...(options.promptCacheSharing && { '
-                              'promptCacheSharing: true }),\n'
-                              '      };\n'
-                              '\n'
-                              '      // Both branches resolve to the same `{ text, '
-                              'usage }` shape so a single\n'
-                              '      // retryWithBackoff governs the whole request (a '
-                              'mid-stream failure retries\n'
-                              '      // the entire call — side queries are '
-                              'idempotent). Streaming keeps the HTTP\n'
-                              "      // connection alive so a slow inference can't be "
-                              "killed by a gateway's\n",
-             'review_after': '    try {\n'
-                             '      const request: PromptCacheSharingParameters = {\n'
-                             '        model: requestModel,\n'
-                             '        config: requestConfig,\n'
-                             '        contents: requestContents,\n'
-                             '        ...(options.promptCacheSharing && { '
-                             'promptCacheSharing: true }),\n'
-                             '        ...(options.phaseBudgetOverrides && {\n'
-                             '          phaseBudgetOverrides: '
-                             'options.phaseBudgetOverrides,\n'
-                             '        }),\n'
-                             '      };\n'
-                             '\n'
-                             '      // Both branches resolve to the same `{ text, '
-                             'usage }` shape so a single\n'
-                             '      // retryWithBackoff governs the whole request (a '
-                             'mid-stream failure retries\n'
-                             '      // the entire call — side queries are idempotent). '
-                             'Streaming keeps the HTTP\n'
-                             "      // connection alive so a slow inference can't be "
-                             "killed by a gateway's\n"},
-            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-6',
+            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-4',
              'path': 'packages/core/src/core/baseLlmClient.ts',
              'before': '            // Chunks are deltas, not cumulative snapshots, so '
                        'concatenate.\n'
@@ -13491,7 +13260,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        maxAttempts: maxAttempts ?? '
                              'DEFAULT_MAX_ATTEMPTS,\n'
                              '        authType: retryAuthType,\n'},
-            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-7',
+            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-5',
              'path': 'packages/core/src/core/baseLlmClient.ts',
              'before': '      });\n'
                        '\n'
@@ -13574,8 +13343,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'chatCompressionService.test.ts\n'
                       '  // (token math, threshold checks, hook firing) and '
                       'geminiChat.test.ts (history\n'
-                      '  // mutation, recording, the truncation backoff). The tests '
-                      'below cover\n'
+                      '  // mutation and recording). The tests below cover\n'
                       '  // only what the wrapper itself adds: argument forwarding and '
                       'the IDE-context\n'
                       '  // flag flip.\n'
@@ -13614,8 +13382,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'chatCompressionService.test.ts\n'
                              '  // (token math, threshold checks, hook firing) and '
                              'geminiChat.test.ts (history\n'
-                             '  // mutation, recording, the truncation backoff). The '
-                             'tests below cover\n'
+                             '  // mutation and recording). The tests below cover\n'
                              '  // only what the wrapper itself adds: argument '
                              'forwarding and the IDE-context\n'
                              '  // flag flip.\n'
@@ -13743,96 +13510,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "  USE_ANTHROPIC = 'anthropic',\n"},
             {'name': 'packages/core/src/core/contentGenerator.ts:landmark-2',
              'path': 'packages/core/src/core/contentGenerator.ts',
-             'before': 'export type PromptCacheSharingParameters = '
-                       'GenerateContentParameters & {\n'
-                       '  /**\n'
-                       '   * Marks reusable history before a non-reusable trailing '
-                       'directive. The\n'
-                       '   * final message is deliberately excluded from cache '
-                       'breakpoints.\n'
-                       '   */\n'
-                       '  promptCacheSharing?: boolean;\n'
-                       '};\n'
-                       '\n'
-                       '/**\n'
-                       ' * Supported input modalities for a model.\n'
-                       ' * Omitted or false fields mean the model does not support '
-                       'that input type.\n'
-                       ' */\n',
-             'after': 'export type PromptCacheSharingParameters = '
-                      'GenerateContentParameters & {\n'
-                      '  /**\n'
-                      '   * Marks reusable history before a non-reusable trailing '
-                      'directive. The\n'
-                      '   * final message is deliberately excluded from cache '
-                      'breakpoints.\n'
-                      '   */\n'
-                      '  promptCacheSharing?: boolean;\n'
-                      '  /**\n'
-                      '   * Narrow, internal per-request ceilings for the two Qwen '
-                      'output phases.\n'
-                      '   * The OpenAI adapter accepts only positive budgets that do '
-                      'not exceed the\n'
-                      "   * pinned provider defaults or the request's total "
-                      'maxOutputTokens.\n'
-                      '   */\n'
-                      '  phaseBudgetOverrides?: {\n'
-                      '    thinkingTokenBudget: number;\n'
-                      '    finalResponseTokenBudget: number;\n'
-                      '  };\n'
-                      '};\n'
-                      '\n'
-                      '/**\n'
-                      ' * Supported input modalities for a model.\n'
-                      ' * Omitted or false fields mean the model does not support that '
-                      'input type.\n'
-                      ' */\n',
-             'review_before': 'export type PromptCacheSharingParameters = '
-                              'GenerateContentParameters & {\n'
-                              '  /**\n'
-                              '   * Marks reusable history before a non-reusable '
-                              'trailing directive. The\n'
-                              '   * final message is deliberately excluded from cache '
-                              'breakpoints.\n'
-                              '   */\n'
-                              '  promptCacheSharing?: boolean;\n'
-                              '};\n'
-                              '\n'
-                              '/**\n'
-                              ' * Supported input modalities for a model.\n'
-                              ' * Omitted or false fields mean the model does not '
-                              'support that input type.\n'
-                              ' */\n',
-             'review_after': 'export type PromptCacheSharingParameters = '
-                             'GenerateContentParameters & {\n'
-                             '  /**\n'
-                             '   * Marks reusable history before a non-reusable '
-                             'trailing directive. The\n'
-                             '   * final message is deliberately excluded from cache '
-                             'breakpoints.\n'
-                             '   */\n'
-                             '  promptCacheSharing?: boolean;\n'
-                             '  /**\n'
-                             '   * Narrow, internal per-request ceilings for the two '
-                             'Qwen output phases.\n'
-                             '   * The OpenAI adapter accepts only positive budgets '
-                             'that do not exceed the\n'
-                             "   * pinned provider defaults or the request's total "
-                             'maxOutputTokens.\n'
-                             '   */\n'
-                             '  phaseBudgetOverrides?: {\n'
-                             '    thinkingTokenBudget: number;\n'
-                             '    finalResponseTokenBudget: number;\n'
-                             '  };\n'
-                             '};\n'
-                             '\n'
-                             '/**\n'
-                             ' * Supported input modalities for a model.\n'
-                             ' * Omitted or false fields mean the model does not '
-                             'support that input type.\n'
-                             ' */\n'},
-            {'name': 'packages/core/src/core/contentGenerator.ts:landmark-3',
-             'path': 'packages/core/src/core/contentGenerator.ts',
              'before': '  customHeaders?: Record<string, string>;\n'
                        '  // Extra body parameters to be merged into the request body\n'
                        '  extra_body?: Record<string, unknown>;\n'
@@ -13937,7 +13614,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '"user"` message instead of\n'
                              '  // being embedded inside the `role: "tool"` message. '
                              'The OpenAI Chat\n'},
-            {'name': 'packages/core/src/core/contentGenerator.ts:landmark-4',
+            {'name': 'packages/core/src/core/contentGenerator.ts:landmark-3',
              'path': 'packages/core/src/core/contentGenerator.ts',
              'before': '  async countTokens(\n'
                        '    request: CountTokensParameters,\n'
@@ -16769,7 +16446,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        "overflow error', async () => {\n"
                        '      const compressedHistory: Content[] = [\n'
                        "        { role: 'user', parts: [{ text: 'summary' }] },\n"
-                       "        { role: 'model', parts: [{ text: 'ack' }] },\n",
+                       "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                       "        { role: 'user', parts: [{ text: 'latest' }] },\n"
+                       '      ];\n',
              'after': '      ).toBe(true);\n'
                       '      '
                       'expect(compressSpy.mock.calls[0][1].requestGenerationConfig?.tools).toBe(\n'
@@ -16777,96 +16456,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      );\n'
                       '    });\n'
                       '\n'
-                      "    it('feeds truncation backoff from truncated attempts only "
-                      "and resets it on success', async () => {\n"
-                      '      const compressSpy = vi.spyOn(\n'
-                      '        ChatCompressionService.prototype,\n'
-                      "        'compress',\n"
-                      '      );\n'
-                      '      const failure = (status: CompressionStatus) => ({\n'
-                      '        newHistory: null,\n'
-                      '        info: {\n'
-                      '          originalTokenCount: 100_000,\n'
-                      '          newTokenCount: 100_000,\n'
-                      '          compressionStatus: status,\n'
-                      '        },\n'
-                      '      });\n'
-                      '      const consumeSend = async (prompt: string) => {\n'
-                      '        '
-                      'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
-                      '          makeStreamResponse(),\n'
-                      '        );\n'
-                      '        const stream = await chat.sendMessageStream(\n'
-                      "          'test-model',\n"
-                      '          { message: prompt },\n'
-                      '          prompt,\n'
-                      '        );\n'
-                      '        for await (const _ of stream) {\n'
-                      '          /* consume */\n'
-                      '        }\n'
-                      '      };\n'
-                      '\n'
-                      '      // A truncated snapshot is the one failure whose remedy '
-                      'is a smaller\n'
-                      '      // input, so it alone advances the backoff the service '
-                      'receives.\n'
-                      '      compressSpy.mockResolvedValueOnce(\n'
-                      '        '
-                      'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                      '      );\n'
-                      "      await consumeSend('truncated-1');\n"
-                      '      '
-                      'expect(compressSpy.mock.calls[0][1].truncationBackoff).toBe(0);\n'
-                      '\n'
-                      '      // Non-truncation failures are sampler or endpoint '
-                      'flukes; shrinking\n'
-                      '      // the input does not target them, so the backoff must '
-                      'not move.\n'
-                      '      compressSpy.mockResolvedValueOnce(\n'
-                      '        '
-                      'failure(CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT),\n'
-                      '      );\n'
-                      "      await consumeSend('inflated');\n"
-                      '      '
-                      'expect(compressSpy.mock.calls[1][1].truncationBackoff).toBe(1);\n'
-                      '\n'
-                      '      compressSpy.mockResolvedValueOnce(\n'
-                      '        '
-                      'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                      '      );\n'
-                      "      await consumeSend('truncated-2');\n"
-                      '      '
-                      'expect(compressSpy.mock.calls[2][1].truncationBackoff).toBe(1);\n'
-                      '\n'
-                      '      // Any committed compaction proves the budget fits '
-                      'again.\n'
-                      '      compressSpy.mockResolvedValueOnce({\n'
-                      '        newHistory: [\n'
-                      "          { role: 'user', parts: [{ text: 'summary' }] },\n"
-                      "          { role: 'model', parts: [{ text: 'ack' }] },\n"
-                      '        ],\n'
-                      '        info: {\n'
-                      '          originalTokenCount: 100_000,\n'
-                      '          newTokenCount: 30_000,\n'
-                      '          compressionStatus: CompressionStatus.COMPRESSED,\n'
-                      '        },\n'
-                      '      });\n'
-                      "      await chat.tryCompress('prompt-reset-force', true);\n"
-                      '      '
-                      'expect(compressSpy.mock.calls[3][1].truncationBackoff).toBe(2);\n'
-                      '\n'
-                      '      '
-                      'compressSpy.mockResolvedValueOnce(failure(CompressionStatus.NOOP));\n'
-                      "      await consumeSend('after-reset');\n"
-                      '      '
-                      'expect(compressSpy.mock.calls[4][1].truncationBackoff).toBe(0);\n'
-                      '    });\n'
-                      '\n'
                       "    it('reactively compresses and retries once after a context "
                       "overflow error', async () => {\n"
                       '      const compressedHistory: Content[] = [\n'
                       "        { role: 'user', parts: [{ text: 'summary' }] },\n"
-                      "        { role: 'model', parts: [{ text: 'ack' }] },\n",
+                      "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                      "        { role: 'user', parts: [{ text: 'latest' }] },\n"
+                      '      ];\n',
              'review_before': '      ).toBe(true);\n'
                               '      '
                               'expect(compressSpy.mock.calls[0][1].requestGenerationConfig?.tools).toBe(\n'
@@ -17147,7 +16743,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '      const compressedHistory: Content[] = [\n'
                               "        { role: 'user', parts: [{ text: 'summary' }] "
                               '},\n'
-                              "        { role: 'model', parts: [{ text: 'ack' }] },\n",
+                              "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                              "        { role: 'user', parts: [{ text: 'latest' }] },\n"
+                              '      ];\n',
              'review_after': '      ).toBe(true);\n'
                              '      '
                              'expect(compressSpy.mock.calls[0][1].requestGenerationConfig?.tools).toBe(\n'
@@ -17155,99 +16753,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '    });\n'
                              '\n'
-                             "    it('feeds truncation backoff from truncated attempts "
-                             "only and resets it on success', async () => {\n"
-                             '      const compressSpy = vi.spyOn(\n'
-                             '        ChatCompressionService.prototype,\n'
-                             "        'compress',\n"
-                             '      );\n'
-                             '      const failure = (status: CompressionStatus) => ({\n'
-                             '        newHistory: null,\n'
-                             '        info: {\n'
-                             '          originalTokenCount: 100_000,\n'
-                             '          newTokenCount: 100_000,\n'
-                             '          compressionStatus: status,\n'
-                             '        },\n'
-                             '      });\n'
-                             '      const consumeSend = async (prompt: string) => {\n'
-                             '        '
-                             'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
-                             '          makeStreamResponse(),\n'
-                             '        );\n'
-                             '        const stream = await chat.sendMessageStream(\n'
-                             "          'test-model',\n"
-                             '          { message: prompt },\n'
-                             '          prompt,\n'
-                             '        );\n'
-                             '        for await (const _ of stream) {\n'
-                             '          /* consume */\n'
-                             '        }\n'
-                             '      };\n'
-                             '\n'
-                             '      // A truncated snapshot is the one failure whose '
-                             'remedy is a smaller\n'
-                             '      // input, so it alone advances the backoff the '
-                             'service receives.\n'
-                             '      compressSpy.mockResolvedValueOnce(\n'
-                             '        '
-                             'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                             '      );\n'
-                             "      await consumeSend('truncated-1');\n"
-                             '      '
-                             'expect(compressSpy.mock.calls[0][1].truncationBackoff).toBe(0);\n'
-                             '\n'
-                             '      // Non-truncation failures are sampler or endpoint '
-                             'flukes; shrinking\n'
-                             '      // the input does not target them, so the backoff '
-                             'must not move.\n'
-                             '      compressSpy.mockResolvedValueOnce(\n'
-                             '        '
-                             'failure(CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT),\n'
-                             '      );\n'
-                             "      await consumeSend('inflated');\n"
-                             '      '
-                             'expect(compressSpy.mock.calls[1][1].truncationBackoff).toBe(1);\n'
-                             '\n'
-                             '      compressSpy.mockResolvedValueOnce(\n'
-                             '        '
-                             'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                             '      );\n'
-                             "      await consumeSend('truncated-2');\n"
-                             '      '
-                             'expect(compressSpy.mock.calls[2][1].truncationBackoff).toBe(1);\n'
-                             '\n'
-                             '      // Any committed compaction proves the budget fits '
-                             'again.\n'
-                             '      compressSpy.mockResolvedValueOnce({\n'
-                             '        newHistory: [\n'
-                             "          { role: 'user', parts: [{ text: 'summary' }] "
-                             '},\n'
-                             "          { role: 'model', parts: [{ text: 'ack' }] },\n"
-                             '        ],\n'
-                             '        info: {\n'
-                             '          originalTokenCount: 100_000,\n'
-                             '          newTokenCount: 30_000,\n'
-                             '          compressionStatus: '
-                             'CompressionStatus.COMPRESSED,\n'
-                             '        },\n'
-                             '      });\n'
-                             "      await chat.tryCompress('prompt-reset-force', "
-                             'true);\n'
-                             '      '
-                             'expect(compressSpy.mock.calls[3][1].truncationBackoff).toBe(2);\n'
-                             '\n'
-                             '      '
-                             'compressSpy.mockResolvedValueOnce(failure(CompressionStatus.NOOP));\n'
-                             "      await consumeSend('after-reset');\n"
-                             '      '
-                             'expect(compressSpy.mock.calls[4][1].truncationBackoff).toBe(0);\n'
-                             '    });\n'
-                             '\n'
                              "    it('reactively compresses and retries once after a "
                              "context overflow error', async () => {\n"
                              '      const compressedHistory: Content[] = [\n'
                              "        { role: 'user', parts: [{ text: 'summary' }] },\n"
-                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"},
+                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                             "        { role: 'user', parts: [{ text: 'latest' }] },\n"
+                             '      ];\n'},
             {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-7',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      );\n'
@@ -17407,7 +16919,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        .mockResolvedValueOnce({\n'},
             {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-9',
              'path': 'packages/core/src/core/geminiChat.test.ts',
-             'before': '      );\n'
+             'before': "        'prompt-id-after-reactive-failed-latch',\n"
+                       '      );\n'
                        '      for await (const _ of nextStream) {\n'
                        '        /* consume */\n'
                        '      }\n'
@@ -17432,23 +16945,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '      const overflow = new Error(\n'
                        "        'prompt is too long: 135000 tokens > 128000 maximum',\n"
                        '      );\n',
-             'after': '      );\n'
+             'after': "        'prompt-id-after-reactive-failed-latch',\n"
+                      '      );\n'
                       '      for await (const _ of nextStream) {\n'
                       '        /* consume */\n'
                       '      }\n'
                       '\n'
+                      '      // A reactive failure latches nothing: the next send '
+                      'simply attempts\n'
+                      '      // again. The breaker that used to count strikes here '
+                      'suppressed\n'
+                      '      // retries while the context grew, which is how a '
+                      'recoverable state\n'
+                      '      // became a dead session.\n'
                       '      expect(compressSpy).toHaveBeenCalledTimes(3);\n'
-                      '      // A non-truncation reactive failure is a fluke, not a '
-                      'workload\n'
-                      '      // signal: the next send retries at full budget with '
-                      'nothing latched.\n'
-                      '      // The breaker that used to count strikes here suppressed '
-                      'retries\n'
-                      '      // while the context grew, which is how a recoverable '
-                      'state became a\n'
-                      '      // dead session.\n'
-                      '      '
-                      'expect(compressSpy.mock.calls[2][1].truncationBackoff).toBe(0);\n'
                       '    });\n'
                       '\n'
                       "    it('releases the send-lock when reactive compression "
@@ -17456,7 +16966,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      const overflow = new Error(\n'
                       "        'prompt is too long: 135000 tokens > 128000 maximum',\n"
                       '      );\n',
-             'review_before': '      );\n'
+             'review_before': "        'prompt-id-after-reactive-failed-latch',\n"
+                              '      );\n'
                               '      for await (const _ of nextStream) {\n'
                               '        /* consume */\n'
                               '      }\n'
@@ -17482,23 +16993,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               "        'prompt is too long: 135000 tokens > 128000 "
                               "maximum',\n"
                               '      );\n',
-             'review_after': '      );\n'
+             'review_after': "        'prompt-id-after-reactive-failed-latch',\n"
+                             '      );\n'
                              '      for await (const _ of nextStream) {\n'
                              '        /* consume */\n'
                              '      }\n'
                              '\n'
+                             '      // A reactive failure latches nothing: the next '
+                             'send simply attempts\n'
+                             '      // again. The breaker that used to count strikes '
+                             'here suppressed\n'
+                             '      // retries while the context grew, which is how a '
+                             'recoverable state\n'
+                             '      // became a dead session.\n'
                              '      expect(compressSpy).toHaveBeenCalledTimes(3);\n'
-                             '      // A non-truncation reactive failure is a fluke, '
-                             'not a workload\n'
-                             '      // signal: the next send retries at full budget '
-                             'with nothing latched.\n'
-                             '      // The breaker that used to count strikes here '
-                             'suppressed retries\n'
-                             '      // while the context grew, which is how a '
-                             'recoverable state became a\n'
-                             '      // dead session.\n'
-                             '      '
-                             'expect(compressSpy.mock.calls[2][1].truncationBackoff).toBe(0);\n'
                              '    });\n'
                              '\n'
                              "    it('releases the send-lock when reactive compression "
@@ -17546,15 +17054,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'crosses\n'
                       '  // `computeThresholds(window).hard`, sendMessageStream forces '
                       'a snapshot\n'
-                      '  // attempt on that very send, falls back to deterministic '
-                      'microcompaction\n'
-                      '  // if the attempt cannot shrink the prompt, and refuses the '
-                      'send only when\n'
-                      '  // both fail — an oversized prompt must never reach the wire, '
-                      'and a\n'
-                      '  // rescue must never be skipped, because nothing above this '
-                      'tier can\n'
-                      '  // shrink the context.\n'
+                      '  // attempt on that very send and refuses the send if it '
+                      'cannot shrink the\n'
+                      '  // prompt — an oversized prompt must never reach the wire, '
+                      'and a rescue\n'
+                      '  // must never be skipped, because nothing above this tier can '
+                      'shrink the\n'
+                      '  // context.\n'
                       "  describe('sendMessageStream hard-tier rescue', () => {\n"
                       '    function makeStreamResponse(\n'
                       "      text = 'ok',\n"
@@ -17600,15 +17106,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'crosses\n'
                              '  // `computeThresholds(window).hard`, sendMessageStream '
                              'forces a snapshot\n'
-                             '  // attempt on that very send, falls back to '
-                             'deterministic microcompaction\n'
-                             '  // if the attempt cannot shrink the prompt, and '
-                             'refuses the send only when\n'
-                             '  // both fail — an oversized prompt must never reach '
-                             'the wire, and a\n'
-                             '  // rescue must never be skipped, because nothing above '
-                             'this tier can\n'
-                             '  // shrink the context.\n'
+                             '  // attempt on that very send and refuses the send if '
+                             'it cannot shrink the\n'
+                             '  // prompt — an oversized prompt must never reach the '
+                             'wire, and a rescue\n'
+                             '  // must never be skipped, because nothing above this '
+                             'tier can shrink the\n'
+                             '  // context.\n'
                              "  describe('sendMessageStream hard-tier rescue', () => "
                              '{\n'
                              '    function makeStreamResponse(\n'
@@ -17729,7 +17233,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "          'prompt-id-oversized-after-compression-and-user',\n"
                       '        ),\n'
                       '      ).rejects.toThrow(/Estimated prompt tokens: 178000; hard '
-                      'limit: 164936/i);\n'
+                      'limit: 147848/i);\n'
                       '\n'
                       '      '
                       'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
@@ -17768,7 +17272,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'prompt-id-oversized-after-compression-and-user',\n"
                              '        ),\n'
                              '      ).rejects.toThrow(/Estimated prompt tokens: '
-                             '178000; hard limit: 164936/i);\n'
+                             '178000; hard limit: 147848/i);\n'
                              '\n'
                              '      '
                              'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
@@ -17802,7 +17306,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          ],\n'
                       '          info: {\n'
                       '            originalTokenCount: 180_000,\n'
-                      '            newTokenCount: 160_000,\n'
+                      '            newTokenCount: 140_000,\n'
                       '            compressionStatus: CompressionStatus.COMPRESSED,\n'
                       '          },\n'
                       '        });\n'
@@ -17835,7 +17339,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ],\n'
                              '          info: {\n'
                              '            originalTokenCount: 180_000,\n'
-                             '            newTokenCount: 160_000,\n'
+                             '            newTokenCount: 140_000,\n'
                              '            compressionStatus: '
                              'CompressionStatus.COMPRESSED,\n'
                              '          },\n'
@@ -17870,7 +17374,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      );\n'
                       '      expect(recordChatCompression).toHaveBeenCalledTimes(1);\n'
                       '      '
-                      'expect(chatWithRecording.getLastPromptTokenCount()).toBe(160_000);\n'
+                      'expect(chatWithRecording.getLastPromptTokenCount()).toBe(140_000);\n'
                       '    });\n'
                       '\n'
                       "    it('includes previous response output tokens in the "
@@ -17906,7 +17410,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      '
                              'expect(recordChatCompression).toHaveBeenCalledTimes(1);\n'
                              '      '
-                             'expect(chatWithRecording.getLastPromptTokenCount()).toBe(160_000);\n'
+                             'expect(chatWithRecording.getLastPromptTokenCount()).toBe(140_000);\n'
                              '    });\n'
                              '\n'
                              "    it('includes previous response output tokens in the "
@@ -17938,9 +17442,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      vi.mocked(mockContentGenerator.generateContentStream)\n'
                       '        .mockResolvedValueOnce(\n'
                       "          makeStreamResponse('first', {\n"
-                      '            promptTokenCount: 164_000,\n'
+                      '            promptTokenCount: 146_912,\n'
                       '            candidatesTokenCount: 1_500,\n'
-                      '            totalTokenCount: 165_500,\n'
+                      '            totalTokenCount: 148_412,\n'
                       '          }),\n'
                       '        )\n'
                       "        .mockResolvedValueOnce(makeStreamResponse('after "
@@ -17976,9 +17480,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.mocked(mockContentGenerator.generateContentStream)\n'
                              '        .mockResolvedValueOnce(\n'
                              "          makeStreamResponse('first', {\n"
-                             '            promptTokenCount: 164_000,\n'
+                             '            promptTokenCount: 146_912,\n'
                              '            candidatesTokenCount: 1_500,\n'
-                             '            totalTokenCount: 165_500,\n'
+                             '            totalTokenCount: 148_412,\n'
                              '          }),\n'
                              '        )\n'
                              "        .mockResolvedValueOnce(makeStreamResponse('after "
@@ -18015,13 +17519,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      expect(compressSpy.mock.calls[0][1].force).toBe(false);\n'
                       "      // Without the previous response's 1,500 output tokens "
                       'the estimate is\n'
-                      '      // 164,00x — below the 164,936 hard tier; including them '
+                      '      // 146,91x — below the 147,848 hard tier; including them '
                       'crosses it.\n'
                       '      expect(compressSpy.mock.calls[1][1].force).toBe(true);\n'
                       '      expect(\n'
                       '        '
                       'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                      '      ).toBeGreaterThanOrEqual(164_936);\n'
+                      '      ).toBeGreaterThanOrEqual(147_848);\n'
                       '    });\n'
                       '\n'
                       "    it('does not double-count output tokens when prompt count "
@@ -18058,14 +17562,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'expect(compressSpy.mock.calls[0][1].force).toBe(false);\n'
                              "      // Without the previous response's 1,500 output "
                              'tokens the estimate is\n'
-                             '      // 164,00x — below the 164,936 hard tier; '
+                             '      // 146,91x — below the 147,848 hard tier; '
                              'including them crosses it.\n'
                              '      '
                              'expect(compressSpy.mock.calls[1][1].force).toBe(true);\n'
                              '      expect(\n'
                              '        '
                              'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                             '      ).toBeGreaterThanOrEqual(164_936);\n'
+                             '      ).toBeGreaterThanOrEqual(147_848);\n'
                              '    });\n'
                              '\n'
                              "    it('does not double-count output tokens when prompt "
@@ -18094,7 +17598,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        .mockResolvedValueOnce(\n'
                       "          makeStreamResponse('first', {\n"
                       '            candidatesTokenCount: 1_500,\n'
-                      '            totalTokenCount: 164_000,\n'
+                      '            totalTokenCount: 146_912,\n'
                       '          }),\n'
                       '        )\n'
                       "        .mockResolvedValueOnce(makeStreamResponse('second'));\n"
@@ -18124,7 +17628,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        .mockResolvedValueOnce(\n'
                              "          makeStreamResponse('first', {\n"
                              '            candidatesTokenCount: 1_500,\n'
-                             '            totalTokenCount: 164_000,\n'
+                             '            totalTokenCount: 146_912,\n'
                              '          }),\n'
                              '        )\n'
                              '        '
@@ -18159,15 +17663,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      }\n'
                       '\n'
                       '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
-                      '      // The 164,000 total already contains the 1,500 '
+                      '      // The 146,912 total already contains the 1,500 '
                       'candidates; adding\n'
-                      '      // them again would read 165,50x and cross the 164,936 '
+                      '      // them again would read 148,41x and cross the 147,848 '
                       'hard tier.\n'
                       '      expect(compressSpy.mock.calls[1][1].force).toBe(false);\n'
                       '      expect(\n'
                       '        '
                       'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                      '      ).toBeLessThan(164_936);\n'
+                      '      ).toBeLessThan(147_848);\n'
                       '    });\n'
                       '\n'
                       "    it('includes previous response thought tokens in the "
@@ -18200,16 +17704,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      }\n'
                              '\n'
                              '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
-                             '      // The 164,000 total already contains the 1,500 '
+                             '      // The 146,912 total already contains the 1,500 '
                              'candidates; adding\n'
-                             '      // them again would read 165,50x and cross the '
-                             '164,936 hard tier.\n'
+                             '      // them again would read 148,41x and cross the '
+                             '147,848 hard tier.\n'
                              '      '
                              'expect(compressSpy.mock.calls[1][1].force).toBe(false);\n'
                              '      expect(\n'
                              '        '
                              'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                             '      ).toBeLessThan(164_936);\n'
+                             '      ).toBeLessThan(147_848);\n'
                              '    });\n'
                              '\n'
                              "    it('includes previous response thought tokens in the "
@@ -18242,10 +17746,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      vi.mocked(mockContentGenerator.generateContentStream)\n'
                       '        .mockResolvedValueOnce(\n'
                       "          makeStreamResponse('first', {\n"
-                      '            promptTokenCount: 164_000,\n'
+                      '            promptTokenCount: 146_912,\n'
                       '            candidatesTokenCount: 500,\n'
                       '            thoughtsTokenCount: 1_000,\n'
-                      '            totalTokenCount: 165_500,\n'
+                      '            totalTokenCount: 148_412,\n'
                       '          }),\n'
                       '        )\n'
                       "        .mockResolvedValueOnce(makeStreamResponse('after "
@@ -18282,10 +17786,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.mocked(mockContentGenerator.generateContentStream)\n'
                              '        .mockResolvedValueOnce(\n'
                              "          makeStreamResponse('first', {\n"
-                             '            promptTokenCount: 164_000,\n'
+                             '            promptTokenCount: 146_912,\n'
                              '            candidatesTokenCount: 500,\n'
                              '            thoughtsTokenCount: 1_000,\n'
-                             '            totalTokenCount: 165_500,\n'
+                             '            totalTokenCount: 148_412,\n'
                              '          }),\n'
                              '        )\n'
                              "        .mockResolvedValueOnce(makeStreamResponse('after "
@@ -18318,7 +17822,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      expect(\n'
                       '        '
                       'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                      '      ).toBeGreaterThanOrEqual(164_936);\n'
+                      '      ).toBeGreaterThanOrEqual(147_848);\n'
                       '    });\n'
                       '\n'
                       "    it('includes disjoint candidate and thought tokens when "
@@ -18350,7 +17854,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      expect(\n'
                              '        '
                              'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                             '      ).toBeGreaterThanOrEqual(164_936);\n'
+                             '      ).toBeGreaterThanOrEqual(147_848);\n'
                              '    });\n'
                              '\n'
                              "    it('includes disjoint candidate and thought tokens "
@@ -18380,7 +17884,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      vi.mocked(mockContentGenerator.generateContentStream)\n'
                       '        .mockResolvedValueOnce(\n'
                       "          makeStreamResponse('first', {\n"
-                      '            promptTokenCount: 164_000,\n'
+                      '            promptTokenCount: 146_912,\n'
                       '            candidatesTokenCount: 1_200,\n'
                       '            thoughtsTokenCount: 300,\n'
                       '          }),\n'
@@ -18413,7 +17917,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.mocked(mockContentGenerator.generateContentStream)\n'
                              '        .mockResolvedValueOnce(\n'
                              "          makeStreamResponse('first', {\n"
-                             '            promptTokenCount: 164_000,\n'
+                             '            promptTokenCount: 146_912,\n'
                              '            candidatesTokenCount: 1_200,\n'
                              '            thoughtsTokenCount: 300,\n'
                              '          }),\n'
@@ -18467,7 +17971,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      expect(\n'
                       '        '
                       'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                      '      ).toBeGreaterThanOrEqual(164_936);\n'
+                      '      ).toBeGreaterThanOrEqual(147_848);\n'
                       '    });\n'
                       '\n'
                       "    it('does not double-count OpenAI-compatible reasoning "
@@ -18479,18 +17983,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      compressSpy.mockResolvedValue({\n'
                       '        newHistory: null,\n'
                       '        info: {\n'
-                      '          originalTokenCount: 164_900,\n'
-                      '          newTokenCount: 164_900,\n'
+                      '          originalTokenCount: 147_812,\n'
+                      '          newTokenCount: 147_812,\n'
                       '          compressionStatus: CompressionStatus.NOOP,\n'
                       '        },\n'
                       '      });\n'
                       '      vi.mocked(mockContentGenerator.generateContentStream)\n'
                       '        .mockResolvedValueOnce(\n'
                       "          makeStreamResponse('first', {\n"
-                      '            promptTokenCount: 163_900,\n'
+                      '            promptTokenCount: 146_812,\n'
                       '            candidatesTokenCount: 1_000,\n'
                       '            thoughtsTokenCount: 500,\n'
-                      '            totalTokenCount: 164_900,\n'
+                      '            totalTokenCount: 147_812,\n'
                       '          }),\n'
                       '        )\n'
                       "        .mockResolvedValueOnce(makeStreamResponse('second'));\n"
@@ -18547,7 +18051,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      expect(\n'
                              '        '
                              'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                             '      ).toBeGreaterThanOrEqual(164_936);\n'
+                             '      ).toBeGreaterThanOrEqual(147_848);\n'
                              '    });\n'
                              '\n'
                              "    it('does not double-count OpenAI-compatible "
@@ -18560,8 +18064,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      compressSpy.mockResolvedValue({\n'
                              '        newHistory: null,\n'
                              '        info: {\n'
-                             '          originalTokenCount: 164_900,\n'
-                             '          newTokenCount: 164_900,\n'
+                             '          originalTokenCount: 147_812,\n'
+                             '          newTokenCount: 147_812,\n'
                              '          compressionStatus: CompressionStatus.NOOP,\n'
                              '        },\n'
                              '      });\n'
@@ -18569,10 +18073,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.mocked(mockContentGenerator.generateContentStream)\n'
                              '        .mockResolvedValueOnce(\n'
                              "          makeStreamResponse('first', {\n"
-                             '            promptTokenCount: 163_900,\n'
+                             '            promptTokenCount: 146_812,\n'
                              '            candidatesTokenCount: 1_000,\n'
                              '            thoughtsTokenCount: 500,\n'
-                             '            totalTokenCount: 164_900,\n'
+                             '            totalTokenCount: 147_812,\n'
                              '          }),\n'
                              '        )\n'
                              '        '
@@ -18609,13 +18113,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
                       '      // total == prompt + candidates proves thoughts are '
                       'inside candidates;\n'
-                      '      // adding the 500 again would read 165,4xx and cross the '
+                      '      // adding the 500 again would read 148,3xx and cross the '
                       'hard tier.\n'
                       '      expect(compressSpy.mock.calls[1][1].force).toBe(false);\n'
                       '      expect(\n'
                       '        '
                       'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                      '      ).toBeLessThan(164_936);\n'
+                      '      ).toBeLessThan(147_848);\n'
                       '    });\n'
                       '\n'
                       "    it('resets previous response output tokens when seeding "
@@ -18651,14 +18155,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
                              '      // total == prompt + candidates proves thoughts '
                              'are inside candidates;\n'
-                             '      // adding the 500 again would read 165,4xx and '
+                             '      // adding the 500 again would read 148,3xx and '
                              'cross the hard tier.\n'
                              '      '
                              'expect(compressSpy.mock.calls[1][1].force).toBe(false);\n'
                              '      expect(\n'
                              '        '
                              'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                             '      ).toBeLessThan(164_936);\n'
+                             '      ).toBeLessThan(147_848);\n'
                              '    });\n'
                              '\n'
                              "    it('resets previous response output tokens when "
@@ -18704,7 +18208,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        /* consume */\n'
                       '      }\n'
                       '\n'
-                      '      chat.setLastPromptTokenCount(160_000);\n'
+                      '      chat.setLastPromptTokenCount(142_912);\n'
                       '      const secondStream = await chat.sendMessageStream(\n'
                       "        'test-model',\n"
                       "        { message: 'seeded follow-up' },\n"
@@ -18717,12 +18221,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
                       '      // A stale 5,000-token lastOutput carried past the '
                       'external seed would\n'
-                      '      // read 165,0xx and cross the 164,936 hard tier.\n'
+                      '      // read 147,91x and cross the 147,848 hard tier.\n'
                       '      expect(compressSpy.mock.calls[1][1].force).toBe(false);\n'
                       '      expect(\n'
                       '        '
                       'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                      '      ).toBeLessThan(164_936);\n'
+                      '      ).toBeLessThan(147_848);\n'
                       '    });\n'
                       '\n'
                       "    it('resets previous response output tokens after successful "
@@ -18767,7 +18271,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        /* consume */\n'
                              '      }\n'
                              '\n'
-                             '      chat.setLastPromptTokenCount(160_000);\n'
+                             '      chat.setLastPromptTokenCount(142_912);\n'
                              '      const secondStream = await '
                              'chat.sendMessageStream(\n'
                              "        'test-model',\n"
@@ -18781,13 +18285,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
                              '      // A stale 5,000-token lastOutput carried past the '
                              'external seed would\n'
-                             '      // read 165,0xx and cross the 164,936 hard tier.\n'
+                             '      // read 147,91x and cross the 147,848 hard tier.\n'
                              '      '
                              'expect(compressSpy.mock.calls[1][1].force).toBe(false);\n'
                              '      expect(\n'
                              '        '
                              'compressSpy.mock.calls[1][1].precomputedEffectiveTokens,\n'
-                             '      ).toBeLessThan(164_936);\n'
+                             '      ).toBeLessThan(147_848);\n'
                              '    });\n'
                              '\n'
                              "    it('resets previous response output tokens after "
@@ -19122,168 +18626,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(\n'
                       '        1,\n'
                       '      );\n'
-                      '    });\n'
-                      '\n'
-                      "    it('falls back to deterministic microcompaction when the "
-                      "snapshot attempt cannot shrink a hard-tier send', async () => "
-                      '{\n'
-                      "      vi.stubEnv('QWEN_MC_KEEP_RECENT', '1');\n"
-                      '      try {\n'
-                      '        // Tool results dominate a working history; clearing '
-                      'the old ones is\n'
-                      '        // the one shrink that needs no model in the loop and '
-                      'so cannot fail\n'
-                      '        // the way a sampled snapshot can.\n'
-                      "        const fatOutput = 'y'.repeat(400_000);\n"
-                      '        const history: Content[] = [\n'
-                      "          { role: 'user', parts: [{ text: 'task' }] },\n"
-                      '          {\n'
-                      "            role: 'model',\n"
-                      '            parts: [\n'
-                      "              { functionCall: { id: 'r1', name: 'read_file', "
-                      'args: {} } },\n'
-                      '            ],\n'
-                      '          },\n'
-                      '          {\n'
-                      "            role: 'user',\n"
-                      '            parts: [\n'
-                      '              {\n'
-                      '                functionResponse: {\n'
-                      "                  id: 'r1',\n"
-                      "                  name: 'read_file',\n"
-                      '                  response: { output: fatOutput },\n'
-                      '                },\n'
-                      '              },\n'
-                      '            ],\n'
-                      '          },\n'
-                      '          {\n'
-                      "            role: 'model',\n"
-                      '            parts: [\n'
-                      "              { functionCall: { id: 'r2', name: 'read_file', "
-                      'args: {} } },\n'
-                      '            ],\n'
-                      '          },\n'
-                      '          {\n'
-                      "            role: 'user',\n"
-                      '            parts: [\n'
-                      '              {\n'
-                      '                functionResponse: {\n'
-                      "                  id: 'r2',\n"
-                      "                  name: 'read_file',\n"
-                      '                  response: { output: fatOutput },\n'
-                      '                },\n'
-                      '              },\n'
-                      '            ],\n'
-                      '          },\n'
-                      "          { role: 'model', parts: [{ text: 'still working' }] "
-                      '},\n'
-                      '        ];\n'
-                      '        const recordChatCompression = vi.fn();\n'
-                      '        const chatWithRecording = new GeminiChat(\n'
-                      '          mockConfig,\n'
-                      '          config,\n'
-                      '          history,\n'
-                      '          {\n'
-                      '            recordAssistantTurn: vi.fn(),\n'
-                      '            recordChatCompression,\n'
-                      '          } as unknown as ConstructorParameters<typeof '
-                      'GeminiChat>[3],\n'
-                      '          uiTelemetryService,\n'
-                      '        );\n'
-                      '        chatWithRecording.setLastPromptTokenCount(176_999);\n'
-                      '\n'
-                      '        const compressSpy = vi\n'
-                      "          .spyOn(ChatCompressionService.prototype, 'compress')\n"
-                      '          .mockResolvedValueOnce({\n'
-                      '            newHistory: null,\n'
-                      '            info: {\n'
-                      '              originalTokenCount: 178_000,\n'
-                      '              newTokenCount: 178_000,\n'
-                      '              compressionStatus:\n'
-                      '                '
-                      'CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,\n'
-                      '            },\n'
-                      '          });\n'
-                      '        '
-                      'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
-                      "          makeStreamResponse('sent on degraded memory'),\n"
-                      '        );\n'
-                      '\n'
-                      '        const stream = await '
-                      'chatWithRecording.sendMessageStream(\n'
-                      "          'test-model',\n"
-                      "          { message: 'keep going' },\n"
-                      "          'prompt-hard-rescue-fast-floor',\n"
-                      '        );\n'
-                      '        const events: StreamEvent[] = [];\n'
-                      '        for await (const event of stream) {\n'
-                      '          events.push(event);\n'
-                      '        }\n'
-                      '\n'
-                      '        // The send proceeded: clearing the older fat tool '
-                      'result dropped the\n'
-                      '        // estimate below the hard tier, so the session '
-                      'continues on honest,\n'
-                      '        // degraded memory instead of dying on a sampler '
-                      'failure.\n'
-                      '        expect(compressSpy).toHaveBeenCalledTimes(1);\n'
-                      '        '
-                      'expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(\n'
-                      '          1,\n'
-                      '        );\n'
-                      '        const compactions = events.filter(\n'
-                      '          (event) => event.type === '
-                      'StreamEventType.COMPACTION,\n'
-                      '        );\n'
-                      '        expect(compactions).toHaveLength(2);\n'
-                      '        expect(\n'
-                      '          (compactions[0] as { record: { status: string } '
-                      '}).record.status,\n'
-                      "        ).toBe('COMPRESSION_FAILED_OUTPUT_TRUNCATED');\n"
-                      '        expect(\n'
-                      '          (compactions[1] as { record: { succeeded: boolean } '
-                      '}).record\n'
-                      '            .succeeded,\n'
-                      '        ).toBe(true);\n'
-                      '        const compressed = events.filter(\n'
-                      '          (event) => event.type === '
-                      'StreamEventType.COMPRESSED,\n'
-                      '        );\n'
-                      '        expect(compressed).toHaveLength(1);\n'
-                      '        expect(\n'
-                      '          (compressed[0] as { info: { triggerReason?: string } '
-                      '}).info\n'
-                      '            .triggerReason,\n'
-                      "        ).toBe('hard_limit_fallback');\n"
-                      '        // Persistence was deferred until the recount proved '
-                      'the send could\n'
-                      '        // proceed, then written exactly once for the '
-                      'fallback.\n'
-                      '        '
-                      'expect(recordChatCompression).toHaveBeenCalledTimes(1);\n'
-                      '        expect(\n'
-                      '          '
-                      'recordChatCompression.mock.calls[0][0].info.triggerReason,\n'
-                      "        ).toBe('hard_limit_fallback');\n"
-                      '        // The cleared slot keeps its functionResponse shape so '
-                      'the tool\n'
-                      '        // transaction stays paired.\n'
-                      '        const cleared = chatWithRecording\n'
-                      '          .getHistory()\n'
-                      '          .find((content) =>\n'
-                      '            content.parts?.some(\n'
-                      '              (part) =>\n'
-                      "                part.functionResponse?.id === 'r1' &&\n"
-                      '                JSON.stringify(part.functionResponse?.response '
-                      '?? {}).includes(\n'
-                      "                  'cleared',\n"
-                      '                ),\n'
-                      '            ),\n'
-                      '          );\n'
-                      '        expect(cleared).toBeDefined();\n'
-                      '      } finally {\n'
-                      '        vi.unstubAllEnvs();\n'
-                      '      }\n'
                       '    });\n'
                       '\n'
                       "    it('propagates a thrown snapshot attempt on every hard-tier "
@@ -19673,172 +19015,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '    });\n'
                              '\n'
-                             "    it('falls back to deterministic microcompaction when "
-                             "the snapshot attempt cannot shrink a hard-tier send', "
-                             'async () => {\n'
-                             "      vi.stubEnv('QWEN_MC_KEEP_RECENT', '1');\n"
-                             '      try {\n'
-                             '        // Tool results dominate a working history; '
-                             'clearing the old ones is\n'
-                             '        // the one shrink that needs no model in the '
-                             'loop and so cannot fail\n'
-                             '        // the way a sampled snapshot can.\n'
-                             "        const fatOutput = 'y'.repeat(400_000);\n"
-                             '        const history: Content[] = [\n'
-                             "          { role: 'user', parts: [{ text: 'task' }] },\n"
-                             '          {\n'
-                             "            role: 'model',\n"
-                             '            parts: [\n'
-                             "              { functionCall: { id: 'r1', name: "
-                             "'read_file', args: {} } },\n"
-                             '            ],\n'
-                             '          },\n'
-                             '          {\n'
-                             "            role: 'user',\n"
-                             '            parts: [\n'
-                             '              {\n'
-                             '                functionResponse: {\n'
-                             "                  id: 'r1',\n"
-                             "                  name: 'read_file',\n"
-                             '                  response: { output: fatOutput },\n'
-                             '                },\n'
-                             '              },\n'
-                             '            ],\n'
-                             '          },\n'
-                             '          {\n'
-                             "            role: 'model',\n"
-                             '            parts: [\n'
-                             "              { functionCall: { id: 'r2', name: "
-                             "'read_file', args: {} } },\n"
-                             '            ],\n'
-                             '          },\n'
-                             '          {\n'
-                             "            role: 'user',\n"
-                             '            parts: [\n'
-                             '              {\n'
-                             '                functionResponse: {\n'
-                             "                  id: 'r2',\n"
-                             "                  name: 'read_file',\n"
-                             '                  response: { output: fatOutput },\n'
-                             '                },\n'
-                             '              },\n'
-                             '            ],\n'
-                             '          },\n'
-                             "          { role: 'model', parts: [{ text: 'still "
-                             "working' }] },\n"
-                             '        ];\n'
-                             '        const recordChatCompression = vi.fn();\n'
-                             '        const chatWithRecording = new GeminiChat(\n'
-                             '          mockConfig,\n'
-                             '          config,\n'
-                             '          history,\n'
-                             '          {\n'
-                             '            recordAssistantTurn: vi.fn(),\n'
-                             '            recordChatCompression,\n'
-                             '          } as unknown as ConstructorParameters<typeof '
-                             'GeminiChat>[3],\n'
-                             '          uiTelemetryService,\n'
-                             '        );\n'
-                             '        '
-                             'chatWithRecording.setLastPromptTokenCount(176_999);\n'
-                             '\n'
-                             '        const compressSpy = vi\n'
-                             '          .spyOn(ChatCompressionService.prototype, '
-                             "'compress')\n"
-                             '          .mockResolvedValueOnce({\n'
-                             '            newHistory: null,\n'
-                             '            info: {\n'
-                             '              originalTokenCount: 178_000,\n'
-                             '              newTokenCount: 178_000,\n'
-                             '              compressionStatus:\n'
-                             '                '
-                             'CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,\n'
-                             '            },\n'
-                             '          });\n'
-                             '        '
-                             'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
-                             "          makeStreamResponse('sent on degraded "
-                             "memory'),\n"
-                             '        );\n'
-                             '\n'
-                             '        const stream = await '
-                             'chatWithRecording.sendMessageStream(\n'
-                             "          'test-model',\n"
-                             "          { message: 'keep going' },\n"
-                             "          'prompt-hard-rescue-fast-floor',\n"
-                             '        );\n'
-                             '        const events: StreamEvent[] = [];\n'
-                             '        for await (const event of stream) {\n'
-                             '          events.push(event);\n'
-                             '        }\n'
-                             '\n'
-                             '        // The send proceeded: clearing the older fat '
-                             'tool result dropped the\n'
-                             '        // estimate below the hard tier, so the session '
-                             'continues on honest,\n'
-                             '        // degraded memory instead of dying on a sampler '
-                             'failure.\n'
-                             '        expect(compressSpy).toHaveBeenCalledTimes(1);\n'
-                             '        '
-                             'expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(\n'
-                             '          1,\n'
-                             '        );\n'
-                             '        const compactions = events.filter(\n'
-                             '          (event) => event.type === '
-                             'StreamEventType.COMPACTION,\n'
-                             '        );\n'
-                             '        expect(compactions).toHaveLength(2);\n'
-                             '        expect(\n'
-                             '          (compactions[0] as { record: { status: string '
-                             '} }).record.status,\n'
-                             "        ).toBe('COMPRESSION_FAILED_OUTPUT_TRUNCATED');\n"
-                             '        expect(\n'
-                             '          (compactions[1] as { record: { succeeded: '
-                             'boolean } }).record\n'
-                             '            .succeeded,\n'
-                             '        ).toBe(true);\n'
-                             '        const compressed = events.filter(\n'
-                             '          (event) => event.type === '
-                             'StreamEventType.COMPRESSED,\n'
-                             '        );\n'
-                             '        expect(compressed).toHaveLength(1);\n'
-                             '        expect(\n'
-                             '          (compressed[0] as { info: { triggerReason?: '
-                             'string } }).info\n'
-                             '            .triggerReason,\n'
-                             "        ).toBe('hard_limit_fallback');\n"
-                             '        // Persistence was deferred until the recount '
-                             'proved the send could\n'
-                             '        // proceed, then written exactly once for the '
-                             'fallback.\n'
-                             '        '
-                             'expect(recordChatCompression).toHaveBeenCalledTimes(1);\n'
-                             '        expect(\n'
-                             '          '
-                             'recordChatCompression.mock.calls[0][0].info.triggerReason,\n'
-                             "        ).toBe('hard_limit_fallback');\n"
-                             '        // The cleared slot keeps its functionResponse '
-                             'shape so the tool\n'
-                             '        // transaction stays paired.\n'
-                             '        const cleared = chatWithRecording\n'
-                             '          .getHistory()\n'
-                             '          .find((content) =>\n'
-                             '            content.parts?.some(\n'
-                             '              (part) =>\n'
-                             "                part.functionResponse?.id === 'r1' &&\n"
-                             '                '
-                             'JSON.stringify(part.functionResponse?.response ?? '
-                             '{}).includes(\n'
-                             "                  'cleared',\n"
-                             '                ),\n'
-                             '            ),\n'
-                             '          );\n'
-                             '        expect(cleared).toBeDefined();\n'
-                             '      } finally {\n'
-                             '        vi.unstubAllEnvs();\n'
-                             '      }\n'
-                             '    });\n'
-                             '\n'
                              "    it('propagates a thrown snapshot attempt on every "
                              "hard-tier send instead of swallowing it', async () => {\n"
                              "      const compressionError = new Error('compression "
@@ -20007,7 +19183,31 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        newHistory: null,\n'
                        '        info: {\n'
                        '          originalTokenCount: 40_000,\n'
-                       '          newTokenCount: 40_000,\n',
+                       '          newTokenCount: 40_000,\n'
+                       '          compressionStatus: CompressionStatus.NOOP,\n'
+                       '        },\n'
+                       '      });\n'
+                       '      chat.setLastPromptTokenCount(50_000);\n'
+                       '      const followUpStream = await chat.sendMessageStream(\n'
+                       "        'test-model',\n"
+                       "        { message: 'after recovery' },\n"
+                       "        'prompt-hard-rescue-after-recovery',\n"
+                       '      );\n'
+                       '      for await (const _ of followUpStream) {\n'
+                       '        /* consume */\n'
+                       '      }\n'
+                       '      '
+                       'expect(compressSpy.mock.calls[0][1].consecutiveFailures).toBe(0);\n'
+                       '      expect(compressSpy.mock.calls[0][1].force).toBe(false);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('does not force when tokens are below hard threshold "
+                       "(normal auto path)', async () => {\n"
+                       '      const compressSpy = vi\n'
+                       "        .spyOn(ChatCompressionService.prototype, 'compress')\n"
+                       '        .mockResolvedValueOnce({\n'
+                       '          newHistory: null,\n'
+                       '          info: {\n',
              'after': '\n'
                       '      expect(estimatePromptTokens(history, userMessage, 0, '
                       '9999)).toBe(\n'
@@ -20015,82 +19215,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      );\n'
                       '    });\n'
                       '\n'
-                      "    it('forwards the truncation backoff into hard-tier attempts "
-                      "and resets it on the committed rescue', async () => {\n"
-                      '      const compressSpy = vi.spyOn(\n'
-                      '        ChatCompressionService.prototype,\n'
-                      "        'compress',\n"
-                      '      );\n'
-                      '\n'
-                      '      // Two hard-tier truncations: each attempt sees the '
-                      'strikes banked so\n'
-                      '      // far, so its summary input is halved relative to the '
-                      'attempt that\n'
-                      '      // overflowed — the retry ladder moves even though '
-                      'force=true.\n'
-                      '      compressSpy.mockResolvedValue({\n'
-                      '        newHistory: null,\n'
-                      '        info: {\n'
-                      '          originalTokenCount: 178_000,\n'
-                      '          newTokenCount: 178_000,\n'
-                      '          compressionStatus:\n'
-                      '            '
-                      'CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,\n'
-                      '        },\n'
-                      '      });\n'
-                      '      chat.setLastPromptTokenCount(176_999);\n'
-                      '      for (let i = 0; i < 2; i++) {\n'
-                      '        await expect(\n'
-                      '          chat.sendMessageStream(\n'
-                      "            'test-model',\n"
-                      '            { message: `truncated-rescue-${i}` },\n'
-                      '            `prompt-backoff-forward-${i}`,\n'
-                      '          ),\n'
-                      '        ).rejects.toThrow(\n'
-                      '          /compression status: '
-                      'COMPRESSION_FAILED_OUTPUT_TRUNCATED/i,\n'
-                      '        );\n'
-                      '        expect(compressSpy.mock.calls[i][1].force).toBe(true);\n'
-                      '        '
-                      'expect(compressSpy.mock.calls[i][1].truncationBackoff).toBe(i);\n'
-                      '      }\n'
-                      '\n'
-                      '      // The committed rescue clears the strikes: the next '
-                      'attempt runs at\n'
-                      '      // full budget again.\n'
-                      '      compressSpy.mockClear();\n'
-                      '      compressSpy.mockResolvedValueOnce({\n'
-                      '        newHistory: [\n'
-                      "          { role: 'user', parts: [{ text: 'summary' }] },\n"
-                      "          { role: 'model', parts: [{ text: 'ack' }] },\n"
-                      '        ],\n'
-                      '        info: {\n'
-                      '          originalTokenCount: 178_000,\n'
-                      '          newTokenCount: 40_000,\n'
-                      '          compressionStatus: CompressionStatus.COMPRESSED,\n'
-                      '        },\n'
-                      '      });\n'
-                      '      '
-                      'vi.mocked(mockContentGenerator.generateContentStream).mockImplementation(\n'
-                      "        async () => makeStreamResponse('after rescue'),\n"
-                      '      );\n'
-                      '      const rescueStream = await chat.sendMessageStream(\n'
-                      "        'test-model',\n"
-                      "        { message: 'rescue me' },\n"
-                      "        'prompt-backoff-reset-rescue',\n"
-                      '      );\n'
-                      '      for await (const _ of rescueStream) {\n'
-                      '        /* consume */\n'
-                      '      }\n'
-                      '      '
-                      'expect(compressSpy.mock.calls[0][1].truncationBackoff).toBe(2);\n'
-                      '\n'
-                      '      compressSpy.mockClear();\n'
-                      '      compressSpy.mockResolvedValueOnce({\n'
-                      '        newHistory: null,\n'
-                      '        info: {\n'
-                      '          originalTokenCount: 40_000,\n'
-                      '          newTokenCount: 40_000,\n',
+                      "    it('does not force when tokens are below hard threshold "
+                      "(normal auto path)', async () => {\n"
+                      '      const compressSpy = vi\n'
+                      "        .spyOn(ChatCompressionService.prototype, 'compress')\n"
+                      '        .mockResolvedValueOnce({\n'
+                      '          newHistory: null,\n'
+                      '          info: {\n',
              'review_before': '\n'
                               '      expect(estimatePromptTokens(history, userMessage, '
                               '0, 9999)).toBe(\n'
@@ -20231,139 +19362,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        newHistory: null,\n'
                               '        info: {\n'
                               '          originalTokenCount: 40_000,\n'
-                              '          newTokenCount: 40_000,\n',
-             'review_after': '\n'
-                             '      expect(estimatePromptTokens(history, userMessage, '
-                             '0, 9999)).toBe(\n'
-                             '        estimateContentTokens([...history, '
-                             'userMessage]),\n'
-                             '      );\n'
-                             '    });\n'
-                             '\n'
-                             "    it('forwards the truncation backoff into hard-tier "
-                             "attempts and resets it on the committed rescue', async "
-                             '() => {\n'
-                             '      const compressSpy = vi.spyOn(\n'
-                             '        ChatCompressionService.prototype,\n'
-                             "        'compress',\n"
-                             '      );\n'
-                             '\n'
-                             '      // Two hard-tier truncations: each attempt sees '
-                             'the strikes banked so\n'
-                             '      // far, so its summary input is halved relative to '
-                             'the attempt that\n'
-                             '      // overflowed — the retry ladder moves even though '
-                             'force=true.\n'
-                             '      compressSpy.mockResolvedValue({\n'
-                             '        newHistory: null,\n'
-                             '        info: {\n'
-                             '          originalTokenCount: 178_000,\n'
-                             '          newTokenCount: 178_000,\n'
-                             '          compressionStatus:\n'
-                             '            '
-                             'CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,\n'
-                             '        },\n'
-                             '      });\n'
-                             '      chat.setLastPromptTokenCount(176_999);\n'
-                             '      for (let i = 0; i < 2; i++) {\n'
-                             '        await expect(\n'
-                             '          chat.sendMessageStream(\n'
-                             "            'test-model',\n"
-                             '            { message: `truncated-rescue-${i}` },\n'
-                             '            `prompt-backoff-forward-${i}`,\n'
-                             '          ),\n'
-                             '        ).rejects.toThrow(\n'
-                             '          /compression status: '
-                             'COMPRESSION_FAILED_OUTPUT_TRUNCATED/i,\n'
-                             '        );\n'
-                             '        '
-                             'expect(compressSpy.mock.calls[i][1].force).toBe(true);\n'
-                             '        '
-                             'expect(compressSpy.mock.calls[i][1].truncationBackoff).toBe(i);\n'
-                             '      }\n'
-                             '\n'
-                             '      // The committed rescue clears the strikes: the '
-                             'next attempt runs at\n'
-                             '      // full budget again.\n'
-                             '      compressSpy.mockClear();\n'
-                             '      compressSpy.mockResolvedValueOnce({\n'
-                             '        newHistory: [\n'
-                             "          { role: 'user', parts: [{ text: 'summary' }] "
-                             '},\n'
-                             "          { role: 'model', parts: [{ text: 'ack' }] },\n"
-                             '        ],\n'
-                             '        info: {\n'
-                             '          originalTokenCount: 178_000,\n'
-                             '          newTokenCount: 40_000,\n'
-                             '          compressionStatus: '
-                             'CompressionStatus.COMPRESSED,\n'
-                             '        },\n'
-                             '      });\n'
-                             '      '
-                             'vi.mocked(mockContentGenerator.generateContentStream).mockImplementation(\n'
-                             "        async () => makeStreamResponse('after rescue'),\n"
-                             '      );\n'
-                             '      const rescueStream = await '
-                             'chat.sendMessageStream(\n'
-                             "        'test-model',\n"
-                             "        { message: 'rescue me' },\n"
-                             "        'prompt-backoff-reset-rescue',\n"
-                             '      );\n'
-                             '      for await (const _ of rescueStream) {\n'
-                             '        /* consume */\n'
-                             '      }\n'
-                             '      '
-                             'expect(compressSpy.mock.calls[0][1].truncationBackoff).toBe(2);\n'
-                             '\n'
-                             '      compressSpy.mockClear();\n'
-                             '      compressSpy.mockResolvedValueOnce({\n'
-                             '        newHistory: null,\n'
-                             '        info: {\n'
-                             '          originalTokenCount: 40_000,\n'
-                             '          newTokenCount: 40_000,\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-27',
-             'path': 'packages/core/src/core/geminiChat.test.ts',
-             'before': '        },\n'
-                       '      });\n'
-                       '      chat.setLastPromptTokenCount(50_000);\n'
-                       '      const followUpStream = await chat.sendMessageStream(\n'
-                       "        'test-model',\n"
-                       "        { message: 'after recovery' },\n"
-                       "        'prompt-hard-rescue-after-recovery',\n"
-                       '      );\n'
-                       '      for await (const _ of followUpStream) {\n'
-                       '        /* consume */\n'
-                       '      }\n'
-                       '      '
-                       'expect(compressSpy.mock.calls[0][1].consecutiveFailures).toBe(0);\n'
-                       '      expect(compressSpy.mock.calls[0][1].force).toBe(false);\n'
-                       '    });\n'
-                       '\n'
-                       "    it('does not force when tokens are below hard threshold "
-                       "(normal auto path)', async () => {\n"
-                       '      const compressSpy = vi\n'
-                       "        .spyOn(ChatCompressionService.prototype, 'compress')\n",
-             'after': '        },\n'
-                      '      });\n'
-                      '      chat.setLastPromptTokenCount(50_000);\n'
-                      '      const followUpStream = await chat.sendMessageStream(\n'
-                      "        'test-model',\n"
-                      "        { message: 'after recovery' },\n"
-                      "        'prompt-backoff-after-recovery',\n"
-                      '      );\n'
-                      '      for await (const _ of followUpStream) {\n'
-                      '        /* consume */\n'
-                      '      }\n'
-                      '      '
-                      'expect(compressSpy.mock.calls[0][1].truncationBackoff).toBe(0);\n'
-                      '      expect(compressSpy.mock.calls[0][1].force).toBe(false);\n'
-                      '    });\n'
-                      '\n'
-                      "    it('does not force when tokens are below hard threshold "
-                      "(normal auto path)', async () => {\n"
-                      '      const compressSpy = vi\n'
-                      "        .spyOn(ChatCompressionService.prototype, 'compress')\n",
-             'review_before': '        },\n'
+                              '          newTokenCount: 40_000,\n'
+                              '          compressionStatus: CompressionStatus.NOOP,\n'
+                              '        },\n'
                               '      });\n'
                               '      chat.setLastPromptTokenCount(50_000);\n'
                               '      const followUpStream = await '
@@ -20385,31 +19386,27 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               "threshold (normal auto path)', async () => {\n"
                               '      const compressSpy = vi\n'
                               '        .spyOn(ChatCompressionService.prototype, '
-                              "'compress')\n",
-             'review_after': '        },\n'
-                             '      });\n'
-                             '      chat.setLastPromptTokenCount(50_000);\n'
-                             '      const followUpStream = await '
-                             'chat.sendMessageStream(\n'
-                             "        'test-model',\n"
-                             "        { message: 'after recovery' },\n"
-                             "        'prompt-backoff-after-recovery',\n"
+                              "'compress')\n"
+                              '        .mockResolvedValueOnce({\n'
+                              '          newHistory: null,\n'
+                              '          info: {\n',
+             'review_after': '\n'
+                             '      expect(estimatePromptTokens(history, userMessage, '
+                             '0, 9999)).toBe(\n'
+                             '        estimateContentTokens([...history, '
+                             'userMessage]),\n'
                              '      );\n'
-                             '      for await (const _ of followUpStream) {\n'
-                             '        /* consume */\n'
-                             '      }\n'
-                             '      '
-                             'expect(compressSpy.mock.calls[0][1].truncationBackoff).toBe(0);\n'
-                             '      '
-                             'expect(compressSpy.mock.calls[0][1].force).toBe(false);\n'
                              '    });\n'
                              '\n'
                              "    it('does not force when tokens are below hard "
                              "threshold (normal auto path)', async () => {\n"
                              '      const compressSpy = vi\n'
                              '        .spyOn(ChatCompressionService.prototype, '
-                             "'compress')\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-28',
+                             "'compress')\n"
+                             '        .mockResolvedValueOnce({\n'
+                             '          newHistory: null,\n'
+                             '          info: {\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-27',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
                        '      expect(compressSpy.mock.calls[0][1].force).toBe(false);\n'
@@ -20459,16 +19456,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "maxOutputTokens to the room left (issue #5950)', async () => {\n"
                       '      // claude-sonnet-4-6 has a 65,536 output limit, clipped '
                       'to the 64K\n'
-                      '      // ceiling. With the old reservation, a 160K prompt on a '
+                      '      // ceiling. With the old reservation, a 140K prompt on a '
                       '200K window\n'
                       '      // would have hard-rescued (hard was ~111K); with '
                       'full-window\n'
-                      '      // thresholds hard = 164,936, so this send takes the '
+                      '      // thresholds hard = 147,848, so this send takes the '
                       'normal cheap-gate\n'
                       '      // path — and the outgoing request is window-clamped '
                       'instead:\n'
-                      '      // maxOutputTokens = 200000 − ~160001 − 10000 (margin) ≈ '
-                      '30K.\n'
+                      '      // maxOutputTokens = 200000 − ~140001 − 10000 (margin) ≈ '
+                      '50K.\n'
                       '      '
                       'vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({\n'
                       '        authType: AuthType.USE_GEMINI,\n'
@@ -20481,8 +19478,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        .mockResolvedValueOnce({\n'
                       '          newHistory: null,\n'
                       '          info: {\n'
-                      '            originalTokenCount: 160_000,\n'
-                      '            newTokenCount: 160_000,\n'
+                      '            originalTokenCount: 140_000,\n'
+                      '            newTokenCount: 140_000,\n'
                       '            compressionStatus: CompressionStatus.NOOP,\n'
                       '          },\n'
                       '        });\n'
@@ -20542,16 +19539,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '() => {\n'
                              '      // claude-sonnet-4-6 has a 65,536 output limit, '
                              'clipped to the 64K\n'
-                             '      // ceiling. With the old reservation, a 160K '
+                             '      // ceiling. With the old reservation, a 140K '
                              'prompt on a 200K window\n'
                              '      // would have hard-rescued (hard was ~111K); with '
                              'full-window\n'
-                             '      // thresholds hard = 164,936, so this send takes '
+                             '      // thresholds hard = 147,848, so this send takes '
                              'the normal cheap-gate\n'
                              '      // path — and the outgoing request is '
                              'window-clamped instead:\n'
-                             '      // maxOutputTokens = 200000 − ~160001 − 10000 '
-                             '(margin) ≈ 30K.\n'
+                             '      // maxOutputTokens = 200000 − ~140001 − 10000 '
+                             '(margin) ≈ 50K.\n'
                              '      '
                              'vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({\n'
                              '        authType: AuthType.USE_GEMINI,\n'
@@ -20565,8 +19562,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        .mockResolvedValueOnce({\n'
                              '          newHistory: null,\n'
                              '          info: {\n'
-                             '            originalTokenCount: 160_000,\n'
-                             '            newTokenCount: 160_000,\n'
+                             '            originalTokenCount: 140_000,\n'
+                             '            newTokenCount: 140_000,\n'
                              '            compressionStatus: CompressionStatus.NOOP,\n'
                              '          },\n'
                              '        });\n'
@@ -20574,7 +19571,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
                              "        makeStreamResponse('clamped response'),\n"
                              '      );\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-29',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-28',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '        mockConfig,\n'
                        '        config,\n'
@@ -20625,7 +19622,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        undefined,\n'
                       '        uiTelemetryService,\n'
                       '      );\n'
-                      '      chatInstance.setLastPromptTokenCount(160_000);\n'
+                      '      chatInstance.setLastPromptTokenCount(140_000);\n'
                       '\n'
                       '      const stream = await chatInstance.sendMessageStream(\n'
                       "        'claude-sonnet-4-6',\n"
@@ -20636,7 +19633,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        /* consume */\n'
                       '      }\n'
                       '\n'
-                      '      // Full-window thresholds: 160K < hard (164,936) → '
+                      '      // Full-window thresholds: 140K < hard (147,848) → '
                       'cheap-gate, not rescue.\n'
                       '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
                       '      expect(compressSpy.mock.calls[0][1].force).toBe(false);\n'
@@ -20645,14 +19642,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'the window:\n'
                       '      // char/4("hi") = 1 token, inflated by the conservative '
                       'safety factor\n'
-                      "      // (1.5x, ceil'd) to 2, estimate = 160,000 + 2,\n"
-                      '      // room = 200,000 − 160,002 − 10,000.\n'
+                      "      // (1.5x, ceil'd) to 2, estimate = 140,000 + 2,\n"
+                      '      // room = 200,000 − 140,002 − 10,000.\n'
                       '      const requestConfig = vi.mocked(\n'
                       '        mockContentGenerator.generateContentStream,\n'
                       '      ).mock.calls[0][0].config as { maxOutputTokens?: number '
                       '};\n'
-                      '      expect(requestConfig.maxOutputTokens).toBe(29_998);\n'
-                      '      expect(160_000 + '
+                      '      expect(requestConfig.maxOutputTokens).toBe(49_998);\n'
+                      '      expect(140_000 + '
                       'requestConfig.maxOutputTokens!).toBeLessThanOrEqual(\n'
                       '        200_000,\n'
                       '      );\n'
@@ -20714,7 +19711,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        undefined,\n'
                              '        uiTelemetryService,\n'
                              '      );\n'
-                             '      chatInstance.setLastPromptTokenCount(160_000);\n'
+                             '      chatInstance.setLastPromptTokenCount(140_000);\n'
                              '\n'
                              '      const stream = await '
                              'chatInstance.sendMessageStream(\n'
@@ -20726,7 +19723,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        /* consume */\n'
                              '      }\n'
                              '\n'
-                             '      // Full-window thresholds: 160K < hard (164,936) → '
+                             '      // Full-window thresholds: 140K < hard (147,848) → '
                              'cheap-gate, not rescue.\n'
                              '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
                              '      '
@@ -20736,15 +19733,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'left in the window:\n'
                              '      // char/4("hi") = 1 token, inflated by the '
                              'conservative safety factor\n'
-                             "      // (1.5x, ceil'd) to 2, estimate = 160,000 + 2,\n"
-                             '      // room = 200,000 − 160,002 − 10,000.\n'
+                             "      // (1.5x, ceil'd) to 2, estimate = 140,000 + 2,\n"
+                             '      // room = 200,000 − 140,002 − 10,000.\n'
                              '      const requestConfig = vi.mocked(\n'
                              '        mockContentGenerator.generateContentStream,\n'
                              '      ).mock.calls[0][0].config as { maxOutputTokens?: '
                              'number };\n'
                              '      '
-                             'expect(requestConfig.maxOutputTokens).toBe(29_998);\n'
-                             '      expect(160_000 + '
+                             'expect(requestConfig.maxOutputTokens).toBe(49_998);\n'
+                             '      expect(140_000 + '
                              'requestConfig.maxOutputTokens!).toBeLessThanOrEqual(\n'
                              '        200_000,\n'
                              '      );\n'
@@ -20754,7 +19751,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "room (unknown model → 32K)', async () => {\n"
                              '      '
                              'vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-30',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-29',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      const requestConfig = vi.mocked(\n'
                        '        mockContentGenerator.generateContentStream,\n'
@@ -20983,9 +19980,88 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "        model: 'test-model',\n"
                              '        contextWindowSize: 40_000,\n'
                              '      });\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-31',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-30',
              'path': 'packages/core/src/core/geminiChat.test.ts',
-             'before': '        ).not.toHaveBeenCalled();\n'
+             'before': "    it('should retry on invalid content, succeed, and report "
+                       "metrics', async () => {\n"
+                       '      vi.useFakeTimers();\n'
+                       '      try {\n'
+                       '        // Use mockImplementationOnce to provide a fresh, '
+                       'promise-wrapped generator for each attempt.\n'
+                       '        vi.mocked(mockContentGenerator.generateContentStream)\n'
+                       '          .mockImplementationOnce(async () =>\n'
+                       '            // First call returns an invalid stream\n'
+                       '            (async function* () {\n'
+                       '              yield {\n'
+                       "                candidates: [{ content: { parts: [{ text: '' "
+                       '}] } }], // Invalid empty text part\n'
+                       '              } as unknown as GenerateContentResponse;\n'
+                       '            })(),\n'
+                       '          )\n'
+                       '          .mockImplementationOnce(async () =>\n'
+                       '            // Second call returns a valid stream\n'
+                       '            (async function* () {\n'
+                       '              yield {\n'
+                       '                candidates: [\n'
+                       '                  {\n'
+                       "                    content: { parts: [{ text: 'Successful "
+                       "response' }] },\n"
+                       "                    finishReason: 'STOP',\n"
+                       '                  },\n'
+                       '                ],\n'
+                       '              } as unknown as GenerateContentResponse;\n'
+                       '            })(),\n'
+                       '          );\n'
+                       '\n'
+                       '        const stream = await chat.sendMessageStream(\n'
+                       "          'test-model',\n"
+                       "          { message: 'test' },\n"
+                       "          'prompt-id-retry-success',\n"
+                       '        );\n'
+                       '        const chunks = await '
+                       'collectStreamWithFakeTimers(stream);\n'
+                       '\n'
+                       '        // Assertions\n'
+                       '        expect(mockLogContentRetry).toHaveBeenCalledTimes(1);\n'
+                       '        '
+                       'expect(mockLogContentRetryFailure).not.toHaveBeenCalled();\n'
+                       '        expect(\n'
+                       '          mockContentGenerator.generateContentStream,\n'
+                       '        ).toHaveBeenCalledTimes(2);\n'
+                       '\n'
+                       '        // Check for a retry event\n'
+                       '        expect(chunks.some((c) => c.type === '
+                       'StreamEventType.RETRY)).toBe(true);\n'
+                       '\n'
+                       '        // Check for the successful content chunk\n'
+                       '        expect(\n'
+                       '          chunks.some(\n'
+                       '            (c) =>\n'
+                       '              c.type === StreamEventType.CHUNK &&\n'
+                       '              '
+                       'c.value.candidates?.[0]?.content?.parts?.[0]?.text ===\n'
+                       "                'Successful response',\n"
+                       '          ),\n'
+                       '        ).toBe(true);\n'
+                       '\n'
+                       '        // Check that history was recorded correctly once, '
+                       'with no duplicates.\n'
+                       '        const history = chat.getHistory();\n'
+                       '        expect(history.length).toBe(2);\n'
+                       '        expect(history[0]).toEqual({\n'
+                       "          role: 'user',\n"
+                       "          parts: [{ text: 'test' }],\n"
+                       '        });\n'
+                       '        expect(history[1]).toEqual({\n'
+                       "          role: 'model',\n"
+                       "          parts: [{ text: 'Successful response' }],\n"
+                       '        });\n'
+                       '\n'
+                       '        // Verify that token counting is not called when '
+                       'usageMetadata is missing\n'
+                       '        expect(\n'
+                       '          uiTelemetryService.setLastPromptTokenCount,\n'
+                       '        ).not.toHaveBeenCalled();\n'
                        '      } finally {\n'
                        '        vi.useRealTimers();\n'
                        '      }\n'
@@ -20998,7 +20074,86 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        vi.mocked(\n'
                        '          mockContentGenerator.generateContentStream,\n'
                        '        ).mockImplementation(async () =>\n',
-             'after': '        ).not.toHaveBeenCalled();\n'
+             'after': "    it('should retry on invalid content, succeed, and report "
+                      "metrics', async () => {\n"
+                      '      vi.useFakeTimers();\n'
+                      '      try {\n'
+                      '        // Use mockImplementationOnce to provide a fresh, '
+                      'promise-wrapped generator for each attempt.\n'
+                      '        vi.mocked(mockContentGenerator.generateContentStream)\n'
+                      '          .mockImplementationOnce(async () =>\n'
+                      '            // First call returns an invalid stream\n'
+                      '            (async function* () {\n'
+                      '              yield {\n'
+                      "                candidates: [{ content: { parts: [{ text: '' }] "
+                      '} }], // Invalid empty text part\n'
+                      '              } as unknown as GenerateContentResponse;\n'
+                      '            })(),\n'
+                      '          )\n'
+                      '          .mockImplementationOnce(async () =>\n'
+                      '            // Second call returns a valid stream\n'
+                      '            (async function* () {\n'
+                      '              yield {\n'
+                      '                candidates: [\n'
+                      '                  {\n'
+                      "                    content: { parts: [{ text: 'Successful "
+                      "response' }] },\n"
+                      "                    finishReason: 'STOP',\n"
+                      '                  },\n'
+                      '                ],\n'
+                      '              } as unknown as GenerateContentResponse;\n'
+                      '            })(),\n'
+                      '          );\n'
+                      '\n'
+                      '        const stream = await chat.sendMessageStream(\n'
+                      "          'test-model',\n"
+                      "          { message: 'test' },\n"
+                      "          'prompt-id-retry-success',\n"
+                      '        );\n'
+                      '        const chunks = await '
+                      'collectStreamWithFakeTimers(stream);\n'
+                      '\n'
+                      '        // Assertions\n'
+                      '        expect(mockLogContentRetry).toHaveBeenCalledTimes(1);\n'
+                      '        '
+                      'expect(mockLogContentRetryFailure).not.toHaveBeenCalled();\n'
+                      '        expect(\n'
+                      '          mockContentGenerator.generateContentStream,\n'
+                      '        ).toHaveBeenCalledTimes(2);\n'
+                      '\n'
+                      '        // Check for a retry event\n'
+                      '        expect(chunks.some((c) => c.type === '
+                      'StreamEventType.RETRY)).toBe(true);\n'
+                      '\n'
+                      '        // Check for the successful content chunk\n'
+                      '        expect(\n'
+                      '          chunks.some(\n'
+                      '            (c) =>\n'
+                      '              c.type === StreamEventType.CHUNK &&\n'
+                      '              '
+                      'c.value.candidates?.[0]?.content?.parts?.[0]?.text ===\n'
+                      "                'Successful response',\n"
+                      '          ),\n'
+                      '        ).toBe(true);\n'
+                      '\n'
+                      '        // Check that history was recorded correctly once, with '
+                      'no duplicates.\n'
+                      '        const history = chat.getHistory();\n'
+                      '        expect(history.length).toBe(2);\n'
+                      '        expect(history[0]).toEqual({\n'
+                      "          role: 'user',\n"
+                      "          parts: [{ text: 'test' }],\n"
+                      '        });\n'
+                      '        expect(history[1]).toEqual({\n'
+                      "          role: 'model',\n"
+                      "          parts: [{ text: 'Successful response' }],\n"
+                      '        });\n'
+                      '\n'
+                      '        // Verify that token counting is not called when '
+                      'usageMetadata is missing\n'
+                      '        expect(\n'
+                      '          uiTelemetryService.setLastPromptTokenCount,\n'
+                      '        ).not.toHaveBeenCalled();\n'
                       '      } finally {\n'
                       '        vi.useRealTimers();\n'
                       '      }\n'
@@ -21242,7 +20397,88 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        vi.mocked(\n'
                       '          mockContentGenerator.generateContentStream,\n'
                       '        ).mockImplementation(async () =>\n',
-             'review_before': '        ).not.toHaveBeenCalled();\n'
+             'review_before': "    it('should retry on invalid content, succeed, and "
+                              "report metrics', async () => {\n"
+                              '      vi.useFakeTimers();\n'
+                              '      try {\n'
+                              '        // Use mockImplementationOnce to provide a '
+                              'fresh, promise-wrapped generator for each attempt.\n'
+                              '        '
+                              'vi.mocked(mockContentGenerator.generateContentStream)\n'
+                              '          .mockImplementationOnce(async () =>\n'
+                              '            // First call returns an invalid stream\n'
+                              '            (async function* () {\n'
+                              '              yield {\n'
+                              '                candidates: [{ content: { parts: [{ '
+                              "text: '' }] } }], // Invalid empty text part\n"
+                              '              } as unknown as GenerateContentResponse;\n'
+                              '            })(),\n'
+                              '          )\n'
+                              '          .mockImplementationOnce(async () =>\n'
+                              '            // Second call returns a valid stream\n'
+                              '            (async function* () {\n'
+                              '              yield {\n'
+                              '                candidates: [\n'
+                              '                  {\n'
+                              '                    content: { parts: [{ text: '
+                              "'Successful response' }] },\n"
+                              "                    finishReason: 'STOP',\n"
+                              '                  },\n'
+                              '                ],\n'
+                              '              } as unknown as GenerateContentResponse;\n'
+                              '            })(),\n'
+                              '          );\n'
+                              '\n'
+                              '        const stream = await chat.sendMessageStream(\n'
+                              "          'test-model',\n"
+                              "          { message: 'test' },\n"
+                              "          'prompt-id-retry-success',\n"
+                              '        );\n'
+                              '        const chunks = await '
+                              'collectStreamWithFakeTimers(stream);\n'
+                              '\n'
+                              '        // Assertions\n'
+                              '        '
+                              'expect(mockLogContentRetry).toHaveBeenCalledTimes(1);\n'
+                              '        '
+                              'expect(mockLogContentRetryFailure).not.toHaveBeenCalled();\n'
+                              '        expect(\n'
+                              '          mockContentGenerator.generateContentStream,\n'
+                              '        ).toHaveBeenCalledTimes(2);\n'
+                              '\n'
+                              '        // Check for a retry event\n'
+                              '        expect(chunks.some((c) => c.type === '
+                              'StreamEventType.RETRY)).toBe(true);\n'
+                              '\n'
+                              '        // Check for the successful content chunk\n'
+                              '        expect(\n'
+                              '          chunks.some(\n'
+                              '            (c) =>\n'
+                              '              c.type === StreamEventType.CHUNK &&\n'
+                              '              '
+                              'c.value.candidates?.[0]?.content?.parts?.[0]?.text ===\n'
+                              "                'Successful response',\n"
+                              '          ),\n'
+                              '        ).toBe(true);\n'
+                              '\n'
+                              '        // Check that history was recorded correctly '
+                              'once, with no duplicates.\n'
+                              '        const history = chat.getHistory();\n'
+                              '        expect(history.length).toBe(2);\n'
+                              '        expect(history[0]).toEqual({\n'
+                              "          role: 'user',\n"
+                              "          parts: [{ text: 'test' }],\n"
+                              '        });\n'
+                              '        expect(history[1]).toEqual({\n'
+                              "          role: 'model',\n"
+                              "          parts: [{ text: 'Successful response' }],\n"
+                              '        });\n'
+                              '\n'
+                              '        // Verify that token counting is not called '
+                              'when usageMetadata is missing\n'
+                              '        expect(\n'
+                              '          uiTelemetryService.setLastPromptTokenCount,\n'
+                              '        ).not.toHaveBeenCalled();\n'
                               '      } finally {\n'
                               '        vi.useRealTimers();\n'
                               '      }\n'
@@ -21255,7 +20491,88 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        vi.mocked(\n'
                               '          mockContentGenerator.generateContentStream,\n'
                               '        ).mockImplementation(async () =>\n',
-             'review_after': '        ).not.toHaveBeenCalled();\n'
+             'review_after': "    it('should retry on invalid content, succeed, and "
+                             "report metrics', async () => {\n"
+                             '      vi.useFakeTimers();\n'
+                             '      try {\n'
+                             '        // Use mockImplementationOnce to provide a '
+                             'fresh, promise-wrapped generator for each attempt.\n'
+                             '        '
+                             'vi.mocked(mockContentGenerator.generateContentStream)\n'
+                             '          .mockImplementationOnce(async () =>\n'
+                             '            // First call returns an invalid stream\n'
+                             '            (async function* () {\n'
+                             '              yield {\n'
+                             '                candidates: [{ content: { parts: [{ '
+                             "text: '' }] } }], // Invalid empty text part\n"
+                             '              } as unknown as GenerateContentResponse;\n'
+                             '            })(),\n'
+                             '          )\n'
+                             '          .mockImplementationOnce(async () =>\n'
+                             '            // Second call returns a valid stream\n'
+                             '            (async function* () {\n'
+                             '              yield {\n'
+                             '                candidates: [\n'
+                             '                  {\n'
+                             '                    content: { parts: [{ text: '
+                             "'Successful response' }] },\n"
+                             "                    finishReason: 'STOP',\n"
+                             '                  },\n'
+                             '                ],\n'
+                             '              } as unknown as GenerateContentResponse;\n'
+                             '            })(),\n'
+                             '          );\n'
+                             '\n'
+                             '        const stream = await chat.sendMessageStream(\n'
+                             "          'test-model',\n"
+                             "          { message: 'test' },\n"
+                             "          'prompt-id-retry-success',\n"
+                             '        );\n'
+                             '        const chunks = await '
+                             'collectStreamWithFakeTimers(stream);\n'
+                             '\n'
+                             '        // Assertions\n'
+                             '        '
+                             'expect(mockLogContentRetry).toHaveBeenCalledTimes(1);\n'
+                             '        '
+                             'expect(mockLogContentRetryFailure).not.toHaveBeenCalled();\n'
+                             '        expect(\n'
+                             '          mockContentGenerator.generateContentStream,\n'
+                             '        ).toHaveBeenCalledTimes(2);\n'
+                             '\n'
+                             '        // Check for a retry event\n'
+                             '        expect(chunks.some((c) => c.type === '
+                             'StreamEventType.RETRY)).toBe(true);\n'
+                             '\n'
+                             '        // Check for the successful content chunk\n'
+                             '        expect(\n'
+                             '          chunks.some(\n'
+                             '            (c) =>\n'
+                             '              c.type === StreamEventType.CHUNK &&\n'
+                             '              '
+                             'c.value.candidates?.[0]?.content?.parts?.[0]?.text ===\n'
+                             "                'Successful response',\n"
+                             '          ),\n'
+                             '        ).toBe(true);\n'
+                             '\n'
+                             '        // Check that history was recorded correctly '
+                             'once, with no duplicates.\n'
+                             '        const history = chat.getHistory();\n'
+                             '        expect(history.length).toBe(2);\n'
+                             '        expect(history[0]).toEqual({\n'
+                             "          role: 'user',\n"
+                             "          parts: [{ text: 'test' }],\n"
+                             '        });\n'
+                             '        expect(history[1]).toEqual({\n'
+                             "          role: 'model',\n"
+                             "          parts: [{ text: 'Successful response' }],\n"
+                             '        });\n'
+                             '\n'
+                             '        // Verify that token counting is not called when '
+                             'usageMetadata is missing\n'
+                             '        expect(\n'
+                             '          uiTelemetryService.setLastPromptTokenCount,\n'
+                             '        ).not.toHaveBeenCalled();\n'
                              '      } finally {\n'
                              '        vi.useRealTimers();\n'
                              '      }\n'
@@ -21511,7 +20828,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        vi.mocked(\n'
                              '          mockContentGenerator.generateContentStream,\n'
                              '        ).mockImplementation(async () =>\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-32',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-31',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      redactStructuredOutputArgsForRecording(original);\n'
                        '      expect(original).toEqual(snapshot);\n'
@@ -21538,11 +20855,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '\n'
                       '  // Compression logic is tested in '
                       'chatCompressionService.test.ts; this\n'
-                      '  // suite covers per-chat state on GeminiChat: the truncation '
-                      'backoff,\n'
-                      '  // token-count mutation, history replacement, and conditional '
-                      'telemetry\n'
-                      '  // mirroring.\n'
+                      '  // suite covers per-chat state on GeminiChat: token-count '
+                      'mutation,\n'
+                      '  // history replacement, and conditional telemetry mirroring.\n'
                       "  describe('tryCompress (per-chat state)', () => {\n"
                       '    const userMsg = (text: string) => ({\n'
                       "      role: 'user' as const,\n"
@@ -21575,18 +20890,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '  // Compression logic is tested in '
                              'chatCompressionService.test.ts; this\n'
-                             '  // suite covers per-chat state on GeminiChat: the '
-                             'truncation backoff,\n'
-                             '  // token-count mutation, history replacement, and '
-                             'conditional telemetry\n'
-                             '  // mirroring.\n'
+                             '  // suite covers per-chat state on GeminiChat: '
+                             'token-count mutation,\n'
+                             '  // history replacement, and conditional telemetry '
+                             'mirroring.\n'
                              "  describe('tryCompress (per-chat state)', () => {\n"
                              '    const userMsg = (text: string) => ({\n'
                              "      role: 'user' as const,\n"
                              '      parts: [{ text }],\n'
                              '    });\n'
                              '    const modelMsg = (text: string) => ({\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-33',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-32',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': "      const info = await subagentChat.tryCompress('p3');\n"
                        '      '
@@ -21647,8 +20961,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'expect(uiTelemetryService.setLastPromptTokenCount).not.toHaveBeenCalled();\n'
                       '    });\n'
                       '\n'
-                      "    it('keeps the truncation backoff untouched by "
-                      "non-truncation failures', async () => {\n"
+                      "    it('latches nothing on a failure, so the next trigger "
+                      "attempts again', async () => {\n"
                       '      const compressSpy = '
                       "mockCompressionService('failed-inflated');\n"
                       '\n'
@@ -21659,12 +20973,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      );\n'
                       '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
                       '\n'
-                      '      // An inflated-count failure is not a truncation, so the '
-                      'next call\n'
-                      '      // still runs at full request budget. Only '
-                      'OUTPUT_TRUNCATED banks a\n'
-                      "      // strike — asserted in the 'compaction truncation "
-                      "backoff' suite.\n"
+                      '      // A failure latches nothing, so the next call attempts '
+                      'again.\n'
                       '      compressSpy.mockClear();\n'
                       '      compressSpy.mockResolvedValue({\n'
                       '        newHistory: null,\n'
@@ -21676,8 +20986,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      });\n'
                       "      await chat.tryCompress('p2');\n"
                       '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
-                      '      '
-                      'expect(compressSpy.mock.calls[0][1].truncationBackoff).toBe(0);\n'
                       '    });\n'
                       '\n'
                       "    it('forwards force=true to the compression service', async "
@@ -21749,8 +21057,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'expect(uiTelemetryService.setLastPromptTokenCount).not.toHaveBeenCalled();\n'
                              '    });\n'
                              '\n'
-                             "    it('keeps the truncation backoff untouched by "
-                             "non-truncation failures', async () => {\n"
+                             "    it('latches nothing on a failure, so the next "
+                             "trigger attempts again', async () => {\n"
                              '      const compressSpy = '
                              "mockCompressionService('failed-inflated');\n"
                              '\n'
@@ -21761,12 +21069,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
                              '\n'
-                             '      // An inflated-count failure is not a truncation, '
-                             'so the next call\n'
-                             '      // still runs at full request budget. Only '
-                             'OUTPUT_TRUNCATED banks a\n'
-                             "      // strike — asserted in the 'compaction truncation "
-                             "backoff' suite.\n"
+                             '      // A failure latches nothing, so the next call '
+                             'attempts again.\n'
                              '      compressSpy.mockClear();\n'
                              '      compressSpy.mockResolvedValue({\n'
                              '        newHistory: null,\n'
@@ -21778,8 +21082,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      });\n'
                              "      await chat.tryCompress('p2');\n"
                              '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
-                             '      '
-                             'expect(compressSpy.mock.calls[0][1].truncationBackoff).toBe(0);\n'
                              '    });\n'
                              '\n'
                              "    it('forwards force=true to the compression service', "
@@ -21788,7 +21090,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "mockCompressionService('compressed');\n"
                              '\n'
                              "      await chat.tryCompress('p1', true);\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-34',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-33',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '          info: expect.objectContaining({ '
                        'newTokenCountIsEstimated: true }),\n'
@@ -21972,7 +21274,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        "  describe('XML tool call fallback integration', () => {\n"
                        '    function xmlChunk(\n'
                        '      text: string,\n'
-                       '      finishReason?: string,\n',
+                       '      finishReason?: string,\n'
+                       '    ): GenerateContentResponse {\n'
+                       '      return {\n',
              'after': '          info: expect.objectContaining({ '
                       'newTokenCountIsEstimated: true }),\n'
                       '        }),\n'
@@ -21980,137 +21284,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    });\n'
                       '  });\n'
                       '\n'
-                      '  // The truncation backoff replaced the consecutive-failure '
-                      'circuit\n'
-                      '  // breaker. The breaker suppressed retries while the context '
-                      'kept growing,\n'
-                      '  // so every later attempt faced a larger history with the '
-                      'same budget;\n'
-                      "  // the backoff instead shrinks the next attempt's summary "
-                      'input, and only\n'
-                      '  // the failure whose remedy is a smaller input advances it.\n'
-                      "  describe('compaction truncation backoff', () => {\n"
-                      '    const userMsg = (text: string) => ({\n'
-                      "      role: 'user' as const,\n"
-                      '      parts: [{ text }],\n'
-                      '    });\n'
-                      '    const modelMsg = (text: string) => ({\n'
-                      "      role: 'model' as const,\n"
-                      '      parts: [{ text }],\n'
-                      '    });\n'
-                      '    const failure = (status: CompressionStatus) => ({\n'
-                      '      newHistory: null,\n'
-                      '      info: {\n'
-                      '        originalTokenCount: 100_000,\n'
-                      '        newTokenCount: 100_000,\n'
-                      '        compressionStatus: status,\n'
-                      '      },\n'
-                      '    });\n'
-                      '\n'
-                      "    it('advances one strike per truncated attempt, forced or "
-                      "not', async () => {\n"
-                      '      const compressSpy = vi.spyOn(\n'
-                      '        ChatCompressionService.prototype,\n'
-                      "        'compress',\n"
-                      '      );\n'
-                      '      compressSpy.mockResolvedValue(\n'
-                      '        '
-                      'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                      '      );\n'
-                      "      chat.setHistory([userMsg('a'), modelMsg('b'), "
-                      "userMsg('c')]);\n"
-                      '\n'
-                      '      // Reactive and hard-tier attempts run with force=true; a '
-                      'truncation\n'
-                      '      // there is the same workload signal as on the auto path, '
-                      'so force\n'
-                      '      // must not exempt it from the strike.\n'
-                      "      await chat.tryCompress('p0');\n"
-                      "      await chat.tryCompress('p1', true);\n"
-                      "      await chat.tryCompress('p2');\n"
-                      '      expect(\n'
-                      '        compressSpy.mock.calls.map(([, opts]) => '
-                      'opts.truncationBackoff),\n'
-                      '      ).toEqual([0, 1, 2]);\n'
-                      '    });\n'
-                      '\n'
-                      "    it('does not move on non-truncation failures', async () => "
-                      '{\n'
-                      '      // A refusal, protocol violation, or tokenizer outage is '
-                      'a fluke of a\n'
-                      '      // nondeterministic sampler or a transient endpoint; '
-                      'shrinking the\n'
-                      '      // input does not target it, and banking strikes for it '
-                      'would shrink\n'
-                      '      // future summaries for no reason.\n'
-                      '      const compressSpy = vi.spyOn(\n'
-                      '        ChatCompressionService.prototype,\n'
-                      "        'compress',\n"
-                      '      );\n'
-                      '      compressSpy\n'
-                      '        .mockResolvedValueOnce(\n'
-                      '          '
-                      'failure(CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY),\n'
-                      '        )\n'
-                      '        .mockResolvedValueOnce(\n'
-                      '          '
-                      'failure(CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT),\n'
-                      '        )\n'
-                      '        .mockResolvedValueOnce(\n'
-                      '          '
-                      'failure(CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR),\n'
-                      '        )\n'
-                      '        '
-                      '.mockResolvedValueOnce(failure(CompressionStatus.NOOP));\n'
-                      '      for (let i = 0; i < 4; i++) {\n'
-                      '        await chat.tryCompress(`p-other-${i}`);\n'
-                      '      }\n'
-                      '      expect(\n'
-                      '        compressSpy.mock.calls.map(([, opts]) => '
-                      'opts.truncationBackoff),\n'
-                      '      ).toEqual([0, 0, 0, 0]);\n'
-                      '    });\n'
-                      '\n'
-                      "    it('resets to zero on any committed compaction', async () "
-                      '=> {\n'
-                      '      const compressSpy = vi.spyOn(\n'
-                      '        ChatCompressionService.prototype,\n'
-                      "        'compress',\n"
-                      '      );\n'
-                      '      compressSpy\n'
-                      '        .mockResolvedValueOnce(\n'
-                      '          '
-                      'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                      '        )\n'
-                      '        .mockResolvedValueOnce(\n'
-                      '          '
-                      'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                      '        )\n'
-                      '        .mockResolvedValueOnce({\n'
-                      "          newHistory: [userMsg('summary'), modelMsg('ack')],\n"
-                      '          info: {\n'
-                      '            originalTokenCount: 100_000,\n'
-                      '            newTokenCount: 30_000,\n'
-                      '            compressionStatus: CompressionStatus.COMPRESSED,\n'
-                      '          },\n'
-                      '        })\n'
-                      '        '
-                      '.mockResolvedValueOnce(failure(CompressionStatus.NOOP));\n'
-                      '\n'
-                      "      await chat.tryCompress('p1');\n"
-                      "      await chat.tryCompress('p2');\n"
-                      "      await chat.tryCompress('p-success', true);\n"
-                      '      '
-                      'expect(compressSpy.mock.calls[2][1].truncationBackoff).toBe(2);\n'
-                      "      await chat.tryCompress('p-after');\n"
-                      '      '
-                      'expect(compressSpy.mock.calls[3][1].truncationBackoff).toBe(0);\n'
-                      '    });\n'
-                      '  });\n'
                       "  describe('XML tool call fallback integration', () => {\n"
                       '    function xmlChunk(\n'
                       '      text: string,\n'
-                      '      finishReason?: string,\n',
+                      '      finishReason?: string,\n'
+                      '    ): GenerateContentResponse {\n'
+                      '      return {\n',
              'review_before': '          info: expect.objectContaining({ '
                               'newTokenCountIsEstimated: true }),\n'
                               '        }),\n'
@@ -22302,7 +21481,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '{\n'
                               '    function xmlChunk(\n'
                               '      text: string,\n'
-                              '      finishReason?: string,\n',
+                              '      finishReason?: string,\n'
+                              '    ): GenerateContentResponse {\n'
+                              '      return {\n',
              'review_after': '          info: expect.objectContaining({ '
                              'newTokenCountIsEstimated: true }),\n'
                              '        }),\n'
@@ -22310,142 +21491,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    });\n'
                              '  });\n'
                              '\n'
-                             '  // The truncation backoff replaced the '
-                             'consecutive-failure circuit\n'
-                             '  // breaker. The breaker suppressed retries while the '
-                             'context kept growing,\n'
-                             '  // so every later attempt faced a larger history with '
-                             'the same budget;\n'
-                             "  // the backoff instead shrinks the next attempt's "
-                             'summary input, and only\n'
-                             '  // the failure whose remedy is a smaller input '
-                             'advances it.\n'
-                             "  describe('compaction truncation backoff', () => {\n"
-                             '    const userMsg = (text: string) => ({\n'
-                             "      role: 'user' as const,\n"
-                             '      parts: [{ text }],\n'
-                             '    });\n'
-                             '    const modelMsg = (text: string) => ({\n'
-                             "      role: 'model' as const,\n"
-                             '      parts: [{ text }],\n'
-                             '    });\n'
-                             '    const failure = (status: CompressionStatus) => ({\n'
-                             '      newHistory: null,\n'
-                             '      info: {\n'
-                             '        originalTokenCount: 100_000,\n'
-                             '        newTokenCount: 100_000,\n'
-                             '        compressionStatus: status,\n'
-                             '      },\n'
-                             '    });\n'
-                             '\n'
-                             "    it('advances one strike per truncated attempt, "
-                             "forced or not', async () => {\n"
-                             '      const compressSpy = vi.spyOn(\n'
-                             '        ChatCompressionService.prototype,\n'
-                             "        'compress',\n"
-                             '      );\n'
-                             '      compressSpy.mockResolvedValue(\n'
-                             '        '
-                             'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                             '      );\n'
-                             "      chat.setHistory([userMsg('a'), modelMsg('b'), "
-                             "userMsg('c')]);\n"
-                             '\n'
-                             '      // Reactive and hard-tier attempts run with '
-                             'force=true; a truncation\n'
-                             '      // there is the same workload signal as on the '
-                             'auto path, so force\n'
-                             '      // must not exempt it from the strike.\n'
-                             "      await chat.tryCompress('p0');\n"
-                             "      await chat.tryCompress('p1', true);\n"
-                             "      await chat.tryCompress('p2');\n"
-                             '      expect(\n'
-                             '        compressSpy.mock.calls.map(([, opts]) => '
-                             'opts.truncationBackoff),\n'
-                             '      ).toEqual([0, 1, 2]);\n'
-                             '    });\n'
-                             '\n'
-                             "    it('does not move on non-truncation failures', async "
-                             '() => {\n'
-                             '      // A refusal, protocol violation, or tokenizer '
-                             'outage is a fluke of a\n'
-                             '      // nondeterministic sampler or a transient '
-                             'endpoint; shrinking the\n'
-                             '      // input does not target it, and banking strikes '
-                             'for it would shrink\n'
-                             '      // future summaries for no reason.\n'
-                             '      const compressSpy = vi.spyOn(\n'
-                             '        ChatCompressionService.prototype,\n'
-                             "        'compress',\n"
-                             '      );\n'
-                             '      compressSpy\n'
-                             '        .mockResolvedValueOnce(\n'
-                             '          '
-                             'failure(CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY),\n'
-                             '        )\n'
-                             '        .mockResolvedValueOnce(\n'
-                             '          '
-                             'failure(CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT),\n'
-                             '        )\n'
-                             '        .mockResolvedValueOnce(\n'
-                             '          '
-                             'failure(CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR),\n'
-                             '        )\n'
-                             '        '
-                             '.mockResolvedValueOnce(failure(CompressionStatus.NOOP));\n'
-                             '      for (let i = 0; i < 4; i++) {\n'
-                             '        await chat.tryCompress(`p-other-${i}`);\n'
-                             '      }\n'
-                             '      expect(\n'
-                             '        compressSpy.mock.calls.map(([, opts]) => '
-                             'opts.truncationBackoff),\n'
-                             '      ).toEqual([0, 0, 0, 0]);\n'
-                             '    });\n'
-                             '\n'
-                             "    it('resets to zero on any committed compaction', "
-                             'async () => {\n'
-                             '      const compressSpy = vi.spyOn(\n'
-                             '        ChatCompressionService.prototype,\n'
-                             "        'compress',\n"
-                             '      );\n'
-                             '      compressSpy\n'
-                             '        .mockResolvedValueOnce(\n'
-                             '          '
-                             'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                             '        )\n'
-                             '        .mockResolvedValueOnce(\n'
-                             '          '
-                             'failure(CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED),\n'
-                             '        )\n'
-                             '        .mockResolvedValueOnce({\n'
-                             "          newHistory: [userMsg('summary'), "
-                             "modelMsg('ack')],\n"
-                             '          info: {\n'
-                             '            originalTokenCount: 100_000,\n'
-                             '            newTokenCount: 30_000,\n'
-                             '            compressionStatus: '
-                             'CompressionStatus.COMPRESSED,\n'
-                             '          },\n'
-                             '        })\n'
-                             '        '
-                             '.mockResolvedValueOnce(failure(CompressionStatus.NOOP));\n'
-                             '\n'
-                             "      await chat.tryCompress('p1');\n"
-                             "      await chat.tryCompress('p2');\n"
-                             "      await chat.tryCompress('p-success', true);\n"
-                             '      '
-                             'expect(compressSpy.mock.calls[2][1].truncationBackoff).toBe(2);\n'
-                             "      await chat.tryCompress('p-after');\n"
-                             '      '
-                             'expect(compressSpy.mock.calls[3][1].truncationBackoff).toBe(0);\n'
-                             '    });\n'
-                             '  });\n'
                              "  describe('XML tool call fallback integration', () => "
                              '{\n'
                              '    function xmlChunk(\n'
                              '      text: string,\n'
-                             '      finishReason?: string,\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-35',
+                             '      finishReason?: string,\n'
+                             '    ): GenerateContentResponse {\n'
+                             '      return {\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-34',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '            ...(finishReason ? { finishReason } : {}),\n'
                        '          },\n'
@@ -22814,7 +21867,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'import {\n'
                       '  type ChatCompressionInfo,\n'
                       '  type CompactionRecord,\n'
-                      '  type CompactionTriggerReason,\n'
                       '  CompressionStatus,\n'
                       '  toCompactionRecord,\n'
                       "} from './turn.js';\n"
@@ -22852,7 +21904,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'import {\n'
                              '  type ChatCompressionInfo,\n'
                              '  type CompactionRecord,\n'
-                             '  type CompactionTriggerReason,\n'
                              '  CompressionStatus,\n'
                              '  toCompactionRecord,\n'
                              "} from './turn.js';\n"
@@ -23349,7 +22400,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' *\n'},
             {'name': 'packages/core/src/core/geminiChat.ts:landmark-10',
              'path': 'packages/core/src/core/geminiChat.ts',
-             'before': '   * was reported, so steady-state prompt estimates add this '
+             'before': '   * previous response is appended to local history after '
+                       '`promptTokenCount`\n'
+                       '   * was reported, so steady-state prompt estimates add this '
                        'value to avoid\n'
                        '   * under-counting the next request near the hard compaction '
                        'threshold.\n'
@@ -23416,34 +22469,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'note\n'
                        '   * above `ORPHAN_TOOL_USE_REPAIR_REASON` for the lifecycle '
                        'and the\n'
-                       '   * wedge they prevent.\n',
-             'after': '   * was reported, so steady-state prompt estimates add this '
+                       '   * wedge they prevent.\n'
+                       '   */\n',
+             'after': '   * previous response is appended to local history after '
+                      '`promptTokenCount`\n'
+                      '   * was reported, so steady-state prompt estimates add this '
                       'value to avoid\n'
                       '   * under-counting the next request near the hard compaction '
                       'threshold.\n'
                       '   */\n'
                       '  private lastOutputTokenCount = 0;\n'
-                      '\n'
-                      '  /**\n'
-                      '   * Number of consecutive OUTPUT_TRUNCATED compaction failures '
-                      'for this\n'
-                      '   * chat. Fed to the compression service as its truncation '
-                      'backoff: each\n'
-                      "   * strike halves the next attempt's summary-request budget, "
-                      'so a retry\n'
-                      '   * always summarizes strictly less than the attempt whose '
-                      'snapshot\n'
-                      '   * overflowed. Any committed compaction resets it. This '
-                      'replaced the\n'
-                      '   * consecutive-failure circuit breaker, which suppressed '
-                      'retries while the\n'
-                      '   * context kept growing — under it, every later attempt faced '
-                      'a larger\n'
-                      '   * history with the same budget, and a production session '
-                      'walked\n'
-                      '   * three suppressed failures into the hard limit and died.\n'
-                      '   */\n'
-                      '  private consecutiveTruncationFailures = 0;\n'
                       '\n'
                       '  /**\n'
                       '   * Partial-push markers — index of the in-memory '
@@ -23452,8 +22487,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'note\n'
                       '   * above `ORPHAN_TOOL_USE_REPAIR_REASON` for the lifecycle '
                       'and the\n'
-                      '   * wedge they prevent.\n',
-             'review_before': '   * was reported, so steady-state prompt estimates add '
+                      '   * wedge they prevent.\n'
+                      '   */\n',
+             'review_before': '   * previous response is appended to local history '
+                              'after `promptTokenCount`\n'
+                              '   * was reported, so steady-state prompt estimates add '
                               'this value to avoid\n'
                               '   * under-counting the next request near the hard '
                               'compaction threshold.\n'
@@ -23521,35 +22559,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'canonical note\n'
                               '   * above `ORPHAN_TOOL_USE_REPAIR_REASON` for the '
                               'lifecycle and the\n'
-                              '   * wedge they prevent.\n',
-             'review_after': '   * was reported, so steady-state prompt estimates add '
+                              '   * wedge they prevent.\n'
+                              '   */\n',
+             'review_after': '   * previous response is appended to local history '
+                             'after `promptTokenCount`\n'
+                             '   * was reported, so steady-state prompt estimates add '
                              'this value to avoid\n'
                              '   * under-counting the next request near the hard '
                              'compaction threshold.\n'
                              '   */\n'
                              '  private lastOutputTokenCount = 0;\n'
-                             '\n'
-                             '  /**\n'
-                             '   * Number of consecutive OUTPUT_TRUNCATED compaction '
-                             'failures for this\n'
-                             '   * chat. Fed to the compression service as its '
-                             'truncation backoff: each\n'
-                             "   * strike halves the next attempt's summary-request "
-                             'budget, so a retry\n'
-                             '   * always summarizes strictly less than the attempt '
-                             'whose snapshot\n'
-                             '   * overflowed. Any committed compaction resets it. '
-                             'This replaced the\n'
-                             '   * consecutive-failure circuit breaker, which '
-                             'suppressed retries while the\n'
-                             '   * context kept growing — under it, every later '
-                             'attempt faced a larger\n'
-                             '   * history with the same budget, and a production '
-                             'session walked\n'
-                             '   * three suppressed failures into the hard limit and '
-                             'died.\n'
-                             '   */\n'
-                             '  private consecutiveTruncationFailures = 0;\n'
                              '\n'
                              '  /**\n'
                              '   * Partial-push markers — index of the in-memory '
@@ -23558,7 +22577,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'canonical note\n'
                              '   * above `ORPHAN_TOOL_USE_REPAIR_REASON` for the '
                              'lifecycle and the\n'
-                             '   * wedge they prevent.\n'},
+                             '   * wedge they prevent.\n'
+                             '   */\n'},
             {'name': 'packages/core/src/core/geminiChat.ts:landmark-11',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '   * whole chat history. This is an internal hot path: long '
@@ -23963,7 +22983,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      promptId,\n'
                       '      force,\n'
                       '      config: this.config,\n'
-                      '      truncationBackoff: this.consecutiveTruncationFailures,\n'
                       '      originalTokenCount,\n'
                       '      pendingUserMessage: options?.pendingUserMessage,\n'
                       '      precomputedEffectiveTokens: '
@@ -23996,8 +23015,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      promptId,\n'
                              '      force,\n'
                              '      config: this.config,\n'
-                             '      truncationBackoff: '
-                             'this.consecutiveTruncationFailures,\n'
                              '      originalTokenCount,\n'
                              '      pendingUserMessage: options?.pendingUserMessage,\n'
                              '      precomputedEffectiveTokens: '
@@ -24047,23 +23064,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '    return info;\n'
                        '  }\n'
                        '\n'
-                       '  /**\n'
-                       '   * Fast, rule-based compression without any LLM side-query.\n'
-                       '   *\n'
-                       '   * Force-runs microcompaction (clear old tool results + '
-                       'media, keep recent N)\n'
-                       '   * then strips thinking parts from all model turns.\n'
-                       '   */\n'
-                       '  compressFast(): {\n'
-                       '    info: ChatCompressionInfo;\n'
-                       '    microcompactMeta?: MicrocompactMeta;\n'
-                       '  } {\n'
-                       '    // Use the same estimator on both sides so the NOOP gate '
-                       'compares\n'
-                       '    // apples to apples. The API-authoritative '
-                       'lastPromptTokenCount is\n'
-                       '    // then adjusted by the estimated delta — never replaced '
-                       'wholesale.\n',
+                       '  /**\n',
              'after': '      this.config.getFileReadCache().clear();\n'
                       '      this.setLastPromptTokenCount(\n'
                       '        info.newTokenCount,\n'
@@ -24071,69 +23072,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      );\n'
                       '      '
                       'this.telemetryService?.setLastPromptTokenCount(info.newTokenCount);\n'
-                      '      // Any committed compaction proves the current budget '
-                      'fits the current\n'
-                      '      // workload, so the truncation backoff starts over.\n'
-                      '      this.consecutiveTruncationFailures = 0;\n'
-                      '    } else if (\n'
-                      '      info.compressionStatus ===\n'
-                      '      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED\n'
-                      '    ) {\n'
-                      '      // Only truncation feeds the backoff: it is the one '
-                      'failure whose\n'
-                      '      // remedy is a smaller input. Refusals, protocol '
-                      'violations, and\n'
-                      '      // count errors are flukes of a nondeterministic sampler '
-                      'or a\n'
-                      '      // transient endpoint — the next natural trigger simply '
-                      'retries them,\n'
-                      "      // and the hard tier's deterministic fallback bounds how "
-                      'long that\n'
-                      '      // can go on.\n'
-                      '      this.consecutiveTruncationFailures += 1;\n'
-                      '      debugLogger.warn(\n'
-                      '        `[compaction] snapshot truncated; next attempt runs at '
-                      '` +\n'
-                      '          `truncation backoff '
-                      '${this.consecutiveTruncationFailures}.`,\n'
-                      '      );\n'
                       '    }\n'
                       '\n'
                       '    return info;\n'
                       '  }\n'
                       '\n'
-                      '  /**\n'
-                      '   * Fast, rule-based compression without any LLM side-query.\n'
-                      '   *\n'
-                      '   * Force-runs microcompaction (clear old tool results + '
-                      'media, keep recent N)\n'
-                      '   * then strips thinking parts from all model turns.\n'
-                      '   *\n'
-                      "   * `trigger` labels the emitted record: 'manual' for the "
-                      'user-invoked\n'
-                      "   * command, 'hard_limit_fallback' when the hard tier runs "
-                      'this because a\n'
-                      '   * sampled snapshot could not be committed. '
-                      '`deferPersistence` skips the\n'
-                      '   * JSONL checkpoint and the telemetry event so the hard tier '
-                      'can roll the\n'
-                      '   * whole rescue back if the prompt still cannot be sent — the '
-                      'caller owns\n'
-                      '   * persisting a rescue it decides to keep.\n'
-                      '   */\n'
-                      '  compressFast(options?: {\n'
-                      '    trigger?: CompactionTriggerReason;\n'
-                      '    deferPersistence?: boolean;\n'
-                      '  }): {\n'
-                      '    info: ChatCompressionInfo;\n'
-                      '    microcompactMeta?: MicrocompactMeta;\n'
-                      '  } {\n'
-                      '    // Use the same estimator on both sides so the NOOP gate '
-                      'compares\n'
-                      '    // apples to apples. The API-authoritative '
-                      'lastPromptTokenCount is\n'
-                      '    // then adjusted by the estimated delta — never replaced '
-                      'wholesale.\n',
+                      '  /**\n',
              'review_before': '      this.config.getFileReadCache().clear();\n'
                               '      this.setLastPromptTokenCount(\n'
                               '        info.newTokenCount,\n'
@@ -24172,24 +23116,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '    return info;\n'
                               '  }\n'
                               '\n'
-                              '  /**\n'
-                              '   * Fast, rule-based compression without any LLM '
-                              'side-query.\n'
-                              '   *\n'
-                              '   * Force-runs microcompaction (clear old tool results '
-                              '+ media, keep recent N)\n'
-                              '   * then strips thinking parts from all model turns.\n'
-                              '   */\n'
-                              '  compressFast(): {\n'
-                              '    info: ChatCompressionInfo;\n'
-                              '    microcompactMeta?: MicrocompactMeta;\n'
-                              '  } {\n'
-                              '    // Use the same estimator on both sides so the NOOP '
-                              'gate compares\n'
-                              '    // apples to apples. The API-authoritative '
-                              'lastPromptTokenCount is\n'
-                              '    // then adjusted by the estimated delta — never '
-                              'replaced wholesale.\n',
+                              '  /**\n',
              'review_after': '      this.config.getFileReadCache().clear();\n'
                              '      this.setLastPromptTokenCount(\n'
                              '        info.newTokenCount,\n'
@@ -24197,93 +23124,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '      '
                              'this.telemetryService?.setLastPromptTokenCount(info.newTokenCount);\n'
-                             '      // Any committed compaction proves the current '
-                             'budget fits the current\n'
-                             '      // workload, so the truncation backoff starts '
-                             'over.\n'
-                             '      this.consecutiveTruncationFailures = 0;\n'
-                             '    } else if (\n'
-                             '      info.compressionStatus ===\n'
-                             '      '
-                             'CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED\n'
-                             '    ) {\n'
-                             '      // Only truncation feeds the backoff: it is the '
-                             'one failure whose\n'
-                             '      // remedy is a smaller input. Refusals, protocol '
-                             'violations, and\n'
-                             '      // count errors are flukes of a nondeterministic '
-                             'sampler or a\n'
-                             '      // transient endpoint — the next natural trigger '
-                             'simply retries them,\n'
-                             "      // and the hard tier's deterministic fallback "
-                             'bounds how long that\n'
-                             '      // can go on.\n'
-                             '      this.consecutiveTruncationFailures += 1;\n'
-                             '      debugLogger.warn(\n'
-                             '        `[compaction] snapshot truncated; next attempt '
-                             'runs at ` +\n'
-                             '          `truncation backoff '
-                             '${this.consecutiveTruncationFailures}.`,\n'
-                             '      );\n'
                              '    }\n'
                              '\n'
                              '    return info;\n'
                              '  }\n'
                              '\n'
-                             '  /**\n'
-                             '   * Fast, rule-based compression without any LLM '
-                             'side-query.\n'
-                             '   *\n'
-                             '   * Force-runs microcompaction (clear old tool results '
-                             '+ media, keep recent N)\n'
-                             '   * then strips thinking parts from all model turns.\n'
-                             '   *\n'
-                             "   * `trigger` labels the emitted record: 'manual' for "
-                             'the user-invoked\n'
-                             "   * command, 'hard_limit_fallback' when the hard tier "
-                             'runs this because a\n'
-                             '   * sampled snapshot could not be committed. '
-                             '`deferPersistence` skips the\n'
-                             '   * JSONL checkpoint and the telemetry event so the '
-                             'hard tier can roll the\n'
-                             '   * whole rescue back if the prompt still cannot be '
-                             'sent — the caller owns\n'
-                             '   * persisting a rescue it decides to keep.\n'
-                             '   */\n'
-                             '  compressFast(options?: {\n'
-                             '    trigger?: CompactionTriggerReason;\n'
-                             '    deferPersistence?: boolean;\n'
-                             '  }): {\n'
-                             '    info: ChatCompressionInfo;\n'
-                             '    microcompactMeta?: MicrocompactMeta;\n'
-                             '  } {\n'
-                             '    // Use the same estimator on both sides so the NOOP '
-                             'gate compares\n'
-                             '    // apples to apples. The API-authoritative '
-                             'lastPromptTokenCount is\n'
-                             '    // then adjusted by the estimated delta — never '
-                             'replaced wholesale.\n'},
+                             '  /**\n'},
             {'name': 'packages/core/src/core/geminiChat.ts:landmark-15',
              'path': 'packages/core/src/core/geminiChat.ts',
-             'before': '\n'
-                       '    const info: ChatCompressionInfo = {\n'
-                       '      originalTokenCount: apiBaseline,\n'
-                       '      newTokenCount: adjustedTokenCount,\n'
-                       '      newTokenCountIsEstimated: true,\n'
-                       '      compressionStatus: CompressionStatus.COMPRESSED,\n'
-                       "      triggerReason: 'manual',\n"
-                       '    };\n'
-                       '\n'
-                       '    this.chatRecordingService?.recordChatCompression({\n'
-                       '      info,\n'
-                       '      compressedHistory: newHistory,\n'
-                       '    });\n'
-                       '    logChatCompression(\n'
-                       '      this.config,\n'
-                       '      makeChatCompressionEvent({\n'
-                       '        tokens_before: info.originalTokenCount,\n'
-                       '        tokens_after: info.newTokenCount,\n'
-                       '      }),\n'
+             'before': '      }),\n'
                        '    );\n'
                        '    this.setHistory(newHistory);\n'
                        '    this.lastPromptTokenCount = adjustedTokenCount;\n'
@@ -24297,59 +23146,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '\n'
                        '  setSystemInstruction(sysInstr: string) {\n'
                        '    this.generationConfig.systemInstruction = sysInstr;\n',
-             'after': '\n'
-                      '    const info: ChatCompressionInfo = {\n'
-                      '      originalTokenCount: apiBaseline,\n'
-                      '      newTokenCount: adjustedTokenCount,\n'
-                      '      newTokenCountIsEstimated: true,\n'
-                      '      compressionStatus: CompressionStatus.COMPRESSED,\n'
-                      "      triggerReason: options?.trigger ?? 'manual',\n"
-                      '    };\n'
-                      '\n'
-                      '    if (!options?.deferPersistence) {\n'
-                      '      this.chatRecordingService?.recordChatCompression({\n'
-                      '        info,\n'
-                      '        compressedHistory: newHistory,\n'
-                      '      });\n'
-                      '      logChatCompression(\n'
-                      '        this.config,\n'
-                      '        makeChatCompressionEvent({\n'
-                      '          tokens_before: info.originalTokenCount,\n'
-                      '          tokens_after: info.newTokenCount,\n'
-                      '        }),\n'
-                      '      );\n'
-                      '    }\n'
+             'after': '      }),\n'
+                      '    );\n'
                       '    this.setHistory(newHistory);\n'
                       '    this.lastPromptTokenCount = adjustedTokenCount;\n'
                       '    this.lastPromptTokenCountIsEstimated = true;\n'
                       '    '
                       'this.telemetryService?.setLastPromptTokenCount(adjustedTokenCount);\n'
-                      '    this.consecutiveTruncationFailures = 0;\n'
                       '\n'
                       '    return { info, microcompactMeta: mcMeta };\n'
                       '  }\n'
                       '\n'
                       '  setSystemInstruction(sysInstr: string) {\n'
                       '    this.generationConfig.systemInstruction = sysInstr;\n',
-             'review_before': '\n'
-                              '    const info: ChatCompressionInfo = {\n'
-                              '      originalTokenCount: apiBaseline,\n'
-                              '      newTokenCount: adjustedTokenCount,\n'
-                              '      newTokenCountIsEstimated: true,\n'
-                              '      compressionStatus: CompressionStatus.COMPRESSED,\n'
-                              "      triggerReason: 'manual',\n"
-                              '    };\n'
-                              '\n'
-                              '    this.chatRecordingService?.recordChatCompression({\n'
-                              '      info,\n'
-                              '      compressedHistory: newHistory,\n'
-                              '    });\n'
-                              '    logChatCompression(\n'
-                              '      this.config,\n'
-                              '      makeChatCompressionEvent({\n'
-                              '        tokens_before: info.originalTokenCount,\n'
-                              '        tokens_after: info.newTokenCount,\n'
-                              '      }),\n'
+             'review_before': '      }),\n'
                               '    );\n'
                               '    this.setHistory(newHistory);\n'
                               '    this.lastPromptTokenCount = adjustedTokenCount;\n'
@@ -24364,35 +23174,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  setSystemInstruction(sysInstr: string) {\n'
                               '    this.generationConfig.systemInstruction = '
                               'sysInstr;\n',
-             'review_after': '\n'
-                             '    const info: ChatCompressionInfo = {\n'
-                             '      originalTokenCount: apiBaseline,\n'
-                             '      newTokenCount: adjustedTokenCount,\n'
-                             '      newTokenCountIsEstimated: true,\n'
-                             '      compressionStatus: CompressionStatus.COMPRESSED,\n'
-                             "      triggerReason: options?.trigger ?? 'manual',\n"
-                             '    };\n'
-                             '\n'
-                             '    if (!options?.deferPersistence) {\n'
-                             '      '
-                             'this.chatRecordingService?.recordChatCompression({\n'
-                             '        info,\n'
-                             '        compressedHistory: newHistory,\n'
-                             '      });\n'
-                             '      logChatCompression(\n'
-                             '        this.config,\n'
-                             '        makeChatCompressionEvent({\n'
-                             '          tokens_before: info.originalTokenCount,\n'
-                             '          tokens_after: info.newTokenCount,\n'
-                             '        }),\n'
-                             '      );\n'
-                             '    }\n'
+             'review_after': '      }),\n'
+                             '    );\n'
                              '    this.setHistory(newHistory);\n'
                              '    this.lastPromptTokenCount = adjustedTokenCount;\n'
                              '    this.lastPromptTokenCountIsEstimated = true;\n'
                              '    '
                              'this.telemetryService?.setLastPromptTokenCount(adjustedTokenCount);\n'
-                             '    this.consecutiveTruncationFailures = 0;\n'
                              '\n'
                              '    return { info, microcompactMeta: mcMeta };\n'
                              '  }\n'
@@ -24401,74 +23189,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    this.generationConfig.systemInstruction = '
                              'sysInstr;\n'},
             {'name': 'packages/core/src/core/geminiChat.ts:landmark-16',
-             'path': 'packages/core/src/core/geminiChat.ts',
-             'before': '    // leftover from a prior unretryable break would otherwise '
-                       'get\n'
-                       "    // appended to JSONL by THIS send's retry-loop flush, "
-                       'attaching\n'
-                       "    // someone else's failed turn to this conversation.\n"
-                       '    this.clearPendingPartialState();\n'
-                       '\n'
-                       '    let compressionInfo: ChatCompressionInfo;\n'
-                       '    let requestContents: Content[];\n'
-                       '    let userContentAdded = false;\n'
-                       '    let manualPlanExitNoticeVersion: number | undefined;\n'
-                       '    let manualPlanExitNoticeText: string | undefined;\n'
-                       '\n'
-                       "    // Determine the ceiling for this turn's output request. "
-                       'The clamp below\n',
-             'after': '    // leftover from a prior unretryable break would otherwise '
-                      'get\n'
-                      "    // appended to JSONL by THIS send's retry-loop flush, "
-                      'attaching\n'
-                      "    // someone else's failed turn to this conversation.\n"
-                      '    this.clearPendingPartialState();\n'
-                      '\n'
-                      '    let compressionInfo: ChatCompressionInfo;\n'
-                      '    let fastRescueInfo: ChatCompressionInfo | undefined;\n'
-                      '    let requestContents: Content[];\n'
-                      '    let userContentAdded = false;\n'
-                      '    let manualPlanExitNoticeVersion: number | undefined;\n'
-                      '    let manualPlanExitNoticeText: string | undefined;\n'
-                      '\n'
-                      "    // Determine the ceiling for this turn's output request. "
-                      'The clamp below\n',
-             'review_before': '    // leftover from a prior unretryable break would '
-                              'otherwise get\n'
-                              "    // appended to JSONL by THIS send's retry-loop "
-                              'flush, attaching\n'
-                              "    // someone else's failed turn to this "
-                              'conversation.\n'
-                              '    this.clearPendingPartialState();\n'
-                              '\n'
-                              '    let compressionInfo: ChatCompressionInfo;\n'
-                              '    let requestContents: Content[];\n'
-                              '    let userContentAdded = false;\n'
-                              '    let manualPlanExitNoticeVersion: number | '
-                              'undefined;\n'
-                              '    let manualPlanExitNoticeText: string | undefined;\n'
-                              '\n'
-                              "    // Determine the ceiling for this turn's output "
-                              'request. The clamp below\n',
-             'review_after': '    // leftover from a prior unretryable break would '
-                             'otherwise get\n'
-                             "    // appended to JSONL by THIS send's retry-loop "
-                             'flush, attaching\n'
-                             "    // someone else's failed turn to this conversation.\n"
-                             '    this.clearPendingPartialState();\n'
-                             '\n'
-                             '    let compressionInfo: ChatCompressionInfo;\n'
-                             '    let fastRescueInfo: ChatCompressionInfo | '
-                             'undefined;\n'
-                             '    let requestContents: Content[];\n'
-                             '    let userContentAdded = false;\n'
-                             '    let manualPlanExitNoticeVersion: number | '
-                             'undefined;\n'
-                             '    let manualPlanExitNoticeText: string | undefined;\n'
-                             '\n'
-                             "    // Determine the ceiling for this turn's output "
-                             'request. The clamp below\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-17',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      explicitOutputCeiling ?? defaultOutputCeiling(model);\n'
                        '    // Declared at function level so the MAX_TOKENS escalation '
@@ -24620,7 +23340,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`finally` (which\n'
                              '      // resolves it) has not run yet. Any setup error '
                              'before returning the\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-18',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-17',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      // estimation (which involves another `getHistory(true)` '
                        'clone). This\n'
@@ -24658,15 +23378,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'value.\n'
                       '      // (review #4168 R1.3 + R1.4)\n'
                       '      //\n'
-                      '      // Every hard-tier send must end below the hard threshold '
-                      'or refuse to\n'
-                      '      // send: the LLM attempt runs first (it always fits, '
-                      'because the\n'
-                      '      // service summarizes the largest clean prefix that '
-                      'does), and if the\n'
-                      '      // prompt is still over, the deterministic microcompact '
-                      'fallback\n'
-                      '      // clears old tool results with no model in the loop. '
+                      '      // Every hard-tier send compacts or refuses to send. '
                       'Skipping rescue\n'
                       '      // after N strikes was tried and is the mechanism that '
                       'killed\n'
@@ -24717,16 +23429,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'resolved value.\n'
                              '      // (review #4168 R1.3 + R1.4)\n'
                              '      //\n'
-                             '      // Every hard-tier send must end below the hard '
-                             'threshold or refuse to\n'
-                             '      // send: the LLM attempt runs first (it always '
-                             'fits, because the\n'
-                             '      // service summarizes the largest clean prefix '
-                             'that does), and if the\n'
-                             '      // prompt is still over, the deterministic '
-                             'microcompact fallback\n'
-                             '      // clears old tool results with no model in the '
-                             'loop. Skipping rescue\n'
+                             '      // Every hard-tier send compacts or refuses to '
+                             'send. Skipping rescue\n'
                              '      // after N strikes was tried and is the mechanism '
                              'that killed\n'
                              '      // sessions: a skipped send grows the prompt, and '
@@ -24740,7 +23444,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        contextWindowForClamp,\n'
                              '        this.config.getAutoCompactThreshold(),\n'
                              '      );\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-19',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-18',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      // restore / subagent inheritance) walks history with a '
                        'char/4\n'
@@ -24840,8 +23544,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        debugLogger.warn(\n'
                       '          `[compaction] hard-tier rescue triggered: '
                       'prompt_id=${prompt_id}, effectiveTokens=${effectiveTokens}, '
-                      'hard=${hard}, '
-                      'truncationBackoff=${this.consecutiveTruncationFailures}.`,\n'
+                      'hard=${hard}.`,\n'
                       '        );\n'
                       '      }\n'
                       '\n'
@@ -24955,8 +23658,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        debugLogger.warn(\n'
                              '          `[compaction] hard-tier rescue triggered: '
                              'prompt_id=${prompt_id}, '
-                             'effectiveTokens=${effectiveTokens}, hard=${hard}, '
-                             'truncationBackoff=${this.consecutiveTruncationFailures}.`,\n'
+                             'effectiveTokens=${effectiveTokens}, hard=${hard}.`,\n'
                              '        );\n'
                              '      }\n'
                              '\n'
@@ -24967,7 +23669,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus: CompressionStatus.NOOP,\n'
                              '        };\n'
                              '      } else {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-20',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-19',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          params.config?.abortSignal,\n'
                        '          {\n'
@@ -25004,8 +23706,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        shouldStopAfterHardRescue(\n'
                        '          shouldForceFromHard,\n'
                        '          hard,\n'
-                       '          localPromptTokensAfterCompression,\n'
-                       '        )\n',
+                       '          localPromptTokensAfterCompression,\n',
              'after': '          params.config?.abortSignal,\n'
                       '          {\n'
                       '            pendingUserMessage: userContent,\n'
@@ -25025,8 +23726,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          },\n'
                       '        );\n'
                       '      }\n'
-                      '      const recountLocalPromptTokens = async () =>\n'
-                      '        exactTokenCounting\n'
+                      '      const localPromptTokensAfterCompression = '
+                      'shouldForceFromHard\n'
+                      '        ? exactTokenCounting\n'
                       '          ? await countExactRequestTokens(\n'
                       '              this.getRequestHistoryWithPendingForRoute(\n'
                       '                userContent,\n'
@@ -25040,75 +23742,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '              this.lastPromptTokenCount,\n'
                       '              this.lastOutputTokenCount,\n'
                       '              imageTokenEstimate,\n'
-                      '            );\n'
-                      '      let localPromptTokensAfterCompression = '
-                      'shouldForceFromHard\n'
-                      '        ? await recountLocalPromptTokens()\n'
+                      '            )\n'
                       '        : 0;\n'
-                      '      // Snapshot the post-attempt history now: the deferred '
-                      'record must\n'
-                      '      // describe the history as the LLM attempt left it, and '
-                      'the fallback\n'
-                      '      // below may mutate it again before the record is '
-                      'written.\n'
-                      '      const historyAfterLlmAttempt =\n'
-                      '        shouldForceFromHard &&\n'
-                      '        compressionInfo.compressionStatus === '
-                      'CompressionStatus.COMPRESSED\n'
-                      '          ? this.getHistoryShallow()\n'
-                      '          : undefined;\n'
-                      '      let deferredFastRescue:\n'
-                      '        | { info: ChatCompressionInfo; history: Content[] }\n'
-                      '        | undefined;\n'
                       '      if (\n'
                       '        shouldStopAfterHardRescue(\n'
                       '          shouldForceFromHard,\n'
                       '          hard,\n'
-                      '          localPromptTokensAfterCompression,\n'
-                      '        )\n'
-                      '      ) {\n'
-                      '        // The model could not produce a committable snapshot '
-                      '(or the giant\n'
-                      '        // pending payload dwarfs what one summary can absorb). '
-                      'Before\n'
-                      '        // refusing the send, shrink deterministically: '
-                      'microcompaction\n'
-                      '        // clears old tool results and thought parts without a '
-                      'model in the\n'
-                      '        // loop, so it cannot fail the way a sampled snapshot '
-                      'can. It\n'
-                      '        // fabricates nothing — the turn structure and the '
-                      "model's own prose\n"
-                      '        // survive — so continuing with it is honest, merely '
-                      'poorer in old\n'
-                      '        // tool detail than a summary would have been. '
-                      'Persistence is\n'
-                      '        // deferred until the recount proves the send can '
-                      'proceed; a\n'
-                      '        // recorded compression that this guard then rolls back '
-                      'would leave\n'
-                      '        // the JSONL checkpoint describing a history that never '
-                      'shipped.\n'
-                      '        const fast = this.compressFast({\n'
-                      "          trigger: 'hard_limit_fallback',\n"
-                      '          deferPersistence: true,\n'
-                      '        });\n'
-                      '        if (fast.info.compressionStatus === '
-                      'CompressionStatus.COMPRESSED) {\n'
-                      '          deferredFastRescue = {\n'
-                      '            info: fast.info,\n'
-                      '            history: this.getHistoryShallow(),\n'
-                      '          };\n'
-                      '          localPromptTokensAfterCompression = await '
-                      'recountLocalPromptTokens();\n'
-                      '        }\n'
-                      '      }\n'
-                      '      if (\n'
-                      '        shouldStopAfterHardRescue(\n'
-                      '          shouldForceFromHard,\n'
-                      '          hard,\n'
-                      '          localPromptTokensAfterCompression,\n'
-                      '        )\n',
+                      '          localPromptTokensAfterCompression,\n',
              'review_before': '          params.config?.abortSignal,\n'
                               '          {\n'
                               '            pendingUserMessage: userContent,\n'
@@ -25147,8 +23787,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        shouldStopAfterHardRescue(\n'
                               '          shouldForceFromHard,\n'
                               '          hard,\n'
-                              '          localPromptTokensAfterCompression,\n'
-                              '        )\n',
+                              '          localPromptTokensAfterCompression,\n',
              'review_after': '          params.config?.abortSignal,\n'
                              '          {\n'
                              '            pendingUserMessage: userContent,\n'
@@ -25171,8 +23810,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          },\n'
                              '        );\n'
                              '      }\n'
-                             '      const recountLocalPromptTokens = async () =>\n'
-                             '        exactTokenCounting\n'
+                             '      const localPromptTokensAfterCompression = '
+                             'shouldForceFromHard\n'
+                             '        ? exactTokenCounting\n'
                              '          ? await countExactRequestTokens(\n'
                              '              '
                              'this.getRequestHistoryWithPendingForRoute(\n'
@@ -25187,77 +23827,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              this.lastPromptTokenCount,\n'
                              '              this.lastOutputTokenCount,\n'
                              '              imageTokenEstimate,\n'
-                             '            );\n'
-                             '      let localPromptTokensAfterCompression = '
-                             'shouldForceFromHard\n'
-                             '        ? await recountLocalPromptTokens()\n'
+                             '            )\n'
                              '        : 0;\n'
-                             '      // Snapshot the post-attempt history now: the '
-                             'deferred record must\n'
-                             '      // describe the history as the LLM attempt left '
-                             'it, and the fallback\n'
-                             '      // below may mutate it again before the record is '
-                             'written.\n'
-                             '      const historyAfterLlmAttempt =\n'
-                             '        shouldForceFromHard &&\n'
-                             '        compressionInfo.compressionStatus === '
-                             'CompressionStatus.COMPRESSED\n'
-                             '          ? this.getHistoryShallow()\n'
-                             '          : undefined;\n'
-                             '      let deferredFastRescue:\n'
-                             '        | { info: ChatCompressionInfo; history: '
-                             'Content[] }\n'
-                             '        | undefined;\n'
                              '      if (\n'
                              '        shouldStopAfterHardRescue(\n'
                              '          shouldForceFromHard,\n'
                              '          hard,\n'
-                             '          localPromptTokensAfterCompression,\n'
-                             '        )\n'
-                             '      ) {\n'
-                             '        // The model could not produce a committable '
-                             'snapshot (or the giant\n'
-                             '        // pending payload dwarfs what one summary can '
-                             'absorb). Before\n'
-                             '        // refusing the send, shrink deterministically: '
-                             'microcompaction\n'
-                             '        // clears old tool results and thought parts '
-                             'without a model in the\n'
-                             '        // loop, so it cannot fail the way a sampled '
-                             'snapshot can. It\n'
-                             '        // fabricates nothing — the turn structure and '
-                             "the model's own prose\n"
-                             '        // survive — so continuing with it is honest, '
-                             'merely poorer in old\n'
-                             '        // tool detail than a summary would have been. '
-                             'Persistence is\n'
-                             '        // deferred until the recount proves the send '
-                             'can proceed; a\n'
-                             '        // recorded compression that this guard then '
-                             'rolls back would leave\n'
-                             '        // the JSONL checkpoint describing a history '
-                             'that never shipped.\n'
-                             '        const fast = this.compressFast({\n'
-                             "          trigger: 'hard_limit_fallback',\n"
-                             '          deferPersistence: true,\n'
-                             '        });\n'
-                             '        if (fast.info.compressionStatus === '
-                             'CompressionStatus.COMPRESSED) {\n'
-                             '          deferredFastRescue = {\n'
-                             '            info: fast.info,\n'
-                             '            history: this.getHistoryShallow(),\n'
-                             '          };\n'
-                             '          localPromptTokensAfterCompression = await '
-                             'recountLocalPromptTokens();\n'
-                             '        }\n'
-                             '      }\n'
-                             '      if (\n'
-                             '        shouldStopAfterHardRescue(\n'
-                             '          shouldForceFromHard,\n'
-                             '          hard,\n'
-                             '          localPromptTokensAfterCompression,\n'
-                             '        )\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-21',
+                             '          localPromptTokensAfterCompression,\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-20',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        const message = getHardRescueFailureMessage(\n'
                        '          effectiveTokens,\n'
@@ -25277,44 +23854,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '          // Hard-rescue compression mutates in-memory history '
                        'before this\n'
                        '          // guard can compare the compressed prompt size. If '
-                       'the compressed\n'
-                       '          // prompt is still too large to send, restore the '
-                       'pre-compression\n'
-                       '          // state. The JSONL compression checkpoint is '
-                       'intentionally not\n'
-                       '          // written because the send is about to be '
-                       'rejected.\n'
-                       '          this.setHistory(historyBeforeHardRescue);\n'
-                       '          this.lastPromptTokenCount = '
-                       'lastPromptTokenCountBeforeHardRescue;\n'
-                       '          this.lastPromptTokenCountIsEstimated =\n'
-                       '            lastPromptTokenCountWasEstimatedBeforeHardRescue;\n'
-                       '          this.telemetryService?.setLastPromptTokenCount(\n'
-                       '            lastPromptTokenCountBeforeHardRescue,\n',
+                       'the compressed\n',
              'after': '        const message = getHardRescueFailureMessage(\n'
                       '          effectiveTokens,\n'
                       '          hard,\n'
                       '          compressionInfo,\n'
                       '          localPromptTokensAfterCompression,\n'
                       '        );\n'
-                      '        if (historyBeforeHardRescue) {\n'
-                      '          // Rescue mutates in-memory history before this guard '
-                      'can compare\n'
-                      '          // the compressed prompt size. If the prompt is still '
-                      'too large to\n'
-                      '          // send, restore the pre-rescue state — nothing was '
-                      'persisted (the\n'
-                      "          // LLM record was deferred, the fallback's "
-                      'persistence too), so\n'
-                      '          // the bundle keeps the full evidence of the refused '
-                      'state.\n'
-                      '          this.setHistory(historyBeforeHardRescue);\n'
-                      '          this.lastPromptTokenCount = '
-                      'lastPromptTokenCountBeforeHardRescue;\n'
-                      '          this.lastPromptTokenCountIsEstimated =\n'
-                      '            lastPromptTokenCountWasEstimatedBeforeHardRescue;\n'
-                      '          this.telemetryService?.setLastPromptTokenCount(\n'
-                      '            lastPromptTokenCountBeforeHardRescue,\n',
+                      '        if (\n'
+                      '          compressionInfo.compressionStatus === '
+                      'CompressionStatus.COMPRESSED &&\n'
+                      '          historyBeforeHardRescue\n'
+                      '        ) {\n'
+                      '          // Hard-rescue compression mutates in-memory history '
+                      'before this\n'
+                      '          // guard can compare the compressed prompt size. If '
+                      'the compressed\n',
              'review_before': '        const message = getHardRescueFailureMessage(\n'
                               '          effectiveTokens,\n'
                               '          hard,\n'
@@ -25334,49 +23889,23 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '          // Hard-rescue compression mutates in-memory '
                               'history before this\n'
                               '          // guard can compare the compressed prompt '
-                              'size. If the compressed\n'
-                              '          // prompt is still too large to send, restore '
-                              'the pre-compression\n'
-                              '          // state. The JSONL compression checkpoint is '
-                              'intentionally not\n'
-                              '          // written because the send is about to be '
-                              'rejected.\n'
-                              '          this.setHistory(historyBeforeHardRescue);\n'
-                              '          this.lastPromptTokenCount = '
-                              'lastPromptTokenCountBeforeHardRescue;\n'
-                              '          this.lastPromptTokenCountIsEstimated =\n'
-                              '            '
-                              'lastPromptTokenCountWasEstimatedBeforeHardRescue;\n'
-                              '          '
-                              'this.telemetryService?.setLastPromptTokenCount(\n'
-                              '            lastPromptTokenCountBeforeHardRescue,\n',
+                              'size. If the compressed\n',
              'review_after': '        const message = getHardRescueFailureMessage(\n'
                              '          effectiveTokens,\n'
                              '          hard,\n'
                              '          compressionInfo,\n'
                              '          localPromptTokensAfterCompression,\n'
                              '        );\n'
-                             '        if (historyBeforeHardRescue) {\n'
-                             '          // Rescue mutates in-memory history before '
-                             'this guard can compare\n'
-                             '          // the compressed prompt size. If the prompt '
-                             'is still too large to\n'
-                             '          // send, restore the pre-rescue state — '
-                             'nothing was persisted (the\n'
-                             "          // LLM record was deferred, the fallback's "
-                             'persistence too), so\n'
-                             '          // the bundle keeps the full evidence of the '
-                             'refused state.\n'
-                             '          this.setHistory(historyBeforeHardRescue);\n'
-                             '          this.lastPromptTokenCount = '
-                             'lastPromptTokenCountBeforeHardRescue;\n'
-                             '          this.lastPromptTokenCountIsEstimated =\n'
-                             '            '
-                             'lastPromptTokenCountWasEstimatedBeforeHardRescue;\n'
-                             '          '
-                             'this.telemetryService?.setLastPromptTokenCount(\n'
-                             '            lastPromptTokenCountBeforeHardRescue,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-22',
+                             '        if (\n'
+                             '          compressionInfo.compressionStatus === '
+                             'CompressionStatus.COMPRESSED &&\n'
+                             '          historyBeforeHardRescue\n'
+                             '        ) {\n'
+                             '          // Hard-rescue compression mutates in-memory '
+                             'history before this\n'
+                             '          // guard can compare the compressed prompt '
+                             'size. If the compressed\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-21',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        debugLogger.warn(\n'
                        '          `[compaction] hard-tier rescue stopped oversized '
@@ -25399,21 +23928,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '      if (\n'
                        '        shouldForceFromHard &&\n'
                        '        compressionInfo.compressionStatus === '
-                       'CompressionStatus.COMPRESSED\n'
-                       '      ) {\n'
-                       '        this.chatRecordingService?.recordChatCompression({\n'
-                       '          info: compressionInfo,\n'
-                       '          compressedHistory: this.getHistoryShallow(),\n'
-                       '        });\n'
-                       '      }\n'
-                       '\n'
-                       '      if (this.manualPlanExitNoticesEnabled) {\n'
-                       '        const notice = '
-                       'this.config.takePendingManualPlanExitNotice();\n'
-                       '        if (notice) {\n'
-                       '          manualPlanExitNoticeVersion = notice.version;\n'
-                       '          manualPlanExitNoticeText = '
-                       'getManualPlanExitSystemReminder(\n',
+                       'CompressionStatus.COMPRESSED\n',
              'after': '        debugLogger.warn(\n'
                       '          `[compaction] hard-tier rescue stopped oversized '
                       'prompt: ` +\n'
@@ -25424,48 +23939,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            `${localPromptTokensAfterCompression}, '
                       'compressionStatus=` +\n'
                       '            `${compressionStatus}, newTokenCount=` +\n'
-                      '            `${compressionInfo.newTokenCount}, '
-                      'truncationBackoff=` +\n'
-                      '            `${this.consecutiveTruncationFailures}. '
-                      '${message}`,\n'
+                      '            `${compressionInfo.newTokenCount}. ${message}`,\n'
                       '        );\n'
                       '        throw new Error(message);\n'
                       '      }\n'
                       '      if (\n'
                       '        shouldForceFromHard &&\n'
                       '        compressionInfo.compressionStatus === '
-                      'CompressionStatus.COMPRESSED\n'
-                      '      ) {\n'
-                      '        this.chatRecordingService?.recordChatCompression({\n'
-                      '          info: compressionInfo,\n'
-                      '          compressedHistory: historyAfterLlmAttempt ?? '
-                      'this.getHistoryShallow(),\n'
-                      '        });\n'
-                      '      }\n'
-                      '      if (deferredFastRescue) {\n'
-                      '        this.chatRecordingService?.recordChatCompression({\n'
-                      '          info: deferredFastRescue.info,\n'
-                      '          compressedHistory: deferredFastRescue.history,\n'
-                      '        });\n'
-                      '        logChatCompression(\n'
-                      '          this.config,\n'
-                      '          makeChatCompressionEvent({\n'
-                      '            tokens_before: '
-                      'deferredFastRescue.info.originalTokenCount,\n'
-                      '            tokens_after: '
-                      'deferredFastRescue.info.newTokenCount,\n'
-                      '          }),\n'
-                      '        );\n'
-                      '        fastRescueInfo = deferredFastRescue.info;\n'
-                      '      }\n'
-                      '\n'
-                      '      if (this.manualPlanExitNoticesEnabled) {\n'
-                      '        const notice = '
-                      'this.config.takePendingManualPlanExitNotice();\n'
-                      '        if (notice) {\n'
-                      '          manualPlanExitNoticeVersion = notice.version;\n'
-                      '          manualPlanExitNoticeText = '
-                      'getManualPlanExitSystemReminder(\n',
+                      'CompressionStatus.COMPRESSED\n',
              'review_before': '        debugLogger.warn(\n'
                               '          `[compaction] hard-tier rescue stopped '
                               'oversized prompt: ` +\n'
@@ -25487,23 +23968,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '      if (\n'
                               '        shouldForceFromHard &&\n'
                               '        compressionInfo.compressionStatus === '
-                              'CompressionStatus.COMPRESSED\n'
-                              '      ) {\n'
-                              '        '
-                              'this.chatRecordingService?.recordChatCompression({\n'
-                              '          info: compressionInfo,\n'
-                              '          compressedHistory: this.getHistoryShallow(),\n'
-                              '        });\n'
-                              '      }\n'
-                              '\n'
-                              '      if (this.manualPlanExitNoticesEnabled) {\n'
-                              '        const notice = '
-                              'this.config.takePendingManualPlanExitNotice();\n'
-                              '        if (notice) {\n'
-                              '          manualPlanExitNoticeVersion = '
-                              'notice.version;\n'
-                              '          manualPlanExitNoticeText = '
-                              'getManualPlanExitSystemReminder(\n',
+                              'CompressionStatus.COMPRESSED\n',
              'review_after': '        debugLogger.warn(\n'
                              '          `[compaction] hard-tier rescue stopped '
                              'oversized prompt: ` +\n'
@@ -25514,9 +23979,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            `${localPromptTokensAfterCompression}, '
                              'compressionStatus=` +\n'
                              '            `${compressionStatus}, newTokenCount=` +\n'
-                             '            `${compressionInfo.newTokenCount}, '
-                             'truncationBackoff=` +\n'
-                             '            `${this.consecutiveTruncationFailures}. '
+                             '            `${compressionInfo.newTokenCount}. '
                              '${message}`,\n'
                              '        );\n'
                              '        throw new Error(message);\n'
@@ -25524,42 +23987,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      if (\n'
                              '        shouldForceFromHard &&\n'
                              '        compressionInfo.compressionStatus === '
-                             'CompressionStatus.COMPRESSED\n'
-                             '      ) {\n'
-                             '        '
-                             'this.chatRecordingService?.recordChatCompression({\n'
-                             '          info: compressionInfo,\n'
-                             '          compressedHistory: historyAfterLlmAttempt ?? '
-                             'this.getHistoryShallow(),\n'
-                             '        });\n'
-                             '      }\n'
-                             '      if (deferredFastRescue) {\n'
-                             '        '
-                             'this.chatRecordingService?.recordChatCompression({\n'
-                             '          info: deferredFastRescue.info,\n'
-                             '          compressedHistory: '
-                             'deferredFastRescue.history,\n'
-                             '        });\n'
-                             '        logChatCompression(\n'
-                             '          this.config,\n'
-                             '          makeChatCompressionEvent({\n'
-                             '            tokens_before: '
-                             'deferredFastRescue.info.originalTokenCount,\n'
-                             '            tokens_after: '
-                             'deferredFastRescue.info.newTokenCount,\n'
-                             '          }),\n'
-                             '        );\n'
-                             '        fastRescueInfo = deferredFastRescue.info;\n'
-                             '      }\n'
-                             '\n'
-                             '      if (this.manualPlanExitNoticesEnabled) {\n'
-                             '        const notice = '
-                             'this.config.takePendingManualPlanExitNotice();\n'
-                             '        if (notice) {\n'
-                             '          manualPlanExitNoticeVersion = notice.version;\n'
-                             '          manualPlanExitNoticeText = '
-                             'getManualPlanExitSystemReminder(\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-23',
+                             'CompressionStatus.COMPRESSED\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-22',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      // estimatePromptTokens — "typically ~15-20K of '
                        'under-estimate"). Some\n'
@@ -25759,7 +24188,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ...params.config,\n'
                              '          maxOutputTokens: clampedMaxOutputTokens,\n'
                              '        },\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-24',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-23',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    return (async function* () {\n'
                        '      const sleepInhibitorHandle = acquireSleepInhibitor(\n'
@@ -25783,16 +24212,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        ) {\n'
                        '          yield {\n'
                        '            type: StreamEventType.COMPRESSED,\n'
-                       '            info: compressionInfo,\n'
-                       '          };\n'
-                       '        }\n'
-                       '\n'
-                       "        let lastError: unknown = new Error('Request failed "
-                       "after all retries.');\n"
-                       '        let rateLimitRetryCount = 0;\n'
-                       '        let transientInvalidStreamRetryCount = 0;\n'
-                       '        let protocolTagLeakRetryCount = 0;\n'
-                       '        const totalInvalidStreamRetryCount = () =>\n',
+                       '            info: compressionInfo,\n',
              'after': '    return (async function* () {\n'
                       '      const sleepInhibitorHandle = acquireSleepInhibitor(\n'
                       '        self.config,\n'
@@ -25835,33 +24255,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        ) {\n'
                       '          yield {\n'
                       '            type: StreamEventType.COMPRESSED,\n'
-                      '            info: compressionInfo,\n'
-                      '          };\n'
-                      '        }\n'
-                      '        // The deterministic hard-tier fallback replaces '
-                      'history exactly like\n'
-                      '        // an LLM compaction, so it reports through the same '
-                      'two events —\n'
-                      '        // suppressing it would leave the captured stream '
-                      'showing a failed\n'
-                      '        // attempt followed by an inexplicably smaller prompt.\n'
-                      '        if (fastRescueInfo) {\n'
-                      '          yield {\n'
-                      '            type: StreamEventType.COMPACTION,\n'
-                      '            record: toCompactionRecord(fastRescueInfo),\n'
-                      '          };\n'
-                      '          yield {\n'
-                      '            type: StreamEventType.COMPRESSED,\n'
-                      '            info: fastRescueInfo,\n'
-                      '          };\n'
-                      '        }\n'
-                      '\n'
-                      "        let lastError: unknown = new Error('Request failed "
-                      "after all retries.');\n"
-                      '        let rateLimitRetryCount = 0;\n'
-                      '        let transientInvalidStreamRetryCount = 0;\n'
-                      '        let protocolTagLeakRetryCount = 0;\n'
-                      '        const totalInvalidStreamRetryCount = () =>\n',
+                      '            info: compressionInfo,\n',
              'review_before': '    return (async function* () {\n'
                               '      const sleepInhibitorHandle = '
                               'acquireSleepInhibitor(\n'
@@ -25885,16 +24279,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        ) {\n'
                               '          yield {\n'
                               '            type: StreamEventType.COMPRESSED,\n'
-                              '            info: compressionInfo,\n'
-                              '          };\n'
-                              '        }\n'
-                              '\n'
-                              "        let lastError: unknown = new Error('Request "
-                              "failed after all retries.');\n"
-                              '        let rateLimitRetryCount = 0;\n'
-                              '        let transientInvalidStreamRetryCount = 0;\n'
-                              '        let protocolTagLeakRetryCount = 0;\n'
-                              '        const totalInvalidStreamRetryCount = () =>\n',
+                              '            info: compressionInfo,\n',
              'review_after': '    return (async function* () {\n'
                              '      const sleepInhibitorHandle = '
                              'acquireSleepInhibitor(\n'
@@ -25939,35 +24324,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ) {\n'
                              '          yield {\n'
                              '            type: StreamEventType.COMPRESSED,\n'
-                             '            info: compressionInfo,\n'
-                             '          };\n'
-                             '        }\n'
-                             '        // The deterministic hard-tier fallback replaces '
-                             'history exactly like\n'
-                             '        // an LLM compaction, so it reports through the '
-                             'same two events —\n'
-                             '        // suppressing it would leave the captured '
-                             'stream showing a failed\n'
-                             '        // attempt followed by an inexplicably smaller '
-                             'prompt.\n'
-                             '        if (fastRescueInfo) {\n'
-                             '          yield {\n'
-                             '            type: StreamEventType.COMPACTION,\n'
-                             '            record: toCompactionRecord(fastRescueInfo),\n'
-                             '          };\n'
-                             '          yield {\n'
-                             '            type: StreamEventType.COMPRESSED,\n'
-                             '            info: fastRescueInfo,\n'
-                             '          };\n'
-                             '        }\n'
-                             '\n'
-                             "        let lastError: unknown = new Error('Request "
-                             "failed after all retries.');\n"
-                             '        let rateLimitRetryCount = 0;\n'
-                             '        let transientInvalidStreamRetryCount = 0;\n'
-                             '        let protocolTagLeakRetryCount = 0;\n'
-                             '        const totalInvalidStreamRetryCount = () =>\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-25',
+                             '            info: compressionInfo,\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-24',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        let streamYieldedAnyChunk = false;\n'
                        '\n'
@@ -26029,7 +24387,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              retryErrorCodes: '
                              'exactRoute.retryErrorCodes,\n'
                              '            }\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-26',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-25',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '            cgConfig?.samplingParams?.max_tokens !== null) ||\n'
                        '          parsedEnvMaxTokens !== undefined;\n'
@@ -26126,7 +24484,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        let lastFinishReason: string | undefined;\n'
                              '\n'
                              '        /**\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-27',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-26',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              // second discards output the caller is '
                        'watching. The\n'
@@ -26204,7 +24562,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                '
                              'TRANSPORT_STREAM_RETRY_CONFIG.initialDelayMs *\n'
                              '                transportStreamRetryCount;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-28',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-27',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': "            // check), and the scheduler's repair path already "
                        'covers it.\n'
@@ -26284,7 +24642,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`transportContinuationText` accumulates\n'
                              '              // and is never reset while continuing. '
                              "Each attempt's own text\n"},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-29',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-28',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '                      precomputedEffectiveTokens: '
                        'reactiveOriginalTokenCount,\n'
@@ -26382,7 +24740,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'setHistory has already\n'
                              '                    // cleared the marker. Kept for '
                              'uniformity with the\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-30',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-29',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '                  }\n'
                        '\n'
@@ -26510,7 +24868,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                    isAbortError(compressionError)\n'
                              '                  ) {\n'
                              '                    throw compressionError;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-31',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-30',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              break;\n'
                        '            }\n'
@@ -26663,7 +25021,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "              if (error.type === 'PROTOCOL_TAG_LEAK') {\n"
                              '                protocolTagLeakRetryCount = '
                              'nextInvalidStreamRetryCount;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-32',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-31',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              }\n'
                        '              return;\n'
@@ -26736,7 +25094,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "                error.type === 'PROTOCOL_TAG_LEAK'\n"
                              '                  ? protocolTagLeakRetryCount\n'
                              '                  : transientRetryCount;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-33',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-32',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              await delay(delayMs, '
                        'attemptState.params.config?.abortSignal)\n'
@@ -26794,7 +25152,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          !hasUserMaxTokensOverride\n'
                              '        ) {\n'
                              '          maxTokensEscalated = true;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-34',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-33',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          // - Do NOT trigger fallback when persistent mode is '
                        'active\n'
@@ -26874,7 +25232,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            !isUnattendedMode() &&\n'
                              '            !streamYieldedAnyChunk\n'
                              '          ) {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-35',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-34',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          contents: requestContents,\n'
                        '          config: { ...this.generationConfig, ...params.config '
@@ -27000,7 +25358,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'return false;\n'
                              '        }\n'
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-36',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-35',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '  private async *processStreamResponse(\n'
                        '    model: string,\n'
@@ -27075,7 +25433,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'string>();\n'
                              '    let usageMetadata: '
                              'GenerateContentResponseUsageMetadata | undefined;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-37',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-36',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '\n'
                        '    // XML tool call fallback: some models (e.g. '
@@ -27143,7 +25501,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      contentText &&\n'
                              '      containsXmlToolCalls(contentText)\n'
                              '    ) {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-38',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-37',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      contentText = consolidatedHistoryParts\n'
                        '        .filter((part) => part.text)\n'
@@ -29568,7 +27926,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'import {\n'
                       '  AuthType,\n'
                       '  type ContentGeneratorConfig,\n'
-                      '  type PromptCacheSharingParameters,\n'
                       "} from '../contentGenerator.js';\n"
                       'import type { OpenAICompatibleProvider } from '
                       "'./provider/index.js';\n"
@@ -29611,7 +27968,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'import {\n'
                              '  AuthType,\n'
                              '  type ContentGeneratorConfig,\n'
-                             '  type PromptCacheSharingParameters,\n'
                              "} from '../contentGenerator.js';\n"
                              'import type { OpenAICompatibleProvider } from '
                              "'./provider/index.js';\n"
@@ -29622,619 +27978,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'import {\n'
                              '  DEFAULT_STREAM_IDLE_TIMEOUT_MS,\n'
                              '  DEFAULT_STREAM_MAX_LIFETIME_MS,\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts:landmark-2',
-             'path': 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts',
-             'before': '          top_p: 0.6,\n'
-                       '          max_tokens: 2048,\n'
-                       '        }),\n'
-                       '        expect.objectContaining({ signal: undefined }),\n'
-                       '      );\n'
-                       '    });\n'
-                       '  });\n'
-                       '\n'
-                       "  describe('createRequestContext', () => {\n"
-                       "    it('should create context with correct properties for "
-                       "non-streaming request', async () => {\n"
-                       '      // Arrange\n'
-                       '      const request: GenerateContentParameters = {\n',
-             'after': '          top_p: 0.6,\n'
-                      '          max_tokens: 2048,\n'
-                      '        }),\n'
-                      '        expect.objectContaining({ signal: undefined }),\n'
-                      '      );\n'
-                      '    });\n'
-                      '\n'
-                      "    it('applies bounded maintenance phase budgets to the "
-                      "OpenAI-compatible wire request', async () => {\n"
-                      '      mockContentGeneratorConfig.samplingParams = {\n'
-                      '        temperature: 0.6,\n'
-                      '        max_tokens: 262_144,\n'
-                      '        thinking_token_budget: 114_688,\n'
-                      '        final_response_token_budget: 32_768,\n'
-                      "      } as ContentGeneratorConfig['samplingParams'];\n"
-                      '      pipeline = new ContentGenerationPipeline(mockConfig);\n'
-                      '      const request: PromptCacheSharingParameters = {\n'
-                      "        model: 'test-model',\n"
-                      "        contents: [{ parts: [{ text: 'Summarize safely' }], "
-                      "role: 'user' }],\n"
-                      '        config: { maxOutputTokens: 20_000 },\n'
-                      '        phaseBudgetOverrides: {\n'
-                      '          thinkingTokenBudget: 12_000,\n'
-                      '          finalResponseTokenBudget: 8_000,\n'
-                      '        },\n'
-                      '      };\n'
-                      '      (mockConverter.convertGeminiRequestToOpenAI as '
-                      'Mock).mockReturnValue([]);\n'
-                      '      (mockConverter.convertOpenAIResponseToGemini as '
-                      'Mock).mockReturnValue(\n'
-                      '        new GenerateContentResponse(),\n'
-                      '      );\n'
-                      '      (mockClient.chat.completions.create as '
-                      'Mock).mockResolvedValue({\n'
-                      "        id: 'test',\n"
-                      "        choices: [{ message: { content: 'summary' } }],\n"
-                      '      });\n'
-                      '\n'
-                      "      await pipeline.execute(request, 'compaction');\n"
-                      '\n'
-                      '      expect(\n'
-                      '        (mockClient.chat.completions.create as '
-                      'Mock).mock.calls[0][0],\n'
-                      '      ).toMatchObject({\n'
-                      '        max_tokens: 20_000,\n'
-                      '        thinking_token_budget: 12_000,\n'
-                      '        final_response_token_budget: 8_000,\n'
-                      '      });\n'
-                      '    });\n'
-                      '\n'
-                      "    it('applies maintenance phase budgets when no "
-                      "samplingParams object exists', async () => {\n"
-                      '      mockContentGeneratorConfig.samplingParams = undefined;\n'
-                      '      pipeline = new ContentGenerationPipeline(mockConfig);\n'
-                      '      const request: PromptCacheSharingParameters = {\n'
-                      "        model: 'test-model',\n"
-                      "        contents: [{ parts: [{ text: 'Summarize safely' }], "
-                      "role: 'user' }],\n"
-                      '        config: { maxOutputTokens: 20_000 },\n'
-                      '        phaseBudgetOverrides: {\n'
-                      '          thinkingTokenBudget: 12_000,\n'
-                      '          finalResponseTokenBudget: 8_000,\n'
-                      '        },\n'
-                      '      };\n'
-                      '      (mockConverter.convertGeminiRequestToOpenAI as '
-                      'Mock).mockReturnValue([]);\n'
-                      '      (mockConverter.convertOpenAIResponseToGemini as '
-                      'Mock).mockReturnValue(\n'
-                      '        new GenerateContentResponse(),\n'
-                      '      );\n'
-                      '      (mockClient.chat.completions.create as '
-                      'Mock).mockResolvedValue({\n'
-                      "        id: 'test',\n"
-                      "        choices: [{ message: { content: 'summary' } }],\n"
-                      '      });\n'
-                      '\n'
-                      "      await pipeline.execute(request, 'compaction');\n"
-                      '\n'
-                      '      expect(\n'
-                      '        (mockClient.chat.completions.create as '
-                      'Mock).mock.calls[0][0],\n'
-                      '      ).toMatchObject({\n'
-                      '        max_tokens: 20_000,\n'
-                      '        thinking_token_budget: 12_000,\n'
-                      '        final_response_token_budget: 8_000,\n'
-                      '      });\n'
-                      '    });\n'
-                      '\n'
-                      '    it.each([\n'
-                      '      {\n'
-                      "        name: 'non-positive thinking budget',\n"
-                      '        sampling: {\n'
-                      '          max_tokens: 20_000,\n'
-                      '          thinking_token_budget: 12_000,\n'
-                      '          final_response_token_budget: 8_000,\n'
-                      '        },\n'
-                      '        overrides: { thinkingTokenBudget: 0, '
-                      'finalResponseTokenBudget: 8_000 },\n'
-                      "        error: 'expected a positive safe integer',\n"
-                      '      },\n'
-                      '      {\n'
-                      "        name: 'thinking budget above the pinned provider "
-                      "ceiling',\n"
-                      '        sampling: {\n'
-                      '          max_tokens: 20_000,\n'
-                      '          thinking_token_budget: 11_999,\n'
-                      '          final_response_token_budget: 8_000,\n'
-                      '        },\n'
-                      '        overrides: {\n'
-                      '          thinkingTokenBudget: 12_000,\n'
-                      '          finalResponseTokenBudget: 8_000,\n'
-                      '        },\n'
-                      "        error: 'must not exceed the pinned provider ceiling',\n"
-                      '      },\n'
-                      '      {\n'
-                      "        name: 'combined phases above the request output "
-                      "ceiling',\n"
-                      '        sampling: {\n'
-                      '          max_tokens: 19_999,\n'
-                      '          thinking_token_budget: 12_000,\n'
-                      '          final_response_token_budget: 8_000,\n'
-                      '        },\n'
-                      '        overrides: {\n'
-                      '          thinkingTokenBudget: 12_000,\n'
-                      '          finalResponseTokenBudget: 8_000,\n'
-                      '        },\n'
-                      "        error: 'Phase budgets exceed maxOutputTokens',\n"
-                      '      },\n'
-                      "    ])('refuses $name', async ({ sampling, overrides, error }) "
-                      '=> {\n'
-                      '      mockContentGeneratorConfig.samplingParams =\n'
-                      "        sampling as ContentGeneratorConfig['samplingParams'];\n"
-                      '      pipeline = new ContentGenerationPipeline(mockConfig);\n'
-                      '      const request: PromptCacheSharingParameters = {\n'
-                      "        model: 'test-model',\n"
-                      "        contents: [{ parts: [{ text: 'Summarize safely' }], "
-                      "role: 'user' }],\n"
-                      '        config: { maxOutputTokens: sampling.max_tokens },\n'
-                      '        phaseBudgetOverrides: overrides,\n'
-                      '      };\n'
-                      '      (mockConverter.convertGeminiRequestToOpenAI as '
-                      'Mock).mockReturnValue([]);\n'
-                      '\n'
-                      '      await expect(pipeline.execute(request, '
-                      "'compaction')).rejects.toThrow(\n"
-                      '        error,\n'
-                      '      );\n'
-                      '      '
-                      'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
-                      '    });\n'
-                      '\n'
-                      "    it('[phase-budget] overrides a phase budget pinned in "
-                      "extra_body, which the provider merges over the request', async "
-                      '() => {\n'
-                      '      // The deployed provider pins the phase budgets in '
-                      '`extra_body`, which\n'
-                      '      // DefaultOpenAICompatibleProvider merges over the '
-                      'request it is given.\n'
-                      '      // Run the real provider so the merge actually happens: a '
-                      'maintenance\n'
-                      '      // budget written before that merge is silently replaced '
-                      'by the pinned\n'
-                      '      // one, which is how a 20K compaction was run with an '
-                      'unbounded\n'
-                      '      // thinking budget and produced no summary at all.\n'
-                      '      mockContentGeneratorConfig = {\n'
-                      '        ...mockContentGeneratorConfig,\n'
-                      '        samplingParams: {\n'
-                      '          temperature: 1,\n'
-                      '          max_tokens: 262_144,\n'
-                      '        },\n'
-                      '        extra_body: {\n'
-                      "          reasoning_effort: 'xhigh',\n"
-                      '          thinking_token_budget: 262_144,\n'
-                      '          final_response_token_budget: 131_072,\n'
-                      '        },\n'
-                      '      } as ContentGeneratorConfig;\n'
-                      '      mockConfig = {\n'
-                      '        ...mockConfig,\n'
-                      '        contentGeneratorConfig: mockContentGeneratorConfig,\n'
-                      '      };\n'
-                      '      pipeline = new ContentGenerationPipeline(mockConfig);\n'
-                      '\n'
-                      '      const realProvider = new '
-                      'DefaultOpenAICompatibleProvider(\n'
-                      '        mockContentGeneratorConfig,\n'
-                      '        {} as unknown as Config,\n'
-                      '      );\n'
-                      '      (mockProvider.buildRequest as '
-                      'Mock).mockImplementation((req) =>\n'
-                      "        realProvider.buildRequest(req, 'compaction'),\n"
-                      '      );\n'
-                      '\n'
-                      '      const request: PromptCacheSharingParameters = {\n'
-                      "        model: 'test-model',\n"
-                      "        contents: [{ parts: [{ text: 'Summarize safely' }], "
-                      "role: 'user' }],\n"
-                      '        config: { maxOutputTokens: 20_000 },\n'
-                      '        phaseBudgetOverrides: {\n'
-                      '          thinkingTokenBudget: 12_000,\n'
-                      '          finalResponseTokenBudget: 8_000,\n'
-                      '        },\n'
-                      '      };\n'
-                      '      (mockConverter.convertGeminiRequestToOpenAI as '
-                      'Mock).mockReturnValue([]);\n'
-                      '      (mockConverter.convertOpenAIResponseToGemini as '
-                      'Mock).mockReturnValue(\n'
-                      '        new GenerateContentResponse(),\n'
-                      '      );\n'
-                      '      (mockClient.chat.completions.create as '
-                      'Mock).mockResolvedValue({\n'
-                      "        id: 'test',\n"
-                      "        choices: [{ message: { content: 'summary' } }],\n"
-                      '      });\n'
-                      '\n'
-                      "      await pipeline.execute(request, 'compaction');\n"
-                      '\n'
-                      '      expect(\n'
-                      '        (mockClient.chat.completions.create as '
-                      'Mock).mock.calls[0][0],\n'
-                      '      ).toMatchObject({\n'
-                      '        max_tokens: 20_000,\n'
-                      '        thinking_token_budget: 12_000,\n'
-                      '        final_response_token_budget: 8_000,\n'
-                      '        // Every other pinned extra_body key still reaches the '
-                      'wire unchanged.\n'
-                      "        reasoning_effort: 'xhigh',\n"
-                      '      });\n'
-                      '    });\n'
-                      '\n'
-                      "    it('[phase-budget] refuses a phase budget above a ceiling "
-                      "pinned in extra_body', async () => {\n"
-                      '      mockContentGeneratorConfig = {\n'
-                      '        ...mockContentGeneratorConfig,\n'
-                      '        samplingParams: {\n'
-                      '          temperature: 1,\n'
-                      '          max_tokens: 262_144,\n'
-                      '        },\n'
-                      '        extra_body: {\n'
-                      '          thinking_token_budget: 11_999,\n'
-                      '          final_response_token_budget: 131_072,\n'
-                      '        },\n'
-                      '      } as ContentGeneratorConfig;\n'
-                      '      mockConfig = {\n'
-                      '        ...mockConfig,\n'
-                      '        contentGeneratorConfig: mockContentGeneratorConfig,\n'
-                      '      };\n'
-                      '      pipeline = new ContentGenerationPipeline(mockConfig);\n'
-                      '\n'
-                      '      const realProvider = new '
-                      'DefaultOpenAICompatibleProvider(\n'
-                      '        mockContentGeneratorConfig,\n'
-                      '        {} as unknown as Config,\n'
-                      '      );\n'
-                      '      (mockProvider.buildRequest as '
-                      'Mock).mockImplementation((req) =>\n'
-                      "        realProvider.buildRequest(req, 'compaction'),\n"
-                      '      );\n'
-                      '\n'
-                      '      const request: PromptCacheSharingParameters = {\n'
-                      "        model: 'test-model',\n"
-                      "        contents: [{ parts: [{ text: 'Summarize safely' }], "
-                      "role: 'user' }],\n"
-                      '        config: { maxOutputTokens: 20_000 },\n'
-                      '        phaseBudgetOverrides: {\n'
-                      '          thinkingTokenBudget: 12_000,\n'
-                      '          finalResponseTokenBudget: 8_000,\n'
-                      '        },\n'
-                      '      };\n'
-                      '      (mockConverter.convertGeminiRequestToOpenAI as '
-                      'Mock).mockReturnValue([]);\n'
-                      '\n'
-                      '      await expect(pipeline.execute(request, '
-                      "'compaction')).rejects.toThrow(\n"
-                      "        'must not exceed the pinned provider ceiling',\n"
-                      '      );\n'
-                      '      '
-                      'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
-                      '    });\n'
-                      '  });\n'
-                      '\n'
-                      "  describe('createRequestContext', () => {\n"
-                      "    it('should create context with correct properties for "
-                      "non-streaming request', async () => {\n"
-                      '      // Arrange\n'
-                      '      const request: GenerateContentParameters = {\n',
-             'review_before': '          top_p: 0.6,\n'
-                              '          max_tokens: 2048,\n'
-                              '        }),\n'
-                              '        expect.objectContaining({ signal: undefined '
-                              '}),\n'
-                              '      );\n'
-                              '    });\n'
-                              '  });\n'
-                              '\n'
-                              "  describe('createRequestContext', () => {\n"
-                              "    it('should create context with correct properties "
-                              "for non-streaming request', async () => {\n"
-                              '      // Arrange\n'
-                              '      const request: GenerateContentParameters = {\n',
-             'review_after': '          top_p: 0.6,\n'
-                             '          max_tokens: 2048,\n'
-                             '        }),\n'
-                             '        expect.objectContaining({ signal: undefined }),\n'
-                             '      );\n'
-                             '    });\n'
-                             '\n'
-                             "    it('applies bounded maintenance phase budgets to the "
-                             "OpenAI-compatible wire request', async () => {\n"
-                             '      mockContentGeneratorConfig.samplingParams = {\n'
-                             '        temperature: 0.6,\n'
-                             '        max_tokens: 262_144,\n'
-                             '        thinking_token_budget: 114_688,\n'
-                             '        final_response_token_budget: 32_768,\n'
-                             "      } as ContentGeneratorConfig['samplingParams'];\n"
-                             '      pipeline = new '
-                             'ContentGenerationPipeline(mockConfig);\n'
-                             '      const request: PromptCacheSharingParameters = {\n'
-                             "        model: 'test-model',\n"
-                             "        contents: [{ parts: [{ text: 'Summarize safely' "
-                             "}], role: 'user' }],\n"
-                             '        config: { maxOutputTokens: 20_000 },\n'
-                             '        phaseBudgetOverrides: {\n'
-                             '          thinkingTokenBudget: 12_000,\n'
-                             '          finalResponseTokenBudget: 8_000,\n'
-                             '        },\n'
-                             '      };\n'
-                             '      (mockConverter.convertGeminiRequestToOpenAI as '
-                             'Mock).mockReturnValue([]);\n'
-                             '      (mockConverter.convertOpenAIResponseToGemini as '
-                             'Mock).mockReturnValue(\n'
-                             '        new GenerateContentResponse(),\n'
-                             '      );\n'
-                             '      (mockClient.chat.completions.create as '
-                             'Mock).mockResolvedValue({\n'
-                             "        id: 'test',\n"
-                             "        choices: [{ message: { content: 'summary' } }],\n"
-                             '      });\n'
-                             '\n'
-                             "      await pipeline.execute(request, 'compaction');\n"
-                             '\n'
-                             '      expect(\n'
-                             '        (mockClient.chat.completions.create as '
-                             'Mock).mock.calls[0][0],\n'
-                             '      ).toMatchObject({\n'
-                             '        max_tokens: 20_000,\n'
-                             '        thinking_token_budget: 12_000,\n'
-                             '        final_response_token_budget: 8_000,\n'
-                             '      });\n'
-                             '    });\n'
-                             '\n'
-                             "    it('applies maintenance phase budgets when no "
-                             "samplingParams object exists', async () => {\n"
-                             '      mockContentGeneratorConfig.samplingParams = '
-                             'undefined;\n'
-                             '      pipeline = new '
-                             'ContentGenerationPipeline(mockConfig);\n'
-                             '      const request: PromptCacheSharingParameters = {\n'
-                             "        model: 'test-model',\n"
-                             "        contents: [{ parts: [{ text: 'Summarize safely' "
-                             "}], role: 'user' }],\n"
-                             '        config: { maxOutputTokens: 20_000 },\n'
-                             '        phaseBudgetOverrides: {\n'
-                             '          thinkingTokenBudget: 12_000,\n'
-                             '          finalResponseTokenBudget: 8_000,\n'
-                             '        },\n'
-                             '      };\n'
-                             '      (mockConverter.convertGeminiRequestToOpenAI as '
-                             'Mock).mockReturnValue([]);\n'
-                             '      (mockConverter.convertOpenAIResponseToGemini as '
-                             'Mock).mockReturnValue(\n'
-                             '        new GenerateContentResponse(),\n'
-                             '      );\n'
-                             '      (mockClient.chat.completions.create as '
-                             'Mock).mockResolvedValue({\n'
-                             "        id: 'test',\n"
-                             "        choices: [{ message: { content: 'summary' } }],\n"
-                             '      });\n'
-                             '\n'
-                             "      await pipeline.execute(request, 'compaction');\n"
-                             '\n'
-                             '      expect(\n'
-                             '        (mockClient.chat.completions.create as '
-                             'Mock).mock.calls[0][0],\n'
-                             '      ).toMatchObject({\n'
-                             '        max_tokens: 20_000,\n'
-                             '        thinking_token_budget: 12_000,\n'
-                             '        final_response_token_budget: 8_000,\n'
-                             '      });\n'
-                             '    });\n'
-                             '\n'
-                             '    it.each([\n'
-                             '      {\n'
-                             "        name: 'non-positive thinking budget',\n"
-                             '        sampling: {\n'
-                             '          max_tokens: 20_000,\n'
-                             '          thinking_token_budget: 12_000,\n'
-                             '          final_response_token_budget: 8_000,\n'
-                             '        },\n'
-                             '        overrides: { thinkingTokenBudget: 0, '
-                             'finalResponseTokenBudget: 8_000 },\n'
-                             "        error: 'expected a positive safe integer',\n"
-                             '      },\n'
-                             '      {\n'
-                             "        name: 'thinking budget above the pinned provider "
-                             "ceiling',\n"
-                             '        sampling: {\n'
-                             '          max_tokens: 20_000,\n'
-                             '          thinking_token_budget: 11_999,\n'
-                             '          final_response_token_budget: 8_000,\n'
-                             '        },\n'
-                             '        overrides: {\n'
-                             '          thinkingTokenBudget: 12_000,\n'
-                             '          finalResponseTokenBudget: 8_000,\n'
-                             '        },\n'
-                             "        error: 'must not exceed the pinned provider "
-                             "ceiling',\n"
-                             '      },\n'
-                             '      {\n'
-                             "        name: 'combined phases above the request output "
-                             "ceiling',\n"
-                             '        sampling: {\n'
-                             '          max_tokens: 19_999,\n'
-                             '          thinking_token_budget: 12_000,\n'
-                             '          final_response_token_budget: 8_000,\n'
-                             '        },\n'
-                             '        overrides: {\n'
-                             '          thinkingTokenBudget: 12_000,\n'
-                             '          finalResponseTokenBudget: 8_000,\n'
-                             '        },\n'
-                             "        error: 'Phase budgets exceed maxOutputTokens',\n"
-                             '      },\n'
-                             "    ])('refuses $name', async ({ sampling, overrides, "
-                             'error }) => {\n'
-                             '      mockContentGeneratorConfig.samplingParams =\n'
-                             '        sampling as '
-                             "ContentGeneratorConfig['samplingParams'];\n"
-                             '      pipeline = new '
-                             'ContentGenerationPipeline(mockConfig);\n'
-                             '      const request: PromptCacheSharingParameters = {\n'
-                             "        model: 'test-model',\n"
-                             "        contents: [{ parts: [{ text: 'Summarize safely' "
-                             "}], role: 'user' }],\n"
-                             '        config: { maxOutputTokens: sampling.max_tokens '
-                             '},\n'
-                             '        phaseBudgetOverrides: overrides,\n'
-                             '      };\n'
-                             '      (mockConverter.convertGeminiRequestToOpenAI as '
-                             'Mock).mockReturnValue([]);\n'
-                             '\n'
-                             '      await expect(pipeline.execute(request, '
-                             "'compaction')).rejects.toThrow(\n"
-                             '        error,\n'
-                             '      );\n'
-                             '      '
-                             'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
-                             '    });\n'
-                             '\n'
-                             "    it('[phase-budget] overrides a phase budget pinned "
-                             'in extra_body, which the provider merges over the '
-                             "request', async () => {\n"
-                             '      // The deployed provider pins the phase budgets in '
-                             '`extra_body`, which\n'
-                             '      // DefaultOpenAICompatibleProvider merges over the '
-                             'request it is given.\n'
-                             '      // Run the real provider so the merge actually '
-                             'happens: a maintenance\n'
-                             '      // budget written before that merge is silently '
-                             'replaced by the pinned\n'
-                             '      // one, which is how a 20K compaction was run with '
-                             'an unbounded\n'
-                             '      // thinking budget and produced no summary at '
-                             'all.\n'
-                             '      mockContentGeneratorConfig = {\n'
-                             '        ...mockContentGeneratorConfig,\n'
-                             '        samplingParams: {\n'
-                             '          temperature: 1,\n'
-                             '          max_tokens: 262_144,\n'
-                             '        },\n'
-                             '        extra_body: {\n'
-                             "          reasoning_effort: 'xhigh',\n"
-                             '          thinking_token_budget: 262_144,\n'
-                             '          final_response_token_budget: 131_072,\n'
-                             '        },\n'
-                             '      } as ContentGeneratorConfig;\n'
-                             '      mockConfig = {\n'
-                             '        ...mockConfig,\n'
-                             '        contentGeneratorConfig: '
-                             'mockContentGeneratorConfig,\n'
-                             '      };\n'
-                             '      pipeline = new '
-                             'ContentGenerationPipeline(mockConfig);\n'
-                             '\n'
-                             '      const realProvider = new '
-                             'DefaultOpenAICompatibleProvider(\n'
-                             '        mockContentGeneratorConfig,\n'
-                             '        {} as unknown as Config,\n'
-                             '      );\n'
-                             '      (mockProvider.buildRequest as '
-                             'Mock).mockImplementation((req) =>\n'
-                             "        realProvider.buildRequest(req, 'compaction'),\n"
-                             '      );\n'
-                             '\n'
-                             '      const request: PromptCacheSharingParameters = {\n'
-                             "        model: 'test-model',\n"
-                             "        contents: [{ parts: [{ text: 'Summarize safely' "
-                             "}], role: 'user' }],\n"
-                             '        config: { maxOutputTokens: 20_000 },\n'
-                             '        phaseBudgetOverrides: {\n'
-                             '          thinkingTokenBudget: 12_000,\n'
-                             '          finalResponseTokenBudget: 8_000,\n'
-                             '        },\n'
-                             '      };\n'
-                             '      (mockConverter.convertGeminiRequestToOpenAI as '
-                             'Mock).mockReturnValue([]);\n'
-                             '      (mockConverter.convertOpenAIResponseToGemini as '
-                             'Mock).mockReturnValue(\n'
-                             '        new GenerateContentResponse(),\n'
-                             '      );\n'
-                             '      (mockClient.chat.completions.create as '
-                             'Mock).mockResolvedValue({\n'
-                             "        id: 'test',\n"
-                             "        choices: [{ message: { content: 'summary' } }],\n"
-                             '      });\n'
-                             '\n'
-                             "      await pipeline.execute(request, 'compaction');\n"
-                             '\n'
-                             '      expect(\n'
-                             '        (mockClient.chat.completions.create as '
-                             'Mock).mock.calls[0][0],\n'
-                             '      ).toMatchObject({\n'
-                             '        max_tokens: 20_000,\n'
-                             '        thinking_token_budget: 12_000,\n'
-                             '        final_response_token_budget: 8_000,\n'
-                             '        // Every other pinned extra_body key still '
-                             'reaches the wire unchanged.\n'
-                             "        reasoning_effort: 'xhigh',\n"
-                             '      });\n'
-                             '    });\n'
-                             '\n'
-                             "    it('[phase-budget] refuses a phase budget above a "
-                             "ceiling pinned in extra_body', async () => {\n"
-                             '      mockContentGeneratorConfig = {\n'
-                             '        ...mockContentGeneratorConfig,\n'
-                             '        samplingParams: {\n'
-                             '          temperature: 1,\n'
-                             '          max_tokens: 262_144,\n'
-                             '        },\n'
-                             '        extra_body: {\n'
-                             '          thinking_token_budget: 11_999,\n'
-                             '          final_response_token_budget: 131_072,\n'
-                             '        },\n'
-                             '      } as ContentGeneratorConfig;\n'
-                             '      mockConfig = {\n'
-                             '        ...mockConfig,\n'
-                             '        contentGeneratorConfig: '
-                             'mockContentGeneratorConfig,\n'
-                             '      };\n'
-                             '      pipeline = new '
-                             'ContentGenerationPipeline(mockConfig);\n'
-                             '\n'
-                             '      const realProvider = new '
-                             'DefaultOpenAICompatibleProvider(\n'
-                             '        mockContentGeneratorConfig,\n'
-                             '        {} as unknown as Config,\n'
-                             '      );\n'
-                             '      (mockProvider.buildRequest as '
-                             'Mock).mockImplementation((req) =>\n'
-                             "        realProvider.buildRequest(req, 'compaction'),\n"
-                             '      );\n'
-                             '\n'
-                             '      const request: PromptCacheSharingParameters = {\n'
-                             "        model: 'test-model',\n"
-                             "        contents: [{ parts: [{ text: 'Summarize safely' "
-                             "}], role: 'user' }],\n"
-                             '        config: { maxOutputTokens: 20_000 },\n'
-                             '        phaseBudgetOverrides: {\n'
-                             '          thinkingTokenBudget: 12_000,\n'
-                             '          finalResponseTokenBudget: 8_000,\n'
-                             '        },\n'
-                             '      };\n'
-                             '      (mockConverter.convertGeminiRequestToOpenAI as '
-                             'Mock).mockReturnValue([]);\n'
-                             '\n'
-                             '      await expect(pipeline.execute(request, '
-                             "'compaction')).rejects.toThrow(\n"
-                             "        'must not exceed the pinned provider ceiling',\n"
-                             '      );\n'
-                             '      '
-                             'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
-                             '    });\n'
-                             '  });\n'
-                             '\n'
-                             "  describe('createRequestContext', () => {\n"
-                             "    it('should create context with correct properties "
-                             "for non-streaming request', async () => {\n"
-                             '      // Arrange\n'
-                             '      const request: GenerateContentParameters = {\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts:landmark-1',
              'path': 'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts',
              'before': '',
@@ -30444,225 +28187,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'import {\n'
                              '  applyOfficialOpenAIPromptCaching,\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-2',
-             'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
-             'before': '      samplingParams[key] = requestMaxTokens;\n'
-                       '    }\n'
-                       '  }\n'
-                       '  return samplingParams;\n'
-                       '}\n'
-                       '\n'
-                       '/**\n'
-                       ' * Resolve a stream-guard timeout (ms). Precedence, for both '
-                       'guards: explicit\n'
-                       ' * `ContentGeneratorConfig` field (programmatic, wins — '
-                       'including `0` to\n'
-                       ' * disable) > the env deployment knob > the built-in default. '
-                       'A malformed env\n'
-                       ' * value is ignored (with a `console.warn`) rather than '
-                       'failing the request.\n'
-                       ' */\n',
-             'after': '      samplingParams[key] = requestMaxTokens;\n'
-                      '    }\n'
-                      '  }\n'
-                      '  return samplingParams;\n'
-                      '}\n'
-                      '\n'
-                      '/**\n'
-                      ' * Write the per-request maintenance phase budget onto the '
-                      'fully merged wire\n'
-                      ' * request, mutating and returning the passed object.\n'
-                      ' *\n'
-                      ' * This is deliberately the last transformation of the request. '
-                      'The phase\n'
-                      ' * budgets are ordinary wire keys that the pinned configuration '
-                      'also declares\n'
-                      ' * — in `samplingParams`, in a provider hook, or in '
-                      '`extra_body`, which\n'
-                      ' * providers merge over the request — so an override written '
-                      'before those\n'
-                      ' * layers have merged is silently replaced by the pinned value, '
-                      'and the\n'
-                      ' * ceiling check below compares against an absent value it can '
-                      'never refuse.\n'
-                      ' * Written here, the override is both the value that ships and '
-                      'the value\n'
-                      ' * validated against the one it replaces.\n'
-                      ' */\n'
-                      'function applyPhaseBudgetOverrides(\n'
-                      '  wireRequest: Record<string, unknown>,\n'
-                      '  overrides: '
-                      "PromptCacheSharingParameters['phaseBudgetOverrides'],\n"
-                      '  requestMaxTokens: number | undefined,\n'
-                      '): Record<string, unknown> {\n'
-                      '  if (!overrides) return wireRequest;\n'
-                      '  const entries = [\n'
-                      "    ['thinking_token_budget', overrides.thinkingTokenBudget],\n"
-                      "    ['final_response_token_budget', "
-                      'overrides.finalResponseTokenBudget],\n'
-                      '  ] as const;\n'
-                      '  for (const [wireKey, requested] of entries) {\n'
-                      '    if (!Number.isSafeInteger(requested) || requested <= 0) {\n'
-                      '      throw new Error(\n'
-                      '        `Invalid ${wireKey} phase override: expected a positive '
-                      'safe integer.`,\n'
-                      '      );\n'
-                      '    }\n'
-                      '    const configured = wireRequest[wireKey];\n'
-                      '    if (\n'
-                      '      configured !== undefined &&\n'
-                      "      (typeof configured !== 'number' ||\n"
-                      '        !Number.isSafeInteger(configured) ||\n'
-                      '        requested > configured)\n'
-                      '    ) {\n'
-                      '      throw new Error(\n'
-                      '        `Refusing ${wireKey}=${requested}: the per-request '
-                      'maintenance ` +\n'
-                      '          `budget must not exceed the pinned provider ceiling '
-                      '(${String(configured)}).`,\n'
-                      '      );\n'
-                      '    }\n'
-                      '  }\n'
-                      '  if (\n'
-                      '    requestMaxTokens !== undefined &&\n'
-                      '    overrides.thinkingTokenBudget + '
-                      'overrides.finalResponseTokenBudget >\n'
-                      '      requestMaxTokens\n'
-                      '  ) {\n'
-                      '    throw new Error(\n'
-                      '      `Phase budgets exceed maxOutputTokens: thinking=` +\n'
-                      '        `${overrides.thinkingTokenBudget}, final=` +\n'
-                      '        `${overrides.finalResponseTokenBudget}, '
-                      'max=${requestMaxTokens}.`,\n'
-                      '    );\n'
-                      '  }\n'
-                      "  wireRequest['thinking_token_budget'] = "
-                      'overrides.thinkingTokenBudget;\n'
-                      "  wireRequest['final_response_token_budget'] =\n"
-                      '    overrides.finalResponseTokenBudget;\n'
-                      '  return wireRequest;\n'
-                      '}\n'
-                      '\n'
-                      '/**\n'
-                      ' * Resolve a stream-guard timeout (ms). Precedence, for both '
-                      'guards: explicit\n'
-                      ' * `ContentGeneratorConfig` field (programmatic, wins — '
-                      'including `0` to\n'
-                      ' * disable) > the env deployment knob > the built-in default. A '
-                      'malformed env\n'
-                      ' * value is ignored (with a `console.warn`) rather than failing '
-                      'the request.\n'
-                      ' */\n',
-             'review_before': '      samplingParams[key] = requestMaxTokens;\n'
-                              '    }\n'
-                              '  }\n'
-                              '  return samplingParams;\n'
-                              '}\n'
-                              '\n'
-                              '/**\n'
-                              ' * Resolve a stream-guard timeout (ms). Precedence, for '
-                              'both guards: explicit\n'
-                              ' * `ContentGeneratorConfig` field (programmatic, wins — '
-                              'including `0` to\n'
-                              ' * disable) > the env deployment knob > the built-in '
-                              'default. A malformed env\n'
-                              ' * value is ignored (with a `console.warn`) rather than '
-                              'failing the request.\n'
-                              ' */\n',
-             'review_after': '      samplingParams[key] = requestMaxTokens;\n'
-                             '    }\n'
-                             '  }\n'
-                             '  return samplingParams;\n'
-                             '}\n'
-                             '\n'
-                             '/**\n'
-                             ' * Write the per-request maintenance phase budget onto '
-                             'the fully merged wire\n'
-                             ' * request, mutating and returning the passed object.\n'
-                             ' *\n'
-                             ' * This is deliberately the last transformation of the '
-                             'request. The phase\n'
-                             ' * budgets are ordinary wire keys that the pinned '
-                             'configuration also declares\n'
-                             ' * — in `samplingParams`, in a provider hook, or in '
-                             '`extra_body`, which\n'
-                             ' * providers merge over the request — so an override '
-                             'written before those\n'
-                             ' * layers have merged is silently replaced by the pinned '
-                             'value, and the\n'
-                             ' * ceiling check below compares against an absent value '
-                             'it can never refuse.\n'
-                             ' * Written here, the override is both the value that '
-                             'ships and the value\n'
-                             ' * validated against the one it replaces.\n'
-                             ' */\n'
-                             'function applyPhaseBudgetOverrides(\n'
-                             '  wireRequest: Record<string, unknown>,\n'
-                             '  overrides: '
-                             "PromptCacheSharingParameters['phaseBudgetOverrides'],\n"
-                             '  requestMaxTokens: number | undefined,\n'
-                             '): Record<string, unknown> {\n'
-                             '  if (!overrides) return wireRequest;\n'
-                             '  const entries = [\n'
-                             "    ['thinking_token_budget', "
-                             'overrides.thinkingTokenBudget],\n'
-                             "    ['final_response_token_budget', "
-                             'overrides.finalResponseTokenBudget],\n'
-                             '  ] as const;\n'
-                             '  for (const [wireKey, requested] of entries) {\n'
-                             '    if (!Number.isSafeInteger(requested) || requested <= '
-                             '0) {\n'
-                             '      throw new Error(\n'
-                             '        `Invalid ${wireKey} phase override: expected a '
-                             'positive safe integer.`,\n'
-                             '      );\n'
-                             '    }\n'
-                             '    const configured = wireRequest[wireKey];\n'
-                             '    if (\n'
-                             '      configured !== undefined &&\n'
-                             "      (typeof configured !== 'number' ||\n"
-                             '        !Number.isSafeInteger(configured) ||\n'
-                             '        requested > configured)\n'
-                             '    ) {\n'
-                             '      throw new Error(\n'
-                             '        `Refusing ${wireKey}=${requested}: the '
-                             'per-request maintenance ` +\n'
-                             '          `budget must not exceed the pinned provider '
-                             'ceiling (${String(configured)}).`,\n'
-                             '      );\n'
-                             '    }\n'
-                             '  }\n'
-                             '  if (\n'
-                             '    requestMaxTokens !== undefined &&\n'
-                             '    overrides.thinkingTokenBudget + '
-                             'overrides.finalResponseTokenBudget >\n'
-                             '      requestMaxTokens\n'
-                             '  ) {\n'
-                             '    throw new Error(\n'
-                             '      `Phase budgets exceed maxOutputTokens: thinking=` '
-                             '+\n'
-                             '        `${overrides.thinkingTokenBudget}, final=` +\n'
-                             '        `${overrides.finalResponseTokenBudget}, '
-                             'max=${requestMaxTokens}.`,\n'
-                             '    );\n'
-                             '  }\n'
-                             "  wireRequest['thinking_token_budget'] = "
-                             'overrides.thinkingTokenBudget;\n'
-                             "  wireRequest['final_response_token_budget'] =\n"
-                             '    overrides.finalResponseTokenBudget;\n'
-                             '  return wireRequest;\n'
-                             '}\n'
-                             '\n'
-                             '/**\n'
-                             ' * Resolve a stream-guard timeout (ms). Precedence, for '
-                             'both guards: explicit\n'
-                             ' * `ContentGeneratorConfig` field (programmatic, wins — '
-                             'including `0` to\n'
-                             ' * disable) > the env deployment knob > the built-in '
-                             'default. A malformed env\n'
-                             ' * value is ignored (with a `console.warn`) rather than '
-                             'failing the request.\n'
-                             ' */\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-3',
              'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before': '    }\n'
                        '  }\n'
@@ -30880,7 +28404,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'env read + any\n'
                              '  // invalid-value warning happen per pipeline, not per '
                              'streaming request.\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-4',
+            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-3',
              'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before': '    );\n'
                        '    this.streamMaxLifetimeMs = resolveStreamMaxLifetimeMs(\n'
@@ -31032,77 +28556,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  ): Promise<GenerateContentResponse> {\n'
                              '    return this.executeWithErrorHandling(\n'
                              '      request,\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-5',
-             'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
-             'before': "        'DashScope: dropping tool_choice=required while "
-                       "thinking is enabled',\n"
-                       '        { model, reasoningEffort, thinkingBudget, '
-                       'thinkingMandatory },\n'
-                       '      );\n'
-                       "      delete typed['tool_choice'];\n"
-                       '    }\n'
-                       '\n'
-                       '    return providerRequest;\n'
-                       '  }\n'
-                       '\n'
-                       '  private requiresThinking(model: string): boolean {\n'
-                       '    const normalizedModel = model.toLowerCase();\n'
-                       '    return (\n',
-             'after': "        'DashScope: dropping tool_choice=required while "
-                      "thinking is enabled',\n"
-                      '        { model, reasoningEffort, thinkingBudget, '
-                      'thinkingMandatory },\n'
-                      '      );\n'
-                      "      delete typed['tool_choice'];\n"
-                      '    }\n'
-                      '\n'
-                      '    applyPhaseBudgetOverrides(\n'
-                      '      typed,\n'
-                      '      request.phaseBudgetOverrides,\n'
-                      '      request.config?.maxOutputTokens,\n'
-                      '    );\n'
-                      '\n'
-                      '    return providerRequest;\n'
-                      '  }\n'
-                      '\n'
-                      '  private requiresThinking(model: string): boolean {\n'
-                      '    const normalizedModel = model.toLowerCase();\n'
-                      '    return (\n',
-             'review_before': "        'DashScope: dropping tool_choice=required while "
-                              "thinking is enabled',\n"
-                              '        { model, reasoningEffort, thinkingBudget, '
-                              'thinkingMandatory },\n'
-                              '      );\n'
-                              "      delete typed['tool_choice'];\n"
-                              '    }\n'
-                              '\n'
-                              '    return providerRequest;\n'
-                              '  }\n'
-                              '\n'
-                              '  private requiresThinking(model: string): boolean {\n'
-                              '    const normalizedModel = model.toLowerCase();\n'
-                              '    return (\n',
-             'review_after': "        'DashScope: dropping tool_choice=required while "
-                             "thinking is enabled',\n"
-                             '        { model, reasoningEffort, thinkingBudget, '
-                             'thinkingMandatory },\n'
-                             '      );\n'
-                             "      delete typed['tool_choice'];\n"
-                             '    }\n'
-                             '\n'
-                             '    applyPhaseBudgetOverrides(\n'
-                             '      typed,\n'
-                             '      request.phaseBudgetOverrides,\n'
-                             '      request.config?.maxOutputTokens,\n'
-                             '    );\n'
-                             '\n'
-                             '    return providerRequest;\n'
-                             '  }\n'
-                             '\n'
-                             '  private requiresThinking(model: string): boolean {\n'
-                             '    const normalizedModel = model.toLowerCase();\n'
-                             '    return (\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-6',
+            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-4',
              'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before': '        : undefined;\n'
                        '\n'
@@ -31286,15 +28740,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'postCompactAttachments.postProcessSummary, not in\n'
                        '    // the prompt. Keeping it out of the prompt saves output '
                        'tokens per\n'
-                       '    // compaction and prevents wording drift.\n'
-                       '    const prompt = getCompressionPrompt();\n'
-                       '    expect(prompt).not.toMatch(\n'
-                       '      /resume.*directly|continue the conversation from where '
-                       'it left off/i,\n'
-                       '    );\n'
-                       '  });\n'
-                       '});\n'
-                       '\n',
+                       '    // compaction and prevents wording drift.\n',
              'after': "    expect(prompt).toContain('new-app');\n"
                       "    expect(prompt).toContain('## New Applications');\n"
                       '  });\n'
@@ -31303,7 +28749,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "describe('getCompressionPrompt', () => {\n"
                       "  it('uses the <state_snapshot> XML envelope with the six "
                       "one-home sections', () => {\n"
-                      '    const prompt = getCompressionPrompt(16_000);\n'
+                      '    const prompt = getCompressionPrompt();\n'
                       "    expect(prompt).toContain('<state_snapshot>');\n"
                       "    expect(prompt).toContain('</state_snapshot>');\n"
                       '    // One section per kind of fact. The previous nine-section '
@@ -31334,7 +28780,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '\n'
                       "  it('states the writing contract: generous, dense, "
                       "deduplicated by structure', () => {\n"
-                      '    const prompt = getCompressionPrompt(16_000);\n'
+                      '    const prompt = getCompressionPrompt();\n'
                       "    expect(prompt).toContain('GENEROUS');\n"
                       "    expect(prompt).toContain('DENSE');\n"
                       "    expect(prompt).toContain('NO DUPLICATION');\n"
@@ -31350,30 +28796,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    expect(prompt).toContain('path:line');\n"
                       '  });\n'
                       '\n'
-                      "  it('names the real final-phase budget so the writer knows the "
-                      "page size', () => {\n"
-                      '    // The three production truncations pressed against a '
-                      'ceiling the model\n'
-                      '    // was never told about. The number is interpolated from '
-                      'the caller so\n'
-                      '    // the prompt cannot drift from the enforced budget.\n'
-                      '    expect(getCompressionPrompt(16_000)).toContain(\n'
-                      "      'hard-capped at 16000 tokens',\n"
-                      '    );\n'
-                      '    expect(getCompressionPrompt(12_345)).toContain(\n'
-                      "      'hard-capped at 12345 tokens',\n"
-                      '    );\n'
-                      '  });\n'
-                      '\n'
                       "  it('sends compaction reasoning to hidden thinking rather than "
                       "an in-band block', () => {\n"
-                      '    const prompt = getCompressionPrompt(16_000);\n'
+                      '    const prompt = getCompressionPrompt();\n'
                       '    // Upstream asked for an <analysis> scratchpad that the '
                       'summarizer then\n'
                       '    // stripped. This deployment thinks natively at xhigh, so '
                       'an in-band\n'
-                      '    // block would spend the fixed maintenance output budget on '
-                      'text that is\n'
+                      '    // block would spend the compaction output budget on text '
+                      'that is\n'
                       '    // discarded -- the failure mode that produced two empty '
                       'summaries and a\n'
                       '    // dead session. The prompt now directs reasoning to hidden '
@@ -31392,15 +28823,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'postCompactAttachments.postProcessSummary, not in\n'
                       '    // the prompt. Keeping it out of the prompt saves output '
                       'tokens per\n'
-                      '    // compaction and prevents wording drift.\n'
-                      '    const prompt = getCompressionPrompt(16_000);\n'
-                      '    expect(prompt).not.toMatch(\n'
-                      '      /resume.*directly|continue the conversation from where it '
-                      'left off/i,\n'
-                      '    );\n'
-                      '  });\n'
-                      '});\n'
-                      '\n',
+                      '    // compaction and prevents wording drift.\n',
              'review_before': "    expect(prompt).toContain('new-app');\n"
                               "    expect(prompt).toContain('## New Applications');\n"
                               '  });\n'
@@ -31455,15 +28878,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'postCompactAttachments.postProcessSummary, not in\n'
                               '    // the prompt. Keeping it out of the prompt saves '
                               'output tokens per\n'
-                              '    // compaction and prevents wording drift.\n'
-                              '    const prompt = getCompressionPrompt();\n'
-                              '    expect(prompt).not.toMatch(\n'
-                              '      /resume.*directly|continue the conversation from '
-                              'where it left off/i,\n'
-                              '    );\n'
-                              '  });\n'
-                              '});\n'
-                              '\n',
+                              '    // compaction and prevents wording drift.\n',
              'review_after': "    expect(prompt).toContain('new-app');\n"
                              "    expect(prompt).toContain('## New Applications');\n"
                              '  });\n'
@@ -31472,7 +28887,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "describe('getCompressionPrompt', () => {\n"
                              "  it('uses the <state_snapshot> XML envelope with the "
                              "six one-home sections', () => {\n"
-                             '    const prompt = getCompressionPrompt(16_000);\n'
+                             '    const prompt = getCompressionPrompt();\n'
                              "    expect(prompt).toContain('<state_snapshot>');\n"
                              "    expect(prompt).toContain('</state_snapshot>');\n"
                              '    // One section per kind of fact. The previous '
@@ -31503,7 +28918,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              "  it('states the writing contract: generous, dense, "
                              "deduplicated by structure', () => {\n"
-                             '    const prompt = getCompressionPrompt(16_000);\n'
+                             '    const prompt = getCompressionPrompt();\n'
                              "    expect(prompt).toContain('GENEROUS');\n"
                              "    expect(prompt).toContain('DENSE');\n"
                              "    expect(prompt).toContain('NO DUPLICATION');\n"
@@ -31519,31 +28934,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    expect(prompt).toContain('path:line');\n"
                              '  });\n'
                              '\n'
-                             "  it('names the real final-phase budget so the writer "
-                             "knows the page size', () => {\n"
-                             '    // The three production truncations pressed against '
-                             'a ceiling the model\n'
-                             '    // was never told about. The number is interpolated '
-                             'from the caller so\n'
-                             '    // the prompt cannot drift from the enforced '
-                             'budget.\n'
-                             '    expect(getCompressionPrompt(16_000)).toContain(\n'
-                             "      'hard-capped at 16000 tokens',\n"
-                             '    );\n'
-                             '    expect(getCompressionPrompt(12_345)).toContain(\n'
-                             "      'hard-capped at 12345 tokens',\n"
-                             '    );\n'
-                             '  });\n'
-                             '\n'
                              "  it('sends compaction reasoning to hidden thinking "
                              "rather than an in-band block', () => {\n"
-                             '    const prompt = getCompressionPrompt(16_000);\n'
+                             '    const prompt = getCompressionPrompt();\n'
                              '    // Upstream asked for an <analysis> scratchpad that '
                              'the summarizer then\n'
                              '    // stripped. This deployment thinks natively at '
                              'xhigh, so an in-band\n'
-                             '    // block would spend the fixed maintenance output '
-                             'budget on text that is\n'
+                             '    // block would spend the compaction output budget on '
+                             'text that is\n'
                              '    // discarded -- the failure mode that produced two '
                              'empty summaries and a\n'
                              '    // dead session. The prompt now directs reasoning to '
@@ -31562,15 +28961,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'postCompactAttachments.postProcessSummary, not in\n'
                              '    // the prompt. Keeping it out of the prompt saves '
                              'output tokens per\n'
-                             '    // compaction and prevents wording drift.\n'
-                             '    const prompt = getCompressionPrompt(16_000);\n'
-                             '    expect(prompt).not.toMatch(\n'
-                             '      /resume.*directly|continue the conversation from '
-                             'where it left off/i,\n'
-                             '    );\n'
-                             '  });\n'
-                             '});\n'
-                             '\n'},
+                             '    // compaction and prevents wording drift.\n'},
             {'name': 'packages/core/src/core/prompts.ts:landmark-1',
              'path': 'packages/core/src/core/prompts.ts',
              'before': "import process from 'node:process';\n"
@@ -31883,23 +29274,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'homes\n'
                       ' * (files_and_code_sections, current_work, next_step quotes, '
                       'and the restored\n'
-                      ' * attachments), summaries grew ~18K → ~30K chars across one '
-                      "session's\n"
-                      ' * compactions, and the last three overflowed the final-phase '
-                      'budget and were\n'
-                      ' * discarded. Deduplication enforced by structure survives '
-                      'budget pressure;\n'
-                      ' * deduplication requested by exhortation does not.\n'
-                      ' *\n'
-                      ' * `finalResponseTokenBudget` is the server-enforced ceiling on '
-                      'the final\n'
-                      " * channel (the snapshot's phase of the generation), stated to "
-                      'the model\n'
-                      ' * because an overflowing snapshot is discarded whole — the '
-                      'writer must know\n'
-                      ' * the page size. Passed as a parameter: this module must not '
-                      'import the\n'
-                      ' * compaction service (which imports this one).\n'
+                      ' * attachments), and summaries grew ~18K → ~30K chars across '
+                      "one session's\n"
+                      ' * compactions restating the same material. Deduplication '
+                      'enforced by\n'
+                      ' * structure holds; deduplication requested by exhortation does '
+                      'not.\n'
                       ' *\n'
                       ' * The resume trailer ("do not acknowledge the summary, ..." '
                       'etc.) is\n'
@@ -31909,8 +29289,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       're-generate\n'
                       ' * it every compaction.\n'
                       ' */\n'
-                      'export function getCompressionPrompt(finalResponseTokenBudget: '
-                      'number): string {\n'
+                      'export function getCompressionPrompt(): string {\n'
                       '  return `\n'
                       'You are the compaction component. The conversation is about to '
                       'exceed the context window, and everything you are shown will be '
@@ -31947,12 +29326,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'where exact wording carries intent, and content that was '
                       'deleted or overwritten.\n'
                       '\n'
-                      'The final channel is hard-capped at ${finalResponseTokenBudget} '
-                      'tokens and an overflowing snapshot is DISCARDED WHOLE, wasting '
-                      'the attempt. A complete, tight snapshot beats an exhaustive '
-                      'loose one. Spend the budget on <in_progress>, <learnings>, and '
-                      '<next_step> first — they are what the resuming agent cannot '
-                      'rediscover cheaply.\n'
+                      'Take the length the state genuinely needs. <in_progress>, '
+                      '<learnings>, and <next_step> carry what the resuming agent '
+                      'cannot rediscover cheaply; do not compress them to save room.\n'
                       '\n'
                       '<state_snapshot>\n'
                       '    <intent>\n'
@@ -32187,23 +29563,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'legitimate homes\n'
                              ' * (files_and_code_sections, current_work, next_step '
                              'quotes, and the restored\n'
-                             ' * attachments), summaries grew ~18K → ~30K chars across '
-                             "one session's\n"
-                             ' * compactions, and the last three overflowed the '
-                             'final-phase budget and were\n'
-                             ' * discarded. Deduplication enforced by structure '
-                             'survives budget pressure;\n'
-                             ' * deduplication requested by exhortation does not.\n'
-                             ' *\n'
-                             ' * `finalResponseTokenBudget` is the server-enforced '
-                             'ceiling on the final\n'
-                             " * channel (the snapshot's phase of the generation), "
-                             'stated to the model\n'
-                             ' * because an overflowing snapshot is discarded whole — '
-                             'the writer must know\n'
-                             ' * the page size. Passed as a parameter: this module '
-                             'must not import the\n'
-                             ' * compaction service (which imports this one).\n'
+                             ' * attachments), and summaries grew ~18K → ~30K chars '
+                             "across one session's\n"
+                             ' * compactions restating the same material. '
+                             'Deduplication enforced by\n'
+                             ' * structure holds; deduplication requested by '
+                             'exhortation does not.\n'
                              ' *\n'
                              ' * The resume trailer ("do not acknowledge the summary, '
                              '..." etc.) is\n'
@@ -32213,9 +29578,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'not re-generate\n'
                              ' * it every compaction.\n'
                              ' */\n'
-                             'export function '
-                             'getCompressionPrompt(finalResponseTokenBudget: number): '
-                             'string {\n'
+                             'export function getCompressionPrompt(): string {\n'
                              '  return `\n'
                              'You are the compaction component. The conversation is '
                              'about to exceed the context window, and everything you '
@@ -32255,13 +29618,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'output, user phrasing where exact wording carries '
                              'intent, and content that was deleted or overwritten.\n'
                              '\n'
-                             'The final channel is hard-capped at '
-                             '${finalResponseTokenBudget} tokens and an overflowing '
-                             'snapshot is DISCARDED WHOLE, wasting the attempt. A '
-                             'complete, tight snapshot beats an exhaustive loose one. '
-                             'Spend the budget on <in_progress>, <learnings>, and '
-                             '<next_step> first — they are what the resuming agent '
-                             'cannot rediscover cheaply.\n'
+                             'Take the length the state genuinely needs. '
+                             '<in_progress>, <learnings>, and <next_step> carry what '
+                             'the resuming agent cannot rediscover cheaply; do not '
+                             'compress them to save room.\n'
                              '\n'
                              '<state_snapshot>\n'
                              '    <intent>\n'
@@ -33741,8 +31101,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'export type CompactionTriggerReason =\n'
                       "  | 'token_limit'\n"
                       "  | 'image_overflow'\n"
-                      "  | 'manual'\n"
-                      "  | 'hard_limit_fallback';\n"
+                      "  | 'manual';\n"
                       '\n'
                       '/**\n'
                       ' * How one compaction generation spent its fixed output '
@@ -33765,10 +31124,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'export interface CompactionOutputAccounting {\n'
                       '  /** Hard output ceiling the attempt was given. */\n'
                       '  maxOutputTokens: number;\n'
-                      '  /** Thinking-phase budget requested on the wire. */\n'
-                      '  thinkingTokenBudget: number;\n'
-                      '  /** Final-response budget requested on the wire. */\n'
-                      '  finalResponseTokenBudget: number;\n'
                       '  /** Output tokens the model actually produced, across both '
                       'phases. */\n'
                       '  outputTokens: number;\n'
@@ -33785,24 +31140,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  summaryChars: number;\n'
                       "  /** The provider's terminal reason, e.g. `MAX_TOKENS`. */\n"
                       '  finishReason: string | null;\n'
-                      '  /**\n'
-                      '   * Exact rendered tokens of the side query that produced this '
-                      'output. A\n'
-                      '   * truncation against a backoff-halved request reads '
-                      'differently from one\n'
-                      '   * against the full history, and nothing else in the captured '
-                      'stream\n'
-                      '   * carries the request size.\n'
-                      '   */\n'
-                      '  summaryRequestTokens: number;\n'
-                      '  /**\n'
-                      '   * History entries carried forward verbatim behind the '
-                      'snapshot because\n'
-                      '   * the full history no longer fit beside the output reserve. '
-                      'Zero means\n'
-                      '   * the snapshot covers everything.\n'
-                      '   */\n'
-                      '  carriedTailContents: number;\n'
                       '}\n'
                       '\n'
                       'export interface ChatCompressionInfo {\n'
@@ -33980,8 +31317,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'export type CompactionTriggerReason =\n'
                              "  | 'token_limit'\n"
                              "  | 'image_overflow'\n"
-                             "  | 'manual'\n"
-                             "  | 'hard_limit_fallback';\n"
+                             "  | 'manual';\n"
                              '\n'
                              '/**\n'
                              ' * How one compaction generation spent its fixed output '
@@ -34005,10 +31341,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'export interface CompactionOutputAccounting {\n'
                              '  /** Hard output ceiling the attempt was given. */\n'
                              '  maxOutputTokens: number;\n'
-                             '  /** Thinking-phase budget requested on the wire. */\n'
-                             '  thinkingTokenBudget: number;\n'
-                             '  /** Final-response budget requested on the wire. */\n'
-                             '  finalResponseTokenBudget: number;\n'
                              '  /** Output tokens the model actually produced, across '
                              'both phases. */\n'
                              '  outputTokens: number;\n'
@@ -34026,24 +31358,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "  /** The provider's terminal reason, e.g. `MAX_TOKENS`. "
                              '*/\n'
                              '  finishReason: string | null;\n'
-                             '  /**\n'
-                             '   * Exact rendered tokens of the side query that '
-                             'produced this output. A\n'
-                             '   * truncation against a backoff-halved request reads '
-                             'differently from one\n'
-                             '   * against the full history, and nothing else in the '
-                             'captured stream\n'
-                             '   * carries the request size.\n'
-                             '   */\n'
-                             '  summaryRequestTokens: number;\n'
-                             '  /**\n'
-                             '   * History entries carried forward verbatim behind the '
-                             'snapshot because\n'
-                             '   * the full history no longer fit beside the output '
-                             'reserve. Zero means\n'
-                             '   * the snapshot covers everything.\n'
-                             '   */\n'
-                             '  carriedTailContents: number;\n'
                              '}\n'
                              '\n'
                              'export interface ChatCompressionInfo {\n'
@@ -40305,19 +37619,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "import * as attachments from './postCompactAttachments.js';\n"
                       'import {\n'
                       '  AUTOCOMPACT_BUFFER,\n'
-                      '  COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
                       '  COMPACT_MAX_OUTPUT_TOKENS,\n'
-                      '  COMPACT_PHASE_DELIMITER_ALLOWANCE,\n'
-                      '  COMPACT_THINKING_TOKEN_BUDGET,\n'
                       '  ChatCompressionService,\n'
                       '  DEFAULT_PCT,\n'
                       '  HARD_BUFFER,\n'
-                      '  MAX_TRUNCATION_BACKOFF,\n'
                       '  SUMMARY_RESERVE,\n'
                       '  WARN_BUFFER,\n'
-                      '  cleanSplitIndices,\n'
                       '  computeThresholds,\n'
-                      '  summaryRequestBudget,\n'
                       "} from './chatCompressionService.js';\n"
                       '\n'
                       "const MODEL = 'Qwen3.8-27B-NVFP4';\n"
@@ -40395,7 +37703,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    contextWindowSize: WINDOW,\n'
                       '  };\n'
                       '  const countSideQuery = vi.fn().mockResolvedValue({\n'
-                      '    totalTokens: 225_000,\n'
+                      '    totalTokens: 195_000,\n'
                       '    maxModelLen: WINDOW,\n'
                       '  });\n'
                       '  const generateText = '
@@ -40481,7 +37789,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    force?: boolean;\n'
                       "    trigger?: 'manual' | 'auto';\n"
                       '    originalTokenCount?: number;\n'
-                      '    truncationBackoff?: number;\n'
                       '    pendingUserMessage?: Content;\n'
                       '    precomputedEffectiveTokens?: number;\n'
                       '    requestGenerationConfig?: GenerateContentConfig;\n'
@@ -40494,7 +37801,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    force: overrides.force ?? true,\n'
                       '    trigger: overrides.trigger,\n'
                       '    config: harness.config,\n'
-                      '    truncationBackoff: overrides.truncationBackoff ?? 0,\n'
                       '    originalTokenCount: overrides.originalTokenCount ?? '
                       '230_000,\n'
                       '    pendingUserMessage: overrides.pendingUserMessage,\n'
@@ -40593,28 +37899,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      undefined,\n'
                       '    );\n'
                       '\n'
-                      '    // No failure count suppresses an over-threshold attempt: '
-                      'the breaker\n'
-                      '    // that NOOPed here walked a real session through the hard '
-                      'limit while\n'
-                      "    // its context grew. Backoff shrinks the next attempt's "
-                      'input instead of\n'
-                      '    // skipping the attempt.\n'
+                      '    // Nothing suppresses an over-threshold attempt. The '
+                      'consecutive-failure\n'
+                      '    // breaker that NOOPed here walked a real session through '
+                      'the hard limit\n'
+                      '    // while its context kept growing; every trigger now runs '
+                      'an attempt.\n'
                       '    const stillTries = makeHarness();\n'
-                      '    // Fit inside the quarter budget so the full-history shape '
-                      'is chosen and\n'
-                      '    // the assertion isolates the gate, not the split '
-                      'machinery.\n'
-                      '    stillTries.countSideQuery.mockResolvedValue({\n'
-                      '      totalTokens: 50_000,\n'
-                      '      maxModelLen: WINDOW,\n'
-                      '    });\n'
                       '    const { auto } = computeThresholds(WINDOW, 1);\n'
                       '    expect(\n'
                       '      (\n'
                       '        await compress(stillTries, {\n'
                       '          force: false,\n'
-                      '          truncationBackoff: MAX_TRUNCATION_BACKOFF,\n'
                       '          precomputedEffectiveTokens: auto,\n'
                       '        })\n'
                       '      ).info.compressionStatus,\n'
@@ -40622,8 +37918,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    expect(stillTries.generateText).toHaveBeenCalledTimes(1);\n'
                       '  });\n'
                       '\n'
-                      "  it('uses one cache-preserving main-model request with "
-                      "explicit phase budgets', async () => {\n"
+                      "  it('sends the ENTIRE history to one cache-preserving "
+                      "main-model request', async () => {\n"
                       '    const harness = makeHarness();\n'
                       '    const requestTools = [\n'
                       "      { functionDeclarations: [{ name: 'transient_tool' }] },\n"
@@ -40655,11 +37951,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      maxAttempts: 1,\n'
                       '      promptCacheSharing: true,\n'
                       '      failClosed: true,\n'
-                      '      phaseBudgetOverrides: {\n'
-                      '        thinkingTokenBudget: COMPACT_THINKING_TOKEN_BUDGET,\n'
-                      '        finalResponseTokenBudget: '
-                      'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
-                      '      },\n'
                       '      config: {\n'
                       '        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
                       '        tools: requestTools,\n'
@@ -40670,8 +37961,23 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        },\n'
                       '      },\n'
                       '    });\n'
+                      '    // The request must be a pure extension of the conversation '
+                      'already in\n'
+                      "    // the provider's prefix cache: the same contents, in the "
+                      'same order,\n'
+                      '    // plus exactly one trailing directive. Anything that '
+                      'rewrote, reordered\n'
+                      '    // or dropped an earlier entry would re-prefill ~200K '
+                      'tokens and evict\n'
+                      '    // the cache the agent needs on its very next turn. It also '
+                      'declares no\n'
+                      '    // phase budgets, so the model thinks and answers as it '
+                      'does on any turn.\n'
+                      '    '
+                      'expect(generated.contents).toHaveLength(harness.history.length '
+                      '+ 1);\n'
                       '    expect(generated.contents.slice(0, '
-                      '2)).toEqual(harness.history);\n'
+                      '-1)).toEqual(harness.history);\n'
                       '    const directive = '
                       "generated.contents.at(-1)?.parts?.[0]?.text ?? '';\n"
                       "    expect(directive).toContain('native hidden-thinking "
@@ -40883,14 +38189,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    );\n'
                       '    expect(rejected.generateText).not.toHaveBeenCalled();\n'
                       '\n'
-                      '    // A two-content history has no clean split point, so an '
-                      'over-budget\n'
-                      '    // request cannot shrink its input and must refuse rather '
-                      'than send a\n'
-                      '    // side query the server rejects. Histories with split '
-                      'points take the\n'
-                      '    // prefix path instead — see the [compaction-growth] '
-                      'cases.\n'
+                      '    // A request that cannot leave the generation its full '
+                      'reserve must\n'
+                      '    // refuse rather than send a side query the server will '
+                      'reject.\n'
                       '    const oversized = makeHarness();\n'
                       '    oversized.countSideQuery.mockResolvedValueOnce({\n'
                       '      totalTokens: WINDOW - COMPACT_MAX_OUTPUT_TOKENS + 1,\n'
@@ -40970,15 +38272,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    // the only surviving evidence of where the tokens went.\n'
                       '    expect(result.info.output).toEqual({\n'
                       '      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
-                      '      thinkingTokenBudget: COMPACT_THINKING_TOKEN_BUDGET,\n'
-                      '      finalResponseTokenBudget: '
-                      'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
                       '      outputTokens: 19_900,\n'
                       '      thinkingTokens: 19_900,\n'
                       '      summaryChars: 0,\n'
                       '      finishReason: FinishReason.MAX_TOKENS,\n'
-                      '      summaryRequestTokens: 225_000,\n'
-                      '      carriedTailContents: 0,\n'
                       '    });\n'
                       '  });\n'
                       '\n'
@@ -41152,177 +38449,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    );\n'
                       '    '
                       'expect(attachments.composePostCompactHistory).not.toHaveBeenCalled();\n'
-                      '  });\n'
-                      '\n'
-                      "  it('derives the output ceiling as the exact phase partition', "
-                      '() => {\n'
-                      '    // If the total can exceed the sum, both caps bind '
-                      'interchangeably and a\n'
-                      '    // MAX_TOKENS stop stops naming which phase overflowed; if '
-                      'it can be\n'
-                      '    // less, the total steals the delimiter tokens from the '
-                      'final phase.\n'
-                      '    expect(COMPACT_MAX_OUTPUT_TOKENS).toBe(\n'
-                      '      COMPACT_THINKING_TOKEN_BUDGET +\n'
-                      '        COMPACT_FINAL_RESPONSE_TOKEN_BUDGET +\n'
-                      '        COMPACT_PHASE_DELIMITER_ALLOWANCE,\n'
-                      '    );\n'
-                      '  });\n'
-                      '\n'
-                      "  it('halves the summary request budget per truncation strike, "
-                      "clamped', () => {\n"
-                      '    const base = WINDOW - COMPACT_MAX_OUTPUT_TOKENS;\n'
-                      '    expect(summaryRequestBudget(WINDOW, 0)).toBe(base);\n'
-                      '    expect(summaryRequestBudget(WINDOW, '
-                      '1)).toBe(Math.floor(base / 2));\n'
-                      '    expect(summaryRequestBudget(WINDOW, '
-                      '2)).toBe(Math.floor(base / 4));\n'
-                      '    expect(summaryRequestBudget(WINDOW, '
-                      '7)).toBe(Math.floor(base / 4));\n'
-                      '    expect(summaryRequestBudget(WINDOW, -3)).toBe(base);\n'
-                      '  });\n'
-                      '\n'
-                      "  it('offers only model-turn starts past the opening exchange "
-                      "as split points', () => {\n"
-                      '    const history: Content[] = [\n'
-                      "      { role: 'user', parts: [{ text: 'task' }] },\n"
-                      "      { role: 'model', parts: [{ functionCall: { id: '1', name: "
-                      "'read_file', args: {} } }] },\n"
-                      "      { role: 'user', parts: [{ functionResponse: { id: '1', "
-                      "name: 'read_file', response: {} } }] },\n"
-                      "      { role: 'model', parts: [{ functionCall: { id: '2', name: "
-                      "'edit', args: {} } }] },\n"
-                      "      { role: 'user', parts: [{ functionResponse: { id: '2', "
-                      "name: 'edit', response: {} } }] },\n"
-                      "      { role: 'model', parts: [{ text: 'done' }] },\n"
-                      '    ];\n'
-                      '    // Index 1 would leave a bare task in the prefix; indices 2 '
-                      'and 4 would\n'
-                      '    // cut a call from its response.\n'
-                      '    expect(cleanSplitIndices(history)).toEqual([3, 5]);\n'
-                      '  });\n'
-                      '\n'
-                      "  it('[compaction-growth] summarizes the largest fitting prefix "
-                      "and carries the tail when the history outgrows the reserve', "
-                      'async () => {\n'
-                      '    const harness = makeHarness();\n'
-                      '    const history: Content[] = [];\n'
-                      '    for (let i = 0; i < 4; i++) {\n'
-                      "      history.push({ role: 'user', parts: [{ text: `input ${i}` "
-                      '}] });\n'
-                      "      history.push({ role: 'model', parts: [{ text: `work ${i}` "
-                      '}] });\n'
-                      '    }\n'
-                      '    harness.setHistory(history);\n'
-                      '    // 40K tokens per history content: the full request (320K) '
-                      'exceeds even\n'
-                      '    // the window, exactly the state the old full-or-nothing '
-                      'shape could not\n'
-                      '    // compact and died in.\n'
-                      '    harness.countSideQuery.mockImplementation(\n'
-                      '      async (options: GenerateTextOptions) => ({\n'
-                      '        totalTokens: (options.contents.length - 1) * 40_000,\n'
-                      '        maxModelLen: WINDOW,\n'
-                      '      }),\n'
-                      '    );\n'
-                      '    const pending: Content = {\n'
-                      "      role: 'user',\n"
-                      '      parts: [\n'
-                      "        { functionResponse: { id: 'p1', name: 'run_shell', "
-                      'response: {} } },\n'
-                      '      ],\n'
-                      '    };\n'
-                      '\n'
-                      '    const result = await compress(harness, { '
-                      'pendingUserMessage: pending });\n'
-                      '\n'
-                      '    '
-                      'expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);\n'
-                      '    // Clean split points are the model turns at 3, 5, 7; 5 '
-                      'contents is the\n'
-                      '    // largest prefix whose request (200K) fits window - '
-                      'reserve (230,080).\n'
-                      '    const generated = harness.generateText.mock\n'
-                      '      .calls[0]![0] as GenerateTextOptions;\n'
-                      '    expect(generated.contents).toHaveLength(6);\n'
-                      '    expect(generated.contents.slice(0, '
-                      '5)).toEqual(history.slice(0, 5));\n'
-                      '    // The pending tool result rides only the full-history '
-                      'shape; here it\n'
-                      '    // stays pending, paired with its call inside the carried '
-                      'tail.\n'
-                      '    expect(\n'
-                      '      generated.contents.some((c) =>\n'
-                      '        c.parts?.some((p) => !!p.functionResponse),\n'
-                      '      ),\n'
-                      '    ).toBe(false);\n'
-                      '    '
-                      'expect(attachments.composePostCompactHistory).toHaveBeenCalledWith(\n'
-                      '      history.slice(0, 5),\n'
-                      '      snapshot(),\n'
-                      '      expect.objectContaining({ carriedTail: history.slice(5) '
-                      '}),\n'
-                      '    );\n'
-                      '    expect(result.info.output).toMatchObject({\n'
-                      '      summaryRequestTokens: 200_000,\n'
-                      '      carriedTailContents: 3,\n'
-                      '    });\n'
-                      '    // One full count plus one probe per bisection step — never '
-                      'a count per\n'
-                      '    // content, which at production history sizes would be '
-                      'hundreds of\n'
-                      '    // tokenizer round-trips.\n'
-                      '    expect(harness.countSideQuery).toHaveBeenCalledTimes(3);\n'
-                      '  });\n'
-                      '\n'
-                      "  it('[compaction-growth] a truncation strike forces a smaller "
-                      "prefix than the fit alone allows', async () => {\n"
-                      '    const makeCounted = () => {\n'
-                      '      const harness = makeHarness();\n'
-                      '      const history: Content[] = [];\n'
-                      '      for (let i = 0; i < 4; i++) {\n'
-                      "        history.push({ role: 'user', parts: [{ text: `input "
-                      '${i}` }] });\n'
-                      "        history.push({ role: 'model', parts: [{ text: `work "
-                      '${i}` }] });\n'
-                      '      }\n'
-                      '      harness.setHistory(history);\n'
-                      '      harness.countSideQuery.mockImplementation(\n'
-                      '        async (options: GenerateTextOptions) => ({\n'
-                      '          totalTokens: (options.contents.length - 1) * 20_000,\n'
-                      '          maxModelLen: WINDOW,\n'
-                      '        }),\n'
-                      '      );\n'
-                      '      return { harness, history };\n'
-                      '    };\n'
-                      '\n'
-                      '    // Without a strike the whole 160K history fits the 230,080 '
-                      'budget.\n'
-                      '    const fresh = makeCounted();\n'
-                      '    await compress(fresh.harness);\n'
-                      '    expect(\n'
-                      '      (fresh.harness.generateText.mock.calls[0]![0] as '
-                      'GenerateTextOptions)\n'
-                      '        .contents,\n'
-                      '    ).toHaveLength(fresh.history.length + 1);\n'
-                      '\n'
-                      '    // One strike halves the budget to 115,040, so the '
-                      'identical history is\n'
-                      '    // re-attempted at the 5-content prefix: the retry provably '
-                      'has less to\n'
-                      '    // describe than the attempt whose snapshot overflowed.\n'
-                      '    const struck = makeCounted();\n'
-                      '    const result = await compress(struck.harness, { '
-                      'truncationBackoff: 1 });\n'
-                      '    '
-                      'expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);\n'
-                      '    const generated = struck.harness.generateText.mock\n'
-                      '      .calls[0]![0] as GenerateTextOptions;\n'
-                      '    expect(generated.contents).toHaveLength(6);\n'
-                      '    expect(result.info.output).toMatchObject({\n'
-                      '      summaryRequestTokens: 100_000,\n'
-                      '      carriedTailContents: 3,\n'
-                      '    });\n'
                       '  });\n'
                       '});\n',
              'review_before': '/**\n'
@@ -46827,19 +43953,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'./postCompactAttachments.js';\n"
                              'import {\n'
                              '  AUTOCOMPACT_BUFFER,\n'
-                             '  COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
                              '  COMPACT_MAX_OUTPUT_TOKENS,\n'
-                             '  COMPACT_PHASE_DELIMITER_ALLOWANCE,\n'
-                             '  COMPACT_THINKING_TOKEN_BUDGET,\n'
                              '  ChatCompressionService,\n'
                              '  DEFAULT_PCT,\n'
                              '  HARD_BUFFER,\n'
-                             '  MAX_TRUNCATION_BACKOFF,\n'
                              '  SUMMARY_RESERVE,\n'
                              '  WARN_BUFFER,\n'
-                             '  cleanSplitIndices,\n'
                              '  computeThresholds,\n'
-                             '  summaryRequestBudget,\n'
                              "} from './chatCompressionService.js';\n"
                              '\n'
                              "const MODEL = 'Qwen3.8-27B-NVFP4';\n"
@@ -46917,7 +44037,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    contextWindowSize: WINDOW,\n'
                              '  };\n'
                              '  const countSideQuery = vi.fn().mockResolvedValue({\n'
-                             '    totalTokens: 225_000,\n'
+                             '    totalTokens: 195_000,\n'
                              '    maxModelLen: WINDOW,\n'
                              '  });\n'
                              '  const generateText = '
@@ -47006,7 +44126,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    force?: boolean;\n'
                              "    trigger?: 'manual' | 'auto';\n"
                              '    originalTokenCount?: number;\n'
-                             '    truncationBackoff?: number;\n'
                              '    pendingUserMessage?: Content;\n'
                              '    precomputedEffectiveTokens?: number;\n'
                              '    requestGenerationConfig?: GenerateContentConfig;\n'
@@ -47020,8 +44139,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    force: overrides.force ?? true,\n'
                              '    trigger: overrides.trigger,\n'
                              '    config: harness.config,\n'
-                             '    truncationBackoff: overrides.truncationBackoff ?? '
-                             '0,\n'
                              '    originalTokenCount: overrides.originalTokenCount ?? '
                              '230_000,\n'
                              '    pendingUserMessage: overrides.pendingUserMessage,\n'
@@ -47128,28 +44245,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      undefined,\n'
                              '    );\n'
                              '\n'
-                             '    // No failure count suppresses an over-threshold '
-                             'attempt: the breaker\n'
-                             '    // that NOOPed here walked a real session through '
-                             'the hard limit while\n'
-                             '    // its context grew. Backoff shrinks the next '
-                             "attempt's input instead of\n"
-                             '    // skipping the attempt.\n'
+                             '    // Nothing suppresses an over-threshold attempt. The '
+                             'consecutive-failure\n'
+                             '    // breaker that NOOPed here walked a real session '
+                             'through the hard limit\n'
+                             '    // while its context kept growing; every trigger now '
+                             'runs an attempt.\n'
                              '    const stillTries = makeHarness();\n'
-                             '    // Fit inside the quarter budget so the full-history '
-                             'shape is chosen and\n'
-                             '    // the assertion isolates the gate, not the split '
-                             'machinery.\n'
-                             '    stillTries.countSideQuery.mockResolvedValue({\n'
-                             '      totalTokens: 50_000,\n'
-                             '      maxModelLen: WINDOW,\n'
-                             '    });\n'
                              '    const { auto } = computeThresholds(WINDOW, 1);\n'
                              '    expect(\n'
                              '      (\n'
                              '        await compress(stillTries, {\n'
                              '          force: false,\n'
-                             '          truncationBackoff: MAX_TRUNCATION_BACKOFF,\n'
                              '          precomputedEffectiveTokens: auto,\n'
                              '        })\n'
                              '      ).info.compressionStatus,\n'
@@ -47158,8 +44265,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'expect(stillTries.generateText).toHaveBeenCalledTimes(1);\n'
                              '  });\n'
                              '\n'
-                             "  it('uses one cache-preserving main-model request with "
-                             "explicit phase budgets', async () => {\n"
+                             "  it('sends the ENTIRE history to one cache-preserving "
+                             "main-model request', async () => {\n"
                              '    const harness = makeHarness();\n'
                              '    const requestTools = [\n'
                              "      { functionDeclarations: [{ name: 'transient_tool' "
@@ -47195,12 +44302,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      maxAttempts: 1,\n'
                              '      promptCacheSharing: true,\n'
                              '      failClosed: true,\n'
-                             '      phaseBudgetOverrides: {\n'
-                             '        thinkingTokenBudget: '
-                             'COMPACT_THINKING_TOKEN_BUDGET,\n'
-                             '        finalResponseTokenBudget: '
-                             'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
-                             '      },\n'
                              '      config: {\n'
                              '        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
                              '        tools: requestTools,\n'
@@ -47211,8 +44312,23 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        },\n'
                              '      },\n'
                              '    });\n'
+                             '    // The request must be a pure extension of the '
+                             'conversation already in\n'
+                             "    // the provider's prefix cache: the same contents, "
+                             'in the same order,\n'
+                             '    // plus exactly one trailing directive. Anything '
+                             'that rewrote, reordered\n'
+                             '    // or dropped an earlier entry would re-prefill '
+                             '~200K tokens and evict\n'
+                             '    // the cache the agent needs on its very next turn. '
+                             'It also declares no\n'
+                             '    // phase budgets, so the model thinks and answers as '
+                             'it does on any turn.\n'
+                             '    '
+                             'expect(generated.contents).toHaveLength(harness.history.length '
+                             '+ 1);\n'
                              '    expect(generated.contents.slice(0, '
-                             '2)).toEqual(harness.history);\n'
+                             '-1)).toEqual(harness.history);\n'
                              '    const directive = '
                              "generated.contents.at(-1)?.parts?.[0]?.text ?? '';\n"
                              "    expect(directive).toContain('native hidden-thinking "
@@ -47443,14 +44559,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    '
                              'expect(rejected.generateText).not.toHaveBeenCalled();\n'
                              '\n'
-                             '    // A two-content history has no clean split point, '
-                             'so an over-budget\n'
-                             '    // request cannot shrink its input and must refuse '
-                             'rather than send a\n'
-                             '    // side query the server rejects. Histories with '
-                             'split points take the\n'
-                             '    // prefix path instead — see the [compaction-growth] '
-                             'cases.\n'
+                             '    // A request that cannot leave the generation its '
+                             'full reserve must\n'
+                             '    // refuse rather than send a side query the server '
+                             'will reject.\n'
                              '    const oversized = makeHarness();\n'
                              '    oversized.countSideQuery.mockResolvedValueOnce({\n'
                              '      totalTokens: WINDOW - COMPACT_MAX_OUTPUT_TOKENS + '
@@ -47542,16 +44654,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'went.\n'
                              '    expect(result.info.output).toEqual({\n'
                              '      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
-                             '      thinkingTokenBudget: '
-                             'COMPACT_THINKING_TOKEN_BUDGET,\n'
-                             '      finalResponseTokenBudget: '
-                             'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
                              '      outputTokens: 19_900,\n'
                              '      thinkingTokens: 19_900,\n'
                              '      summaryChars: 0,\n'
                              '      finishReason: FinishReason.MAX_TOKENS,\n'
-                             '      summaryRequestTokens: 225_000,\n'
-                             '      carriedTailContents: 0,\n'
                              '    });\n'
                              '  });\n'
                              '\n'
@@ -47740,183 +44846,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    '
                              'expect(attachments.composePostCompactHistory).not.toHaveBeenCalled();\n'
                              '  });\n'
-                             '\n'
-                             "  it('derives the output ceiling as the exact phase "
-                             "partition', () => {\n"
-                             '    // If the total can exceed the sum, both caps bind '
-                             'interchangeably and a\n'
-                             '    // MAX_TOKENS stop stops naming which phase '
-                             'overflowed; if it can be\n'
-                             '    // less, the total steals the delimiter tokens from '
-                             'the final phase.\n'
-                             '    expect(COMPACT_MAX_OUTPUT_TOKENS).toBe(\n'
-                             '      COMPACT_THINKING_TOKEN_BUDGET +\n'
-                             '        COMPACT_FINAL_RESPONSE_TOKEN_BUDGET +\n'
-                             '        COMPACT_PHASE_DELIMITER_ALLOWANCE,\n'
-                             '    );\n'
-                             '  });\n'
-                             '\n'
-                             "  it('halves the summary request budget per truncation "
-                             "strike, clamped', () => {\n"
-                             '    const base = WINDOW - COMPACT_MAX_OUTPUT_TOKENS;\n'
-                             '    expect(summaryRequestBudget(WINDOW, 0)).toBe(base);\n'
-                             '    expect(summaryRequestBudget(WINDOW, '
-                             '1)).toBe(Math.floor(base / 2));\n'
-                             '    expect(summaryRequestBudget(WINDOW, '
-                             '2)).toBe(Math.floor(base / 4));\n'
-                             '    expect(summaryRequestBudget(WINDOW, '
-                             '7)).toBe(Math.floor(base / 4));\n'
-                             '    expect(summaryRequestBudget(WINDOW, '
-                             '-3)).toBe(base);\n'
-                             '  });\n'
-                             '\n'
-                             "  it('offers only model-turn starts past the opening "
-                             "exchange as split points', () => {\n"
-                             '    const history: Content[] = [\n'
-                             "      { role: 'user', parts: [{ text: 'task' }] },\n"
-                             "      { role: 'model', parts: [{ functionCall: { id: "
-                             "'1', name: 'read_file', args: {} } }] },\n"
-                             "      { role: 'user', parts: [{ functionResponse: { id: "
-                             "'1', name: 'read_file', response: {} } }] },\n"
-                             "      { role: 'model', parts: [{ functionCall: { id: "
-                             "'2', name: 'edit', args: {} } }] },\n"
-                             "      { role: 'user', parts: [{ functionResponse: { id: "
-                             "'2', name: 'edit', response: {} } }] },\n"
-                             "      { role: 'model', parts: [{ text: 'done' }] },\n"
-                             '    ];\n'
-                             '    // Index 1 would leave a bare task in the prefix; '
-                             'indices 2 and 4 would\n'
-                             '    // cut a call from its response.\n'
-                             '    expect(cleanSplitIndices(history)).toEqual([3, 5]);\n'
-                             '  });\n'
-                             '\n'
-                             "  it('[compaction-growth] summarizes the largest fitting "
-                             'prefix and carries the tail when the history outgrows '
-                             "the reserve', async () => {\n"
-                             '    const harness = makeHarness();\n'
-                             '    const history: Content[] = [];\n'
-                             '    for (let i = 0; i < 4; i++) {\n'
-                             "      history.push({ role: 'user', parts: [{ text: "
-                             '`input ${i}` }] });\n'
-                             "      history.push({ role: 'model', parts: [{ text: "
-                             '`work ${i}` }] });\n'
-                             '    }\n'
-                             '    harness.setHistory(history);\n'
-                             '    // 40K tokens per history content: the full request '
-                             '(320K) exceeds even\n'
-                             '    // the window, exactly the state the old '
-                             'full-or-nothing shape could not\n'
-                             '    // compact and died in.\n'
-                             '    harness.countSideQuery.mockImplementation(\n'
-                             '      async (options: GenerateTextOptions) => ({\n'
-                             '        totalTokens: (options.contents.length - 1) * '
-                             '40_000,\n'
-                             '        maxModelLen: WINDOW,\n'
-                             '      }),\n'
-                             '    );\n'
-                             '    const pending: Content = {\n'
-                             "      role: 'user',\n"
-                             '      parts: [\n'
-                             "        { functionResponse: { id: 'p1', name: "
-                             "'run_shell', response: {} } },\n"
-                             '      ],\n'
-                             '    };\n'
-                             '\n'
-                             '    const result = await compress(harness, { '
-                             'pendingUserMessage: pending });\n'
-                             '\n'
-                             '    '
-                             'expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);\n'
-                             '    // Clean split points are the model turns at 3, 5, '
-                             '7; 5 contents is the\n'
-                             '    // largest prefix whose request (200K) fits window - '
-                             'reserve (230,080).\n'
-                             '    const generated = harness.generateText.mock\n'
-                             '      .calls[0]![0] as GenerateTextOptions;\n'
-                             '    expect(generated.contents).toHaveLength(6);\n'
-                             '    expect(generated.contents.slice(0, '
-                             '5)).toEqual(history.slice(0, 5));\n'
-                             '    // The pending tool result rides only the '
-                             'full-history shape; here it\n'
-                             '    // stays pending, paired with its call inside the '
-                             'carried tail.\n'
-                             '    expect(\n'
-                             '      generated.contents.some((c) =>\n'
-                             '        c.parts?.some((p) => !!p.functionResponse),\n'
-                             '      ),\n'
-                             '    ).toBe(false);\n'
-                             '    '
-                             'expect(attachments.composePostCompactHistory).toHaveBeenCalledWith(\n'
-                             '      history.slice(0, 5),\n'
-                             '      snapshot(),\n'
-                             '      expect.objectContaining({ carriedTail: '
-                             'history.slice(5) }),\n'
-                             '    );\n'
-                             '    expect(result.info.output).toMatchObject({\n'
-                             '      summaryRequestTokens: 200_000,\n'
-                             '      carriedTailContents: 3,\n'
-                             '    });\n'
-                             '    // One full count plus one probe per bisection step '
-                             '— never a count per\n'
-                             '    // content, which at production history sizes would '
-                             'be hundreds of\n'
-                             '    // tokenizer round-trips.\n'
-                             '    '
-                             'expect(harness.countSideQuery).toHaveBeenCalledTimes(3);\n'
-                             '  });\n'
-                             '\n'
-                             "  it('[compaction-growth] a truncation strike forces a "
-                             "smaller prefix than the fit alone allows', async () => "
-                             '{\n'
-                             '    const makeCounted = () => {\n'
-                             '      const harness = makeHarness();\n'
-                             '      const history: Content[] = [];\n'
-                             '      for (let i = 0; i < 4; i++) {\n'
-                             "        history.push({ role: 'user', parts: [{ text: "
-                             '`input ${i}` }] });\n'
-                             "        history.push({ role: 'model', parts: [{ text: "
-                             '`work ${i}` }] });\n'
-                             '      }\n'
-                             '      harness.setHistory(history);\n'
-                             '      harness.countSideQuery.mockImplementation(\n'
-                             '        async (options: GenerateTextOptions) => ({\n'
-                             '          totalTokens: (options.contents.length - 1) * '
-                             '20_000,\n'
-                             '          maxModelLen: WINDOW,\n'
-                             '        }),\n'
-                             '      );\n'
-                             '      return { harness, history };\n'
-                             '    };\n'
-                             '\n'
-                             '    // Without a strike the whole 160K history fits the '
-                             '230,080 budget.\n'
-                             '    const fresh = makeCounted();\n'
-                             '    await compress(fresh.harness);\n'
-                             '    expect(\n'
-                             '      (fresh.harness.generateText.mock.calls[0]![0] as '
-                             'GenerateTextOptions)\n'
-                             '        .contents,\n'
-                             '    ).toHaveLength(fresh.history.length + 1);\n'
-                             '\n'
-                             '    // One strike halves the budget to 115,040, so the '
-                             'identical history is\n'
-                             '    // re-attempted at the 5-content prefix: the retry '
-                             'provably has less to\n'
-                             '    // describe than the attempt whose snapshot '
-                             'overflowed.\n'
-                             '    const struck = makeCounted();\n'
-                             '    const result = await compress(struck.harness, { '
-                             'truncationBackoff: 1 });\n'
-                             '    '
-                             'expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);\n'
-                             '    const generated = struck.harness.generateText.mock\n'
-                             '      .calls[0]![0] as GenerateTextOptions;\n'
-                             '    expect(generated.contents).toHaveLength(6);\n'
-                             '    expect(result.info.output).toMatchObject({\n'
-                             '      summaryRequestTokens: 100_000,\n'
-                             '      carriedTailContents: 3,\n'
-                             '    });\n'
-                             '  });\n'
                              '});\n'},
             {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-1',
              'path': 'packages/core/src/services/chatCompressionService.ts',
@@ -47996,7 +44925,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'for how it combines\n'
                        ' * with the absolute ceiling (it governs large windows; the '
                        'ceiling governs\n'
-                       ' * smaller ones).\n',
+                       ' * smaller ones).\n'
+                       ' */\n'
+                       'export const DEFAULT_PCT = 0.85;\n'
+                       '\n'
+                       '/**\n'
+                       ' * Token budget reserved from the window for compression '
+                       'output. Matches\n'
+                       ' * COMPACT_MAX_OUTPUT_TOKENS, the hard provider output ceiling '
+                       'for both\n'
+                       ' * compression request shapes.\n'
+                       ' */\n'
+                       'export const SUMMARY_RESERVE = COMPACT_MAX_OUTPUT_TOKENS; // '
+                       '20_000\n'
+                       '\n'
+                       '/**\n'
+                       ' * Distance between auto threshold and effectiveWindow. '
+                       "Matches claude-code's\n"
+                       ' * AUTOCOMPACT_BUFFER_TOKENS (autoCompact.ts:62) — empirically '
+                       'chosen to leave\n'
+                       ' * headroom for the compaction sideQuery round-trip plus a few '
+                       'user-message\n'
+                       ' * turns before the window saturates.\n',
              'after': '\n'
                       'import type { Content, GenerateContentConfig } from '
                       "'@google/genai';\n"
@@ -48040,56 +44990,31 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "const debugLogger = createDebugLogger('COMPRESSION');\n"
                       '\n'
                       '/**\n'
-                      ' * Compaction remains xhigh, but reserves a real final-response '
-                      'phase inside\n'
-                      ' * the fixed maintenance budget. The patched vLLM sampler '
-                      'forces the Qwen\n'
-                      ' * reasoning-end marker at the thinking ceiling, so hidden '
-                      'reasoning can\n'
-                      " * never consume the snapshot's space. Sized from the measured "
-                      'production\n'
-                      ' * curve: forced closure bound thinking twice at 12,000, and '
-                      'three summaries\n'
-                      ' * were truncated pressing against an 8,000-token final phase '
-                      '(the largest\n'
-                      ' * clipped at ~30,000 chars, a floor on what the model wanted, '
-                      'not what it\n'
-                      ' * needed). A truncated snapshot is discarded whole, so the '
-                      'final phase gets\n'
-                      ' * roughly double the clipped demand rather than a fitted '
-                      'value.\n'
+                      ' * Output ceiling for the compression generation, and the only '
+                      'number that\n'
+                      ' * sizes compaction. The request declares no phase budgets: the '
+                      'model thinks\n'
+                      ' * to a natural stop and then writes the snapshot under the '
+                      'pinned provider\n'
+                      ' * ceilings, exactly as on an ordinary turn.\n'
+                      ' *\n'
+                      ' * It is also SUMMARY_RESERVE, so it is subtracted from the '
+                      'working window\n'
+                      ' * for the whole session, and a smaller working window means '
+                      'more\n'
+                      ' * compactions. Sized against ten accounted production '
+                      'compactions: hidden\n'
+                      ' * reasoning never reached its 12,000 ceiling in any of them, '
+                      'peaking at\n'
+                      ' * 11,720, while snapshots were clipped at ~30,100 chars and so '
+                      'are known\n'
+                      ' * only from below, ~9,800 tokens. Against ~15,000 per phase as '
+                      'the working\n'
+                      ' * estimate of joint demand this is ~1.6x, and 2.6x the largest '
+                      'generation\n'
+                      ' * that ever ran to a natural stop (18,719 tokens).\n'
                       ' */\n'
-                      'export const COMPACT_THINKING_TOKEN_BUDGET = 16_000;\n'
-                      'export const COMPACT_FINAL_RESPONSE_TOKEN_BUDGET = 16_000;\n'
-                      '\n'
-                      '/**\n'
-                      ' * The reasoning-end sequence the sampler emits (or forces) '
-                      'between the two\n'
-                      ' * phases is counted by neither phase budget. Without this '
-                      'allowance a run\n'
-                      ' * whose thinking reaches its forced ceiling has the total cap '
-                      'fire those\n'
-                      ' * few tokens before the final budget does, truncating a '
-                      'snapshot that the\n'
-                      ' * final phase itself would have admitted.\n'
-                      ' */\n'
-                      'export const COMPACT_PHASE_DELIMITER_ALLOWANCE = 64;\n'
-                      '\n'
-                      '/**\n'
-                      ' * Hard cap on the single cache-preserving compression '
-                      'generation. Derived,\n'
-                      ' * not tuned: the phases partition it exactly, so MAX_TOKENS on '
-                      'a compaction\n'
-                      ' * response always means the final phase overflowed — a total '
-                      'that exceeded\n'
-                      ' * the sum let the two caps bind interchangeably and made '
-                      'truncations\n'
-                      ' * unattributable.\n'
-                      ' */\n'
-                      'export const COMPACT_MAX_OUTPUT_TOKENS =\n'
-                      '  COMPACT_THINKING_TOKEN_BUDGET +\n'
-                      '  COMPACT_FINAL_RESPONSE_TOKEN_BUDGET +\n'
-                      '  COMPACT_PHASE_DELIMITER_ALLOWANCE;\n'
+                      'export const COMPACT_MAX_OUTPUT_TOKENS = 49_152;\n'
                       '\n'
                       'const COMPRESSION_REQUEST_DIRECTIVE =\n'
                       "  'Reason in the native hidden-thinking channel, then emit "
@@ -48103,7 +45028,27 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'for how it combines\n'
                       ' * with the absolute ceiling (it governs large windows; the '
                       'ceiling governs\n'
-                      ' * smaller ones).\n',
+                      ' * smaller ones).\n'
+                      ' */\n'
+                      'export const DEFAULT_PCT = 0.85;\n'
+                      '\n'
+                      '/**\n'
+                      ' * Token budget reserved from the window for compression '
+                      'output. It is\n'
+                      ' * COMPACT_MAX_OUTPUT_TOKENS, so the room the thresholds keep '
+                      'free and the\n'
+                      ' * room the generation may occupy are the same number.\n'
+                      ' */\n'
+                      'export const SUMMARY_RESERVE = COMPACT_MAX_OUTPUT_TOKENS;\n'
+                      '\n'
+                      '/**\n'
+                      ' * Distance between auto threshold and effectiveWindow. Matches '
+                      "claude-code's\n"
+                      ' * AUTOCOMPACT_BUFFER_TOKENS (autoCompact.ts:62) — empirically '
+                      'chosen to leave\n'
+                      ' * headroom for the compaction sideQuery round-trip plus a few '
+                      'user-message\n'
+                      ' * turns before the window saturates.\n',
              'review_before': '\n'
                               'import type { Content, GenerateContentConfig } from '
                               "'@google/genai';\n"
@@ -48186,7 +45131,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'computeThresholds for how it combines\n'
                               ' * with the absolute ceiling (it governs large windows; '
                               'the ceiling governs\n'
-                              ' * smaller ones).\n',
+                              ' * smaller ones).\n'
+                              ' */\n'
+                              'export const DEFAULT_PCT = 0.85;\n'
+                              '\n'
+                              '/**\n'
+                              ' * Token budget reserved from the window for '
+                              'compression output. Matches\n'
+                              ' * COMPACT_MAX_OUTPUT_TOKENS, the hard provider output '
+                              'ceiling for both\n'
+                              ' * compression request shapes.\n'
+                              ' */\n'
+                              'export const SUMMARY_RESERVE = '
+                              'COMPACT_MAX_OUTPUT_TOKENS; // 20_000\n'
+                              '\n'
+                              '/**\n'
+                              ' * Distance between auto threshold and effectiveWindow. '
+                              "Matches claude-code's\n"
+                              ' * AUTOCOMPACT_BUFFER_TOKENS (autoCompact.ts:62) — '
+                              'empirically chosen to leave\n'
+                              ' * headroom for the compaction sideQuery round-trip '
+                              'plus a few user-message\n'
+                              ' * turns before the window saturates.\n',
              'review_after': '\n'
                              'import type { Content, GenerateContentConfig } from '
                              "'@google/genai';\n"
@@ -48235,57 +45201,31 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "const debugLogger = createDebugLogger('COMPRESSION');\n"
                              '\n'
                              '/**\n'
-                             ' * Compaction remains xhigh, but reserves a real '
-                             'final-response phase inside\n'
-                             ' * the fixed maintenance budget. The patched vLLM '
-                             'sampler forces the Qwen\n'
-                             ' * reasoning-end marker at the thinking ceiling, so '
-                             'hidden reasoning can\n'
-                             " * never consume the snapshot's space. Sized from the "
-                             'measured production\n'
-                             ' * curve: forced closure bound thinking twice at 12,000, '
-                             'and three summaries\n'
-                             ' * were truncated pressing against an 8,000-token final '
-                             'phase (the largest\n'
-                             ' * clipped at ~30,000 chars, a floor on what the model '
-                             'wanted, not what it\n'
-                             ' * needed). A truncated snapshot is discarded whole, so '
-                             'the final phase gets\n'
-                             ' * roughly double the clipped demand rather than a '
-                             'fitted value.\n'
+                             ' * Output ceiling for the compression generation, and '
+                             'the only number that\n'
+                             ' * sizes compaction. The request declares no phase '
+                             'budgets: the model thinks\n'
+                             ' * to a natural stop and then writes the snapshot under '
+                             'the pinned provider\n'
+                             ' * ceilings, exactly as on an ordinary turn.\n'
+                             ' *\n'
+                             ' * It is also SUMMARY_RESERVE, so it is subtracted from '
+                             'the working window\n'
+                             ' * for the whole session, and a smaller working window '
+                             'means more\n'
+                             ' * compactions. Sized against ten accounted production '
+                             'compactions: hidden\n'
+                             ' * reasoning never reached its 12,000 ceiling in any of '
+                             'them, peaking at\n'
+                             ' * 11,720, while snapshots were clipped at ~30,100 chars '
+                             'and so are known\n'
+                             ' * only from below, ~9,800 tokens. Against ~15,000 per '
+                             'phase as the working\n'
+                             ' * estimate of joint demand this is ~1.6x, and 2.6x the '
+                             'largest generation\n'
+                             ' * that ever ran to a natural stop (18,719 tokens).\n'
                              ' */\n'
-                             'export const COMPACT_THINKING_TOKEN_BUDGET = 16_000;\n'
-                             'export const COMPACT_FINAL_RESPONSE_TOKEN_BUDGET = '
-                             '16_000;\n'
-                             '\n'
-                             '/**\n'
-                             ' * The reasoning-end sequence the sampler emits (or '
-                             'forces) between the two\n'
-                             ' * phases is counted by neither phase budget. Without '
-                             'this allowance a run\n'
-                             ' * whose thinking reaches its forced ceiling has the '
-                             'total cap fire those\n'
-                             ' * few tokens before the final budget does, truncating a '
-                             'snapshot that the\n'
-                             ' * final phase itself would have admitted.\n'
-                             ' */\n'
-                             'export const COMPACT_PHASE_DELIMITER_ALLOWANCE = 64;\n'
-                             '\n'
-                             '/**\n'
-                             ' * Hard cap on the single cache-preserving compression '
-                             'generation. Derived,\n'
-                             ' * not tuned: the phases partition it exactly, so '
-                             'MAX_TOKENS on a compaction\n'
-                             ' * response always means the final phase overflowed — a '
-                             'total that exceeded\n'
-                             ' * the sum let the two caps bind interchangeably and '
-                             'made truncations\n'
-                             ' * unattributable.\n'
-                             ' */\n'
-                             'export const COMPACT_MAX_OUTPUT_TOKENS =\n'
-                             '  COMPACT_THINKING_TOKEN_BUDGET +\n'
-                             '  COMPACT_FINAL_RESPONSE_TOKEN_BUDGET +\n'
-                             '  COMPACT_PHASE_DELIMITER_ALLOWANCE;\n'
+                             'export const COMPACT_MAX_OUTPUT_TOKENS = 49_152;\n'
                              '\n'
                              'const COMPRESSION_REQUEST_DIRECTIVE =\n'
                              "  'Reason in the native hidden-thinking channel, then "
@@ -48299,72 +45239,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'computeThresholds for how it combines\n'
                              ' * with the absolute ceiling (it governs large windows; '
                              'the ceiling governs\n'
-                             ' * smaller ones).\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-2',
-             'path': 'packages/core/src/services/chatCompressionService.ts',
-             'before': '\n'
-                       '/**\n'
-                       ' * Token budget reserved from the window for compression '
-                       'output. Matches\n'
-                       ' * COMPACT_MAX_OUTPUT_TOKENS, the hard provider output ceiling '
-                       'for both\n'
-                       ' * compression request shapes.\n'
-                       ' */\n'
-                       'export const SUMMARY_RESERVE = COMPACT_MAX_OUTPUT_TOKENS; // '
-                       '20_000\n'
-                       '\n'
-                       '/**\n'
-                       ' * Distance between auto threshold and effectiveWindow. '
-                       "Matches claude-code's\n"
-                       ' * AUTOCOMPACT_BUFFER_TOKENS (autoCompact.ts:62) — empirically '
-                       'chosen to leave\n'
-                       ' * headroom for the compaction sideQuery round-trip plus a few '
-                       'user-message\n'
-                       ' * turns before the window saturates.\n',
-             'after': '\n'
-                      '/**\n'
-                      ' * Token budget reserved from the window for compression '
-                      'output. Matches\n'
-                      ' * COMPACT_MAX_OUTPUT_TOKENS, the hard provider output ceiling '
-                      'for both\n'
-                      ' * compression request shapes.\n'
-                      ' */\n'
-                      'export const SUMMARY_RESERVE = COMPACT_MAX_OUTPUT_TOKENS;\n'
-                      '\n'
-                      '/**\n'
-                      ' * Distance between auto threshold and effectiveWindow. Matches '
-                      "claude-code's\n"
-                      ' * AUTOCOMPACT_BUFFER_TOKENS (autoCompact.ts:62) — empirically '
-                      'chosen to leave\n'
-                      ' * headroom for the compaction sideQuery round-trip plus a few '
-                      'user-message\n'
-                      ' * turns before the window saturates.\n',
-             'review_before': '\n'
-                              '/**\n'
-                              ' * Token budget reserved from the window for '
-                              'compression output. Matches\n'
-                              ' * COMPACT_MAX_OUTPUT_TOKENS, the hard provider output '
-                              'ceiling for both\n'
-                              ' * compression request shapes.\n'
-                              ' */\n'
-                              'export const SUMMARY_RESERVE = '
-                              'COMPACT_MAX_OUTPUT_TOKENS; // 20_000\n'
-                              '\n'
-                              '/**\n'
-                              ' * Distance between auto threshold and effectiveWindow. '
-                              "Matches claude-code's\n"
-                              ' * AUTOCOMPACT_BUFFER_TOKENS (autoCompact.ts:62) — '
-                              'empirically chosen to leave\n'
-                              ' * headroom for the compaction sideQuery round-trip '
-                              'plus a few user-message\n'
-                              ' * turns before the window saturates.\n',
-             'review_after': '\n'
+                             ' * smaller ones).\n'
+                             ' */\n'
+                             'export const DEFAULT_PCT = 0.85;\n'
+                             '\n'
                              '/**\n'
                              ' * Token budget reserved from the window for compression '
-                             'output. Matches\n'
-                             ' * COMPACT_MAX_OUTPUT_TOKENS, the hard provider output '
-                             'ceiling for both\n'
-                             ' * compression request shapes.\n'
+                             'output. It is\n'
+                             ' * COMPACT_MAX_OUTPUT_TOKENS, so the room the thresholds '
+                             'keep free and the\n'
+                             ' * room the generation may occupy are the same number.\n'
                              ' */\n'
                              'export const SUMMARY_RESERVE = '
                              'COMPACT_MAX_OUTPUT_TOKENS;\n'
@@ -48377,9 +45261,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' * headroom for the compaction sideQuery round-trip plus '
                              'a few user-message\n'
                              ' * turns before the window saturates.\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-3',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-2',
              'path': 'packages/core/src/services/chatCompressionService.ts',
-             'before': 'export const WARN_BUFFER = 20_000;\n'
+             'before': ' */\n'
+                       'export const WARN_BUFFER = 20_000;\n'
                        '\n'
                        '/** Distance between hard threshold and effectiveWindow '
                        "(matches claude-code's MANUAL_COMPACT_BUFFER). */\n"
@@ -48432,29 +45317,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        ' * already capped at `MAX_COMPRESS_INSTRUCTIONS_CHARS` (2000) '
                        'in\n'
                        ' * compressCommand.ts for exactly this reason — the side-query '
-                       'has no\n',
-             'after': 'export const WARN_BUFFER = 20_000;\n'
+                       'has no\n'
+                       ' * input-truncation retry, so an unbounded hook payload could '
+                       'inflate the\n',
+             'after': ' */\n'
+                      'export const WARN_BUFFER = 20_000;\n'
                       '\n'
                       '/** Distance between hard threshold and effectiveWindow '
                       "(matches claude-code's MANUAL_COMPACT_BUFFER). */\n"
                       'export const HARD_BUFFER = 3_000;\n'
-                      '\n'
-                      '/**\n'
-                      ' * Ceiling on the truncation-backoff exponent. Each '
-                      'consecutive\n'
-                      " * OUTPUT_TRUNCATED failure halves the next attempt's request "
-                      'budget (see\n'
-                      ' * summaryRequestBudget), so a retry always has strictly less '
-                      'to describe\n'
-                      ' * than the attempt that overflowed; past two halvings the '
-                      'input is small\n'
-                      ' * enough that further shrinking blames the model, not the '
-                      'workload, and the\n'
-                      " * hard tier's deterministic fallback owns that case. The "
-                      'counter itself\n'
-                      ' * lives on GeminiChat.\n'
-                      ' */\n'
-                      'export const MAX_TRUNCATION_BACKOFF = 2;\n'
                       '\n'
                       '/**\n'
                       " * Hard cap on the PreCompact hook's `additionalContext` once "
@@ -48464,8 +45335,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       ' * already capped at `MAX_COMPRESS_INSTRUCTIONS_CHARS` (2000) '
                       'in\n'
                       ' * compressCommand.ts for exactly this reason — the side-query '
-                      'has no\n',
-             'review_before': 'export const WARN_BUFFER = 20_000;\n'
+                      'has no\n'
+                      ' * input-truncation retry, so an unbounded hook payload could '
+                      'inflate the\n',
+             'review_before': ' */\n'
+                              'export const WARN_BUFFER = 20_000;\n'
                               '\n'
                               '/** Distance between hard threshold and effectiveWindow '
                               "(matches claude-code's MANUAL_COMPACT_BUFFER). */\n"
@@ -48519,29 +45393,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               ' * already capped at `MAX_COMPRESS_INSTRUCTIONS_CHARS` '
                               '(2000) in\n'
                               ' * compressCommand.ts for exactly this reason — the '
-                              'side-query has no\n',
-             'review_after': 'export const WARN_BUFFER = 20_000;\n'
+                              'side-query has no\n'
+                              ' * input-truncation retry, so an unbounded hook payload '
+                              'could inflate the\n',
+             'review_after': ' */\n'
+                             'export const WARN_BUFFER = 20_000;\n'
                              '\n'
                              '/** Distance between hard threshold and effectiveWindow '
                              "(matches claude-code's MANUAL_COMPACT_BUFFER). */\n"
                              'export const HARD_BUFFER = 3_000;\n'
-                             '\n'
-                             '/**\n'
-                             ' * Ceiling on the truncation-backoff exponent. Each '
-                             'consecutive\n'
-                             " * OUTPUT_TRUNCATED failure halves the next attempt's "
-                             'request budget (see\n'
-                             ' * summaryRequestBudget), so a retry always has strictly '
-                             'less to describe\n'
-                             ' * than the attempt that overflowed; past two halvings '
-                             'the input is small\n'
-                             ' * enough that further shrinking blames the model, not '
-                             'the workload, and the\n'
-                             " * hard tier's deterministic fallback owns that case. "
-                             'The counter itself\n'
-                             ' * lives on GeminiChat.\n'
-                             ' */\n'
-                             'export const MAX_TRUNCATION_BACKOFF = 2;\n'
                              '\n'
                              '/**\n'
                              " * Hard cap on the PreCompact hook's `additionalContext` "
@@ -48551,8 +45411,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' * already capped at `MAX_COMPRESS_INSTRUCTIONS_CHARS` '
                              '(2000) in\n'
                              ' * compressCommand.ts for exactly this reason — the '
-                             'side-query has no\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-4',
+                             'side-query has no\n'
+                             ' * input-truncation retry, so an unbounded hook payload '
+                             'could inflate the\n'},
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-3',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '\n'
                        'export interface CompactionThresholds {\n'
@@ -48568,26 +45430,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '  readonly effectiveWindow: number;\n'
                        '}\n'
                        '\n'
-                       '/**\n'
-                       ' * Compute the three-tier threshold ladder for a given context '
-                       'window.\n'
-                       ' *\n'
-                       ' * The absolute term (effectiveWindow - AUTOCOMPACT_BUFFER) is '
-                       'a *ceiling* —\n'
-                       ' * "compact by here, or the summarization side-query has no '
-                       'room to run" — so\n'
-                       ' * it is combined with the proportional preference via `min`, '
-                       'not `max`:\n'
-                       ' *   auto = absoluteCeiling > 0 ? min(pct * window, '
-                       'absoluteCeiling) : pct * window\n'
-                       ' *   warn = max(0, auto - WARN_BUFFER)\n'
-                       ' *   hard = min(window, max(effectiveWindow - HARD_BUFFER, '
-                       'auto + HARD_BUFFER))\n'
-                       ' *\n'
-                       ' * So large windows compact at ~pct (never crowding the '
-                       'ceiling), smaller\n'
-                       ' * windows compact at the ceiling (leaving room for the '
-                       'summary), and a window\n',
+                       '/**\n',
              'after': '\n'
                       'export interface CompactionThresholds {\n'
                       '  /** Token count at which UI warn tier triggers. */\n'
@@ -48602,28 +45445,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  readonly effectiveWindow: number;\n'
                       '}\n'
                       '\n'
-                      '/**\n'
-                      ' * Compute the three-tier threshold ladder for a given context '
-                      'window.\n'
-                      ' *\n'
-                      ' * The absolute term (effectiveWindow - AUTOCOMPACT_BUFFER) is '
-                      'a *ceiling* —\n'
-                      ' * "compact by here, or the side query must start splitting off '
-                      'a prefix\n'
-                      ' * instead of covering the whole history in one snapshot" — so '
-                      'it is\n'
-                      ' * combined with the proportional preference via `min`, not '
-                      '`max`:\n'
-                      ' *   auto = absoluteCeiling > 0 ? min(pct * window, '
-                      'absoluteCeiling) : pct * window\n'
-                      ' *   warn = max(0, auto - WARN_BUFFER)\n'
-                      ' *   hard = min(window, max(effectiveWindow - HARD_BUFFER, auto '
-                      '+ HARD_BUFFER))\n'
-                      ' *\n'
-                      ' * So large windows compact at ~pct (never crowding the '
-                      'ceiling), smaller\n'
-                      ' * windows compact at the ceiling (leaving room for the '
-                      'summary), and a window\n',
+                      '/**\n',
              'review_before': '\n'
                               'export interface CompactionThresholds {\n'
                               '  /** Token count at which UI warn tier triggers. */\n'
@@ -48640,26 +45462,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  readonly effectiveWindow: number;\n'
                               '}\n'
                               '\n'
-                              '/**\n'
-                              ' * Compute the three-tier threshold ladder for a given '
-                              'context window.\n'
-                              ' *\n'
-                              ' * The absolute term (effectiveWindow - '
-                              'AUTOCOMPACT_BUFFER) is a *ceiling* —\n'
-                              ' * "compact by here, or the summarization side-query '
-                              'has no room to run" — so\n'
-                              ' * it is combined with the proportional preference via '
-                              '`min`, not `max`:\n'
-                              ' *   auto = absoluteCeiling > 0 ? min(pct * window, '
-                              'absoluteCeiling) : pct * window\n'
-                              ' *   warn = max(0, auto - WARN_BUFFER)\n'
-                              ' *   hard = min(window, max(effectiveWindow - '
-                              'HARD_BUFFER, auto + HARD_BUFFER))\n'
-                              ' *\n'
-                              ' * So large windows compact at ~pct (never crowding the '
-                              'ceiling), smaller\n'
-                              ' * windows compact at the ceiling (leaving room for the '
-                              'summary), and a window\n',
+                              '/**\n',
              'review_after': '\n'
                              'export interface CompactionThresholds {\n'
                              '  /** Token count at which UI warn tier triggers. */\n'
@@ -48674,137 +45477,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  readonly effectiveWindow: number;\n'
                              '}\n'
                              '\n'
-                             '/**\n'
-                             ' * Compute the three-tier threshold ladder for a given '
-                             'context window.\n'
-                             ' *\n'
-                             ' * The absolute term (effectiveWindow - '
-                             'AUTOCOMPACT_BUFFER) is a *ceiling* —\n'
-                             ' * "compact by here, or the side query must start '
-                             'splitting off a prefix\n'
-                             ' * instead of covering the whole history in one '
-                             'snapshot" — so it is\n'
-                             ' * combined with the proportional preference via `min`, '
-                             'not `max`:\n'
-                             ' *   auto = absoluteCeiling > 0 ? min(pct * window, '
-                             'absoluteCeiling) : pct * window\n'
-                             ' *   warn = max(0, auto - WARN_BUFFER)\n'
-                             ' *   hard = min(window, max(effectiveWindow - '
-                             'HARD_BUFFER, auto + HARD_BUFFER))\n'
-                             ' *\n'
-                             ' * So large windows compact at ~pct (never crowding the '
-                             'ceiling), smaller\n'
-                             ' * windows compact at the ceiling (leaving room for the '
-                             'summary), and a window\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-5',
-             'path': 'packages/core/src/services/chatCompressionService.ts',
-             'before': '    Math.max(0, pct !== undefined && Number.isFinite(pct) ? '
-                       'pct : DEFAULT_PCT),\n'
-                       '  );\n'
-                       '  // Clamp to 0 for tiny windows (window < SUMMARY_RESERVE) so '
-                       'the surfaced\n'
-                       '  // value in `/context` stays meaningful.\n'
-                       '  const effectiveWindow = Math.max(0, window - '
-                       'SUMMARY_RESERVE);\n'
-                       '\n'
-                       '  // The absolute term is a ceiling: compact before the prompt '
-                       'leaves too little\n'
-                       '  // room for the summarization side-query (which needs up to '
-                       'SUMMARY_RESERVE of\n'
-                       '  // output). Combine it with the proportional preference via '
-                       '`min`. When the\n'
-                       '  // window is so small the ceiling is non-positive, fall back '
-                       'to the\n'
-                       '  // proportional value as a floor so the trigger stays '
-                       'usable.\n'
-                       '  const proportional = effectivePct * window;\n'
-                       '  const absoluteCeiling = effectiveWindow - '
-                       'AUTOCOMPACT_BUFFER;\n'
-                       '  const auto =\n'
-                       '    absoluteCeiling > 0\n'
-                       '      ? Math.min(proportional, absoluteCeiling)\n'
-                       '      : proportional;\n',
-             'after': '    Math.max(0, pct !== undefined && Number.isFinite(pct) ? pct '
-                      ': DEFAULT_PCT),\n'
-                      '  );\n'
-                      '  // Clamp to 0 for tiny windows (window < SUMMARY_RESERVE) so '
-                      'the surfaced\n'
-                      '  // value in `/context` stays meaningful.\n'
-                      '  const effectiveWindow = Math.max(0, window - '
-                      'SUMMARY_RESERVE);\n'
-                      '\n'
-                      '  // The absolute term is a ceiling: compact while the whole '
-                      'history still\n'
-                      '  // fits beside SUMMARY_RESERVE, so the ordinary snapshot '
-                      'covers everything\n'
-                      '  // and the prefix-splitting fallback stays the exception. '
-                      'Combine it with\n'
-                      '  // the proportional preference via `min`. When the window is '
-                      'so small the\n'
-                      '  // ceiling is non-positive, fall back to the proportional '
-                      'value as a floor\n'
-                      '  // so the trigger stays usable.\n'
-                      '  const proportional = effectivePct * window;\n'
-                      '  const absoluteCeiling = effectiveWindow - '
-                      'AUTOCOMPACT_BUFFER;\n'
-                      '  const auto =\n'
-                      '    absoluteCeiling > 0\n'
-                      '      ? Math.min(proportional, absoluteCeiling)\n'
-                      '      : proportional;\n',
-             'review_before': '    Math.max(0, pct !== undefined && '
-                              'Number.isFinite(pct) ? pct : DEFAULT_PCT),\n'
-                              '  );\n'
-                              '  // Clamp to 0 for tiny windows (window < '
-                              'SUMMARY_RESERVE) so the surfaced\n'
-                              '  // value in `/context` stays meaningful.\n'
-                              '  const effectiveWindow = Math.max(0, window - '
-                              'SUMMARY_RESERVE);\n'
-                              '\n'
-                              '  // The absolute term is a ceiling: compact before the '
-                              'prompt leaves too little\n'
-                              '  // room for the summarization side-query (which needs '
-                              'up to SUMMARY_RESERVE of\n'
-                              '  // output). Combine it with the proportional '
-                              'preference via `min`. When the\n'
-                              '  // window is so small the ceiling is non-positive, '
-                              'fall back to the\n'
-                              '  // proportional value as a floor so the trigger stays '
-                              'usable.\n'
-                              '  const proportional = effectivePct * window;\n'
-                              '  const absoluteCeiling = effectiveWindow - '
-                              'AUTOCOMPACT_BUFFER;\n'
-                              '  const auto =\n'
-                              '    absoluteCeiling > 0\n'
-                              '      ? Math.min(proportional, absoluteCeiling)\n'
-                              '      : proportional;\n',
-             'review_after': '    Math.max(0, pct !== undefined && '
-                             'Number.isFinite(pct) ? pct : DEFAULT_PCT),\n'
-                             '  );\n'
-                             '  // Clamp to 0 for tiny windows (window < '
-                             'SUMMARY_RESERVE) so the surfaced\n'
-                             '  // value in `/context` stays meaningful.\n'
-                             '  const effectiveWindow = Math.max(0, window - '
-                             'SUMMARY_RESERVE);\n'
-                             '\n'
-                             '  // The absolute term is a ceiling: compact while the '
-                             'whole history still\n'
-                             '  // fits beside SUMMARY_RESERVE, so the ordinary '
-                             'snapshot covers everything\n'
-                             '  // and the prefix-splitting fallback stays the '
-                             'exception. Combine it with\n'
-                             '  // the proportional preference via `min`. When the '
-                             'window is so small the\n'
-                             '  // ceiling is non-positive, fall back to the '
-                             'proportional value as a floor\n'
-                             '  // so the trigger stays usable.\n'
-                             '  const proportional = effectivePct * window;\n'
-                             '  const absoluteCeiling = effectiveWindow - '
-                             'AUTOCOMPACT_BUFFER;\n'
-                             '  const auto =\n'
-                             '    absoluteCeiling > 0\n'
-                             '      ? Math.min(proportional, absoluteCeiling)\n'
-                             '      : proportional;\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-6',
+                             '/**\n'},
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-4',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '\n'
                        'export interface CompressOptions {\n'
@@ -48878,17 +45552,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  promptId: string;\n'
                       '  force: boolean;\n'
                       '  config: Config;\n'
-                      '  /**\n'
-                      '   * Number of consecutive OUTPUT_TRUNCATED failures for this '
-                      'chat. Each one\n'
-                      "   * halves this attempt's summary-request budget (clamped at\n"
-                      '   * MAX_TRUNCATION_BACKOFF), so a retry after truncation '
-                      'always summarizes\n'
-                      '   * strictly less than the attempt that overflowed instead of '
-                      'repeating it\n'
-                      '   * against a larger history.\n'
-                      '   */\n'
-                      '  truncationBackoff: number;\n'
                       '  /**\n'
                       '   * Most recent provider token count for this chat. It is '
                       'retained for\n'
@@ -49003,18 +45666,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  force: boolean;\n'
                              '  config: Config;\n'
                              '  /**\n'
-                             '   * Number of consecutive OUTPUT_TRUNCATED failures for '
-                             'this chat. Each one\n'
-                             "   * halves this attempt's summary-request budget "
-                             '(clamped at\n'
-                             '   * MAX_TRUNCATION_BACKOFF), so a retry after '
-                             'truncation always summarizes\n'
-                             '   * strictly less than the attempt that overflowed '
-                             'instead of repeating it\n'
-                             '   * against a larger history.\n'
-                             '   */\n'
-                             '  truncationBackoff: number;\n'
-                             '  /**\n'
                              '   * Most recent provider token count for this chat. It '
                              'is retained for\n'
                              '   * telemetry and failure reporting; an automatic '
@@ -49054,83 +45705,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  /**\n'
                              '   * User-supplied focus directives passed to the '
                              'compression side-query.\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-7',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-5',
              'path': 'packages/core/src/services/chatCompressionService.ts',
-             'before': ' * explicit user intent outranks a global hook policy when '
-                       'both speak.\n'
-                       ' */\n'
-                       'function buildCompressionSystemPrompt(\n'
-                       '  userInstructions: string | undefined,\n'
-                       '  hookInstructions: string,\n'
-                       '): string {\n'
-                       '  const base = getCompressionPrompt();\n'
-                       '  const parts: string[] = [];\n'
-                       '  if (userInstructions && userInstructions.trim().length > 0) '
-                       '{\n'
-                       '    parts.push(userInstructions.trim());\n'
-                       '  }\n'
-                       '  if (hookInstructions.length > 0) {\n'
-                       '    parts.push(hookInstructions);\n',
-             'after': ' * explicit user intent outranks a global hook policy when both '
-                      'speak.\n'
-                      ' */\n'
-                      'function buildCompressionSystemPrompt(\n'
-                      '  userInstructions: string | undefined,\n'
-                      '  hookInstructions: string,\n'
-                      '): string {\n'
-                      '  const base = '
-                      'getCompressionPrompt(COMPACT_FINAL_RESPONSE_TOKEN_BUDGET);\n'
-                      '  const parts: string[] = [];\n'
-                      '  if (userInstructions && userInstructions.trim().length > 0) '
-                      '{\n'
-                      '    parts.push(userInstructions.trim());\n'
-                      '  }\n'
-                      '  if (hookInstructions.length > 0) {\n'
-                      '    parts.push(hookInstructions);\n',
-             'review_before': ' * explicit user intent outranks a global hook policy '
-                              'when both speak.\n'
-                              ' */\n'
-                              'function buildCompressionSystemPrompt(\n'
-                              '  userInstructions: string | undefined,\n'
-                              '  hookInstructions: string,\n'
-                              '): string {\n'
-                              '  const base = getCompressionPrompt();\n'
-                              '  const parts: string[] = [];\n'
-                              '  if (userInstructions && '
-                              'userInstructions.trim().length > 0) {\n'
-                              '    parts.push(userInstructions.trim());\n'
-                              '  }\n'
-                              '  if (hookInstructions.length > 0) {\n'
-                              '    parts.push(hookInstructions);\n',
-             'review_after': ' * explicit user intent outranks a global hook policy '
-                             'when both speak.\n'
-                             ' */\n'
-                             'function buildCompressionSystemPrompt(\n'
-                             '  userInstructions: string | undefined,\n'
-                             '  hookInstructions: string,\n'
-                             '): string {\n'
-                             '  const base = '
-                             'getCompressionPrompt(COMPACT_FINAL_RESPONSE_TOKEN_BUDGET);\n'
-                             '  const parts: string[] = [];\n'
-                             '  if (userInstructions && userInstructions.trim().length '
-                             '> 0) {\n'
-                             '    parts.push(userInstructions.trim());\n'
-                             '  }\n'
-                             '  if (hookInstructions.length > 0) {\n'
-                             '    parts.push(hookInstructions);\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-8',
-             'path': 'packages/core/src/services/chatCompressionService.ts',
-             'before': '    start >= 0 &&\n'
-                       '    end > start + startTag.length &&\n'
-                       '    stripped.slice(start + startTag.length, end).trim().length '
-                       '> 0\n'
-                       '  );\n'
-                       '}\n'
-                       '\n'
-                       'export class ChatCompressionService {\n'
-                       '  async compress(\n'
-                       '    chat: GeminiChat,\n'
-                       '    opts: CompressOptions,\n'
+             'before': '    opts: CompressOptions,\n'
                        '  ): Promise<{ newHistory: Content[] | null; info: '
                        'ChatCompressionInfo }> {\n'
                        '    const {\n'
@@ -49179,77 +45756,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '          originalTokenCount,\n'
                        '          newTokenCount: originalTokenCount,\n'
                        '          compressionStatus: CompressionStatus.NOOP,\n',
-             'after': '    start >= 0 &&\n'
-                      '    end > start + startTag.length &&\n'
-                      '    stripped.slice(start + startTag.length, end).trim().length '
-                      '> 0\n'
-                      '  );\n'
-                      '}\n'
-                      '\n'
-                      '/**\n'
-                      ' * Exact token budget one summary side-query request may '
-                      'occupy. The base is\n'
-                      ' * the window minus the full output reserve — the request must '
-                      'leave the\n'
-                      ' * generation its whole ceiling or vLLM rejects it — and each '
-                      'consecutive\n'
-                      ' * truncation failure halves it, because a snapshot that '
-                      'overflowed its final\n'
-                      ' * phase needs less input to describe, not another identical '
-                      'attempt against\n'
-                      ' * a history that has only grown since.\n'
-                      ' */\n'
-                      'export function summaryRequestBudget(\n'
-                      '  window: number,\n'
-                      '  truncationBackoff: number,\n'
-                      '): number {\n'
-                      '  const fitBudget = Math.max(0, window - '
-                      'COMPACT_MAX_OUTPUT_TOKENS);\n'
-                      '  const clamped = Math.max(\n'
-                      '    0,\n'
-                      '    Math.min(MAX_TRUNCATION_BACKOFF, '
-                      'Math.trunc(truncationBackoff)),\n'
-                      '  );\n'
-                      '  return Math.floor(fitBudget / 2 ** clamped);\n'
-                      '}\n'
-                      '\n'
-                      '/**\n'
-                      ' * Indices where the history may be cut into a summarized '
-                      'prefix and a\n'
-                      ' * verbatim tail. Only a model-turn start is clean: tool '
-                      'transactions are\n'
-                      ' * model(functionCall) → user(functionResponse) adjacencies, so '
-                      'any other cut\n'
-                      ' * strands one half of a pair on each side of the summary '
-                      'boundary — the side\n'
-                      ' * query would end on an unanswered call, and the rebuilt '
-                      'history would open\n'
-                      ' * on a response whose call was summarized away. Index 1 is '
-                      'excluded so the\n'
-                      ' * prefix always holds at least the opening user/model '
-                      'exchange, mirroring\n'
-                      ' * the < 2 meaningful-summary guard.\n'
-                      ' */\n'
-                      'export function cleanSplitIndices(history: Content[]): number[] '
-                      '{\n'
-                      '  const indices: number[] = [];\n'
-                      '  for (let i = 2; i < history.length; i++) {\n'
-                      "    if (history[i].role === 'model') indices.push(i);\n"
-                      '  }\n'
-                      '  return indices;\n'
-                      '}\n'
-                      '\n'
-                      'export class ChatCompressionService {\n'
-                      '  async compress(\n'
-                      '    chat: GeminiChat,\n'
-                      '    opts: CompressOptions,\n'
+             'after': '    opts: CompressOptions,\n'
                       '  ): Promise<{ newHistory: Content[] | null; info: '
                       'ChatCompressionInfo }> {\n'
                       '    const {\n'
                       '      promptId,\n'
                       '      force,\n'
                       '      config,\n'
-                      '      truncationBackoff,\n'
                       '      originalTokenCount,\n'
                       '      trigger,\n'
                       '      signal,\n'
@@ -49289,17 +45802,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          originalTokenCount,\n'
                       '          newTokenCount: originalTokenCount,\n'
                       '          compressionStatus: CompressionStatus.NOOP,\n',
-             'review_before': '    start >= 0 &&\n'
-                              '    end > start + startTag.length &&\n'
-                              '    stripped.slice(start + startTag.length, '
-                              'end).trim().length > 0\n'
-                              '  );\n'
-                              '}\n'
-                              '\n'
-                              'export class ChatCompressionService {\n'
-                              '  async compress(\n'
-                              '    chat: GeminiChat,\n'
-                              '    opts: CompressOptions,\n'
+             'review_before': '    opts: CompressOptions,\n'
                               '  ): Promise<{ newHistory: Content[] | null; info: '
                               'ChatCompressionInfo }> {\n'
                               '    const {\n'
@@ -49349,77 +45852,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '          originalTokenCount,\n'
                               '          newTokenCount: originalTokenCount,\n'
                               '          compressionStatus: CompressionStatus.NOOP,\n',
-             'review_after': '    start >= 0 &&\n'
-                             '    end > start + startTag.length &&\n'
-                             '    stripped.slice(start + startTag.length, '
-                             'end).trim().length > 0\n'
-                             '  );\n'
-                             '}\n'
-                             '\n'
-                             '/**\n'
-                             ' * Exact token budget one summary side-query request may '
-                             'occupy. The base is\n'
-                             ' * the window minus the full output reserve — the '
-                             'request must leave the\n'
-                             ' * generation its whole ceiling or vLLM rejects it — and '
-                             'each consecutive\n'
-                             ' * truncation failure halves it, because a snapshot that '
-                             'overflowed its final\n'
-                             ' * phase needs less input to describe, not another '
-                             'identical attempt against\n'
-                             ' * a history that has only grown since.\n'
-                             ' */\n'
-                             'export function summaryRequestBudget(\n'
-                             '  window: number,\n'
-                             '  truncationBackoff: number,\n'
-                             '): number {\n'
-                             '  const fitBudget = Math.max(0, window - '
-                             'COMPACT_MAX_OUTPUT_TOKENS);\n'
-                             '  const clamped = Math.max(\n'
-                             '    0,\n'
-                             '    Math.min(MAX_TRUNCATION_BACKOFF, '
-                             'Math.trunc(truncationBackoff)),\n'
-                             '  );\n'
-                             '  return Math.floor(fitBudget / 2 ** clamped);\n'
-                             '}\n'
-                             '\n'
-                             '/**\n'
-                             ' * Indices where the history may be cut into a '
-                             'summarized prefix and a\n'
-                             ' * verbatim tail. Only a model-turn start is clean: tool '
-                             'transactions are\n'
-                             ' * model(functionCall) → user(functionResponse) '
-                             'adjacencies, so any other cut\n'
-                             ' * strands one half of a pair on each side of the '
-                             'summary boundary — the side\n'
-                             ' * query would end on an unanswered call, and the '
-                             'rebuilt history would open\n'
-                             ' * on a response whose call was summarized away. Index 1 '
-                             'is excluded so the\n'
-                             ' * prefix always holds at least the opening user/model '
-                             'exchange, mirroring\n'
-                             ' * the < 2 meaningful-summary guard.\n'
-                             ' */\n'
-                             'export function cleanSplitIndices(history: Content[]): '
-                             'number[] {\n'
-                             '  const indices: number[] = [];\n'
-                             '  for (let i = 2; i < history.length; i++) {\n'
-                             "    if (history[i].role === 'model') indices.push(i);\n"
-                             '  }\n'
-                             '  return indices;\n'
-                             '}\n'
-                             '\n'
-                             'export class ChatCompressionService {\n'
-                             '  async compress(\n'
-                             '    chat: GeminiChat,\n'
-                             '    opts: CompressOptions,\n'
+             'review_after': '    opts: CompressOptions,\n'
                              '  ): Promise<{ newHistory: Content[] | null; info: '
                              'ChatCompressionInfo }> {\n'
                              '    const {\n'
                              '      promptId,\n'
                              '      force,\n'
                              '      config,\n'
-                             '      truncationBackoff,\n'
                              '      originalTokenCount,\n'
                              '      trigger,\n'
                              '      signal,\n'
@@ -49461,7 +45900,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          originalTokenCount,\n'
                              '          newTokenCount: originalTokenCount,\n'
                              '          compressionStatus: CompressionStatus.NOOP,\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-9',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-6',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '      // to be reserved out of the window here (this replaced '
                        'the\n'
@@ -49712,7 +46151,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              `auto=${auto}, '
                              'contextLimit=${contextLimit}`,\n'
                              '          );\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-10',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-7',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '        }\n'
                        '        // Below the token threshold but the screenshot '
@@ -49825,7 +46264,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'ack + recent\n'
                              '    // file restores + recent image restore).\n'
                              '\n'},
-            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-11',
+            {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-8',
              'path': 'packages/core/src/services/chatCompressionService.ts',
              'before': '          // side-query prompt past a recoverable size.\n'
                        '          hookExtraInstructions = merged\n'
@@ -50773,11 +47212,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "      role: 'user',\n"
                       '      parts: [{ text: sharedRequestText }],\n'
                       '    };\n'
-                      '    // One request shape for every candidate input, so a probe '
-                      'count and the\n'
-                      '    // eventual generation can never disagree about rendering.\n'
-                      '    const makeSideQueryOptions = (contents: Content[]) => ({\n'
-                      '      contents: [...contents, directiveContent],\n'
+                      '    // One request shape, used for both the exact count and the '
+                      'generation,\n'
+                      '    // so the two can never disagree about rendering.\n'
+                      '    const sideQueryOptions = {\n'
+                      '      contents: [...sideQueryHistory, directiveContent],\n'
                       '      model: config.getModel(),\n'
                       '      systemInstruction: mainSystemInstruction,\n'
                       '      config: {\n'
@@ -50792,24 +47231,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        },\n'
                       '        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
                       '      },\n'
-                      '      phaseBudgetOverrides: {\n'
-                      '        thinkingTokenBudget: COMPACT_THINKING_TOKEN_BUDGET,\n'
-                      '        finalResponseTokenBudget: '
-                      'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
-                      '      },\n'
                       '      abortSignal,\n'
                       '      promptId,\n'
                       '      stream: true,\n'
                       '      maxAttempts: 1,\n'
                       '      promptCacheSharing: true,\n'
                       '      failClosed: true,\n'
-                      '    });\n'
+                      '    };\n'
                       '\n'
                       '    let exactOriginalTokenCount: number;\n'
                       '    let summaryRequestTokenCount: number;\n'
                       '    let summaryResult: GenerateTextResult;\n'
-                      '    let summarizedPrefix: Content[];\n'
-                      '    let carriedTail: Content[];\n'
                       '    try {\n'
                       '      const originalCount = await '
                       'chat.countRequestTokensForCandidateHistory(\n'
@@ -50819,15 +47251,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        opts.requestGenerationConfig,\n'
                       '      );\n'
                       '      exactOriginalTokenCount = originalCount.totalTokens;\n'
-                      '      const requestBudget = summaryRequestBudget(\n'
-                      '        contextLimit,\n'
-                      '        truncationBackoff,\n'
-                      '      );\n'
-                      '      const fullOptions = '
-                      'makeSideQueryOptions(sideQueryHistory);\n'
                       '      const summaryCount = await config\n'
                       '        .getBaseLlmClient()\n'
-                      '        .countRequestTokens(fullOptions);\n'
+                      '        .countRequestTokens(sideQueryOptions);\n'
                       '      if (summaryCount.maxModelLen !== contextLimit) {\n'
                       '        throw new Error(\n'
                       '          `summary /tokenize '
@@ -50835,71 +47261,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '${contextLimit}`,\n'
                       '        );\n'
                       '      }\n'
-                      '      let chosenOptions = fullOptions;\n'
                       '      summaryRequestTokenCount = summaryCount.totalTokens;\n'
-                      '      summarizedPrefix = historyForSummary;\n'
-                      '      carriedTail = [];\n'
-                      '      if (summaryRequestTokenCount > requestBudget) {\n'
-                      '        // The whole history no longer fits beside the output '
-                      'reserve (or a\n'
-                      '        // prior truncation shrank the budget). Summarize the '
-                      'largest clean\n'
-                      '        // prefix that does and carry the rest forward verbatim '
-                      'behind the\n'
-                      '        // snapshot — the alternative is a side query the '
-                      'server must reject,\n'
-                      '        // which is precisely the state that used to end '
-                      'sessions once the\n'
-                      '        // window outgrew window − reserve. The fit predicate '
-                      'is monotone in\n'
-                      '        // the prefix length, so binary search over the clean '
-                      'split points\n'
-                      '        // finds the boundary with O(log n) exact counts, each '
-                      'rendered by\n'
-                      '        // the same tokenizer that will render the generation.\n'
-                      '        const splits = cleanSplitIndices(historyForSummary);\n'
-                      '        let fitted:\n'
-                      '          | { index: number; tokens: number }\n'
-                      '          | undefined = undefined;\n'
-                      '        let lo = 0;\n'
-                      '        let hi = splits.length - 1;\n'
-                      '        while (lo <= hi) {\n'
-                      '          const mid = (lo + hi) >> 1;\n'
-                      '          const prefix = historyForSummary.slice(0, '
-                      'splits[mid]);\n'
-                      '          const probe = await config\n'
-                      '            .getBaseLlmClient()\n'
-                      '            .countRequestTokens(makeSideQueryOptions(prefix));\n'
-                      '          if (probe.totalTokens <= requestBudget) {\n'
-                      '            fitted = { index: splits[mid], tokens: '
-                      'probe.totalTokens };\n'
-                      '            lo = mid + 1;\n'
-                      '          } else {\n'
-                      '            hi = mid - 1;\n'
-                      '          }\n'
-                      '        }\n'
-                      '        if (fitted === undefined) {\n'
-                      '          throw new Error(\n'
-                      '            `no clean split point fits the summary request: ` '
-                      '+\n'
-                      '              `full=${summaryRequestTokenCount}, '
-                      'budget=${requestBudget}, ` +\n'
-                      '              `truncationBackoff=${truncationBackoff}, ` +\n'
-                      '              `window=${contextLimit}`,\n'
-                      '          );\n'
-                      '        }\n'
-                      '        // The pending tool result rides only the full-history '
-                      'shape; a\n'
-                      '        // prefix never reaches the end of history, so the '
-                      'pending response\n'
-                      '        // stays paired with its call in the carried tail.\n'
-                      '        summarizedPrefix = historyForSummary.slice(0, '
-                      'fitted.index);\n'
-                      '        chosenOptions = '
-                      'makeSideQueryOptions(summarizedPrefix);\n'
-                      '        summaryRequestTokenCount = fitted.tokens;\n'
-                      '        carriedTail = historyForSummary.slice(fitted.index);\n'
-                      '      }\n'
                       '      if (summaryRequestTokenCount + COMPACT_MAX_OUTPUT_TOKENS '
                       '> contextLimit) {\n'
                       '        throw new Error(\n'
@@ -50911,7 +47273,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      }\n'
                       '      summaryResult = await config\n'
                       '        .getBaseLlmClient()\n'
-                      '        .generateText(chosenOptions);\n'
+                      '        .generateText(sideQueryOptions);\n'
                       '    } catch (error) {\n'
                       '      if (abortSignal.aborted) throw error;\n'
                       '      config\n'
@@ -50950,16 +47312,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'generated.\n'
                       '    const outputAccounting: CompactionOutputAccounting = {\n'
                       '      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
-                      '      thinkingTokenBudget: COMPACT_THINKING_TOKEN_BUDGET,\n'
-                      '      finalResponseTokenBudget: '
-                      'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
                       '      outputTokens: compressionOutputTokenCount ?? 0,\n'
                       '      thinkingTokens: summaryResult.usage?.thoughtsTokenCount '
                       '?? 0,\n'
                       '      summaryChars: processedSummary.length,\n'
                       '      finishReason: summaryResult.finishReason ?? null,\n'
-                      '      summaryRequestTokens: summaryRequestTokenCount,\n'
-                      '      carriedTailContents: carriedTail.length,\n'
                       '    };\n'
                       '\n'
                       '    if (summaryResult.finishReason === FinishReason.MAX_TOKENS) '
@@ -51042,17 +47399,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '\n'
                       '    let extraHistory: Content[];\n'
                       '    try {\n'
-                      '      // Attachment extraction reads the summarized span only: '
-                      'with a tail\n'
-                      '      // carried, the recent reads live in the tail verbatim, '
-                      'and restoring\n'
-                      '      // them again would hand the model the same bytes twice.\n'
                       '      extraHistory = await composePostCompactHistory(\n'
-                      '        carriedTail.length > 0\n'
-                      '          ? summarizedPrefix\n'
-                      "          : compactTrigger === 'manual'\n"
-                      '            ? historyForSummary\n'
-                      '            : curatedHistory,\n'
+                      "        compactTrigger === 'manual' ? historyForSummary : "
+                      'curatedHistory,\n'
                       '        summary,\n'
                       '        {\n'
                       '          workspaceRoot: config.getTargetDir(),\n'
@@ -51062,7 +47411,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          planModeActive: config.getApprovalMode?.() === '
                       'ApprovalMode.PLAN,\n'
                       '          runningSubagents: collectActiveSubagents(config),\n'
-                      '          carriedTail,\n'
                       '        },\n'
                       '      );\n'
                       '    } catch (error) {\n'
@@ -52199,13 +48547,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "      role: 'user',\n"
                              '      parts: [{ text: sharedRequestText }],\n'
                              '    };\n'
-                             '    // One request shape for every candidate input, so a '
-                             'probe count and the\n'
-                             '    // eventual generation can never disagree about '
-                             'rendering.\n'
-                             '    const makeSideQueryOptions = (contents: Content[]) '
-                             '=> ({\n'
-                             '      contents: [...contents, directiveContent],\n'
+                             '    // One request shape, used for both the exact count '
+                             'and the generation,\n'
+                             '    // so the two can never disagree about rendering.\n'
+                             '    const sideQueryOptions = {\n'
+                             '      contents: [...sideQueryHistory, '
+                             'directiveContent],\n'
                              '      model: config.getModel(),\n'
                              '      systemInstruction: mainSystemInstruction,\n'
                              '      config: {\n'
@@ -52220,25 +48567,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        },\n'
                              '        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
                              '      },\n'
-                             '      phaseBudgetOverrides: {\n'
-                             '        thinkingTokenBudget: '
-                             'COMPACT_THINKING_TOKEN_BUDGET,\n'
-                             '        finalResponseTokenBudget: '
-                             'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
-                             '      },\n'
                              '      abortSignal,\n'
                              '      promptId,\n'
                              '      stream: true,\n'
                              '      maxAttempts: 1,\n'
                              '      promptCacheSharing: true,\n'
                              '      failClosed: true,\n'
-                             '    });\n'
+                             '    };\n'
                              '\n'
                              '    let exactOriginalTokenCount: number;\n'
                              '    let summaryRequestTokenCount: number;\n'
                              '    let summaryResult: GenerateTextResult;\n'
-                             '    let summarizedPrefix: Content[];\n'
-                             '    let carriedTail: Content[];\n'
                              '    try {\n'
                              '      const originalCount = await '
                              'chat.countRequestTokensForCandidateHistory(\n'
@@ -52249,15 +48588,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '      exactOriginalTokenCount = '
                              'originalCount.totalTokens;\n'
-                             '      const requestBudget = summaryRequestBudget(\n'
-                             '        contextLimit,\n'
-                             '        truncationBackoff,\n'
-                             '      );\n'
-                             '      const fullOptions = '
-                             'makeSideQueryOptions(sideQueryHistory);\n'
                              '      const summaryCount = await config\n'
                              '        .getBaseLlmClient()\n'
-                             '        .countRequestTokens(fullOptions);\n'
+                             '        .countRequestTokens(sideQueryOptions);\n'
                              '      if (summaryCount.maxModelLen !== contextLimit) {\n'
                              '        throw new Error(\n'
                              '          `summary /tokenize '
@@ -52265,78 +48598,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '${contextLimit}`,\n'
                              '        );\n'
                              '      }\n'
-                             '      let chosenOptions = fullOptions;\n'
                              '      summaryRequestTokenCount = '
                              'summaryCount.totalTokens;\n'
-                             '      summarizedPrefix = historyForSummary;\n'
-                             '      carriedTail = [];\n'
-                             '      if (summaryRequestTokenCount > requestBudget) {\n'
-                             '        // The whole history no longer fits beside the '
-                             'output reserve (or a\n'
-                             '        // prior truncation shrank the budget). '
-                             'Summarize the largest clean\n'
-                             '        // prefix that does and carry the rest forward '
-                             'verbatim behind the\n'
-                             '        // snapshot — the alternative is a side query '
-                             'the server must reject,\n'
-                             '        // which is precisely the state that used to end '
-                             'sessions once the\n'
-                             '        // window outgrew window − reserve. The fit '
-                             'predicate is monotone in\n'
-                             '        // the prefix length, so binary search over the '
-                             'clean split points\n'
-                             '        // finds the boundary with O(log n) exact '
-                             'counts, each rendered by\n'
-                             '        // the same tokenizer that will render the '
-                             'generation.\n'
-                             '        const splits = '
-                             'cleanSplitIndices(historyForSummary);\n'
-                             '        let fitted:\n'
-                             '          | { index: number; tokens: number }\n'
-                             '          | undefined = undefined;\n'
-                             '        let lo = 0;\n'
-                             '        let hi = splits.length - 1;\n'
-                             '        while (lo <= hi) {\n'
-                             '          const mid = (lo + hi) >> 1;\n'
-                             '          const prefix = historyForSummary.slice(0, '
-                             'splits[mid]);\n'
-                             '          const probe = await config\n'
-                             '            .getBaseLlmClient()\n'
-                             '            '
-                             '.countRequestTokens(makeSideQueryOptions(prefix));\n'
-                             '          if (probe.totalTokens <= requestBudget) {\n'
-                             '            fitted = { index: splits[mid], tokens: '
-                             'probe.totalTokens };\n'
-                             '            lo = mid + 1;\n'
-                             '          } else {\n'
-                             '            hi = mid - 1;\n'
-                             '          }\n'
-                             '        }\n'
-                             '        if (fitted === undefined) {\n'
-                             '          throw new Error(\n'
-                             '            `no clean split point fits the summary '
-                             'request: ` +\n'
-                             '              `full=${summaryRequestTokenCount}, '
-                             'budget=${requestBudget}, ` +\n'
-                             '              `truncationBackoff=${truncationBackoff}, ` '
-                             '+\n'
-                             '              `window=${contextLimit}`,\n'
-                             '          );\n'
-                             '        }\n'
-                             '        // The pending tool result rides only the '
-                             'full-history shape; a\n'
-                             '        // prefix never reaches the end of history, so '
-                             'the pending response\n'
-                             '        // stays paired with its call in the carried '
-                             'tail.\n'
-                             '        summarizedPrefix = historyForSummary.slice(0, '
-                             'fitted.index);\n'
-                             '        chosenOptions = '
-                             'makeSideQueryOptions(summarizedPrefix);\n'
-                             '        summaryRequestTokenCount = fitted.tokens;\n'
-                             '        carriedTail = '
-                             'historyForSummary.slice(fitted.index);\n'
-                             '      }\n'
                              '      if (summaryRequestTokenCount + '
                              'COMPACT_MAX_OUTPUT_TOKENS > contextLimit) {\n'
                              '        throw new Error(\n'
@@ -52348,7 +48611,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      }\n'
                              '      summaryResult = await config\n'
                              '        .getBaseLlmClient()\n'
-                             '        .generateText(chosenOptions);\n'
+                             '        .generateText(sideQueryOptions);\n'
                              '    } catch (error) {\n'
                              '      if (abortSignal.aborted) throw error;\n'
                              '      config\n'
@@ -52388,17 +48651,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const outputAccounting: CompactionOutputAccounting = '
                              '{\n'
                              '      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,\n'
-                             '      thinkingTokenBudget: '
-                             'COMPACT_THINKING_TOKEN_BUDGET,\n'
-                             '      finalResponseTokenBudget: '
-                             'COMPACT_FINAL_RESPONSE_TOKEN_BUDGET,\n'
                              '      outputTokens: compressionOutputTokenCount ?? 0,\n'
                              '      thinkingTokens: '
                              'summaryResult.usage?.thoughtsTokenCount ?? 0,\n'
                              '      summaryChars: processedSummary.length,\n'
                              '      finishReason: summaryResult.finishReason ?? null,\n'
-                             '      summaryRequestTokens: summaryRequestTokenCount,\n'
-                             '      carriedTailContents: carriedTail.length,\n'
                              '    };\n'
                              '\n'
                              '    if (summaryResult.finishReason === '
@@ -52482,18 +48739,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '    let extraHistory: Content[];\n'
                              '    try {\n'
-                             '      // Attachment extraction reads the summarized span '
-                             'only: with a tail\n'
-                             '      // carried, the recent reads live in the tail '
-                             'verbatim, and restoring\n'
-                             '      // them again would hand the model the same bytes '
-                             'twice.\n'
                              '      extraHistory = await composePostCompactHistory(\n'
-                             '        carriedTail.length > 0\n'
-                             '          ? summarizedPrefix\n'
-                             "          : compactTrigger === 'manual'\n"
-                             '            ? historyForSummary\n'
-                             '            : curatedHistory,\n'
+                             "        compactTrigger === 'manual' ? historyForSummary "
+                             ': curatedHistory,\n'
                              '        summary,\n'
                              '        {\n'
                              '          workspaceRoot: config.getTargetDir(),\n'
@@ -52504,7 +48752,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'ApprovalMode.PLAN,\n'
                              '          runningSubagents: '
                              'collectActiveSubagents(config),\n'
-                             '          carriedTail,\n'
                              '        },\n'
                              '      );\n'
                              '    } catch (error) {\n'
@@ -53349,635 +49596,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' */\n'
                              'export class LoopDetectionService {\n'
                              '  private readonly config: Config;\n'},
-            {'name': 'packages/core/src/services/postCompactAttachments.test.ts:landmark-1',
-             'path': 'packages/core/src/services/postCompactAttachments.test.ts',
-             'before': '      .filter((p) => (p as { inlineData?: unknown '
-                       '}).inlineData);\n'
-                       '    expect(restoredImages.length).toBeGreaterThan(0); // '
-                       'images survived...\n'
-                       '    expect(countToolResponseImages(result)).toBe(0); // ...but '
-                       'top-level, uncounted\n'
-                       '  });\n'
-                       '});\n'
-                       '\n'
-                       "describe('postProcessSummary', () => {\n"
-                       "  it('returns body + trailer when no <analysis> block is "
-                       "present', () => {\n"
-                       '    const out = '
-                       "postProcessSummary('<state_snapshot>body</state_snapshot>');\n"
-                       '    '
-                       "expect(out).toContain('<state_snapshot>body</state_snapshot>');\n"
-                       '    expect(out).toMatch(/resume.*prior task/i);\n'
-                       '  });\n',
-             'after': '      .filter((p) => (p as { inlineData?: unknown '
-                      '}).inlineData);\n'
-                      '    expect(restoredImages.length).toBeGreaterThan(0); // images '
-                      'survived...\n'
-                      '    expect(countToolResponseImages(result)).toBe(0); // ...but '
-                      'top-level, uncounted\n'
-                      '  });\n'
-                      '});\n'
-                      '\n'
-                      "describe('composePostCompactHistory — carried tail', () => {\n"
-                      '  const tail: Content[] = [\n'
-                      '    {\n'
-                      "      role: 'model',\n"
-                      "      parts: [{ functionCall: { id: 't1', name: 'edit', args: "
-                      '{} } }],\n'
-                      '    },\n'
-                      '    {\n'
-                      "      role: 'user',\n"
-                      '      parts: [\n'
-                      "        { functionResponse: { id: 't1', name: 'edit', response: "
-                      "{ output: 'ok' } } },\n"
-                      '      ],\n'
-                      '    },\n'
-                      "    { role: 'model', parts: [{ text: 'continuing the edit' }] "
-                      '},\n'
-                      '  ];\n'
-                      '\n'
-                      "  it('appends the tail after the attachment block and keeps "
-                      "roles alternating', async () => {\n"
-                      '    const history: Content[] = [\n'
-                      "      { role: 'user', parts: [{ text: 'task' }] },\n"
-                      "      { role: 'model', parts: [{ text: 'worked' }] },\n"
-                      '    ];\n'
-                      '    const result = await composePostCompactHistory(history, '
-                      "'SUM', {\n"
-                      '      carriedTail: tail,\n'
-                      '      planModeActive: true,\n'
-                      '    });\n'
-                      '    // [user(sum), model(ack), user(reminder), model(fc), '
-                      'user(fr), model(text)]\n'
-                      '    expect(result.map((c) => c.role)).toEqual([\n'
-                      "      'user',\n"
-                      "      'model',\n"
-                      "      'user',\n"
-                      "      'model',\n"
-                      "      'user',\n"
-                      "      'model',\n"
-                      '    ]);\n'
-                      '    expect(result.slice(3)).toEqual(tail);\n'
-                      '  });\n'
-                      '\n'
-                      "  it('inserts a continuation marker when no attachments "
-                      "separate ack from tail', async () => {\n"
-                      '    const history: Content[] = [\n'
-                      "      { role: 'user', parts: [{ text: 'task' }] },\n"
-                      "      { role: 'model', parts: [{ text: 'worked' }] },\n"
-                      '    ];\n'
-                      '    const result = await composePostCompactHistory(history, '
-                      "'SUM', {\n"
-                      '      carriedTail: tail,\n'
-                      '    });\n'
-                      '    // A tail starts at a model turn; without the marker the '
-                      'ack and the\n'
-                      "    // tail's first turn would sit model-to-model and the "
-                      'provider rejects\n'
-                      '    // the request.\n'
-                      '    expect(result.map((c) => c.role)).toEqual([\n'
-                      "      'user',\n"
-                      "      'model',\n"
-                      "      'user',\n"
-                      "      'model',\n"
-                      "      'user',\n"
-                      "      'model',\n"
-                      '    ]);\n'
-                      '    expect((result[2].parts?.[0] as { text: string '
-                      '}).text).toContain(\n'
-                      "      'resumes below',\n"
-                      '    );\n'
-                      '    for (let i = 1; i < result.length; i++) {\n'
-                      '      expect(result[i].role).not.toBe(result[i - 1].role);\n'
-                      '    }\n'
-                      '  });\n'
-                      '\n'
-                      "  it('suppresses the trailing-call rescue because the tail "
-                      "already carries the trailing turn', async () => {\n"
-                      '    // The prefix (extraction history) ends with a dangling '
-                      'model call; with\n'
-                      '    // a tail present that turn belongs to the tail, so copying '
-                      'it again\n'
-                      '    // would duplicate the call id the pending response '
-                      'resolves against.\n'
-                      '    const prefixEndingWithCall: Content[] = [\n'
-                      "      { role: 'user', parts: [{ text: 'task' }] },\n"
-                      '      {\n'
-                      "        role: 'model',\n"
-                      "        parts: [{ functionCall: { id: 'dup', name: 'edit', "
-                      'args: {} } }],\n'
-                      '      },\n'
-                      '    ];\n'
-                      '    const result = await '
-                      "composePostCompactHistory(prefixEndingWithCall, 'SUM', {\n"
-                      '      carriedTail: tail,\n'
-                      '    });\n'
-                      '    const callIds = result\n'
-                      '      .flatMap((c) => c.parts ?? [])\n'
-                      '      .map((p) => p.functionCall?.id)\n'
-                      '      .filter((id): id is string => !!id);\n'
-                      "    expect(callIds).toEqual(['t1']);\n"
-                      '  });\n'
-                      '});\n'
-                      '\n'
-                      "describe('postProcessSummary', () => {\n"
-                      "  it('returns body + trailer when no <analysis> block is "
-                      "present', () => {\n"
-                      '    const out = '
-                      "postProcessSummary('<state_snapshot>body</state_snapshot>');\n"
-                      '    '
-                      "expect(out).toContain('<state_snapshot>body</state_snapshot>');\n"
-                      '    expect(out).toMatch(/resume.*prior task/i);\n'
-                      '  });\n',
-             'review_before': '      .filter((p) => (p as { inlineData?: unknown '
-                              '}).inlineData);\n'
-                              '    expect(restoredImages.length).toBeGreaterThan(0); '
-                              '// images survived...\n'
-                              '    expect(countToolResponseImages(result)).toBe(0); // '
-                              '...but top-level, uncounted\n'
-                              '  });\n'
-                              '});\n'
-                              '\n'
-                              "describe('postProcessSummary', () => {\n"
-                              "  it('returns body + trailer when no <analysis> block "
-                              "is present', () => {\n"
-                              '    const out = '
-                              "postProcessSummary('<state_snapshot>body</state_snapshot>');\n"
-                              '    '
-                              "expect(out).toContain('<state_snapshot>body</state_snapshot>');\n"
-                              '    expect(out).toMatch(/resume.*prior task/i);\n'
-                              '  });\n',
-             'review_after': '      .filter((p) => (p as { inlineData?: unknown '
-                             '}).inlineData);\n'
-                             '    expect(restoredImages.length).toBeGreaterThan(0); // '
-                             'images survived...\n'
-                             '    expect(countToolResponseImages(result)).toBe(0); // '
-                             '...but top-level, uncounted\n'
-                             '  });\n'
-                             '});\n'
-                             '\n'
-                             "describe('composePostCompactHistory — carried tail', () "
-                             '=> {\n'
-                             '  const tail: Content[] = [\n'
-                             '    {\n'
-                             "      role: 'model',\n"
-                             "      parts: [{ functionCall: { id: 't1', name: 'edit', "
-                             'args: {} } }],\n'
-                             '    },\n'
-                             '    {\n'
-                             "      role: 'user',\n"
-                             '      parts: [\n'
-                             "        { functionResponse: { id: 't1', name: 'edit', "
-                             "response: { output: 'ok' } } },\n"
-                             '      ],\n'
-                             '    },\n'
-                             "    { role: 'model', parts: [{ text: 'continuing the "
-                             "edit' }] },\n"
-                             '  ];\n'
-                             '\n'
-                             "  it('appends the tail after the attachment block and "
-                             "keeps roles alternating', async () => {\n"
-                             '    const history: Content[] = [\n'
-                             "      { role: 'user', parts: [{ text: 'task' }] },\n"
-                             "      { role: 'model', parts: [{ text: 'worked' }] },\n"
-                             '    ];\n'
-                             '    const result = await '
-                             "composePostCompactHistory(history, 'SUM', {\n"
-                             '      carriedTail: tail,\n'
-                             '      planModeActive: true,\n'
-                             '    });\n'
-                             '    // [user(sum), model(ack), user(reminder), '
-                             'model(fc), user(fr), model(text)]\n'
-                             '    expect(result.map((c) => c.role)).toEqual([\n'
-                             "      'user',\n"
-                             "      'model',\n"
-                             "      'user',\n"
-                             "      'model',\n"
-                             "      'user',\n"
-                             "      'model',\n"
-                             '    ]);\n'
-                             '    expect(result.slice(3)).toEqual(tail);\n'
-                             '  });\n'
-                             '\n'
-                             "  it('inserts a continuation marker when no attachments "
-                             "separate ack from tail', async () => {\n"
-                             '    const history: Content[] = [\n'
-                             "      { role: 'user', parts: [{ text: 'task' }] },\n"
-                             "      { role: 'model', parts: [{ text: 'worked' }] },\n"
-                             '    ];\n'
-                             '    const result = await '
-                             "composePostCompactHistory(history, 'SUM', {\n"
-                             '      carriedTail: tail,\n'
-                             '    });\n'
-                             '    // A tail starts at a model turn; without the marker '
-                             'the ack and the\n'
-                             "    // tail's first turn would sit model-to-model and "
-                             'the provider rejects\n'
-                             '    // the request.\n'
-                             '    expect(result.map((c) => c.role)).toEqual([\n'
-                             "      'user',\n"
-                             "      'model',\n"
-                             "      'user',\n"
-                             "      'model',\n"
-                             "      'user',\n"
-                             "      'model',\n"
-                             '    ]);\n'
-                             '    expect((result[2].parts?.[0] as { text: string '
-                             '}).text).toContain(\n'
-                             "      'resumes below',\n"
-                             '    );\n'
-                             '    for (let i = 1; i < result.length; i++) {\n'
-                             '      expect(result[i].role).not.toBe(result[i - '
-                             '1].role);\n'
-                             '    }\n'
-                             '  });\n'
-                             '\n'
-                             "  it('suppresses the trailing-call rescue because the "
-                             "tail already carries the trailing turn', async () => {\n"
-                             '    // The prefix (extraction history) ends with a '
-                             'dangling model call; with\n'
-                             '    // a tail present that turn belongs to the tail, so '
-                             'copying it again\n'
-                             '    // would duplicate the call id the pending response '
-                             'resolves against.\n'
-                             '    const prefixEndingWithCall: Content[] = [\n'
-                             "      { role: 'user', parts: [{ text: 'task' }] },\n"
-                             '      {\n'
-                             "        role: 'model',\n"
-                             "        parts: [{ functionCall: { id: 'dup', name: "
-                             "'edit', args: {} } }],\n"
-                             '      },\n'
-                             '    ];\n'
-                             '    const result = await '
-                             "composePostCompactHistory(prefixEndingWithCall, 'SUM', "
-                             '{\n'
-                             '      carriedTail: tail,\n'
-                             '    });\n'
-                             '    const callIds = result\n'
-                             '      .flatMap((c) => c.parts ?? [])\n'
-                             '      .map((p) => p.functionCall?.id)\n'
-                             '      .filter((id): id is string => !!id);\n'
-                             "    expect(callIds).toEqual(['t1']);\n"
-                             '  });\n'
-                             '});\n'
-                             '\n'
-                             "describe('postProcessSummary', () => {\n"
-                             "  it('returns body + trailer when no <analysis> block is "
-                             "present', () => {\n"
-                             '    const out = '
-                             "postProcessSummary('<state_snapshot>body</state_snapshot>');\n"
-                             '    '
-                             "expect(out).toContain('<state_snapshot>body</state_snapshot>');\n"
-                             '    expect(out).toMatch(/resume.*prior task/i);\n'
-                             '  });\n'},
-            {'name': 'packages/core/src/services/postCompactAttachments.ts:landmark-1',
-             'path': 'packages/core/src/services/postCompactAttachments.ts',
-             'before': '   * Empty array or `undefined` renders no block. '
-                       'Terminal-state tasks\n'
-                       '   * (completed/failed/cancelled) should already be filtered '
-                       'out by the\n'
-                       '   * caller — they have already emitted their notification XML '
-                       'and need\n'
-                       '   * no reminder.\n'
-                       '   */\n'
-                       '  runningSubagents?: SubagentSnapshot[];\n'
-                       '}\n'
-                       '\n'
-                       '/**\n'
-                       ' * Trailing `model+functionCall` content from the pre-compact '
-                       'history,\n'
-                       ' * to be preserved in the post-compact output so a pending\n'
-                       " * `functionResponse` (sitting in `sendMessageStream`'s\n",
-             'after': '   * Empty array or `undefined` renders no block. '
-                      'Terminal-state tasks\n'
-                      '   * (completed/failed/cancelled) should already be filtered '
-                      'out by the\n'
-                      '   * caller — they have already emitted their notification XML '
-                      'and need\n'
-                      '   * no reminder.\n'
-                      '   */\n'
-                      '  runningSubagents?: SubagentSnapshot[];\n'
-                      '  /**\n'
-                      '   * History entries the compaction left unsummarized because '
-                      'the full\n'
-                      '   * history no longer fit beside the output reserve. Appended '
-                      'verbatim\n'
-                      '   * after the attachment block, so the rebuilt history reads\n'
-                      '   * summary → attachments → recent turns and the resuming '
-                      'model sees its\n'
-                      '   * newest work exactly as it happened. Pairing is guaranteed '
-                      'by the\n'
-                      '   * split rule (a tail always starts at a model turn), so this '
-                      'module\n'
-                      '   * only places it.\n'
-                      '   */\n'
-                      '  carriedTail?: Content[];\n'
-                      '}\n'
-                      '\n'
-                      '/**\n'
-                      ' * Trailing `model+functionCall` content from the pre-compact '
-                      'history,\n'
-                      ' * to be preserved in the post-compact output so a pending\n'
-                      " * `functionResponse` (sitting in `sendMessageStream`'s\n",
-             'review_before': '   * Empty array or `undefined` renders no block. '
-                              'Terminal-state tasks\n'
-                              '   * (completed/failed/cancelled) should already be '
-                              'filtered out by the\n'
-                              '   * caller — they have already emitted their '
-                              'notification XML and need\n'
-                              '   * no reminder.\n'
-                              '   */\n'
-                              '  runningSubagents?: SubagentSnapshot[];\n'
-                              '}\n'
-                              '\n'
-                              '/**\n'
-                              ' * Trailing `model+functionCall` content from the '
-                              'pre-compact history,\n'
-                              ' * to be preserved in the post-compact output so a '
-                              'pending\n'
-                              ' * `functionResponse` (sitting in '
-                              "`sendMessageStream`'s\n",
-             'review_after': '   * Empty array or `undefined` renders no block. '
-                             'Terminal-state tasks\n'
-                             '   * (completed/failed/cancelled) should already be '
-                             'filtered out by the\n'
-                             '   * caller — they have already emitted their '
-                             'notification XML and need\n'
-                             '   * no reminder.\n'
-                             '   */\n'
-                             '  runningSubagents?: SubagentSnapshot[];\n'
-                             '  /**\n'
-                             '   * History entries the compaction left unsummarized '
-                             'because the full\n'
-                             '   * history no longer fit beside the output reserve. '
-                             'Appended verbatim\n'
-                             '   * after the attachment block, so the rebuilt history '
-                             'reads\n'
-                             '   * summary → attachments → recent turns and the '
-                             'resuming model sees its\n'
-                             '   * newest work exactly as it happened. Pairing is '
-                             'guaranteed by the\n'
-                             '   * split rule (a tail always starts at a model turn), '
-                             'so this module\n'
-                             '   * only places it.\n'
-                             '   */\n'
-                             '  carriedTail?: Content[];\n'
-                             '}\n'
-                             '\n'
-                             '/**\n'
-                             ' * Trailing `model+functionCall` content from the '
-                             'pre-compact history,\n'
-                             ' * to be preserved in the post-compact output so a '
-                             'pending\n'
-                             ' * `functionResponse` (sitting in '
-                             "`sendMessageStream`'s\n"},
-            {'name': 'packages/core/src/services/postCompactAttachments.ts:landmark-2',
-             'path': 'packages/core/src/services/postCompactAttachments.ts',
-             'before': '    workspaceRoot,\n'
-                       '    signal,\n'
-                       '    maxFiles = POST_COMPACT_MAX_FILES_TO_RESTORE,\n'
-                       '    maxImages = POST_COMPACT_MAX_IMAGES_TO_RESTORE,\n'
-                       '    planModeActive,\n'
-                       '    runningSubagents,\n'
-                       '  } = options;\n'
-                       '\n'
-                       '  // Workspace-boundary filter on the extracted file paths '
-                       '(Finding 4).\n'
-                       '  const filePaths = extractRecentFilePaths(history, '
-                       'maxFiles).filter((p) =>\n'
-                       '    isInsideWorkspace(p, workspaceRoot),\n'
-                       '  );\n',
-             'after': '    workspaceRoot,\n'
-                      '    signal,\n'
-                      '    maxFiles = POST_COMPACT_MAX_FILES_TO_RESTORE,\n'
-                      '    maxImages = POST_COMPACT_MAX_IMAGES_TO_RESTORE,\n'
-                      '    planModeActive,\n'
-                      '    runningSubagents,\n'
-                      '    carriedTail = [],\n'
-                      '  } = options;\n'
-                      '\n'
-                      '  // Workspace-boundary filter on the extracted file paths '
-                      '(Finding 4).\n'
-                      '  const filePaths = extractRecentFilePaths(history, '
-                      'maxFiles).filter((p) =>\n'
-                      '    isInsideWorkspace(p, workspaceRoot),\n'
-                      '  );\n',
-             'review_before': '    workspaceRoot,\n'
-                              '    signal,\n'
-                              '    maxFiles = POST_COMPACT_MAX_FILES_TO_RESTORE,\n'
-                              '    maxImages = POST_COMPACT_MAX_IMAGES_TO_RESTORE,\n'
-                              '    planModeActive,\n'
-                              '    runningSubagents,\n'
-                              '  } = options;\n'
-                              '\n'
-                              '  // Workspace-boundary filter on the extracted file '
-                              'paths (Finding 4).\n'
-                              '  const filePaths = extractRecentFilePaths(history, '
-                              'maxFiles).filter((p) =>\n'
-                              '    isInsideWorkspace(p, workspaceRoot),\n'
-                              '  );\n',
-             'review_after': '    workspaceRoot,\n'
-                             '    signal,\n'
-                             '    maxFiles = POST_COMPACT_MAX_FILES_TO_RESTORE,\n'
-                             '    maxImages = POST_COMPACT_MAX_IMAGES_TO_RESTORE,\n'
-                             '    planModeActive,\n'
-                             '    runningSubagents,\n'
-                             '    carriedTail = [],\n'
-                             '  } = options;\n'
-                             '\n'
-                             '  // Workspace-boundary filter on the extracted file '
-                             'paths (Finding 4).\n'
-                             '  const filePaths = extractRecentFilePaths(history, '
-                             'maxFiles).filter((p) =>\n'
-                             '    isInsideWorkspace(p, workspaceRoot),\n'
-                             '  );\n'},
-            {'name': 'packages/core/src/services/postCompactAttachments.ts:landmark-3',
-             'path': 'packages/core/src/services/postCompactAttachments.ts',
-             'before': '  // attachments so role alternation holds:\n'
-                       '  //  - with attachments:  [user(sum), model(ack), '
-                       'user(attach), model(fc)]\n'
-                       '  //  - without:           [user(sum), model(ack + fc)] — fc '
-                       'lands in\n'
-                       "  //                       the ack's own model Content to "
-                       'avoid the\n'
-                       '  //                       model→model adjacency that would '
-                       'otherwise\n'
-                       '  //                       arise from a separate appended '
-                       'entry.\n'
-                       '  const trailingFc = trailingFunctionCallContent(history);\n'
-                       '  const ackParts: Part[] = [\n'
-                       "    { text: 'Got it. Thanks for the additional context!' },\n"
-                       '  ];\n'
-                       '\n'
-                       '  const out: Content[] = [\n'
-                       "    { role: 'user', parts: [{ text: "
-                       'postProcessSummary(summary) }] },\n'
-                       '  ];\n'
-                       '\n'
-                       '  if (postAckParts.length > 0) {\n'
-                       "    out.push({ role: 'model', parts: ackParts });\n"
-                       "    out.push({ role: 'user', parts: postAckParts });\n"
-                       '    if (trailingFc) out.push(trailingFc);\n'
-                       '  } else if (trailingFc) {\n'
-                       "    // Fold the trailing functionCall into the ack's own "
-                       "Content so we don't\n"
-                       '    // produce model→model adjacency. Intentionally keep ONLY '
-                       'the\n',
-             'after': '  // attachments so role alternation holds:\n'
-                      '  //  - with attachments:  [user(sum), model(ack), '
-                      'user(attach), model(fc)]\n'
-                      '  //  - without:           [user(sum), model(ack + fc)] — fc '
-                      'lands in\n'
-                      "  //                       the ack's own model Content to avoid "
-                      'the\n'
-                      '  //                       model→model adjacency that would '
-                      'otherwise\n'
-                      '  //                       arise from a separate appended '
-                      'entry.\n'
-                      '  // With a carried tail, the tail IS the trailing span — it '
-                      'already ends\n'
-                      '  // with whatever the history ended with — so the '
-                      'trailing-call rescue is\n'
-                      '  // skipped rather than duplicating that model turn.\n'
-                      '  const trailingFc =\n'
-                      '    carriedTail.length > 0 ? undefined : '
-                      'trailingFunctionCallContent(history);\n'
-                      '  const ackParts: Part[] = [\n'
-                      "    { text: 'Got it. Thanks for the additional context!' },\n"
-                      '  ];\n'
-                      '\n'
-                      '  const out: Content[] = [\n'
-                      "    { role: 'user', parts: [{ text: postProcessSummary(summary) "
-                      '}] },\n'
-                      '  ];\n'
-                      '\n'
-                      '  if (carriedTail.length > 0) {\n'
-                      '    // A tail starts at a model turn, so a user Content must '
-                      'sit between\n'
-                      '    // the ack and the tail or the rebuilt history carries a '
-                      'model→model\n'
-                      '    // adjacency. The attachment block serves when present; '
-                      'otherwise a\n'
-                      '    // one-line marker keeps the roles sound and tells the '
-                      'resuming model\n'
-                      '    // why the transcript resumes mid-task.\n'
-                      "    out.push({ role: 'model', parts: ackParts });\n"
-                      '    out.push({\n'
-                      "      role: 'user',\n"
-                      '      parts:\n'
-                      '        postAckParts.length > 0\n'
-                      '          ? postAckParts\n'
-                      '          : [\n'
-                      '              {\n'
-                      "                text: 'The conversation resumes below from the "
-                      "point the summary leaves off.',\n"
-                      '              },\n'
-                      '            ],\n'
-                      '    });\n'
-                      '    out.push(...carriedTail);\n'
-                      '  } else if (postAckParts.length > 0) {\n'
-                      "    out.push({ role: 'model', parts: ackParts });\n"
-                      "    out.push({ role: 'user', parts: postAckParts });\n"
-                      '    if (trailingFc) out.push(trailingFc);\n'
-                      '  } else if (trailingFc) {\n'
-                      "    // Fold the trailing functionCall into the ack's own "
-                      "Content so we don't\n"
-                      '    // produce model→model adjacency. Intentionally keep ONLY '
-                      'the\n',
-             'review_before': '  // attachments so role alternation holds:\n'
-                              '  //  - with attachments:  [user(sum), model(ack), '
-                              'user(attach), model(fc)]\n'
-                              '  //  - without:           [user(sum), model(ack + fc)] '
-                              '— fc lands in\n'
-                              "  //                       the ack's own model Content "
-                              'to avoid the\n'
-                              '  //                       model→model adjacency that '
-                              'would otherwise\n'
-                              '  //                       arise from a separate '
-                              'appended entry.\n'
-                              '  const trailingFc = '
-                              'trailingFunctionCallContent(history);\n'
-                              '  const ackParts: Part[] = [\n'
-                              "    { text: 'Got it. Thanks for the additional "
-                              "context!' },\n"
-                              '  ];\n'
-                              '\n'
-                              '  const out: Content[] = [\n'
-                              "    { role: 'user', parts: [{ text: "
-                              'postProcessSummary(summary) }] },\n'
-                              '  ];\n'
-                              '\n'
-                              '  if (postAckParts.length > 0) {\n'
-                              "    out.push({ role: 'model', parts: ackParts });\n"
-                              "    out.push({ role: 'user', parts: postAckParts });\n"
-                              '    if (trailingFc) out.push(trailingFc);\n'
-                              '  } else if (trailingFc) {\n'
-                              "    // Fold the trailing functionCall into the ack's "
-                              "own Content so we don't\n"
-                              '    // produce model→model adjacency. Intentionally '
-                              'keep ONLY the\n',
-             'review_after': '  // attachments so role alternation holds:\n'
-                             '  //  - with attachments:  [user(sum), model(ack), '
-                             'user(attach), model(fc)]\n'
-                             '  //  - without:           [user(sum), model(ack + fc)] '
-                             '— fc lands in\n'
-                             "  //                       the ack's own model Content "
-                             'to avoid the\n'
-                             '  //                       model→model adjacency that '
-                             'would otherwise\n'
-                             '  //                       arise from a separate '
-                             'appended entry.\n'
-                             '  // With a carried tail, the tail IS the trailing span '
-                             '— it already ends\n'
-                             '  // with whatever the history ended with — so the '
-                             'trailing-call rescue is\n'
-                             '  // skipped rather than duplicating that model turn.\n'
-                             '  const trailingFc =\n'
-                             '    carriedTail.length > 0 ? undefined : '
-                             'trailingFunctionCallContent(history);\n'
-                             '  const ackParts: Part[] = [\n'
-                             "    { text: 'Got it. Thanks for the additional context!' "
-                             '},\n'
-                             '  ];\n'
-                             '\n'
-                             '  const out: Content[] = [\n'
-                             "    { role: 'user', parts: [{ text: "
-                             'postProcessSummary(summary) }] },\n'
-                             '  ];\n'
-                             '\n'
-                             '  if (carriedTail.length > 0) {\n'
-                             '    // A tail starts at a model turn, so a user Content '
-                             'must sit between\n'
-                             '    // the ack and the tail or the rebuilt history '
-                             'carries a model→model\n'
-                             '    // adjacency. The attachment block serves when '
-                             'present; otherwise a\n'
-                             '    // one-line marker keeps the roles sound and tells '
-                             'the resuming model\n'
-                             '    // why the transcript resumes mid-task.\n'
-                             "    out.push({ role: 'model', parts: ackParts });\n"
-                             '    out.push({\n'
-                             "      role: 'user',\n"
-                             '      parts:\n'
-                             '        postAckParts.length > 0\n'
-                             '          ? postAckParts\n'
-                             '          : [\n'
-                             '              {\n'
-                             "                text: 'The conversation resumes below "
-                             "from the point the summary leaves off.',\n"
-                             '              },\n'
-                             '            ],\n'
-                             '    });\n'
-                             '    out.push(...carriedTail);\n'
-                             '  } else if (postAckParts.length > 0) {\n'
-                             "    out.push({ role: 'model', parts: ackParts });\n"
-                             "    out.push({ role: 'user', parts: postAckParts });\n"
-                             '    if (trailingFc) out.push(trailingFc);\n'
-                             '  } else if (trailingFc) {\n'
-                             "    // Fold the trailing functionCall into the ack's own "
-                             "Content so we don't\n"
-                             '    // produce model→model adjacency. Intentionally keep '
-                             'ONLY the\n'},
             {'name': 'packages/core/src/services/visionBridge/vision-bridge-service.test.ts:landmark-1',
              'path': 'packages/core/src/services/visionBridge/vision-bridge-service.test.ts',
              'before': '      signal: signal(),\n'
@@ -95327,7 +90945,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/config/config.ts': 'c476125a2be618c868e8b38fdce4a77d53c882e8525ce33b20fb35947a38d7c0',
  'packages/cli/src/gemini.test.tsx': '2e547b0eb91c2e1746e3b966511cb286846cbc5495779056d0b1099776795166',
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',
- 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '096f79b80302e0c73c0a466232b685700ed0fc30eda1fff322b419b62176ebb6',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '3ca41ffb0c577065f99d6d88a32ab5df694900f015e7416d0942c4bfe5749ed5',
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863',
  'packages/cli/src/nonInteractive/types.ts': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e',
  'packages/cli/src/nonInteractiveCli.test.ts': '36499ab60a63edfb90c470d3593014c9c07499fe07d56b9ed3aaf9395ac0c52a',
@@ -95346,45 +90964,43 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/agents/subagent-result.ts': '6dc6f199ba394f6e0520aca1d54a5d7c529eea9b0d94f76ab0fffa29327b12e2',
  'packages/core/src/config/config.ts': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49',
  'packages/core/src/config/qwen38-agent-service-contract.test.ts': '1bea1f3fecc42a4e1ece933d9b7e88e9cf32f0d7386928c9260b91b611bb19ad',
- 'packages/core/src/core/baseLlmClient.test.ts': '3473d53774ef2b86869cf5af03bf2faf3433171e7630c4b4652a398ec6fc5d0d',
- 'packages/core/src/core/baseLlmClient.ts': '408fcec52d262c12fc8c2327eb9826aeb7005f7bb5566817276ea918ff140459',
- 'packages/core/src/core/client.test.ts': '1666cbe38b695e86e71a61e78626438c9469d9d43b9ba872757b776fffe17944',
- 'packages/core/src/core/contentGenerator.ts': '476242ed064c4980cec6789b84bb5496cb93a28d7763b659fb799f84fcd9bebc',
+ 'packages/core/src/core/baseLlmClient.test.ts': '643b5f7c90bbb9a63300c3ec02cffea86f4ecdbb65f06b1ec94eb18fda7e7674',
+ 'packages/core/src/core/baseLlmClient.ts': '14a959fbbeeffd507b9ebd2bb4d6b564d3a88feb4e46a406afcf2555fa791a9b',
+ 'packages/core/src/core/client.test.ts': '672a46838231a8799545260380cc65c10782779b2a344660342b1dd1d3b57c89',
+ 'packages/core/src/core/contentGenerator.ts': '27fa593f8dbf0e75106b2d4aa8f9d22801dcf016b112d56046542ed4fd3ff303',
  'packages/core/src/core/coreToolScheduler.test.ts': 'de21e1f4528091327c67e81ea7acd5a159b4cbd83189f09f3ddc5ed28b71943e',
  'packages/core/src/core/coreToolScheduler.ts': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e',
- 'packages/core/src/core/geminiChat.test.ts': 'd522e0b9a5c19cdb22365e601f3b1f82dc6dd08c301b04ca7cb1e9ac4faa9d63',
- 'packages/core/src/core/geminiChat.ts': '4426d9e1632f852b048c16750cb902e5927a7d822490e99943da0cc355a0b622',
+ 'packages/core/src/core/geminiChat.test.ts': '8f610f05483369dc12bca6658413259d16d629430f8c77acf4dd380d47d0d377',
+ 'packages/core/src/core/geminiChat.ts': '513fc09bd4b44a1000f56fe50c449604f6c77afa3e7ea9527631855fea4ca9a8',
  'packages/core/src/core/genai-compat.test.ts': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50',
  'packages/core/src/core/genai-compat.ts': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81',
  'packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts': '39cb515dfc3afb39edfe8dbabd3956351dd4b7b71e82f2fd77e4f6dc2b8ce695',
  'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'bb73338e3cb074e243c5baf4c09159a638134210e0eabf816a90df3656e8da28',
  'packages/core/src/core/openaiContentGenerator/converter.ts': '28c729be63e9171b90b58c712c22808a9d529402ee1c5026436051059387ca51',
  'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1',
- 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': '31a0c872819e5b0ded6cc91c865e0b0614fee8a17e065a15f07a0efef3014ea6',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': '6ddd4b092ec9130e5c90c799c23969da0e1ff07208b5efc765d691283e015c82',
  'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888',
- 'packages/core/src/core/openaiContentGenerator/pipeline.ts': 'eb39024c965025c6c9d35178d0ae8517bcbe954182e539ae640a8b97cd656f20',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.ts': 'a9abde6f3ae36ee4447159fc72a63301e131a008a05695be000ca6a5ce1f6966',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
- 'packages/core/src/core/prompts.test.ts': 'c2a6fdbdd9d3eaa3058b3618edaa1e3d2f6fa1212a66123faf157ba1089c748d',
- 'packages/core/src/core/prompts.ts': '9e62d9c9ab0306f8149ea1bcf2e06275ef134637d61e8b4d5e8357c13be35384',
+ 'packages/core/src/core/prompts.test.ts': '415b3b6491fd759d6b8df89161576319c4fd7f6965d9b76f8e9a26bafa4a891c',
+ 'packages/core/src/core/prompts.ts': 'c195557edf2fc0bb340aa2c0f1d9fe9c03ac3a28c986b6455944a70dfdc58477',
  'packages/core/src/core/qwen38-deployment-prompt.test.ts': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851',
  'packages/core/src/core/qwen38-deployment-prompt.ts': '0397a0cf6e4c71f9df3d0f04a2058c9703ae6b8507cd5cbcd9682603a993b24a',
  'packages/core/src/core/session-recovery.ts': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513',
  'packages/core/src/core/tokenLimits.test.ts': '0f4775ebb4abb3b3a7a38a2369b3c44995b97b2f256b04c56609c1ef0c01823c',
  'packages/core/src/core/tokenLimits.ts': '9a3bda80d944c61cae61197c018a10e4606a47187686f0a34b5ccf5624f978cb',
  'packages/core/src/core/toolOutcome.ts': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9',
- 'packages/core/src/core/turn.ts': '451de8d5cfec7fd0d08500e0acee7f18a5b48dee8752e42e01c9a46f7e3b361b',
+ 'packages/core/src/core/turn.ts': '6c2707d2ebf84fb82cc2fe2b0e7be92275a5e09a330d527a52000a32035add72',
  'packages/core/src/index.ts': '6ce05101bad847681232aae4d4b738afa4e7d6206a495a6210df2a913b9dbcef',
  'packages/core/src/models/constants.ts': '11cf01eda085973eedc575e4b8cd0c7bf469ced519e66bbac72129c47e8b2d38',
  'packages/core/src/models/content-generator-config.ts': '6f8c6321a1171425eec010e05e72e5e71b6ae1f7415075779a935f4b58565503',
  'packages/core/src/models/types.ts': '36aeae5b246fb84e527d3d767e0ac4dd90288e6969240c982ac7488848ae844b',
  'packages/core/src/permissions/permission-manager.test.ts': 'd7d463b3c4eebf766656f881f9cc1ecd4a3758b86af7d8e49bbbe84a45389f92',
  'packages/core/src/permissions/permission-manager.ts': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779',
- 'packages/core/src/services/chatCompressionService.test.ts': '937086585da78d4e580c5b327abc8f59b6efb495ad9722744656165d9e7d925f',
- 'packages/core/src/services/chatCompressionService.ts': '1b900017067d4b9a679b41045d5bc220ad344e0cea2d1cc36f934e977f642ce2',
+ 'packages/core/src/services/chatCompressionService.test.ts': 'f3e53999112f482b0f5c9c4e59bb11de5ada425cc68250777b3111269d33b965',
+ 'packages/core/src/services/chatCompressionService.ts': '07f7c18031236116fa73d39c4bb15111c4f364c597a9d3cdd1e09b81b7886ae0',
  'packages/core/src/services/fileReadCache.integration.test.ts': '310b8d5c9d81bec445100ffddf8bc89e2841ef7f5917d267fd4df55c8104a775',
  'packages/core/src/services/loopDetectionService.ts': '9e3b6457192b8bd6691ada479da2db67d10721778c3ad260e06409778217f99d',
- 'packages/core/src/services/postCompactAttachments.test.ts': 'bf91b560b24006a8dc41bb55d2853c9cfeeca17bac2e2904ba81469813ad0daa',
- 'packages/core/src/services/postCompactAttachments.ts': '52e5503f962dda10155262604315c879d0a9635c57055ae9573d4f489b446140',
  'packages/core/src/services/visionBridge/vision-bridge-service.test.ts': '35135d73b65c44e88135024f40720ad178d861e90ca3dd64db0ab40633aaabe6',
  'packages/core/src/services/visionBridge/vision-bridge-service.ts': '42cb9a783943cd0246c3f674cf16807dcd8d396ed1a00c52b6c1aea7ee830972',
  'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',

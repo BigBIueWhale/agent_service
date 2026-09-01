@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `f4c2c5fd012a2c7f291b32dd18853a82c45a78d719ec5bf2ee664b996ddf0696`
+- Review-diff SHA-256: `8ca47e044e3958b3af224edaff33a8f953e292ebb2ad4f0eb508fc8c1fa8ead7`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `a6c0d7b9f62dc5b2b503476f948ce3aff7aaa5837531229590d5e5852e0fc3f4`
+- Transformer-manifest SHA-256: `62aa8c6dee139625c4639fda88e6069f31eacbc7c86de8cd1fd37d32526a23ea`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -33,25 +33,22 @@ provide as one fail-closed mode:
   content, never after visible output or a potentially executable side effect;
 - exact, same-model compaction whose input and candidate output are both counted by
   vLLM and whose summary must end normally without tool calls;
-- a per-request maintenance phase budget that cannot be silently lost.
-  Compaction runs inside a fixed 20,000-token output ceiling and splits it
-  deliberately — a bounded thinking phase, and a reserved final-response
-  phase so the state snapshot has room to be written. The override was
-  applied to the per-request sampling parameters, but this deployment pins
-  both phase budgets in `extra_body`, which the provider hook merges over
-  the request, so the split never reached the wire: the summarizer ran at
-  the pinned 262,144-token thinking budget inside a 20,000-token cap.
-  Thought parts are filtered out of the response, so two consecutive
-  attempts each spent about 19,900 output tokens and produced no summary at
-  all; the session then died refusing to send 240,122 tokens against a
-  239,144-token limit. The existing ceiling guard could not have caught it:
-  it compared against the sampling-parameter layer, which never declares
-  those keys, so it read `undefined` and always passed. The budget is now
-  written onto the fully merged wire request, after every configuration
-  layer, and validated against the exact value it replaces — so the same
-  guard that could never fire now reads the pinned 262,144 and refuses
-  anything above it (two `[phase-budget]` tests execute both halves in the
-  build);
+- a compaction output ceiling sized for this window, and nothing else.
+  Upstream's 20,000 tokens was measured as too small here: across ten
+  accounted production compactions hidden reasoning alone reached 11,720
+  tokens and snapshots were clipped at ~30,100 chars, and one 136-turn
+  session had three consecutive attempts discarded as `MAX_TOKENS` and then
+  died refusing to send 252,945 tokens. The ceiling is 49,152 and is one
+  number because it is two things at once: the request's `max_tokens` and
+  the reserve the compaction thresholds keep free, so input plus output
+  cannot exceed `max_model_len`. It costs working window — the automatic
+  trigger sits at 199,992 rather than upstream's 229,144. The request is
+  otherwise ordinary: it declares no per-request phase budgets, so the
+  model thinks to a natural stop and writes the snapshot under the pinned
+  `extra_body` ceilings exactly as on any turn, and the reasoning-end
+  marker is never forced. The snapshot schema gives every fact exactly one
+  home, because the previous nine sections gave one code snippet four and
+  duplication is what grew under budget pressure;
 - one universal tool allowlist covering core, dynamic, MCP, skill, and synthetic tools;
 - an explicit foreground-agents-only mode that exposes only `general-purpose` and `Explore`, returns results inline, and rejects forks, background work, teams, worktrees, custom agent types, and model overrides.
 - init metadata filtered through that same policy, so it does not advertise internal or uncallable agent types.
