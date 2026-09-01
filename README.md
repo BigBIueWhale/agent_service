@@ -154,11 +154,12 @@ outbound generation limit uses the real vLLM tokenizer on the fully rendered
 request. Before compaction and again before generation, Qwen Code sends the exact
 messages, typed tool history, image parts, tool schemas, and template arguments to
 the backend `/tokenize` endpoint. `max_tokens` is then exactly
-`min(262144, 262144 - rendered_prompt_tokens)`. There is no character division,
-`target // 8`, image-token guess, padding margin, minimum-output fabrication, local
-tokenizer, or tokenizer fallback in the compaction trigger or outbound clamp. If
-the tokenizer is missing, malformed, or reports another model window, the turn
-fails before generation.
+`min(262144, 262144 - rendered_prompt_tokens, 199992 - rendered_prompt_tokens)`,
+the last term holding the turn inside the size its own summary request can carry.
+There is no character division, `target // 8`, image-token guess, padding margin,
+local tokenizer, or tokenizer fallback in the compaction trigger or outbound
+sizing. If the tokenizer is missing, malformed, or reports another model window,
+the turn fails before generation.
 
 A session is bounded by model turns, never by wall-clock time: the default
 budget is 400 turns (`limits.max_session_turns`), a submission may name any
@@ -268,9 +269,12 @@ The local patch provides:
 
 - vLLM `/tokenize` calls over the same rendered messages, tools, and template kwargs
   as the subsequent completion request;
-- exact `max_tokens = min(configured ceiling, context window - rendered tokens)`;
-- no character estimate, byte division, padding margin, token safety margin,
-  minimum-output fabrication, or tokenizer fallback;
+- exact `max_tokens = min(configured ceiling, context window - rendered tokens,
+  auto-compaction threshold - rendered tokens)`;
+- a compaction request sized to the room the window leaves beside it, so a summary
+  request can be issued at any history size;
+- no character estimate, byte division, padding margin, token safety margin, or
+  tokenizer fallback;
 - the same exact rendered-request count drives the automatic-compaction threshold,
   including image tokens and tool schemas;
 - a universal strict native-tool allowlist covering built-in, dynamic, MCP, skill,

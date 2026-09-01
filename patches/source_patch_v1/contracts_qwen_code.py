@@ -298,7 +298,8 @@ def _validate_exact_tokens_after(state: State) -> None:
             "export function clampExactOutputTokensToWindow(",
             "const room = contextWindowSize - exactPromptTokens;",
             "if (room <= 0)",
-            "return Math.min(outputCeiling, room);",
+            "function compactionRoom(",
+            "compactionRoom(autoCompactionThreshold, exactPromptTokens),",
         ),
         label=label,
     )
@@ -308,7 +309,7 @@ def _validate_exact_tokens_after(state: State) -> None:
     _require(
         "MIN_CLAMPED_OUTPUT_TOKENS" not in exact_body
         and "Math.max(" not in exact_body,
-        f"{label}: exact clamp contains a fabricated minimum or heuristic floor",
+        f"{label}: exact clamp pads or floors its window term",
     )
     pipeline_source = _require_all(
         state,
@@ -2470,15 +2471,16 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "export const COMPACT_MAX_OUTPUT_TOKENS = 49_152;",
             "export const SUMMARY_RESERVE = COMPACT_MAX_OUTPUT_TOKENS;",
-            "        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,",
-            "if (summaryRequestTokenCount + COMPACT_MAX_OUTPUT_TOKENS > contextLimit) {",
+            "export const COMPACTION_BUDGET_SAFETY_MARGIN = 1_024;",
+            "export function computeCompactionOutputBudget(",
+            "          maxOutputTokens: compactionOutputBudget,",
         ),
         label=label,
     )
     # The compaction request is an ordinary one. Nothing splits the output
     # budget into phases, nothing shrinks or splits the input, and nothing
     # converges a failed attempt into a smaller retry.
-    for retired in (
+    for absent in (
         "COMPACT_THINKING_TOKEN_BUDGET",
         "COMPACT_FINAL_RESPONSE_TOKEN_BUDGET",
         "COMPACT_PHASE_DELIMITER_ALLOWANCE",
@@ -2490,8 +2492,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         "phaseBudgetOverrides",
     ):
         _require(
-            retired not in service_source,
-            f"{label}: {service} kept retired compaction machinery '{retired}'",
+            absent not in service_source,
+            f"{label}: {service} splits or converges the compaction budget via '{absent}'",
         )
     # The per-request phase-budget apparatus is gone from the layers that
     # carried it, so no caller can reintroduce a split budget.

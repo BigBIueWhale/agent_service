@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `8ca47e044e3958b3af224edaff33a8f953e292ebb2ad4f0eb508fc8c1fa8ead7`
+- Review-diff SHA-256: `c45e841bb21c35c830e4fbb66d868fce6e33c71074aaccddf5cf1ccdc5cfe412`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `62aa8c6dee139625c4639fda88e6069f31eacbc7c86de8cd1fd37d32526a23ea`
+- Transformer-manifest SHA-256: `bc464d1451f1e5a4ce655371127c3c4adaf73b8c039b9c277c98cb0a12f1e9fd`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -23,7 +23,7 @@ The semantic transformer adds the requirements that upstream 0.21.12 does not
 provide as one fail-closed mode:
 
 - exact rendered-request token counts from vLLM's real `/tokenize` endpoint;
-- an exact `max_tokens = min(configured_output_ceiling, context_window - rendered_prompt_tokens)` clamp, with no heuristic margin, padding, minimum, or fallback estimate;
+- an exact per-turn output budget: the smallest of the configured output ceiling, the context window less the rendered prompt, and the auto-compaction threshold less the rendered prompt, the window term carrying no heuristic margin, padding, or fallback estimate;
 - exact rendered-token automatic-compaction gating before generation, including
   the actual image expansion, template, and tool schemas;
 - strict native tool-call parsing and a successful-tool-call terminal invariant;
@@ -33,22 +33,25 @@ provide as one fail-closed mode:
   content, never after visible output or a potentially executable side effect;
 - exact, same-model compaction whose input and candidate output are both counted by
   vLLM and whose summary must end normally without tool calls;
-- a compaction output ceiling sized for this window, and nothing else.
-  Upstream's 20,000 tokens was measured as too small here: across ten
-  accounted production compactions hidden reasoning alone reached 11,720
-  tokens and snapshots were clipped at ~30,100 chars, and one 136-turn
-  session had three consecutive attempts discarded as `MAX_TOKENS` and then
-  died refusing to send 252,945 tokens. The ceiling is 49,152 and is one
-  number because it is two things at once: the request's `max_tokens` and
-  the reserve the compaction thresholds keep free, so input plus output
-  cannot exceed `max_model_len`. It costs working window — the automatic
-  trigger sits at 199,992 rather than upstream's 229,144. The request is
-  otherwise ordinary: it declares no per-request phase budgets, so the
-  model thinks to a natural stop and writes the snapshot under the pinned
-  `extra_body` ceilings exactly as on any turn, and the reasoning-end
-  marker is never forced. The snapshot schema gives every fact exactly one
-  home, because the previous nine sections gave one code snippet four and
-  duplication is what grew under budget pressure;
+- a conversation that stays summarizable at every size it can reach. Two
+  bounds hold it there and they are the same arithmetic seen from each end.
+  A turn's output request stops at the auto-compaction threshold, so no
+  single turn can carry the history past the point where compaction falls
+  due; the buffer between that threshold and the effective window absorbs
+  the turn's tool result, whose size the tokenizer cannot know in advance.
+  The compaction request is then sized to the room the window actually
+  leaves beside it, counted by `/tokenize` on the request that will be sent,
+  so a summary request can be issued whatever the history costs. The ceiling
+  on that budget is 49,152, and it is one number because it is two things at
+  once: the request's `max_tokens` and the reserve the thresholds hold free,
+  which is what keeps the budget at its full value in every state the
+  thresholds admit. It costs working window — the automatic trigger sits at
+  199,992 rather than upstream's 229,144. The request is otherwise ordinary:
+  it declares no per-request phase budgets, so the model thinks to a natural
+  stop and writes the snapshot under the pinned `extra_body` ceilings exactly
+  as on any turn, and the reasoning-end marker is never forced. The snapshot
+  schema gives every fact exactly one home, so nothing in it has two places
+  to grow;
 - one universal tool allowlist covering core, dynamic, MCP, skill, and synthetic tools;
 - an explicit foreground-agents-only mode that exposes only `general-purpose` and `Explore`, returns results inline, and rejects forks, background work, teams, worktrees, custom agent types, and model overrides.
 - init metadata filtered through that same policy, so it does not advertise internal or uncallable agent types.
@@ -367,62 +370,19 @@ provide as one fail-closed mode:
   a subagent's record and report name the same cause in the same words (one
   `[subagent-scope]` and four `[loop-attribution]` tests execute this in the
   build);
-- a failed compaction that diagnoses itself from the standard bundle. The
-  compaction diagnostics — `[chat-compression] summary terminated with
-  MAX_TOKENS` and its siblings — go to the debug logger, and this deployment
-  enables no debug logging, so none of them reached `qwen.stderr`; the
-  truncated summary was discarded unpersisted, and a failed side query's
-  usage never reaches the billed event stream. The investigation into the
-  session above could therefore establish that the 20,000-token maintenance
-  budget had been exhausted but not how it split between hidden thinking and
-  the final response, which is the one fact that identifies the failure.
-  Turning on debug logging would be a second mode and would pollute the
-  captured stream, so the compaction event carries the accounting instead:
-  the ceiling, both phase budgets, the output tokens produced, how many of
-  them were reasoning, how much summary survived, and the provider's
+- a compaction attempt that diagnoses itself from the standard bundle. The
+  compaction diagnostics go to the debug logger, and this deployment enables
+  no debug logging, so none of them reach `qwen.stderr`; a discarded summary
+  is never persisted, and a side query's usage never reaches the billed event
+  stream. Turning on debug logging would be a second mode and would pollute
+  the captured stream, so the compaction event carries the accounting
+  instead: the budget the attempt ran under, the output tokens produced, how
+  many of them were reasoning, how much summary survived, and the provider's
   terminal reason. It is attached to every outcome reachable after the
   generation and left empty when the attempt was refused before it, so a
   budget consumed entirely by reasoning stays distinguishable from a request
   that never ran (three more `[compaction-event]` tests execute this in the
-  build);
-- compaction that cannot outgrow its own window, sized from its measured
-  failure. The accounting above, over a 136-turn production session, showed
-  summaries growing 18,092 → 30,098 chars across five attempts; the last
-  three terminated MAX_TOKENS pressing against the 8,000-token final phase
-  (the largest a clipped floor, not a demand measurement), thinking hit its
-  12,000-token forced ceiling twice, and every retry re-ran the identical
-  request against a larger history because the consecutive-failure breaker
-  suppressed attempts while the context kept growing — until the prompt
-  passed `window − reserve`, where no full-history side query can even be
-  issued, and the session died refusing 252,945 tokens. Five changes, one
-  mode: the phases are now 16,000 thinking + 16,000 final, with the total
-  ceiling *derived* as their exact partition (plus a named 64-token
-  allowance for the reasoning-end delimiter that belongs to neither phase),
-  so a MAX_TOKENS stop always names the final phase; the summary request is
-  sized to fit by construction — when history + directive no longer fit
-  beside the reserve, the side query summarizes the largest clean prefix
-  (binary search over model-turn boundaries, exact `/tokenize` counts) and
-  the remainder rides verbatim behind the snapshot, which also keeps the
-  prefix cache shared; a truncated attempt halves its successor's request
-  budget (two strikes maximum) instead of being suppressed, so retries
-  strictly shrink; the snapshot schema was rebuilt around one home per
-  fact — intent, environment, completed, in_progress, learnings, next_step —
-  because the previous nine sections gave one code snippet four legitimate
-  homes and duplication, not content, is what grows under budget pressure;
-  and the prompt now states the real final-phase budget, interpolated from
-  the enforced constant, since the three truncated summaries were written
-  against a ceiling the model was never told about. On failure, nothing is
-  latched: a fluke retries at the next natural trigger, and a hard-tier
-  send that still cannot shrink falls back to deterministic
-  microcompaction — old tool results cleared, nothing fabricated — before
-  the terminal refusal, so a sampler failure degrades memory instead of
-  ending the run. The auto threshold moves from 229,144 to 217,080 tokens:
-  12,064 tokens of working window (5.3%) deliberately traded for a summary
-  budget that double-covers the observed clipped demand, because a
-  truncated summary costs the whole attempt and, previously, the session
-  (two `[compaction-growth]` tests, the truncation-dominates-content
-  ordering test, the carried-tail composition tests, and the
-  deterministic-fallback test execute this in the build).
+  build).
 
 Verification performed in the pinned Node image:
 

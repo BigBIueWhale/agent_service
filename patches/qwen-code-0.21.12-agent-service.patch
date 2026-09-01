@@ -4298,7 +4298,7 @@ index c224235..1786226 100644
            );
          }
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
-index 5ae5029..5689604 100644
+index 5ae5029..ebde662 100644
 --- a/packages/core/src/core/geminiChat.test.ts
 +++ b/packages/core/src/core/geminiChat.test.ts
 @@ -30,24 +30,26 @@ import { OpenAIContentGenerator } from './openaiContentGenerator/openaiContentGe
@@ -4847,7 +4847,7 @@ index 5ae5029..5689604 100644
        const compressSpy = vi
          .spyOn(ChatCompressionService.prototype, 'compress')
          .mockResolvedValueOnce({
-@@ -3857,19 +3838,17 @@ describe('GeminiChat', async () => {
+@@ -3857,19 +3838,16 @@ describe('GeminiChat', async () => {
          'prompt-id-after-reactive-failed-latch',
        );
        for await (const _ of nextStream) {
@@ -4855,9 +4855,8 @@ index 5ae5029..5689604 100644
        }
  
 +      // A reactive failure latches nothing: the next send simply attempts
-+      // again. The breaker that used to count strikes here suppressed
-+      // retries while the context grew, which is how a recoverable state
-+      // became a dead session.
++      // again, so a recoverable state stays recoverable while the context
++      // grows.
        expect(compressSpy).toHaveBeenCalledTimes(3);
 -      // Reactive compression is force=true, so tryCompress's own failure
 -      // branch doesn't increment the counter (force=true skips it). The
@@ -4871,7 +4870,7 @@ index 5ae5029..5689604 100644
        const overflow = new Error(
          'prompt is too long: 135000 tokens > 128000 maximum',
        );
-@@ -3928,18 +3907,19 @@ describe('GeminiChat', async () => {
+@@ -3928,18 +3906,19 @@ describe('GeminiChat', async () => {
                'next request ok',
          ),
        ).toBe(true);
@@ -4897,27 +4896,30 @@ index 5ae5029..5689604 100644
        usageMetadata?: GenerateContentResponse['usageMetadata'],
      ) {
        return (async function* () {
-@@ -3958,15 +3938,16 @@ describe('GeminiChat', async () => {
+@@ -3956,17 +3935,17 @@ describe('GeminiChat', async () => {
+           text: () => text,
+         } as unknown as GenerateContentResponse;
        })();
      }
  
      /**
-      * 200K raw window in our mocks. Thresholds run against the FULL window
-      * (the output clamp replaced the reservation):
+-     * 200K raw window in our mocks. Thresholds run against the FULL window
+-     * (the output clamp replaced the reservation):
 -     *   effectiveWindow = 200K - 20K (SUMMARY_RESERVE) = 180K
 -     *   hard            = max(180K - 3K, auto + 3K) = 177K
 -     * So lastPromptTokenCount=176K + a small user message tips over 177K.
-+     *   effectiveWindow = 200K - 32,064 (SUMMARY_RESERVE) = 167,936
-+     *   auto            = min(0.85 * 200K, 167,936 - 13K) = 154,936
-+     *   hard            = max(167,936 - 3K, auto + 3K) = 164,936
-+     * So lastPromptTokenCount=164K + a small user message tips over 164,936.
++     * 200K raw window in our mocks. Thresholds run against the full window:
++     *   effectiveWindow = 200K - 49,152 (SUMMARY_RESERVE) = 150,848
++     *   auto            = min(0.85 * 200K, 150,848 - 13K) = 137,848
++     *   hard            = max(150,848 - 3K, auto + 3K) = 147,848
++     * So a lastPromptTokenCount in the 164K range is already past hard.
       */
      beforeEach(() => {
        vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
          authType: AuthType.USE_GEMINI,
          model: 'test-model',
          contextWindowSize: 200_000,
-@@ -4183,13 +4164,13 @@ describe('GeminiChat', async () => {
+@@ -4183,13 +4162,13 @@ describe('GeminiChat', async () => {
        await expect(
          chatWithRecording.sendMessageStream(
            'test-model',
@@ -4932,7 +4934,7 @@ index 5ae5029..5689604 100644
        expect(chatWithRecording.getLastPromptTokenCount()).toBe(175_500);
        expect(chatWithRecording.isLastPromptTokenCountEstimated()).toBe(false);
        expect(chatWithRecording.getHistory()[0].parts?.[0].text).toBe(
-@@ -4222,13 +4203,13 @@ describe('GeminiChat', async () => {
+@@ -4222,13 +4201,13 @@ describe('GeminiChat', async () => {
            newHistory: [
              { role: 'user', parts: [{ text: 'summary' }] },
              { role: 'model', parts: [{ text: 'ack' }] },
@@ -4947,7 +4949,7 @@ index 5ae5029..5689604 100644
        vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
          makeStreamResponse('sent after compression'),
        );
-@@ -4245,13 +4226,13 @@ describe('GeminiChat', async () => {
+@@ -4245,13 +4224,13 @@ describe('GeminiChat', async () => {
        expect(compressSpy).toHaveBeenCalledTimes(1);
        expect(compressSpy.mock.calls[0][1].force).toBe(true);
        expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(
@@ -4962,7 +4964,7 @@ index 5ae5029..5689604 100644
        const compressSpy = vi.spyOn(
          ChatCompressionService.prototype,
          'compress',
-@@ -4276,15 +4257,15 @@ describe('GeminiChat', async () => {
+@@ -4276,15 +4255,15 @@ describe('GeminiChat', async () => {
              compressionStatus: CompressionStatus.COMPRESSED,
            },
          });
@@ -4980,7 +4982,7 @@ index 5ae5029..5689604 100644
  
        chat.setLastPromptTokenCount(50_000);
        const firstStream = await chat.sendMessageStream(
-@@ -4304,16 +4285,18 @@ describe('GeminiChat', async () => {
+@@ -4304,16 +4283,18 @@ describe('GeminiChat', async () => {
        for await (const _ of rescueStream) {
          /* consume */
        }
@@ -5000,7 +5002,7 @@ index 5ae5029..5689604 100644
        const compressSpy = vi.spyOn(
          ChatCompressionService.prototype,
          'compress',
-@@ -4327,13 +4310,13 @@ describe('GeminiChat', async () => {
+@@ -4327,13 +4308,13 @@ describe('GeminiChat', async () => {
          },
        });
        vi.mocked(mockContentGenerator.generateContentStream)
@@ -5015,7 +5017,7 @@ index 5ae5029..5689604 100644
  
        chat.setLastPromptTokenCount(50_000);
        const firstStream = await chat.sendMessageStream(
-@@ -4352,16 +4335,18 @@ describe('GeminiChat', async () => {
+@@ -4352,16 +4333,18 @@ describe('GeminiChat', async () => {
        );
        for await (const _ of secondStream) {
          /* consume */
@@ -5035,7 +5037,7 @@ index 5ae5029..5689604 100644
        const compressSpy = vi.spyOn(
          ChatCompressionService.prototype,
          'compress',
-@@ -4386,16 +4371,16 @@ describe('GeminiChat', async () => {
+@@ -4386,16 +4369,16 @@ describe('GeminiChat', async () => {
              compressionStatus: CompressionStatus.COMPRESSED,
            },
          });
@@ -5054,7 +5056,7 @@ index 5ae5029..5689604 100644
  
        chat.setLastPromptTokenCount(50_000);
        const firstStream = await chat.sendMessageStream(
-@@ -4417,13 +4402,13 @@ describe('GeminiChat', async () => {
+@@ -4417,13 +4400,13 @@ describe('GeminiChat', async () => {
        }
  
        expect(compressSpy).toHaveBeenCalledTimes(2);
@@ -5069,7 +5071,7 @@ index 5ae5029..5689604 100644
        const compressSpy = vi.spyOn(
          ChatCompressionService.prototype,
          'compress',
-@@ -4448,13 +4433,13 @@ describe('GeminiChat', async () => {
+@@ -4448,13 +4431,13 @@ describe('GeminiChat', async () => {
              compressionStatus: CompressionStatus.COMPRESSED,
            },
          });
@@ -5084,7 +5086,7 @@ index 5ae5029..5689604 100644
          )
          .mockResolvedValueOnce(makeStreamResponse('after rescue'));
  
-@@ -4478,35 +4463,35 @@ describe('GeminiChat', async () => {
+@@ -4478,35 +4461,35 @@ describe('GeminiChat', async () => {
        }
  
        expect(compressSpy).toHaveBeenCalledTimes(2);
@@ -5125,7 +5127,7 @@ index 5ae5029..5689604 100644
  
        chat.setLastPromptTokenCount(50_000);
        const firstStream = await chat.sendMessageStream(
-@@ -4525,16 +4510,18 @@ describe('GeminiChat', async () => {
+@@ -4525,16 +4508,18 @@ describe('GeminiChat', async () => {
        );
        for await (const _ of secondStream) {
          /* consume */
@@ -5145,7 +5147,7 @@ index 5ae5029..5689604 100644
        const compressSpy = vi
          .spyOn(ChatCompressionService.prototype, 'compress')
          .mockResolvedValue({
-@@ -4561,27 +4548,29 @@ describe('GeminiChat', async () => {
+@@ -4561,27 +4546,29 @@ describe('GeminiChat', async () => {
          'prompt-collect-candidates',
        );
        for await (const _ of firstStream) {
@@ -5177,7 +5179,7 @@ index 5ae5029..5689604 100644
        const compressSpy = vi.spyOn(
          ChatCompressionService.prototype,
          'compress',
-@@ -4657,209 +4646,98 @@ describe('GeminiChat', async () => {
+@@ -4657,209 +4644,98 @@ describe('GeminiChat', async () => {
        expect(compressSpy.mock.calls[1][1].force).toBe(true);
        expect(
          compressSpy.mock.calls[2][1].precomputedEffectiveTokens,
@@ -5420,7 +5422,7 @@ index 5ae5029..5689604 100644
          info: {
            originalTokenCount: 123_456,
            newTokenCount: 123_456,
-@@ -4898,125 +4776,12 @@ describe('GeminiChat', async () => {
+@@ -4898,125 +4774,12 @@ describe('GeminiChat', async () => {
  
        expect(estimatePromptTokens(history, userMessage, 0, 9999)).toBe(
          estimateContentTokens([...history, userMessage]),
@@ -5546,21 +5548,24 @@ index 5ae5029..5689604 100644
          .mockResolvedValueOnce({
            newHistory: null,
            info: {
-@@ -5043,30 +4808,30 @@ describe('GeminiChat', async () => {
+@@ -5041,32 +4804,30 @@ describe('GeminiChat', async () => {
+       }
+ 
        expect(compressSpy).toHaveBeenCalledTimes(1);
        expect(compressSpy.mock.calls[0][1].force).toBe(false);
      });
  
-     it('gates thresholds on the full window and clamps maxOutputTokens to the room left (issue #5950)', async () => {
+-    it('gates thresholds on the full window and clamps maxOutputTokens to the room left (issue #5950)', async () => {
++    it('sizes maxOutputTokens to the room the thresholds leave (issue #5950)', async () => {
        // claude-sonnet-4-6 has a 65,536 output limit, clipped to the 64K
 -      // ceiling. With the old reservation, a 170K prompt on a 200K window
-+      // ceiling. With the old reservation, a 140K prompt on a 200K window
-       // would have hard-rescued (hard was ~111K); with full-window
+-      // would have hard-rescued (hard was ~111K); with full-window
 -      // thresholds hard = 177K, so this send takes the normal cheap-gate
-+      // thresholds hard = 147,848, so this send takes the normal cheap-gate
-       // path — and the outgoing request is window-clamped instead:
+-      // path — and the outgoing request is window-clamped instead:
 -      // maxOutputTokens = 200000 − ~170001 − 10000 (margin) ≈ 20K.
-+      // maxOutputTokens = 200000 − ~140001 − 10000 (margin) ≈ 50K.
++      // ceiling. On a 200K window hard sits at 147,848, so a 140K prompt
++      // takes the normal cheap-gate path. It is already past auto (137,848),
++      // so the turn gets the progress floor and the next send compacts.
        vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
          authType: AuthType.USE_GEMINI,
          model: 'claude-sonnet-4-6',
@@ -5582,7 +5587,7 @@ index 5ae5029..5689604 100644
        vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
          makeStreamResponse('clamped response'),
        );
-@@ -5075,36 +4840,36 @@ describe('GeminiChat', async () => {
+@@ -5075,36 +4836,36 @@ describe('GeminiChat', async () => {
          mockConfig,
          config,
          [],
@@ -5617,7 +5622,7 @@ index 5ae5029..5689604 100644
        ).mock.calls[0][0].config as { maxOutputTokens?: number };
 -      expect(requestConfig.maxOutputTokens).toBe(19_998);
 -      expect(170_000 + requestConfig.maxOutputTokens!).toBeLessThanOrEqual(
-+      expect(requestConfig.maxOutputTokens).toBe(49_998);
++      expect(requestConfig.maxOutputTokens).toBe(4_000);
 +      expect(140_000 + requestConfig.maxOutputTokens!).toBeLessThanOrEqual(
          200_000,
        );
@@ -5625,7 +5630,7 @@ index 5ae5029..5689604 100644
  
      it('sends the default ceiling when the window has room (unknown model → 32K)', async () => {
        vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
-@@ -5250,12 +5015,83 @@ describe('GeminiChat', async () => {
+@@ -5250,12 +5011,85 @@ describe('GeminiChat', async () => {
        const requestConfig = vi.mocked(
          mockContentGenerator.generateContentStream,
        ).mock.calls[0][0].config as { maxOutputTokens?: number };
@@ -5675,7 +5680,9 @@ index 5ae5029..5689604 100644
 +      const requestConfig = vi.mocked(
 +        mockContentGenerator.generateContentStream,
 +      ).mock.calls[0][0].config as { maxOutputTokens?: number };
-+      expect(requestConfig.maxOutputTokens).toBe(249_799);
++      // 262,144-token window: auto sits at 199,992, so an exactly counted
++      // 12,345-token prompt may write 187,647 with no pad or margin.
++      expect(requestConfig.maxOutputTokens).toBe(187_647);
 +    });
 +
 +    it('fails closed when exact request token counting is unavailable', async () => {
@@ -5709,7 +5716,45 @@ index 5ae5029..5689604 100644
          model: 'test-model',
          contextWindowSize: 40_000,
        });
-@@ -5855,81 +5691,280 @@ describe('GeminiChat', async () => {
+@@ -5398,18 +5232,16 @@ describe('GeminiChat', async () => {
+ 
+       expect(chatInstance.getLastPromptTokenCount()).toBe(79);
+       expect(chatInstance.isLastPromptTokenCountEstimated()).toBe(true);
+     });
+ 
+     it('keeps a sane input budget on small custom windows (issue #6144)', async () => {
+-      // Custom local model with a 65,536-token window. Under the old
+-      // reservation a flat 64K was subtracted from the window, collapsing
+-      // the input budget to 1,536 tokens and rejecting a ~6K prompt. With
+-      // full-window thresholds the same prompt sends normally, and the
+-      // output request is the model's 32,768 output limit (room =
+-      // 65,536 − ~6,280 − 10,000 ≈ 49K does not bind).
++      // Custom local model with a 65,536-token window. The input budget is
++      // the whole window, so a ~6K prompt sends normally. The summary
++      // reserve leaves auto at 3,384 on a window this size, so the prompt is
++      // already past it and the turn gets the progress floor.
+       vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
+         authType: AuthType.USE_GEMINI,
+         model: 'qwen3coder-64k',
+         contextWindowSize: 65_536,
+       });
+ 
+@@ -5448,13 +5280,13 @@ describe('GeminiChat', async () => {
+       // Normal auto-path cheap-gate (force=false), NOT hard-tier rescue.
+       expect(compressSpy).toHaveBeenCalledTimes(1);
+       expect(compressSpy.mock.calls[0][1].force).toBe(false);
+       const requestConfig = vi.mocked(
+         mockContentGenerator.generateContentStream,
+       ).mock.calls[0][0].config as { maxOutputTokens?: number };
+-      expect(requestConfig.maxOutputTokens).toBe(32_768);
++      expect(requestConfig.maxOutputTokens).toBe(4_000);
+     });
+   });
+ 
+   describe('addHistory', () => {
+     it('should add a new content item to the history', () => {
+       const newContent: Content = {
+@@ -5855,81 +5687,280 @@ describe('GeminiChat', async () => {
      it('should retry on invalid content, succeed, and report metrics', async () => {
        vi.useFakeTimers();
        try {
@@ -6036,7 +6081,76 @@ index 5ae5029..5689604 100644
          vi.mocked(
            mockContentGenerator.generateContentStream,
          ).mockImplementation(async () =>
-@@ -14726,15 +14761,14 @@ describe('GeminiChat', async () => {
+@@ -8027,16 +8058,16 @@ describe('GeminiChat', async () => {
+         } finally {
+           vi.useRealTimers();
+         }
+       });
+ 
+       it('merges a whitespace-leading remainder identically in both layers', async () => {
+-        // R1-1: the record used to dedupe against `contentText`, which is
+-        // trimmed, while history merged the raw part. A cut landing on a token
+-        // boundary (before a space) then fused the two words in the transcript
+-        // only — "The result is" + " 42." recorded as "The result is42.".
++        // The transcript and history must merge the same bytes. A cut landing
++        // on a token boundary (before a space) would otherwise fuse the two
++        // words in the transcript only — "The result is" + " 42." recorded as
++        // "The result is42." — so both layers merge the raw part.
+         vi.useFakeTimers();
+         try {
+           const recordAssistantTurn = vi.fn();
+           const chatWithRecording = chatWithRecorder(recordAssistantTurn);
+           vi.mocked(mockContentGenerator.generateContentStream)
+             .mockResolvedValueOnce(cutAfter([textChunk('The result is')]))
+@@ -12677,18 +12708,17 @@ describe('GeminiChat', async () => {
+       const calls = vi.mocked(mockContentGenerator.generateContentStream).mock
+         .calls;
+       const initialConfig = calls[0]![0].config as { maxOutputTokens?: number };
+       const recoveryConfig = calls[1]![0].config as {
+         maxOutputTokens?: number;
+       };
+-      // Initial: char/4("hi")=1 token, inflated by the conservative safety
+-      // factor (1.5x, ceil'd) to 2, room = 131072 − 71351 − 10000 = 49721
+-      // (below the 64K ceiling).
+-      expect(initialConfig.maxOutputTokens).toBe(49_721);
+-      // Recovery: prompt grew to ~121K → re-clamped to the 4,000 floor, NOT
+-      // the stale 49,721 (which would overflow the window by ~40K).
++      // Initial: a 71,351-token prompt on a 131,072-token window is already
++      // past auto (68,920), so the turn takes the progress floor.
++      expect(initialConfig.maxOutputTokens).toBe(4_000);
++      // Recovery: the prompt grew to ~121K and is re-clamped, not left at a
++      // stale grant that would overflow the window.
+       expect(recoveryConfig.maxOutputTokens).toBe(4_000);
+     });
+ 
+     it('re-clamps recovery sends even when an intermediate response omits usage metadata', async () => {
+       // Codex round-4 scenario: multi-iteration recovery where the FIRST
+       // truncated response reports usage but the SECOND omits it. The
+@@ -12760,18 +12790,18 @@ describe('GeminiChat', async () => {
+       const recovery1Config = calls[1]![0].config as {
+         maxOutputTokens?: number;
+       };
+       const recovery2Config = calls[2]![0].config as {
+         maxOutputTokens?: number;
+       };
+-      // Iteration 1: plenty of room, ceiling binds.
+-      expect(recovery1Config.maxOutputTokens).toBe(64_000);
++      // Iteration 1: an ~84K prompt on a 180,000-token window leaves 33,439
++      // below auto (117,848), which binds before the 64K ceiling.
++      expect(recovery1Config.maxOutputTokens).toBe(33_439);
+       // Iteration 2: the stale count-based estimate (frozen at ~69K) would
+-      // re-grant the full 64,000; the padded walk (~148K: two 64K partials
+-      // + pad) must win, shrinking the grant to roughly
+-      // 180,000 − ~148K − 10,000 ≈ 22K.
++      // re-grant more; the padded walk (~148K: two 64K partials + pad) must
++      // win, shrinking the grant further.
+       expect(recovery2Config.maxOutputTokens).toBeLessThan(30_000);
+       expect(recovery2Config.maxOutputTokens).toBeGreaterThanOrEqual(4_000);
+     });
+ 
+     it('should enter recovery loop when escalated response is also truncated', async () => {
+       // Three streams: initial (MAX_TOKENS) → escalated (MAX_TOKENS) →
+@@ -14726,15 +14756,14 @@ describe('GeminiChat', async () => {
        redactStructuredOutputArgsForRecording(original);
        expect(original).toEqual(snapshot);
      });
@@ -6054,7 +6168,7 @@ index 5ae5029..5689604 100644
        parts: [{ text }],
      });
      const modelMsg = (text: string) => ({
-@@ -14817,38 +14851,33 @@ describe('GeminiChat', async () => {
+@@ -14817,38 +14846,33 @@ describe('GeminiChat', async () => {
        const info = await subagentChat.tryCompress('p3');
        expect(info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
        expect(subagentChat.getLastPromptTokenCount()).toBe(200);
@@ -6095,7 +6209,7 @@ index 5ae5029..5689604 100644
        const compressSpy = mockCompressionService('compressed');
  
        await chat.tryCompress('p1', true);
-@@ -14970,153 +14999,12 @@ describe('GeminiChat', async () => {
+@@ -14970,153 +14994,12 @@ describe('GeminiChat', async () => {
            info: expect.objectContaining({ newTokenCountIsEstimated: true }),
          }),
        );
@@ -6249,7 +6363,7 @@ index 5ae5029..5689604 100644
        finishReason?: string,
      ): GenerateContentResponse {
        return {
-@@ -15126,12 +15014,47 @@ describe('GeminiChat', async () => {
+@@ -15126,12 +15009,47 @@ describe('GeminiChat', async () => {
              ...(finishReason ? { finishReason } : {}),
            },
          ],
@@ -6298,7 +6412,7 @@ index 5ae5029..5689604 100644
          (async function* () {
            yield xmlChunk(xml, 'STOP');
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
-index 8051292..01b4c2f 100644
+index 8051292..7e8d24e 100644
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
 @@ -43,25 +43,31 @@ import {
@@ -6694,13 +6808,43 @@ index 8051292..01b4c2f 100644
  
    setSystemInstruction(sysInstr: string) {
      this.generationConfig.systemInstruction = sysInstr;
-@@ -2259,12 +2297,44 @@ export class GeminiChat {
+@@ -2231,17 +2269,16 @@ export class GeminiChat {
+     let requestContents: Content[];
+     let userContentAdded = false;
+     let manualPlanExitNoticeVersion: number | undefined;
+     let manualPlanExitNoticeText: string | undefined;
+ 
+     // Determine the ceiling for this turn's output request. The clamp below
+-    // (see clampOutputTokensToWindow) sizes the actual max_tokens to the room
+-    // left in the window, so output can never overflow the context limit and
+-    // compaction thresholds run against the FULL window — no output
+-    // reservation is subtracted (this replaces the #5957/#6266 reservation
+-    // machinery; see the max-tokens-window-clamp design doc).
++    // sizes the actual max_tokens to the smallest of that ceiling, the room
++    // left in the window, and the room left below the auto-compaction
++    // threshold, so a turn can neither overflow the context limit nor carry
++    // the conversation past the size its own summary request can hold.
+     //
+     // The ceiling is the explicit user/subagent value when one is set
+     // (params.config.maxOutputTokens from subagents, samplingParams.max_tokens
+     // or QWEN_CODE_MAX_OUTPUT_TOKENS from user config), else
+     // defaultOutputCeiling(model) (the model's output limit clipped to
+     // OUTPUT_TOKEN_CEILING).
+@@ -2259,12 +2296,52 @@ export class GeminiChat {
        explicitOutputCeiling ?? defaultOutputCeiling(model);
      // Declared at function level so the MAX_TOKENS escalation path inside
      // the generator closure can re-clamp against the same window and prompt
      // estimate.
      const contextWindowForClamp =
        cgConfigForThresholds?.contextWindowSize ?? DEFAULT_TOKEN_LIMIT;
++    // Every send in this method — the first, the escalated retry, and each
++    // recovery iteration — sizes its output against these two thresholds, so
++    // they are derived once from the window they belong to.
++    const { auto: autoCompactionThreshold, hard: hardCompactionThreshold } =
++      computeThresholds(
++        contextWindowForClamp,
++        this.config.getAutoCompactThreshold(),
++      );
 +    const exactTokenCounting =
 +      cgConfigForThresholds?.exactTokenCounting === 'vllm';
 +    const tokenCountGenerator =
@@ -6739,28 +6883,41 @@ index 8051292..01b4c2f 100644
      try {
        // The send-lock above is held but the generator's `finally` (which
        // resolves it) has not run yet. Any setup error before returning the
-@@ -2309,16 +2379,16 @@ export class GeminiChat {
+@@ -2304,27 +2381,19 @@ export class GeminiChat {
+       // this send instead of waiting for the API to reject the request as too
+       // large.
+       //
+       // We compute `effectiveTokens` ONCE here and pass it through to
+       // tryCompress → service.compress so the cheap-gate doesn't redo the
        // estimation (which involves another `getHistory(true)` clone). This
-       // reuse also fixes a per-config-knob inconsistency: previously the
-       // hard-tier rescue used the default imageTokenEstimate while the
-       // cheap-gate inside tryCompress used the user's resolved value.
-       // (review #4168 R1.3 + R1.4)
+-      // reuse also fixes a per-config-knob inconsistency: previously the
+-      // hard-tier rescue used the default imageTokenEstimate while the
+-      // cheap-gate inside tryCompress used the user's resolved value.
+-      // (review #4168 R1.3 + R1.4)
++      // reuse also keeps one resolved imageTokenEstimate across the
++      // hard-tier rescue and the cheap-gate inside tryCompress.
        //
 -      // The cheap-gate consecutive-failure counter is NOT pre-reset here.
 -      // force=true already bypasses that breaker, while hard-rescue itself is
 -      // bounded by hardRescueFailureCount so persistent pre-send rescue
 -      // failures fall through to reactive overflow after a few strikes.
+-      // Thresholds gate on the full window: the output clamp guarantees the
+-      // response fits, so nothing needs to be pre-reserved for it.
+-      const { hard } = computeThresholds(
+-        contextWindowForClamp,
+-        this.config.getAutoCompactThreshold(),
+-      );
 +      // Every hard-tier send compacts or refuses to send. Skipping rescue
 +      // after N strikes was tried and is the mechanism that killed
 +      // sessions: a skipped send grows the prompt, and nothing above the
 +      // hard tier can shrink it.
-       // Thresholds gate on the full window: the output clamp guarantees the
-       // response fits, so nothing needs to be pre-reserved for it.
-       const { hard } = computeThresholds(
-         contextWindowForClamp,
-         this.config.getAutoCompactThreshold(),
-       );
-@@ -2334,43 +2404,41 @@ export class GeminiChat {
+       const imageTokenEstimate = resolveSlimmingConfig(
+         this.config.getChatCompression(),
+       ).imageTokenEstimate;
+       // When lastPromptTokenCount > 0, estimatePromptTokens uses the
+       // API-authoritative previous prompt count + the previous response's
+       // output token count + a tiny estimate of just the new user message.
+@@ -2334,43 +2403,41 @@ export class GeminiChat {
        // restore / subagent inheritance) walks history with a char/4
        // heuristic that can under-count by ~15-20K tokens; the reactive
        // overflow recovery path inside the async iterator below (the
@@ -6774,6 +6931,11 @@ index 8051292..01b4c2f 100644
 -        this.lastOutputTokenCount,
 -        imageTokenEstimate,
 -      );
+-      const isHardTier = effectiveTokens >= hard;
+-      const shouldForceFromHard =
+-        !exactRoute &&
+-        isHardTier &&
+-        this.hardRescueFailureCount < MAX_CONSECUTIVE_FAILURES;
 +      const effectiveTokens = exactTokenCounting
 +        ? await countExactRequestTokens(
 +            this.getRequestHistoryWithPendingForRoute(
@@ -6788,11 +6950,7 @@ index 8051292..01b4c2f 100644
 +            this.lastOutputTokenCount,
 +            imageTokenEstimate,
 +          );
-       const isHardTier = effectiveTokens >= hard;
--      const shouldForceFromHard =
--        !exactRoute &&
--        isHardTier &&
--        this.hardRescueFailureCount < MAX_CONSECUTIVE_FAILURES;
++      const isHardTier = effectiveTokens >= hardCompactionThreshold;
 +      const shouldForceFromHard = !exactRoute && isHardTier;
        const historyBeforeHardRescue = shouldForceFromHard
          ? this.getHistoryShallow()
@@ -6809,7 +6967,7 @@ index 8051292..01b4c2f 100644
 -      } else if (isHardTier && !exactRoute) {
 -        debugLogger.warn(
 -          `[compaction] hard-tier rescue skipped after ${this.hardRescueFailureCount} failed attempts; relying on reactive overflow recovery. prompt_id=${prompt_id}, effectiveTokens=${effectiveTokens}, hard=${hard}.`,
-+          `[compaction] hard-tier rescue triggered: prompt_id=${prompt_id}, effectiveTokens=${effectiveTokens}, hard=${hard}.`,
++          `[compaction] hard-tier rescue triggered: prompt_id=${prompt_id}, effectiveTokens=${effectiveTokens}, hard=${hardCompactionThreshold}.`,
          );
        }
  
@@ -6821,7 +6979,7 @@ index 8051292..01b4c2f 100644
            compressionStatus: CompressionStatus.NOOP,
          };
        } else {
-@@ -2380,29 +2448,36 @@ export class GeminiChat {
+@@ -2380,47 +2447,50 @@ export class GeminiChat {
            params.config?.abortSignal,
            {
              pendingUserMessage: userContent,
@@ -6865,12 +7023,15 @@ index 8051292..01b4c2f 100644
        if (
          shouldStopAfterHardRescue(
            shouldForceFromHard,
-           hard,
+-          hard,
++          hardCompactionThreshold,
            localPromptTokensAfterCompression,
-@@ -2411,16 +2486,12 @@ export class GeminiChat {
+         )
+       ) {
          const message = getHardRescueFailureMessage(
            effectiveTokens,
-           hard,
+-          hard,
++          hardCompactionThreshold,
            compressionInfo,
            localPromptTokensAfterCompression,
          );
@@ -6884,11 +7045,15 @@ index 8051292..01b4c2f 100644
          ) {
            // Hard-rescue compression mutates in-memory history before this
            // guard can compare the compressed prompt size. If the compressed
-@@ -2441,15 +2512,13 @@ export class GeminiChat {
+@@ -2438,18 +2508,16 @@ export class GeminiChat {
+         const compressionStatus =
+           CompressionStatus[compressionInfo.compressionStatus] ??
+           String(compressionInfo.compressionStatus);
          debugLogger.warn(
            `[compaction] hard-tier rescue stopped oversized prompt: ` +
              `prompt_id=${prompt_id}, effectiveTokens=${effectiveTokens}, ` +
-             `hard=${hard}, localPromptTokensAfterCompression=` +
+-            `hard=${hard}, localPromptTokensAfterCompression=` +
++            `hard=${hardCompactionThreshold}, localPromptTokensAfterCompression=` +
              `${localPromptTokensAfterCompression}, compressionStatus=` +
              `${compressionStatus}, newTokenCount=` +
 -            `${compressionInfo.newTokenCount}, hardRescueFailureCount=` +
@@ -6901,7 +7066,35 @@ index 8051292..01b4c2f 100644
        if (
          shouldForceFromHard &&
          compressionInfo.compressionStatus === CompressionStatus.COMPRESSED
-@@ -2536,37 +2605,44 @@ export class GeminiChat {
+@@ -2515,20 +2583,22 @@ export class GeminiChat {
+       }
+       requestContents = this.getRequestHistoryForRoute(
+         currentUserContent,
+         requestModalities,
+       );
+ 
+-      // Window-clamp the output request AFTER compression has settled the
+-      // history: max_tokens = min(ceiling, window − prompt − margin), floored
+-      // at MIN_CLAMPED_OUTPUT_TOKENS. Computed here in the send path — not in
++      // Size the output request AFTER compression has settled the history:
++      // max_tokens = min(ceiling, window − prompt − margin, threshold −
++      // prompt), each room term floored at MIN_CLAMPED_OUTPUT_TOKENS.
++      // Computed here in the send path — not in
+       // the shared provider code — so the API-authoritative
+       // lastPromptTokenCount is in scope and side queries (which set their
+       // own maxOutputTokens via getBaseLlmClient()) stay exempt by
+-      // construction. This makes `prompt + max_tokens ≤ window` an invariant
+-      // on every main-turn request (issue #5950).
++      // construction. This makes `prompt + max_tokens ≤ window` and
++      // `prompt + max_tokens ≤ auto-compaction threshold` invariants on every
++      // main-turn request.
+       //
+       // When lastPromptTokenCount > 0 (steady state, or refreshed to
+       // newTokenCount by compression/resume), re-estimate from the counts —
+       // cheap, no history walk. When it is still 0, reuse the pre-push gate
+       // estimate: userContent is already in history here, so a fresh history
+       // walk would double-count it. Estimate-derived counts can omit the
+@@ -2536,37 +2606,46 @@ export class GeminiChat {
        // estimatePromptTokens — "typically ~15-20K of under-estimate"). Some
        // counts based on prior API usage already preserve part of that
        // overhead, but conservatively double-counting it is safe and
@@ -6942,11 +7135,13 @@ index 8051292..01b4c2f 100644
 +            outputCeiling,
 +            contextWindowForClamp,
 +            promptTokensForClamp,
++            autoCompactionThreshold,
 +          )
 +        : clampOutputTokensToWindow(
 +            outputCeiling,
 +            contextWindowForClamp,
 +            promptTokensForClamp,
++            autoCompactionThreshold,
 +          );
        params = {
          ...params,
@@ -6954,7 +7149,7 @@ index 8051292..01b4c2f 100644
            ...params.config,
            maxOutputTokens: clampedMaxOutputTokens,
          },
-@@ -2591,17 +2667,30 @@ export class GeminiChat {
+@@ -2591,17 +2670,30 @@ export class GeminiChat {
      return (async function* () {
        const sleepInhibitorHandle = acquireSleepInhibitor(
          self.config,
@@ -6987,7 +7182,7 @@ index 8051292..01b4c2f 100644
            yield {
              type: StreamEventType.COMPRESSED,
              info: compressionInfo,
-@@ -2641,12 +2730,13 @@ export class GeminiChat {
+@@ -2641,12 +2733,13 @@ export class GeminiChat {
          let streamYieldedAnyChunk = false;
  
          // Read per-config overrides; fall back to built-in defaults.
@@ -7001,7 +7196,7 @@ index 8051292..01b4c2f 100644
                retryAuthType: exactRoute.retryAuthType,
                retryErrorCodes: exactRoute.retryErrorCodes,
              }
-@@ -2671,17 +2761,23 @@ export class GeminiChat {
+@@ -2671,17 +2764,25 @@ export class GeminiChat {
              cgConfig?.samplingParams?.max_tokens !== null) ||
            parsedEnvMaxTokens !== undefined;
          // params.config.maxOutputTokens is set by the first-send clamp; the
@@ -7018,11 +7213,13 @@ index 8051292..01b4c2f 100644
 +              OUTPUT_TOKEN_CEILING,
 +              contextWindowForClamp,
 +              promptTokensForClamp,
++              autoCompactionThreshold,
 +            )
 +          : clampOutputTokensToWindow(
 +              OUTPUT_TOKEN_CEILING,
 +              contextWindowForClamp,
 +              promptTokensForClamp,
++              autoCompactionThreshold,
 +            );
          const shouldEscalateMaxOutputTokens =
            effectiveInitialMaxOutputTokens < escalatedLimit;
@@ -7030,7 +7227,7 @@ index 8051292..01b4c2f 100644
          let lastFinishReason: string | undefined;
  
          /**
-@@ -2949,13 +3045,15 @@ export class GeminiChat {
+@@ -2949,13 +3050,15 @@ export class GeminiChat {
                // second discards output the caller is watching. The
                // accumulated buffer is what distinguishes them, and it must be
                // consulted here because this branch is checked before the
@@ -7047,7 +7244,7 @@ index 8051292..01b4c2f 100644
                const delayMs =
                  TRANSPORT_STREAM_RETRY_CONFIG.initialDelayMs *
                  transportStreamRetryCount;
-@@ -3002,13 +3100,15 @@ export class GeminiChat {
+@@ -3002,13 +3105,15 @@ export class GeminiChat {
              // check), and the scheduler's repair path already covers it.
              const canContinueAfterTransportCut =
                isRetryableStreamTransportError &&
@@ -7064,7 +7261,7 @@ index 8051292..01b4c2f 100644
                // Everything delivered so far — across earlier continuation
                // attempts too, since `transportContinuationText` accumulates
                // and is never reset while continuing. Each attempt's own text
-@@ -3081,12 +3181,24 @@ export class GeminiChat {
+@@ -3081,12 +3186,24 @@ export class GeminiChat {
                        precomputedEffectiveTokens: reactiveOriginalTokenCount,
                        requestGenerationConfig: params.config,
                        trigger: 'auto',
@@ -7089,7 +7286,7 @@ index 8051292..01b4c2f 100644
                    ) {
                      // No-op today: tryCompress's setHistory has already
                      // cleared the marker. Kept for uniformity with the
-@@ -3141,31 +3253,12 @@ export class GeminiChat {
+@@ -3141,31 +3258,12 @@ export class GeminiChat {
                    }
  
                    debugLogger.warn(
@@ -7121,7 +7318,7 @@ index 8051292..01b4c2f 100644
                      isAbortError(compressionError)
                    ) {
                      throw compressionError;
-@@ -3196,22 +3289,29 @@ export class GeminiChat {
+@@ -3196,22 +3294,29 @@ export class GeminiChat {
                break;
              }
  
@@ -7153,7 +7350,7 @@ index 8051292..01b4c2f 100644
                const nextInvalidStreamRetryCount = invalidStreamRetryCount + 1;
                if (error.type === 'PROTOCOL_TAG_LEAK') {
                  protocolTagLeakRetryCount = nextInvalidStreamRetryCount;
-@@ -3320,14 +3420,15 @@ export class GeminiChat {
+@@ -3320,14 +3425,15 @@ export class GeminiChat {
                }
                return;
              } catch (error) {
@@ -7171,7 +7368,7 @@ index 8051292..01b4c2f 100644
                  error.type === 'PROTOCOL_TAG_LEAK'
                    ? protocolTagLeakRetryCount
                    : transientRetryCount;
-@@ -3362,12 +3463,13 @@ export class GeminiChat {
+@@ -3362,12 +3468,13 @@ export class GeminiChat {
                await delay(delayMs, attemptState.params.config?.abortSignal)
                  .promise;
              }
@@ -7185,7 +7382,21 @@ index 8051292..01b4c2f 100644
            !hasUserMaxTokensOverride
          ) {
            maxTokensEscalated = true;
-@@ -3614,15 +3716,16 @@ export class GeminiChat {
+@@ -3523,12 +3630,13 @@ export class GeminiChat {
+               config: {
+                 ...recoveryParams.config,
+                 maxOutputTokens: clampOutputTokensToWindow(
+                   recoveryCeiling,
+                   contextWindowForClamp,
+                   recoveryPromptEstimate,
++                  autoCompactionThreshold,
+                 ),
+               },
+             };
+ 
+             try {
+               for await (const event of streamWithInvalidStreamRetries(
+@@ -3614,15 +3722,16 @@ export class GeminiChat {
            // - Do NOT trigger fallback when persistent mode is active
            //   (QWEN_CODE_UNATTENDED_RETRY) — persistent mode retries the primary
            //   model indefinitely by design.
@@ -7205,7 +7416,7 @@ index 8051292..01b4c2f 100644
              !isUnattendedMode() &&
              !streamYieldedAnyChunk
            ) {
-@@ -3897,19 +4000,24 @@ export class GeminiChat {
+@@ -3897,19 +4006,24 @@ export class GeminiChat {
            contents: requestContents,
            config: { ...this.generationConfig, ...params.config },
          },
@@ -7231,7 +7442,7 @@ index 8051292..01b4c2f 100644
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -4441,12 +4549,14 @@ export class GeminiChat {
+@@ -4441,12 +4555,14 @@ export class GeminiChat {
    private async *processStreamResponse(
      model: string,
      streamResponse: AsyncGenerator<GenerateContentResponse>,
@@ -7246,7 +7457,7 @@ index 8051292..01b4c2f 100644
      const rawToolCallIdsInCurrentTurn = new Set<string>();
      const reservedToolCallIds = new Map<string, string>();
      let usageMetadata: GenerateContentResponseUsageMetadata | undefined;
-@@ -4771,12 +4881,13 @@ export class GeminiChat {
+@@ -4771,12 +4887,13 @@ export class GeminiChat {
  
      // XML tool call fallback: some models (e.g. qwen3.8-max-preview in very
      // long contexts) occasionally emit tool calls as raw XML in the content
@@ -7260,7 +7471,7 @@ index 8051292..01b4c2f 100644
        contentText &&
        containsXmlToolCalls(contentText)
      ) {
-@@ -4946,12 +5057,54 @@ export class GeminiChat {
+@@ -4946,12 +5063,54 @@ export class GeminiChat {
        contentText = consolidatedHistoryParts
          .filter((part) => part.text)
          .map((part) => part.text)
@@ -8863,7 +9074,7 @@ index f87557c..3b115b2 100644
  }
  
 diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core/tokenLimits.test.ts
-index 6d72689..c148861 100644
+index 6d72689..88aa8dd 100644
 --- a/packages/core/src/core/tokenLimits.test.ts
 +++ b/packages/core/src/core/tokenLimits.test.ts
 @@ -1,12 +1,13 @@
@@ -8880,7 +9091,78 @@ index 6d72689..c148861 100644
    DEFAULT_TOKEN_LIMIT,
    DEFAULT_OUTPUT_TOKEN_LIMIT,
    ESCALATED_MAX_TOKENS,
-@@ -568,12 +569,32 @@ describe('clampOutputTokensToWindow', () => {
+@@ -510,70 +511,141 @@ describe('tokenLimit with output type', () => {
+       expect(tokenLimit('qwen3-max-20250601', 'output')).toBe(32768);
+     });
+   });
+ });
+ 
+ describe('clampOutputTokensToWindow', () => {
++  // These cases exercise the ceiling and window bounds, so the compaction
++  // threshold is set where it cannot bind.
++  const SLACK = Number.MAX_SAFE_INTEGER;
++
+   it('returns the ceiling when the window has plenty of room', () => {
+     // 200K window, 50K prompt, margin = max(10K, 5%×200K) = 10K:
+     // room = 140K, ceiling 32K binds.
+-    expect(clampOutputTokensToWindow(32_000, 200_000, 50_000)).toBe(32_000);
++    expect(clampOutputTokensToWindow(32_000, 200_000, 50_000, SLACK)).toBe(32_000);
+   });
+ 
+   it('tapers to the room left as the prompt approaches the window', () => {
+     // 200K window, 170K prompt: room = 200K − 170K − 10K = 20K < 32K ceiling.
+-    expect(clampOutputTokensToWindow(32_000, 200_000, 170_000)).toBe(20_000);
++    expect(clampOutputTokensToWindow(32_000, 200_000, 170_000, SLACK)).toBe(20_000);
+   });
+ 
+   it('keeps prompt + max_tokens under the window (issue #5950 invariant)', () => {
+     // The #5950 shape: 131K window, ~71K prompt, 64K ceiling. The clamp must
+     // never let prompt + output exceed the window.
+     const window = 131_072;
+     const prompt = 71_349;
+-    const clamped = clampOutputTokensToWindow(64_000, window, prompt);
++    const clamped = clampOutputTokensToWindow(64_000, window, prompt, SLACK);
+     expect(prompt + clamped).toBeLessThanOrEqual(window);
+     expect(clamped).toBe(window - prompt - outputClampMargin(window));
+   });
+ 
+   it('floors at MIN_CLAMPED_OUTPUT_TOKENS when no room is left', () => {
+     // Prompt at/above the window: never send max_tokens ≤ 0; compaction /
+     // hard-rescue owns this regime.
+-    expect(clampOutputTokensToWindow(32_000, 40_000, 39_000)).toBe(
++    expect(clampOutputTokensToWindow(32_000, 40_000, 39_000, SLACK)).toBe(
+       MIN_CLAMPED_OUTPUT_TOKENS,
+     );
+-    expect(clampOutputTokensToWindow(32_000, 40_000, 60_000)).toBe(
++    expect(clampOutputTokensToWindow(32_000, 40_000, 60_000, SLACK)).toBe(
+       MIN_CLAMPED_OUTPUT_TOKENS,
+     );
+   });
+ 
+   it('scales the margin at 5% for huge windows', () => {
+     expect(outputClampMargin(200_000)).toBe(10_000);
+     expect(outputClampMargin(1_000_000)).toBe(50_000);
+     // Small windows keep the 10K floor.
+     expect(outputClampMargin(40_000)).toBe(10_000);
+     // 1M window, 500K prompt: room = 1M − 500K − 50K = 450K, ceiling binds.
+-    expect(clampOutputTokensToWindow(64_000, 1_000_000, 500_000)).toBe(64_000);
++    expect(clampOutputTokensToWindow(64_000, 1_000_000, 500_000, SLACK)).toBe(64_000);
+   });
+ 
+   it('respects an explicit ceiling below the room', () => {
+-    expect(clampOutputTokensToWindow(8_000, 40_000, 10_000)).toBe(8_000);
++    expect(clampOutputTokensToWindow(8_000, 40_000, 10_000, SLACK)).toBe(8_000);
+   });
+ 
+   it('never inflates an explicit ceiling below the floor (review finding)', () => {
+     // QWEN_CODE_MAX_OUTPUT_TOKENS=2000 on a capacity-constrained backend:
+     // the floor applies to the ROOM, not to the user's explicit ceiling.
+-    expect(clampOutputTokensToWindow(2_000, 200_000, 50_000)).toBe(2_000);
++    expect(clampOutputTokensToWindow(2_000, 200_000, 50_000, SLACK)).toBe(2_000);
+     // Even with no room left, a tiny explicit ceiling is preserved.
+-    expect(clampOutputTokensToWindow(2_000, 40_000, 39_000)).toBe(2_000);
++    expect(clampOutputTokensToWindow(2_000, 40_000, 39_000, SLACK)).toBe(2_000);
+   });
  
    it('keeps OUTPUT_TOKEN_CEILING aligned with the escalation target', () => {
      expect(OUTPUT_TOKEN_CEILING).toBe(ESCALATED_MAX_TOKENS);
@@ -8888,21 +9170,68 @@ index 6d72689..c148861 100644
  });
  
 +describe('clampExactOutputTokensToWindow', () => {
++  const SLACK = Number.MAX_SAFE_INTEGER;
++
 +  it('uses every exactly measured token of remaining room', () => {
-+    expect(clampExactOutputTokensToWindow(262_144, 262_144, 12_345)).toBe(
++    expect(clampExactOutputTokensToWindow(262_144, 262_144, 12_345, SLACK)).toBe(
 +      249_799,
 +    );
 +  });
 +
 +  it('respects an explicit output ceiling', () => {
-+    expect(clampExactOutputTokensToWindow(131_072, 262_144, 12_345)).toBe(
++    expect(clampExactOutputTokensToWindow(131_072, 262_144, 12_345, SLACK)).toBe(
 +      131_072,
 +    );
 +  });
 +
 +  it('fails closed when the rendered prompt leaves no generation room', () => {
-+    expect(() => clampExactOutputTokensToWindow(10, 262_144, 262_144)).toThrow(
++    expect(() => clampExactOutputTokensToWindow(10, 262_144, 262_144, SLACK)).toThrow(
 +      'exceeding the 262144-token context window',
++    );
++  });
++});
++
++describe('turn output sizing against the compaction threshold', () => {
++  // The served profile: a 262,144-token window whose auto-compaction
++  // threshold sits at 199,992.
++  const WINDOW = 262_144;
++  const AUTO = 199_992;
++
++  it('stops a turn at the threshold rather than at the window', () => {
++    const prompt = 189_429;
++    expect(clampExactOutputTokensToWindow(WINDOW, WINDOW, prompt, AUTO)).toBe(
++      AUTO - prompt,
++    );
++  });
++
++  it('leaves the ceiling in force while the threshold is far away', () => {
++    expect(clampExactOutputTokensToWindow(64_000, WINDOW, 20_000, AUTO)).toBe(
++      64_000,
++    );
++  });
++
++  it('holds prompt + output at or below the threshold at every prompt size', () => {
++    for (let prompt = 1_000; prompt < AUTO; prompt += 4_999) {
++      const output = clampExactOutputTokensToWindow(
++        WINDOW,
++        WINDOW,
++        prompt,
++        AUTO,
++      );
++      expect(prompt + output).toBeLessThanOrEqual(AUTO);
++    }
++  });
++
++  it('keeps room to make progress once the threshold is behind us', () => {
++    expect(
++      clampExactOutputTokensToWindow(WINDOW, WINDOW, AUTO + 5_000, AUTO),
++    ).toBe(MIN_CLAMPED_OUTPUT_TOKENS);
++  });
++
++  it('applies the same bound on the estimate path', () => {
++    const prompt = 150_000;
++    expect(clampOutputTokensToWindow(64_000, WINDOW, prompt, AUTO)).toBe(
++      AUTO - prompt,
 +    );
 +  });
 +});
@@ -8914,26 +9243,116 @@ index 6d72689..c148861 100644
    });
  
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
-index 4b7c7f6..d246909 100644
+index 4b7c7f6..2fbac4c 100644
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
-@@ -72,12 +72,42 @@ export function clampOutputTokensToWindow(
+@@ -21,19 +21,17 @@ export const ESCALATED_MAX_TOKENS: TokenCount = 64_000;
+  * escalation-on-truncation raises the request up to this ceiling, never
+  * past it.
+  */
+ export const OUTPUT_TOKEN_CEILING: TokenCount = ESCALATED_MAX_TOKENS;
+ 
+ /**
+- * Floor applied to the window ROOM when clamping an output request: when the
+- * prompt has (nearly) filled the window, still ask for at least this much
+- * rather than max_tokens <= 0 — compaction/hard-rescue owns that regime. An
+- * explicit user ceiling below this floor is still respected (the floor
+- * bounds the room, not the ceiling). Must stay below ~5K so that
+- * `margin + MIN_CLAMPED_OUTPUT_TOKENS` fits inside the headroom compaction
+- * leaves free (15% of a 100K window); see the window-clamp design doc.
++ * Floor applied to the ROOM when sizing an output request: when the prompt
++ * has (nearly) filled the room a bound allows, still ask for at least this
++ * much rather than max_tokens <= 0 — compaction and the hard-tier rescue own
++ * that regime. An explicit user ceiling below this floor is still respected
++ * (the floor bounds the room, not the ceiling).
+  */
+ export const MIN_CLAMPED_OUTPUT_TOKENS: TokenCount = 4_000;
+ 
+ /**
+  * Safety headroom subtracted from the window before sizing the output
+  * request: absorbs prompt-estimation error plus system/tool/schema overhead
+@@ -43,39 +41,104 @@ export const MIN_CLAMPED_OUTPUT_TOKENS: TokenCount = 4_000;
+  */
+ export function outputClampMargin(contextWindowSize: number): TokenCount {
+   return Math.max(10_000, Math.round(0.05 * contextWindowSize));
+ }
+ 
+ /**
+- * Size an output request to the room actually left in the context window:
+- * `min(ceiling, window − prompt − margin)`, floored at
+- * MIN_CLAMPED_OUTPUT_TOKENS. Makes `prompt + max_tokens ≤ window` an
+- * invariant on every main-turn request (issue #5950 becomes structurally
+- * impossible), which is what lets compaction thresholds run against the
+- * full window with no output reservation.
++ * Room a turn may occupy below the auto-compaction threshold.
++ *
++ * A conversation stays summarizable only while it still fits inside the
++ * summary request that has to carry it, so a turn is sized to stop at the
++ * threshold where compaction falls due. The buffer between that threshold
++ * and the effective window absorbs the turn's tool result, and the next send
++ * compacts before the window is reached.
++ */
++function compactionRoom(
++  autoCompactionThreshold: number,
++  promptTokens: number,
++): TokenCount {
++  return Math.max(
++    MIN_CLAMPED_OUTPUT_TOKENS,
++    autoCompactionThreshold - promptTokens,
++  );
++}
++
++/**
++ * Size an output request for one turn. Three bounds apply and the smallest
++ * wins: the configured ceiling, the room the context window can serve
++ * (`window − prompt − margin`), and the room below the auto-compaction
++ * threshold. The window bound makes `prompt + max_tokens ≤ window` an
++ * invariant on every main-turn request; the compaction bound makes
++ * `history ≤ threshold + one tool result` an invariant on the history that
++ * request produces.
+  *
+  * @param outputCeiling - Upper bound on the request: the user's explicit
+  *   max_tokens when set, else `min(tokenLimit(model,'output'),
+  *   OUTPUT_TOKEN_CEILING)`.
+  * @param contextWindowSize - The configured context window.
+  * @param promptTokens - Estimated prompt size; use the API-authoritative
+  *   count where available (a fresh chars/4 estimate under-counts CJK and
+  *   tool-heavy prompts, which is the one way a residual 400 could return).
++ * @param autoCompactionThreshold - `computeThresholds(window).auto`, the
++ *   size at which the next send compacts.
+  */
+ export function clampOutputTokensToWindow(
+   outputCeiling: number,
+   contextWindowSize: number,
+   promptTokens: number,
++  autoCompactionThreshold: number,
+ ): TokenCount {
+   const room =
+     contextWindowSize - promptTokens - outputClampMargin(contextWindowSize);
+   // Floor the ROOM, then cap by the ceiling — never the other way around: an
    // explicit ceiling below MIN_CLAMPED_OUTPUT_TOKENS (e.g.
    // QWEN_CODE_MAX_OUTPUT_TOKENS=2000 on a capacity-constrained backend) must
    // be respected, not inflated to the floor.
-   return Math.min(outputCeiling, Math.max(MIN_CLAMPED_OUTPUT_TOKENS, room));
- }
- 
+-  return Math.min(outputCeiling, Math.max(MIN_CLAMPED_OUTPUT_TOKENS, room));
++  return Math.min(
++    outputCeiling,
++    Math.max(MIN_CLAMPED_OUTPUT_TOKENS, room),
++    compactionRoom(autoCompactionThreshold, promptTokens),
++  );
++}
++
 +/**
-+ * Clamp against a server-authoritative count of the fully rendered prompt.
-+ * Unlike the estimate path, this intentionally has no heuristic margin and no
-+ * minimum-output floor: either the exact remaining room is used or the turn
-+ * fails before it can overflow vLLM's configured context window.
++ * Size a turn's output request against a server-authoritative count of the
++ * fully rendered prompt. The window bound carries no heuristic margin: either
++ * the exact remaining room is used or the turn fails before it can overflow
++ * vLLM's configured context window. The compaction bound keeps the history
++ * the turn produces inside the size its own summary request can carry.
 + */
 +export function clampExactOutputTokensToWindow(
 +  outputCeiling: number,
 +  contextWindowSize: number,
 +  exactPromptTokens: number,
++  autoCompactionThreshold: number,
 +): TokenCount {
 +  if (
 +    !Number.isSafeInteger(outputCeiling) ||
@@ -8941,7 +9360,9 @@ index 4b7c7f6..d246909 100644
 +    !Number.isSafeInteger(contextWindowSize) ||
 +    contextWindowSize <= 0 ||
 +    !Number.isSafeInteger(exactPromptTokens) ||
-+    exactPromptTokens < 0
++    exactPromptTokens < 0 ||
++    !Number.isSafeInteger(autoCompactionThreshold) ||
++    autoCompactionThreshold <= 0
 +  ) {
 +    throw new Error('Exact output clamp received invalid token limits.');
 +  }
@@ -8951,15 +9372,17 @@ index 4b7c7f6..d246909 100644
 +      `Exact rendered prompt uses ${exactPromptTokens} tokens, exceeding the ${contextWindowSize}-token context window before generation.`,
 +    );
 +  }
-+  return Math.min(outputCeiling, room);
-+}
-+
++  return Math.min(
++    outputCeiling,
++    room,
++    compactionRoom(autoCompactionThreshold, exactPromptTokens),
++  );
+ }
+ 
  export function parsePositiveIntegerEnvValue(
    raw: string | undefined,
  ): number | undefined {
    if (raw === undefined) return undefined;
- 
-   const trimmed = raw.trim();
 diff --git a/packages/core/src/core/toolOutcome.ts b/packages/core/src/core/toolOutcome.ts
 new file mode 100644
 index 0000000..0e8e43d
@@ -9424,10 +9847,10 @@ index 8e53833..bfc063a 100644
      }
  
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
-index 59b9c51..8254d20 100644
+index 59b9c51..fcc48ef 100644
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,747 @@
+@@ -1,4405 +1,777 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -9477,6 +9900,7 @@ index 59b9c51..8254d20 100644
 +import {
 +  AUTOCOMPACT_BUFFER,
 +  COMPACT_MAX_OUTPUT_TOKENS,
++  COMPACTION_BUDGET_SAFETY_MARGIN,
 +  ChatCompressionService,
 +  DEFAULT_PCT,
 +  HARD_BUFFER,
@@ -9873,7 +10297,14 @@ index 59b9c51..8254d20 100644
 +      .calls[0]![0] as GenerateTextOptions;
 +    const generated = harness.generateText.mock
 +      .calls[0]![0] as GenerateTextOptions;
-+    expect(generated).toEqual(counted);
++    // One request shape renders both the count and the generation; the output
++    // budget is the single field the count has no use for.
++    const { maxOutputTokens, ...generatedConfig } = generated.config as Record<
++      string,
++      unknown
++    >;
++    expect({ ...generated, config: generatedConfig }).toEqual(counted);
++    expect(maxOutputTokens).toBe(COMPACT_MAX_OUTPUT_TOKENS);
 +    expect(generated).toMatchObject({
 +      model: MODEL,
 +      stream: true,
@@ -9881,7 +10312,6 @@ index 59b9c51..8254d20 100644
 +      promptCacheSharing: true,
 +      failClosed: true,
 +      config: {
-+        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
 +        tools: requestTools,
 +        toolConfig: {
 +          functionCallingConfig: {
@@ -10342,7 +10772,13 @@ index 59b9c51..8254d20 100644
 -      consecutiveFailures: 0,
 -      originalTokenCount: 100_000,
 -    });
--
++    const result = await compress(harness, { trigger: 'manual' });
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(harness.generateText).not.toHaveBeenCalled();
++  });
+ 
 -    expect(composeSpy).toHaveBeenCalled();
 -    // Degraded success — not an escape, not a compression failure.
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
@@ -10354,29 +10790,6 @@ index 59b9c51..8254d20 100644
 -      .map((p) => (p as { text?: string }).text ?? '')
 -      .join(' ');
 -    expect(ackText).not.toContain('let me read it'); // trailing text dropped
-+    const result = await compress(harness, { trigger: 'manual' });
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(harness.generateText).not.toHaveBeenCalled();
-   });
- 
--  it('silently ignores the deprecated chatCompression.contextPercentageThreshold = 0 (no longer disables compaction)', async () => {
--    // Pre-PR #4168, setting contextPercentageThreshold = 0 short-circuited
--    // compress() at the cheap-gate (NOOP). The field was removed from
--    // ChatCompressionSettings as part of the redesign; leftover values
--    // in stale settings.json must be ignored without suppressing the gate.
--    // Drive the non-force path with originalTokenCount above auto so the
--    // gate would have to actively pass, and verify the side-query fires.
--    const history: Content[] = [
--      { role: 'user', parts: [{ text: 'msg1' }] },
--      { role: 'model', parts: [{ text: 'msg2' }] },
--      { role: 'user', parts: [{ text: 'msg3' }] },
--      { role: 'model', parts: [{ text: 'msg4' }] },
--    ];
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(
--      110_000,
 +  it.each([
 +    ['different model', (h: Harness) => h.setCompactionModel('other-model')],
 +    [
@@ -10398,6 +10811,32 @@ index 59b9c51..8254d20 100644
 +    const result = await compress(harness);
 +    expect(result.info.compressionStatus).toBe(
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(harness.countSideQuery).not.toHaveBeenCalled();
++    expect(harness.generateText).not.toHaveBeenCalled();
+   });
+ 
+-  it('silently ignores the deprecated chatCompression.contextPercentageThreshold = 0 (no longer disables compaction)', async () => {
+-    // Pre-PR #4168, setting contextPercentageThreshold = 0 short-circuited
+-    // compress() at the cheap-gate (NOOP). The field was removed from
+-    // ChatCompressionSettings as part of the redesign; leftover values
+-    // in stale settings.json must be ignored without suppressing the gate.
+-    // Drive the non-force path with originalTokenCount above auto so the
+-    // gate would have to actively pass, and verify the side-query fires.
+-    const history: Content[] = [
+-      { role: 'user', parts: [{ text: 'msg1' }] },
+-      { role: 'model', parts: [{ text: 'msg2' }] },
+-      { role: 'user', parts: [{ text: 'msg3' }] },
+-      { role: 'model', parts: [{ text: 'msg4' }] },
+-    ];
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(
+-      110_000,
++  it('fails closed when the tokenizer cannot count the request', async () => {
++    const rejected = makeHarness();
++    rejected.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
++    expect((await compress(rejected)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
      );
 -    // The deprecated field is no longer in ChatCompressionSettings; cast so
 -    // we can simulate a leftover value coming from a stale settings.json.
@@ -10409,7 +10848,9 @@ index 59b9c51..8254d20 100644
 -      model: 'gemini-pro',
 -      contextWindowSize: 128_000,
 -    } as unknown as ReturnType<typeof mockConfig.getContentGeneratorConfig>);
--
++    expect(rejected.generateText).not.toHaveBeenCalled();
++  });
+ 
 -    const mockGenerateContent = vi.fn().mockResolvedValue({
 -      text: 'Summary',
 -      usage: {
@@ -10419,11 +10860,17 @@ index 59b9c51..8254d20 100644
 -        candidatesTokenCount: 1500,
 -        totalTokenCount: 100_500,
 -      },
--    });
++  it('sizes the generation to the room the window leaves beside the request', async () => {
++    const tight = makeHarness();
++    const requestTokens = WINDOW - COMPACT_MAX_OUTPUT_TOKENS + 1;
++    tight.countSideQuery.mockResolvedValueOnce({
++      totalTokens: requestTokens,
++      maxModelLen: WINDOW,
+     });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateContent,
 -    } as unknown as BaseLlmClient);
--
+ 
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: false,
@@ -10431,13 +10878,18 @@ index 59b9c51..8254d20 100644
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
 -    });
--
++    await compress(tight);
+ 
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -    expect(mockGenerateContent).toHaveBeenCalled();
 -    // Crossed the token threshold (not the screenshot trigger) → token_limit.
 -    expect(result.info.triggerReason).toBe('token_limit');
-+    expect(harness.countSideQuery).not.toHaveBeenCalled();
-+    expect(harness.generateText).not.toHaveBeenCalled();
++    const generated = tight.generateText.mock
++      .calls[0]![0] as GenerateTextOptions;
++    const budget = (generated.config as { maxOutputTokens?: number })
++      .maxOutputTokens;
++    expect(budget).toBe(WINDOW - requestTokens - COMPACTION_BUDGET_SAFETY_MARGIN);
++    expect(requestTokens + budget!).toBeLessThanOrEqual(WINDOW);
    });
  
 -  it('should compress if over token threshold', async () => {
@@ -10466,28 +10918,31 @@ index 59b9c51..8254d20 100644
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateContent,
 -    } as unknown as BaseLlmClient);
-+  it('fails closed when exact preflight rejects or the exact summary request does not fit', async () => {
-+    const rejected = makeHarness();
-+    rejected.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
-+    expect((await compress(rejected)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(rejected.generateText).not.toHaveBeenCalled();
- 
+-
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: false,
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
-+    // A request that cannot leave the generation its full reserve must
-+    // refuse rather than send a side query the server will reject.
-+    const oversized = makeHarness();
-+    oversized.countSideQuery.mockResolvedValueOnce({
-+      totalTokens: WINDOW - COMPACT_MAX_OUTPUT_TOKENS + 1,
-+      maxModelLen: WINDOW,
-     });
--
+-    });
++  it('issues a summary request at every history size', async () => {
++    for (const requestTokens of [1_000, 150_000, WINDOW - 2_048, WINDOW]) {
++      const harness = makeHarness();
++      harness.countSideQuery.mockResolvedValueOnce({
++        totalTokens: requestTokens,
++        maxModelLen: WINDOW,
++      });
++      await compress(harness);
++      const generated = harness.generateText.mock
++        .calls[0]![0] as GenerateTextOptions;
++      const budget = (generated.config as { maxOutputTokens?: number })
++        .maxOutputTokens;
++      expect(budget).toBeGreaterThanOrEqual(1);
++      expect(budget).toBeLessThanOrEqual(COMPACT_MAX_OUTPUT_TOKENS);
++    }
++  });
+ 
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -    expect(result.info.newTokenCount).toBe(350); // 900 - (1600 - 1000) + 50
 -    expect(result.newHistory).not.toBeNull();
@@ -10496,10 +10951,39 @@ index 59b9c51..8254d20 100644
 -    expect(result.newHistory![0].parts![0].text).toContain('Summary');
 -    expect(mockGenerateContent).toHaveBeenCalled();
 -    expect(mockGetHookSystem).toHaveBeenCalled();
-+    expect((await compress(oversized)).info.compressionStatus).toBe(
++  it.each([
++    [
++      'MAX_TOKENS',
++      summaryResult({ finishReason: FinishReason.MAX_TOKENS }),
++      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
++    ],
++    [
++      'missing terminal',
++      summaryResult({ finishReason: undefined }),
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(oversized.generateText).not.toHaveBeenCalled();
++    ],
++    [
++      'tool call',
++      summaryResult({ hadToolCall: true }),
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    ],
++    [
++      'malformed snapshot',
++      summaryResult({ text: 'not a state snapshot' }),
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    ],
++    [
++      'empty final',
++      summaryResult({ text: '   ' }),
++      CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
++    ],
++  ])('rejects unusable summary output: %s', async (_name, response, status) => {
++    const harness = makeHarness();
++    harness.generateText.mockResolvedValueOnce(response);
++    const result = await compress(harness);
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(status);
++    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
    });
  
 -  it('does not deep-clone full history while compressing', async () => {
@@ -10541,75 +11025,6 @@ index 59b9c51..8254d20 100644
 -      contextWindowSize: 1000,
 -    } as unknown as ReturnType<typeof mockConfig.getContentGeneratorConfig>);
 -    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(900);
--
--    const mockGenerateContent = vi.fn().mockResolvedValue({
--      text: 'Summary',
--      usage: {
--        promptTokenCount: 1600,
--        candidatesTokenCount: 50,
--        totalTokenCount: 1650,
--      },
--    });
--    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
--      generateText: mockGenerateContent,
--    } as unknown as BaseLlmClient);
--
--    const result = await service.compress(mockChat, {
--      promptId: mockPromptId,
--      force: false,
--      config: mockConfig,
--      consecutiveFailures: 0,
--      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
--
--    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
--    expect(mockChat.getHistory).not.toHaveBeenCalled();
--    expect(mockChat.getHistoryShallow).toHaveBeenCalledWith(true);
-+  it.each([
-+    [
-+      'MAX_TOKENS',
-+      summaryResult({ finishReason: FinishReason.MAX_TOKENS }),
-+      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
-+    ],
-+    [
-+      'missing terminal',
-+      summaryResult({ finishReason: undefined }),
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    ],
-+    [
-+      'tool call',
-+      summaryResult({ hadToolCall: true }),
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    ],
-+    [
-+      'malformed snapshot',
-+      summaryResult({ text: 'not a state snapshot' }),
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    ],
-+    [
-+      'empty final',
-+      summaryResult({ text: '   ' }),
-+      CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
-+    ],
-+  ])('rejects unusable summary output: %s', async (_name, response, status) => {
-+    const harness = makeHarness();
-+    harness.generateText.mockResolvedValueOnce(response);
-+    const result = await compress(harness);
-+    expect(result.newHistory).toBeNull();
-+    expect(result.info.compressionStatus).toBe(status);
-+    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
-   });
- 
--  it('should force compress even if under threshold', async () => {
--    const history: Content[] = [
--      { role: 'user', parts: [{ text: 'msg1' }] },
--      { role: 'model', parts: [{ text: 'msg2' }] },
--      { role: 'user', parts: [{ text: 'msg3' }] },
--      { role: 'model', parts: [{ text: 'msg4' }] },
--    ];
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
--    vi.mocked(tokenLimit).mockReturnValue(1000);
 +  it('[compaction-event] records where a truncated attempt spent its output budget', async () => {
 +    const harness = makeHarness();
 +    harness.generateText.mockResolvedValueOnce(
@@ -10625,13 +11040,12 @@ index 59b9c51..8254d20 100644
 +      }),
 +    );
  
--    // newTokenCount = 100 - (1100 - 1000) + 50 = 100 - 100 + 50 = 50 <= 100 (success)
 -    const mockGenerateContent = vi.fn().mockResolvedValue({
 -      text: 'Summary',
 -      usage: {
--        promptTokenCount: 1100,
+-        promptTokenCount: 1600,
 -        candidatesTokenCount: 50,
--        totalTokenCount: 1150,
+-        totalTokenCount: 1650,
 -      },
 -    });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
@@ -10641,8 +11055,7 @@ index 59b9c51..8254d20 100644
  
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
--      force: true,
--      // forced
+-      force: false,
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
@@ -10662,10 +11075,11 @@ index 59b9c51..8254d20 100644
      });
 -
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
--    expect(result.newHistory).not.toBeNull();
+-    expect(mockChat.getHistory).not.toHaveBeenCalled();
+-    expect(mockChat.getHistoryShallow).toHaveBeenCalledWith(true);
    });
  
--  it('does not append SessionStart additionalContext after successful compression', async () => {
+-  it('should force compress even if under threshold', async () => {
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'msg1' }] },
 -      { role: 'model', parts: [{ text: 'msg2' }] },
@@ -10676,6 +11090,7 @@ index 59b9c51..8254d20 100644
 -    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
 -    vi.mocked(tokenLimit).mockReturnValue(1000);
 -
+-    // newTokenCount = 100 - (1100 - 1000) + 50 = 100 - 100 + 50 = 50 <= 100 (success)
 -    const mockGenerateContent = vi.fn().mockResolvedValue({
 -      text: 'Summary',
 -      usage: {
@@ -10691,16 +11106,18 @@ index 59b9c51..8254d20 100644
 +    const harness = makeHarness();
 +    harness.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
  
--    await service.compress(mockChat, {
+-    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: true,
+-      // forced
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
 -    });
 +    const result = await compress(harness);
  
--    expect(mockGenerateContent).toHaveBeenCalled();
+-    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
+-    expect(result.newHistory).not.toBeNull();
 +    expect(result.info.compressionStatus).toBe(
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +    );
@@ -10708,6 +11125,77 @@ index 59b9c51..8254d20 100644
 +    // No attempt, no accounting to invent: a refusal before generation and a
 +    // generation that produced nothing must stay distinguishable.
 +    expect(result.info.output).toBeUndefined();
+   });
+ 
+-  it('does not append SessionStart additionalContext after successful compression', async () => {
+-    const history: Content[] = [
+-      { role: 'user', parts: [{ text: 'msg1' }] },
+-      { role: 'model', parts: [{ text: 'msg2' }] },
+-      { role: 'user', parts: [{ text: 'msg3' }] },
+-      { role: 'model', parts: [{ text: 'msg4' }] },
+-    ];
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
+-    vi.mocked(tokenLimit).mockReturnValue(1000);
++  it('fails closed instead of fabricating history when composition fails', async () => {
++    const harness = makeHarness();
++    vi.mocked(attachments.composePostCompactHistory).mockRejectedValueOnce(
++      new Error('workspace read failed'),
++    );
++    const result = await compress(harness);
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
++  });
+ 
+-    const mockGenerateContent = vi.fn().mockResolvedValue({
+-      text: 'Summary',
+-      usage: {
+-        promptTokenCount: 1100,
+-        candidatesTokenCount: 50,
+-        totalTokenCount: 1150,
+-      },
+-    });
+-    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
+-      generateText: mockGenerateContent,
+-    } as unknown as BaseLlmClient);
++  it('requires an exact shrinking candidate with the full output reserve of next-turn room', async () => {
++    const countFailure = makeHarness();
++    countFailure.countCandidate
++      .mockReset()
++      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
++      .mockRejectedValueOnce(new Error('post tokenizer failed'));
++    expect((await compress(countFailure)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
++    );
+ 
+-    await service.compress(mockChat, {
+-      promptId: mockPromptId,
+-      force: true,
+-      config: mockConfig,
+-      consecutiveFailures: 0,
+-      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
+-    });
++    const noShrink = makeHarness();
++    noShrink.countCandidate
++      .mockReset()
++      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
++      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW });
++    expect((await compress(noShrink)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++    );
+ 
+-    expect(mockGenerateContent).toHaveBeenCalled();
++    const noRoom = makeHarness();
++    noRoom.countCandidate
++      .mockReset()
++      .mockResolvedValueOnce({ totalTokens: 250_000, maxModelLen: WINDOW })
++      .mockResolvedValueOnce({ totalTokens: 245_000, maxModelLen: WINDOW });
++    expect((await compress(noRoom)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++    );
    });
  
 -  it('passes abort signal to summary generation', async () => {
@@ -10742,22 +11230,29 @@ index 59b9c51..8254d20 100644
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
 -      signal: abortController.signal,
 -    });
--
++  it('fails closed on pre- and post-compaction hook errors', async () => {
++    const pre = makeHarness();
++    pre.setHookSystem(true);
++    pre.firePreCompactEvent.mockRejectedValueOnce(new Error('pre hook failed'));
++    expect((await compress(pre)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(pre.generateText).not.toHaveBeenCalled();
+ 
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        abortSignal: abortController.signal,
 -      }),
-+  it('fails closed instead of fabricating history when composition fails', async () => {
-+    const harness = makeHarness();
-+    vi.mocked(attachments.composePostCompactHistory).mockRejectedValueOnce(
-+      new Error('workspace read failed'),
++    const post = makeHarness();
++    post.setHookSystem(true);
++    post.firePostCompactEvent.mockRejectedValueOnce(
++      new Error('post hook failed'),
 +    );
-+    const result = await compress(harness);
++    const result = await compress(post);
 +    expect(result.newHistory).toBeNull();
 +    expect(result.info.compressionStatus).toBe(
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
      );
-+    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
    });
  
 -  it('strips inline media from side-query contents during compaction', async () => {
@@ -10787,145 +11282,6 @@ index 59b9c51..8254d20 100644
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 250,
 -      },
--    });
--    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
--      generateText: mockGenerateText,
--    } as unknown as BaseLlmClient);
-+  it('requires an exact shrinking candidate with the full output reserve of next-turn room', async () => {
-+    const countFailure = makeHarness();
-+    countFailure.countCandidate
-+      .mockReset()
-+      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
-+      .mockRejectedValueOnce(new Error('post tokenizer failed'));
-+    expect((await compress(countFailure)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
-+    );
- 
--    await service.compress(mockChat, {
--      promptId: mockPromptId,
--      force: true,
--      config: mockConfig,
--      consecutiveFailures: 0,
--      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
-+    const noShrink = makeHarness();
-+    noShrink.countCandidate
-+      .mockReset()
-+      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
-+      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW });
-+    expect((await compress(noShrink)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
-+    );
- 
--    // Inspect the actual contents passed to the summary model.
--    const call = mockGenerateText.mock.calls[0]?.[0] as { contents: Content[] };
--    expect(call).toBeDefined();
--    const serialized = JSON.stringify(call.contents);
--    // No base64 image bytes leaked through.
--    expect(serialized).not.toContain('AAAAAAAA');
--    // Placeholder is present.
--    expect(serialized).toContain('[image: image/png]');
-+    const noRoom = makeHarness();
-+    noRoom.countCandidate
-+      .mockReset()
-+      .mockResolvedValueOnce({ totalTokens: 250_000, maxModelLen: WINDOW })
-+      .mockResolvedValueOnce({ totalTokens: 245_000, maxModelLen: WINDOW });
-+    expect((await compress(noRoom)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
-+    );
-   });
- 
--  it('passes getCompactionModel to runSideQuery for compression', async () => {
--    // Compression passes config.getCompactionModel?.() to runSideQuery so it uses
--    // the compaction model (falls back to the main model) instead of
--    // the expensive main model, reducing cost. See https://github.com/QwenLM/qwen-code/issues/5956
--    const history: Content[] = [
--      { role: 'user', parts: [{ text: 'msg1' }] },
--      { role: 'model', parts: [{ text: 'msg2' }] },
--      { role: 'user', parts: [{ text: 'msg3' }] },
--      { role: 'model', parts: [{ text: 'msg4' }] },
--    ];
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
--    vi.mocked(tokenLimit).mockReturnValue(1000);
--    vi.mocked(mockConfig.getCompactionModel).mockReturnValue(
--      'compaction-model-v1',
-+  it('fails closed on pre- and post-compaction hook errors', async () => {
-+    const pre = makeHarness();
-+    pre.setHookSystem(true);
-+    pre.firePreCompactEvent.mockRejectedValueOnce(new Error('pre hook failed'));
-+    expect((await compress(pre)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-     );
-+    expect(pre.generateText).not.toHaveBeenCalled();
- 
--    const mockGenerateText = vi.fn().mockResolvedValue({
--      text: 'Summary',
--      usage: {
--        promptTokenCount: 1100,
--        candidatesTokenCount: 50,
--        totalTokenCount: 1150,
--      },
--    });
--    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
--      generateText: mockGenerateText,
--    } as unknown as BaseLlmClient);
--
--    await service.compress(mockChat, {
--      promptId: mockPromptId,
--      force: true,
--      config: mockConfig,
--      consecutiveFailures: 0,
--      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
--
--    // Thinking is intentionally disabled (per-provider budget semantics are
--    // inconsistent) and the output is hard-capped by COMPACT_MAX_OUTPUT_TOKENS
--    // so subsequent threshold math has a predictable reserve. maxAttempts=1
--    // keeps the call best-effort (next turn re-triggers on failure).
--    // Model is set to getCompactionModel?.() to use the compaction model for cost efficiency.
--    expect(mockGenerateText).toHaveBeenCalledWith(
--      expect.objectContaining({
--        model: 'compaction-model-v1',
--        maxAttempts: 1,
--        config: expect.objectContaining({
--          thinkingConfig: { includeThoughts: false },
--          maxOutputTokens: 20_000,
--        }),
--      }),
-+    const post = makeHarness();
-+    post.setHookSystem(true);
-+    post.firePostCompactEvent.mockRejectedValueOnce(
-+      new Error('post hook failed'),
-+    );
-+    const result = await compress(post);
-+    expect(result.newHistory).toBeNull();
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-     );
-   });
- 
--  it('falls back to the main model when compactionModel is not set', async () => {
--    const history: Content[] = [
--      { role: 'user', parts: [{ text: 'msg1' }] },
--      { role: 'model', parts: [{ text: 'msg2' }] },
--      { role: 'user', parts: [{ text: 'msg3' }] },
--      { role: 'model', parts: [{ text: 'msg4' }] },
--    ];
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
--    vi.mocked(tokenLimit).mockReturnValue(1000);
--    // getCompactionModel() returns undefined when compactionModel is unset;
--    // the service coalesces to config.getModel() via ?? fallback
--    vi.mocked(mockConfig.getCompactionModel).mockReturnValue(undefined);
--
--    const mockGenerateText = vi.fn().mockResolvedValue({
--      text: 'Summary',
--      usage: {
--        promptTokenCount: 1100,
--        candidatesTokenCount: 50,
--        totalTokenCount: 1150,
--      },
 +  it('fires hooks in order and gives PostCompact the committed summary body', async () => {
 +    const harness = makeHarness();
 +    harness.setHookSystem(true);
@@ -10950,25 +11306,146 @@ index 59b9c51..8254d20 100644
 +      order.push('post');
      });
 -
--    expect(mockGenerateText).toHaveBeenCalledWith(
--      expect.objectContaining({
--        model: 'test-model',
--      }),
+-    // Inspect the actual contents passed to the summary model.
+-    const call = mockGenerateText.mock.calls[0]?.[0] as { contents: Content[] };
+-    expect(call).toBeDefined();
+-    const serialized = JSON.stringify(call.contents);
+-    // No base64 image bytes leaked through.
+-    expect(serialized).not.toContain('AAAAAAAA');
+-    // Placeholder is present.
+-    expect(serialized).toContain('[image: image/png]');
+-  });
+-
+-  it('passes getCompactionModel to runSideQuery for compression', async () => {
+-    // Compression passes config.getCompactionModel?.() to runSideQuery so it uses
+-    // the compaction model (falls back to the main model) instead of
+-    // the expensive main model, reducing cost. See https://github.com/QwenLM/qwen-code/issues/5956
+-    const history: Content[] = [
+-      { role: 'user', parts: [{ text: 'msg1' }] },
+-      { role: 'model', parts: [{ text: 'msg2' }] },
+-      { role: 'user', parts: [{ text: 'msg3' }] },
+-      { role: 'model', parts: [{ text: 'msg4' }] },
+-    ];
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
+-    vi.mocked(tokenLimit).mockReturnValue(1000);
+-    vi.mocked(mockConfig.getCompactionModel).mockReturnValue(
+-      'compaction-model-v1',
 +    await compress(harness, { customInstructions: 'Retain user intent.' });
 +    expect(order).toEqual(['pre', 'post']);
 +    expect(harness.firePostCompactEvent).toHaveBeenCalledWith(
 +      'manual',
 +      snapshot(),
 +      undefined,
-+    );
+     );
 +    const generated = harness.generateText.mock
 +      .calls[0]![0] as GenerateTextOptions;
 +    const directive = generated.contents.at(-1)?.parts?.[0]?.text ?? '';
 +    expect(directive.indexOf('Retain user intent.')).toBeLessThan(
 +      directive.indexOf('Retain exact file paths.'),
-     );
-   });
++    );
++  });
  
+-    const mockGenerateText = vi.fn().mockResolvedValue({
+-      text: 'Summary',
+-      usage: {
+-        promptTokenCount: 1100,
+-        candidatesTokenCount: 50,
+-        totalTokenCount: 1150,
+-      },
+-    });
+-    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
+-      generateText: mockGenerateText,
+-    } as unknown as BaseLlmClient);
+-
+-    await service.compress(mockChat, {
+-      promptId: mockPromptId,
+-      force: true,
+-      config: mockConfig,
+-      consecutiveFailures: 0,
+-      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
++  it('propagates cancellation and does not convert it into a fallback status', async () => {
++    const harness = makeHarness();
++    const controller = new AbortController();
++    harness.generateText.mockImplementationOnce(async () => {
++      controller.abort();
++      throw new DOMException('cancelled', 'AbortError');
+     });
+-
+-    // Thinking is intentionally disabled (per-provider budget semantics are
+-    // inconsistent) and the output is hard-capped by COMPACT_MAX_OUTPUT_TOKENS
+-    // so subsequent threshold math has a predictable reserve. maxAttempts=1
+-    // keeps the call best-effort (next turn re-triggers on failure).
+-    // Model is set to getCompactionModel?.() to use the compaction model for cost efficiency.
+-    expect(mockGenerateText).toHaveBeenCalledWith(
+-      expect.objectContaining({
+-        model: 'compaction-model-v1',
+-        maxAttempts: 1,
+-        config: expect.objectContaining({
+-          thinkingConfig: { includeThoughts: false },
+-          maxOutputTokens: 20_000,
+-        }),
++    await expect(
++      compress(harness, { signal: controller.signal }),
++    ).rejects.toThrow();
++    expect(harness.generateText).toHaveBeenCalledTimes(1);
++  });
++
++  it('discards a truncated response even when its text parses as a complete snapshot', async () => {
++    // Truncation can land after the closing tag (inside trailing whitespace
++    // or a dropped epilogue), so superficial completeness proves nothing.
++    // The finishReason check must dominate content validation or a clipped
++    // memory gets committed as if whole.
++    const harness = makeHarness();
++    harness.generateText.mockResolvedValueOnce(
++      summaryResult({
++        text: snapshot('looks complete'),
++        finishReason: FinishReason.MAX_TOKENS,
+       }),
+     );
+-  });
+-
+-  it('falls back to the main model when compactionModel is not set', async () => {
+-    const history: Content[] = [
+-      { role: 'user', parts: [{ text: 'msg1' }] },
+-      { role: 'model', parts: [{ text: 'msg2' }] },
+-      { role: 'user', parts: [{ text: 'msg3' }] },
+-      { role: 'model', parts: [{ text: 'msg4' }] },
+-    ];
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
+-    vi.mocked(tokenLimit).mockReturnValue(1000);
+-    // getCompactionModel() returns undefined when compactionModel is unset;
+-    // the service coalesces to config.getModel() via ?? fallback
+-    vi.mocked(mockConfig.getCompactionModel).mockReturnValue(undefined);
+-
+-    const mockGenerateText = vi.fn().mockResolvedValue({
+-      text: 'Summary',
+-      usage: {
+-        promptTokenCount: 1100,
+-        candidatesTokenCount: 50,
+-        totalTokenCount: 1150,
+-      },
+-    });
+-    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
+-      generateText: mockGenerateText,
+-    } as unknown as BaseLlmClient);
+-
+-    await service.compress(mockChat, {
+-      promptId: mockPromptId,
+-      force: true,
+-      config: mockConfig,
+-      consecutiveFailures: 0,
+-      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
+-    });
+-
+-    expect(mockGenerateText).toHaveBeenCalledWith(
+-      expect.objectContaining({
+-        model: 'test-model',
+-      }),
+-    );
+-  });
+-
 -  it('falls back to the main model when the compaction model context window is too small', async () => {
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'msg1' }] },
@@ -10991,13 +11468,7 @@ index 59b9c51..8254d20 100644
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 1150,
 -      },
-+  it('propagates cancellation and does not convert it into a fallback status', async () => {
-+    const harness = makeHarness();
-+    const controller = new AbortController();
-+    harness.generateText.mockImplementationOnce(async () => {
-+      controller.abort();
-+      throw new DOMException('cancelled', 'AbortError');
-     });
+-    });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateText,
 -    } as unknown as BaseLlmClient);
@@ -11143,24 +11614,8 @@ index 59b9c51..8254d20 100644
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        model: 'test-model',
-+    await expect(
-+      compress(harness, { signal: controller.signal }),
-+    ).rejects.toThrow();
-+    expect(harness.generateText).toHaveBeenCalledTimes(1);
-+  });
-+
-+  it('discards a truncated response even when its text parses as a complete snapshot', async () => {
-+    // Truncation can land after the closing tag (inside trailing whitespace
-+    // or a dropped epilogue), so superficial completeness proves nothing.
-+    // The finishReason check must dominate content validation or a clipped
-+    // memory gets committed as if whole.
-+    const harness = makeHarness();
-+    harness.generateText.mockResolvedValueOnce(
-+      summaryResult({
-+        text: snapshot('looks complete'),
-+        finishReason: FinishReason.MAX_TOKENS,
-       }),
-     );
+-      }),
+-    );
 -    // No warning — guard was skipped for the main model
 -    expect(result.info.warning).toBeUndefined();
 -  });
@@ -14476,10 +14931,10 @@ index 59b9c51..8254d20 100644
    });
  });
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
-index 9a37b9b..8324be2 100644
+index 9a37b9b..ec9a3ab 100644
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
-@@ -6,77 +6,75 @@
+@@ -6,77 +6,99 @@
  
  import type { Content, GenerateContentConfig } from '@google/genai';
  import type { Config } from '../config/config.js';
@@ -14538,22 +14993,46 @@ index 9a37b9b..8324be2 100644
 - * tokens from sharing the output budget. Mirrors claude-code's
 - * MAX_OUTPUT_TOKENS_FOR_SUMMARY (autoCompact.ts:30), which is based on p99.99
 - * of real compaction outputs.
-+ * Output ceiling for the compression generation, and the only number that
-+ * sizes compaction. The request declares no phase budgets: the model thinks
-+ * to a natural stop and then writes the snapshot under the pinned provider
-+ * ceilings, exactly as on an ordinary turn.
++ * Output ceiling for the compression generation. The request declares no
++ * phase budgets: the model thinks to a natural stop and then writes the
++ * snapshot under the pinned provider ceilings, exactly as on an ordinary
++ * turn, so one number covers hidden reasoning and the snapshot together.
 + *
-+ * It is also SUMMARY_RESERVE, so it is subtracted from the working window
-+ * for the whole session, and a smaller working window means more
-+ * compactions. Sized against ten accounted production compactions: hidden
-+ * reasoning never reached its 12,000 ceiling in any of them, peaking at
-+ * 11,720, while snapshots were clipped at ~30,100 chars and so are known
-+ * only from below, ~9,800 tokens. Against ~15,000 per phase as the working
-+ * estimate of joint demand this is ~1.6x, and 2.6x the largest generation
-+ * that ever ran to a natural stop (18,719 tokens).
++ * It is also SUMMARY_RESERVE, the room the thresholds hold free, which is
++ * what keeps the budget at its full value in every state the thresholds
++ * admit. Sized at roughly three times the joint demand of a reasoning pass
++ * and a dense whole-history snapshot, because a snapshot that stops short
++ * costs the whole attempt while a generous ceiling costs only working
++ * window.
   */
 -export const COMPACT_MAX_OUTPUT_TOKENS = 20_000;
 +export const COMPACT_MAX_OUTPUT_TOKENS = 49_152;
++
++/**
++ * Room held back from the window when sizing the compression generation, so
++ * the request stays valid at any history size the send path admits.
++ */
++export const COMPACTION_BUDGET_SAFETY_MARGIN = 1_024;
++
++/**
++ * Output budget for one compression generation: the ceiling, reduced to the
++ * room the window actually leaves beside the rendered request. The count is
++ * the exact rendered request from the active tokenizer, so the budget is the
++ * real remaining room rather than an estimate of it, and a summary request
++ * can always be issued whatever the history costs.
++ */
++export function computeCompactionOutputBudget(
++  requestTokenCount: number,
++  contextLimit: number,
++): number {
++  return Math.max(
++    1,
++    Math.min(
++      COMPACT_MAX_OUTPUT_TOKENS,
++      contextLimit - requestTokenCount - COMPACTION_BUDGET_SAFETY_MARGIN,
++    ),
++  );
++}
  
  const COMPRESSION_REQUEST_DIRECTIVE =
 -  'First, reason in your <analysis> block. Then, produce the <state_snapshot> XML.';
@@ -14583,7 +15062,7 @@ index 9a37b9b..8324be2 100644
   * AUTOCOMPACT_BUFFER_TOKENS (autoCompact.ts:62) — empirically chosen to leave
   * headroom for the compaction sideQuery round-trip plus a few user-message
   * turns before the window saturates.
-@@ -90,44 +88,12 @@ export const AUTOCOMPACT_BUFFER = 13_000;
+@@ -90,44 +112,12 @@ export const AUTOCOMPACT_BUFFER = 13_000;
   */
  export const WARN_BUFFER = 20_000;
  
@@ -14628,7 +15107,7 @@ index 9a37b9b..8324be2 100644
   * already capped at `MAX_COMPRESS_INSTRUCTIONS_CHARS` (2000) in
   * compressCommand.ts for exactly this reason — the side-query has no
   * input-truncation retry, so an unbounded hook payload could inflate the
-@@ -139,13 +105,13 @@ export const MAX_HOOK_INSTRUCTIONS_CHARS = 4000;
+@@ -139,13 +129,13 @@ export const MAX_HOOK_INSTRUCTIONS_CHARS = 4000;
  
  export interface CompactionThresholds {
    /** Token count at which UI warn tier triggers. */
@@ -14643,7 +15122,7 @@ index 9a37b9b..8324be2 100644
  }
  
  /**
-@@ -209,46 +175,33 @@ export type CompactTrigger = 'manual' | 'auto';
+@@ -209,46 +199,33 @@ export type CompactTrigger = 'manual' | 'auto';
  
  export interface CompressOptions {
    promptId: string;
@@ -14698,7 +15177,7 @@ index 9a37b9b..8324be2 100644
    requestGenerationConfig?: GenerateContentConfig;
    /**
     * User-supplied focus directives passed to the compression side-query.
-@@ -354,35 +307,34 @@ export class ChatCompressionService {
+@@ -354,86 +331,90 @@ export class ChatCompressionService {
      opts: CompressOptions,
    ): Promise<{ newHistory: Content[] | null; info: ChatCompressionInfo }> {
      const {
@@ -14740,9 +15219,18 @@ index 9a37b9b..8324be2 100644
            originalTokenCount,
            newTokenCount: originalTokenCount,
            compressionStatus: CompressionStatus.NOOP,
-@@ -396,44 +348,50 @@ export class ChatCompressionService {
-       // to be reserved out of the window here (this replaced the
-       // #5957/#6266 reservedOutputTokens machinery).
+         },
+       };
+     }
+ 
+     if (!force) {
+-      // Thresholds run against the FULL window: the send-path output clamp
+-      // guarantees `prompt + max_tokens ≤ window`, so no output budget needs
+-      // to be reserved out of the window here (this replaced the
+-      // #5957/#6266 reservedOutputTokens machinery).
++      // Thresholds run against the full window. The send path sizes every
++      // turn against these same thresholds, so the history reaching this gate
++      // is already inside the size a summary request can carry.
        const { auto } = computeThresholds(
          contextLimit,
          config.getAutoCompactThreshold(),
@@ -14814,7 +15302,7 @@ index 9a37b9b..8324be2 100644
              `[compaction] cheap-gate NOOP: effectiveTokens=${effectiveTokens}, ` +
                `auto=${auto}, contextLimit=${contextLimit}`,
            );
-@@ -448,29 +406,12 @@ export class ChatCompressionService {
+@@ -448,29 +429,12 @@ export class ChatCompressionService {
          }
          // Below the token threshold but the screenshot trigger fired.
          triggerReason = 'image_overflow';
@@ -14844,7 +15332,7 @@ index 9a37b9b..8324be2 100644
      // composePostCompactHistory below (summary + model ack + recent
      // file restores + recent image restore).
  
-@@ -517,611 +458,429 @@ export class ChatCompressionService {
+@@ -517,611 +481,431 @@ export class ChatCompressionService {
            // side-query prompt past a recoverable size.
            hookExtraInstructions = merged
              .trim()
@@ -14932,9 +15420,7 @@ index 9a37b9b..8324be2 100644
 -          slimmingConfig.imageTokenEstimate,
 -        )
 -      : 0;
-+      ? [...historyForSummary, opts.pendingUserMessage!]
-+      : historyForSummary;
- 
+-
 -    // Lazy: the cold fallback input is slimmed on demand. The original
 -    // history keeps its media: the shared request needs it for cache-prefix
 -    // identity, and the post-compact image restoration block reads it
@@ -14944,7 +15430,9 @@ index 9a37b9b..8324be2 100644
 -      coldInput ??= slimCompactionInput(sideQueryHistory);
 -      return coldInput;
 -    };
--
++      ? [...historyForSummary, opts.pendingUserMessage!]
++      : historyForSummary;
+ 
 -    // Hoist the system prompt so the guard can include it in the estimate.
      const systemInstruction = buildCompressionSystemPrompt(
        opts.customInstructions,
@@ -15227,7 +15715,6 @@ index 9a37b9b..8324be2 100644
 -      }
 -    }
 +        },
-+        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
 +      },
 +      abortSignal,
 +      promptId,
@@ -15264,14 +15751,9 @@ index 9a37b9b..8324be2 100644
 -      compressionOutputTokenCount = Math.max(
 -        0,
 -        compressionUsageMetadata.totalTokenCount - compressionInputTokenCount,
--      );
--    }
--    if (compressionOutputTokenCount === undefined && !isSummaryEmpty) {
--      compressionOutputTokenCount = estimateSummaryOutputTokens(
--        summary,
--        slimmingConfig.imageTokenEstimate,
 +    let exactOriginalTokenCount: number;
 +    let summaryRequestTokenCount: number;
++    let compactionOutputBudget: number;
 +    let summaryResult: GenerateTextResult;
 +    try {
 +      const originalCount = await chat.countRequestTokensForCandidateHistory(
@@ -15280,6 +15762,11 @@ index 9a37b9b..8324be2 100644
 +        `${promptId}:pre-compact`,
 +        opts.requestGenerationConfig,
        );
+-    }
+-    if (compressionOutputTokenCount === undefined && !isSummaryEmpty) {
+-      compressionOutputTokenCount = estimateSummaryOutputTokens(
+-        summary,
+-        slimmingConfig.imageTokenEstimate,
 +      exactOriginalTokenCount = originalCount.totalTokens;
 +      const summaryCount = await config
 +        .getBaseLlmClient()
@@ -15290,15 +15777,17 @@ index 9a37b9b..8324be2 100644
 +        );
 +      }
 +      summaryRequestTokenCount = summaryCount.totalTokens;
-+      if (summaryRequestTokenCount + COMPACT_MAX_OUTPUT_TOKENS > contextLimit) {
-+        throw new Error(
-+          `exact summary request does not fit: prompt=${summaryRequestTokenCount}, ` +
-+            `output=${COMPACT_MAX_OUTPUT_TOKENS}, window=${contextLimit}`,
-+        );
-+      }
-+      summaryResult = await config
-+        .getBaseLlmClient()
-+        .generateText(sideQueryOptions);
++      compactionOutputBudget = computeCompactionOutputBudget(
++        summaryRequestTokenCount,
++        contextLimit,
+       );
++      summaryResult = await config.getBaseLlmClient().generateText({
++        ...sideQueryOptions,
++        config: {
++          ...sideQueryOptions.config,
++          maxOutputTokens: compactionOutputBudget,
++        },
++      });
 +    } catch (error) {
 +      if (abortSignal.aborted) throw error;
        config
@@ -15331,7 +15820,7 @@ index 9a37b9b..8324be2 100644
 +    // run whose reasoning consumed the whole ceiling and emitted no summary
 +    // is otherwise indistinguishable from one that never generated.
 +    const outputAccounting: CompactionOutputAccounting = {
-+      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
++      maxOutputTokens: compactionOutputBudget,
 +      outputTokens: compressionOutputTokenCount ?? 0,
 +      thinkingTokens: summaryResult.usage?.thoughtsTokenCount ?? 0,
 +      summaryChars: processedSummary.length,
@@ -15711,12 +16200,12 @@ index 9a37b9b..8324be2 100644
        };
 -    } else if (newTokenCount > originalTokenCount) {
 +    }
-+    if (newTokenCount + COMPACT_MAX_OUTPUT_TOKENS > contextLimit) {
++    if (newTokenCount + SUMMARY_RESERVE > contextLimit) {
 +      config
 +        .getDebugLogger()
 +        .warn(
 +          `[chat-compression] candidate leaves insufficient next-turn room: ` +
-+            `prompt=${newTokenCount}, reserve=${COMPACT_MAX_OUTPUT_TOKENS}, ` +
++            `prompt=${newTokenCount}, reserve=${SUMMARY_RESERVE}, ` +
 +            `window=${contextLimit}.`,
 +        );
        return {
