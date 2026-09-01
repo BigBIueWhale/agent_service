@@ -84,7 +84,7 @@
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "25bd4ab4f1ef94794a507f371ff2a36019d7d4ec23e5ff00906e0ace9bc6a336",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "runtime_contract_sha256": "fa73d21549ea1af433588ad714b2248658b58b1c19b2dcff482cc1f62cdd0bd1",
+    "runtime_contract_sha256": "2c3b59dbeae51983034bf02bf988f16c8f0dc6824bcdfa45119788f9d0e7f20b",
     "wrapper_sha256": "51fe0901413a12b408f1f446c7d732046caf34d1dca440eba73dc63f1ca3ab36",
     "agent_exec_source_sha256": "ee421cf216de9caa7619f0bd38006d8bf5a5b2cf672c429e59e4a263940682c8",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",

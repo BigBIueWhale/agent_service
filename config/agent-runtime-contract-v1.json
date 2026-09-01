@@ -173,6 +173,6 @@
     "deployment_contract_sha256": "25bd4ab4f1ef94794a507f371ff2a36019d7d4ec23e5ff00906e0ace9bc6a336",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
     "wrapper_sha256": "51fe0901413a12b408f1f446c7d732046caf34d1dca440eba73dc63f1ca3ab36",
-    "agent_exec_source_sha256": "fb0aacbe005539376c26129dbbd7ab740778021a2ccc5c87c416747385647cdb"
+    "agent_exec_source_sha256": "ee421cf216de9caa7619f0bd38006d8bf5a5b2cf672c429e59e4a263940682c8"
   }
 }
