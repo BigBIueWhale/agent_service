@@ -51,7 +51,7 @@ const DEFAULT_MAX_SESSION_TURNS: u32 = 400;
 /// Qwen Code even if the control mount were wrong. It must equal
 /// `limits.max_session_turns_ceiling` in the stack lock and
 /// `execution.max_session_turns_ceiling` in the agent runtime contract.
-const MAX_SESSION_TURNS_CEILING: u32 = 800;
+const MAX_SESSION_TURNS_CEILING: u32 = 2000;
 // The sealed default must itself be a runnable budget.
 const _: () = assert!(
     DEFAULT_MAX_SESSION_TURNS >= 1 && DEFAULT_MAX_SESSION_TURNS <= MAX_SESSION_TURNS_CEILING,
@@ -554,7 +554,7 @@ mod tests {
         assert_eq!(NODE, "/usr/local/bin/node");
         assert_eq!(TURN_BUDGET_FILE, "/run/agent/turn-budget.json");
         assert_eq!(DEFAULT_MAX_SESSION_TURNS, 400);
-        assert_eq!(MAX_SESSION_TURNS_CEILING, 800);
+        assert_eq!(MAX_SESSION_TURNS_CEILING, 2000);
         assert_eq!(CLI, "/opt/qwen-code/scripts/cli-entry.js");
         assert_eq!(CONTROL_ATTEST_FD, 3);
         assert_eq!(CONTROL_RELEASE_FD, 4);
