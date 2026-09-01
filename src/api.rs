@@ -3282,7 +3282,8 @@ mod tests {
 
         // The decoder deliberately admits every JSON number so the typed
         // validator, not serde, produces the refusal that names the field.
-        for rejected in ["0", "-1", "1.5", "801"] {
+        let over_ceiling = (crate::config::MAX_SESSION_TURNS_CEILING + 1).to_string();
+        for rejected in ["0", "-1", "1.5", over_ceiling.as_str()] {
             let body = serde_json::from_str::<CreateRequest>(&format!(
                 r#"{{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","max_session_turns":{rejected}}}"#
             ))
