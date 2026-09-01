@@ -187,7 +187,7 @@ assert_receipt "${BUDGET_ID}" "${BUDGET_REQUEST}"
   exit 1
 }
 rm -rf -- "${SUBMISSION_RECEIPT_ROOT}/${BUDGET_ID}"
-for rejected in 0 -1 801 1.5 abc; do
+for rejected in 0 -1 "$((SUBMISSION_MAX_SESSION_TURNS_CEILING + 1))" 1.5 abc; do
   if submission_create_receipt "${REFUSED_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" "${rejected}" \
     >/dev/null 2>&1; then
     printf 'turn budget %s was accepted by the client harness\n' "${rejected}" >&2
