@@ -8,7 +8,7 @@
     "sha256": "29627e775b325fe0edc04152d9f398f1601cf266b30368ee519ee8bd7a923433"
   },
   "images": {
-    "agent": "sha256:ea5d153c27a5f7f56797958a5c6d0e1e24e37d4453259e566cf8bce2f3cf6270",
+    "agent": "sha256:d244ecdee38af7b6cd7d7c49eaadce27e67e9a3ef6bfa92cc6966338397334ba",
     "capture": "sha256:2d38ea4ae0f33894740a1a067c7fa8e3e3d864ff58ef439d6d432fd4739b9aef",
     "relay": "sha256:5153a46bc03fa920b0d09000eca1848af255010bda99cc50e8a6110ebcd02690",
     "broker": "sha256:add2f4fabab2af616fd4455381ed6441beade0cfeed4a9162313e74b32ad46ca",
