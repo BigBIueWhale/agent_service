@@ -135,7 +135,7 @@
   },
   "execution": {
     "max_session_turns": 400,
-    "max_session_turns_ceiling": 800,
+    "max_session_turns_ceiling": 2000,
     "max_cumulative_tool_calls": -1,
     "max_tool_calls_per_turn": 1000,
     "max_wall_time_seconds": -1,

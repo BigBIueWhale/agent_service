@@ -765,7 +765,7 @@ The creation body is exactly two ordered `multipart/form-data` parts: part 1
 hashed, bounded only by the explicit 200 GiB + container-overhead archive cap).
 A required caller-generated 256-bit `Idempotency-Key` names the operation. The
 optional field is typed, not a profile name: `max_session_turns` is a JSON
-integer in `1..=800`. Omitting it selects the locked default of 400 turns; a
+integer in `1..=2000`. Omitting it selects the locked default of 400 turns; a
 bad value is refused by name before the archive part is spooled, and a replay
 under the same handle must repeat the same values or it is a 409 rather than a
 second operation.

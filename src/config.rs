@@ -72,10 +72,12 @@ pub const DEFAULT_MAX_SESSION_TURNS: u32 = 400;
 ///
 /// A per-session budget is a task-shape decision, not an escape hatch from the
 /// circuit breaker: something has to remain finite, or a degenerate loop simply
-/// asks for a bigger number. 800 is exactly two default budgets -- room for a
-/// genuinely larger repository task (a multi-service change, a long build/verify
-/// cycle) without admitting a budget that could no longer be distinguished from
-/// unbounded. A request outside `1..=800` is refused with the offending value;
+/// asks for a bigger number. 2000 is five default budgets -- room for a task
+/// whose turn count is bounded by the corpus it must read rather than by the
+/// reasoning it must do, where the floor is arithmetic: a tool result is capped
+/// at 25,000 characters, so a multi-megabyte corpus costs hundreds of reads
+/// before a single one is wasted. It still cannot be mistaken for unbounded.
+/// A request outside `1..=2000` is refused with the offending value;
 /// it is never clamped, because a silently shortened budget would look like an
 /// ordinary turn-exhausted exit 53 and be graded as one.
 ///
@@ -83,7 +85,7 @@ pub const DEFAULT_MAX_SESSION_TURNS: u32 = 400;
 /// lock carries it for the service, the agent runtime contract carries it for
 /// the in-image verifier, and the launcher compiles its own copy that the
 /// verifier proves equal to the contract's.
-pub const MAX_SESSION_TURNS_CEILING: u32 = 800;
+pub const MAX_SESSION_TURNS_CEILING: u32 = 2000;
 
 // The default must itself be a budget a caller could have asked for. A build in
 // which it is not is incoherent before it ever reaches a request.
