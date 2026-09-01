@@ -328,6 +328,10 @@ def _validate_exact_tokens_after(state: State) -> None:
             "tokenizeBody['chat_template_kwargs']",
             "deriveVllmTokenizeUrl(this.contentGeneratorConfig.baseUrl)",
             "response.max_model_len",
+            # Every request names the agent it belongs to, so the backend can
+            # group offloaded KV by agent instead of by block recency.
+            "(request.config as { kvScope?: string } | undefined)",
+            "['kv_scope'] = kvScope",
         ),
         label=label,
     )

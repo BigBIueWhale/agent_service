@@ -108,24 +108,24 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "c45e841bb21c35c830e4fbb66d868fce6e33c71074aaccddf5cf1ccdc5cfe412",
-      "source_patch_manifest_sha256": "bc464d1451f1e5a4ce655371127c3c4adaf73b8c039b9c277c98cb0a12f1e9fd"
+      "patch_sha256": "6b968e031ac3e2d7cabc425c74892cd1f291dd1bfab28149009918aa92142751",
+      "source_patch_manifest_sha256": "7c2146a69ec455d1b517d57ddc992ccc1078c74a5297eb60fe6009ccc205d9cf"
     }
   },
   "backend": {
     "project_dir": "/home/user/Desktop/Qwen_best_model_ever",
     "container_name": "qwen38-agent-native",
     "project_label": "Qwen_best_model_ever",
-    "profile_label": "socket-isolated-nonroot-vision-k8v4-agent-v17",
-    "image_tag": "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v17",
-    "image_id": "sha256:fbbe5e85e9684d37835b751627c9faab2381d7536183cf33c7d59863e7e1d318",
+    "profile_label": "socket-isolated-nonroot-vision-k8v4-agent-v18",
+    "image_tag": "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v18",
+    "image_id": "sha256:bcdcd2950752e1fcb5fdff806f02b2c0c7c911cb6e6fdb04403b091786cd80d6",
     "user": "2000:0",
     "rootfs_read_only": true,
     "tmpfs": {
       "/run": "rw,nosuid,nodev,noexec,size=64m,uid=2000,gid=0,mode=0700",
       "/tmp": "rw,nosuid,nodev,exec,size=2g,mode=1777"
     },
-    "cache_volume": "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v17",
+    "cache_volume": "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v18",
     "cache_mount": "/home/vllm/.cache/vllm",
     "cache_owner_mode": "2000:0:770",
     "endpoint": "http://127.0.0.1:8000",

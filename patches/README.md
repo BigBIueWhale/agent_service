@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `c45e841bb21c35c830e4fbb66d868fce6e33c71074aaccddf5cf1ccdc5cfe412`
+- Review-diff SHA-256: `6b968e031ac3e2d7cabc425c74892cd1f291dd1bfab28149009918aa92142751`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `bc464d1451f1e5a4ce655371127c3c4adaf73b8c039b9c277c98cb0a12f1e9fd`
+- Transformer-manifest SHA-256: `7c2146a69ec455d1b517d57ddc992ccc1078c74a5297eb60fe6009ccc205d9cf`
 - Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
 - Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
@@ -52,6 +52,14 @@ provide as one fail-closed mode:
   as on any turn, and the reasoning-end marker is never forced. The snapshot
   schema gives every fact exactly one home, so nothing in it has two places
   to grow;
+- the agent's identity on every request. Each chat carries the agent it
+  belongs to — the session id for the main line, the spawning tool-call id
+  for a subagent, with no distinction between the two — and the send path
+  puts it on the wire as `kv_scope`. The compaction side query inherits it
+  from the chat it is summarizing, so an agent's own history is always
+  attributed to that agent. It is what lets the backend group offloaded KV
+  by agent and give up whole contexts under pressure instead of shredding
+  every resident agent by block recency;
 - one universal tool allowlist covering core, dynamic, MCP, skill, and synthetic tools;
 - an explicit foreground-agents-only mode that exposes only `general-purpose` and `Explore`, returns results inline, and rejects forks, background work, teams, worktrees, custom agent types, and model overrides.
 - init metadata filtered through that same policy, so it does not advertise internal or uncallable agent types.

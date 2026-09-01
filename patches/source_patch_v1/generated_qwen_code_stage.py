@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'c45e841bb21c35c830e4fbb66d868fce6e33c71074aaccddf5cf1ccdc5cfe412',
+  'review_sha256': '6b968e031ac3e2d7cabc425c74892cd1f291dd1bfab28149009918aa92142751',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -61,7 +61,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '5ce2e138841cfd514818d12a56ce0a426974f633e81bbbaad4b0cf38cc0437de'},
             {'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before_sha256': '79dd902bfd3af29fff89a1886f4076e64019681261f9550e446eda0df0ab9464',
-             'after_sha256': '430d4e4c9dc75cd363a9979eec5481ae4bd5debf1f4432c7caa627e62a67758c'},
+             'after_sha256': '2c998619b919b775143d554cadee7173cdc5d6cb180852ada9ad92c694a35bbf'},
             {'path': 'packages/core/src/agents/runtime/agent-events.ts',
              'before_sha256': 'c28f4f24651cdb75ea34b3102c9456e3b467d5ee0a03afb73a160b25b736d3b8',
              'after_sha256': 'a34880c8ffa5ba33ebb5f045db3703093b5527ebc629f19ece83037e2b5b7603'},
@@ -71,6 +71,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before_sha256': 'db6d8ed8f7714a83483fb9f22c860a3f2e7e38cf53171e79c5fc49a363d3c3ce',
              'after_sha256': '665297f0f113aa9bcf42fe6f480bbbe363cacc02d2a8a0f4ec96131f61db8166'},
+            {'path': 'packages/core/src/agents/runtime/agent-types.ts',
+             'before_sha256': 'b02dc24f71f260e089677cfe41dee1d99b0fea88a355bee14b1ce15cbc237750',
+             'after_sha256': '09a5db201308cae2598fb36f4a79b645b73705e3dd54d2b3a88a27a034ee449b'},
             {'path': 'packages/core/src/agents/subagent-result.test.ts',
              'before_sha256': '044cd3646709a861e488f473d015f4238405dc37dd5c8d26ce8ab010a391ba6d',
              'after_sha256': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91'},
@@ -92,6 +95,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/core/client.test.ts',
              'before_sha256': '00f0f1c4ff0e705ab43235fc9368609e63b441df4e2bc81cd3ce63e4cb9771e4',
              'after_sha256': '672a46838231a8799545260380cc65c10782779b2a344660342b1dd1d3b57c89'},
+            {'path': 'packages/core/src/core/client.ts',
+             'before_sha256': 'b15faf13bc894ab9d9a60853bcadffdfd197a39779d05ecdef401b6f4d360c19',
+             'after_sha256': 'a2e60cacffbadcf3f9bd0c16810a02d226be5d3f299a7fcef254eaa9055e3327'},
             {'path': 'packages/core/src/core/contentGenerator.ts',
              'before_sha256': '7bbdb216d8bbde513ce99d4f1160746942b6fc3c388ef222c1d47cc324a15247',
              'after_sha256': '27fa593f8dbf0e75106b2d4aa8f9d22801dcf016b112d56046542ed4fd3ff303'},
@@ -106,7 +112,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '7ef9277810eaa314832a3ecac7e9f83d626bb83833407580dcdd878219ae1e31'},
             {'path': 'packages/core/src/core/geminiChat.ts',
              'before_sha256': '384de52c73dc5c387d3147713046713d34de0b6724b12feb00574508a4d7cc6c',
-             'after_sha256': '030fcdcf7013b00c710622b24b1fa740c21404b35db4bbb034e697112a54b7af'},
+             'after_sha256': 'd4e020551f7fa36de936d79a0a0b44f5b4181fd1c07b0555d01a5782f5680578'},
             {'path': 'packages/core/src/core/genai-compat.test.ts',
              'before_sha256': 'b454f3c146c1be79cbc43aadceda5010756ada9f80a5ec33186c9826feaccf76',
              'after_sha256': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50'},
@@ -127,13 +133,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts',
              'before_sha256': '45a51e9f9f3e0a87c903b960847d7e17faf768d129e2706f6df9c731e69e2f2b',
-             'after_sha256': '6ddd4b092ec9130e5c90c799c23969da0e1ff07208b5efc765d691283e015c82'},
+             'after_sha256': 'ed00320575c8e2b90a1300734588c99d6115ee85f0318e1cd66bc814eb4bf944'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts',
              'before_sha256': None,
              'after_sha256': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before_sha256': 'fd6061e56956d1072885a4a8e40be6ed148623d791a5586f3669bbf325c1d09c',
-             'after_sha256': 'a9abde6f3ae36ee4447159fc72a63301e131a008a05695be000ca6a5ce1f6966'},
+             'after_sha256': '22db5d61da4f9e77007e38855f2cc656e670d261d017e24a41d04e795cab47a5'},
             {'path': 'packages/core/src/core/openaiContentGenerator/types.ts',
              'before_sha256': '0b827511f3ccefbc74aa7d14eaccf7502e1a2aaed846983b982ac9191827aa51',
              'after_sha256': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c'},
@@ -217,7 +223,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '6dcceb44938d59bd79f4d3b78010413ca0238a3339e7b80729d60611f898a4df'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': 'f89157f1ed09857b767af70c745b23cf6c896c0b74fa96f701ad0cedbde0b864'},
+             'after_sha256': 'b2fd9bf314b67a843d38b196af03ee05d581e5793da50beb698a1272a440201d'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -7474,6 +7480,86 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  readonly runConfig: RunConfig;\n'},
             {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-7',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
+             'before': "    // carries the parent's exact rendered systemInstruction "
+                       'so the fork\n'
+                       '    // shares a byte-identical cache prefix. Otherwise, '
+                       'template\n'
+                       '    // `systemPrompt` via buildChatSystemPrompt (which may '
+                       'throw — kept\n'
+                       '    // outside the try/catch so template errors surface to the '
+                       'caller).\n'
+                       '    const generationConfig: GenerateContentConfig & {\n'
+                       '      systemInstruction?: string | Content;\n'
+                       '    } = {};\n'
+                       '    if (this.promptConfig.renderedSystemPrompt !== undefined) '
+                       '{\n'
+                       '      generationConfig.systemInstruction =\n'
+                       '        this.promptConfig.renderedSystemPrompt;\n'
+                       '    } else if (this.promptConfig.systemPrompt) {\n'
+                       '      const systemInstruction = '
+                       'this.buildChatSystemPrompt(context, options);\n'
+                       '      if (systemInstruction) {\n',
+             'after': "    // carries the parent's exact rendered systemInstruction so "
+                      'the fork\n'
+                      '    // shares a byte-identical cache prefix. Otherwise, '
+                      'template\n'
+                      '    // `systemPrompt` via buildChatSystemPrompt (which may '
+                      'throw — kept\n'
+                      '    // outside the try/catch so template errors surface to the '
+                      'caller).\n'
+                      '    const generationConfig: GenerateContentConfig & {\n'
+                      '      systemInstruction?: string | Content;\n'
+                      '      kvScope?: string;\n'
+                      '    } = { kvScope: this.modelConfig.kvScope };\n'
+                      '    if (this.promptConfig.renderedSystemPrompt !== undefined) '
+                      '{\n'
+                      '      generationConfig.systemInstruction =\n'
+                      '        this.promptConfig.renderedSystemPrompt;\n'
+                      '    } else if (this.promptConfig.systemPrompt) {\n'
+                      '      const systemInstruction = '
+                      'this.buildChatSystemPrompt(context, options);\n'
+                      '      if (systemInstruction) {\n',
+             'review_before': "    // carries the parent's exact rendered "
+                              'systemInstruction so the fork\n'
+                              '    // shares a byte-identical cache prefix. Otherwise, '
+                              'template\n'
+                              '    // `systemPrompt` via buildChatSystemPrompt (which '
+                              'may throw — kept\n'
+                              '    // outside the try/catch so template errors surface '
+                              'to the caller).\n'
+                              '    const generationConfig: GenerateContentConfig & {\n'
+                              '      systemInstruction?: string | Content;\n'
+                              '    } = {};\n'
+                              '    if (this.promptConfig.renderedSystemPrompt !== '
+                              'undefined) {\n'
+                              '      generationConfig.systemInstruction =\n'
+                              '        this.promptConfig.renderedSystemPrompt;\n'
+                              '    } else if (this.promptConfig.systemPrompt) {\n'
+                              '      const systemInstruction = '
+                              'this.buildChatSystemPrompt(context, options);\n'
+                              '      if (systemInstruction) {\n',
+             'review_after': "    // carries the parent's exact rendered "
+                             'systemInstruction so the fork\n'
+                             '    // shares a byte-identical cache prefix. Otherwise, '
+                             'template\n'
+                             '    // `systemPrompt` via buildChatSystemPrompt (which '
+                             'may throw — kept\n'
+                             '    // outside the try/catch so template errors surface '
+                             'to the caller).\n'
+                             '    const generationConfig: GenerateContentConfig & {\n'
+                             '      systemInstruction?: string | Content;\n'
+                             '      kvScope?: string;\n'
+                             '    } = { kvScope: this.modelConfig.kvScope };\n'
+                             '    if (this.promptConfig.renderedSystemPrompt !== '
+                             'undefined) {\n'
+                             '      generationConfig.systemInstruction =\n'
+                             '        this.promptConfig.renderedSystemPrompt;\n'
+                             '    } else if (this.promptConfig.systemPrompt) {\n'
+                             '      const systemInstruction = '
+                             'this.buildChatSystemPrompt(context, options);\n'
+                             '      if (systemInstruction) {\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-8',
+             'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '    abortController: AbortController,\n'
                        '    options?: ReasoningLoopOptions,\n'
                        '  ): Promise<ReasoningLoopResult> {\n'
@@ -7546,7 +7632,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'a tool-result loop.\n'
                              '    const duplicateProviderToolCallResponseIds = new '
                              'Set<string>();\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-8',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-9',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      if (abortController.signal.aborted) {\n'
                        '        terminateMode = AgentTerminateMode.CANCELLED;\n'
@@ -7612,7 +7698,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '* 60);\n'
                              '      if (options?.maxTimeMinutes && durationMin >= '
                              'options.maxTimeMinutes) {\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-9',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-10',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      // parent propagation; the try/finally below guarantees '
                        'reverse-cleanup\n'
@@ -7683,7 +7769,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            abortSignal: roundAbortController.signal,\n'
                              '            tools: [{ functionDeclarations: toolsList '
                              '}],\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-10',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-11',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '            DEFAULT_QWEN_MODEL,\n'
                        '          messageParams,\n'
@@ -7739,7 +7825,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '        const functionCalls: FunctionCall[] = [];\n'
                              "        let roundText = '';\n"},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-11',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-12',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '\n'
                        '        for await (const streamEvent of responseStream) {\n'
@@ -7809,7 +7895,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'wasOutputTruncated) from a\n'
                              '          // previous attempt that may have hit '
                              'MAX_TOKENS.\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-12',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-13',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '            lastUsage = undefined;\n'
                        '            currentResponseId = undefined;\n'
@@ -7972,7 +8058,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'correlation\n'
                              '            if (resp.responseId) {\n'
                              '              currentResponseId = resp.responseId;\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-13',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-14',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '              if (txt && isThought) roundThoughtText += txt;\n'
                        '              if (txt && !isThought) roundText += txt;\n'
@@ -8036,7 +8122,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            }\n'
                              '            if (resp.usageMetadata) lastUsage = '
                              'resp.usageMetadata;\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-14',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-15',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '        }\n'
                        '\n'
@@ -8225,7 +8311,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            handledProviderToolCallIds,\n'
                              '            duplicateProviderToolCallResponseIds,\n'
                              '          );\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-15',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-16',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '              immediateExternalInputs,\n'
                        '            );\n'
@@ -8332,7 +8418,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              terminateMode = waitResult.terminateMode;\n'
                              '              break;\n'
                              '            }\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-16',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-17',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '              finalText = roundText.trim();\n'
                        '              // Emit ROUND_END for the final round so all '
@@ -8404,7 +8490,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'completion\n'
                              '              break;\n'
                              '            }\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-17',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-18',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '            ];\n'
                        '          }\n'
@@ -8468,7 +8554,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'ended normally, broke,\n'
                              '        // returned, or threw — preventing '
                              'parent-listener accumulation on\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-18',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-19',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      }\n'
                        '    }\n'
@@ -8531,7 +8617,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  private drainExternalInputs(\n'
                              '    options?: ReasoningLoopOptions,\n'
                              '  ): AgentExternalInput[] {\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-19',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-20',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      });\n'
                        '    }\n'
@@ -8596,7 +8682,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    options: ReasoningLoopOptions | undefined,\n'
                              '    startTime: number,\n'
                              '  ): number | undefined {\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-20',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-21',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '  }\n'
                        '\n'
@@ -8652,7 +8738,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    while (true) {\n'
                              '      const immediate = '
                              'this.drainExternalInputs(options);\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-21',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-22',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      }\n'
                        '\n'
@@ -8730,7 +8816,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'remainingTimeMs <= 0) {\n'
                              '        return { inputs: [], terminateMode: '
                              'AgentTerminateMode.TIMEOUT };\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-22',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-23',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': ' - Use tools only when necessary to obtain facts or make '
                        'changes.\n'
@@ -8874,7 +8960,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '|| 0);\n'
                              '    const cachedTok = '
                              'Number(usage.cachedContentTokenCount || 0);\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-23',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-24',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      this.executionStats.totalTokens =\n'
                        '        (this.executionStats.totalTokens || 0) +\n'
@@ -9930,6 +10016,90 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  setExternalMessageProvider(provider: () => '
                              'AgentExternalInput[]): void {\n'
                              '    this.externalMessageProvider = provider;\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-types.ts:landmark-1',
+             'path': 'packages/core/src/agents/runtime/agent-types.ts',
+             'before': '  /**\n'
+                       '   * The name or identifier of the model to be used (e.g., '
+                       "'qwen3-coder-plus').\n"
+                       '   *\n'
+                       "   * TODO: In the future, this needs to support 'auto' or some "
+                       'other string to support routing use cases.\n'
+                       '   */\n'
+                       '  model?: string;\n'
+                       '}\n'
+                       '\n'
+                       '/**\n'
+                       ' * Configures the execution environment and constraints for an '
+                       'agent.\n'
+                       ' *\n'
+                       ' * TODO: Consider adding max_tokens as a form of budgeting.\n',
+             'after': '  /**\n'
+                      '   * The name or identifier of the model to be used (e.g., '
+                      "'qwen3-coder-plus').\n"
+                      '   *\n'
+                      "   * TODO: In the future, this needs to support 'auto' or some "
+                      'other string to support routing use cases.\n'
+                      '   */\n'
+                      '  model?: string;\n'
+                      '\n'
+                      '  /**\n'
+                      '   * The agent this configuration belongs to, sent with every '
+                      'request so the\n'
+                      '   * backend can group offloaded KV by agent and give up whole '
+                      'contexts under\n'
+                      '   * pressure. Every agent has one; a subagent is not a special '
+                      'case.\n'
+                      '   */\n'
+                      '  kvScope?: string;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * Configures the execution environment and constraints for an '
+                      'agent.\n'
+                      ' *\n'
+                      ' * TODO: Consider adding max_tokens as a form of budgeting.\n',
+             'review_before': '  /**\n'
+                              '   * The name or identifier of the model to be used '
+                              "(e.g., 'qwen3-coder-plus').\n"
+                              '   *\n'
+                              "   * TODO: In the future, this needs to support 'auto' "
+                              'or some other string to support routing use cases.\n'
+                              '   */\n'
+                              '  model?: string;\n'
+                              '}\n'
+                              '\n'
+                              '/**\n'
+                              ' * Configures the execution environment and constraints '
+                              'for an agent.\n'
+                              ' *\n'
+                              ' * TODO: Consider adding max_tokens as a form of '
+                              'budgeting.\n',
+             'review_after': '  /**\n'
+                             '   * The name or identifier of the model to be used '
+                             "(e.g., 'qwen3-coder-plus').\n"
+                             '   *\n'
+                             "   * TODO: In the future, this needs to support 'auto' "
+                             'or some other string to support routing use cases.\n'
+                             '   */\n'
+                             '  model?: string;\n'
+                             '\n'
+                             '  /**\n'
+                             '   * The agent this configuration belongs to, sent with '
+                             'every request so the\n'
+                             '   * backend can group offloaded KV by agent and give up '
+                             'whole contexts under\n'
+                             '   * pressure. Every agent has one; a subagent is not a '
+                             'special case.\n'
+                             '   */\n'
+                             '  kvScope?: string;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * Configures the execution environment and constraints '
+                             'for an agent.\n'
+                             ' *\n'
+                             ' * TODO: Consider adding max_tokens as a form of '
+                             'budgeting.\n'},
             {'name': 'packages/core/src/agents/subagent-result.test.ts:landmark-1',
              'path': 'packages/core/src/agents/subagent-result.test.ts',
              'before': ' * Copyright 2026 Qwen\n'
@@ -13392,6 +13562,58 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'to NOOP for unrelated\n'
                              '      // tests; restore the real implementation here so '
                              'we can observe it.\n'},
+            {'name': 'packages/core/src/core/client.ts:landmark-1',
+             'path': 'packages/core/src/core/client.ts',
+             'before': "        'gemini_chat_construct',\n"
+                       '        () =>\n'
+                       '          new GeminiChat(\n'
+                       '            this.config,\n'
+                       '            {\n'
+                       '              systemInstruction,\n'
+                       '            },\n'
+                       '            history,\n'
+                       '            this.config.getChatRecordingService(),\n'
+                       '            uiTelemetryService,\n'
+                       '          ),\n'
+                       '      );\n',
+             'after': "        'gemini_chat_construct',\n"
+                      '        () =>\n'
+                      '          new GeminiChat(\n'
+                      '            this.config,\n'
+                      '            {\n'
+                      '              systemInstruction,\n'
+                      '              kvScope: this.config.getSessionId(),\n'
+                      '            },\n'
+                      '            history,\n'
+                      '            this.config.getChatRecordingService(),\n'
+                      '            uiTelemetryService,\n'
+                      '          ),\n'
+                      '      );\n',
+             'review_before': "        'gemini_chat_construct',\n"
+                              '        () =>\n'
+                              '          new GeminiChat(\n'
+                              '            this.config,\n'
+                              '            {\n'
+                              '              systemInstruction,\n'
+                              '            },\n'
+                              '            history,\n'
+                              '            this.config.getChatRecordingService(),\n'
+                              '            uiTelemetryService,\n'
+                              '          ),\n'
+                              '      );\n',
+             'review_after': "        'gemini_chat_construct',\n"
+                             '        () =>\n'
+                             '          new GeminiChat(\n'
+                             '            this.config,\n'
+                             '            {\n'
+                             '              systemInstruction,\n'
+                             '              kvScope: this.config.getSessionId(),\n'
+                             '            },\n'
+                             '            history,\n'
+                             '            this.config.getChatRecordingService(),\n'
+                             '            uiTelemetryService,\n'
+                             '          ),\n'
+                             '      );\n'},
             {'name': 'packages/core/src/core/contentGenerator.ts:landmark-1',
              'path': 'packages/core/src/core/contentGenerator.ts',
              'before': '    request: GenerateContentParameters,\n'
@@ -23079,6 +23301,82 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '   */\n'},
             {'name': 'packages/core/src/core/geminiChat.ts:landmark-11',
              'path': 'packages/core/src/core/geminiChat.ts',
+             'before': '   * @param telemetryService - Optional UI telemetry service. '
+                       'When provided,\n'
+                       '   *   prompt token counts are reported on each API response. '
+                       'Pass `undefined`\n'
+                       '   *   for sub-agent chats to avoid overwriting the main '
+                       "agent's context usage.\n"
+                       '   */\n'
+                       '  constructor(\n'
+                       '    private readonly config: Config,\n'
+                       '    private readonly generationConfig: GenerateContentConfig = '
+                       '{},\n'
+                       '    private history: Content[] = [],\n'
+                       '    private readonly chatRecordingService?: '
+                       'ChatRecordingService,\n'
+                       '    private readonly telemetryService?: UiTelemetryService,\n'
+                       '  ) {\n'
+                       '    validateHistory(history);\n'
+                       '    this.redactApprovedPlansFromLoadedHistory();\n',
+             'after': '   * @param telemetryService - Optional UI telemetry service. '
+                      'When provided,\n'
+                      '   *   prompt token counts are reported on each API response. '
+                      'Pass `undefined`\n'
+                      '   *   for sub-agent chats to avoid overwriting the main '
+                      "agent's context usage.\n"
+                      '   */\n'
+                      '  constructor(\n'
+                      '    private readonly config: Config,\n'
+                      '    private readonly generationConfig: ChatGenerationConfig = '
+                      '{},\n'
+                      '    private history: Content[] = [],\n'
+                      '    private readonly chatRecordingService?: '
+                      'ChatRecordingService,\n'
+                      '    private readonly telemetryService?: UiTelemetryService,\n'
+                      '  ) {\n'
+                      '    validateHistory(history);\n'
+                      '    this.redactApprovedPlansFromLoadedHistory();\n',
+             'review_before': '   * @param telemetryService - Optional UI telemetry '
+                              'service. When provided,\n'
+                              '   *   prompt token counts are reported on each API '
+                              'response. Pass `undefined`\n'
+                              '   *   for sub-agent chats to avoid overwriting the '
+                              "main agent's context usage.\n"
+                              '   */\n'
+                              '  constructor(\n'
+                              '    private readonly config: Config,\n'
+                              '    private readonly generationConfig: '
+                              'GenerateContentConfig = {},\n'
+                              '    private history: Content[] = [],\n'
+                              '    private readonly chatRecordingService?: '
+                              'ChatRecordingService,\n'
+                              '    private readonly telemetryService?: '
+                              'UiTelemetryService,\n'
+                              '  ) {\n'
+                              '    validateHistory(history);\n'
+                              '    this.redactApprovedPlansFromLoadedHistory();\n',
+             'review_after': '   * @param telemetryService - Optional UI telemetry '
+                             'service. When provided,\n'
+                             '   *   prompt token counts are reported on each API '
+                             'response. Pass `undefined`\n'
+                             '   *   for sub-agent chats to avoid overwriting the main '
+                             "agent's context usage.\n"
+                             '   */\n'
+                             '  constructor(\n'
+                             '    private readonly config: Config,\n'
+                             '    private readonly generationConfig: '
+                             'ChatGenerationConfig = {},\n'
+                             '    private history: Content[] = [],\n'
+                             '    private readonly chatRecordingService?: '
+                             'ChatRecordingService,\n'
+                             '    private readonly telemetryService?: '
+                             'UiTelemetryService,\n'
+                             '  ) {\n'
+                             '    validateHistory(history);\n'
+                             '    this.redactApprovedPlansFromLoadedHistory();\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-12',
+             'path': 'packages/core/src/core/geminiChat.ts',
              'before': '   * whole chat history. This is an internal hot path: long '
                        'sessions can make a\n'
                        '   * full `structuredClone` larger than the remaining V8 heap '
@@ -23167,7 +23465,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'imagePayloadThreshold) {\n'
                              '      const skipEntry = currentUserContent\n'
                              '        ? curatedHistory.find(\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-12',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-13',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      }\n'
                        '      return requestHistory;\n'
@@ -23456,7 +23754,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "parent chat's\n"
                              '   * `getLastPromptTokenCount()` here. This also clears '
                              'any remembered\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-13',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-14',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    );\n'
                        '    const service = new ChatCompressionService();\n'
@@ -23522,7 +23820,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      trigger: options?.trigger,\n'
                              '      customInstructions: '
                              'options?.customInstructions,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-14',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-15',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      this.config.getFileReadCache().clear();\n'
                        '      this.setLastPromptTokenCount(\n'
@@ -23628,7 +23926,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  }\n'
                              '\n'
                              '  /**\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-15',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-16',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      }),\n'
                        '    );\n'
@@ -23686,7 +23984,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  setSystemInstruction(sysInstr: string) {\n'
                              '    this.generationConfig.systemInstruction = '
                              'sysInstr;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-16',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-17',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    let requestContents: Content[];\n'
                        '    let userContentAdded = false;\n'
@@ -23792,7 +24090,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    // defaultOutputCeiling(model) (the model's output "
                              'limit clipped to\n'
                              '    // OUTPUT_TOKEN_CEILING).\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-17',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-18',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      explicitOutputCeiling ?? defaultOutputCeiling(model);\n'
                        '    // Declared at function level so the MAX_TOKENS escalation '
@@ -23967,7 +24265,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`finally` (which\n'
                              '      // resolves it) has not run yet. Any setup error '
                              'before returning the\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-18',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-19',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      // this send instead of waiting for the API to reject '
                        'the request as too\n'
@@ -24118,7 +24416,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "previous response's\n"
                              '      // output token count + a tiny estimate of just '
                              'the new user message.\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-19',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-20',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      // restore / subagent inheritance) walks history with a '
                        'char/4\n'
@@ -24346,7 +24644,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          compressionStatus: CompressionStatus.NOOP,\n'
                              '        };\n'
                              '      } else {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-20',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-21',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          params.config?.abortSignal,\n'
                        '          {\n'
@@ -24588,7 +24886,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'history before this\n'
                              '          // guard can compare the compressed prompt '
                              'size. If the compressed\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-21',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-22',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        const compressionStatus =\n'
                        '          CompressionStatus[compressionInfo.compressionStatus] '
@@ -24688,7 +24986,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        shouldForceFromHard &&\n'
                              '        compressionInfo.compressionStatus === '
                              'CompressionStatus.COMPRESSED\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-22',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-23',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      }\n'
                        '      requestContents = this.getRequestHistoryForRoute(\n'
@@ -24823,7 +25121,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'here, so a fresh history\n'
                              '      // walk would double-count it. Estimate-derived '
                              'counts can omit the\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-23',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-24',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      // estimatePromptTokens — "typically ~15-20K of '
                        'under-estimate"). Some\n'
@@ -25027,7 +25325,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ...params.config,\n'
                              '          maxOutputTokens: clampedMaxOutputTokens,\n'
                              '        },\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-24',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-25',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    return (async function* () {\n'
                        '      const sleepInhibitorHandle = acquireSleepInhibitor(\n'
@@ -25164,7 +25462,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          yield {\n'
                              '            type: StreamEventType.COMPRESSED,\n'
                              '            info: compressionInfo,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-25',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-26',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        let streamYieldedAnyChunk = false;\n'
                        '\n'
@@ -25226,7 +25524,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              retryErrorCodes: '
                              'exactRoute.retryErrorCodes,\n'
                              '            }\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-26',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-27',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '            cgConfig?.samplingParams?.max_tokens !== null) ||\n'
                        '          parsedEnvMaxTokens !== undefined;\n'
@@ -25327,7 +25625,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        let lastFinishReason: string | undefined;\n'
                              '\n'
                              '        /**\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-27',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-28',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              // second discards output the caller is '
                        'watching. The\n'
@@ -25405,7 +25703,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                '
                              'TRANSPORT_STREAM_RETRY_CONFIG.initialDelayMs *\n'
                              '                transportStreamRetryCount;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-28',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-29',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': "            // check), and the scheduler's repair path already "
                        'covers it.\n'
@@ -25485,7 +25783,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`transportContinuationText` accumulates\n'
                              '              // and is never reset while continuing. '
                              "Each attempt's own text\n"},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-29',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-30',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '                      precomputedEffectiveTokens: '
                        'reactiveOriginalTokenCount,\n'
@@ -25583,7 +25881,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'setHistory has already\n'
                              '                    // cleared the marker. Kept for '
                              'uniformity with the\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-30',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-31',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '                  }\n'
                        '\n'
@@ -25711,7 +26009,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                    isAbortError(compressionError)\n'
                              '                  ) {\n'
                              '                    throw compressionError;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-31',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-32',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              break;\n'
                        '            }\n'
@@ -25864,7 +26162,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "              if (error.type === 'PROTOCOL_TAG_LEAK') {\n"
                              '                protocolTagLeakRetryCount = '
                              'nextInvalidStreamRetryCount;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-32',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-33',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              }\n'
                        '              return;\n'
@@ -25937,7 +26235,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "                error.type === 'PROTOCOL_TAG_LEAK'\n"
                              '                  ? protocolTagLeakRetryCount\n'
                              '                  : transientRetryCount;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-33',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-34',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              await delay(delayMs, '
                        'attemptState.params.config?.abortSignal)\n'
@@ -25995,7 +26293,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          !hasUserMaxTokensOverride\n'
                              '        ) {\n'
                              '          maxTokensEscalated = true;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-34',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-35',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              config: {\n'
                        '                ...recoveryParams.config,\n'
@@ -26053,7 +26351,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            try {\n'
                              '              for await (const event of '
                              'streamWithInvalidStreamRetries(\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-35',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-36',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          // - Do NOT trigger fallback when persistent mode is '
                        'active\n'
@@ -26133,7 +26431,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            !isUnattendedMode() &&\n'
                              '            !streamYieldedAnyChunk\n'
                              '          ) {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-36',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-37',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          contents: requestContents,\n'
                        '          config: { ...this.generationConfig, ...params.config '
@@ -26259,7 +26557,77 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'return false;\n'
                              '        }\n'
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-37',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-38',
+             'path': 'packages/core/src/core/geminiChat.ts',
+             'before': '\n'
+                       '  setTools(tools: Tool[]): void {\n'
+                       '    this.generationConfig.tools = tools;\n'
+                       '  }\n'
+                       '\n'
+                       '  /** Returns a shallow copy of the current generation config '
+                       '(for cache param snapshots). */\n'
+                       '  getGenerationConfig(): GenerateContentConfig {\n'
+                       '    return { ...this.generationConfig };\n'
+                       '  }\n'
+                       '\n'
+                       '  async maybeIncludeSchemaDepthContext(error: '
+                       'StructuredError): Promise<void> {\n'
+                       '    // Check for potentially problematic cyclic tools with '
+                       'cyclic schemas\n'
+                       '    // and include a recommendation to remove potentially '
+                       'problematic tools.\n',
+             'after': '\n'
+                      '  setTools(tools: Tool[]): void {\n'
+                      '    this.generationConfig.tools = tools;\n'
+                      '  }\n'
+                      '\n'
+                      '  /** Returns a shallow copy of the current generation config '
+                      '(for cache param snapshots). */\n'
+                      '  getGenerationConfig(): ChatGenerationConfig {\n'
+                      '    return { ...this.generationConfig };\n'
+                      '  }\n'
+                      '\n'
+                      '  async maybeIncludeSchemaDepthContext(error: StructuredError): '
+                      'Promise<void> {\n'
+                      '    // Check for potentially problematic cyclic tools with '
+                      'cyclic schemas\n'
+                      '    // and include a recommendation to remove potentially '
+                      'problematic tools.\n',
+             'review_before': '\n'
+                              '  setTools(tools: Tool[]): void {\n'
+                              '    this.generationConfig.tools = tools;\n'
+                              '  }\n'
+                              '\n'
+                              '  /** Returns a shallow copy of the current generation '
+                              'config (for cache param snapshots). */\n'
+                              '  getGenerationConfig(): GenerateContentConfig {\n'
+                              '    return { ...this.generationConfig };\n'
+                              '  }\n'
+                              '\n'
+                              '  async maybeIncludeSchemaDepthContext(error: '
+                              'StructuredError): Promise<void> {\n'
+                              '    // Check for potentially problematic cyclic tools '
+                              'with cyclic schemas\n'
+                              '    // and include a recommendation to remove '
+                              'potentially problematic tools.\n',
+             'review_after': '\n'
+                             '  setTools(tools: Tool[]): void {\n'
+                             '    this.generationConfig.tools = tools;\n'
+                             '  }\n'
+                             '\n'
+                             '  /** Returns a shallow copy of the current generation '
+                             'config (for cache param snapshots). */\n'
+                             '  getGenerationConfig(): ChatGenerationConfig {\n'
+                             '    return { ...this.generationConfig };\n'
+                             '  }\n'
+                             '\n'
+                             '  async maybeIncludeSchemaDepthContext(error: '
+                             'StructuredError): Promise<void> {\n'
+                             '    // Check for potentially problematic cyclic tools '
+                             'with cyclic schemas\n'
+                             '    // and include a recommendation to remove '
+                             'potentially problematic tools.\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-39',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '  private async *processStreamResponse(\n'
                        '    model: string,\n'
@@ -26334,7 +26702,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'string>();\n'
                              '    let usageMetadata: '
                              'GenerateContentResponseUsageMetadata | undefined;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-38',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-40',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '\n'
                        '    // XML tool call fallback: some models (e.g. '
@@ -26402,7 +26770,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      contentText &&\n'
                              '      containsXmlToolCalls(contentText)\n'
                              '    ) {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-39',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-41',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      contentText = consolidatedHistoryParts\n'
                        '        .filter((part) => part.text)\n'
@@ -26575,6 +26943,97 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const contextWindowSize =\n'
                              '        '
                              'this.config.getContentGeneratorConfig()?.contextWindowSize;\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-42',
+             'path': 'packages/core/src/core/geminiChat.ts',
+             'before': '      this.history.splice(len - 2, 2);\n'
+                       '    }\n'
+                       '  }\n'
+                       '}\n'
+                       '\n'
+                       '/** Visible for Testing */\n'
+                       'export function isSchemaDepthError(errorMessage: string): '
+                       'boolean {\n'
+                       "  return errorMessage.includes('maximum schema depth "
+                       "exceeded');\n"
+                       '}\n'
+                       '\n'
+                       'export function isInvalidArgumentError(errorMessage: string): '
+                       'boolean {\n'
+                       "  return errorMessage.includes('Request contains an invalid "
+                       "argument');\n",
+             'after': '      this.history.splice(len - 2, 2);\n'
+                      '    }\n'
+                      '  }\n'
+                      '}\n'
+                      '\n'
+                      '/** Visible for Testing */\n'
+                      '/**\n'
+                      " * A chat's generation config, plus the identity of the agent "
+                      'the chat\n'
+                      ' * belongs to. Every request the chat makes carries it, '
+                      'including the\n'
+                      " * compaction side query, which summarizes that same agent's "
+                      'history.\n'
+                      ' */\n'
+                      'export type ChatGenerationConfig = GenerateContentConfig & {\n'
+                      '  kvScope?: string;\n'
+                      '};\n'
+                      '\n'
+                      'export function isSchemaDepthError(errorMessage: string): '
+                      'boolean {\n'
+                      "  return errorMessage.includes('maximum schema depth "
+                      "exceeded');\n"
+                      '}\n'
+                      '\n'
+                      'export function isInvalidArgumentError(errorMessage: string): '
+                      'boolean {\n'
+                      "  return errorMessage.includes('Request contains an invalid "
+                      "argument');\n",
+             'review_before': '      this.history.splice(len - 2, 2);\n'
+                              '    }\n'
+                              '  }\n'
+                              '}\n'
+                              '\n'
+                              '/** Visible for Testing */\n'
+                              'export function isSchemaDepthError(errorMessage: '
+                              'string): boolean {\n'
+                              "  return errorMessage.includes('maximum schema depth "
+                              "exceeded');\n"
+                              '}\n'
+                              '\n'
+                              'export function isInvalidArgumentError(errorMessage: '
+                              'string): boolean {\n'
+                              "  return errorMessage.includes('Request contains an "
+                              "invalid argument');\n",
+             'review_after': '      this.history.splice(len - 2, 2);\n'
+                             '    }\n'
+                             '  }\n'
+                             '}\n'
+                             '\n'
+                             '/** Visible for Testing */\n'
+                             '/**\n'
+                             " * A chat's generation config, plus the identity of the "
+                             'agent the chat\n'
+                             ' * belongs to. Every request the chat makes carries it, '
+                             'including the\n'
+                             ' * compaction side query, which summarizes that same '
+                             "agent's history.\n"
+                             ' */\n'
+                             'export type ChatGenerationConfig = GenerateContentConfig '
+                             '& {\n'
+                             '  kvScope?: string;\n'
+                             '};\n'
+                             '\n'
+                             'export function isSchemaDepthError(errorMessage: '
+                             'string): boolean {\n'
+                             "  return errorMessage.includes('maximum schema depth "
+                             "exceeded');\n"
+                             '}\n'
+                             '\n'
+                             'export function isInvalidArgumentError(errorMessage: '
+                             'string): boolean {\n'
+                             "  return errorMessage.includes('Request contains an "
+                             "invalid argument');\n"},
             {'name': 'packages/core/src/core/genai-compat.test.ts:landmark-1',
              'path': 'packages/core/src/core/genai-compat.test.ts',
              'before': "describe('genai compatibility values', () => {\n"
@@ -28879,6 +29338,207 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'import {\n'
                              '  DEFAULT_STREAM_IDLE_TIMEOUT_MS,\n'
                              '  DEFAULT_STREAM_MAX_LIFETIME_MS,\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts:landmark-2',
+             'path': 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts',
+             'before': '        .calls[0][0];\n'
+                       '      expect(apiCall.enable_thinking).toBe(true);\n'
+                       "      expect(apiCall.reasoning_effort).toBe('high');\n"
+                       "      expect(apiCall.tool_choice).toBe('required');\n"
+                       '    });\n'
+                       '\n'
+                       "    it('never ships the escape-hatch disable shape to a "
+                       "thinkingMandatory model end to end', async () => {\n"
+                       '      // The provider canonicalizes the documented extra_body\n'
+                       '      // `enable_thinking: false` escape hatch into the tiered '
+                       "family's\n"
+                       "      // canonical disable shape (`reasoning_effort: 'none'`) "
+                       'even when no\n'
+                       '      // effort tier ships. The thinkingMandatory strip must '
+                       'catch that\n'
+                       '      // shape too: on a mandatory-thinking model it is a '
+                       'guaranteed\n',
+             'after': '        .calls[0][0];\n'
+                      '      expect(apiCall.enable_thinking).toBe(true);\n'
+                      "      expect(apiCall.reasoning_effort).toBe('high');\n"
+                      "      expect(apiCall.tool_choice).toBe('required');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('sends the agent identity so the backend can group "
+                      "offloaded KV by agent', async () => {\n"
+                      '      const request: GenerateContentParameters = {\n'
+                      "        model: 'glm-5.2',\n"
+                      "        contents: [{ parts: [{ text: 'hi' }], role: 'user' }],\n"
+                      "        config: { kvScope: 'agent-7' },\n"
+                      '      } as GenerateContentParameters;\n'
+                      '\n'
+                      '      (mockConverter.convertGeminiRequestToOpenAI as '
+                      'Mock).mockReturnValue([\n'
+                      "        { role: 'user', content: 'hi' },\n"
+                      '      ]);\n'
+                      '      (mockConverter.convertOpenAIResponseToGemini as '
+                      'Mock).mockReturnValue(\n'
+                      '        new GenerateContentResponse(),\n'
+                      '      );\n'
+                      '      (mockClient.chat.completions.create as '
+                      'Mock).mockResolvedValue({\n'
+                      "        id: 'r',\n"
+                      "        choices: [{ message: { content: 'ok' }, finish_reason: "
+                      "'stop' }],\n"
+                      '      } as OpenAI.Chat.ChatCompletion);\n'
+                      '\n'
+                      "      await pipeline.execute(request, 'prompt-kv-scope');\n"
+                      '\n'
+                      '      const apiCall = (mockClient.chat.completions.create as '
+                      'Mock).mock\n'
+                      '        .calls[0][0];\n'
+                      "      expect(apiCall.kv_scope).toBe('agent-7');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('omits the agent identity when the chat has none', async "
+                      '() => {\n'
+                      '      const request: GenerateContentParameters = {\n'
+                      "        model: 'glm-5.2',\n"
+                      "        contents: [{ parts: [{ text: 'hi' }], role: 'user' }],\n"
+                      '        config: {},\n'
+                      '      };\n'
+                      '\n'
+                      '      (mockConverter.convertGeminiRequestToOpenAI as '
+                      'Mock).mockReturnValue([\n'
+                      "        { role: 'user', content: 'hi' },\n"
+                      '      ]);\n'
+                      '      (mockConverter.convertOpenAIResponseToGemini as '
+                      'Mock).mockReturnValue(\n'
+                      '        new GenerateContentResponse(),\n'
+                      '      );\n'
+                      '      (mockClient.chat.completions.create as '
+                      'Mock).mockResolvedValue({\n'
+                      "        id: 'r',\n"
+                      "        choices: [{ message: { content: 'ok' }, finish_reason: "
+                      "'stop' }],\n"
+                      '      } as OpenAI.Chat.ChatCompletion);\n'
+                      '\n'
+                      '      await pipeline.execute(request, '
+                      "'prompt-kv-scope-absent');\n"
+                      '\n'
+                      '      const apiCall = (mockClient.chat.completions.create as '
+                      'Mock).mock\n'
+                      '        .calls[0][0];\n'
+                      "      expect('kv_scope' in apiCall).toBe(false);\n"
+                      '    });\n'
+                      '\n'
+                      "    it('never ships the escape-hatch disable shape to a "
+                      "thinkingMandatory model end to end', async () => {\n"
+                      '      // The provider canonicalizes the documented extra_body\n'
+                      '      // `enable_thinking: false` escape hatch into the tiered '
+                      "family's\n"
+                      "      // canonical disable shape (`reasoning_effort: 'none'`) "
+                      'even when no\n'
+                      '      // effort tier ships. The thinkingMandatory strip must '
+                      'catch that\n'
+                      '      // shape too: on a mandatory-thinking model it is a '
+                      'guaranteed\n',
+             'review_before': '        .calls[0][0];\n'
+                              '      expect(apiCall.enable_thinking).toBe(true);\n'
+                              "      expect(apiCall.reasoning_effort).toBe('high');\n"
+                              "      expect(apiCall.tool_choice).toBe('required');\n"
+                              '    });\n'
+                              '\n'
+                              "    it('never ships the escape-hatch disable shape to a "
+                              "thinkingMandatory model end to end', async () => {\n"
+                              '      // The provider canonicalizes the documented '
+                              'extra_body\n'
+                              '      // `enable_thinking: false` escape hatch into the '
+                              "tiered family's\n"
+                              '      // canonical disable shape (`reasoning_effort: '
+                              "'none'`) even when no\n"
+                              '      // effort tier ships. The thinkingMandatory strip '
+                              'must catch that\n'
+                              '      // shape too: on a mandatory-thinking model it is '
+                              'a guaranteed\n',
+             'review_after': '        .calls[0][0];\n'
+                             '      expect(apiCall.enable_thinking).toBe(true);\n'
+                             "      expect(apiCall.reasoning_effort).toBe('high');\n"
+                             "      expect(apiCall.tool_choice).toBe('required');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('sends the agent identity so the backend can "
+                             "group offloaded KV by agent', async () => {\n"
+                             '      const request: GenerateContentParameters = {\n'
+                             "        model: 'glm-5.2',\n"
+                             "        contents: [{ parts: [{ text: 'hi' }], role: "
+                             "'user' }],\n"
+                             "        config: { kvScope: 'agent-7' },\n"
+                             '      } as GenerateContentParameters;\n'
+                             '\n'
+                             '      (mockConverter.convertGeminiRequestToOpenAI as '
+                             'Mock).mockReturnValue([\n'
+                             "        { role: 'user', content: 'hi' },\n"
+                             '      ]);\n'
+                             '      (mockConverter.convertOpenAIResponseToGemini as '
+                             'Mock).mockReturnValue(\n'
+                             '        new GenerateContentResponse(),\n'
+                             '      );\n'
+                             '      (mockClient.chat.completions.create as '
+                             'Mock).mockResolvedValue({\n'
+                             "        id: 'r',\n"
+                             "        choices: [{ message: { content: 'ok' }, "
+                             "finish_reason: 'stop' }],\n"
+                             '      } as OpenAI.Chat.ChatCompletion);\n'
+                             '\n'
+                             '      await pipeline.execute(request, '
+                             "'prompt-kv-scope');\n"
+                             '\n'
+                             '      const apiCall = '
+                             '(mockClient.chat.completions.create as Mock).mock\n'
+                             '        .calls[0][0];\n'
+                             "      expect(apiCall.kv_scope).toBe('agent-7');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('omits the agent identity when the chat has "
+                             "none', async () => {\n"
+                             '      const request: GenerateContentParameters = {\n'
+                             "        model: 'glm-5.2',\n"
+                             "        contents: [{ parts: [{ text: 'hi' }], role: "
+                             "'user' }],\n"
+                             '        config: {},\n'
+                             '      };\n'
+                             '\n'
+                             '      (mockConverter.convertGeminiRequestToOpenAI as '
+                             'Mock).mockReturnValue([\n'
+                             "        { role: 'user', content: 'hi' },\n"
+                             '      ]);\n'
+                             '      (mockConverter.convertOpenAIResponseToGemini as '
+                             'Mock).mockReturnValue(\n'
+                             '        new GenerateContentResponse(),\n'
+                             '      );\n'
+                             '      (mockClient.chat.completions.create as '
+                             'Mock).mockResolvedValue({\n'
+                             "        id: 'r',\n"
+                             "        choices: [{ message: { content: 'ok' }, "
+                             "finish_reason: 'stop' }],\n"
+                             '      } as OpenAI.Chat.ChatCompletion);\n'
+                             '\n'
+                             '      await pipeline.execute(request, '
+                             "'prompt-kv-scope-absent');\n"
+                             '\n'
+                             '      const apiCall = '
+                             '(mockClient.chat.completions.create as Mock).mock\n'
+                             '        .calls[0][0];\n'
+                             "      expect('kv_scope' in apiCall).toBe(false);\n"
+                             '    });\n'
+                             '\n'
+                             "    it('never ships the escape-hatch disable shape to a "
+                             "thinkingMandatory model end to end', async () => {\n"
+                             '      // The provider canonicalizes the documented '
+                             'extra_body\n'
+                             '      // `enable_thinking: false` escape hatch into the '
+                             "tiered family's\n"
+                             '      // canonical disable shape (`reasoning_effort: '
+                             "'none'`) even when no\n"
+                             '      // effort tier ships. The thinkingMandatory strip '
+                             'must catch that\n'
+                             '      // shape too: on a mandatory-thinking model it is '
+                             'a guaranteed\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts:landmark-1',
              'path': 'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts',
              'before': '',
@@ -29458,6 +30118,90 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    return this.executeWithErrorHandling(\n'
                              '      request,\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-4',
+             'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
+             'before': "      } else if (fcMode === 'NONE') {\n"
+                       '        (baseRequest as unknown as Record<string, '
+                       "unknown>)['tool_choice'] =\n"
+                       "          'none';\n"
+                       '      }\n'
+                       '    }\n'
+                       '\n'
+                       '    // Let provider enhance the request (e.g., add metadata, '
+                       'cache control)\n'
+                       '    let providerRequest = this.config.provider.buildRequest(\n'
+                       '      baseRequest,\n'
+                       '      userPromptId,\n'
+                       '    );\n'
+                       '    if (\n',
+             'after': "      } else if (fcMode === 'NONE') {\n"
+                      '        (baseRequest as unknown as Record<string, '
+                      "unknown>)['tool_choice'] =\n"
+                      "          'none';\n"
+                      '      }\n'
+                      '    }\n'
+                      '\n'
+                      '    // The agent this request belongs to. The backend groups '
+                      'offloaded KV by\n'
+                      '    // it, so a context is given up whole rather than shredded '
+                      'across agents.\n'
+                      '    const kvScope = (request.config as { kvScope?: string } | '
+                      'undefined)\n'
+                      '      ?.kvScope;\n'
+                      '    if (kvScope) {\n'
+                      '      (baseRequest as unknown as Record<string, '
+                      "unknown>)['kv_scope'] = kvScope;\n"
+                      '    }\n'
+                      '\n'
+                      '    // Let provider enhance the request (e.g., add metadata, '
+                      'cache control)\n'
+                      '    let providerRequest = this.config.provider.buildRequest(\n'
+                      '      baseRequest,\n'
+                      '      userPromptId,\n'
+                      '    );\n'
+                      '    if (\n',
+             'review_before': "      } else if (fcMode === 'NONE') {\n"
+                              '        (baseRequest as unknown as Record<string, '
+                              "unknown>)['tool_choice'] =\n"
+                              "          'none';\n"
+                              '      }\n'
+                              '    }\n'
+                              '\n'
+                              '    // Let provider enhance the request (e.g., add '
+                              'metadata, cache control)\n'
+                              '    let providerRequest = '
+                              'this.config.provider.buildRequest(\n'
+                              '      baseRequest,\n'
+                              '      userPromptId,\n'
+                              '    );\n'
+                              '    if (\n',
+             'review_after': "      } else if (fcMode === 'NONE') {\n"
+                             '        (baseRequest as unknown as Record<string, '
+                             "unknown>)['tool_choice'] =\n"
+                             "          'none';\n"
+                             '      }\n'
+                             '    }\n'
+                             '\n'
+                             '    // The agent this request belongs to. The backend '
+                             'groups offloaded KV by\n'
+                             '    // it, so a context is given up whole rather than '
+                             'shredded across agents.\n'
+                             '    const kvScope = (request.config as { kvScope?: '
+                             'string } | undefined)\n'
+                             '      ?.kvScope;\n'
+                             '    if (kvScope) {\n'
+                             '      (baseRequest as unknown as Record<string, '
+                             "unknown>)['kv_scope'] = kvScope;\n"
+                             '    }\n'
+                             '\n'
+                             '    // Let provider enhance the request (e.g., add '
+                             'metadata, cache control)\n'
+                             '    let providerRequest = '
+                             'this.config.provider.buildRequest(\n'
+                             '      baseRequest,\n'
+                             '      userPromptId,\n'
+                             '    );\n'
+                             '    if (\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/pipeline.ts:landmark-5',
              'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before': '        : undefined;\n'
                        '\n'
@@ -56650,6 +57394,64 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'unknown[]) => {\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '    }\n'
+                       '\n'
+                       '    const subagent = await AgentHeadless.create(\n'
+                       '      FORK_AGENT.name,\n'
+                       '      agentConfig,\n'
+                       '      promptConfig,\n'
+                       '      {},\n'
+                       '      { max_turns: FORK_DEFAULT_MAX_TURNS },\n'
+                       '      toolConfig,\n'
+                       '      eventEmitter,\n'
+                       '    );\n'
+                       '\n'
+                       '    return { subagent, initialMessages, taskPrompt, toolConfig '
+                       '};\n',
+             'after': '    }\n'
+                      '\n'
+                      '    const subagent = await AgentHeadless.create(\n'
+                      '      FORK_AGENT.name,\n'
+                      '      agentConfig,\n'
+                      '      promptConfig,\n'
+                      '      { kvScope: this.callId },\n'
+                      '      { max_turns: FORK_DEFAULT_MAX_TURNS },\n'
+                      '      toolConfig,\n'
+                      '      eventEmitter,\n'
+                      '    );\n'
+                      '\n'
+                      '    return { subagent, initialMessages, taskPrompt, toolConfig '
+                      '};\n',
+             'review_before': '    }\n'
+                              '\n'
+                              '    const subagent = await AgentHeadless.create(\n'
+                              '      FORK_AGENT.name,\n'
+                              '      agentConfig,\n'
+                              '      promptConfig,\n'
+                              '      {},\n'
+                              '      { max_turns: FORK_DEFAULT_MAX_TURNS },\n'
+                              '      toolConfig,\n'
+                              '      eventEmitter,\n'
+                              '    );\n'
+                              '\n'
+                              '    return { subagent, initialMessages, taskPrompt, '
+                              'toolConfig };\n',
+             'review_after': '    }\n'
+                             '\n'
+                             '    const subagent = await AgentHeadless.create(\n'
+                             '      FORK_AGENT.name,\n'
+                             '      agentConfig,\n'
+                             '      promptConfig,\n'
+                             '      { kvScope: this.callId },\n'
+                             '      { max_turns: FORK_DEFAULT_MAX_TURNS },\n'
+                             '      toolConfig,\n'
+                             '      eventEmitter,\n'
+                             '    );\n'
+                             '\n'
+                             '    return { subagent, initialMessages, taskPrompt, '
+                             'toolConfig };\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
+             'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '\n'
                        '      // Get the results\n'
@@ -56729,7 +57531,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '      // Publish span outcome BEFORE side-effectful '
                              'UI/registry calls — if\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          resultSummaryPresent: Boolean(\n'
                        '            subagentRawText && subagentRawText.length > 0,\n'
@@ -56872,7 +57674,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      }\n'
                              '      return stopHookWarning;\n'
                              '    } catch (error) {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      // `error` marks the call failed in the scheduler, so '
                        'tool-usage stats\n'
@@ -56980,7 +57782,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          this.params.subagent_type ?? '
                              'DEFAULT_BUILTIN_SUBAGENT_TYPE,\n'
                              '        taskDescription: this.params.description,\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-16',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '    let backgroundSlotReservationConsumed = false;\n'
                        '    // Concrete model ID the sub-agent will run with, resolved '
@@ -57054,7 +57856,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          '
                              '.releaseBackgroundSlot(backgroundSlotReservation);\n'
                              '        backgroundSlotReservation = undefined;\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-16',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-17',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': "      // BackgroundTaskRegistry's single session-level "
                        'notification callback\n'
@@ -57146,7 +57948,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '&&\n'
                              '                // A `name` passed without an active '
                              'team falls through to a regular\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-17',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-18',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      } else {\n'
                        '        const result = await '
@@ -57164,7 +57966,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'subagentRuntimeAuthOverrides\n'
                        '              ? { runtimeAuthOverrides: '
                        'subagentRuntimeAuthOverrides }\n'
-                       '              : {}),\n',
+                       '              : {}),\n'
+                       '          },\n'
+                       '        );\n'
+                       '        subagent = result.subagent;\n',
              'after': '      } else {\n'
                       '        const result = await '
                       'this.subagentManager.createAgentHeadless(\n'
@@ -57192,15 +57997,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '                  },\n'
                       '                }\n'
                       '              : {}),\n'
-                      '            ...(shouldRunInBackground && subagentModelId\n'
-                      '              ? { modelConfigOverrides: { model: '
-                      'subagentModelId } }\n'
-                      '              : {}),\n'
+                      '            modelConfigOverrides: {\n'
+                      '              kvScope: this.callId,\n'
+                      '              ...(shouldRunInBackground && subagentModelId\n'
+                      '                ? { model: subagentModelId }\n'
+                      '                : {}),\n'
+                      '            },\n'
                       '            ...(shouldRunInBackground && '
                       'subagentRuntimeAuthOverrides\n'
                       '              ? { runtimeAuthOverrides: '
                       'subagentRuntimeAuthOverrides }\n'
-                      '              : {}),\n',
+                      '              : {}),\n'
+                      '          },\n'
+                      '        );\n'
+                      '        subagent = result.subagent;\n',
              'review_before': '      } else {\n'
                               '        const result = await '
                               'this.subagentManager.createAgentHeadless(\n'
@@ -57218,7 +58028,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'subagentRuntimeAuthOverrides\n'
                               '              ? { runtimeAuthOverrides: '
                               'subagentRuntimeAuthOverrides }\n'
-                              '              : {}),\n',
+                              '              : {}),\n'
+                              '          },\n'
+                              '        );\n'
+                              '        subagent = result.subagent;\n',
              'review_after': '      } else {\n'
                              '        const result = await '
                              'this.subagentManager.createAgentHeadless(\n'
@@ -57246,17 +58059,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                  },\n'
                              '                }\n'
                              '              : {}),\n'
-                             '            ...(shouldRunInBackground && '
+                             '            modelConfigOverrides: {\n'
+                             '              kvScope: this.callId,\n'
+                             '              ...(shouldRunInBackground && '
                              'subagentModelId\n'
-                             '              ? { modelConfigOverrides: { model: '
-                             'subagentModelId } }\n'
-                             '              : {}),\n'
+                             '                ? { model: subagentModelId }\n'
+                             '                : {}),\n'
+                             '            },\n'
                              '            ...(shouldRunInBackground && '
                              'subagentRuntimeAuthOverrides\n'
                              '              ? { runtimeAuthOverrides: '
                              'subagentRuntimeAuthOverrides }\n'
-                             '              : {}),\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-18',
+                             '              : {}),\n'
+                             '          },\n'
+                             '        );\n'
+                             '        subagent = result.subagent;\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-19',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        fgAbortController.abort();\n'
                        '      } else {\n'
@@ -57474,7 +58292,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'in. Foreground entries\n'
                              '      // skip XML notification and headless-holdback '
                              '(see the registry for\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-19',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-20',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          resumeCount: 0,\n'
                        '          // Persisted so resume restores the original nesting '
@@ -57664,7 +58482,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "execution failed.') + wtSuffix,\n"
                              '            returnDisplay: this.currentDisplay!,\n'
                              '          };\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-20',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-21',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      const errorDisplay: AgentResultDisplay = {\n'
                        '        ...this.currentDisplay!,\n'
@@ -92852,10 +93670,11 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/agents/runtime/agent-context.test.ts': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a',
  'packages/core/src/agents/runtime/agent-context.ts': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6',
  'packages/core/src/agents/runtime/agent-core.test.ts': '5ce2e138841cfd514818d12a56ce0a426974f633e81bbbaad4b0cf38cc0437de',
- 'packages/core/src/agents/runtime/agent-core.ts': '430d4e4c9dc75cd363a9979eec5481ae4bd5debf1f4432c7caa627e62a67758c',
+ 'packages/core/src/agents/runtime/agent-core.ts': '2c998619b919b775143d554cadee7173cdc5d6cb180852ada9ad92c694a35bbf',
  'packages/core/src/agents/runtime/agent-events.ts': 'a34880c8ffa5ba33ebb5f045db3703093b5527ebc629f19ece83037e2b5b7603',
  'packages/core/src/agents/runtime/agent-headless.test.ts': '25c436dc1471f6e4add077a719151c339378f0950d313f48d69cfc4cc31f66be',
  'packages/core/src/agents/runtime/agent-headless.ts': '665297f0f113aa9bcf42fe6f480bbbe363cacc02d2a8a0f4ec96131f61db8166',
+ 'packages/core/src/agents/runtime/agent-types.ts': '09a5db201308cae2598fb36f4a79b645b73705e3dd54d2b3a88a27a034ee449b',
  'packages/core/src/agents/subagent-result.test.ts': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91',
  'packages/core/src/agents/subagent-result.ts': '6dc6f199ba394f6e0520aca1d54a5d7c529eea9b0d94f76ab0fffa29327b12e2',
  'packages/core/src/config/config.ts': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49',
@@ -92863,20 +93682,21 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/baseLlmClient.test.ts': '643b5f7c90bbb9a63300c3ec02cffea86f4ecdbb65f06b1ec94eb18fda7e7674',
  'packages/core/src/core/baseLlmClient.ts': '14a959fbbeeffd507b9ebd2bb4d6b564d3a88feb4e46a406afcf2555fa791a9b',
  'packages/core/src/core/client.test.ts': '672a46838231a8799545260380cc65c10782779b2a344660342b1dd1d3b57c89',
+ 'packages/core/src/core/client.ts': 'a2e60cacffbadcf3f9bd0c16810a02d226be5d3f299a7fcef254eaa9055e3327',
  'packages/core/src/core/contentGenerator.ts': '27fa593f8dbf0e75106b2d4aa8f9d22801dcf016b112d56046542ed4fd3ff303',
  'packages/core/src/core/coreToolScheduler.test.ts': 'de21e1f4528091327c67e81ea7acd5a159b4cbd83189f09f3ddc5ed28b71943e',
  'packages/core/src/core/coreToolScheduler.ts': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e',
  'packages/core/src/core/geminiChat.test.ts': '7ef9277810eaa314832a3ecac7e9f83d626bb83833407580dcdd878219ae1e31',
- 'packages/core/src/core/geminiChat.ts': '030fcdcf7013b00c710622b24b1fa740c21404b35db4bbb034e697112a54b7af',
+ 'packages/core/src/core/geminiChat.ts': 'd4e020551f7fa36de936d79a0a0b44f5b4181fd1c07b0555d01a5782f5680578',
  'packages/core/src/core/genai-compat.test.ts': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50',
  'packages/core/src/core/genai-compat.ts': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81',
  'packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts': '39cb515dfc3afb39edfe8dbabd3956351dd4b7b71e82f2fd77e4f6dc2b8ce695',
  'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'bb73338e3cb074e243c5baf4c09159a638134210e0eabf816a90df3656e8da28',
  'packages/core/src/core/openaiContentGenerator/converter.ts': '28c729be63e9171b90b58c712c22808a9d529402ee1c5026436051059387ca51',
  'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1',
- 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': '6ddd4b092ec9130e5c90c799c23969da0e1ff07208b5efc765d691283e015c82',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': 'ed00320575c8e2b90a1300734588c99d6115ee85f0318e1cd66bc814eb4bf944',
  'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888',
- 'packages/core/src/core/openaiContentGenerator/pipeline.ts': 'a9abde6f3ae36ee4447159fc72a63301e131a008a05695be000ca6a5ce1f6966',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.ts': '22db5d61da4f9e77007e38855f2cc656e670d261d017e24a41d04e795cab47a5',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
  'packages/core/src/core/prompts.test.ts': '415b3b6491fd759d6b8df89161576319c4fd7f6965d9b76f8e9a26bafa4a891c',
  'packages/core/src/core/prompts.ts': 'c195557edf2fc0bb340aa2c0f1d9fe9c03ac3a28c986b6455944a70dfdc58477',
@@ -92904,7 +93724,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/test-utils/mock-tool.ts': '2d986e625264006e124e2762e70d3202cda49804f9645325dbf9c5481a3ef24d',
  'packages/core/src/tools/__snapshots__/shell.test.ts.snap': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41',
  'packages/core/src/tools/agent/agent.test.ts': '6dcceb44938d59bd79f4d3b78010413ca0238a3339e7b80729d60611f898a4df',
- 'packages/core/src/tools/agent/agent.ts': 'f89157f1ed09857b767af70c745b23cf6c896c0b74fa96f701ad0cedbde0b864',
+ 'packages/core/src/tools/agent/agent.ts': 'b2fd9bf314b67a843d38b196af03ee05d581e5793da50beb698a1272a440201d',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',

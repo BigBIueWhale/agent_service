@@ -1981,7 +1981,7 @@ index c100f92..f32632a 100644
      );
  
 diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/agents/runtime/agent-core.ts
-index 191b5ab..d50fb67 100644
+index 191b5ab..490b232 100644
 --- a/packages/core/src/agents/runtime/agent-core.ts
 +++ b/packages/core/src/agents/runtime/agent-core.ts
 @@ -22,12 +22,13 @@ import { reportError } from '../../utils/errorReporting.js';
@@ -2106,7 +2106,23 @@ index 191b5ab..d50fb67 100644
    readonly promptConfig: PromptConfig;
    readonly modelConfig: ModelConfig;
    readonly runConfig: RunConfig;
-@@ -853,13 +897,13 @@ export class AgentCore {
+@@ -533,13 +577,14 @@ export class AgentCore {
+     // carries the parent's exact rendered systemInstruction so the fork
+     // shares a byte-identical cache prefix. Otherwise, template
+     // `systemPrompt` via buildChatSystemPrompt (which may throw — kept
+     // outside the try/catch so template errors surface to the caller).
+     const generationConfig: GenerateContentConfig & {
+       systemInstruction?: string | Content;
+-    } = {};
++      kvScope?: string;
++    } = { kvScope: this.modelConfig.kvScope };
+     if (this.promptConfig.renderedSystemPrompt !== undefined) {
+       generationConfig.systemInstruction =
+         this.promptConfig.renderedSystemPrompt;
+     } else if (this.promptConfig.systemPrompt) {
+       const systemInstruction = this.buildChatSystemPrompt(context, options);
+       if (systemInstruction) {
+@@ -853,13 +898,13 @@ export class AgentCore {
      abortController: AbortController,
      options?: ReasoningLoopOptions,
    ): Promise<ReasoningLoopResult> {
@@ -2121,7 +2137,7 @@ index 191b5ab..d50fb67 100644
      // Scoped to this reasoning loop. A second duplicate response for the same
      // provider id would keep deterministic providers in a tool-result loop.
      const duplicateProviderToolCallResponseIds = new Set<string>();
-@@ -884,13 +928,13 @@ export class AgentCore {
+@@ -884,13 +929,13 @@ export class AgentCore {
        if (abortController.signal.aborted) {
          terminateMode = AgentTerminateMode.CANCELLED;
          break;
@@ -2136,7 +2152,7 @@ index 191b5ab..d50fb67 100644
  
        let durationMin = (Date.now() - startTime) / (1000 * 60);
        if (options?.maxTimeMinutes && durationMin >= options.maxTimeMinutes) {
-@@ -903,13 +947,13 @@ export class AgentCore {
+@@ -903,13 +948,13 @@ export class AgentCore {
        // parent propagation; the try/finally below guarantees reverse-cleanup
        // fires for every exit (success, break, return, throw).
        const roundAbortController = createChildAbortController(abortController);
@@ -2151,7 +2167,7 @@ index 191b5ab..d50fb67 100644
            config: {
              abortSignal: roundAbortController.signal,
              tools: [{ functionDeclarations: toolsList }],
-@@ -926,13 +970,13 @@ export class AgentCore {
+@@ -926,13 +971,13 @@ export class AgentCore {
              DEFAULT_QWEN_MODEL,
            messageParams,
            promptId,
@@ -2166,7 +2182,7 @@ index 191b5ab..d50fb67 100644
  
          const functionCalls: FunctionCall[] = [];
          let roundText = '';
-@@ -945,13 +989,14 @@ export class AgentCore {
+@@ -945,13 +990,14 @@ export class AgentCore {
  
          for await (const streamEvent of responseStream) {
            if (roundAbortController.signal.aborted) {
@@ -2182,7 +2198,7 @@ index 191b5ab..d50fb67 100644
            // Handle retry events — reset all per-attempt state so a successful
            // retry does not inherit stale data (e.g. wasOutputTruncated) from a
            // previous attempt that may have hit MAX_TOKENS.
-@@ -970,24 +1015,39 @@ export class AgentCore {
+@@ -970,24 +1016,39 @@ export class AgentCore {
              lastUsage = undefined;
              currentResponseId = undefined;
              wasOutputTruncated = false;
@@ -2227,7 +2243,7 @@ index 191b5ab..d50fb67 100644
              // Track the response ID for tool call correlation
              if (resp.responseId) {
                currentResponseId = resp.responseId;
-@@ -1007,13 +1067,13 @@ export class AgentCore {
+@@ -1007,13 +1068,13 @@ export class AgentCore {
                if (txt && isThought) roundThoughtText += txt;
                if (txt && !isThought) roundText += txt;
                if (txt)
@@ -2242,7 +2258,7 @@ index 191b5ab..d50fb67 100644
                  });
              }
              if (resp.usageMetadata) lastUsage = resp.usageMetadata;
-@@ -1093,41 +1153,41 @@ export class AgentCore {
+@@ -1093,41 +1154,41 @@ export class AgentCore {
          }
  
          if (roundText || roundThoughtText || lastUsage) {
@@ -2288,7 +2304,7 @@ index 191b5ab..d50fb67 100644
              handledProviderToolCallIds,
              duplicateProviderToolCallResponseIds,
            );
-@@ -1163,22 +1223,22 @@ export class AgentCore {
+@@ -1163,22 +1224,22 @@ export class AgentCore {
                immediateExternalInputs,
              );
              this.emitExternalInputEvents(immediateExternalInputs);
@@ -2313,7 +2329,7 @@ index 191b5ab..d50fb67 100644
                terminateMode = waitResult.terminateMode;
                break;
              }
-@@ -1209,13 +1269,13 @@ export class AgentCore {
+@@ -1209,13 +1270,13 @@ export class AgentCore {
                finalText = roundText.trim();
                // Emit ROUND_END for the final round so all consumers see it.
                // Previously this was skipped, requiring AgentInteractive to
@@ -2328,7 +2344,7 @@ index 191b5ab..d50fb67 100644
                // null terminateMode = normal text completion
                break;
              }
-@@ -1232,13 +1292,13 @@ export class AgentCore {
+@@ -1232,13 +1293,13 @@ export class AgentCore {
              ];
            }
          }
@@ -2343,7 +2359,7 @@ index 191b5ab..d50fb67 100644
        } finally {
          // Reverse-cleanup fires whether the iteration ended normally, broke,
          // returned, or threw — preventing parent-listener accumulation on
-@@ -1248,13 +1308,17 @@ export class AgentCore {
+@@ -1248,13 +1309,17 @@ export class AgentCore {
        }
      }
  
@@ -2362,7 +2378,7 @@ index 191b5ab..d50fb67 100644
    private drainExternalInputs(
      options?: ReasoningLoopOptions,
    ): AgentExternalInput[] {
-@@ -1300,15 +1364,15 @@ export class AgentCore {
+@@ -1300,15 +1365,15 @@ export class AgentCore {
        });
      }
    }
@@ -2380,7 +2396,7 @@ index 191b5ab..d50fb67 100644
      options: ReasoningLoopOptions | undefined,
      startTime: number,
    ): number | undefined {
-@@ -1317,13 +1381,13 @@ export class AgentCore {
+@@ -1317,13 +1382,13 @@ export class AgentCore {
    }
  
    private async waitForExternalInputs(
@@ -2395,7 +2411,7 @@ index 191b5ab..d50fb67 100644
    }> {
      while (true) {
        const immediate = this.drainExternalInputs(options);
-@@ -1332,13 +1396,13 @@ export class AgentCore {
+@@ -1332,13 +1397,13 @@ export class AgentCore {
        }
  
        if (abortController.signal.aborted) {
@@ -2410,7 +2426,7 @@ index 191b5ab..d50fb67 100644
        const remainingTimeMs = this.getRemainingTimeMs(options, startTime);
        if (remainingTimeMs !== undefined && remainingTimeMs <= 0) {
          return { inputs: [], terminateMode: AgentTerminateMode.TIMEOUT };
-@@ -2301,25 +2365,31 @@ Important Rules:
+@@ -2301,25 +2366,31 @@ Important Rules:
   - Use tools only when necessary to obtain facts or make changes.
   - When the task is complete, return the final result as a normal model response (not a tool call) and stop.`;
      }
@@ -2444,7 +2460,7 @@ index 191b5ab..d50fb67 100644
      const outTok = Number(usage.candidatesTokenCount || 0);
      const thoughtTok = Number(usage.thoughtsTokenCount || 0);
      const cachedTok = Number(usage.cachedContentTokenCount || 0);
-@@ -2354,13 +2424,13 @@ Important Rules:
+@@ -2354,13 +2425,13 @@ Important Rules:
        this.executionStats.totalTokens =
          (this.executionStats.totalTokens || 0) +
          (isFinite(totalTok) ? totalTok : 0);
@@ -2729,6 +2745,30 @@ index 2870d4b..493f4c0 100644
     */
    setExternalMessageProvider(provider: () => AgentExternalInput[]): void {
      this.externalMessageProvider = provider;
+diff --git a/packages/core/src/agents/runtime/agent-types.ts b/packages/core/src/agents/runtime/agent-types.ts
+index 03c4213..0dc60e5 100644
+--- a/packages/core/src/agents/runtime/agent-types.ts
++++ b/packages/core/src/agents/runtime/agent-types.ts
+@@ -49,12 +49,19 @@ export interface ModelConfig {
+   /**
+    * The name or identifier of the model to be used (e.g., 'qwen3-coder-plus').
+    *
+    * TODO: In the future, this needs to support 'auto' or some other string to support routing use cases.
+    */
+   model?: string;
++
++  /**
++   * The agent this configuration belongs to, sent with every request so the
++   * backend can group offloaded KV by agent and give up whole contexts under
++   * pressure. Every agent has one; a subagent is not a special case.
++   */
++  kvScope?: string;
+ }
+ 
+ /**
+  * Configures the execution environment and constraints for an agent.
+  *
+  * TODO: Consider adding max_tokens as a form of budgeting.
 diff --git a/packages/core/src/agents/subagent-result.test.ts b/packages/core/src/agents/subagent-result.test.ts
 index 691da33..1a33e6b 100644
 --- a/packages/core/src/agents/subagent-result.test.ts
@@ -3762,6 +3802,24 @@ index 1939fef..2c5b735 100644
      beforeEach(() => {
        // The top-level beforeEach stubs tryCompressChat to NOOP for unrelated
        // tests; restore the real implementation here so we can observe it.
+diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
+index 60ffda3..d925bcf 100644
+--- a/packages/core/src/core/client.ts
++++ b/packages/core/src/core/client.ts
+@@ -1620,12 +1620,13 @@ export class GeminiClient {
+         'gemini_chat_construct',
+         () =>
+           new GeminiChat(
+             this.config,
+             {
+               systemInstruction,
++              kvScope: this.config.getSessionId(),
+             },
+             history,
+             this.config.getChatRecordingService(),
+             uiTelemetryService,
+           ),
+       );
 diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core/contentGenerator.ts
 index 7216c26..4a22651 100644
 --- a/packages/core/src/core/contentGenerator.ts
@@ -6412,7 +6470,7 @@ index 5ae5029..ebde662 100644
          (async function* () {
            yield xmlChunk(xml, 'STOP');
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
-index 8051292..7e8d24e 100644
+index 8051292..ffaafec 100644
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
 @@ -43,25 +43,31 @@ import {
@@ -6634,6 +6692,21 @@ index 8051292..7e8d24e 100644
     * above `ORPHAN_TOOL_USE_REPAIR_REASON` for the lifecycle and the
     * wedge they prevent.
     */
+@@ -1826,13 +1807,13 @@ export class GeminiChat {
+    * @param telemetryService - Optional UI telemetry service. When provided,
+    *   prompt token counts are reported on each API response. Pass `undefined`
+    *   for sub-agent chats to avoid overwriting the main agent's context usage.
+    */
+   constructor(
+     private readonly config: Config,
+-    private readonly generationConfig: GenerateContentConfig = {},
++    private readonly generationConfig: ChatGenerationConfig = {},
+     private history: Content[] = [],
+     private readonly chatRecordingService?: ChatRecordingService,
+     private readonly telemetryService?: UiTelemetryService,
+   ) {
+     validateHistory(history);
+     this.redactApprovedPlansFromLoadedHistory();
 @@ -1863,14 +1844,17 @@ export class GeminiChat {
     * whole chat history. This is an internal hot path: long sessions can make a
     * full `structuredClone` larger than the remaining V8 heap headroom.
@@ -7442,6 +7515,21 @@ index 8051292..7e8d24e 100644
            if (isInvalidArgumentError(error.message)) return false;
          }
  
+@@ -4393,13 +4507,13 @@ export class GeminiChat {
+ 
+   setTools(tools: Tool[]): void {
+     this.generationConfig.tools = tools;
+   }
+ 
+   /** Returns a shallow copy of the current generation config (for cache param snapshots). */
+-  getGenerationConfig(): GenerateContentConfig {
++  getGenerationConfig(): ChatGenerationConfig {
+     return { ...this.generationConfig };
+   }
+ 
+   async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
+     // Check for potentially problematic cyclic tools with cyclic schemas
+     // and include a recommendation to remove potentially problematic tools.
 @@ -4441,12 +4555,14 @@ export class GeminiChat {
    private async *processStreamResponse(
      model: string,
@@ -7526,6 +7614,28 @@ index 8051292..7e8d24e 100644
      ) {
        const contextWindowSize =
          this.config.getContentGeneratorConfig()?.contextWindowSize;
+@@ -5108,12 +5267,21 @@ export class GeminiChat {
+       this.history.splice(len - 2, 2);
+     }
+   }
+ }
+ 
+ /** Visible for Testing */
++/**
++ * A chat's generation config, plus the identity of the agent the chat
++ * belongs to. Every request the chat makes carries it, including the
++ * compaction side query, which summarizes that same agent's history.
++ */
++export type ChatGenerationConfig = GenerateContentConfig & {
++  kvScope?: string;
++};
++
+ export function isSchemaDepthError(errorMessage: string): boolean {
+   return errorMessage.includes('maximum schema depth exceeded');
+ }
+ 
+ export function isInvalidArgumentError(errorMessage: string): boolean {
+   return errorMessage.includes('Request contains an invalid argument');
 diff --git a/packages/core/src/core/genai-compat.test.ts b/packages/core/src/core/genai-compat.test.ts
 index ddb9329..1d27ded 100644
 --- a/packages/core/src/core/genai-compat.test.ts
@@ -8262,7 +8372,7 @@ index f4166d4..c5ee9a3 100644
      let text = '';
      if (Array.isArray(request.contents)) {
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
-index fc0c21c..b9e9fed 100644
+index fc0c21c..1fb6d04 100644
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 @@ -23,13 +23,16 @@ import {
@@ -8283,6 +8393,69 @@ index fc0c21c..b9e9fed 100644
  import {
    DEFAULT_STREAM_IDLE_TIMEOUT_MS,
    DEFAULT_STREAM_MAX_LIFETIME_MS,
+@@ -1068,12 +1071,62 @@ describe('ContentGenerationPipeline', () => {
+         .calls[0][0];
+       expect(apiCall.enable_thinking).toBe(true);
+       expect(apiCall.reasoning_effort).toBe('high');
+       expect(apiCall.tool_choice).toBe('required');
+     });
+ 
++    it('sends the agent identity so the backend can group offloaded KV by agent', async () => {
++      const request: GenerateContentParameters = {
++        model: 'glm-5.2',
++        contents: [{ parts: [{ text: 'hi' }], role: 'user' }],
++        config: { kvScope: 'agent-7' },
++      } as GenerateContentParameters;
++
++      (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
++        { role: 'user', content: 'hi' },
++      ]);
++      (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
++        new GenerateContentResponse(),
++      );
++      (mockClient.chat.completions.create as Mock).mockResolvedValue({
++        id: 'r',
++        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
++      } as OpenAI.Chat.ChatCompletion);
++
++      await pipeline.execute(request, 'prompt-kv-scope');
++
++      const apiCall = (mockClient.chat.completions.create as Mock).mock
++        .calls[0][0];
++      expect(apiCall.kv_scope).toBe('agent-7');
++    });
++
++    it('omits the agent identity when the chat has none', async () => {
++      const request: GenerateContentParameters = {
++        model: 'glm-5.2',
++        contents: [{ parts: [{ text: 'hi' }], role: 'user' }],
++        config: {},
++      };
++
++      (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
++        { role: 'user', content: 'hi' },
++      ]);
++      (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
++        new GenerateContentResponse(),
++      );
++      (mockClient.chat.completions.create as Mock).mockResolvedValue({
++        id: 'r',
++        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
++      } as OpenAI.Chat.ChatCompletion);
++
++      await pipeline.execute(request, 'prompt-kv-scope-absent');
++
++      const apiCall = (mockClient.chat.completions.create as Mock).mock
++        .calls[0][0];
++      expect('kv_scope' in apiCall).toBe(false);
++    });
++
+     it('never ships the escape-hatch disable shape to a thinkingMandatory model end to end', async () => {
+       // The provider canonicalizes the documented extra_body
+       // `enable_thinking: false` escape hatch into the tiered family's
+       // canonical disable shape (`reasoning_effort: 'none'`) even when no
+       // effort tier ships. The thinkingMandatory strip must catch that
+       // shape too: on a mandatory-thinking model it is a guaranteed
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts
 new file mode 100644
 index 0000000..9e8125a
@@ -8354,7 +8527,7 @@ index 0000000..9e8125a
 +  });
 +});
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-index a7aaf90..a5d7caa 100644
+index a7aaf90..c482fdb 100644
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 @@ -8,12 +8,13 @@ import type OpenAI from 'openai';
@@ -8507,7 +8680,28 @@ index a7aaf90..a5d7caa 100644
    ): Promise<GenerateContentResponse> {
      return this.executeWithErrorHandling(
        request,
-@@ -1417,12 +1528,13 @@ export class ContentGenerationPipeline {
+@@ -998,12 +1109,20 @@ export class ContentGenerationPipeline {
+       } else if (fcMode === 'NONE') {
+         (baseRequest as unknown as Record<string, unknown>)['tool_choice'] =
+           'none';
+       }
+     }
+ 
++    // The agent this request belongs to. The backend groups offloaded KV by
++    // it, so a context is given up whole rather than shredded across agents.
++    const kvScope = (request.config as { kvScope?: string } | undefined)
++      ?.kvScope;
++    if (kvScope) {
++      (baseRequest as unknown as Record<string, unknown>)['kv_scope'] = kvScope;
++    }
++
+     // Let provider enhance the request (e.g., add metadata, cache control)
+     let providerRequest = this.config.provider.buildRequest(
+       baseRequest,
+       userPromptId,
+     );
+     if (
+@@ -1417,12 +1536,13 @@ export class ContentGenerationPipeline {
          : undefined;
  
      return {
@@ -17540,7 +17734,7 @@ index 6d3fb50..add369d 100644
          // test-time listener hookup doesn't throw.
          getCore: vi.fn().mockReturnValue({
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..ab71bff 100644
+index 4bcea69..07e8f6e 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -3,13 +3,18 @@
@@ -17869,6 +18063,21 @@ index 4bcea69..ab71bff 100644
      });
  
      this.eventEmitter.on(AgentEventType.ERROR, (...args: unknown[]) => {
+@@ -1873,13 +2025,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+     }
+ 
+     const subagent = await AgentHeadless.create(
+       FORK_AGENT.name,
+       agentConfig,
+       promptConfig,
+-      {},
++      { kvScope: this.callId },
+       { max_turns: FORK_DEFAULT_MAX_TURNS },
+       toolConfig,
+       eventEmitter,
+     );
+ 
+     return { subagent, initialMessages, taskPrompt, toolConfig };
 @@ -2171,13 +2323,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
  
@@ -17982,13 +18191,15 @@ index 4bcea69..ab71bff 100644
                (!isForkRequested &&
                  this.params.working_dir === undefined &&
                  // A `name` passed without an active team falls through to a regular
-@@ -3074,12 +3243,25 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3074,15 +3243,31 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        } else {
          const result = await this.subagentManager.createAgentHeadless(
            subagentConfig,
            subagentRuntimeConfig as Config,
            {
              eventEmitter: backgroundEventEmitter ?? this.eventEmitter,
+-            ...(shouldRunInBackground && subagentModelId
+-              ? { modelConfigOverrides: { model: subagentModelId } }
 +            // A subagent is bounded by the same session turn budget as the
 +            // agent that launched it. The built-in agents declare no runConfig,
 +            // so without this they would run unbounded -- and this deployment
@@ -18001,14 +18212,20 @@ index 4bcea69..ab71bff 100644
 +                    max_turns: this.config.getMaxSessionTurns(),
 +                  },
 +                }
-+              : {}),
-             ...(shouldRunInBackground && subagentModelId
-               ? { modelConfigOverrides: { model: subagentModelId } }
                : {}),
++            modelConfigOverrides: {
++              kvScope: this.callId,
++              ...(shouldRunInBackground && subagentModelId
++                ? { model: subagentModelId }
++                : {}),
++            },
              ...(shouldRunInBackground && subagentRuntimeAuthOverrides
                ? { runtimeAuthOverrides: subagentRuntimeAuthOverrides }
                : {}),
-@@ -3941,25 +4123,56 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+           },
+         );
+         subagent = result.subagent;
+@@ -3941,25 +4126,56 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          fgAbortController.abort();
        } else {
          signal?.addEventListener('abort', onParentAbort, { once: true });
@@ -18070,7 +18287,7 @@ index 4bcea69..ab71bff 100644
        // Register in BackgroundTaskRegistry with isBackgrounded:false so the
        // pill counts the run and the dialog can drill in. Foreground entries
        // skip XML notification and headless-holdback (see the registry for
-@@ -4109,18 +4322,59 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4109,18 +4325,59 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            resumeCount: 0,
            // Persisted so resume restores the original nesting level; see
            // childLaunchDepth() for the rationale.
@@ -18135,7 +18352,7 @@ index 4bcea69..ab71bff 100644
              llmContent: (finalText || 'Subagent execution failed.') + wtSuffix,
              returnDisplay: this.currentDisplay!,
            };
-@@ -4263,14 +4517,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4263,14 +4520,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        const errorDisplay: AgentResultDisplay = {
          ...this.currentDisplay!,
          status: 'failed',
