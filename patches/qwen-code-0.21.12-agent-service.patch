@@ -2476,7 +2476,7 @@ index 191b5ab..490b232 100644
    }
  }
 diff --git a/packages/core/src/agents/runtime/agent-events.ts b/packages/core/src/agents/runtime/agent-events.ts
-index 013ae52..c27cdaa 100644
+index 013ae52..0e8dcf4 100644
 --- a/packages/core/src/agents/runtime/agent-events.ts
 +++ b/packages/core/src/agents/runtime/agent-events.ts
 @@ -17,12 +17,14 @@ import { EventEmitter } from 'events';
@@ -2567,7 +2567,28 @@ index 013ae52..c27cdaa 100644
    totalToolCalls?: number;
    successfulToolCalls?: number;
    failedToolCalls?: number;
-@@ -243,12 +276,13 @@ export interface AgentEventMap {
+@@ -213,12 +246,20 @@ export interface AgentFinishEvent {
+   totalTokens?: number;
+ }
+ 
+ export interface AgentErrorEvent {
+   subagentId: string;
+   error: string;
++  /**
++   * Model round-trips this run started, on the same terms as
++   * {@link AgentFinishEvent.turnsUsed}. A run that ends by throwing is
++   * exactly the run whose count matters most, and this event is what flips a
++   * consumer to the terminal state, so it carries the count rather than
++   * leaving the consumer to invent one.
++   */
++  turnsUsed: number;
+   timestamp: number;
+ }
+ 
+ export interface AgentStatusChangeEvent {
+   agentId: string;
+   previousStatus: AgentStatus;
+@@ -243,12 +284,13 @@ export interface AgentEventMap {
    [AgentEventType.TOOL_RESULT]: AgentToolResultEvent;
    [AgentEventType.TOOL_RESPONSES_FINALIZED]: AgentToolResponsesFinalizedEvent;
    [AgentEventType.TOOL_OUTPUT_UPDATE]: AgentToolOutputUpdateEvent;
@@ -2635,7 +2656,7 @@ index 1d5b20a..584b512 100644
        const promptConfig: PromptConfig = { systemPrompt: 'Execute task.' };
  
 diff --git a/packages/core/src/agents/runtime/agent-headless.ts b/packages/core/src/agents/runtime/agent-headless.ts
-index 2870d4b..493f4c0 100644
+index 2870d4b..0b6c8ee 100644
 --- a/packages/core/src/agents/runtime/agent-headless.ts
 +++ b/packages/core/src/agents/runtime/agent-headless.ts
 @@ -36,12 +36,13 @@ import type {
@@ -2684,7 +2705,7 @@ index 2870d4b..493f4c0 100644
      }
  
      try {
-@@ -374,12 +381,13 @@ export class AgentHeadless {
+@@ -374,29 +381,33 @@ export class AgentHeadless {
              shouldWaitForExternalMessages: this.externalMessageWaitPredicate,
            },
          );
@@ -2698,7 +2719,12 @@ index 2870d4b..493f4c0 100644
          this.core.eventEmitter?.emit(AgentEventType.ERROR, {
            subagentId: this.core.subagentId,
            error: error instanceof Error ? error.message : String(error),
-@@ -391,12 +399,14 @@ export class AgentHeadless {
++          turnsUsed: this.core.getReasoningTurnsUsed(),
+           timestamp: Date.now(),
+         } as AgentErrorEvent);
+ 
+         throw error;
+       } finally {
          this.core.executionStats.totalDurationMs =
            Date.now() - this.core.executionStats.startTimeMs;
          const summary = this.core.stats.getSummary(Date.now());
@@ -2713,7 +2739,7 @@ index 2870d4b..493f4c0 100644
            totalToolCalls: summary.totalToolCalls,
            successfulToolCalls: summary.successfulToolCalls,
            failedToolCalls: summary.failedToolCalls,
-@@ -471,12 +481,31 @@ export class AgentHeadless {
+@@ -471,12 +482,31 @@ export class AgentHeadless {
    }
  
    getTerminateMode(): AgentTerminateMode {
@@ -10041,10 +10067,10 @@ index 8e53833..bfc063a 100644
      }
  
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
-index 59b9c51..fcc48ef 100644
+index 59b9c51..54c4512 100644
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,777 @@
+@@ -1,4405 +1,798 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -10169,8 +10195,9 @@ index 59b9c51..fcc48ef 100644
 +  let compactionModel: string | undefined = MODEL;
 +  let autoThreshold = 1;
 +  let hooksEnabled = false;
-+  const generationConfig: GenerateContentConfig = {
++  const generationConfig: GenerateContentConfig & { kvScope?: string } = {
 +    systemInstruction: 'main agent system prompt',
++    kvScope: 'agent-under-test',
 +    tools: [{ functionDeclarations: [{ name: 'read_file' }] }],
 +  };
 +  const contentGeneratorConfig = {
@@ -10966,13 +10993,7 @@ index 59b9c51..fcc48ef 100644
 -      consecutiveFailures: 0,
 -      originalTokenCount: 100_000,
 -    });
-+    const result = await compress(harness, { trigger: 'manual' });
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(harness.generateText).not.toHaveBeenCalled();
-+  });
- 
+-
 -    expect(composeSpy).toHaveBeenCalled();
 -    // Degraded success — not an escape, not a compression failure.
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
@@ -10984,6 +11005,29 @@ index 59b9c51..fcc48ef 100644
 -      .map((p) => (p as { text?: string }).text ?? '')
 -      .join(' ');
 -    expect(ackText).not.toContain('let me read it'); // trailing text dropped
++    const result = await compress(harness, { trigger: 'manual' });
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(harness.generateText).not.toHaveBeenCalled();
+   });
+ 
+-  it('silently ignores the deprecated chatCompression.contextPercentageThreshold = 0 (no longer disables compaction)', async () => {
+-    // Pre-PR #4168, setting contextPercentageThreshold = 0 short-circuited
+-    // compress() at the cheap-gate (NOOP). The field was removed from
+-    // ChatCompressionSettings as part of the redesign; leftover values
+-    // in stale settings.json must be ignored without suppressing the gate.
+-    // Drive the non-force path with originalTokenCount above auto so the
+-    // gate would have to actively pass, and verify the side-query fires.
+-    const history: Content[] = [
+-      { role: 'user', parts: [{ text: 'msg1' }] },
+-      { role: 'model', parts: [{ text: 'msg2' }] },
+-      { role: 'user', parts: [{ text: 'msg3' }] },
+-      { role: 'model', parts: [{ text: 'msg4' }] },
+-    ];
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(
+-      110_000,
 +  it.each([
 +    ['different model', (h: Harness) => h.setCompactionModel('other-model')],
 +    [
@@ -11005,32 +11049,6 @@ index 59b9c51..fcc48ef 100644
 +    const result = await compress(harness);
 +    expect(result.info.compressionStatus).toBe(
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(harness.countSideQuery).not.toHaveBeenCalled();
-+    expect(harness.generateText).not.toHaveBeenCalled();
-   });
- 
--  it('silently ignores the deprecated chatCompression.contextPercentageThreshold = 0 (no longer disables compaction)', async () => {
--    // Pre-PR #4168, setting contextPercentageThreshold = 0 short-circuited
--    // compress() at the cheap-gate (NOOP). The field was removed from
--    // ChatCompressionSettings as part of the redesign; leftover values
--    // in stale settings.json must be ignored without suppressing the gate.
--    // Drive the non-force path with originalTokenCount above auto so the
--    // gate would have to actively pass, and verify the side-query fires.
--    const history: Content[] = [
--      { role: 'user', parts: [{ text: 'msg1' }] },
--      { role: 'model', parts: [{ text: 'msg2' }] },
--      { role: 'user', parts: [{ text: 'msg3' }] },
--      { role: 'model', parts: [{ text: 'msg4' }] },
--    ];
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(
--      110_000,
-+  it('fails closed when the tokenizer cannot count the request', async () => {
-+    const rejected = makeHarness();
-+    rejected.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
-+    expect((await compress(rejected)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
      );
 -    // The deprecated field is no longer in ChatCompressionSettings; cast so
 -    // we can simulate a leftover value coming from a stale settings.json.
@@ -11042,9 +11060,7 @@ index 59b9c51..fcc48ef 100644
 -      model: 'gemini-pro',
 -      contextWindowSize: 128_000,
 -    } as unknown as ReturnType<typeof mockConfig.getContentGeneratorConfig>);
-+    expect(rejected.generateText).not.toHaveBeenCalled();
-+  });
- 
+-
 -    const mockGenerateContent = vi.fn().mockResolvedValue({
 -      text: 'Summary',
 -      usage: {
@@ -11054,17 +11070,11 @@ index 59b9c51..fcc48ef 100644
 -        candidatesTokenCount: 1500,
 -        totalTokenCount: 100_500,
 -      },
-+  it('sizes the generation to the room the window leaves beside the request', async () => {
-+    const tight = makeHarness();
-+    const requestTokens = WINDOW - COMPACT_MAX_OUTPUT_TOKENS + 1;
-+    tight.countSideQuery.mockResolvedValueOnce({
-+      totalTokens: requestTokens,
-+      maxModelLen: WINDOW,
-     });
+-    });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateContent,
 -    } as unknown as BaseLlmClient);
- 
+-
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: false,
@@ -11072,18 +11082,13 @@ index 59b9c51..fcc48ef 100644
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
 -    });
-+    await compress(tight);
- 
+-
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -    expect(mockGenerateContent).toHaveBeenCalled();
 -    // Crossed the token threshold (not the screenshot trigger) → token_limit.
 -    expect(result.info.triggerReason).toBe('token_limit');
-+    const generated = tight.generateText.mock
-+      .calls[0]![0] as GenerateTextOptions;
-+    const budget = (generated.config as { maxOutputTokens?: number })
-+      .maxOutputTokens;
-+    expect(budget).toBe(WINDOW - requestTokens - COMPACTION_BUDGET_SAFETY_MARGIN);
-+    expect(requestTokens + budget!).toBeLessThanOrEqual(WINDOW);
++    expect(harness.countSideQuery).not.toHaveBeenCalled();
++    expect(harness.generateText).not.toHaveBeenCalled();
    });
  
 -  it('should compress if over token threshold', async () => {
@@ -11112,7 +11117,12 @@ index 59b9c51..fcc48ef 100644
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateContent,
 -    } as unknown as BaseLlmClient);
--
++  it('summarizes under the identity of the agent whose history it is', async () => {
++    // The snapshot request is that agent's own conversation, so the backend
++    // must see it as that agent's traffic and not as an unattributed side
++    // query. It inherits the chat's identity rather than being told again.
++    const harness = makeHarness();
+ 
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: false,
@@ -11120,22 +11130,7 @@ index 59b9c51..fcc48ef 100644
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
 -    });
-+  it('issues a summary request at every history size', async () => {
-+    for (const requestTokens of [1_000, 150_000, WINDOW - 2_048, WINDOW]) {
-+      const harness = makeHarness();
-+      harness.countSideQuery.mockResolvedValueOnce({
-+        totalTokens: requestTokens,
-+        maxModelLen: WINDOW,
-+      });
-+      await compress(harness);
-+      const generated = harness.generateText.mock
-+        .calls[0]![0] as GenerateTextOptions;
-+      const budget = (generated.config as { maxOutputTokens?: number })
-+        .maxOutputTokens;
-+      expect(budget).toBeGreaterThanOrEqual(1);
-+      expect(budget).toBeLessThanOrEqual(COMPACT_MAX_OUTPUT_TOKENS);
-+    }
-+  });
++    await compress(harness);
  
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -    expect(result.info.newTokenCount).toBe(350); // 900 - (1600 - 1000) + 50
@@ -11145,39 +11140,16 @@ index 59b9c51..fcc48ef 100644
 -    expect(result.newHistory![0].parts![0].text).toContain('Summary');
 -    expect(mockGenerateContent).toHaveBeenCalled();
 -    expect(mockGetHookSystem).toHaveBeenCalled();
-+  it.each([
-+    [
-+      'MAX_TOKENS',
-+      summaryResult({ finishReason: FinishReason.MAX_TOKENS }),
-+      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
-+    ],
-+    [
-+      'missing terminal',
-+      summaryResult({ finishReason: undefined }),
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    ],
-+    [
-+      'tool call',
-+      summaryResult({ hadToolCall: true }),
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    ],
-+    [
-+      'malformed snapshot',
-+      summaryResult({ text: 'not a state snapshot' }),
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    ],
-+    [
-+      'empty final',
-+      summaryResult({ text: '   ' }),
-+      CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
-+    ],
-+  ])('rejects unusable summary output: %s', async (_name, response, status) => {
-+    const harness = makeHarness();
-+    harness.generateText.mockResolvedValueOnce(response);
-+    const result = await compress(harness);
-+    expect(result.newHistory).toBeNull();
-+    expect(result.info.compressionStatus).toBe(status);
-+    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
++    const counted = harness.countSideQuery.mock
++      .calls[0]![0] as GenerateTextOptions;
++    const generated = harness.generateText.mock
++      .calls[0]![0] as GenerateTextOptions;
++    expect(
++      (counted.config as { kvScope?: string } | undefined)?.kvScope,
++    ).toBe('agent-under-test');
++    expect(
++      (generated.config as { kvScope?: string } | undefined)?.kvScope,
++    ).toBe('agent-under-test');
    });
  
 -  it('does not deep-clone full history while compressing', async () => {
@@ -11219,20 +11191,14 @@ index 59b9c51..fcc48ef 100644
 -      contextWindowSize: 1000,
 -    } as unknown as ReturnType<typeof mockConfig.getContentGeneratorConfig>);
 -    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(900);
-+  it('[compaction-event] records where a truncated attempt spent its output budget', async () => {
-+    const harness = makeHarness();
-+    harness.generateText.mockResolvedValueOnce(
-+      summaryResult({
-+        text: '',
-+        finishReason: FinishReason.MAX_TOKENS,
-+        usage: {
-+          promptTokenCount: 233_926,
-+          candidatesTokenCount: 19_900,
-+          thoughtsTokenCount: 19_900,
-+          totalTokenCount: 253_826,
-+        },
-+      }),
++  it('fails closed when the tokenizer cannot count the request', async () => {
++    const rejected = makeHarness();
++    rejected.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
++    expect((await compress(rejected)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +    );
++    expect(rejected.generateText).not.toHaveBeenCalled();
++  });
  
 -    const mockGenerateContent = vi.fn().mockResolvedValue({
 -      text: 'Summary',
@@ -11241,11 +11207,16 @@ index 59b9c51..fcc48ef 100644
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 1650,
 -      },
--    });
++  it('sizes the generation to the room the window leaves beside the request', async () => {
++    const tight = makeHarness();
++    const requestTokens = WINDOW - COMPACT_MAX_OUTPUT_TOKENS + 1;
++    tight.countSideQuery.mockResolvedValueOnce({
++      totalTokens: requestTokens,
++      maxModelLen: WINDOW,
+     });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateContent,
 -    } as unknown as BaseLlmClient);
-+    const result = await compress(harness);
  
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
@@ -11253,24 +11224,18 @@ index 59b9c51..fcc48ef 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
-+    );
-+    // The whole maintenance budget went to hidden reasoning and produced no
-+    // summary at all. The status alone cannot separate that from a request
-+    // that never generated, and the summary itself is discarded, so this is
-+    // the only surviving evidence of where the tokens went.
-+    expect(result.info.output).toEqual({
-+      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
-+      outputTokens: 19_900,
-+      thinkingTokens: 19_900,
-+      summaryChars: 0,
-+      finishReason: FinishReason.MAX_TOKENS,
-     });
--
+-    });
++    await compress(tight);
+ 
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -    expect(mockChat.getHistory).not.toHaveBeenCalled();
 -    expect(mockChat.getHistoryShallow).toHaveBeenCalledWith(true);
++    const generated = tight.generateText.mock
++      .calls[0]![0] as GenerateTextOptions;
++    const budget = (generated.config as { maxOutputTokens?: number })
++      .maxOutputTokens;
++    expect(budget).toBe(WINDOW - requestTokens - COMPACTION_BUDGET_SAFETY_MARGIN);
++    expect(requestTokens + budget!).toBeLessThanOrEqual(WINDOW);
    });
  
 -  it('should force compress even if under threshold', async () => {
@@ -11296,10 +11261,7 @@ index 59b9c51..fcc48ef 100644
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateContent,
 -    } as unknown as BaseLlmClient);
-+  it('[compaction-event] leaves the accounting null when no generation ran', async () => {
-+    const harness = makeHarness();
-+    harness.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
- 
+-
 -    const result = await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: true,
@@ -11308,17 +11270,58 @@ index 59b9c51..fcc48ef 100644
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
 -    });
-+    const result = await compress(harness);
++  it('issues a summary request at every history size', async () => {
++    for (const requestTokens of [1_000, 150_000, WINDOW - 2_048, WINDOW]) {
++      const harness = makeHarness();
++      harness.countSideQuery.mockResolvedValueOnce({
++        totalTokens: requestTokens,
++        maxModelLen: WINDOW,
++      });
++      await compress(harness);
++      const generated = harness.generateText.mock
++        .calls[0]![0] as GenerateTextOptions;
++      const budget = (generated.config as { maxOutputTokens?: number })
++        .maxOutputTokens;
++      expect(budget).toBeGreaterThanOrEqual(1);
++      expect(budget).toBeLessThanOrEqual(COMPACT_MAX_OUTPUT_TOKENS);
++    }
++  });
  
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 -    expect(result.newHistory).not.toBeNull();
-+    expect(result.info.compressionStatus).toBe(
++  it.each([
++    [
++      'MAX_TOKENS',
++      summaryResult({ finishReason: FinishReason.MAX_TOKENS }),
++      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
++    ],
++    [
++      'missing terminal',
++      summaryResult({ finishReason: undefined }),
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(harness.generateText).not.toHaveBeenCalled();
-+    // No attempt, no accounting to invent: a refusal before generation and a
-+    // generation that produced nothing must stay distinguishable.
-+    expect(result.info.output).toBeUndefined();
++    ],
++    [
++      'tool call',
++      summaryResult({ hadToolCall: true }),
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    ],
++    [
++      'malformed snapshot',
++      summaryResult({ text: 'not a state snapshot' }),
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    ],
++    [
++      'empty final',
++      summaryResult({ text: '   ' }),
++      CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
++    ],
++  ])('rejects unusable summary output: %s', async (_name, response, status) => {
++    const harness = makeHarness();
++    harness.generateText.mockResolvedValueOnce(response);
++    const result = await compress(harness);
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(status);
++    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
    });
  
 -  it('does not append SessionStart additionalContext after successful compression', async () => {
@@ -11331,18 +11334,20 @@ index 59b9c51..fcc48ef 100644
 -    vi.mocked(mockChat.getHistory).mockReturnValue(history);
 -    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
 -    vi.mocked(tokenLimit).mockReturnValue(1000);
-+  it('fails closed instead of fabricating history when composition fails', async () => {
++  it('[compaction-event] records where a truncated attempt spent its output budget', async () => {
 +    const harness = makeHarness();
-+    vi.mocked(attachments.composePostCompactHistory).mockRejectedValueOnce(
-+      new Error('workspace read failed'),
++    harness.generateText.mockResolvedValueOnce(
++      summaryResult({
++        text: '',
++        finishReason: FinishReason.MAX_TOKENS,
++        usage: {
++          promptTokenCount: 233_926,
++          candidatesTokenCount: 19_900,
++          thoughtsTokenCount: 19_900,
++          totalTokenCount: 253_826,
++        },
++      }),
 +    );
-+    const result = await compress(harness);
-+    expect(result.newHistory).toBeNull();
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
-+  });
  
 -    const mockGenerateContent = vi.fn().mockResolvedValue({
 -      text: 'Summary',
@@ -11355,15 +11360,7 @@ index 59b9c51..fcc48ef 100644
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateContent,
 -    } as unknown as BaseLlmClient);
-+  it('requires an exact shrinking candidate with the full output reserve of next-turn room', async () => {
-+    const countFailure = makeHarness();
-+    countFailure.countCandidate
-+      .mockReset()
-+      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
-+      .mockRejectedValueOnce(new Error('post tokenizer failed'));
-+    expect((await compress(countFailure)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
-+    );
++    const result = await compress(harness);
  
 -    await service.compress(mockChat, {
 -      promptId: mockPromptId,
@@ -11371,25 +11368,22 @@ index 59b9c51..fcc48ef 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
-+    const noShrink = makeHarness();
-+    noShrink.countCandidate
-+      .mockReset()
-+      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
-+      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW });
-+    expect((await compress(noShrink)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
 +    );
- 
++    // The whole maintenance budget went to hidden reasoning and produced no
++    // summary at all. The status alone cannot separate that from a request
++    // that never generated, and the summary itself is discarded, so this is
++    // the only surviving evidence of where the tokens went.
++    expect(result.info.output).toEqual({
++      maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
++      outputTokens: 19_900,
++      thinkingTokens: 19_900,
++      summaryChars: 0,
++      finishReason: FinishReason.MAX_TOKENS,
+     });
+-
 -    expect(mockGenerateContent).toHaveBeenCalled();
-+    const noRoom = makeHarness();
-+    noRoom.countCandidate
-+      .mockReset()
-+      .mockResolvedValueOnce({ totalTokens: 250_000, maxModelLen: WINDOW })
-+      .mockResolvedValueOnce({ totalTokens: 245_000, maxModelLen: WINDOW });
-+    expect((await compress(noRoom)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
-+    );
    });
  
 -  it('passes abort signal to summary generation', async () => {
@@ -11415,7 +11409,10 @@ index 59b9c51..fcc48ef 100644
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateText,
 -    } as unknown as BaseLlmClient);
--
++  it('[compaction-event] leaves the accounting null when no generation ran', async () => {
++    const harness = makeHarness();
++    harness.countSideQuery.mockRejectedValueOnce(new Error('tokenizer down'));
+ 
 -    await service.compress(mockChat, {
 -      promptId: mockPromptId,
 -      force: true,
@@ -11424,29 +11421,19 @@ index 59b9c51..fcc48ef 100644
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
 -      signal: abortController.signal,
 -    });
-+  it('fails closed on pre- and post-compaction hook errors', async () => {
-+    const pre = makeHarness();
-+    pre.setHookSystem(true);
-+    pre.firePreCompactEvent.mockRejectedValueOnce(new Error('pre hook failed'));
-+    expect((await compress(pre)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
-+    expect(pre.generateText).not.toHaveBeenCalled();
++    const result = await compress(harness);
  
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        abortSignal: abortController.signal,
 -      }),
-+    const post = makeHarness();
-+    post.setHookSystem(true);
-+    post.firePostCompactEvent.mockRejectedValueOnce(
-+      new Error('post hook failed'),
-+    );
-+    const result = await compress(post);
-+    expect(result.newHistory).toBeNull();
 +    expect(result.info.compressionStatus).toBe(
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
      );
++    expect(harness.generateText).not.toHaveBeenCalled();
++    // No attempt, no accounting to invent: a refusal before generation and a
++    // generation that produced nothing must stay distinguishable.
++    expect(result.info.output).toBeUndefined();
    });
  
 -  it('strips inline media from side-query contents during compaction', async () => {
@@ -11476,16 +11463,7 @@ index 59b9c51..fcc48ef 100644
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 250,
 -      },
-+  it('fires hooks in order and gives PostCompact the committed summary body', async () => {
-+    const harness = makeHarness();
-+    harness.setHookSystem(true);
-+    const order: string[] = [];
-+    harness.firePreCompactEvent.mockImplementation(async () => {
-+      order.push('pre');
-+      return {
-+        getAdditionalContext: () => 'Retain exact file paths.',
-+      };
-     });
+-    });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateText,
 -    } as unknown as BaseLlmClient);
@@ -11496,9 +11474,7 @@ index 59b9c51..fcc48ef 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
-+    harness.firePostCompactEvent.mockImplementation(async () => {
-+      order.push('post');
-     });
+-    });
 -
 -    // Inspect the actual contents passed to the summary model.
 -    const call = mockGenerateText.mock.calls[0]?.[0] as { contents: Content[] };
@@ -11508,8 +11484,19 @@ index 59b9c51..fcc48ef 100644
 -    expect(serialized).not.toContain('AAAAAAAA');
 -    // Placeholder is present.
 -    expect(serialized).toContain('[image: image/png]');
--  });
--
++  it('fails closed instead of fabricating history when composition fails', async () => {
++    const harness = makeHarness();
++    vi.mocked(attachments.composePostCompactHistory).mockRejectedValueOnce(
++      new Error('workspace read failed'),
++    );
++    const result = await compress(harness);
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
+   });
+ 
 -  it('passes getCompactionModel to runSideQuery for compression', async () => {
 -    // Compression passes config.getCompactionModel?.() to runSideQuery so it uses
 -    // the compaction model (falls back to the main model) instead of
@@ -11525,20 +11512,15 @@ index 59b9c51..fcc48ef 100644
 -    vi.mocked(tokenLimit).mockReturnValue(1000);
 -    vi.mocked(mockConfig.getCompactionModel).mockReturnValue(
 -      'compaction-model-v1',
-+    await compress(harness, { customInstructions: 'Retain user intent.' });
-+    expect(order).toEqual(['pre', 'post']);
-+    expect(harness.firePostCompactEvent).toHaveBeenCalledWith(
-+      'manual',
-+      snapshot(),
-+      undefined,
++  it('requires an exact shrinking candidate with the full output reserve of next-turn room', async () => {
++    const countFailure = makeHarness();
++    countFailure.countCandidate
++      .mockReset()
++      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
++      .mockRejectedValueOnce(new Error('post tokenizer failed'));
++    expect((await compress(countFailure)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
      );
-+    const generated = harness.generateText.mock
-+      .calls[0]![0] as GenerateTextOptions;
-+    const directive = generated.contents.at(-1)?.parts?.[0]?.text ?? '';
-+    expect(directive.indexOf('Retain user intent.')).toBeLessThan(
-+      directive.indexOf('Retain exact file paths.'),
-+    );
-+  });
  
 -    const mockGenerateText = vi.fn().mockResolvedValue({
 -      text: 'Summary',
@@ -11558,14 +11540,16 @@ index 59b9c51..fcc48ef 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
-+  it('propagates cancellation and does not convert it into a fallback status', async () => {
-+    const harness = makeHarness();
-+    const controller = new AbortController();
-+    harness.generateText.mockImplementationOnce(async () => {
-+      controller.abort();
-+      throw new DOMException('cancelled', 'AbortError');
-     });
--
+-    });
++    const noShrink = makeHarness();
++    noShrink.countCandidate
++      .mockReset()
++      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
++      .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW });
++    expect((await compress(noShrink)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++    );
+ 
 -    // Thinking is intentionally disabled (per-provider budget semantics are
 -    // inconsistent) and the output is hard-capped by COMPACT_MAX_OUTPUT_TOKENS
 -    // so subsequent threshold math has a predictable reserve. maxAttempts=1
@@ -11579,26 +11563,17 @@ index 59b9c51..fcc48ef 100644
 -          thinkingConfig: { includeThoughts: false },
 -          maxOutputTokens: 20_000,
 -        }),
-+    await expect(
-+      compress(harness, { signal: controller.signal }),
-+    ).rejects.toThrow();
-+    expect(harness.generateText).toHaveBeenCalledTimes(1);
-+  });
-+
-+  it('discards a truncated response even when its text parses as a complete snapshot', async () => {
-+    // Truncation can land after the closing tag (inside trailing whitespace
-+    // or a dropped epilogue), so superficial completeness proves nothing.
-+    // The finishReason check must dominate content validation or a clipped
-+    // memory gets committed as if whole.
-+    const harness = makeHarness();
-+    harness.generateText.mockResolvedValueOnce(
-+      summaryResult({
-+        text: snapshot('looks complete'),
-+        finishReason: FinishReason.MAX_TOKENS,
-       }),
+-      }),
++    const noRoom = makeHarness();
++    noRoom.countCandidate
++      .mockReset()
++      .mockResolvedValueOnce({ totalTokens: 250_000, maxModelLen: WINDOW })
++      .mockResolvedValueOnce({ totalTokens: 245_000, maxModelLen: WINDOW });
++    expect((await compress(noRoom)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
      );
--  });
--
+   });
+ 
 -  it('falls back to the main model when compactionModel is not set', async () => {
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'msg1' }] },
@@ -11632,14 +11607,31 @@ index 59b9c51..fcc48ef 100644
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
 -    });
--
++  it('fails closed on pre- and post-compaction hook errors', async () => {
++    const pre = makeHarness();
++    pre.setHookSystem(true);
++    pre.firePreCompactEvent.mockRejectedValueOnce(new Error('pre hook failed'));
++    expect((await compress(pre)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(pre.generateText).not.toHaveBeenCalled();
+ 
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        model: 'test-model',
 -      }),
--    );
--  });
--
++    const post = makeHarness();
++    post.setHookSystem(true);
++    post.firePostCompactEvent.mockRejectedValueOnce(
++      new Error('post hook failed'),
++    );
++    const result = await compress(post);
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
+     );
+   });
+ 
 -  it('falls back to the main model when the compaction model context window is too small', async () => {
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'msg1' }] },
@@ -11706,7 +11698,16 @@ index 59b9c51..fcc48ef 100644
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 1150,
 -      },
--    });
++  it('fires hooks in order and gives PostCompact the committed summary body', async () => {
++    const harness = makeHarness();
++    harness.setHookSystem(true);
++    const order: string[] = [];
++    harness.firePreCompactEvent.mockImplementation(async () => {
++      order.push('pre');
++      return {
++        getAdditionalContext: () => 'Retain exact file paths.',
++      };
+     });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateText,
 -    } as unknown as BaseLlmClient);
@@ -11717,13 +11718,21 @@ index 59b9c51..fcc48ef 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: 100,
--    });
++    harness.firePostCompactEvent.mockImplementation(async () => {
++      order.push('post');
+     });
 -
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        model: 'big-model',
 -      }),
--    );
++    await compress(harness, { customInstructions: 'Retain user intent.' });
++    expect(order).toEqual(['pre', 'post']);
++    expect(harness.firePostCompactEvent).toHaveBeenCalledWith(
++      'manual',
++      snapshot(),
++      undefined,
+     );
 -    expect(result.info.warning).toBeUndefined();
 -  });
 -
@@ -11765,9 +11774,14 @@ index 59b9c51..fcc48ef 100644
 -      expect.objectContaining({
 -        model: 'test-model',
 -      }),
--    );
--  });
--
++    const generated = harness.generateText.mock
++      .calls[0]![0] as GenerateTextOptions;
++    const directive = generated.contents.at(-1)?.parts?.[0]?.text ?? '';
++    expect(directive.indexOf('Retain user intent.')).toBeLessThan(
++      directive.indexOf('Retain exact file paths.'),
+     );
+   });
+ 
 -  it('skips the guard when no explicit compaction model is configured', async () => {
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'msg1' }] },
@@ -11803,13 +11817,35 @@ index 59b9c51..fcc48ef 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: 100,
--    });
++  it('propagates cancellation and does not convert it into a fallback status', async () => {
++    const harness = makeHarness();
++    const controller = new AbortController();
++    harness.generateText.mockImplementationOnce(async () => {
++      controller.abort();
++      throw new DOMException('cancelled', 'AbortError');
+     });
 -
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        model: 'test-model',
--      }),
--    );
++    await expect(
++      compress(harness, { signal: controller.signal }),
++    ).rejects.toThrow();
++    expect(harness.generateText).toHaveBeenCalledTimes(1);
++  });
++
++  it('discards a truncated response even when its text parses as a complete snapshot', async () => {
++    // Truncation can land after the closing tag (inside trailing whitespace
++    // or a dropped epilogue), so superficial completeness proves nothing.
++    // The finishReason check must dominate content validation or a clipped
++    // memory gets committed as if whole.
++    const harness = makeHarness();
++    harness.generateText.mockResolvedValueOnce(
++      summaryResult({
++        text: snapshot('looks complete'),
++        finishReason: FinishReason.MAX_TOKENS,
+       }),
+     );
 -    // No warning — guard was skipped for the main model
 -    expect(result.info.warning).toBeUndefined();
 -  });
@@ -17297,7 +17333,7 @@ index ecd9117..7031b5a 100644
    <good-example>
    pytest /foo/bar/tests
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..add369d 100644
+index 6d3fb50..c20a0cc 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
 @@ -28,13 +28,15 @@ import {
@@ -17403,7 +17439,7 @@ index 6d3fb50..add369d 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -2221,13 +2271,170 @@ describe('AgentTool', () => {
+@@ -2221,13 +2271,213 @@ describe('AgentTool', () => {
  
        const invocation = (
          agentTool as AgentToolWithProtectedMethods
@@ -17519,6 +17555,49 @@ index 6d3fb50..add369d 100644
 +      );
 +    });
 +
++    it('[subagent-scope] publishes the turn count when the run ends by throwing', async () => {
++      // A run that dies mid-flight announces itself through ERROR, and that
++      // announcement is the first update leaving `running`. It is therefore
++      // the one the headless stream reads, so it carries the count for the
++      // same reason the finish announcement does.
++      vi.mocked(mockAgent.getFinalText).mockReturnValue('');
++      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(
++        AgentTerminateMode.ERROR,
++      );
++      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(98);
++
++      const params: AgentParams = {
++        description: 'Read the series',
++        prompt: 'Read every book',
++        subagent_type: 'file-search',
++        run_in_background: false,
++      };
++
++      const snapshots: AgentResultDisplay[] = [];
++      const invocation = (
++        agentTool as AgentToolWithProtectedMethods
++      ).createInvocation(params);
++      vi.mocked(mockAgent.execute).mockImplementation(async () => {
++        invocation.eventEmitter.emit(AgentEventType.ERROR, {
++          subagentId: 'sub-1',
++          error: 'Context is too large to send safely',
++          turnsUsed: 98,
++          timestamp: Date.now(),
++        });
++      });
++      await invocation.execute(undefined, (output) => {
++        snapshots.push(output as AgentResultDisplay);
++      });
++
++      const terminal = snapshots.filter(
++        (snapshot) => snapshot.status === 'failed',
++      );
++      expect(terminal.length).toBeGreaterThan(0);
++      expect(terminal.map((snapshot) => snapshot.turnsUsed)).toEqual(
++        terminal.map(() => 98),
++      );
++    });
++
 +    it('[loop-attribution] names the rule that halted a looping subagent', async () => {
 +      vi.mocked(mockAgent.getFinalText).mockReturnValue('');
 +      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(
@@ -17575,7 +17654,7 @@ index 6d3fb50..add369d 100644
        vi.mocked(mockAgent.getFinalText).mockReturnValue(
          '<analysis>scratch only</analysis>',
        );
-@@ -3404,12 +3611,14 @@ describe('AgentTool', () => {
+@@ -3404,12 +3654,14 @@ describe('AgentTool', () => {
            totalDurationMs: 0,
            totalToolCalls: 0,
            successfulToolCalls: 0,
@@ -17590,7 +17669,7 @@ index 6d3fb50..add369d 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4667,12 +4876,14 @@ describe('AgentTool', () => {
+@@ -4667,12 +4919,14 @@ describe('AgentTool', () => {
            totalDurationMs: 500,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -17605,7 +17684,7 @@ index 6d3fb50..add369d 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4863,12 +5074,14 @@ describe('AgentTool', () => {
+@@ -4863,12 +5117,14 @@ describe('AgentTool', () => {
            totalDurationMs: 500,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -17620,7 +17699,7 @@ index 6d3fb50..add369d 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -5214,12 +5427,14 @@ describe('AgentTool', () => {
+@@ -5214,12 +5470,14 @@ describe('AgentTool', () => {
            totalDurationMs: 100,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -17635,7 +17714,7 @@ index 6d3fb50..add369d 100644
          emitDuringExecute(capturedInvocation.eventEmitter);
        });
  
-@@ -5283,12 +5498,82 @@ describe('AgentTool', () => {
+@@ -5283,12 +5541,82 @@ describe('AgentTool', () => {
          (entry) => entry.callId === 'call-read-1',
        );
        expect(toolCall?.args).toEqual({ path: '/test.ts' });
@@ -17718,7 +17797,7 @@ index 6d3fb50..add369d 100644
        const snapshots: AgentResultDisplay[] = [];
  
        const invocation = createInvocationWithEventDrivenAgent((emitter) => {
-@@ -5590,12 +5875,14 @@ describe('AgentTool', () => {
+@@ -5590,12 +5918,14 @@ describe('AgentTool', () => {
      beforeEach(() => {
        mockAgent = {
          execute: vi.fn().mockResolvedValue(undefined),
@@ -17734,7 +17813,7 @@ index 6d3fb50..add369d 100644
          // test-time listener hookup doesn't throw.
          getCore: vi.fn().mockReturnValue({
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..07e8f6e 100644
+index 4bcea69..c1bfaac 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -3,13 +3,18 @@
@@ -18022,7 +18101,7 @@ index 4bcea69..07e8f6e 100644
      private readonly config: Config,
      private readonly subagentManager: SubagentManager,
      params: AgentParams,
-@@ -1549,18 +1680,39 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1549,29 +1680,50 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            },
            updateOutput,
          );
@@ -18041,11 +18120,10 @@ index 4bcea69..07e8f6e 100644
 +      );
 +    });
 +
-+    // This is the first update that leaves `running`, so it is the one an
-+    // edge-triggered consumer reads. It therefore has to carry the terminal
-+    // facts in full: a later, richer update for the same transition is not
-+    // read at all, and a consumer that finds no turn count on this one
-+    // records that the subagent took no turns.
++    // Whichever of these lands first is the update that leaves `running`,
++    // and it is the one an edge-triggered consumer reads; a later, richer
++    // update for the same transition is not read at all. Both therefore
++    // carry the terminal facts in full.
      this.eventEmitter.on(AgentEventType.FINISH, (...args: unknown[]) => {
        const event = args[0] as AgentFinishEvent;
        this.updateDisplay(
@@ -18063,6 +18141,18 @@ index 4bcea69..07e8f6e 100644
      });
  
      this.eventEmitter.on(AgentEventType.ERROR, (...args: unknown[]) => {
+       const event = args[0] as AgentErrorEvent;
+       this.updateDisplay(
+         {
+           status: 'failed',
+           terminateReason: event.error,
++          turnsUsed: event.turnsUsed,
+         },
+         updateOutput,
+       );
+     });
+ 
+     // Track real-time token consumption from subagent API calls.
 @@ -1873,13 +2025,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      }
  

@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '6b968e031ac3e2d7cabc425c74892cd1f291dd1bfab28149009918aa92142751',
+  'review_sha256': 'e3dfd6c2c4770ebd895ac45ccab980a5a35d950c7dbe89dd26f69aee469a8fdc',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -64,13 +64,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '2c998619b919b775143d554cadee7173cdc5d6cb180852ada9ad92c694a35bbf'},
             {'path': 'packages/core/src/agents/runtime/agent-events.ts',
              'before_sha256': 'c28f4f24651cdb75ea34b3102c9456e3b467d5ee0a03afb73a160b25b736d3b8',
-             'after_sha256': 'a34880c8ffa5ba33ebb5f045db3703093b5527ebc629f19ece83037e2b5b7603'},
+             'after_sha256': 'f8ddde1eb314785fbc47470dda432f2296b9d4d024cbe3c2241e12db69e99dcb'},
             {'path': 'packages/core/src/agents/runtime/agent-headless.test.ts',
              'before_sha256': 'f740161dd426d7801fd405271f2ecc0f4eb4b72698a742f2469244499fade871',
              'after_sha256': '25c436dc1471f6e4add077a719151c339378f0950d313f48d69cfc4cc31f66be'},
             {'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before_sha256': 'db6d8ed8f7714a83483fb9f22c860a3f2e7e38cf53171e79c5fc49a363d3c3ce',
-             'after_sha256': '665297f0f113aa9bcf42fe6f480bbbe363cacc02d2a8a0f4ec96131f61db8166'},
+             'after_sha256': '24f953533bc130c33687e2cbe1b324dc0f49fb5a3f78860e30682193ac272cf5'},
             {'path': 'packages/core/src/agents/runtime/agent-types.ts',
              'before_sha256': 'b02dc24f71f260e089677cfe41dee1d99b0fea88a355bee14b1ce15cbc237750',
              'after_sha256': '09a5db201308cae2598fb36f4a79b645b73705e3dd54d2b3a88a27a034ee449b'},
@@ -190,7 +190,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779'},
             {'path': 'packages/core/src/services/chatCompressionService.test.ts',
              'before_sha256': 'dca73e970a07ea2c8e819976dc758b57426754e89be5ec230954fda06a2b03db',
-             'after_sha256': 'de66bd63d1b1a08c605cf987d80bf1415903bd2c09dadf8220dbd636cdfa7adc'},
+             'after_sha256': '9dfd150993d625d6081e14b9b6913f8c38d6baf1d3b941e60c46ac66090dc37a'},
             {'path': 'packages/core/src/services/chatCompressionService.ts',
              'before_sha256': 'ce64d44a40510b3eb83c00345a7e6bb6caee0ffcb9f959fbe1a91a804b03899f',
              'after_sha256': '8cd8d307e840464108a2859d5f9ee29dc485928d42bab4cc5cb6c80e9232fb8c'},
@@ -220,10 +220,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
-             'after_sha256': '6dcceb44938d59bd79f4d3b78010413ca0238a3339e7b80729d60611f898a4df'},
+             'after_sha256': 'ff5f70a758e180e4b465ee568dffaa4b3ce9e8ae94781eb4d611f89c0eead510'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': 'b2fd9bf314b67a843d38b196af03ee05d581e5793da50beb698a1272a440201d'},
+             'after_sha256': '87fe816db6a8a4e37faebb865a5bab9d375f86d92f9ac68c8732cced11047fb5'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -9343,6 +9343,79 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  failedToolCalls?: number;\n'},
             {'name': 'packages/core/src/agents/runtime/agent-events.ts:landmark-5',
              'path': 'packages/core/src/agents/runtime/agent-events.ts',
+             'before': '  totalTokens?: number;\n'
+                       '}\n'
+                       '\n'
+                       'export interface AgentErrorEvent {\n'
+                       '  subagentId: string;\n'
+                       '  error: string;\n'
+                       '  timestamp: number;\n'
+                       '}\n'
+                       '\n'
+                       'export interface AgentStatusChangeEvent {\n'
+                       '  agentId: string;\n'
+                       '  previousStatus: AgentStatus;\n',
+             'after': '  totalTokens?: number;\n'
+                      '}\n'
+                      '\n'
+                      'export interface AgentErrorEvent {\n'
+                      '  subagentId: string;\n'
+                      '  error: string;\n'
+                      '  /**\n'
+                      '   * Model round-trips this run started, on the same terms as\n'
+                      '   * {@link AgentFinishEvent.turnsUsed}. A run that ends by '
+                      'throwing is\n'
+                      '   * exactly the run whose count matters most, and this event '
+                      'is what flips a\n'
+                      '   * consumer to the terminal state, so it carries the count '
+                      'rather than\n'
+                      '   * leaving the consumer to invent one.\n'
+                      '   */\n'
+                      '  turnsUsed: number;\n'
+                      '  timestamp: number;\n'
+                      '}\n'
+                      '\n'
+                      'export interface AgentStatusChangeEvent {\n'
+                      '  agentId: string;\n'
+                      '  previousStatus: AgentStatus;\n',
+             'review_before': '  totalTokens?: number;\n'
+                              '}\n'
+                              '\n'
+                              'export interface AgentErrorEvent {\n'
+                              '  subagentId: string;\n'
+                              '  error: string;\n'
+                              '  timestamp: number;\n'
+                              '}\n'
+                              '\n'
+                              'export interface AgentStatusChangeEvent {\n'
+                              '  agentId: string;\n'
+                              '  previousStatus: AgentStatus;\n',
+             'review_after': '  totalTokens?: number;\n'
+                             '}\n'
+                             '\n'
+                             'export interface AgentErrorEvent {\n'
+                             '  subagentId: string;\n'
+                             '  error: string;\n'
+                             '  /**\n'
+                             '   * Model round-trips this run started, on the same '
+                             'terms as\n'
+                             '   * {@link AgentFinishEvent.turnsUsed}. A run that ends '
+                             'by throwing is\n'
+                             '   * exactly the run whose count matters most, and this '
+                             'event is what flips a\n'
+                             '   * consumer to the terminal state, so it carries the '
+                             'count rather than\n'
+                             '   * leaving the consumer to invent one.\n'
+                             '   */\n'
+                             '  turnsUsed: number;\n'
+                             '  timestamp: number;\n'
+                             '}\n'
+                             '\n'
+                             'export interface AgentStatusChangeEvent {\n'
+                             '  agentId: string;\n'
+                             '  previousStatus: AgentStatus;\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-events.ts:landmark-6',
+             'path': 'packages/core/src/agents/runtime/agent-events.ts',
              'before': '  [AgentEventType.TOOL_RESULT]: AgentToolResultEvent;\n'
                        '  [AgentEventType.TOOL_RESPONSES_FINALIZED]: '
                        'AgentToolResponsesFinalizedEvent;\n'
@@ -9789,7 +9862,25 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        this.core.eventEmitter?.emit(AgentEventType.ERROR, {\n'
                        '          subagentId: this.core.subagentId,\n'
                        '          error: error instanceof Error ? error.message : '
-                       'String(error),\n',
+                       'String(error),\n'
+                       '          timestamp: Date.now(),\n'
+                       '        } as AgentErrorEvent);\n'
+                       '\n'
+                       '        throw error;\n'
+                       '      } finally {\n'
+                       '        this.core.executionStats.totalDurationMs =\n'
+                       '          Date.now() - this.core.executionStats.startTimeMs;\n'
+                       '        const summary = '
+                       'this.core.stats.getSummary(Date.now());\n'
+                       '        this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
+                       '          subagentId: this.core.subagentId,\n'
+                       '          terminateReason: this.terminateMode,\n'
+                       '          timestamp: Date.now(),\n'
+                       '          rounds: summary.rounds,\n'
+                       '          totalDurationMs: summary.totalDurationMs,\n'
+                       '          totalToolCalls: summary.totalToolCalls,\n'
+                       '          successfulToolCalls: summary.successfulToolCalls,\n'
+                       '          failedToolCalls: summary.failedToolCalls,\n',
              'after': '            shouldWaitForExternalMessages: '
                       'this.externalMessageWaitPredicate,\n'
                       '          },\n'
@@ -9806,7 +9897,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        this.core.eventEmitter?.emit(AgentEventType.ERROR, {\n'
                       '          subagentId: this.core.subagentId,\n'
                       '          error: error instanceof Error ? error.message : '
-                      'String(error),\n',
+                      'String(error),\n'
+                      '          turnsUsed: this.core.getReasoningTurnsUsed(),\n'
+                      '          timestamp: Date.now(),\n'
+                      '        } as AgentErrorEvent);\n'
+                      '\n'
+                      '        throw error;\n'
+                      '      } finally {\n'
+                      '        this.core.executionStats.totalDurationMs =\n'
+                      '          Date.now() - this.core.executionStats.startTimeMs;\n'
+                      '        const summary = '
+                      'this.core.stats.getSummary(Date.now());\n'
+                      '        this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
+                      '          subagentId: this.core.subagentId,\n'
+                      '          terminateReason: this.terminateMode,\n'
+                      '          turnsUsed: this.core.getReasoningTurnsUsed(),\n'
+                      '          loopType: this.loopType,\n'
+                      '          timestamp: Date.now(),\n'
+                      '          rounds: summary.rounds,\n'
+                      '          totalDurationMs: summary.totalDurationMs,\n'
+                      '          totalToolCalls: summary.totalToolCalls,\n'
+                      '          successfulToolCalls: summary.successfulToolCalls,\n'
+                      '          failedToolCalls: summary.failedToolCalls,\n',
              'review_before': '            shouldWaitForExternalMessages: '
                               'this.externalMessageWaitPredicate,\n'
                               '          },\n'
@@ -9823,7 +9935,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'this.core.eventEmitter?.emit(AgentEventType.ERROR, {\n'
                               '          subagentId: this.core.subagentId,\n'
                               '          error: error instanceof Error ? error.message '
-                              ': String(error),\n',
+                              ': String(error),\n'
+                              '          timestamp: Date.now(),\n'
+                              '        } as AgentErrorEvent);\n'
+                              '\n'
+                              '        throw error;\n'
+                              '      } finally {\n'
+                              '        this.core.executionStats.totalDurationMs =\n'
+                              '          Date.now() - '
+                              'this.core.executionStats.startTimeMs;\n'
+                              '        const summary = '
+                              'this.core.stats.getSummary(Date.now());\n'
+                              '        '
+                              'this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
+                              '          subagentId: this.core.subagentId,\n'
+                              '          terminateReason: this.terminateMode,\n'
+                              '          timestamp: Date.now(),\n'
+                              '          rounds: summary.rounds,\n'
+                              '          totalDurationMs: summary.totalDurationMs,\n'
+                              '          totalToolCalls: summary.totalToolCalls,\n'
+                              '          successfulToolCalls: '
+                              'summary.successfulToolCalls,\n'
+                              '          failedToolCalls: summary.failedToolCalls,\n',
              'review_after': '            shouldWaitForExternalMessages: '
                              'this.externalMessageWaitPredicate,\n'
                              '          },\n'
@@ -9841,54 +9974,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'this.core.eventEmitter?.emit(AgentEventType.ERROR, {\n'
                              '          subagentId: this.core.subagentId,\n'
                              '          error: error instanceof Error ? error.message '
-                             ': String(error),\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-5',
-             'path': 'packages/core/src/agents/runtime/agent-headless.ts',
-             'before': '        this.core.executionStats.totalDurationMs =\n'
-                       '          Date.now() - this.core.executionStats.startTimeMs;\n'
-                       '        const summary = '
-                       'this.core.stats.getSummary(Date.now());\n'
-                       '        this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
-                       '          subagentId: this.core.subagentId,\n'
-                       '          terminateReason: this.terminateMode,\n'
-                       '          timestamp: Date.now(),\n'
-                       '          rounds: summary.rounds,\n'
-                       '          totalDurationMs: summary.totalDurationMs,\n'
-                       '          totalToolCalls: summary.totalToolCalls,\n'
-                       '          successfulToolCalls: summary.successfulToolCalls,\n'
-                       '          failedToolCalls: summary.failedToolCalls,\n',
-             'after': '        this.core.executionStats.totalDurationMs =\n'
-                      '          Date.now() - this.core.executionStats.startTimeMs;\n'
-                      '        const summary = '
-                      'this.core.stats.getSummary(Date.now());\n'
-                      '        this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
-                      '          subagentId: this.core.subagentId,\n'
-                      '          terminateReason: this.terminateMode,\n'
-                      '          turnsUsed: this.core.getReasoningTurnsUsed(),\n'
-                      '          loopType: this.loopType,\n'
-                      '          timestamp: Date.now(),\n'
-                      '          rounds: summary.rounds,\n'
-                      '          totalDurationMs: summary.totalDurationMs,\n'
-                      '          totalToolCalls: summary.totalToolCalls,\n'
-                      '          successfulToolCalls: summary.successfulToolCalls,\n'
-                      '          failedToolCalls: summary.failedToolCalls,\n',
-             'review_before': '        this.core.executionStats.totalDurationMs =\n'
-                              '          Date.now() - '
-                              'this.core.executionStats.startTimeMs;\n'
-                              '        const summary = '
-                              'this.core.stats.getSummary(Date.now());\n'
-                              '        '
-                              'this.core.eventEmitter?.emit(AgentEventType.FINISH, {\n'
-                              '          subagentId: this.core.subagentId,\n'
-                              '          terminateReason: this.terminateMode,\n'
-                              '          timestamp: Date.now(),\n'
-                              '          rounds: summary.rounds,\n'
-                              '          totalDurationMs: summary.totalDurationMs,\n'
-                              '          totalToolCalls: summary.totalToolCalls,\n'
-                              '          successfulToolCalls: '
-                              'summary.successfulToolCalls,\n'
-                              '          failedToolCalls: summary.failedToolCalls,\n',
-             'review_after': '        this.core.executionStats.totalDurationMs =\n'
+                             ': String(error),\n'
+                             '          turnsUsed: this.core.getReasoningTurnsUsed(),\n'
+                             '          timestamp: Date.now(),\n'
+                             '        } as AgentErrorEvent);\n'
+                             '\n'
+                             '        throw error;\n'
+                             '      } finally {\n'
+                             '        this.core.executionStats.totalDurationMs =\n'
                              '          Date.now() - '
                              'this.core.executionStats.startTimeMs;\n'
                              '        const summary = '
@@ -9906,7 +9999,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          successfulToolCalls: '
                              'summary.successfulToolCalls,\n'
                              '          failedToolCalls: summary.failedToolCalls,\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-6',
+            {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-5',
              'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before': '  }\n'
                        '\n'
@@ -40163,8 +40256,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  let compactionModel: string | undefined = MODEL;\n'
                       '  let autoThreshold = 1;\n'
                       '  let hooksEnabled = false;\n'
-                      '  const generationConfig: GenerateContentConfig = {\n'
+                      '  const generationConfig: GenerateContentConfig & { kvScope?: '
+                      'string } = {\n'
                       "    systemInstruction: 'main agent system prompt',\n"
+                      "    kvScope: 'agent-under-test',\n"
                       "    tools: [{ functionDeclarations: [{ name: 'read_file' }] "
                       '}],\n'
                       '  };\n'
@@ -40657,6 +40752,32 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    );\n'
                       '    expect(harness.countSideQuery).not.toHaveBeenCalled();\n'
                       '    expect(harness.generateText).not.toHaveBeenCalled();\n'
+                      '  });\n'
+                      '\n'
+                      "  it('summarizes under the identity of the agent whose history "
+                      "it is', async () => {\n"
+                      "    // The snapshot request is that agent's own conversation, "
+                      'so the backend\n'
+                      "    // must see it as that agent's traffic and not as an "
+                      'unattributed side\n'
+                      "    // query. It inherits the chat's identity rather than being "
+                      'told again.\n'
+                      '    const harness = makeHarness();\n'
+                      '\n'
+                      '    await compress(harness);\n'
+                      '\n'
+                      '    const counted = harness.countSideQuery.mock\n'
+                      '      .calls[0]![0] as GenerateTextOptions;\n'
+                      '    const generated = harness.generateText.mock\n'
+                      '      .calls[0]![0] as GenerateTextOptions;\n'
+                      '    expect(\n'
+                      '      (counted.config as { kvScope?: string } | '
+                      'undefined)?.kvScope,\n'
+                      "    ).toBe('agent-under-test');\n"
+                      '    expect(\n'
+                      '      (generated.config as { kvScope?: string } | '
+                      'undefined)?.kvScope,\n'
+                      "    ).toBe('agent-under-test');\n"
                       '  });\n'
                       '\n'
                       "  it('fails closed when the tokenizer cannot count the "
@@ -46536,8 +46657,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  let compactionModel: string | undefined = MODEL;\n'
                              '  let autoThreshold = 1;\n'
                              '  let hooksEnabled = false;\n'
-                             '  const generationConfig: GenerateContentConfig = {\n'
+                             '  const generationConfig: GenerateContentConfig & { '
+                             'kvScope?: string } = {\n'
                              "    systemInstruction: 'main agent system prompt',\n"
+                             "    kvScope: 'agent-under-test',\n"
                              "    tools: [{ functionDeclarations: [{ name: 'read_file' "
                              '}] }],\n'
                              '  };\n'
@@ -47066,6 +47189,32 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'expect(harness.countSideQuery).not.toHaveBeenCalled();\n'
                              '    '
                              'expect(harness.generateText).not.toHaveBeenCalled();\n'
+                             '  });\n'
+                             '\n'
+                             "  it('summarizes under the identity of the agent whose "
+                             "history it is', async () => {\n"
+                             "    // The snapshot request is that agent's own "
+                             'conversation, so the backend\n'
+                             "    // must see it as that agent's traffic and not as an "
+                             'unattributed side\n'
+                             "    // query. It inherits the chat's identity rather "
+                             'than being told again.\n'
+                             '    const harness = makeHarness();\n'
+                             '\n'
+                             '    await compress(harness);\n'
+                             '\n'
+                             '    const counted = harness.countSideQuery.mock\n'
+                             '      .calls[0]![0] as GenerateTextOptions;\n'
+                             '    const generated = harness.generateText.mock\n'
+                             '      .calls[0]![0] as GenerateTextOptions;\n'
+                             '    expect(\n'
+                             '      (counted.config as { kvScope?: string } | '
+                             'undefined)?.kvScope,\n'
+                             "    ).toBe('agent-under-test');\n"
+                             '    expect(\n'
+                             '      (generated.config as { kvScope?: string } | '
+                             'undefined)?.kvScope,\n'
+                             "    ).toBe('agent-under-test');\n"
                              '  });\n'
                              '\n'
                              "  it('fails closed when the tokenizer cannot count the "
@@ -55144,6 +55293,55 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      );\n'
                       '    });\n'
                       '\n'
+                      "    it('[subagent-scope] publishes the turn count when the run "
+                      "ends by throwing', async () => {\n"
+                      '      // A run that dies mid-flight announces itself through '
+                      'ERROR, and that\n'
+                      '      // announcement is the first update leaving `running`. It '
+                      'is therefore\n'
+                      '      // the one the headless stream reads, so it carries the '
+                      'count for the\n'
+                      '      // same reason the finish announcement does.\n'
+                      "      vi.mocked(mockAgent.getFinalText).mockReturnValue('');\n"
+                      '      vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                      '        AgentTerminateMode.ERROR,\n'
+                      '      );\n'
+                      '      vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(98);\n'
+                      '\n'
+                      '      const params: AgentParams = {\n'
+                      "        description: 'Read the series',\n"
+                      "        prompt: 'Read every book',\n"
+                      "        subagent_type: 'file-search',\n"
+                      '        run_in_background: false,\n'
+                      '      };\n'
+                      '\n'
+                      '      const snapshots: AgentResultDisplay[] = [];\n'
+                      '      const invocation = (\n'
+                      '        agentTool as AgentToolWithProtectedMethods\n'
+                      '      ).createInvocation(params);\n'
+                      '      vi.mocked(mockAgent.execute).mockImplementation(async () '
+                      '=> {\n'
+                      '        invocation.eventEmitter.emit(AgentEventType.ERROR, {\n'
+                      "          subagentId: 'sub-1',\n"
+                      "          error: 'Context is too large to send safely',\n"
+                      '          turnsUsed: 98,\n'
+                      '          timestamp: Date.now(),\n'
+                      '        });\n'
+                      '      });\n'
+                      '      await invocation.execute(undefined, (output) => {\n'
+                      '        snapshots.push(output as AgentResultDisplay);\n'
+                      '      });\n'
+                      '\n'
+                      '      const terminal = snapshots.filter(\n'
+                      "        (snapshot) => snapshot.status === 'failed',\n"
+                      '      );\n'
+                      '      expect(terminal.length).toBeGreaterThan(0);\n'
+                      '      expect(terminal.map((snapshot) => '
+                      'snapshot.turnsUsed)).toEqual(\n'
+                      '        terminal.map(() => 98),\n'
+                      '      );\n'
+                      '    });\n'
+                      '\n'
                       "    it('[loop-attribution] names the rule that halted a looping "
                       "subagent', async () => {\n"
                       "      vi.mocked(mockAgent.getFinalText).mockReturnValue('');\n"
@@ -55367,6 +55565,60 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      expect(terminal.map((snapshot) => '
                              'snapshot.turnsUsed)).toEqual(\n'
                              '        terminal.map(() => 3),\n'
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[subagent-scope] publishes the turn count when "
+                             "the run ends by throwing', async () => {\n"
+                             '      // A run that dies mid-flight announces itself '
+                             'through ERROR, and that\n'
+                             '      // announcement is the first update leaving '
+                             '`running`. It is therefore\n'
+                             '      // the one the headless stream reads, so it '
+                             'carries the count for the\n'
+                             '      // same reason the finish announcement does.\n'
+                             '      '
+                             "vi.mocked(mockAgent.getFinalText).mockReturnValue('');\n"
+                             '      '
+                             'vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                             '        AgentTerminateMode.ERROR,\n'
+                             '      );\n'
+                             '      '
+                             'vi.mocked(mockAgent.getTurnsUsed).mockReturnValue(98);\n'
+                             '\n'
+                             '      const params: AgentParams = {\n'
+                             "        description: 'Read the series',\n"
+                             "        prompt: 'Read every book',\n"
+                             "        subagent_type: 'file-search',\n"
+                             '        run_in_background: false,\n'
+                             '      };\n'
+                             '\n'
+                             '      const snapshots: AgentResultDisplay[] = [];\n'
+                             '      const invocation = (\n'
+                             '        agentTool as AgentToolWithProtectedMethods\n'
+                             '      ).createInvocation(params);\n'
+                             '      '
+                             'vi.mocked(mockAgent.execute).mockImplementation(async () '
+                             '=> {\n'
+                             '        '
+                             'invocation.eventEmitter.emit(AgentEventType.ERROR, {\n'
+                             "          subagentId: 'sub-1',\n"
+                             "          error: 'Context is too large to send safely',\n"
+                             '          turnsUsed: 98,\n'
+                             '          timestamp: Date.now(),\n'
+                             '        });\n'
+                             '      });\n'
+                             '      await invocation.execute(undefined, (output) => {\n'
+                             '        snapshots.push(output as AgentResultDisplay);\n'
+                             '      });\n'
+                             '\n'
+                             '      const terminal = snapshots.filter(\n'
+                             "        (snapshot) => snapshot.status === 'failed',\n"
+                             '      );\n'
+                             '      expect(terminal.length).toBeGreaterThan(0);\n'
+                             '      expect(terminal.map((snapshot) => '
+                             'snapshot.turnsUsed)).toEqual(\n'
+                             '        terminal.map(() => 98),\n'
                              '      );\n'
                              '    });\n'
                              '\n'
@@ -57270,7 +57522,19 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '    });\n'
                        '\n'
                        '    this.eventEmitter.on(AgentEventType.ERROR, (...args: '
-                       'unknown[]) => {\n',
+                       'unknown[]) => {\n'
+                       '      const event = args[0] as AgentErrorEvent;\n'
+                       '      this.updateDisplay(\n'
+                       '        {\n'
+                       "          status: 'failed',\n"
+                       '          terminateReason: event.error,\n'
+                       '        },\n'
+                       '        updateOutput,\n'
+                       '      );\n'
+                       '    });\n'
+                       '\n'
+                       '    // Track real-time token consumption from subagent API '
+                       'calls.\n',
              'after': '          },\n'
                       '          updateOutput,\n'
                       '        );\n'
@@ -57292,15 +57556,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      );\n'
                       '    });\n'
                       '\n'
-                      '    // This is the first update that leaves `running`, so it is '
-                      'the one an\n'
-                      '    // edge-triggered consumer reads. It therefore has to carry '
-                      'the terminal\n'
-                      '    // facts in full: a later, richer update for the same '
-                      'transition is not\n'
-                      '    // read at all, and a consumer that finds no turn count on '
-                      'this one\n'
-                      '    // records that the subagent took no turns.\n'
+                      '    // Whichever of these lands first is the update that leaves '
+                      '`running`,\n'
+                      '    // and it is the one an edge-triggered consumer reads; a '
+                      'later, richer\n'
+                      '    // update for the same transition is not read at all. Both '
+                      'therefore\n'
+                      '    // carry the terminal facts in full.\n'
                       '    this.eventEmitter.on(AgentEventType.FINISH, (...args: '
                       'unknown[]) => {\n'
                       '      const event = args[0] as AgentFinishEvent;\n'
@@ -57319,7 +57581,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    });\n'
                       '\n'
                       '    this.eventEmitter.on(AgentEventType.ERROR, (...args: '
-                      'unknown[]) => {\n',
+                      'unknown[]) => {\n'
+                      '      const event = args[0] as AgentErrorEvent;\n'
+                      '      this.updateDisplay(\n'
+                      '        {\n'
+                      "          status: 'failed',\n"
+                      '          terminateReason: event.error,\n'
+                      '          turnsUsed: event.turnsUsed,\n'
+                      '        },\n'
+                      '        updateOutput,\n'
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      '    // Track real-time token consumption from subagent API '
+                      'calls.\n',
              'review_before': '          },\n'
                               '          updateOutput,\n'
                               '        );\n'
@@ -57340,7 +57615,19 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '    });\n'
                               '\n'
                               '    this.eventEmitter.on(AgentEventType.ERROR, '
-                              '(...args: unknown[]) => {\n',
+                              '(...args: unknown[]) => {\n'
+                              '      const event = args[0] as AgentErrorEvent;\n'
+                              '      this.updateDisplay(\n'
+                              '        {\n'
+                              "          status: 'failed',\n"
+                              '          terminateReason: event.error,\n'
+                              '        },\n'
+                              '        updateOutput,\n'
+                              '      );\n'
+                              '    });\n'
+                              '\n'
+                              '    // Track real-time token consumption from subagent '
+                              'API calls.\n',
              'review_after': '          },\n'
                              '          updateOutput,\n'
                              '        );\n'
@@ -57362,15 +57649,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '    });\n'
                              '\n'
-                             '    // This is the first update that leaves `running`, '
-                             'so it is the one an\n'
-                             '    // edge-triggered consumer reads. It therefore has '
-                             'to carry the terminal\n'
-                             '    // facts in full: a later, richer update for the '
-                             'same transition is not\n'
-                             '    // read at all, and a consumer that finds no turn '
-                             'count on this one\n'
-                             '    // records that the subagent took no turns.\n'
+                             '    // Whichever of these lands first is the update that '
+                             'leaves `running`,\n'
+                             '    // and it is the one an edge-triggered consumer '
+                             'reads; a later, richer\n'
+                             '    // update for the same transition is not read at '
+                             'all. Both therefore\n'
+                             '    // carry the terminal facts in full.\n'
                              '    this.eventEmitter.on(AgentEventType.FINISH, '
                              '(...args: unknown[]) => {\n'
                              '      const event = args[0] as AgentFinishEvent;\n'
@@ -57391,7 +57676,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    });\n'
                              '\n'
                              '    this.eventEmitter.on(AgentEventType.ERROR, (...args: '
-                             'unknown[]) => {\n'},
+                             'unknown[]) => {\n'
+                             '      const event = args[0] as AgentErrorEvent;\n'
+                             '      this.updateDisplay(\n'
+                             '        {\n'
+                             "          status: 'failed',\n"
+                             '          terminateReason: event.error,\n'
+                             '          turnsUsed: event.turnsUsed,\n'
+                             '        },\n'
+                             '        updateOutput,\n'
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             '    // Track real-time token consumption from subagent '
+                             'API calls.\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '    }\n'
@@ -93671,9 +93969,9 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/agents/runtime/agent-context.ts': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6',
  'packages/core/src/agents/runtime/agent-core.test.ts': '5ce2e138841cfd514818d12a56ce0a426974f633e81bbbaad4b0cf38cc0437de',
  'packages/core/src/agents/runtime/agent-core.ts': '2c998619b919b775143d554cadee7173cdc5d6cb180852ada9ad92c694a35bbf',
- 'packages/core/src/agents/runtime/agent-events.ts': 'a34880c8ffa5ba33ebb5f045db3703093b5527ebc629f19ece83037e2b5b7603',
+ 'packages/core/src/agents/runtime/agent-events.ts': 'f8ddde1eb314785fbc47470dda432f2296b9d4d024cbe3c2241e12db69e99dcb',
  'packages/core/src/agents/runtime/agent-headless.test.ts': '25c436dc1471f6e4add077a719151c339378f0950d313f48d69cfc4cc31f66be',
- 'packages/core/src/agents/runtime/agent-headless.ts': '665297f0f113aa9bcf42fe6f480bbbe363cacc02d2a8a0f4ec96131f61db8166',
+ 'packages/core/src/agents/runtime/agent-headless.ts': '24f953533bc130c33687e2cbe1b324dc0f49fb5a3f78860e30682193ac272cf5',
  'packages/core/src/agents/runtime/agent-types.ts': '09a5db201308cae2598fb36f4a79b645b73705e3dd54d2b3a88a27a034ee449b',
  'packages/core/src/agents/subagent-result.test.ts': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91',
  'packages/core/src/agents/subagent-result.ts': '6dc6f199ba394f6e0520aca1d54a5d7c529eea9b0d94f76ab0fffa29327b12e2',
@@ -93713,7 +94011,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/models/types.ts': '36aeae5b246fb84e527d3d767e0ac4dd90288e6969240c982ac7488848ae844b',
  'packages/core/src/permissions/permission-manager.test.ts': 'd7d463b3c4eebf766656f881f9cc1ecd4a3758b86af7d8e49bbbe84a45389f92',
  'packages/core/src/permissions/permission-manager.ts': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779',
- 'packages/core/src/services/chatCompressionService.test.ts': 'de66bd63d1b1a08c605cf987d80bf1415903bd2c09dadf8220dbd636cdfa7adc',
+ 'packages/core/src/services/chatCompressionService.test.ts': '9dfd150993d625d6081e14b9b6913f8c38d6baf1d3b941e60c46ac66090dc37a',
  'packages/core/src/services/chatCompressionService.ts': '8cd8d307e840464108a2859d5f9ee29dc485928d42bab4cc5cb6c80e9232fb8c',
  'packages/core/src/services/fileReadCache.integration.test.ts': '310b8d5c9d81bec445100ffddf8bc89e2841ef7f5917d267fd4df55c8104a775',
  'packages/core/src/services/loopDetectionService.ts': '9e3b6457192b8bd6691ada479da2db67d10721778c3ad260e06409778217f99d',
@@ -93723,8 +94021,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
  'packages/core/src/test-utils/mock-tool.ts': '2d986e625264006e124e2762e70d3202cda49804f9645325dbf9c5481a3ef24d',
  'packages/core/src/tools/__snapshots__/shell.test.ts.snap': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41',
- 'packages/core/src/tools/agent/agent.test.ts': '6dcceb44938d59bd79f4d3b78010413ca0238a3339e7b80729d60611f898a4df',
- 'packages/core/src/tools/agent/agent.ts': 'b2fd9bf314b67a843d38b196af03ee05d581e5793da50beb698a1272a440201d',
+ 'packages/core/src/tools/agent/agent.test.ts': 'ff5f70a758e180e4b465ee568dffaa4b3ce9e8ae94781eb4d611f89c0eead510',
+ 'packages/core/src/tools/agent/agent.ts': '87fe816db6a8a4e37faebb865a5bab9d375f86d92f9ac68c8732cced11047fb5',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',

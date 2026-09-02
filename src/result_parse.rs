@@ -58,8 +58,11 @@ pub struct AgentScope {
     /// Name of that spawning tool call. Recorded as evidence for the reader,
     /// never used as a correlation key: resolution is by id alone.
     pub tool_name: String,
-    /// Assistant events in this scope carrying billed usage — the turns the
-    /// subagent both started and finished, counted by this parser.
+    /// Assistant events in this scope carrying billed usage, counted by this
+    /// parser. Usage rides the main session's model stream, so a subagent
+    /// scope's assistant events carry none and this is zero for every
+    /// subagent; the count a subagent reports for itself is
+    /// `reported_num_turns`.
     pub billed_turns: u64,
     /// What the scope's own terminal record reported, verbatim. All four are
     /// `None` exactly when the scope never emitted a terminal record (the
