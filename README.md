@@ -276,9 +276,9 @@ second application must be byte-for-byte idempotent.
 is generated review evidence for humans; it is independently hashed and compared
 to the transformer's exact output, but is not a second patching path. Its current
 SHA-256 is
-`cf9b176af4e0be6e7020a711610ef5147e3da177171755a003ba6dcddc45a716`.
+`cf13e1df2cb144a01ad8bbd6f39e9a61dc763713b9c62b003a9a6b1f22398062`.
 The transformer's manifest SHA-256 is
-`8ea0a34ca95352d832404cf8861fecdfa9a384ad19505e19a201dbff3f0f9438`.
+`9e2c7d5597fc42e2c6f05cc7988932d3a6a39453e694a7bc356d060335ca9f5c`.
 Both identities are locked, checked on the host, checked again inside the Docker
 build, and recorded as image labels.
 
@@ -470,6 +470,18 @@ rather than a spelling nothing asserted. Nothing here judges whether the work wa
 done, which is not decidable from a stream; it reports the shape of the ending,
 which is.
 
+A turn's output request is sized to stop at the auto-compaction threshold, so the
+room a turn is given shrinks as the conversation grows while the room a turn needs
+does not. When a generation ends at the output cap under a budget the ceiling did
+not set, the client reads that as the conversation having outgrown the room a turn
+can be given: the severed turn is set aside before any summary is taken, the
+history is summarized, and the same turn is reissued against the summary at the
+room it now buys. This happens at most once per turn and only when the summary
+raises the budget. `error_incomplete_generation` therefore reaches a caller only
+when room was not the constraint — the ceiling was already the limit, the summary
+was refused or failed, or the turn had already produced a tool call — and the
+event stream carries the compaction record either way.
+
 ## Prefix caching evidence
 
 Prefix caching is enabled in the sole backend command. It is not accepted on faith:
@@ -653,7 +665,7 @@ source, build-input, stack-lock, and Cargo-lock labels.
 The current agent image is the one
 [`config/release.lock.json`](config/release.lock.json) names in `.images.agent`.
 Its build reconstructed exactly 104 changed/new files from pristine upstream
-and passed 5,253 tests across fifty-seven focused test files. The sealed runtime
+and passed 5,259 tests across fifty-seven focused test files. The sealed runtime
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
 review-diff, semantic-manifest, settings, instruction, and wrapper labels. The
 build script treats any other image ID as drift. The image also carries Qwen
@@ -840,7 +852,7 @@ backend; unchanged historical cache measurements are identified as such:
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
 2. clean Qwen archive extraction, semantic drift/idempotence/rollback checks,
    transactional source transformation, review-diff equivalence, full patched
-   build, and all 5,253 assertions in fifty-seven focused test files;
+   build, and all 5,259 assertions in fifty-seven focused test files;
 3. independent no-cache reproduction of all five locked images, exact label/hash/
    version checks, and network-none route proofs;
 4. exact live backend container/image/user/labels/command/mounts/cache/listener/

@@ -6151,7 +6151,7 @@ index c224235..1786226 100644
            );
          }
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
-index 5ae5029..8d58888 100644
+index 5ae5029..fb3225a 100644
 --- a/packages/core/src/core/geminiChat.test.ts
 +++ b/packages/core/src/core/geminiChat.test.ts
 @@ -30,24 +30,26 @@ import { OpenAIContentGenerator } from './openaiContentGenerator/openaiContentGe
@@ -7523,11 +7523,11 @@ index 5ae5029..8d58888 100644
 -      );
 -      expect(mockDebugLoggerWarn).toHaveBeenCalledWith(
 -        expect.stringContaining('hard-tier rescue skipped'),
--      );
--      expect(mockDebugLoggerWarn).toHaveBeenCalledWith(
--        expect.stringContaining('prompt_id=prompt-hard-rescue-after-failures'),
 +        Array(FAILING_SENDS).fill(true),
        );
+-      expect(mockDebugLoggerWarn).toHaveBeenCalledWith(
+-        expect.stringContaining('prompt_id=prompt-hard-rescue-after-failures'),
+-      );
 -    });
 +      expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();
  
@@ -8028,7 +8028,7 @@ index 5ae5029..8d58888 100644
          contextWindowSize: 65_536,
        });
  
-@@ -5448,13 +5396,13 @@ describe('GeminiChat', async () => {
+@@ -5448,13 +5396,355 @@ describe('GeminiChat', async () => {
        // Normal auto-path cheap-gate (force=false), NOT hard-tier rescue.
        expect(compressSpy).toHaveBeenCalledTimes(1);
        expect(compressSpy.mock.calls[0][1].force).toBe(false);
@@ -8037,13 +8037,355 @@ index 5ae5029..8d58888 100644
        ).mock.calls[0][0].config as { maxOutputTokens?: number };
 -      expect(requestConfig.maxOutputTokens).toBe(32_768);
 +      expect(requestConfig.maxOutputTokens).toBe(4_000);
++    });
++  });
++
++  describe('sendMessageStream compaction rescue', () => {
++    // A 262,144-token window puts the auto-compaction threshold at 199,992,
++    // so an exactly counted prompt of 180,928 leaves a turn 19,064 tokens to
++    // write in while the ceiling is far higher. These exercise what happens
++    // when the model uses all 19,064 of them.
++    const SEVERED_PROMPT_TOKENS = 180_928;
++    const SEVERED_BUDGET = 19_064;
++    const SUMMARY_PROMPT_TOKENS = 20_756;
++    const RESCUED_BUDGET = 179_236;
++
++    function vllmConfig() {
++      return {
++        authType: AuthType.USE_OPENAI,
++        model: 'qwen3.8-27b-nvfp4-k8v4',
++        contextWindowSize: 262_144,
++        exactTokenCounting: 'vllm' as const,
++        samplingParams: { max_tokens: 262_144 },
++      };
++    }
++
++    function truncatedResponse(text: string) {
++      return (async function* () {
++        yield {
++          candidates: [
++            {
++              content: { parts: [{ text }], role: 'model' },
++              finishReason: 'MAX_TOKENS',
++            },
++          ],
++        } as unknown as GenerateContentResponse;
++      })();
++    }
++
++    function completedResponse(text: string) {
++      return (async function* () {
++        yield {
++          candidates: [
++            {
++              content: { parts: [{ text }], role: 'model' },
++              finishReason: 'STOP',
++            },
++          ],
++        } as unknown as GenerateContentResponse;
++      })();
++    }
++
++    function countTokens(...counts: number[]) {
++      const counter = vi.fn();
++      for (const totalTokens of counts) {
++        counter.mockResolvedValueOnce({ totalTokens, maxModelLen: 262_144 });
++      }
++      counter.mockResolvedValue({
++        totalTokens: counts.at(-1),
++        maxModelLen: 262_144,
++      });
++      mockContentGenerator.countRequestTokens = counter;
++      return counter;
++    }
++
++    function newChat() {
++      return new GeminiChat(mockConfig, {}, [], undefined, uiTelemetryService);
++    }
++
++    async function drain(stream: AsyncGenerator<StreamEvent>) {
++      const events: StreamEvent[] = [];
++      for await (const event of stream) events.push(event);
++      return events;
++    }
++
++    beforeEach(() => {
++      vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue(
++        vllmConfig(),
++      );
++    });
++
++    it('reissues a turn the compaction bound cut short, at the room a summary buys', async () => {
++      // Two counts for the send itself (threshold gate, then clamp) and one
++      // for the summarized history the reissue is sized against.
++      countTokens(
++        SEVERED_PROMPT_TOKENS,
++        SEVERED_PROMPT_TOKENS,
++        SUMMARY_PROMPT_TOKENS,
++      );
++      const compress = vi
++        .spyOn(ChatCompressionService.prototype, 'compress')
++        .mockResolvedValueOnce({
++          newHistory: null,
++          info: {
++            originalTokenCount: SEVERED_PROMPT_TOKENS,
++            newTokenCount: SEVERED_PROMPT_TOKENS,
++            compressionStatus: CompressionStatus.NOOP,
++          },
++        })
++        .mockResolvedValueOnce({
++          newHistory: [{ role: 'user', parts: [{ text: 'summary so far' }] }],
++          info: {
++            originalTokenCount: SEVERED_PROMPT_TOKENS,
++            newTokenCount: SUMMARY_PROMPT_TOKENS,
++            compressionStatus: CompressionStatus.COMPRESSED,
++          },
++        });
++      vi.mocked(mockContentGenerator.generateContentStream)
++        .mockResolvedValueOnce(truncatedResponse('chunk_18 complete. Writing'))
++        .mockResolvedValueOnce(completedResponse('note_18 written'));
++
++      const chatInstance = newChat();
++      const events = await drain(
++        await chatInstance.sendMessageStream(
++          'qwen3.8-27b-nvfp4-k8v4',
++          { message: 'summarize chunk_18' },
++          'prompt-compaction-rescue',
++        ),
++      );
++
++      expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(
++        2,
++      );
++      const calls = vi.mocked(mockContentGenerator.generateContentStream).mock
++        .calls;
++      expect(
++        (calls[0][0].config as { maxOutputTokens?: number }).maxOutputTokens,
++      ).toBe(SEVERED_BUDGET);
++      expect(
++        (calls[1][0].config as { maxOutputTokens?: number }).maxOutputTokens,
++      ).toBe(RESCUED_BUDGET);
++      // The summary was taken for the rescue, forced past the threshold gate
++      // that had just declined at 180,928 of 199,992.
++      expect(compress).toHaveBeenCalledTimes(2);
++      expect(compress.mock.calls[1][1].force).toBe(true);
++      // The reissue is what the caller receives, and the cut-off prefix is
++      // not in the history the next turn will render.
++      expect(chatInstance.getLastModelMessageText()).toBe('note_18 written');
++      expect(
++        chatInstance
++          .getHistoryShallow()
++          .some((entry) =>
++            entry.parts?.some((part) =>
++              part.text?.includes('chunk_18 complete. Writing'),
++            ),
++          ),
++      ).toBe(false);
++      expect(events.some((event) => event.type === StreamEventType.RETRY)).toBe(
++        true,
++      );
++      expect(
++        events.some((event) => event.type === StreamEventType.COMPACTION),
++      ).toBe(true);
++    });
++
++    it('does not reissue a second time when the reissued turn is cut short at the ceiling', async () => {
++      countTokens(
++        SEVERED_PROMPT_TOKENS,
++        SEVERED_PROMPT_TOKENS,
++        SUMMARY_PROMPT_TOKENS,
++      );
++      const compress = vi
++        .spyOn(ChatCompressionService.prototype, 'compress')
++        .mockResolvedValueOnce({
++          newHistory: null,
++          info: {
++            originalTokenCount: SEVERED_PROMPT_TOKENS,
++            newTokenCount: SEVERED_PROMPT_TOKENS,
++            compressionStatus: CompressionStatus.NOOP,
++          },
++        })
++        .mockResolvedValueOnce({
++          newHistory: [{ role: 'user', parts: [{ text: 'summary so far' }] }],
++          info: {
++            originalTokenCount: SEVERED_PROMPT_TOKENS,
++            newTokenCount: SUMMARY_PROMPT_TOKENS,
++            compressionStatus: CompressionStatus.COMPRESSED,
++          },
++        });
++      // Both generations end at MAX_TOKENS. The second one had the room the
++      // summary bought, so nothing further is owed to it.
++      vi.mocked(mockContentGenerator.generateContentStream)
++        .mockResolvedValueOnce(truncatedResponse('first cut'))
++        .mockResolvedValueOnce(truncatedResponse('second cut'))
++        .mockResolvedValue(completedResponse('must not be reached'));
++
++      const chatInstance = newChat();
++      await drain(
++        await chatInstance.sendMessageStream(
++          'qwen3.8-27b-nvfp4-k8v4',
++          { message: 'summarize chunk_18' },
++          'prompt-compaction-rescue-once',
++        ),
++      );
++
++      expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(
++        2,
++      );
++      expect(compress).toHaveBeenCalledTimes(2);
++      expect(chatInstance.getLastModelMessageText()).toBe('second cut');
++    });
++
++    it('leaves a turn cut short at the ceiling alone', async () => {
++      // A configured ceiling below the room the threshold leaves: the budget
++      // is the ceiling's, so nothing a summary could buy was withheld from
++      // this turn and re-asking it would earn the same cut.
++      vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
++        ...vllmConfig(),
++        samplingParams: { max_tokens: 8_000 },
++      });
++      const smallPrompt = 1_000;
++      countTokens(smallPrompt, smallPrompt);
++      const compress = vi
++        .spyOn(ChatCompressionService.prototype, 'compress')
++        .mockResolvedValue({
++          newHistory: null,
++          info: {
++            originalTokenCount: smallPrompt,
++            newTokenCount: smallPrompt,
++            compressionStatus: CompressionStatus.NOOP,
++          },
++        });
++      vi.mocked(mockContentGenerator.generateContentStream)
++        .mockResolvedValueOnce(truncatedResponse('ceiling cut'))
++        .mockResolvedValue(completedResponse('must not be reached'));
++
++      const chatInstance = newChat();
++      await drain(
++        await chatInstance.sendMessageStream(
++          'qwen3.8-27b-nvfp4-k8v4',
++          { message: 'short question' },
++          'prompt-ceiling-cut',
++        ),
++      );
++
++      expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(
++        1,
++      );
++      // Only the send's own threshold gate ran; no rescue summary was taken.
++      expect(compress).toHaveBeenCalledTimes(1);
++      expect(chatInstance.getLastModelMessageText()).toBe('ceiling cut');
++    });
++
++    it.each([
++      [
++        'a summary that was refused',
++        {
++          newHistory: null,
++          info: {
++            originalTokenCount: SEVERED_PROMPT_TOKENS,
++            newTokenCount: SEVERED_PROMPT_TOKENS,
++            compressionStatus: CompressionStatus.NOOP,
++          },
++        },
++      ],
++      [
++        'a summary that failed',
++        {
++          newHistory: null,
++          info: {
++            originalTokenCount: SEVERED_PROMPT_TOKENS,
++            newTokenCount: SEVERED_PROMPT_TOKENS,
++            compressionStatus:
++              CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
++          },
++        },
++      ],
++    ])('reports the severance through %s', async (_name, outcome) => {
++      countTokens(SEVERED_PROMPT_TOKENS, SEVERED_PROMPT_TOKENS);
++      vi.spyOn(ChatCompressionService.prototype, 'compress')
++        .mockResolvedValueOnce({
++          newHistory: null,
++          info: {
++            originalTokenCount: SEVERED_PROMPT_TOKENS,
++            newTokenCount: SEVERED_PROMPT_TOKENS,
++            compressionStatus: CompressionStatus.NOOP,
++          },
++        })
++        .mockResolvedValueOnce(outcome);
++      vi.mocked(mockContentGenerator.generateContentStream)
++        .mockResolvedValueOnce(truncatedResponse('severed prefix'))
++        .mockResolvedValue(completedResponse('must not be reached'));
++
++      const chatInstance = newChat();
++      await drain(
++        await chatInstance.sendMessageStream(
++          'qwen3.8-27b-nvfp4-k8v4',
++          { message: 'summarize chunk_18' },
++          'prompt-rescue-unavailable',
++        ),
++      );
++
++      // No reissue, and the severed turn is put back where it was so the
++      // caller sees the truncation rather than a silently emptied turn.
++      expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(
++        1,
++      );
++      expect(chatInstance.getLastModelMessageText()).toBe('severed prefix');
++    });
++
++    it('does not reissue a turn that already produced a tool call', async () => {
++      countTokens(SEVERED_PROMPT_TOKENS, SEVERED_PROMPT_TOKENS);
++      const compress = vi
++        .spyOn(ChatCompressionService.prototype, 'compress')
++        .mockResolvedValue({
++          newHistory: null,
++          info: {
++            originalTokenCount: SEVERED_PROMPT_TOKENS,
++            newTokenCount: SEVERED_PROMPT_TOKENS,
++            compressionStatus: CompressionStatus.NOOP,
++          },
++        });
++      vi.mocked(mockContentGenerator.generateContentStream)
++        .mockResolvedValueOnce(
++          (async function* () {
++            yield {
++              candidates: [
++                {
++                  content: {
++                    parts: [{ functionCall: { name: 'read_file', args: {} } }],
++                    role: 'model',
++                  },
++                  finishReason: 'MAX_TOKENS',
++                },
++              ],
++            } as unknown as GenerateContentResponse;
++          })(),
++        )
++        .mockResolvedValue(completedResponse('must not be reached'));
++
++      const chatInstance = newChat();
++      await drain(
++        await chatInstance.sendMessageStream(
++          'qwen3.8-27b-nvfp4-k8v4',
++          { message: 'read chunk_18' },
++          'prompt-rescue-tool-call',
++        ),
++      );
++
++      // Re-asking the turn would orphan the call the scheduler is about to
++      // run, so the rescue does not touch it and no summary is taken.
++      expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(
++        1,
++      );
++      expect(compress).toHaveBeenCalledTimes(1);
      });
    });
  
    describe('addHistory', () => {
      it('should add a new content item to the history', () => {
        const newContent: Content = {
-@@ -5855,81 +5803,280 @@ describe('GeminiChat', async () => {
+@@ -5855,81 +6145,280 @@ describe('GeminiChat', async () => {
      it('should retry on invalid content, succeed, and report metrics', async () => {
        vi.useFakeTimers();
        try {
@@ -8370,7 +8712,7 @@ index 5ae5029..8d58888 100644
          vi.mocked(
            mockContentGenerator.generateContentStream,
          ).mockImplementation(async () =>
-@@ -8027,16 +8174,16 @@ describe('GeminiChat', async () => {
+@@ -8027,16 +8516,16 @@ describe('GeminiChat', async () => {
          } finally {
            vi.useRealTimers();
          }
@@ -8391,7 +8733,7 @@ index 5ae5029..8d58888 100644
            const chatWithRecording = chatWithRecorder(recordAssistantTurn);
            vi.mocked(mockContentGenerator.generateContentStream)
              .mockResolvedValueOnce(cutAfter([textChunk('The result is')]))
-@@ -12677,18 +12824,17 @@ describe('GeminiChat', async () => {
+@@ -12677,18 +13166,17 @@ describe('GeminiChat', async () => {
        const calls = vi.mocked(mockContentGenerator.generateContentStream).mock
          .calls;
        const initialConfig = calls[0]![0].config as { maxOutputTokens?: number };
@@ -8415,7 +8757,7 @@ index 5ae5029..8d58888 100644
      it('re-clamps recovery sends even when an intermediate response omits usage metadata', async () => {
        // Codex round-4 scenario: multi-iteration recovery where the FIRST
        // truncated response reports usage but the SECOND omits it. The
-@@ -12760,18 +12906,18 @@ describe('GeminiChat', async () => {
+@@ -12760,18 +13248,18 @@ describe('GeminiChat', async () => {
        const recovery1Config = calls[1]![0].config as {
          maxOutputTokens?: number;
        };
@@ -8439,7 +8781,7 @@ index 5ae5029..8d58888 100644
  
      it('should enter recovery loop when escalated response is also truncated', async () => {
        // Three streams: initial (MAX_TOKENS) → escalated (MAX_TOKENS) →
-@@ -14726,15 +14872,14 @@ describe('GeminiChat', async () => {
+@@ -14726,15 +15214,14 @@ describe('GeminiChat', async () => {
        redactStructuredOutputArgsForRecording(original);
        expect(original).toEqual(snapshot);
      });
@@ -8457,7 +8799,7 @@ index 5ae5029..8d58888 100644
        parts: [{ text }],
      });
      const modelMsg = (text: string) => ({
-@@ -14817,38 +14962,33 @@ describe('GeminiChat', async () => {
+@@ -14817,38 +15304,33 @@ describe('GeminiChat', async () => {
        const info = await subagentChat.tryCompress('p3');
        expect(info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
        expect(subagentChat.getLastPromptTokenCount()).toBe(200);
@@ -8498,7 +8840,7 @@ index 5ae5029..8d58888 100644
        const compressSpy = mockCompressionService('compressed');
  
        await chat.tryCompress('p1', true);
-@@ -14970,153 +15110,12 @@ describe('GeminiChat', async () => {
+@@ -14970,153 +15452,12 @@ describe('GeminiChat', async () => {
            info: expect.objectContaining({ newTokenCountIsEstimated: true }),
          }),
        );
@@ -8652,7 +8994,7 @@ index 5ae5029..8d58888 100644
        finishReason?: string,
      ): GenerateContentResponse {
        return {
-@@ -15126,12 +15125,47 @@ describe('GeminiChat', async () => {
+@@ -15126,12 +15467,47 @@ describe('GeminiChat', async () => {
              ...(finishReason ? { finishReason } : {}),
            },
          ],
@@ -8701,7 +9043,7 @@ index 5ae5029..8d58888 100644
          (async function* () {
            yield xmlChunk(xml, 'STOP');
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
-index 8051292..4e15660 100644
+index 8051292..551c17e 100644
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
 @@ -43,25 +43,31 @@ import {
@@ -9540,7 +9882,21 @@ index 8051292..4e15660 100644
                retryAuthType: exactRoute.retryAuthType,
                retryErrorCodes: exactRoute.retryErrorCodes,
              }
-@@ -2671,17 +2783,25 @@ export class GeminiChat {
+@@ -2660,28 +2772,39 @@ export class GeminiChat {
+           cgConfig?.retryMaxDelayMs ?? RATE_LIMIT_RETRY_OPTIONS.maxDelayMs;
+         const extraRetryErrorCodes = cgConfig?.retryErrorCodes;
+ 
+         // Max output tokens escalation: when no user/env override is set and
+         // the model hits MAX_TOKENS, retry once with the escalated limit.
+         let maxTokensEscalated = false;
++        // One attempt per turn at summarizing a conversation that has
++        // outgrown the room a turn can be given. See the rescue below.
++        let compactionRescueAttempted = false;
+         const parsedEnvMaxTokens = parsePositiveIntegerEnvValue(
+           process.env['QWEN_CODE_MAX_OUTPUT_TOKENS'],
+         );
+         const hasUserMaxTokensOverride =
+           (cgConfig?.samplingParams?.max_tokens !== undefined &&
              cgConfig?.samplingParams?.max_tokens !== null) ||
            parsedEnvMaxTokens !== undefined;
          // params.config.maxOutputTokens is set by the first-send clamp; the
@@ -9571,7 +9927,146 @@ index 8051292..4e15660 100644
          let lastFinishReason: string | undefined;
  
          /**
-@@ -2949,13 +3069,15 @@ export class GeminiChat {
+@@ -2813,12 +2936,138 @@ export class GeminiChat {
+               const fr = chunk.candidates?.[0]?.finishReason;
+               if (fr) lastFinishReason = fr;
+               yield { type: StreamEventType.CHUNK, value: chunk };
+             }
+ 
+             lastError = null;
++            // A generation the compaction bound cut short is not a failed
++            // attempt at an answer: it is the conversation reporting that it
++            // has outgrown the room a turn can be given. Only the provider's
++            // terminal reason says so, and only after the fact, so this is
++            // the one point where it is knowable. `max_tokens` below the
++            // ceiling is what makes summarizing the remedy: the ceiling was
++            // not the limit, the history was, and a summary is exactly what
++            // buys the room back. Nothing is resumed and nothing is patched
++            // up — the severed turn is set aside before the summary is taken
++            // so no cut-off text can enter durable history, and the same
++            // question is then asked again against the summarized history at
++            // the full ceiling. A turn that already produced a tool call is
++            // left alone: re-asking it would orphan the call.
++            if (
++              !compactionRescueAttempted &&
++              lastFinishReason === FinishReason.MAX_TOKENS &&
++              !streamYieldedFunctionCall &&
++              effectiveInitialMaxOutputTokens < outputCeiling
++            ) {
++              compactionRescueAttempted = true;
++              const severedTurn =
++                self.history.at(-1)?.role === 'model'
++                  ? self.history.pop()
++                  : undefined;
++              let summary: ChatCompressionInfo | undefined;
++              let rescue:
++                | {
++                    contents: Content[];
++                    maxOutputTokens: number;
++                    info: ChatCompressionInfo;
++                  }
++                | undefined;
++              try {
++                summary = await self.tryCompress(
++                  prompt_id,
++                  true,
++                  params.config?.abortSignal,
++                  {
++                    originalTokenCountOverride: promptTokensForClamp,
++                    precomputedEffectiveTokens: promptTokensForClamp,
++                    requestGenerationConfig: params.config,
++                    trigger: 'auto',
++                  },
++                );
++                if (
++                  summary.compressionStatus === CompressionStatus.COMPRESSED
++                ) {
++                  const contents = self.getRequestHistoryForRoute(
++                    currentUserContent,
++                    requestModalities,
++                  );
++                  const promptTokens = exactTokenCounting
++                    ? await countExactRequestTokens(contents)
++                    : summary.newTokenCount;
++                  const maxOutputTokens = exactTokenCounting
++                    ? clampExactOutputTokensToWindow(
++                        outputCeiling,
++                        contextWindowForClamp,
++                        promptTokens,
++                        autoCompactionThreshold,
++                      )
++                    : clampOutputTokensToWindow(
++                        outputCeiling,
++                        contextWindowForClamp,
++                        promptTokens,
++                        autoCompactionThreshold,
++                      );
++                  // The summary has to buy room the severed turn did not
++                  // have. Re-asking the same question under the same budget
++                  // would earn the same cut, so a summary that bought nothing
++                  // is not a rescue and the run reports the severance.
++                  if (maxOutputTokens > effectiveInitialMaxOutputTokens) {
++                    rescue = { contents, maxOutputTokens, info: summary };
++                  }
++                }
++              } catch (compactionError) {
++                if (
++                  params.config?.abortSignal?.aborted ||
++                  isAbortError(compactionError)
++                ) {
++                  throw compactionError;
++                }
++                debugLogger.warn(
++                  `[compaction] rescue of a turn cut short at ` +
++                    `${effectiveInitialMaxOutputTokens} tokens failed: ` +
++                    `${String(compactionError)}`,
++                );
++              }
++              if (
++                summary &&
++                summary.compressionStatus !== CompressionStatus.NOOP
++              ) {
++                yield {
++                  type: StreamEventType.COMPACTION,
++                  record: toCompactionRecord(summary),
++                };
++              }
++              if (rescue) {
++                requestContents = rescue.contents;
++                params = {
++                  ...params,
++                  config: {
++                    ...params.config,
++                    maxOutputTokens: rescue.maxOutputTokens,
++                  },
++                };
++                debugLogger.info(
++                  `[compaction] rescued a turn cut short at ` +
++                    `${effectiveInitialMaxOutputTokens} tokens; reissuing it ` +
++                    `with ${rescue.maxOutputTokens}.`,
++                );
++                yield { type: StreamEventType.COMPRESSED, info: rescue.info };
++                yield { type: StreamEventType.RETRY };
++                resetTransportContinuation();
++                suppressNextRetryEvent = true;
++                continue;
++              }
++              // The history the severed turn belonged to is still the history
++              // this chat holds, so the turn goes back where it was.
++              if (
++                summary?.compressionStatus !== CompressionStatus.COMPRESSED &&
++                severedTurn
++              ) {
++                self.history.push(severedTurn);
++              }
++            }
+             // The merge itself now happens inside `processStreamResponse`,
+             // which folds the prefix into the parts before it writes either
+             // the JSONL record or the history turn (issue #8094). Merging
+             // again here would risk double-applying it: the dedup helper only
+             // strips a replayed prefix that clears its significance floor, so
+             // a short prefix would survive the second pass and be doubled.
+@@ -2949,13 +3198,15 @@ export class GeminiChat {
                // second discards output the caller is watching. The
                // accumulated buffer is what distinguishes them, and it must be
                // consulted here because this branch is checked before the
@@ -9588,7 +10083,7 @@ index 8051292..4e15660 100644
                const delayMs =
                  TRANSPORT_STREAM_RETRY_CONFIG.initialDelayMs *
                  transportStreamRetryCount;
-@@ -3002,13 +3124,15 @@ export class GeminiChat {
+@@ -3002,13 +3253,15 @@ export class GeminiChat {
              // check), and the scheduler's repair path already covers it.
              const canContinueAfterTransportCut =
                isRetryableStreamTransportError &&
@@ -9605,7 +10100,7 @@ index 8051292..4e15660 100644
                // Everything delivered so far — across earlier continuation
                // attempts too, since `transportContinuationText` accumulates
                // and is never reset while continuing. Each attempt's own text
-@@ -3081,12 +3205,24 @@ export class GeminiChat {
+@@ -3081,12 +3334,24 @@ export class GeminiChat {
                        precomputedEffectiveTokens: reactiveOriginalTokenCount,
                        requestGenerationConfig: params.config,
                        trigger: 'auto',
@@ -9630,7 +10125,7 @@ index 8051292..4e15660 100644
                    ) {
                      // No-op today: tryCompress's setHistory has already
                      // cleared the marker. Kept for uniformity with the
-@@ -3141,31 +3277,12 @@ export class GeminiChat {
+@@ -3141,31 +3406,12 @@ export class GeminiChat {
                    }
  
                    debugLogger.warn(
@@ -9662,7 +10157,7 @@ index 8051292..4e15660 100644
                      isAbortError(compressionError)
                    ) {
                      throw compressionError;
-@@ -3196,22 +3313,29 @@ export class GeminiChat {
+@@ -3196,22 +3442,29 @@ export class GeminiChat {
                break;
              }
  
@@ -9694,7 +10189,7 @@ index 8051292..4e15660 100644
                const nextInvalidStreamRetryCount = invalidStreamRetryCount + 1;
                if (error.type === 'PROTOCOL_TAG_LEAK') {
                  protocolTagLeakRetryCount = nextInvalidStreamRetryCount;
-@@ -3320,14 +3444,15 @@ export class GeminiChat {
+@@ -3320,14 +3573,15 @@ export class GeminiChat {
                }
                return;
              } catch (error) {
@@ -9712,7 +10207,7 @@ index 8051292..4e15660 100644
                  error.type === 'PROTOCOL_TAG_LEAK'
                    ? protocolTagLeakRetryCount
                    : transientRetryCount;
-@@ -3362,12 +3487,13 @@ export class GeminiChat {
+@@ -3362,12 +3616,13 @@ export class GeminiChat {
                await delay(delayMs, attemptState.params.config?.abortSignal)
                  .promise;
              }
@@ -9726,7 +10221,7 @@ index 8051292..4e15660 100644
            !hasUserMaxTokensOverride
          ) {
            maxTokensEscalated = true;
-@@ -3523,12 +3649,13 @@ export class GeminiChat {
+@@ -3523,12 +3778,13 @@ export class GeminiChat {
                config: {
                  ...recoveryParams.config,
                  maxOutputTokens: clampOutputTokensToWindow(
@@ -9740,7 +10235,7 @@ index 8051292..4e15660 100644
  
              try {
                for await (const event of streamWithInvalidStreamRetries(
-@@ -3614,15 +3741,16 @@ export class GeminiChat {
+@@ -3614,15 +3870,16 @@ export class GeminiChat {
            // - Do NOT trigger fallback when persistent mode is active
            //   (QWEN_CODE_UNATTENDED_RETRY) — persistent mode retries the primary
            //   model indefinitely by design.
@@ -9760,7 +10255,7 @@ index 8051292..4e15660 100644
              !isUnattendedMode() &&
              !streamYieldedAnyChunk
            ) {
-@@ -3897,19 +4025,24 @@ export class GeminiChat {
+@@ -3897,19 +4154,24 @@ export class GeminiChat {
            contents: requestContents,
            config: { ...this.generationConfig, ...params.config },
          },
@@ -9786,7 +10281,7 @@ index 8051292..4e15660 100644
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -4393,13 +4526,13 @@ export class GeminiChat {
+@@ -4393,13 +4655,13 @@ export class GeminiChat {
  
    setTools(tools: Tool[]): void {
      this.generationConfig.tools = tools;
@@ -9801,7 +10296,7 @@ index 8051292..4e15660 100644
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4441,12 +4574,14 @@ export class GeminiChat {
+@@ -4441,12 +4703,14 @@ export class GeminiChat {
    private async *processStreamResponse(
      model: string,
      streamResponse: AsyncGenerator<GenerateContentResponse>,
@@ -9816,7 +10311,7 @@ index 8051292..4e15660 100644
      const rawToolCallIdsInCurrentTurn = new Set<string>();
      const reservedToolCallIds = new Map<string, string>();
      let usageMetadata: GenerateContentResponseUsageMetadata | undefined;
-@@ -4771,12 +4906,13 @@ export class GeminiChat {
+@@ -4771,12 +5035,13 @@ export class GeminiChat {
  
      // XML tool call fallback: some models (e.g. qwen3.8-max-preview in very
      // long contexts) occasionally emit tool calls as raw XML in the content
@@ -9830,7 +10325,7 @@ index 8051292..4e15660 100644
        contentText &&
        containsXmlToolCalls(contentText)
      ) {
-@@ -4946,12 +5082,54 @@ export class GeminiChat {
+@@ -4946,12 +5211,54 @@ export class GeminiChat {
        contentText = consolidatedHistoryParts
          .filter((part) => part.text)
          .map((part) => part.text)
@@ -9885,7 +10380,7 @@ index 8051292..4e15660 100644
      ) {
        const contextWindowSize =
          this.config.getContentGeneratorConfig()?.contextWindowSize;
-@@ -5108,12 +5286,21 @@ export class GeminiChat {
+@@ -5108,12 +5415,21 @@ export class GeminiChat {
        this.history.splice(len - 2, 2);
      }
    }

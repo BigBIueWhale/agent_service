@@ -1140,8 +1140,9 @@ def _validate_compaction_event_after(state: State) -> None:
         f"{label}: {chat} no longer reports the reactive overflow rescue",
     )
     _require(
-        chat_source.count("type: StreamEventType.COMPACTION,") == 2,
-        f"{label}: {chat} must report both compaction sites",
+        chat_source.count("type: StreamEventType.COMPACTION,") == 3,
+        f"{label}: {chat} must report every compaction site — the pre-stream "
+        f"attempt, the reactive overflow rescue, and the severed-turn rescue",
     )
 
     # Subagent attribution: the agent event carries the record to the agent
@@ -2837,6 +2838,96 @@ def _validate_incomplete_generation_after(state: State) -> None:
     forbid_text(state, cli_test, "reason: undefined", label=label)
 
 
+def _validate_compaction_rescue_before(state: State) -> None:
+    label = "compaction-rescue precondition"
+    chat = "packages/core/src/core/geminiChat.ts"
+    chat_test = "packages/core/src/core/geminiChat.test.ts"
+    limits = "packages/core/src/core/tokenLimits.ts"
+    service = "packages/core/src/services/chatCompressionService.ts"
+    # Compaction is due when the prompt crosses the threshold, and only then.
+    # Whether the turn about to be issued has room to work is never asked.
+    require_text(state, service, "if (effectiveTokens < auto) {", label=label)
+    # The output floor names the regime below it as compaction's, and nothing
+    # in the send path ever hands that regime over.
+    require_text(
+        state, limits, "compaction/hard-rescue owns that regime", label=label
+    )
+    forbid_text(state, chat, "compactionRescueAttempted", label=label)
+    forbid_text(state, chat_test, "compaction rescue", label=label)
+
+
+def _validate_compaction_rescue_after(state: State) -> None:
+    label = "compaction-rescue result"
+    chat = "packages/core/src/core/geminiChat.ts"
+    chat_test = "packages/core/src/core/geminiChat.test.ts"
+    limits = "packages/core/src/core/tokenLimits.ts"
+
+    # The regime the output floor names is now reachable from the send path.
+    require_text(
+        state,
+        limits,
+        "compaction and the hard-tier rescue own",
+        label=label,
+    )
+    require_text(
+        state, chat, "let compactionRescueAttempted = false;", count=1, label=label
+    )
+    require_text(
+        state, chat, "compactionRescueAttempted = true;", count=1, label=label
+    )
+    require_text(state, chat, "self.history.push(severedTurn);", count=1, label=label)
+    chat_source = _source(state, chat, label=label)
+    # The rescue reads as one decision: a turn cut short below the ceiling and
+    # carrying no tool call is set aside, summarized, and only reissued when
+    # the summary bought room the severed turn did not have. Every clause is
+    # ordered because each one is what keeps the next safe.
+    _require_ordered(
+        chat_source,
+        (
+            "!compactionRescueAttempted &&",
+            "lastFinishReason === FinishReason.MAX_TOKENS &&",
+            "!streamYieldedFunctionCall &&",
+            "effectiveInitialMaxOutputTokens < outputCeiling",
+            "compactionRescueAttempted = true;",
+            "self.history.pop()",
+            "summary = await self.tryCompress(",
+            "summary.compressionStatus === CompressionStatus.COMPRESSED",
+            "maxOutputTokens > effectiveInitialMaxOutputTokens",
+            "rescue = { contents, maxOutputTokens, info: summary };",
+            "type: StreamEventType.COMPACTION,",
+            "yield { type: StreamEventType.RETRY };",
+            "summary?.compressionStatus !== CompressionStatus.COMPRESSED &&",
+            "self.history.push(severedTurn);",
+        ),
+        label=label,
+        location=chat,
+    )
+    # An abort during the summary stays an abort rather than becoming a
+    # swallowed rescue failure.
+    _require_ordered(
+        chat_source,
+        (
+            "} catch (compactionError) {",
+            "isAbortError(compactionError)",
+            "throw compactionError;",
+        ),
+        label=label,
+        location=chat,
+    )
+
+    # Executed in the build. The first two are what make the rescue safe
+    # rather than merely useful: it cannot recur, and a summary that was
+    # refused or failed reports the severance instead of swallowing it.
+    for case in (
+        "reissues a turn the compaction bound cut short, at the room a summary buys",
+        "does not reissue a second time when the reissued turn is cut short at the ceiling",
+        "reports the severance through %s",
+        "leaves a turn cut short at the ceiling alone",
+        "does not reissue a turn that already produced a tool call",
+    ):
+        require_text(state, chat_test, case, label=label)
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="locked-config-and-literal-cli",
@@ -3444,6 +3535,51 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_incomplete_generation_before,
         validate_after=_validate_incomplete_generation_after,
+    ),
+    SemanticConcern(
+        name="compaction-rescue-for-a-severed-turn",
+        rationale=(
+            "A turn's output request is sized to stop at the auto-compaction "
+            "threshold, so the room it is given shrinks as the conversation "
+            "grows while the room a turn needs does not. Compaction is due "
+            "when the prompt crosses that threshold, never when the room a "
+            "turn is left with runs out, and those are different conditions: "
+            "between them lies a stretch where every generation is issued "
+            "under a budget the history, not the ceiling, has set. The output "
+            "floor already names that stretch as compaction's -- it asks for "
+            "at least 4,000 tokens `rather than max_tokens <= 0` because "
+            "`compaction and the hard-tier rescue own that regime` -- and "
+            "nothing in the send path ever hands it over. Production "
+            "forensics found a 66-turn session whose per-turn need grew from "
+            "5,215 tokens to 20,995 across one conversation while its budget "
+            "fell to 19,064; the two curves crossed once and the run ended "
+            "there. No fixed floor separates them, because a turn's need is "
+            "not knowable before it is issued: a floor set for the early "
+            "turns never fires and one set for the late turns compacts "
+            "through a stretch where the budget was three to five times what "
+            "was used. The provider's terminal reason settles it after the "
+            "fact instead. A generation that ends at MAX_TOKENS under a "
+            "budget the ceiling did not set is the conversation reporting "
+            "that it has outgrown the room a turn can be given, so the "
+            "severed turn is set aside before any summary is taken, the "
+            "history is summarized, and the same question is asked again "
+            "against the summary at the room it now buys. Nothing is resumed "
+            "and no cut-off text enters durable history. It happens at most "
+            "once per turn and only when the summary raises the budget, so a "
+            "generation cut short with the full ceiling behind it, a summary "
+            "that was refused or failed, and a turn that already produced a "
+            "tool call all leave the severance to be reported rather than "
+            "hidden."
+        ),
+        removal_condition=(
+            "Remove only when upstream sizes a turn's output request against "
+            "a threshold it also compacts on, so that no generation can be "
+            "issued under a budget the history has already exhausted, or "
+            "when it recovers such a generation without resuming a severed "
+            "prefix."
+        ),
+        validate_before=_validate_compaction_rescue_before,
+        validate_after=_validate_compaction_rescue_after,
     ),
 )
 

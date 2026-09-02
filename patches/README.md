@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `cf9b176af4e0be6e7020a711610ef5147e3da177171755a003ba6dcddc45a716`
+- Review-diff SHA-256: `cf13e1df2cb144a01ad8bbd6f39e9a61dc763713b9c62b003a9a6b1f22398062`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `8ea0a34ca95352d832404cf8861fecdfa9a384ad19505e19a201dbff3f0f9438`
+- Transformer-manifest SHA-256: `9e2c7d5597fc42e2c6f05cc7988932d3a6a39453e694a7bc356d060335ca9f5c`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -113,6 +113,34 @@ provide as one fail-closed mode:
   are standing on and clear it at each turn head and at a model fallback, so a
   turn that reports none is read as none rather than inheriting an earlier
   turn's;
+- a turn cut short by the room the conversation has left, reissued against a
+  summary. A turn's output request is sized to stop at the auto-compaction
+  threshold, so the room it is given shrinks as the conversation grows while
+  the room a turn needs does not; compaction is due when the prompt crosses
+  that threshold, never when the room a turn is left with runs out. Between
+  those two conditions lies a stretch where every generation is issued under a
+  budget the history, not the ceiling, has set. `MIN_CLAMPED_OUTPUT_TOKENS`
+  already names that stretch as compaction's — the clamp asks for at least
+  4,000 tokens `rather than max_tokens <= 0` because `compaction and the
+  hard-tier rescue own that regime` — and the send path never hands it over.
+  In the 66-turn session above, the per-turn need grew from 5,215 tokens to
+  20,995 across one conversation while the budget fell to 19,064: two curves
+  crossing once, and the run ended at the crossing. No fixed floor separates
+  them, because a turn's need is not knowable before it is issued — a floor
+  set for that session's early turns never fires, and one set for its late
+  turns compacts through a stretch where the budget was three to five times
+  what was used. The provider's terminal reason settles it after the fact
+  instead: a generation that ends at `MAX_TOKENS` under a budget the ceiling
+  did not set is the conversation reporting that it has outgrown the room a
+  turn can be given. The severed turn is set aside before any summary is
+  taken, so no cut-off text enters durable history; the history is summarized;
+  and the same question is asked again against the summary at the room it now
+  buys. Nothing is resumed and nothing is patched up. It happens at most once
+  per turn and only when the summary raises the budget, so a generation cut
+  short with the full ceiling behind it, a summary that was refused or failed,
+  and a turn that already produced a tool call are each left to be reported as
+  `error_incomplete_generation` rather than hidden — the severed turn goes
+  back where it was when no summary replaced the history it belonged to;
 - locked settings loading before initialization and during later auth validation:
   no workspace settings or `.env`, no ambient/project/CLI/session/injected MCP,
   and no include-directory override;
@@ -431,8 +459,8 @@ Verification performed in the pinned Node image:
   idempotence, new-file handling, source/output drift, intermediate-state refusal,
   review-diff drift, time-of-check/time-of-use mutation, and transactional rollback;
 - the complete patched TypeScript/CLI build passed;
-- the full build-derived suite passed: all 57 derived test files (5,253
-  tests: 5,252 passed and 1 environment-skip in the bare pinned image, the
+- the full build-derived suite passed: all 57 derived test files (5,259
+  tests: 5,258 passed and 1 environment-skip in the bare pinned image, the
   20 git-dependent cases with git present as the production image provides
   it) -- zero failures;
 - the same 20 environment-gated failures reproduce byte-identically on the
