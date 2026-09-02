@@ -276,9 +276,9 @@ second application must be byte-for-byte idempotent.
 is generated review evidence for humans; it is independently hashed and compared
 to the transformer's exact output, but is not a second patching path. Its current
 SHA-256 is
-`40a5199c1610458b987576f71c3b80b3bc8a63ce5277d839dbde966f5bdaa330`.
+`cf9b176af4e0be6e7020a711610ef5147e3da177171755a003ba6dcddc45a716`.
 The transformer's manifest SHA-256 is
-`d93b6d78edcfb6719f224d76849692beb57d26a6a9733e3a6b8d7a34cad15871`.
+`8ea0a34ca95352d832404cf8861fecdfa9a384ad19505e19a201dbff3f0f9438`.
 Both identities are locked, checked on the host, checked again inside the Docker
 build, and recorded as image labels.
 
@@ -456,6 +456,19 @@ not mistaken for additional turns. Duplicate results, post-result output, a scop
 that is neither null nor an agent tool-call id, malformed lines, missing fields, an
 empty successful result, and a missing main-session result are hard errors. It never
 chooses a convenient-looking “last result.”
+
+The envelope names which terminal state ended the run, and the service carries that
+name through to the caller as `agent_result_subtype`. `success` is the agent's
+assertion that the model wrote its final message to the end; `error_max_turns`,
+`error_during_execution`, and `error_incomplete_generation` each name a distinct way
+the run stopped instead — the turn budget, a failure during execution, and a
+generation the provider stopped from outside before the model finished writing it.
+The set is closed in both directions: an error envelope carrying `success`, or a
+success envelope carrying an error spelling, is refused rather than mapped onto a
+neighbour. A run that never produced a terminal record reports no state at all
+rather than a spelling nothing asserted. Nothing here judges whether the work was
+done, which is not decidable from a stream; it reports the shape of the ending,
+which is.
 
 ## Prefix caching evidence
 
@@ -640,14 +653,14 @@ source, build-input, stack-lock, and Cargo-lock labels.
 The current agent image is the one
 [`config/release.lock.json`](config/release.lock.json) names in `.images.agent`.
 Its build reconstructed exactly 104 changed/new files from pristine upstream
-and passed 5,241 tests across fifty-seven focused test files. The sealed runtime
+and passed 5,253 tests across fifty-seven focused test files. The sealed runtime
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
 review-diff, semantic-manifest, settings, instruction, and wrapper labels. The
 build script treats any other image ID as drift. The image also carries Qwen
 Code's exact upstream Apache-2.0 license plus this repository's Unlicense and
 third-party scope notice; those documentation files do not alter the executable
 client or its locked behavior.
-The pinned Rust 1.95.0 stages passed all 114 tests: ninety-seven service,
+The pinned Rust 1.95.0 stages passed all 117 tests: one hundred service,
 nine broker, three fixed-relay, two stream-capture, and three agent-exec tests. A
 full clean no-cache release build reproduced the exact locked agent, relay, capture,
 broker, and service image IDs; candidate build directories were absent afterward.
@@ -827,7 +840,7 @@ backend; unchanged historical cache measurements are identified as such:
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
 2. clean Qwen archive extraction, semantic drift/idempotence/rollback checks,
    transactional source transformation, review-diff equivalence, full patched
-   build, and all 5,241 assertions in fifty-seven focused test files;
+   build, and all 5,253 assertions in fifty-seven focused test files;
 3. independent no-cache reproduction of all five locked images, exact label/hash/
    version checks, and network-none route proofs;
 4. exact live backend container/image/user/labels/command/mounts/cache/listener/

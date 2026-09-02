@@ -2649,6 +2649,194 @@ def _validate_compaction_accounting_after(state: State) -> None:
     )
 
 
+def _validate_incomplete_generation_before(state: State) -> None:
+    label = "incomplete-generation precondition"
+    turn = "packages/core/src/core/turn.ts"
+    cli = "packages/cli/src/nonInteractiveCli.ts"
+    types = "packages/cli/src/nonInteractive/types.ts"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    agent_core = "packages/core/src/agents/runtime/agent-core.ts"
+    agent_types = "packages/core/src/agents/runtime/agent-types.ts"
+    # The provider's terminal reason reaches the headless adapter, which reads
+    # the usage half of the event and drops the reason, so nothing downstream
+    # of the stream can separate a completed message from a severed one.
+    require_text(
+        state,
+        adapter,
+        "case GeminiEventType.Finished:\n        if (event.value?.usageMetadata) {",
+        label=label,
+    )
+    # Both reasoning loops equate "this turn requested no tools" with an
+    # answer, and neither consults the reason the generation ended.
+    require_text(
+        state,
+        cli,
+        "let shouldFinalizeTurn = toolCallRequests.length === 0;",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_core,
+        "// No tool calls \u2014 treat this as the model's final answer.",
+        label=label,
+    )
+    for path in (turn, cli, agent_core):
+        forbid_text(state, path, "describeIncompleteGeneration", label=label)
+    for path in (cli, types):
+        forbid_text(state, path, "error_incomplete_generation", label=label)
+    forbid_text(state, agent_types, "INCOMPLETE_GENERATION", label=label)
+
+
+def _validate_incomplete_generation_after(state: State) -> None:
+    label = "incomplete-generation result"
+    turn = "packages/core/src/core/turn.ts"
+    turn_test = "packages/core/src/core/turn.test.ts"
+    cli = "packages/cli/src/nonInteractiveCli.ts"
+    cli_test = "packages/cli/src/nonInteractiveCli.test.ts"
+    types = "packages/cli/src/nonInteractive/types.ts"
+    agent_core = "packages/core/src/agents/runtime/agent-core.ts"
+    agent_types = "packages/core/src/agents/runtime/agent-types.ts"
+    subagent_result = "packages/core/src/agents/subagent-result.ts"
+
+    # One predicate decides it, in core, so the main line and every subagent
+    # answer the question the same way. STOP is the only self-ended terminal.
+    turn_source = _require_all(
+        state,
+        turn,
+        (
+            "export function describeIncompleteGeneration(",
+            "reason: FinishReason | undefined,",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        turn_source,
+        (
+            "export function describeIncompleteGeneration(",
+            "if (reason === FinishReason.STOP) {",
+            "return null;",
+            "reason ?? 'no terminal reason'",
+        ),
+        label=label,
+        location=turn,
+    )
+
+    # The session's success path is gated on it, and the reason it carries is
+    # the one the last generation reported, in whichever loop produced it.
+    cli_source = _require_all(
+        state,
+        cli,
+        (
+            "let lastGenerationFinishReason: GeminiFinishedEventValue['reason'];",
+            "const incompleteGeneration = describeIncompleteGeneration(",
+            "subtype: 'error_incomplete_generation',",
+            "errorType: 'incomplete_generation',",
+        ),
+        label=label,
+    )
+    _require(
+        cli_source.count("lastGenerationFinishReason = event.value.reason;") == 2,
+        f"{label}: the main-turn and drain loops do not both record the terminal reason",
+    )
+    _require(
+        cli_source.count("lastGenerationFinishReason = undefined;") == 3,
+        f"{label}: a turn head or an abandoned fallback response can inherit a stale terminal reason",
+    )
+    _require_ordered(
+        cli_source,
+        (
+            "const incompleteGeneration = describeIncompleteGeneration(",
+            "subtype: 'error_incomplete_generation',",
+            "return 1;",
+            "if (config.getJsonSchema()) {",
+            "isError: false,",
+        ),
+        label=label,
+        location=cli,
+    )
+    require_text(
+        state,
+        types,
+        "| 'error_incomplete_generation';",
+        label=label,
+    )
+
+    # The same rule inside a subagent, whose report the parent would otherwise
+    # integrate as a conclusion.
+    agent_core_source = _require_all(
+        state,
+        agent_core,
+        (
+            "let roundFinishReason: FinishReason | undefined;",
+            "roundFinishReason = chunkFinishReason;",
+            "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
+            "// No tool calls and a self-ended generation \u2014 this is the",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        agent_core_source,
+        (
+            "roundFinishReason = undefined;",
+            "roundFinishReason = chunkFinishReason;",
+            "describeIncompleteGeneration(",
+            "roundFinishReason,",
+            "this.reasoningTurnsUsed,",
+            "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
+        ),
+        label=label,
+        location=agent_core,
+    )
+    require_text(
+        state,
+        agent_types,
+        "INCOMPLETE_GENERATION = 'INCOMPLETE_GENERATION',",
+        label=label,
+    )
+    require_text(
+        state,
+        subagent_result,
+        "reason = `was cut off mid-generation${turns}`;",
+        label=label,
+    )
+
+    # Executed in the build: the predicate itself, the session's two terminal
+    # states, and which generation the session reads.
+    require_text(
+        state,
+        turn_test,
+        "describe('describeIncompleteGeneration'",
+        label=label,
+    )
+    require_text(
+        state,
+        turn_test,
+        "names %s as a generation stopped from outside",
+        label=label,
+    )
+    require_text(
+        state,
+        cli_test,
+        "reports a run whose last generation was stopped by $name as incomplete",
+        label=label,
+    )
+    require_text(
+        state,
+        cli_test,
+        "reports a run whose last generation ended on its own as a success",
+        label=label,
+    )
+    require_text(
+        state,
+        cli_test,
+        "reads the last generation of the run, not an earlier completed one",
+        label=label,
+    )
+    # A fixture that leaves the terminal reason unstated would exercise the
+    # incomplete branch by accident, so none may.
+    forbid_text(state, cli_test, "reason: undefined", label=label)
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="locked-config-and-literal-cli",
@@ -3217,6 +3405,45 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_residue_quarantine_before,
         validate_after=_validate_residue_quarantine_after,
+    ),
+    SemanticConcern(
+        name="incomplete-generation-terminal-state",
+        rationale=(
+            "A reasoning loop ends when a turn requests no tools, and that "
+            "silence has two causes: the model finished its message, or the "
+            "provider stopped generation from outside while it was still "
+            "being written. Only the terminal reason separates them, and it "
+            "reaches the headless adapter, which reads the usage half of the "
+            "event and discards the reason. Under this deployment's strict "
+            "tool-call contract a length terminal yields no executable tool "
+            "call at all, so every generation the output cap severs lands in "
+            "exactly that silence and the session reports `subtype: success`, "
+            "`is_error: false`, exit 0 -- a cut-off prefix presented as a "
+            "final answer, indistinguishable from a run that answered. "
+            "Production forensics found a 66-turn session whose last turn was "
+            "clamped to the 19,064 tokens left below the auto-compaction "
+            "threshold and returned exactly that many: it announced a write, "
+            "was cut off before the call, and was recorded as a success that "
+            "had read 18 of 26 files and written none. The reason is a "
+            "provider fact, so the terminal record can state it without "
+            "judging whether the work was done: success asserts only that the "
+            "model wrote its final message to the end, and every other "
+            "terminal reason -- including one that never arrived -- ends the "
+            "run as `error_incomplete_generation` naming the reason. A "
+            "severed generation is reported rather than continued, because "
+            "the strict terminal contract makes a length-stopped prefix "
+            "non-executable and unresumable. The same rule holds inside a "
+            "subagent, whose partial report the parent would otherwise "
+            "integrate as a conclusion."
+        ),
+        removal_condition=(
+            "Remove only when upstream gates its own headless success path on "
+            "the provider's terminal reason, in the main loop and the subagent "
+            "reasoning loop alike, and expresses a severed generation as a "
+            "terminal state distinct from success and from an execution error."
+        ),
+        validate_before=_validate_incomplete_generation_before,
+        validate_after=_validate_incomplete_generation_after,
     ),
 )
 

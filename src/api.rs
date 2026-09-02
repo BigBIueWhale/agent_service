@@ -3177,6 +3177,7 @@ mod tests {
             response: "fixture terminal".to_string(),
             agent_duration_ms: None,
             agent_api_duration_ms: None,
+            agent_result_subtype: None,
             subagent_scopes: Vec::new(),
             subagent_scope_count: 0,
             subagent_error_count: 0,

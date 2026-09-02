@@ -29,6 +29,12 @@ use crate::error::{io_msg, ServiceError, ServiceResult};
 #[derive(Debug, Clone)]
 pub struct AgentResult {
     pub is_error: bool,
+    /// The terminal record's own name for how the run ended, verbatim.
+    /// `success` is the agent's assertion that the model wrote its final
+    /// message to the end; each `error_*` spelling names a distinct way the
+    /// run stopped instead. The set is closed and checked below, so a reader
+    /// can branch on it without parsing English out of `response`.
+    pub subtype: String,
     pub response: String,
     pub duration_ms: u64,
     /// Wall time the agent spent inside model API calls, as the terminal
@@ -338,7 +344,14 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
     }
 
     let response = if is_error {
-        if subtype != "error_max_turns" && subtype != "error_during_execution" {
+        // Each spelling is a distinct terminal state the agent can prove it
+        // reached: the turn budget ran out, execution failed, or the model's
+        // last generation was stopped from outside before it finished the
+        // message. Anything else is a record this parser cannot interpret.
+        if !matches!(
+            subtype,
+            "error_max_turns" | "error_during_execution" | "error_incomplete_generation"
+        ) {
             return Err(ServiceError::AgentOutputMissing(format!(
                 "error result has unsupported subtype {subtype:?}"
             )));
@@ -375,6 +388,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
 
     Ok(AgentResult {
         is_error,
+        subtype: subtype.to_string(),
         response,
         duration_ms,
         api_duration_ms,
@@ -870,6 +884,77 @@ mod tests {
         // type-checked and then dropped, so the terminal record could report
         // how long the run took but never where the time went.
         assert_eq!(parsed.api_duration_ms, 18_037_819);
+    }
+
+    #[test]
+    fn a_generation_the_provider_cut_short_is_its_own_terminal_state() {
+        // The agent reports the shape of the ending, not a verdict on the
+        // work: this run stopped because the model's last generation was
+        // severed at the output cap, which is a different fact from a failure
+        // during execution and from an exhausted turn budget.
+        let terminal = "{\"type\":\"result\",\"subtype\":\"error_incomplete_generation\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":5562113,\"duration_api_ms\":5560686,\"num_turns\":1,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"Generation on turn 66 ended as MAX_TOKENS rather than the model completing its message, so its text is a cut-off prefix and this run carries no final answer.\"}}\n";
+        let text = format!("{INIT}{MAIN_TURN}{terminal}");
+        let parsed = parse_text(&text).expect("a severed generation is a reportable ending");
+        assert!(parsed.is_error);
+        assert_eq!(parsed.subtype, "error_incomplete_generation");
+        assert!(parsed.response.contains("MAX_TOKENS"));
+        assert_eq!(parsed.duration_ms, 5_562_113);
+    }
+
+    #[test]
+    fn every_terminal_state_reaches_the_caller_under_its_own_name() {
+        // A caller distinguishes the endings by this field alone, so each
+        // spelling the agent can emit must survive the parse verbatim, and
+        // any other spelling must be refused rather than mapped onto one of
+        // them.
+        let success = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{},\"permission_denials\":[]}\n";
+        let parsed =
+            parse_text(&format!("{INIT}{MAIN_TURN}{success}")).expect("a completed run parses");
+        assert_eq!(parsed.subtype, "success");
+
+        for subtype in [
+            "error_max_turns",
+            "error_during_execution",
+            "error_incomplete_generation",
+        ] {
+            let terminal = format!(
+                "{{\"type\":\"result\",\"subtype\":\"{subtype}\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":9,\"duration_api_ms\":8,\"num_turns\":1,\"usage\":{{}},\"permission_denials\":[],\"error\":{{\"message\":\"boom\"}}}}\n"
+            );
+            let parsed = parse_text(&format!("{INIT}{MAIN_TURN}{terminal}"))
+                .expect("every defined error state parses");
+            assert!(parsed.is_error);
+            assert_eq!(parsed.subtype, subtype);
+        }
+
+        // Negative control: the set is closed in both directions.
+        for (is_error, subtype, expected) in [
+            (
+                true,
+                "error_incomplete",
+                "error result has unsupported subtype",
+            ),
+            (true, "success", "error result has unsupported subtype"),
+            (
+                false,
+                "error_incomplete_generation",
+                "successful result has unsupported subtype",
+            ),
+        ] {
+            let tail = if is_error {
+                "\"error\":{\"message\":\"boom\"}"
+            } else {
+                "\"result\":\"ok\""
+            };
+            let terminal = format!(
+                "{{\"type\":\"result\",\"subtype\":\"{subtype}\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":{is_error},\"duration_ms\":9,\"duration_api_ms\":8,\"num_turns\":1,\"usage\":{{}},\"permission_denials\":[],{tail}}}\n"
+            );
+            let error = parse_text(&format!("{INIT}{MAIN_TURN}{terminal}"))
+                .expect_err("an undefined terminal state is not interpretable");
+            assert!(
+                error.to_string().contains(expected),
+                "unexpected refusal for {subtype:?}: {error}"
+            );
+        }
     }
 
     #[test]

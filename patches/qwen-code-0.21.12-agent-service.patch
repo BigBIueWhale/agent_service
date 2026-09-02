@@ -1149,7 +1149,7 @@ index 0b15577..0931963 100644
   * Extracts text from content blocks.
   *
 diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInteractive/types.ts
-index 53801c8..5a9d2a2 100644
+index 53801c8..08f0e51 100644
 --- a/packages/cli/src/nonInteractive/types.ts
 +++ b/packages/cli/src/nonInteractive/types.ts
 @@ -160,12 +160,19 @@ export interface CLISystemMessage {
@@ -1172,11 +1172,26 @@ index 53801c8..5a9d2a2 100644
    num_turns: number;
    result: string;
    usage: ExtendedUsage;
-@@ -176,12 +183,14 @@ export interface CLIResultMessageSuccess {
+@@ -173,15 +180,28 @@ export interface CLIResultMessageSuccess {
+   permission_denials: CLIPermissionDenial[];
+   [key: string]: unknown;
+ }
  
  export interface CLIResultMessageError {
    type: 'result';
-   subtype: 'error_max_turns' | 'error_during_execution';
+-  subtype: 'error_max_turns' | 'error_during_execution';
++  /**
++   * Which terminal state ended the session. `error_incomplete_generation`
++   * says the provider stopped the model's last generation from outside --
++   * the output cap, a content filter, a reason this build does not
++   * recognise -- so the run holds a cut-off prefix rather than an answer.
++   * It is the counterpart of `success`, which asserts the model wrote its
++   * final message to the end.
++   */
++  subtype:
++    | 'error_max_turns'
++    | 'error_during_execution'
++    | 'error_incomplete_generation';
    uuid: string;
    session_id: string;
 +  /** See {@link CLIResultMessageSuccess.parent_tool_use_id}. */
@@ -1188,10 +1203,10 @@ index 53801c8..5a9d2a2 100644
    usage: ExtendedUsage;
    modelUsage?: Record<string, ModelUsage>;
 diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonInteractiveCli.test.ts
-index e6950ce..6f978bc 100644
+index e6950ce..ae7703e 100644
 --- a/packages/cli/src/nonInteractiveCli.test.ts
 +++ b/packages/cli/src/nonInteractiveCli.test.ts
-@@ -42,12 +42,13 @@ import {
+@@ -42,14 +42,15 @@ import {
    TeamEventType,
    ToolConfirmationOutcome,
    ToolNames,
@@ -1200,11 +1215,14 @@ index e6950ce..6f978bc 100644
    GoalPersistenceUnavailableError,
 +  ORPHAN_TOOL_USE_REPAIR_REASON,
  } from '@qwen-code/qwen-code-core';
- import type { Part } from '@google/genai';
+-import type { Part } from '@google/genai';
++import { FinishReason, type Part } from '@google/genai';
  import { EventEmitter } from 'node:events';
  import {
    runNonInteractive,
    skipHeadlessLoopSentinel,
+   TurnInterruptedError,
+ } from './nonInteractiveCli.js';
 @@ -366,12 +367,18 @@ describe('runNonInteractive', () => {
        getSessionId: vi.fn().mockReturnValue('test-session-id'),
        getModel: vi.fn(() => currentModel),
@@ -1224,7 +1242,221 @@ index e6950ce..6f978bc 100644
        getCronScheduler: vi.fn().mockReturnValue(null),
        getTeamManager: vi.fn().mockReturnValue(null),
        onTeamManagerChange: vi.fn(),
-@@ -1571,13 +1578,13 @@ describe('runNonInteractive', () => {
+@@ -585,13 +592,13 @@ describe('runNonInteractive', () => {
+     vi.spyOn(goalRuntime, 'finishTurn').mockResolvedValue(undefined);
+     mockGeminiClient.sendMessageStream.mockImplementation(() =>
+       createStreamFromEvents([
+         {
+           type: GeminiEventType.Finished,
+           value: {
+-            reason: undefined,
++            reason: FinishReason.STOP,
+             usageMetadata: { totalTokenCount: 0 },
+           },
+         },
+       ]),
+     );
+   }
+@@ -744,13 +751,13 @@ describe('runNonInteractive', () => {
+           ]);
+         }
+         return createStreamFromEvents([
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 0 },
+             },
+           },
+         ]);
+       },
+     );
+@@ -825,13 +832,13 @@ describe('runNonInteractive', () => {
+           ]);
+         }
+         return createStreamFromEvents([
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 0 },
+             },
+           },
+         ]);
+       },
+     );
+@@ -893,12 +900,19 @@ describe('runNonInteractive', () => {
+               args: {},
+               isClientInitiated: false,
+               prompt_id: 'goal-terminal-tool-result',
+               goalContext: sendOptions.goalPermit,
+             },
+           },
++          {
++            type: GeminiEventType.Finished,
++            value: {
++              reason: FinishReason.STOP,
++              usageMetadata: { totalTokenCount: 1 },
++            },
++          },
+         ]),
+     );
+ 
+     const exitCode = await runNonInteractive(
+       mockConfig,
+       mockSettings,
+@@ -952,12 +966,19 @@ describe('runNonInteractive', () => {
+               args: {},
+               isClientInitiated: false,
+               prompt_id: 'goal-state-stream',
+               goalContext: sendOptions.goalPermit,
+             },
+           },
++          {
++            type: GeminiEventType.Finished,
++            value: {
++              reason: FinishReason.STOP,
++              usageMetadata: { totalTokenCount: 1 },
++            },
++          },
+         ]),
+     );
+ 
+     const exitCode = await runNonInteractive(
+       mockConfig,
+       mockSettings,
+@@ -999,13 +1020,13 @@ describe('runNonInteractive', () => {
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents([
+         { type: GeminiEventType.Content, value: 'still working' },
+         {
+           type: GeminiEventType.Finished,
+           value: {
+-            reason: undefined,
++            reason: FinishReason.STOP,
+             usageMetadata: { totalTokenCount: 0 },
+           },
+         },
+       ]),
+     );
+ 
+@@ -1049,13 +1070,13 @@ describe('runNonInteractive', () => {
+       )
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 0 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -1345,13 +1366,13 @@ describe('runNonInteractive', () => {
+     { inlineData: { mimeType: 'image/png', data: 'AAAA' } },
+   ];
+   const finishedEvents: ServerGeminiStreamEvent[] = [
+     {
+       type: GeminiEventType.Finished,
+       value: {
+-        reason: undefined,
++        reason: FinishReason.STOP,
+         usageMetadata: { totalTokenCount: 1 },
+       },
+     },
+   ];
+ 
+   async function mockHeadlessImageInput(): Promise<void> {
+@@ -1390,13 +1411,16 @@ describe('runNonInteractive', () => {
+     setupMetricsMock();
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Hello' },
+       { type: GeminiEventType.Content, value: ' World' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 10 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 10 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -1447,13 +1471,13 @@ describe('runNonInteractive', () => {
+           { command: 'echo safe' },
+           approvalSignal,
+         );
+         yield {
+           type: GeminiEventType.Finished,
+           value: {
+-            reason: undefined,
++            reason: FinishReason.STOP,
+             usageMetadata: { totalTokenCount: 0 },
+           },
+         };
+       },
+     );
+ 
+@@ -1478,13 +1502,13 @@ describe('runNonInteractive', () => {
+     });
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents([
+         {
+           type: GeminiEventType.Finished,
+           value: {
+-            reason: undefined,
++            reason: FinishReason.STOP,
+             usageMetadata: { totalTokenCount: 0 },
+           },
+         },
+       ]),
+     );
+ 
+@@ -1501,13 +1525,16 @@ describe('runNonInteractive', () => {
+       'Restored 2 background agents from the previous session.',
+     );
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents([
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 5 },
++          },
+         },
+       ]),
+     );
+ 
+     await runNonInteractive(
+       mockConfig,
+@@ -1551,13 +1578,16 @@ describe('runNonInteractive', () => {
+       ]),
+     }));
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents([
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 5 },
++          },
+         },
+       ]),
+     );
+ 
+     await runNonInteractive(mockConfig, mockSettings, '', 'prompt-c-notice', {
+       continueInterrupted: true,
+@@ -1571,13 +1601,13 @@ describe('runNonInteractive', () => {
      const [request] = mockGeminiClient.sendMessageStream.mock.calls[0]!;
      expect(request).toEqual([
        {
@@ -1239,7 +1471,91 @@ index e6950ce..6f978bc 100644
    });
  
    it('does not let headless YOLO bypass explicit teammate approval', async () => {
-@@ -1809,13 +1816,13 @@ describe('runNonInteractive', () => {
+@@ -1611,13 +1641,13 @@ describe('runNonInteractive', () => {
+             timestamp: Date.now(),
+           });
+         }
+         yield {
+           type: GeminiEventType.Finished,
+           value: {
+-            reason: undefined,
++            reason: FinishReason.STOP,
+             usageMetadata: { totalTokenCount: 0 },
+           },
+         };
+       },
+     );
+ 
+@@ -1672,13 +1702,13 @@ describe('runNonInteractive', () => {
+             timestamp: Date.now(),
+           });
+         }
+         yield {
+           type: GeminiEventType.Finished,
+           value: {
+-            reason: undefined,
++            reason: FinishReason.STOP,
+             usageMetadata: { totalTokenCount: 0 },
+           },
+         };
+       },
+     );
+ 
+@@ -1722,13 +1752,16 @@ describe('runNonInteractive', () => {
+           ]),
+       }));
+       mockGeminiClient.sendMessageStream.mockReturnValue(
+         createStreamFromEvents([
+           {
+             type: GeminiEventType.Finished,
+-            value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++            value: {
++              reason: FinishReason.STOP,
++              usageMetadata: { totalTokenCount: 5 },
++            },
+           },
+         ]),
+       );
+ 
+       await runNonInteractive(mockConfig, mockSettings, '', 'prompt-c1', {
+         continueInterrupted: true,
+@@ -1755,13 +1788,16 @@ describe('runNonInteractive', () => {
+           ]),
+       }));
+       mockGeminiClient.sendMessageStream.mockReturnValue(
+         createStreamFromEvents([
+           {
+             type: GeminiEventType.Finished,
+-            value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++            value: {
++              reason: FinishReason.STOP,
++              usageMetadata: { totalTokenCount: 5 },
++            },
+           },
+         ]),
+       );
+ 
+       await runNonInteractive(mockConfig, mockSettings, '', 'prompt-c-plan', {
+         continueInterrupted: true,
+@@ -1790,13 +1826,16 @@ describe('runNonInteractive', () => {
+         ]),
+       }));
+       mockGeminiClient.sendMessageStream.mockReturnValue(
+         createStreamFromEvents([
+           {
+             type: GeminiEventType.Finished,
+-            value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++            value: {
++              reason: FinishReason.STOP,
++              usageMetadata: { totalTokenCount: 5 },
++            },
+           },
+         ]),
+       );
+ 
+       await runNonInteractive(mockConfig, mockSettings, '', 'prompt-c2', {
+         continueInterrupted: true,
+@@ -1809,13 +1848,13 @@ describe('runNonInteractive', () => {
        );
        expect(request).toEqual([
          {
@@ -1254,7 +1570,25 @@ index e6950ce..6f978bc 100644
      });
  
      it('adds plan mode reminders to a continued tool result without moving function responses', async () => {
-@@ -1856,13 +1863,13 @@ describe('runNonInteractive', () => {
+@@ -1831,13 +1870,16 @@ describe('runNonInteractive', () => {
+         ]),
+       }));
+       mockGeminiClient.sendMessageStream.mockReturnValue(
+         createStreamFromEvents([
+           {
+             type: GeminiEventType.Finished,
+-            value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++            value: {
++              reason: FinishReason.STOP,
++              usageMetadata: { totalTokenCount: 5 },
++            },
+           },
+         ]),
+       );
+ 
+       await runNonInteractive(
+         mockConfig,
+@@ -1856,13 +1898,13 @@ describe('runNonInteractive', () => {
        );
        expect(request).toEqual([
          {
@@ -1269,17 +1603,1042 @@ index e6950ce..6f978bc 100644
        ]);
      });
  
+@@ -1900,13 +1942,13 @@ describe('runNonInteractive', () => {
+           Object.assign(new Error('EPIPE'), { code: 'EPIPE' }),
+         );
+         yield { type: GeminiEventType.Content, value: 'Hello' };
+         yield {
+           type: GeminiEventType.Finished,
+           value: {
+-            reason: undefined,
++            reason: FinishReason.STOP,
+             usageMetadata: { totalTokenCount: 0 },
+           },
+         };
+       },
+     );
+ 
+@@ -2115,21 +2157,174 @@ describe('runNonInteractive', () => {
+     expect(resultMessage?.is_error).toBe(true);
+     expect(resultMessage?.error?.message).toContain(
+       'Loop detection halted the run',
+     );
+   });
+ 
++  it.each([
++    {
++      name: 'the output cap',
++      reason: FinishReason.MAX_TOKENS,
++      described: 'MAX_TOKENS',
++    },
++    {
++      name: 'a content filter',
++      reason: FinishReason.SAFETY,
++      described: 'SAFETY',
++    },
++    {
++      name: 'a reason this build does not recognise',
++      reason: FinishReason.FINISH_REASON_UNSPECIFIED,
++      described: 'FINISH_REASON_UNSPECIFIED',
++    },
++  ])(
++    'reports a run whose last generation was stopped by $name as incomplete',
++    async ({ reason, described }) => {
++      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
++      setupMetricsMock();
++      mockGeminiClient.sendMessageStream.mockReturnValue(
++        createStreamFromEvents([
++          { type: GeminiEventType.Content, value: 'Writing the summary now:' },
++          {
++            type: GeminiEventType.Finished,
++            value: { reason, usageMetadata: { totalTokenCount: 10 } },
++          },
++        ]),
++      );
++
++      const exitCode = await runNonInteractive(
++        mockConfig,
++        mockSettings,
++        'Summarize the corpus',
++        `prompt-incomplete-${described}`,
++      );
++
++      expect(exitCode).toBe(1);
++      const output = processStdoutSpy.mock.calls.at(-1)?.[0] as string;
++      const messages = JSON.parse(output) as Array<{
++        type?: string;
++        subtype?: string;
++        is_error?: boolean;
++        error?: { message?: string };
++      }>;
++      const result = messages.find((message) => message.type === 'result');
++      expect(result?.is_error).toBe(true);
++      expect(result?.subtype).toBe('error_incomplete_generation');
++      expect(result?.error?.message).toContain(described);
++      expect(result?.error?.message).toContain('carries no final answer');
++    },
++  );
++
++  it('reports a run whose last generation ended on its own as a success', async () => {
++    (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
++    setupMetricsMock();
++    mockGeminiClient.sendMessageStream.mockReturnValue(
++      createStreamFromEvents([
++        { type: GeminiEventType.Content, value: 'Here is the summary.' },
++        {
++          type: GeminiEventType.Finished,
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 10 },
++          },
++        },
++      ]),
++    );
++
++    const exitCode = await runNonInteractive(
++      mockConfig,
++      mockSettings,
++      'Summarize the corpus',
++      'prompt-complete-generation',
++    );
++
++    expect(exitCode).toBe(0);
++    const output = processStdoutSpy.mock.calls.at(-1)?.[0] as string;
++    const messages = JSON.parse(output) as Array<{
++      type?: string;
++      subtype?: string;
++      is_error?: boolean;
++    }>;
++    const result = messages.find((message) => message.type === 'result');
++    expect(result?.is_error).toBe(false);
++    expect(result?.subtype).toBe('success');
++  });
++
++  it('reads the last generation of the run, not an earlier completed one', async () => {
++    (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
++    setupMetricsMock();
++    mockCoreExecuteToolCall.mockResolvedValue({
++      responseParts: [{ text: 'chunk 18' }],
++      executionStatus: 'success',
++    });
++    mockGeminiClient.sendMessageStream
++      .mockReturnValueOnce(
++        createStreamFromEvents([
++          {
++            type: GeminiEventType.ToolCallRequest,
++            value: {
++              callId: 'read-18',
++              name: 'testTool',
++              args: {},
++              isClientInitiated: false,
++              prompt_id: 'prompt-late-truncation',
++            },
++          },
++          {
++            type: GeminiEventType.Finished,
++            value: {
++              reason: FinishReason.STOP,
++              usageMetadata: { totalTokenCount: 10 },
++            },
++          },
++        ]),
++      )
++      .mockReturnValueOnce(
++        createStreamFromEvents([
++          { type: GeminiEventType.Content, value: 'Writing note_18:' },
++          {
++            type: GeminiEventType.Finished,
++            value: {
++              reason: FinishReason.MAX_TOKENS,
++              usageMetadata: { totalTokenCount: 20 },
++            },
++          },
++        ]),
++      );
++
++    const exitCode = await runNonInteractive(
++      mockConfig,
++      mockSettings,
++      'Summarize the corpus',
++      'prompt-late-truncation',
++    );
++
++    expect(exitCode).toBe(1);
++    const output = processStdoutSpy.mock.calls.at(-1)?.[0] as string;
++    const messages = JSON.parse(output) as Array<{
++      type?: string;
++      subtype?: string;
++      error?: { message?: string };
++    }>;
++    const result = messages.find((message) => message.type === 'result');
++    expect(result?.subtype).toBe('error_incomplete_generation');
++    expect(result?.error?.message).toContain('turn 2');
++  });
++
+   it('finalizes and reports recording failure before the JSON terminal result', async () => {
+     (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
+     setupMetricsMock();
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents([
+         { type: GeminiEventType.Content, value: 'Answer' },
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 1 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 1 },
++          },
+         },
+       ]),
+     );
+     const order: string[] = [];
+     let recordingFailureListener:
+       | ((event: { sessionId: string; error: Error }) => void)
+@@ -2204,13 +2399,16 @@ describe('runNonInteractive', () => {
+     setupMetricsMock();
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents([
+         { type: GeminiEventType.Content, value: 'Answer' },
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 1 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 1 },
++          },
+         },
+       ]),
+     );
+     const finalize = vi.fn();
+     const flush = vi.fn().mockResolvedValue(undefined);
+     (
+@@ -2255,13 +2453,16 @@ describe('runNonInteractive', () => {
+ 
+     const firstCallEvents: ServerGeminiStreamEvent[] = [toolCallEvent];
+     const secondCallEvents: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Final answer' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 10 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 10 },
++        },
+       },
+     ];
+ 
+     mockGeminiClient.sendMessageStream
+       .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
+       .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
+@@ -2360,13 +2561,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Image understood' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -2438,13 +2639,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Image understood' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -2530,13 +2731,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Main done' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       )
+       .mockReturnValueOnce(
+@@ -2566,13 +2767,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Drain done' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -2596,13 +2797,16 @@ describe('runNonInteractive', () => {
+ 
+   describe('parallel tool execution', () => {
+     const finishTurn: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'done' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 1 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 1 },
++        },
+       },
+     ];
+ 
+     function toolCallEvents(
+       ids: string[],
+       name: string,
+@@ -3167,13 +3371,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Final answer' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 10 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -3313,13 +3517,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Monitor launched.' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 2 },
+             },
+           },
+         ]),
+       )
+       .mockReturnValueOnce(createStreamFromEvents([duplicateToolCallEvent]))
+@@ -3376,13 +3580,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Final answer' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 10 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -3483,13 +3687,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Final answer' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 10 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -3552,13 +3756,16 @@ describe('runNonInteractive', () => {
+       {
+         type: GeminiEventType.Content,
+         value: 'Sorry, let me try again.',
+       },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 10 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 10 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream
+       .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
+       .mockReturnValueOnce(createStreamFromEvents(finalResponse));
+ 
+@@ -3628,13 +3835,16 @@ describe('runNonInteractive', () => {
+       {
+         type: GeminiEventType.Content,
+         value: "Sorry, I can't find that tool.",
+       },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 10 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 10 },
++        },
+       },
+     ];
+ 
+     mockGeminiClient.sendMessageStream
+       .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
+       .mockReturnValueOnce(createStreamFromEvents(finalResponse));
+@@ -3691,13 +3901,16 @@ describe('runNonInteractive', () => {
+ 
+     // Mock a simple stream response from the Gemini client
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Summary complete.' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 10 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 10 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -4105,13 +4318,16 @@ describe('runNonInteractive', () => {
+ 
+   it('should process input and write JSON output with stats', async () => {
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Hello World' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 10 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 10 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+     (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
+@@ -4175,21 +4391,27 @@ describe('runNonInteractive', () => {
+ 
+     // First call returns only tool call, no content
+     const firstCallEvents: ServerGeminiStreamEvent[] = [
+       toolCallEvent,
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 5 },
++        },
+       },
+     ];
+ 
+     // Second call returns no content (tool-only completion)
+     const secondCallEvents: ServerGeminiStreamEvent[] = [
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 3 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 3 },
++        },
+       },
+     ];
+ 
+     mockGeminiClient.sendMessageStream
+       .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
+       .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
+@@ -4264,13 +4486,16 @@ describe('runNonInteractive', () => {
+ 
+   it('should write JSON output with stats for empty response commands', async () => {
+     // Test the scenario where a command completes but produces no content at all
+     const events: ServerGeminiStreamEvent[] = [
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 1 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 1 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+     (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
+@@ -4532,13 +4757,16 @@ describe('runNonInteractive', () => {
+     mockGetCommands.mockReturnValue([mockCommand]);
+ 
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Response from command' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 5 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -4596,13 +4824,16 @@ describe('runNonInteractive', () => {
+     mockGetCommands.mockReturnValue([]);
+ 
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Response to unknown' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 5 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -4692,13 +4923,16 @@ describe('runNonInteractive', () => {
+     mockGetCommands.mockReturnValue([mockCommand]);
+ 
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Acknowledged' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 1 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 1 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -4730,13 +4964,16 @@ describe('runNonInteractive', () => {
+     });
+ 
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Hello stream' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 4 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 4 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -4788,13 +5025,16 @@ describe('runNonInteractive', () => {
+     const turnAbortController = new AbortController();
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       (async function* () {
+         turnAbortController.abort(new TurnInterruptedError());
+         yield {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 0 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 0 },
++          },
+         } as ServerGeminiStreamEvent;
+       })(),
+     );
+ 
+     const exitCode = await runNonInteractive(
+       mockConfig,
+@@ -4851,13 +5091,13 @@ describe('runNonInteractive', () => {
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents([
+         { type: GeminiEventType.Content, value: 'Fork launched.' },
+         {
+           type: GeminiEventType.Finished,
+           value: {
+-            reason: undefined,
++            reason: FinishReason.STOP,
+             usageMetadata: { totalTokenCount: 2 },
+           },
+         },
+       ]),
+     );
+ 
+@@ -4960,25 +5200,25 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Monitor launched.' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 2 },
+             },
+           },
+         ]),
+       )
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Observed.' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -5075,37 +5315,37 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Started.' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       )
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'First notification.' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       )
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Second notification.' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -5153,13 +5393,16 @@ describe('runNonInteractive', () => {
+ 
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents([
+         { type: GeminiEventType.Content, value: 'Handled once' },
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 2 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 2 },
++          },
+         },
+       ]),
+     );
+ 
+     const userEnvelope = {
+       type: 'user',
+@@ -5236,13 +5479,13 @@ describe('runNonInteractive', () => {
+     mockGeminiClient.sendMessageStream.mockReturnValueOnce(
+       createStreamFromEvents([
+         { type: GeminiEventType.Content, value: 'Monitor stopped.' },
+         {
+           type: GeminiEventType.Finished,
+           value: {
+-            reason: undefined,
++            reason: FinishReason.STOP,
+             usageMetadata: { totalTokenCount: 2 },
+           },
+         },
+       ]),
+     );
+ 
+@@ -5374,26 +5617,26 @@ describe('runNonInteractive', () => {
+           eventCount: 2,
+         },
+       );
+       yield {
+         type: GeminiEventType.Finished,
+         value: {
+-          reason: undefined,
++          reason: FinishReason.STOP,
+           usageMetadata: { totalTokenCount: 1 },
+         },
+       };
+     }
+ 
+     mockGeminiClient.sendMessageStream
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Monitor launched.' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 2 },
+             },
+           },
+         ]),
+       )
+       .mockReturnValueOnce(secondTurnStream());
+@@ -5532,25 +5775,25 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Monitor launched.' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 2 },
+             },
+           },
+         ]),
+       )
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'Observed.' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -5681,13 +5924,16 @@ describe('runNonInteractive', () => {
+     });
+ 
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Response from envelope' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 5 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -5781,13 +6027,16 @@ describe('runNonInteractive', () => {
+ 
+     const firstCallEvents: ServerGeminiStreamEvent[] = [toolCallEvent];
+     const secondCallEvents: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Final response' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 10 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 10 },
++        },
+       },
+     ];
+ 
+     mockGeminiClient.sendMessageStream
+       .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
+       .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
+@@ -5892,13 +6141,16 @@ describe('runNonInteractive', () => {
+       {
+         type: GeminiEventType.Content,
+         value: 'I encountered an error',
+       },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 10 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 10 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream
+       .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
+       .mockReturnValueOnce(createStreamFromEvents(finalResponse));
+ 
+@@ -5960,13 +6212,16 @@ describe('runNonInteractive', () => {
+ 
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Hello' },
+       { type: GeminiEventType.Content, value: ' World' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 5 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -6020,13 +6275,16 @@ describe('runNonInteractive', () => {
+         type: GeminiEventType.Thought,
+         value: { subject: 'Analysis', description: 'Processing request' },
+       },
+       { type: GeminiEventType.Content, value: 'Response text' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 8 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 8 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -6104,13 +6362,16 @@ describe('runNonInteractive', () => {
+ 
+     const firstCallEvents: ServerGeminiStreamEvent[] = [toolCall1, toolCall2];
+     const secondCallEvents: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Combined response' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 15 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 15 },
++        },
+       },
+     ];
+ 
+     mockGeminiClient.sendMessageStream
+       .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
+       .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
+@@ -6220,13 +6481,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'done' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -6322,13 +6583,13 @@ describe('runNonInteractive', () => {
+       .mockReturnValueOnce(
+         createStreamFromEvents([
+           { type: GeminiEventType.Content, value: 'done' },
+           {
+             type: GeminiEventType.Finished,
+             value: {
+-              reason: undefined,
++              reason: FinishReason.STOP,
+               usageMetadata: { totalTokenCount: 1 },
+             },
+           },
+         ]),
+       );
+ 
+@@ -6378,13 +6639,16 @@ describe('runNonInteractive', () => {
+     });
+ 
+     const events: ServerGeminiStreamEvent[] = [
+       { type: GeminiEventType.Content, value: 'Response' },
+       {
+         type: GeminiEventType.Finished,
+-        value: { reason: undefined, usageMetadata: { totalTokenCount: 3 } },
++        value: {
++          reason: FinishReason.STOP,
++          usageMetadata: { totalTokenCount: 3 },
++        },
+       },
+     ];
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents(events),
+     );
+ 
+@@ -6478,13 +6742,16 @@ describe('runNonInteractive', () => {
+     mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
+     mockGeminiClient.sendMessageStream.mockReturnValue(
+       createStreamFromEvents([
+         { type: GeminiEventType.Content, value: 'ok' },
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 1 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 1 },
++          },
+         },
+       ]),
+     );
+ 
+     await runNonInteractive(mockConfig, mockSettings, 'test', 'p-cron-wiring');
+ 
+@@ -6996,13 +7263,16 @@ describe('runNonInteractive', () => {
+       });
+ 
+       const plainTextTurn: ServerGeminiStreamEvent[] = [
+         { type: GeminiEventType.Content, value: 'Here is my answer as text.' },
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 5 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 5 },
++          },
+         },
+       ];
+       mockGeminiClient.sendMessageStream.mockReturnValueOnce(
+         createStreamFromEvents(plainTextTurn),
+       );
+ 
+@@ -7383,13 +7653,13 @@ describe('runNonInteractive', () => {
+         .mockReturnValueOnce(
+           createStreamFromEvents([
+             { type: GeminiEventType.Content, value: 'Monitor launched.' },
+             {
+               type: GeminiEventType.Finished,
+               value: {
+-                reason: undefined,
++                reason: FinishReason.STOP,
+                 usageMetadata: { totalTokenCount: 2 },
+               },
+             },
+           ]),
+         )
+         .mockReturnValueOnce(createStreamFromEvents([drainStructuredCall]));
+@@ -7698,13 +7968,16 @@ describe('runNonInteractive', () => {
+ 
+       setupMetricsMock();
+       const events: ServerGeminiStreamEvent[] = [
+         { type: GeminiEventType.Content, value: 'ok' },
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 1 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 1 },
++          },
+         },
+       ];
+       mockGeminiClient.sendMessageStream.mockReturnValue(
+         createStreamFromEvents(events),
+       );
+ 
+@@ -7739,13 +8012,16 @@ describe('runNonInteractive', () => {
+ 
+       setupMetricsMock();
+       const events: ServerGeminiStreamEvent[] = [
+         { type: GeminiEventType.Content, value: 'ok' },
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 1 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 1 },
++          },
+         },
+       ];
+       mockGeminiClient.sendMessageStream.mockReturnValue(
+         createStreamFromEvents(events),
+       );
+ 
+@@ -7794,13 +8070,16 @@ describe('runNonInteractive', () => {
+ 
+       setupMetricsMock();
+       const events: ServerGeminiStreamEvent[] = [
+         { type: GeminiEventType.Content, value: 'ok' },
+         {
+           type: GeminiEventType.Finished,
+-          value: { reason: undefined, usageMetadata: { totalTokenCount: 1 } },
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: { totalTokenCount: 1 },
++          },
+         },
+       ];
+       mockGeminiClient.sendMessageStream.mockReturnValue(
+         createStreamFromEvents(events),
+       );
+ 
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
-index 6dfe8f8..96aef12 100644
+index 6dfe8f8..26cc139 100644
 --- a/packages/cli/src/nonInteractiveCli.ts
 +++ b/packages/cli/src/nonInteractiveCli.ts
-@@ -29,12 +29,13 @@ import {
+@@ -7,12 +7,13 @@
+ import type {
+   BackgroundTaskStatus,
+   ConcurrencyBatch,
+   Config,
+   CronJob,
+   CronScheduler,
++  GeminiFinishedEventValue,
+   GoalRuntime,
+   GoalSnapshotV2,
+   GoalTurnHost,
+   GoalTurnPermit,
+   ActiveGoal,
+   ToolCallRequestInfo,
+@@ -29,12 +30,14 @@ import {
    GeminiEventType,
    FatalInputError,
    promptIdContext,
    OutputFormat,
    InputFormat,
    LoopType,
++  describeIncompleteGeneration,
 +  describeLoopType,
    ToolNames,
    uiTelemetryService,
@@ -1287,7 +2646,7 @@ index 6dfe8f8..96aef12 100644
    createDebugLogger,
    detectAutonomousSentinel,
    detectLoopSentinel,
-@@ -147,52 +148,27 @@ function suppressedOutputBody(structuredCaptured: boolean): string {
+@@ -147,52 +150,27 @@ function suppressedOutputBody(structuredCaptured: boolean): string {
      ? SUPPRESSED_OUTPUT_SUCCESS
      : SUPPRESSED_OUTPUT_RETRY;
  }
@@ -1345,7 +2704,26 @@ index 6dfe8f8..96aef12 100644
    // dedicated hint instead of membership in this list.
    const isAlwaysOn =
      loopType === LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS ||
-@@ -1110,13 +1086,13 @@ export async function runNonInteractive(
+@@ -548,12 +526,18 @@ export async function runNonInteractive(
+       });
+     const unregisterReviewWorktreeCleanup = registerCleanup(() =>
+       cleanupReviewWorktrees(1_000),
+     );
+ 
+     let turnCount = 0;
++    // Terminal reason of the generation this run is currently standing on,
++    // cleared at the head of every turn so a turn that reports none is read
++    // as none rather than inheriting the previous turn's. Both reasoning
++    // loops write it; the success path reads it to decide whether the run
++    // has an answer to report at all.
++    let lastGenerationFinishReason: GeminiFinishedEventValue['reason'];
+     let limitedTurnCount = 0;
+     let totalApiDurationMs = 0;
+     const startTime = Date.now();
+     let activeInteractionPromptId = prompt_id;
+     let activeInteractionOwner: ReturnType<typeof getActiveInteractionSpan>;
+     const selectActiveInteraction = (
+@@ -1110,13 +1094,13 @@ export async function runNonInteractive(
            }
          }
        }
@@ -1360,7 +2738,7 @@ index 6dfe8f8..96aef12 100644
              config,
              settings,
            );
-@@ -1318,13 +1294,13 @@ export async function runNonInteractive(
+@@ -1318,13 +1302,13 @@ export async function runNonInteractive(
          }
        }
  
@@ -1375,7 +2753,43 @@ index 6dfe8f8..96aef12 100644
          initialPartList = withReminder(initialPartList, recoveredAgentsNotice);
        }
  
-@@ -2357,25 +2333,27 @@ export async function runNonInteractive(
+@@ -2290,12 +2274,13 @@ export async function runNonInteractive(
+         selectActiveInteraction(
+           currentPromptId,
+           sendType !== SendMessageType.ToolResult,
+         );
+ 
+         const toolCallRequests: ToolCallRequestInfo[] = [];
++        lastGenerationFinishReason = undefined;
+         const apiStartTime = Date.now();
+         const responseStream = geminiClient.sendMessageStream(
+           currentMessages[0]?.parts || [],
+           abortController.signal,
+           currentPromptId,
+           {
+@@ -2337,14 +2322,21 @@ export async function runNonInteractive(
+           }
+           // Use adapter for all event processing
+           adapter.processEvent(event);
+           if (event.type === GeminiEventType.ToolCallRequest) {
+             toolCallRequests.push(event.value);
+           }
++          if (event.type === GeminiEventType.Finished) {
++            lastGenerationFinishReason = event.value.reason;
++          }
+           if (event.type === GeminiEventType.ModelFallback) {
++            // A fallback abandons the previous model's partial response, so
++            // its tool calls and its terminal reason both stop describing
++            // the turn that is still being generated.
+             toolCallRequests.length = 0;
++            lastGenerationFinishReason = undefined;
+           }
+           if (
+             event.type === GeminiEventType.Content &&
+             plainTextPreview.length < PLAIN_TEXT_PREVIEW_LIMIT
+           ) {
+             const remaining =
+@@ -2357,25 +2349,27 @@ export async function runNonInteractive(
                  config,
                  event.value?.loopType,
                );
@@ -1411,7 +2825,33 @@ index 6dfe8f8..96aef12 100644
          captureActiveInteractionOwner();
  
          // Finalize assistant message
-@@ -2671,24 +2649,22 @@ export async function runNonInteractive(
+@@ -2615,12 +2609,13 @@ export async function runNonInteractive(
+             let itemIsFirstTurn = true;
+             let itemModelOverride: string | undefined;
+             const itemPromptId = `${prompt_id}/automatic/${turnCount}`;
+ 
+             while (true) {
+               const itemToolCallRequests: ToolCallRequestInfo[] = [];
++              lastGenerationFinishReason = undefined;
+               const itemApiStartTime = Date.now();
+               selectActiveInteraction(itemPromptId, itemIsFirstTurn);
+               const itemStream = geminiClient.sendMessageStream(
+                 itemMessages[0]?.parts || [],
+                 abortController.signal,
+                 itemPromptId,
+@@ -2662,33 +2657,34 @@ export async function runNonInteractive(
+                   await routeAbort();
+                 }
+                 adapter.processEvent(event);
+                 if (event.type === GeminiEventType.ToolCallRequest) {
+                   itemToolCallRequests.push(event.value);
+                 }
++                if (event.type === GeminiEventType.Finished) {
++                  lastGenerationFinishReason = event.value.reason;
++                }
+                 if (event.type === GeminiEventType.LoopDetected) {
+                   if (!loopDetected) {
+                     loopDetectedMessage = emitLoopDetectedMessage(
                        config,
                        event.value?.loopType,
                      );
@@ -1440,6 +2880,52 @@ index 6dfe8f8..96aef12 100644
                captureActiveInteractionOwner();
  
                adapter.finalizeAssistantMessage();
+@@ -2938,12 +2934,45 @@ export async function runNonInteractive(
+           // metrics snapshot after the holdback so any task notifications
+           // that landed during shutdown contribute to the totals.
+           if (structuredSubmission !== undefined) {
+             return emitStructuredSuccess();
+           }
+ 
++          // The run reaches this point because the last turn asked for no
++          // tools. That is the model's answer only if the model wrote that
++          // turn to the end; when generation was stopped from outside, the
++          // same silence is the cut itself, and the text the adapter
++          // collected is the prefix that was interrupted. Reported here
++          // rather than repaired: a severed generation cannot be continued
++          // under the strict terminal contract, so the honest terminal
++          // record is the one that names the reason. It precedes the
++          // --json-schema check below because a cut-off turn explains a
++          // missing structured_output call, and the reverse diagnosis would
++          // send the caller after a schema that was never reached.
++          const incompleteGeneration = describeIncompleteGeneration(
++            lastGenerationFinishReason,
++            turnCount,
++          );
++          if (incompleteGeneration) {
++            endActiveInteraction('error', {
++              errorMessage: 'generation did not complete',
++              errorType: 'incomplete_generation',
++            });
++            await emitResult({
++              isError: true,
++              subtype: 'error_incomplete_generation',
++              durationMs: Date.now() - startTime,
++              apiDurationMs: totalApiDurationMs,
++              numTurns: turnCount,
++              errorMessage: incompleteGeneration,
++              usage,
++              stats,
++            });
++            return 1;
++          }
++
+           // --json-schema contract: the model MUST terminate via the
+           // structured_output tool. Reaching this branch means it emitted
+           // plain text instead — surface as an error rather than silently
+           // returning whatever free-form summary the adapter collected.
+           // Returning a non-zero exit code (rather than throwing) avoids
+           // the outer catch re-emitting the result a second time.
 diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/hooks/useGeminiStream.ts
 index 27f4a60..e10b89a 100644
 --- a/packages/cli/src/ui/hooks/useGeminiStream.ts
@@ -1962,10 +3448,126 @@ index 433be1b..c5e89d4 100644
   * `qwen-code.subagent.depth` on subagent spans.
   *
 diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core/src/agents/runtime/agent-core.test.ts
-index c100f92..f32632a 100644
+index c100f92..1e43e6d 100644
 --- a/packages/core/src/agents/runtime/agent-core.test.ts
 +++ b/packages/core/src/agents/runtime/agent-core.test.ts
-@@ -207,13 +207,13 @@ describe('AgentCore.runInAgentFrames', () => {
+@@ -46,14 +46,16 @@ import type {
+ } from '../../core/contentGenerator.js';
+ import {
+   getInvocationContext,
+   runWithInvocationContext,
+   type InvocationContextV1,
+ } from '../../utils/invocation-context.js';
+-import { GeminiChat } from '../../core/geminiChat.js';
++import { GeminiChat, StreamEventType } from '../../core/geminiChat.js';
+ import { ContextState } from './agent-headless.js';
++import { AgentTerminateMode } from './agent-types.js';
++import { FinishReason } from '../../core/genai-compat.js';
+ 
+ describe('AgentCore.createChat manual plan-exit notice ownership', () => {
+   it('enables notices only for interactive agent chats', async () => {
+     const core = new AgentCore(
+       'notice-agent',
+       {} as Config,
+@@ -77,12 +79,97 @@ describe('AgentCore.createChat manual plan-exit notice ownership', () => {
+     expect(enableSpy).toHaveBeenCalledTimes(1);
+ 
+     enableSpy.mockRestore();
+   });
+ });
+ 
++describe('AgentCore round terminal reason', () => {
++  // A round that requests no tools is the agent's report only when the model
++  // wrote it to the end. These drive the reasoning loop over one round whose
++  // only difference is the terminal reason the provider returned.
++  function makeTruncationCore(): AgentCore {
++    const runtimeContext = {
++      getSessionId: () => 'test-session',
++      getSkipLoopDetection: () => true,
++      getModel: () => 'test-model',
++      getMaxToolCallsPerTurn: () => 1000,
++      isMaxToolCallsPerTurnExplicit: () => false,
++      getDebugLogger: () => ({
++        debug: () => {},
++        info: () => {},
++        warn: () => {},
++        error: () => {},
++      }),
++    } as unknown as Config;
++    return new AgentCore(
++      'reader',
++      runtimeContext,
++      { systemPrompt: '' } as PromptConfig,
++      { model: 'test-model' } as ModelConfig,
++      { max_turns: 5 } as RunConfig,
++    );
++  }
++
++  function makeChat(reason: FinishReason): GeminiChat {
++    return {
++      getHistoryFunctionResponseIds: () => [],
++      sendMessageStream: async () =>
++        (async function* () {
++          yield {
++            type: StreamEventType.CHUNK,
++            value: {
++              candidates: [
++                {
++                  content: { parts: [{ text: 'Writing note_18:' }] },
++                  finishReason: reason,
++                },
++              ],
++            },
++          };
++        })(),
++    } as unknown as GeminiChat;
++  }
++
++  async function runOneRound(
++    reason: FinishReason,
++  ): Promise<ReasoningLoopResult> {
++    const core = makeTruncationCore();
++    return await (
++      core as unknown as {
++        _runReasoningLoopInner: (
++          chat: GeminiChat,
++          initialMessages: unknown[],
++          toolsList: FunctionDeclaration[],
++          abortController: AbortController,
++        ) => Promise<ReasoningLoopResult>;
++      }
++    )._runReasoningLoopInner(
++      makeChat(reason),
++      [{ role: 'user', parts: [{ text: 'summarize' }] }],
++      [],
++      new AbortController(),
++    );
++  }
++
++  it('stops the agent when its generation was cut off before the message ended', async () => {
++    const result = await runOneRound(FinishReason.MAX_TOKENS);
++
++    expect(result.terminateMode).toBe(AgentTerminateMode.INCOMPLETE_GENERATION);
++    expect(result.turnsUsed).toBe(1);
++    // The interrupted prefix is kept as evidence; what it is not is a report.
++    expect(result.text).toBe('Writing note_18:');
++  });
++
++  it('takes a self-ended generation with no tool call as the final report', async () => {
++    const result = await runOneRound(FinishReason.STOP);
++
++    expect(result.terminateMode).toBeNull();
++    expect(result.text).toBe('Writing note_18:');
++  });
++});
++
+ describe('AgentCore.runInAgentFrames', () => {
+   // The deferred-approval `respond` callback that AgentCore hands to the
+   // UI must restore both ALS frames the agent normally runs under, so any
+   // tool body resumed via approval — including ones that trigger LLM
+   // calls — sees the agent's ContentGenerator (modalities, auth) and is
+   // attributed to the agent in token stats.
+@@ -207,13 +294,13 @@ describe('AgentCore.runInAgentFrames', () => {
        core as unknown as {
          _runReasoningLoopInner: () => Promise<ReasoningLoopResult>;
        },
@@ -1981,10 +3583,10 @@ index c100f92..f32632a 100644
      );
  
 diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/agents/runtime/agent-core.ts
-index 191b5ab..490b232 100644
+index 191b5ab..ea6b310 100644
 --- a/packages/core/src/agents/runtime/agent-core.ts
 +++ b/packages/core/src/agents/runtime/agent-core.ts
-@@ -22,12 +22,13 @@ import { reportError } from '../../utils/errorReporting.js';
+@@ -22,28 +22,31 @@ import { reportError } from '../../utils/errorReporting.js';
  import { subagentNameContext } from '../../utils/subagentNameContext.js';
  import { runWithInvocationContext } from '../../utils/invocation-context.js';
  import type { Config } from '../../config/config.js';
@@ -1998,7 +3600,11 @@ index 191b5ab..490b232 100644
    runWithRuntimeContentGenerator,
    spawnBlockReason,
    type RuntimeContentGeneratorView,
-@@ -38,12 +39,13 @@ import {
+ } from './agent-context.js';
+ import {
+   createDuplicateProviderToolCallResponse,
++  describeIncompleteGeneration,
+   findRepeatedDuplicateProviderToolCall,
    GeminiEventType,
    markDuplicateProviderToolCallResponseSent,
    type ServerGeminiStreamEvent,
@@ -2012,7 +3618,7 @@ index 191b5ab..490b232 100644
    type ExecutingToolCall,
    type WaitingToolCall,
  } from '../../core/coreToolScheduler.js';
-@@ -66,12 +68,17 @@ import type {
+@@ -66,12 +69,17 @@ import type {
    GenerateContentConfig,
    FunctionDeclaration,
    GenerateContentResponseUsageMetadata,
@@ -2030,7 +3636,7 @@ index 191b5ab..490b232 100644
  } from '../../core/toolCallIdUtils.js';
  import type {
    PromptConfig,
-@@ -80,12 +87,13 @@ import type {
+@@ -80,12 +88,13 @@ import type {
    ToolConfig,
    AgentMessage,
    AgentExternalInput,
@@ -2044,7 +3650,7 @@ index 191b5ab..490b232 100644
    AgentToolResultEvent,
    AgentToolOutputUpdateEvent,
    AgentUsageEvent,
-@@ -282,12 +290,19 @@ export interface ReasoningLoopResult {
+@@ -282,12 +291,19 @@ export interface ReasoningLoopResult {
    /** The final model text response (empty if terminated by abort/limits). */
    text: string;
    /** Why the loop ended. null = normal text completion (no tool calls). */
@@ -2064,7 +3670,7 @@ index 191b5ab..490b232 100644
   * Options for configuring a reasoning loop invocation.
   */
  export interface ReasoningLoopOptions {
-@@ -364,12 +379,41 @@ export interface ExecutionStats {
+@@ -364,12 +380,41 @@ export interface ExecutionStats {
   *
   * It does NOT manage lifecycle (start/stop/terminate), abort signals,
   * or final result interpretation — those are the caller's responsibility.
@@ -2106,7 +3712,7 @@ index 191b5ab..490b232 100644
    readonly promptConfig: PromptConfig;
    readonly modelConfig: ModelConfig;
    readonly runConfig: RunConfig;
-@@ -533,13 +577,14 @@ export class AgentCore {
+@@ -533,13 +578,14 @@ export class AgentCore {
      // carries the parent's exact rendered systemInstruction so the fork
      // shares a byte-identical cache prefix. Otherwise, template
      // `systemPrompt` via buildChatSystemPrompt (which may throw — kept
@@ -2122,7 +3728,7 @@ index 191b5ab..490b232 100644
      } else if (this.promptConfig.systemPrompt) {
        const systemInstruction = this.buildChatSystemPrompt(context, options);
        if (systemInstruction) {
-@@ -853,13 +898,13 @@ export class AgentCore {
+@@ -853,13 +899,13 @@ export class AgentCore {
      abortController: AbortController,
      options?: ReasoningLoopOptions,
    ): Promise<ReasoningLoopResult> {
@@ -2137,7 +3743,7 @@ index 191b5ab..490b232 100644
      // Scoped to this reasoning loop. A second duplicate response for the same
      // provider id would keep deterministic providers in a tool-result loop.
      const duplicateProviderToolCallResponseIds = new Set<string>();
-@@ -884,13 +929,13 @@ export class AgentCore {
+@@ -884,13 +930,13 @@ export class AgentCore {
        if (abortController.signal.aborted) {
          terminateMode = AgentTerminateMode.CANCELLED;
          break;
@@ -2152,7 +3758,7 @@ index 191b5ab..490b232 100644
  
        let durationMin = (Date.now() - startTime) / (1000 * 60);
        if (options?.maxTimeMinutes && durationMin >= options.maxTimeMinutes) {
-@@ -903,13 +948,13 @@ export class AgentCore {
+@@ -903,13 +949,13 @@ export class AgentCore {
        // parent propagation; the try/finally below guarantees reverse-cleanup
        // fires for every exit (success, break, return, throw).
        const roundAbortController = createChildAbortController(abortController);
@@ -2167,7 +3773,7 @@ index 191b5ab..490b232 100644
            config: {
              abortSignal: roundAbortController.signal,
              tools: [{ functionDeclarations: toolsList }],
-@@ -926,13 +971,13 @@ export class AgentCore {
+@@ -926,32 +972,34 @@ export class AgentCore {
              DEFAULT_QWEN_MODEL,
            messageParams,
            promptId,
@@ -2182,7 +3788,13 @@ index 191b5ab..490b232 100644
  
          const functionCalls: FunctionCall[] = [];
          let roundText = '';
-@@ -945,13 +990,14 @@ export class AgentCore {
+         let roundThoughtText = '';
+         let lastUsage: GenerateContentResponseUsageMetadata | undefined =
+           undefined;
+         let currentResponseId: string | undefined = undefined;
+         let wasOutputTruncated = false;
++        let roundFinishReason: FinishReason | undefined;
+         let loopDetectedInStream = false;
  
          for await (const streamEvent of responseStream) {
            if (roundAbortController.signal.aborted) {
@@ -2198,10 +3810,14 @@ index 191b5ab..490b232 100644
            // Handle retry events — reset all per-attempt state so a successful
            // retry does not inherit stale data (e.g. wasOutputTruncated) from a
            // previous attempt that may have hit MAX_TOKENS.
-@@ -970,24 +1016,39 @@ export class AgentCore {
+@@ -967,53 +1015,71 @@ export class AgentCore {
+             functionCalls.length = 0;
+             roundText = '';
+             roundThoughtText = '';
              lastUsage = undefined;
              currentResponseId = undefined;
              wasOutputTruncated = false;
++            roundFinishReason = undefined;
              continue;
            }
  
@@ -2243,7 +3859,25 @@ index 191b5ab..490b232 100644
              // Track the response ID for tool call correlation
              if (resp.responseId) {
                currentResponseId = resp.responseId;
-@@ -1007,13 +1068,13 @@ export class AgentCore {
+             }
+             const chunkFunctionCalls = resp.functionCalls ?? [];
+             functionCalls.push(...chunkFunctionCalls);
+-            if (
+-              resp.candidates?.[0]?.finishReason === FinishReason.MAX_TOKENS
+-            ) {
+-              wasOutputTruncated = true;
++            const chunkFinishReason = resp.candidates?.[0]?.finishReason;
++            if (chunkFinishReason) {
++              roundFinishReason = chunkFinishReason;
++              if (chunkFinishReason === FinishReason.MAX_TOKENS) {
++                wasOutputTruncated = true;
++              }
+             }
+             const content = resp.candidates?.[0]?.content;
+             const parts = content?.parts || [];
+             for (const p of parts) {
+               const txt = p.text;
+               const isThought = p.thought ?? false;
                if (txt && isThought) roundThoughtText += txt;
                if (txt && !isThought) roundText += txt;
                if (txt)
@@ -2258,7 +3892,7 @@ index 191b5ab..490b232 100644
                  });
              }
              if (resp.usageMetadata) lastUsage = resp.usageMetadata;
-@@ -1093,41 +1154,41 @@ export class AgentCore {
+@@ -1093,41 +1159,41 @@ export class AgentCore {
          }
  
          if (roundText || roundThoughtText || lastUsage) {
@@ -2304,7 +3938,31 @@ index 191b5ab..490b232 100644
              handledProviderToolCallIds,
              duplicateProviderToolCallResponseIds,
            );
-@@ -1163,22 +1224,22 @@ export class AgentCore {
+@@ -1154,31 +1220,46 @@ export class AgentCore {
+           }
+           if ((currentMessages[0]?.parts?.length ?? 0) === 0) {
+             terminateMode = AgentTerminateMode.ERROR;
+             break;
+           }
+         } else {
++          // A round that asked for no tools is the agent's report only if
++          // the model wrote it to the end. When generation was stopped from
++          // outside, that silence is the cut itself and the round holds the
++          // interrupted prefix, so the agent stops here and says so rather
++          // than handing the parent a fragment shaped like a conclusion.
++          if (
++            describeIncompleteGeneration(
++              roundFinishReason,
++              this.reasoningTurnsUsed,
++            )
++          ) {
++            finalText = roundText.trim();
++            terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;
++            break;
++          }
+           const immediateExternalInputs = this.drainExternalInputs(options);
+           if (immediateExternalInputs.length > 0) {
+             currentMessages = this.externalInputsToContent(
                immediateExternalInputs,
              );
              this.emitExternalInputEvents(immediateExternalInputs);
@@ -2329,7 +3987,17 @@ index 191b5ab..490b232 100644
                terminateMode = waitResult.terminateMode;
                break;
              }
-@@ -1209,13 +1270,13 @@ export class AgentCore {
+@@ -1201,21 +1282,22 @@ export class AgentCore {
+                   },
+                 ],
+               },
+             ];
+             continue;
+           } else {
+-            // No tool calls — treat this as the model's final answer.
++            // No tool calls and a self-ended generation — this is the
++            // model's final answer.
+             if (roundText && roundText.trim().length > 0) {
                finalText = roundText.trim();
                // Emit ROUND_END for the final round so all consumers see it.
                // Previously this was skipped, requiring AgentInteractive to
@@ -2344,7 +4012,7 @@ index 191b5ab..490b232 100644
                // null terminateMode = normal text completion
                break;
              }
-@@ -1232,13 +1293,13 @@ export class AgentCore {
+@@ -1232,13 +1314,13 @@ export class AgentCore {
              ];
            }
          }
@@ -2359,7 +4027,7 @@ index 191b5ab..490b232 100644
        } finally {
          // Reverse-cleanup fires whether the iteration ended normally, broke,
          // returned, or threw — preventing parent-listener accumulation on
-@@ -1248,13 +1309,17 @@ export class AgentCore {
+@@ -1248,13 +1330,17 @@ export class AgentCore {
        }
      }
  
@@ -2378,7 +4046,7 @@ index 191b5ab..490b232 100644
    private drainExternalInputs(
      options?: ReasoningLoopOptions,
    ): AgentExternalInput[] {
-@@ -1300,15 +1365,15 @@ export class AgentCore {
+@@ -1300,15 +1386,15 @@ export class AgentCore {
        });
      }
    }
@@ -2396,7 +4064,7 @@ index 191b5ab..490b232 100644
      options: ReasoningLoopOptions | undefined,
      startTime: number,
    ): number | undefined {
-@@ -1317,13 +1382,13 @@ export class AgentCore {
+@@ -1317,13 +1403,13 @@ export class AgentCore {
    }
  
    private async waitForExternalInputs(
@@ -2411,7 +4079,7 @@ index 191b5ab..490b232 100644
    }> {
      while (true) {
        const immediate = this.drainExternalInputs(options);
-@@ -1332,13 +1397,13 @@ export class AgentCore {
+@@ -1332,13 +1418,13 @@ export class AgentCore {
        }
  
        if (abortController.signal.aborted) {
@@ -2426,7 +4094,7 @@ index 191b5ab..490b232 100644
        const remainingTimeMs = this.getRemainingTimeMs(options, startTime);
        if (remainingTimeMs !== undefined && remainingTimeMs <= 0) {
          return { inputs: [], terminateMode: AgentTerminateMode.TIMEOUT };
-@@ -2301,25 +2366,31 @@ Important Rules:
+@@ -2301,25 +2387,31 @@ Important Rules:
   - Use tools only when necessary to obtain facts or make changes.
   - When the task is complete, return the final result as a normal model response (not a tool call) and stop.`;
      }
@@ -2460,7 +4128,7 @@ index 191b5ab..490b232 100644
      const outTok = Number(usage.candidatesTokenCount || 0);
      const thoughtTok = Number(usage.thoughtsTokenCount || 0);
      const cachedTok = Number(usage.cachedContentTokenCount || 0);
-@@ -2354,13 +2425,13 @@ Important Rules:
+@@ -2354,13 +2446,13 @@ Important Rules:
        this.executionStats.totalTokens =
          (this.executionStats.totalTokens || 0) +
          (isFinite(totalTok) ? totalTok : 0);
@@ -2603,10 +4271,48 @@ index 013ae52..0e8dcf4 100644
  
  // ─── Event Emitter ──────────────────────────────────────────
 diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/core/src/agents/runtime/agent-headless.test.ts
-index 1d5b20a..584b512 100644
+index 1d5b20a..115845e 100644
 --- a/packages/core/src/agents/runtime/agent-headless.test.ts
 +++ b/packages/core/src/agents/runtime/agent-headless.test.ts
-@@ -2632,12 +2632,48 @@ describe('subagent.ts', () => {
+@@ -195,18 +195,22 @@ const createMockStream = (
+   return vi.fn().mockImplementation(async () => {
+     const response = functionCallsList[index] || 'stop';
+     index++;
+ 
+     return (async function* () {
+       if (response === 'stop') {
+-        // When stopping, the model might return text, but the subagent logic primarily cares about the absence of functionCalls.
++        // A round that ends the loop: text, no function calls, and the STOP
++        // terminal that says the model wrote the message to the end. The
++        // terminal reason is what separates that from a severed generation,
++        // so a stopping round has to state it.
+         yield {
+           type: 'chunk',
+           value: {
+             candidates: [
+               {
++                finishReason: 'STOP',
+                 content: {
+                   parts: [{ text: 'Done.' }],
+                 },
+               },
+             ],
+           },
+@@ -221,12 +225,13 @@ const createMockStream = (
+       } else {
+         yield {
+           type: 'chunk',
+           value: {
+             candidates: [
+               {
++                finishReason: 'STOP',
+                 content: {
+                   parts: [{ text: 'Done.' }],
+                 },
+               },
+             ],
+           },
+@@ -2632,12 +2637,48 @@ describe('subagent.ts', () => {
          );
  
          await expect(scope.execute(new ContextState())).rejects.toThrow(
@@ -2655,6 +4361,48 @@ index 1d5b20a..584b512 100644
      describe('execute - Streaming and Thought Handling', () => {
        const promptConfig: PromptConfig = { systemPrompt: 'Execute task.' };
  
+@@ -2647,12 +2688,13 @@ describe('subagent.ts', () => {
+           (async function* () {
+             yield {
+               type: 'chunk',
+               value: {
+                 candidates: [
+                   {
++                    finishReason: 'STOP',
+                     content: { parts },
+                   },
+                 ],
+               },
+             };
+           })(),
+@@ -2794,12 +2836,13 @@ describe('subagent.ts', () => {
+             if (idx === 0) {
+               yield {
+                 type: 'chunk',
+                 value: {
+                   candidates: [
+                     {
++                      finishReason: 'STOP',
+                       content: {
+                         parts: [
+                           {
+                             text: 'Just thinking...' as string,
+                             thought: true,
+                           },
+@@ -2812,12 +2855,13 @@ describe('subagent.ts', () => {
+             } else {
+               yield {
+                 type: 'chunk',
+                 value: {
+                   candidates: [
+                     {
++                      finishReason: 'STOP',
+                       content: {
+                         parts: [{ text: 'Actual output.' as string }],
+                       },
+                     },
+                   ],
+                 },
 diff --git a/packages/core/src/agents/runtime/agent-headless.ts b/packages/core/src/agents/runtime/agent-headless.ts
 index 2870d4b..0b6c8ee 100644
 --- a/packages/core/src/agents/runtime/agent-headless.ts
@@ -2772,7 +4520,7 @@ index 2870d4b..0b6c8ee 100644
    setExternalMessageProvider(provider: () => AgentExternalInput[]): void {
      this.externalMessageProvider = provider;
 diff --git a/packages/core/src/agents/runtime/agent-types.ts b/packages/core/src/agents/runtime/agent-types.ts
-index 03c4213..0dc60e5 100644
+index 03c4213..062847a 100644
 --- a/packages/core/src/agents/runtime/agent-types.ts
 +++ b/packages/core/src/agents/runtime/agent-types.ts
 @@ -49,12 +49,19 @@ export interface ModelConfig {
@@ -2795,6 +4543,25 @@ index 03c4213..0dc60e5 100644
   * Configures the execution environment and constraints for an agent.
   *
   * TODO: Consider adding max_tokens as a form of budgeting.
+@@ -113,12 +120,18 @@ export enum AgentTerminateMode {
+   /** The agent's execution successfully completed all its defined goals. */
+   GOAL = 'GOAL',
+   /** The agent's execution terminated because it exceeded the maximum number of turns. */
+   MAX_TURNS = 'MAX_TURNS',
+   /** The agent's execution terminated after detecting a tool-call loop. */
+   LOOP_DETECTED = 'LOOP_DETECTED',
++  /**
++   * The provider stopped the agent's generation from outside -- the output
++   * cap, a content filter, a reason this build does not recognise -- so the
++   * round it ended on holds a cut-off prefix rather than a report.
++   */
++  INCOMPLETE_GENERATION = 'INCOMPLETE_GENERATION',
+   /** The agent's execution was cancelled via an abort signal. */
+   CANCELLED = 'CANCELLED',
+   /** The agent was gracefully shut down (e.g., arena/team session ended). */
+   SHUTDOWN = 'SHUTDOWN',
+ }
+ 
 diff --git a/packages/core/src/agents/subagent-result.test.ts b/packages/core/src/agents/subagent-result.test.ts
 index 691da33..1a33e6b 100644
 --- a/packages/core/src/agents/subagent-result.test.ts
@@ -2905,7 +4672,7 @@ index 691da33..1a33e6b 100644
 +  });
  });
 diff --git a/packages/core/src/agents/subagent-result.ts b/packages/core/src/agents/subagent-result.ts
-index 588c7e6..554b54c 100644
+index 588c7e6..423f52d 100644
 --- a/packages/core/src/agents/subagent-result.ts
 +++ b/packages/core/src/agents/subagent-result.ts
 @@ -2,12 +2,29 @@
@@ -2938,7 +4705,7 @@ index 588c7e6..554b54c 100644
  }
  
  function isSelfClosingTag(tag: string): boolean {
-@@ -142,13 +159,43 @@ function stripAnalysisOutsideSummary(text: string): string {
+@@ -142,13 +159,45 @@ function stripAnalysisOutsideSummary(text: string): string {
  }
  
  /** Keeps successful subagent scratchpad tags out of the parent model context. */
@@ -2972,6 +4739,8 @@ index 588c7e6..554b54c 100644
 +      reason = `hit its time limit${turns}`;
 +    } else if (terminateMode === AgentTerminateMode.CANCELLED) {
 +      reason = `was cancelled${turns}`;
++    } else if (terminateMode === AgentTerminateMode.INCOMPLETE_GENERATION) {
++      reason = `was cut off mid-generation${turns}`;
 +    } else {
 +      reason = `stopped as ${String(terminateMode).toLowerCase()}${detail}${turns}`;
 +    }
@@ -10119,8 +11888,67 @@ index 0000000..0e8e43d
 +  'or may have completed before the result was lost. Inspect current state and ' +
 +  'persisted artifacts before deciding what to do next; do not blindly repeat ' +
 +  'a non-idempotent operation.';
+diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.test.ts
+index 65277a5..810575c 100644
+--- a/packages/core/src/core/turn.test.ts
++++ b/packages/core/src/core/turn.test.ts
+@@ -12,14 +12,16 @@ import type {
+ } from './turn.js';
+ import {
+   CompressionStatus,
+   Turn,
+   GeminiEventType,
+   createDuplicateProviderToolCallResponse,
++  describeIncompleteGeneration,
+   findRepeatedDuplicateProviderToolCall,
+ } from './turn.js';
++import { FinishReason } from './genai-compat.js';
+ import type {
+   GenerateContentResponse,
+   Part,
+   Content,
+   PartListUnion,
+ } from '@google/genai';
+@@ -114,12 +116,37 @@ describe('createDuplicateProviderToolCallResponse', () => {
+     });
+ 
+     expect(response.executionStatus).toBe('not_started');
+   });
+ });
+ 
++describe('describeIncompleteGeneration', () => {
++  it('says nothing about a generation the model ended itself', () => {
++    expect(describeIncompleteGeneration(FinishReason.STOP, 7)).toBeNull();
++  });
++
++  it.each([
++    ['MAX_TOKENS', FinishReason.MAX_TOKENS],
++    ['SAFETY', 'SAFETY' as FinishReason],
++    ['FINISH_REASON_UNSPECIFIED', 'FINISH_REASON_UNSPECIFIED' as FinishReason],
++  ])('names %s as a generation stopped from outside', (spelling, reason) => {
++    const described = describeIncompleteGeneration(reason, 66);
++
++    expect(described).toContain(spelling);
++    expect(described).toContain('turn 66');
++    expect(described).toContain('carries no final answer');
++  });
++
++  it('describes a generation whose terminal reason never arrived', () => {
++    const described = describeIncompleteGeneration(undefined, 1);
++
++    expect(described).toContain('no terminal reason');
++    expect(described).toContain('turn 1');
++  });
++});
++
+ describe('Turn', () => {
+   let turn: Turn;
+   // Define a type for the mocked Chat instance for clarity
+   type MockedChatInstance = {
+     sendMessageStream: typeof mockSendMessageStream;
+     getHistory: typeof mockGetHistory;
 diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
-index d2801d0..c5a4f5e 100644
+index d2801d0..f2019cf 100644
 --- a/packages/core/src/core/turn.ts
 +++ b/packages/core/src/core/turn.ts
 @@ -77,12 +77,21 @@ export enum GeminiEventType {
@@ -10145,7 +11973,49 @@ index d2801d0..c5a4f5e 100644
    type: GeminiEventType.Retry;
    retryInfo?: RetryInfo;
    /** When true, the retry is a continuation (recovery) rather than a fresh
-@@ -356,40 +365,130 @@ export enum CompressionStatus {
+@@ -119,12 +128,41 @@ export interface SessionTokenLimitExceededValue {
+ 
+ export interface GeminiFinishedEventValue {
+   reason: FinishReason | undefined;
+   usageMetadata: GenerateContentResponseUsageMetadata | undefined;
+ }
+ 
++/**
++ * Describes a generation the provider stopped from outside, or `null` when
++ * the model ended its own message.
++ *
++ * `STOP` is the only terminal reason that means the model wrote its message
++ * to the end. Under every other reason -- the output cap, a content filter,
++ * a spelling this build does not recognise -- the text on the wire is a
++ * prefix that was cut off mid-message, and the absence of a tool call in
++ * such a turn records where the cut landed rather than a decision to stop
++ * calling tools. A reasoning loop that reads "this turn requested no tools"
++ * as "the model is done" must therefore consult this first, and report what
++ * it says in place of a final answer it does not have. A generation whose
++ * terminal reason never arrived is described here too: asserting that the
++ * model finished requires the provider to have said so.
++ */
++export function describeIncompleteGeneration(
++  reason: FinishReason | undefined,
++  turn: number,
++): string | null {
++  if (reason === FinishReason.STOP) {
++    return null;
++  }
++  return (
++    `Generation on turn ${turn} ended as ${reason ?? 'no terminal reason'} ` +
++    `rather than the model completing its message, so its text is a cut-off ` +
++    `prefix and this run carries no final answer.`
++  );
++}
++
+ export interface ToolCallRequestInfo {
+   callId: string;
+   /**
+    * Original tool-call id emitted by the provider/model. When present, this is
+    * the idempotency key for suppressing duplicate provider tool calls.
+    */
+@@ -356,40 +394,130 @@ export enum CompressionStatus {
     * `COMPRESSION_FAILED_EMPTY_SUMMARY` so telemetry can separate
     * prompt-quality failures (empty / nonsensical summary) from capacity
     * failures (output cap hit, may need a higher cap or finer-grained
@@ -10276,7 +12146,7 @@ index d2801d0..c5a4f5e 100644
  
  export type ServerGeminiSessionTokenLimitExceededEvent = {
    type: GeminiEventType.SessionTokenLimitExceeded;
-@@ -450,12 +549,13 @@ export type ServerGeminiGoalStateEvent = {
+@@ -450,12 +578,13 @@ export type ServerGeminiGoalStateEvent = {
  };
  
  // The original union type, now composed of the individual types
@@ -10290,7 +12160,7 @@ index d2801d0..c5a4f5e 100644
    | ServerGeminiErrorEvent
    | ServerGeminiFinishedEvent
    | ServerGeminiHookSystemMessageEvent
-@@ -578,12 +678,27 @@ export class Turn {
+@@ -578,12 +707,27 @@ export class Turn {
              statusCode: streamEvent.info.statusCode,
              fallbackIndex: streamEvent.info.fallbackIndex,
            };

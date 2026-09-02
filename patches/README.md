@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `40a5199c1610458b987576f71c3b80b3bc8a63ce5277d839dbde966f5bdaa330`
+- Review-diff SHA-256: `cf9b176af4e0be6e7020a711610ef5147e3da177171755a003ba6dcddc45a716`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `d93b6d78edcfb6719f224d76849692beb57d26a6a9733e3a6b8d7a34cad15871`
+- Transformer-manifest SHA-256: `8ea0a34ca95352d832404cf8861fecdfa9a384ad19505e19a201dbff3f0f9438`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -83,6 +83,36 @@ provide as one fail-closed mode:
   response was a mid-thought preamble followed by the error string, and the only
   reason it was ever noticed is that the turn carried no usage, which broke the
   service's independent `num_turns` cross-check;
+- a terminal state that separates a run that finished from a run that was cut
+  off. A reasoning loop ends when a turn requests no tools, and that silence
+  has two causes: the model finished its message, or the provider stopped
+  generation from outside while it was still being written. Only the terminal
+  reason tells them apart, and it arrives on every turn as the `Finished`
+  event's `reason`, of which the headless adapter reads the usage half and
+  discards the rest. Under this build's strict tool-call contract a `length`
+  terminal yields no executable call at all, so a generation the output cap
+  severs always lands in exactly that silence, and the session reported
+  `subtype: success`, `is_error: false`, exit 0 — a cut-off prefix presented as
+  a final answer, indistinguishable at the status level from a run that
+  answered. Forensics found a 66-turn session whose last turn was clamped to
+  the 19,064 tokens left below the auto-compaction threshold and returned
+  exactly that many: it announced a write, was cut off before emitting the
+  call, and was recorded as a success that had read 18 of 26 files and written
+  none of its deliverable. `describeIncompleteGeneration` in core is the one
+  rule for it, and it decides nothing about the work: `STOP` is the only
+  terminal reason that means the model wrote its message to the end, so
+  `subtype: success` now asserts exactly that and nothing more, while every
+  other reason — the output cap, a content filter, a spelling this build does
+  not recognise, or one that never arrived — ends the session as
+  `error_incomplete_generation` naming the reason, with exit 1. It is reported
+  rather than repaired: a length-stopped prefix is already non-executable and
+  unresumable here, so continuing it is not among the options. The same rule
+  runs inside a subagent, which stops as `INCOMPLETE_GENERATION` instead of
+  returning its interrupted prefix as the report the parent then integrates as
+  a conclusion. Both reasoning loops record the reason of the generation they
+  are standing on and clear it at each turn head and at a model fallback, so a
+  turn that reports none is read as none rather than inheriting an earlier
+  turn's;
 - locked settings loading before initialization and during later auth validation:
   no workspace settings or `.env`, no ambient/project/CLI/session/injected MCP,
   and no include-directory override;
@@ -401,8 +431,8 @@ Verification performed in the pinned Node image:
   idempotence, new-file handling, source/output drift, intermediate-state refusal,
   review-diff drift, time-of-check/time-of-use mutation, and transactional rollback;
 - the complete patched TypeScript/CLI build passed;
-- the full build-derived suite passed: all 57 derived test files (5,241
-  tests: 5,240 passed and 1 environment-skip in the bare pinned image, the
+- the full build-derived suite passed: all 57 derived test files (5,253
+  tests: 5,252 passed and 1 environment-skip in the bare pinned image, the
   20 git-dependent cases with git present as the production image provides
   it) -- zero failures;
 - the same 20 environment-gated failures reproduce byte-identically on the

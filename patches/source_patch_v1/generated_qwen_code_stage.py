@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '40a5199c1610458b987576f71c3b80b3bc8a63ce5277d839dbde966f5bdaa330',
+  'review_sha256': 'cf9b176af4e0be6e7020a711610ef5147e3da177171755a003ba6dcddc45a716',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -34,13 +34,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863'},
             {'path': 'packages/cli/src/nonInteractive/types.ts',
              'before_sha256': '6ad4da59e11d6a84d2b9bd03376b834d1737edfc7a8dc9af1e90783ccab2acdf',
-             'after_sha256': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e'},
+             'after_sha256': '4fec37bb31d9163236680e7f85af4f30d8c11c295f75a529bf4f6b4d1b4df719'},
             {'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before_sha256': 'b2974af70f9b5f4beadaa1e9d632e95ff6eac1ee3aab8c3b366db8ce64d73afc',
-             'after_sha256': '36499ab60a63edfb90c470d3593014c9c07499fe07d56b9ed3aaf9395ac0c52a'},
+             'after_sha256': 'b276345e12ab5f713a875f9f591c36e274fefe5982807304537b48903f4fbc05'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
-             'after_sha256': 'ecdd192c690882e67189edc322d8d02b0af1cf25f13d5b218f567e071f25bec9'},
+             'after_sha256': '8aef0166070eba53a77e1bc23bfe08c75377558308bf56b1af461cbc2bc9b958'},
             {'path': 'packages/cli/src/ui/hooks/useGeminiStream.ts',
              'before_sha256': '81ae8edc386ed5b31b09a99435bbb94925117c9a56e6bf4bb80d3c9be422f5ba',
              'after_sha256': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e'},
@@ -58,28 +58,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6'},
             {'path': 'packages/core/src/agents/runtime/agent-core.test.ts',
              'before_sha256': 'd8db843e95fe93797cd31e4686cea069d55a827afff7432d376ec764acc60fb6',
-             'after_sha256': '5ce2e138841cfd514818d12a56ce0a426974f633e81bbbaad4b0cf38cc0437de'},
+             'after_sha256': '8b9e1b7b517d13cbb89b6077455c185a5424dba3c37d881b0401429f8c05033b'},
             {'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before_sha256': '79dd902bfd3af29fff89a1886f4076e64019681261f9550e446eda0df0ab9464',
-             'after_sha256': '2c998619b919b775143d554cadee7173cdc5d6cb180852ada9ad92c694a35bbf'},
+             'after_sha256': '1ab48df33b3672b9e2512008ea833047d2b5420e59268343b8c8c7954fc101cd'},
             {'path': 'packages/core/src/agents/runtime/agent-events.ts',
              'before_sha256': 'c28f4f24651cdb75ea34b3102c9456e3b467d5ee0a03afb73a160b25b736d3b8',
              'after_sha256': 'f8ddde1eb314785fbc47470dda432f2296b9d4d024cbe3c2241e12db69e99dcb'},
             {'path': 'packages/core/src/agents/runtime/agent-headless.test.ts',
              'before_sha256': 'f740161dd426d7801fd405271f2ecc0f4eb4b72698a742f2469244499fade871',
-             'after_sha256': '25c436dc1471f6e4add077a719151c339378f0950d313f48d69cfc4cc31f66be'},
+             'after_sha256': 'b9bb1b3221091d0d4b348d228c31d6ba098a5549cfec6aef195f98bd8a60ed4d'},
             {'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before_sha256': 'db6d8ed8f7714a83483fb9f22c860a3f2e7e38cf53171e79c5fc49a363d3c3ce',
              'after_sha256': '24f953533bc130c33687e2cbe1b324dc0f49fb5a3f78860e30682193ac272cf5'},
             {'path': 'packages/core/src/agents/runtime/agent-types.ts',
              'before_sha256': 'b02dc24f71f260e089677cfe41dee1d99b0fea88a355bee14b1ce15cbc237750',
-             'after_sha256': '09a5db201308cae2598fb36f4a79b645b73705e3dd54d2b3a88a27a034ee449b'},
+             'after_sha256': '25c86534f944d3c5e66c948cc16ae9710c539bbd63238b8390d6c3e36c727647'},
             {'path': 'packages/core/src/agents/subagent-result.test.ts',
              'before_sha256': '044cd3646709a861e488f473d015f4238405dc37dd5c8d26ce8ab010a391ba6d',
              'after_sha256': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91'},
             {'path': 'packages/core/src/agents/subagent-result.ts',
              'before_sha256': 'e82b58889f3c2349c5db5858581a45f0348d6c315b4807ea4b3357b56dcac8df',
-             'after_sha256': '6dc6f199ba394f6e0520aca1d54a5d7c529eea9b0d94f76ab0fffa29327b12e2'},
+             'after_sha256': 'dc0a14c242f52a03c13423a0e0314517f2c270bdf48e2974d0e106db1c0c4379'},
             {'path': 'packages/core/src/config/config.ts',
              'before_sha256': 'e784e48248ab4258e83393996691c85a10e3ea3ab906a88e1cceb683baa1b6f5',
              'after_sha256': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49'},
@@ -167,9 +167,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/core/toolOutcome.ts',
              'before_sha256': None,
              'after_sha256': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9'},
+            {'path': 'packages/core/src/core/turn.test.ts',
+             'before_sha256': '23a61903d7201ad49ed84dfbaf5b3c7ae991d56c69e0e34edfa5d8364cc7f222',
+             'after_sha256': '5de15292c793f4227c500e3680a621ce492a7bb11fb88375a1ee6deb42d313c9'},
             {'path': 'packages/core/src/core/turn.ts',
              'before_sha256': 'f1be47023cae4b9e3a4fd9fd756c28bf36724f772bd9759e8ecd72e73cdea6b7',
-             'after_sha256': '6c2707d2ebf84fb82cc2fe2b0e7be92275a5e09a330d527a52000a32035add72'},
+             'after_sha256': '5978a86c11c663318c6a5c0aaa19492686e9e1e8e5c8c383327b28b7412625ee'},
             {'path': 'packages/core/src/index.ts',
              'before_sha256': '27213fe57ba91831bad52f0b07700aae9240bc636c1bab83f144d726514e3b6b',
              'after_sha256': '6ce05101bad847681232aae4d4b738afa4e7d6206a495a6210df2a913b9dbcef'},
@@ -4236,7 +4239,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  usage: ExtendedUsage;\n'},
             {'name': 'packages/cli/src/nonInteractive/types.ts:landmark-2',
              'path': 'packages/cli/src/nonInteractive/types.ts',
-             'before': '\n'
+             'before': '  permission_denials: CLIPermissionDenial[];\n'
+                       '  [key: string]: unknown;\n'
+                       '}\n'
+                       '\n'
                        'export interface CLIResultMessageError {\n'
                        "  type: 'result';\n"
                        "  subtype: 'error_max_turns' | 'error_during_execution';\n"
@@ -4248,10 +4254,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '  num_turns: number;\n'
                        '  usage: ExtendedUsage;\n'
                        '  modelUsage?: Record<string, ModelUsage>;\n',
-             'after': '\n'
+             'after': '  permission_denials: CLIPermissionDenial[];\n'
+                      '  [key: string]: unknown;\n'
+                      '}\n'
+                      '\n'
                       'export interface CLIResultMessageError {\n'
                       "  type: 'result';\n"
-                      "  subtype: 'error_max_turns' | 'error_during_execution';\n"
+                      '  /**\n'
+                      '   * Which terminal state ended the session. '
+                      '`error_incomplete_generation`\n'
+                      "   * says the provider stopped the model's last generation from "
+                      'outside --\n'
+                      '   * the output cap, a content filter, a reason this build does '
+                      'not\n'
+                      '   * recognise -- so the run holds a cut-off prefix rather than '
+                      'an answer.\n'
+                      '   * It is the counterpart of `success`, which asserts the '
+                      'model wrote its\n'
+                      '   * final message to the end.\n'
+                      '   */\n'
+                      '  subtype:\n'
+                      "    | 'error_max_turns'\n"
+                      "    | 'error_during_execution'\n"
+                      "    | 'error_incomplete_generation';\n"
                       '  uuid: string;\n'
                       '  session_id: string;\n'
                       '  /** See {@link CLIResultMessageSuccess.parent_tool_use_id}. '
@@ -4263,7 +4288,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  num_turns: number;\n'
                       '  usage: ExtendedUsage;\n'
                       '  modelUsage?: Record<string, ModelUsage>;\n',
-             'review_before': '\n'
+             'review_before': '  permission_denials: CLIPermissionDenial[];\n'
+                              '  [key: string]: unknown;\n'
+                              '}\n'
+                              '\n'
                               'export interface CLIResultMessageError {\n'
                               "  type: 'result';\n"
                               "  subtype: 'error_max_turns' | "
@@ -4276,11 +4304,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  num_turns: number;\n'
                               '  usage: ExtendedUsage;\n'
                               '  modelUsage?: Record<string, ModelUsage>;\n',
-             'review_after': '\n'
+             'review_after': '  permission_denials: CLIPermissionDenial[];\n'
+                             '  [key: string]: unknown;\n'
+                             '}\n'
+                             '\n'
                              'export interface CLIResultMessageError {\n'
                              "  type: 'result';\n"
-                             "  subtype: 'error_max_turns' | "
-                             "'error_during_execution';\n"
+                             '  /**\n'
+                             '   * Which terminal state ended the session. '
+                             '`error_incomplete_generation`\n'
+                             "   * says the provider stopped the model's last "
+                             'generation from outside --\n'
+                             '   * the output cap, a content filter, a reason this '
+                             'build does not\n'
+                             '   * recognise -- so the run holds a cut-off prefix '
+                             'rather than an answer.\n'
+                             '   * It is the counterpart of `success`, which asserts '
+                             'the model wrote its\n'
+                             '   * final message to the end.\n'
+                             '   */\n'
+                             '  subtype:\n'
+                             "    | 'error_max_turns'\n"
+                             "    | 'error_during_execution'\n"
+                             "    | 'error_incomplete_generation';\n"
                              '  uuid: string;\n'
                              '  session_id: string;\n'
                              '  /** See {@link '
@@ -4305,7 +4351,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        "import { EventEmitter } from 'node:events';\n"
                        'import {\n'
                        '  runNonInteractive,\n'
-                       '  skipHeadlessLoopSentinel,\n',
+                       '  skipHeadlessLoopSentinel,\n'
+                       '  TurnInterruptedError,\n'
+                       "} from './nonInteractiveCli.js';\n",
              'after': '  TeamEventType,\n'
                       '  ToolConfirmationOutcome,\n'
                       '  ToolNames,\n'
@@ -4314,11 +4362,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  GoalPersistenceUnavailableError,\n'
                       '  ORPHAN_TOOL_USE_REPAIR_REASON,\n'
                       "} from '@qwen-code/qwen-code-core';\n"
-                      "import type { Part } from '@google/genai';\n"
+                      "import { FinishReason, type Part } from '@google/genai';\n"
                       "import { EventEmitter } from 'node:events';\n"
                       'import {\n'
                       '  runNonInteractive,\n'
-                      '  skipHeadlessLoopSentinel,\n',
+                      '  skipHeadlessLoopSentinel,\n'
+                      '  TurnInterruptedError,\n'
+                      "} from './nonInteractiveCli.js';\n",
              'review_before': '  TeamEventType,\n'
                               '  ToolConfirmationOutcome,\n'
                               '  ToolNames,\n'
@@ -4330,7 +4380,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               "import { EventEmitter } from 'node:events';\n"
                               'import {\n'
                               '  runNonInteractive,\n'
-                              '  skipHeadlessLoopSentinel,\n',
+                              '  skipHeadlessLoopSentinel,\n'
+                              '  TurnInterruptedError,\n'
+                              "} from './nonInteractiveCli.js';\n",
              'review_after': '  TeamEventType,\n'
                              '  ToolConfirmationOutcome,\n'
                              '  ToolNames,\n'
@@ -4339,11 +4391,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  GoalPersistenceUnavailableError,\n'
                              '  ORPHAN_TOOL_USE_REPAIR_REASON,\n'
                              "} from '@qwen-code/qwen-code-core';\n"
-                             "import type { Part } from '@google/genai';\n"
+                             'import { FinishReason, type Part } from '
+                             "'@google/genai';\n"
                              "import { EventEmitter } from 'node:events';\n"
                              'import {\n'
                              '  runNonInteractive,\n'
-                             '  skipHeadlessLoopSentinel,\n'},
+                             '  skipHeadlessLoopSentinel,\n'
+                             '  TurnInterruptedError,\n'
+                             "} from './nonInteractiveCli.js';\n"},
             {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-2',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      getSessionId: '
@@ -4427,6 +4482,819 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      onTeamManagerChange: vi.fn(),\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-3',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    vi.spyOn(goalRuntime, '
+                       "'finishTurn').mockResolvedValue(undefined);\n"
+                       '    mockGeminiClient.sendMessageStream.mockImplementation(() '
+                       '=>\n'
+                       '      createStreamFromEvents([\n'
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: {\n'
+                       '            reason: undefined,\n'
+                       '            usageMetadata: { totalTokenCount: 0 },\n'
+                       '          },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '  }\n',
+             'after': '    vi.spyOn(goalRuntime, '
+                      "'finishTurn').mockResolvedValue(undefined);\n"
+                      '    mockGeminiClient.sendMessageStream.mockImplementation(() '
+                      '=>\n'
+                      '      createStreamFromEvents([\n'
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 0 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '  }\n',
+             'review_before': '    vi.spyOn(goalRuntime, '
+                              "'finishTurn').mockResolvedValue(undefined);\n"
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockImplementation(() '
+                              '=>\n'
+                              '      createStreamFromEvents([\n'
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: {\n'
+                              '            reason: undefined,\n'
+                              '            usageMetadata: { totalTokenCount: 0 },\n'
+                              '          },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '  }\n',
+             'review_after': '    vi.spyOn(goalRuntime, '
+                             "'finishTurn').mockResolvedValue(undefined);\n"
+                             '    '
+                             'mockGeminiClient.sendMessageStream.mockImplementation(() '
+                             '=>\n'
+                             '      createStreamFromEvents([\n'
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 0 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '  }\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-4',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "                prompt_id: 'goal-resume-tool-result',\n"
+                       '                goalContext: sendOptions.goalPermit,\n'
+                       '              },\n'
+                       '            },\n'
+                       '          ]);\n'
+                       '        }\n'
+                       '        return createStreamFromEvents([\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 0 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]);\n'
+                       '      },\n'
+                       '    );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n'
+                       '      mockSettings,\n',
+             'after': "                prompt_id: 'goal-resume-tool-result',\n"
+                      '                goalContext: sendOptions.goalPermit,\n'
+                      '              },\n'
+                      '            },\n'
+                      '          ]);\n'
+                      '        }\n'
+                      '        return createStreamFromEvents([\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 0 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]);\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n',
+             'review_before': '          ]);\n'
+                              '        }\n'
+                              '        return createStreamFromEvents([\n'
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 0 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]);\n'
+                              '      },\n'
+                              '    );\n',
+             'review_after': '          ]);\n'
+                             '        }\n'
+                             '        return createStreamFromEvents([\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 0 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]);\n'
+                             '      },\n'
+                             '    );\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-5',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "                prompt_id: 'goal-teammate-handoff',\n"
+                       '                goalContext: sendOptions.goalPermit,\n'
+                       '              },\n'
+                       '            },\n'
+                       '          ]);\n'
+                       '        }\n'
+                       '        return createStreamFromEvents([\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 0 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]);\n'
+                       '      },\n'
+                       '    );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n'
+                       '      mockSettings,\n',
+             'after': "                prompt_id: 'goal-teammate-handoff',\n"
+                      '                goalContext: sendOptions.goalPermit,\n'
+                      '              },\n'
+                      '            },\n'
+                      '          ]);\n'
+                      '        }\n'
+                      '        return createStreamFromEvents([\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 0 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]);\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n',
+             'review_before': '          ]);\n'
+                              '        }\n'
+                              '        return createStreamFromEvents([\n'
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 0 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]);\n'
+                              '      },\n'
+                              '    );\n',
+             'review_after': '          ]);\n'
+                             '        }\n'
+                             '        return createStreamFromEvents([\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 0 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]);\n'
+                             '      },\n'
+                             '    );\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-6',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '              args: {},\n'
+                       '              isClientInitiated: false,\n'
+                       "              prompt_id: 'goal-terminal-tool-result',\n"
+                       '              goalContext: sendOptions.goalPermit,\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '    );\n'
+                       '\n'
+                       '    const exitCode = await runNonInteractive(\n'
+                       '      mockConfig,\n'
+                       '      mockSettings,\n',
+             'after': '              args: {},\n'
+                      '              isClientInitiated: false,\n'
+                      "              prompt_id: 'goal-terminal-tool-result',\n"
+                      '              goalContext: sendOptions.goalPermit,\n'
+                      '            },\n'
+                      '          },\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '    );\n'
+                      '\n'
+                      '    const exitCode = await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n',
+             'review_before': '              args: {},\n'
+                              '              isClientInitiated: false,\n'
+                              "              prompt_id: 'goal-terminal-tool-result',\n"
+                              '              goalContext: sendOptions.goalPermit,\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '    );\n'
+                              '\n'
+                              '    const exitCode = await runNonInteractive(\n'
+                              '      mockConfig,\n'
+                              '      mockSettings,\n',
+             'review_after': '              args: {},\n'
+                             '              isClientInitiated: false,\n'
+                             "              prompt_id: 'goal-terminal-tool-result',\n"
+                             '              goalContext: sendOptions.goalPermit,\n'
+                             '            },\n'
+                             '          },\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '    );\n'
+                             '\n'
+                             '    const exitCode = await runNonInteractive(\n'
+                             '      mockConfig,\n'
+                             '      mockSettings,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-7',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '              args: {},\n'
+                       '              isClientInitiated: false,\n'
+                       "              prompt_id: 'goal-state-stream',\n"
+                       '              goalContext: sendOptions.goalPermit,\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '    );\n'
+                       '\n'
+                       '    const exitCode = await runNonInteractive(\n'
+                       '      mockConfig,\n'
+                       '      mockSettings,\n',
+             'after': '              args: {},\n'
+                      '              isClientInitiated: false,\n'
+                      "              prompt_id: 'goal-state-stream',\n"
+                      '              goalContext: sendOptions.goalPermit,\n'
+                      '            },\n'
+                      '          },\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '    );\n'
+                      '\n'
+                      '    const exitCode = await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n',
+             'review_before': '              args: {},\n'
+                              '              isClientInitiated: false,\n'
+                              "              prompt_id: 'goal-state-stream',\n"
+                              '              goalContext: sendOptions.goalPermit,\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '    );\n'
+                              '\n'
+                              '    const exitCode = await runNonInteractive(\n'
+                              '      mockConfig,\n'
+                              '      mockSettings,\n',
+             'review_after': '              args: {},\n'
+                             '              isClientInitiated: false,\n'
+                             "              prompt_id: 'goal-state-stream',\n"
+                             '              goalContext: sendOptions.goalPermit,\n'
+                             '            },\n'
+                             '          },\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '    );\n'
+                             '\n'
+                             '    const exitCode = await runNonInteractive(\n'
+                             '      mockConfig,\n'
+                             '      mockSettings,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-8',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents([\n'
+                       "        { type: GeminiEventType.Content, value: 'still "
+                       "working' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: {\n'
+                       '            reason: undefined,\n'
+                       '            usageMetadata: { totalTokenCount: 0 },\n'
+                       '          },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      "        { type: GeminiEventType.Content, value: 'still working' "
+                      '},\n'
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 0 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents([\n'
+                              "        { type: GeminiEventType.Content, value: 'still "
+                              "working' },\n"
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: {\n'
+                              '            reason: undefined,\n'
+                              '            usageMetadata: { totalTokenCount: 0 },\n'
+                              '          },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             "        { type: GeminiEventType.Content, value: 'still "
+                             "working' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 0 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-9',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 0 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n',
+             'after': '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 0 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n',
+             'review_before': '      )\n'
+                              '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 0 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      )\n'
+                             '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 0 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-10',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "    { inlineData: { mimeType: 'image/png', data: 'AAAA' } },\n"
+                       '  ];\n'
+                       '  const finishedEvents: ServerGeminiStreamEvent[] = [\n'
+                       '    {\n'
+                       '      type: GeminiEventType.Finished,\n'
+                       '      value: {\n'
+                       '        reason: undefined,\n'
+                       '        usageMetadata: { totalTokenCount: 1 },\n'
+                       '      },\n'
+                       '    },\n'
+                       '  ];\n'
+                       '\n'
+                       '  async function mockHeadlessImageInput(): Promise<void> {\n',
+             'after': "    { inlineData: { mimeType: 'image/png', data: 'AAAA' } },\n"
+                      '  ];\n'
+                      '  const finishedEvents: ServerGeminiStreamEvent[] = [\n'
+                      '    {\n'
+                      '      type: GeminiEventType.Finished,\n'
+                      '      value: {\n'
+                      '        reason: FinishReason.STOP,\n'
+                      '        usageMetadata: { totalTokenCount: 1 },\n'
+                      '      },\n'
+                      '    },\n'
+                      '  ];\n'
+                      '\n'
+                      '  async function mockHeadlessImageInput(): Promise<void> {\n',
+             'review_before': "    { inlineData: { mimeType: 'image/png', data: 'AAAA' "
+                              '} },\n'
+                              '  ];\n'
+                              '  const finishedEvents: ServerGeminiStreamEvent[] = [\n'
+                              '    {\n'
+                              '      type: GeminiEventType.Finished,\n'
+                              '      value: {\n'
+                              '        reason: undefined,\n'
+                              '        usageMetadata: { totalTokenCount: 1 },\n'
+                              '      },\n'
+                              '    },\n'
+                              '  ];\n'
+                              '\n'
+                              '  async function mockHeadlessImageInput(): '
+                              'Promise<void> {\n',
+             'review_after': "    { inlineData: { mimeType: 'image/png', data: 'AAAA' "
+                             '} },\n'
+                             '  ];\n'
+                             '  const finishedEvents: ServerGeminiStreamEvent[] = [\n'
+                             '    {\n'
+                             '      type: GeminiEventType.Finished,\n'
+                             '      value: {\n'
+                             '        reason: FinishReason.STOP,\n'
+                             '        usageMetadata: { totalTokenCount: 1 },\n'
+                             '      },\n'
+                             '    },\n'
+                             '  ];\n'
+                             '\n'
+                             '  async function mockHeadlessImageInput(): Promise<void> '
+                             '{\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-11',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    setupMetricsMock();\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Hello' },\n"
+                       "      { type: GeminiEventType.Content, value: ' World' },\n"
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 10 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    setupMetricsMock();\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Hello' },\n"
+                      "      { type: GeminiEventType.Content, value: ' World' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 10 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    setupMetricsMock();\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              "      { type: GeminiEventType.Content, value: 'Hello' "
+                              '},\n'
+                              "      { type: GeminiEventType.Content, value: ' World' "
+                              '},\n'
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 10 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    setupMetricsMock();\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'Hello' "
+                             '},\n'
+                             "      { type: GeminiEventType.Content, value: ' World' "
+                             '},\n'
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 10 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-12',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "          { command: 'echo safe' },\n"
+                       '          approvalSignal,\n'
+                       '        );\n'
+                       '        yield {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: {\n'
+                       '            reason: undefined,\n'
+                       '            usageMetadata: { totalTokenCount: 0 },\n'
+                       '          },\n'
+                       '        };\n'
+                       '      },\n'
+                       '    );\n'
+                       '\n',
+             'after': "          { command: 'echo safe' },\n"
+                      '          approvalSignal,\n'
+                      '        );\n'
+                      '        yield {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 0 },\n'
+                      '          },\n'
+                      '        };\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n',
+             'review_before': "          { command: 'echo safe' },\n"
+                              '          approvalSignal,\n'
+                              '        );\n'
+                              '        yield {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: {\n'
+                              '            reason: undefined,\n'
+                              '            usageMetadata: { totalTokenCount: 0 },\n'
+                              '          },\n'
+                              '        };\n'
+                              '      },\n'
+                              '    );\n'
+                              '\n',
+             'review_after': "          { command: 'echo safe' },\n"
+                             '          approvalSignal,\n'
+                             '        );\n'
+                             '        yield {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 0 },\n'
+                             '          },\n'
+                             '        };\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-13',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    });\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents([\n'
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: {\n'
+                       '            reason: undefined,\n'
+                       '            usageMetadata: { totalTokenCount: 0 },\n'
+                       '          },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    });\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 0 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    });\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents([\n'
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: {\n'
+                              '            reason: undefined,\n'
+                              '            usageMetadata: { totalTokenCount: 0 },\n'
+                              '          },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    });\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 0 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-14',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "      'Restored 2 background agents from the previous "
+                       "session.',\n"
+                       '    );\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents([\n'
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n',
+             'after': "      'Restored 2 background agents from the previous "
+                      "session.',\n"
+                      '    );\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 5 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n',
+             'review_before': "      'Restored 2 background agents from the previous "
+                              "session.',\n"
+                              '    );\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents([\n'
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 5 } },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '\n'
+                              '    await runNonInteractive(\n'
+                              '      mockConfig,\n',
+             'review_after': "      'Restored 2 background agents from the previous "
+                             "session.',\n"
+                             '    );\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 5 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'
+                             '    await runNonInteractive(\n'
+                             '      mockConfig,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-15',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      ]),\n'
+                       '    }));\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents([\n'
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '\n'
+                       "    await runNonInteractive(mockConfig, mockSettings, '', "
+                       "'prompt-c-notice', {\n"
+                       '      continueInterrupted: true,\n',
+             'after': '      ]),\n'
+                      '    }));\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 5 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n'
+                      "    await runNonInteractive(mockConfig, mockSettings, '', "
+                      "'prompt-c-notice', {\n"
+                      '      continueInterrupted: true,\n',
+             'review_before': '      ]),\n'
+                              '    }));\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents([\n'
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 5 } },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '\n'
+                              '    await runNonInteractive(mockConfig, mockSettings, '
+                              "'', 'prompt-c-notice', {\n"
+                              '      continueInterrupted: true,\n',
+             'review_after': '      ]),\n'
+                             '    }));\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 5 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'
+                             '    await runNonInteractive(mockConfig, mockSettings, '
+                             "'', 'prompt-c-notice', {\n"
+                             '      continueInterrupted: true,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-16',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    const [request] = '
                        'mockGeminiClient.sendMessageStream.mock.calls[0]!;\n'
                        '    expect(request).toEqual([\n'
@@ -4490,7 +5358,359 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              "  it('does not let headless YOLO bypass explicit "
                              "teammate approval', async () => {\n"},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-4',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-17',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "              title: 'Permission rule requires confirmation',\n"
+                       "              prompt: 'Allow this operation?',\n"
+                       '              hideAlwaysAllow: true,\n'
+                       '            },\n'
+                       '            respond,\n'
+                       '            timestamp: Date.now(),\n'
+                       '          });\n'
+                       '        }\n'
+                       '        yield {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: {\n'
+                       '            reason: undefined,\n'
+                       '            usageMetadata: { totalTokenCount: 0 },\n'
+                       '          },\n'
+                       '        };\n'
+                       '      },\n'
+                       '    );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n'
+                       '      mockSettings,\n'
+                       "      'Test input',\n"
+                       "      'prompt-exact-teammate',\n",
+             'after': "              title: 'Permission rule requires confirmation',\n"
+                      "              prompt: 'Allow this operation?',\n"
+                      '              hideAlwaysAllow: true,\n'
+                      '            },\n'
+                      '            respond,\n'
+                      '            timestamp: Date.now(),\n'
+                      '          });\n'
+                      '        }\n'
+                      '        yield {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 0 },\n'
+                      '          },\n'
+                      '        };\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n'
+                      "      'Test input',\n"
+                      "      'prompt-exact-teammate',\n",
+             'review_before': '            timestamp: Date.now(),\n'
+                              '          });\n'
+                              '        }\n'
+                              '        yield {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: {\n'
+                              '            reason: undefined,\n'
+                              '            usageMetadata: { totalTokenCount: 0 },\n'
+                              '          },\n'
+                              '        };\n'
+                              '      },\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '            timestamp: Date.now(),\n'
+                             '          });\n'
+                             '        }\n'
+                             '        yield {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 0 },\n'
+                             '          },\n'
+                             '        };\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-18',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "              title: 'Permission rule requires confirmation',\n"
+                       "              prompt: 'Allow this operation?',\n"
+                       '              hideAlwaysAllow: true,\n'
+                       '            },\n'
+                       '            respond,\n'
+                       '            timestamp: Date.now(),\n'
+                       '          });\n'
+                       '        }\n'
+                       '        yield {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: {\n'
+                       '            reason: undefined,\n'
+                       '            usageMetadata: { totalTokenCount: 0 },\n'
+                       '          },\n'
+                       '        };\n'
+                       '      },\n'
+                       '    );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n'
+                       '      mockSettings,\n'
+                       "      'Test input',\n"
+                       "      'prompt-exact-teammate-default',\n",
+             'after': "              title: 'Permission rule requires confirmation',\n"
+                      "              prompt: 'Allow this operation?',\n"
+                      '              hideAlwaysAllow: true,\n'
+                      '            },\n'
+                      '            respond,\n'
+                      '            timestamp: Date.now(),\n'
+                      '          });\n'
+                      '        }\n'
+                      '        yield {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 0 },\n'
+                      '          },\n'
+                      '        };\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n'
+                      "      'Test input',\n"
+                      "      'prompt-exact-teammate-default',\n",
+             'review_before': '            timestamp: Date.now(),\n'
+                              '          });\n'
+                              '        }\n'
+                              '        yield {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: {\n'
+                              '            reason: undefined,\n'
+                              '            usageMetadata: { totalTokenCount: 0 },\n'
+                              '          },\n'
+                              '        };\n'
+                              '      },\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '            timestamp: Date.now(),\n'
+                             '          });\n'
+                             '        }\n'
+                             '        yield {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 0 },\n'
+                             '          },\n'
+                             '        };\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-19',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '          ]),\n'
+                       '      }));\n'
+                       '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '        createStreamFromEvents([\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       "      await runNonInteractive(mockConfig, mockSettings, '', "
+                       "'prompt-c1', {\n"
+                       '        continueInterrupted: true,\n',
+             'after': '          ]),\n'
+                      '      }));\n'
+                      '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '        createStreamFromEvents([\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 5 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      "      await runNonInteractive(mockConfig, mockSettings, '', "
+                      "'prompt-c1', {\n"
+                      '        continueInterrupted: true,\n',
+             'review_before': '          ]),\n'
+                              '      }));\n'
+                              '      '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '        createStreamFromEvents([\n'
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: { reason: undefined, usageMetadata: '
+                              '{ totalTokenCount: 5 } },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n'
+                              '      await runNonInteractive(mockConfig, mockSettings, '
+                              "'', 'prompt-c1', {\n"
+                              '        continueInterrupted: true,\n',
+             'review_after': '          ]),\n'
+                             '      }));\n'
+                             '      '
+                             'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '        createStreamFromEvents([\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 5 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'
+                             '      await runNonInteractive(mockConfig, mockSettings, '
+                             "'', 'prompt-c1', {\n"
+                             '        continueInterrupted: true,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-20',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '          ]),\n'
+                       '      }));\n'
+                       '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '        createStreamFromEvents([\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       "      await runNonInteractive(mockConfig, mockSettings, '', "
+                       "'prompt-c-plan', {\n"
+                       '        continueInterrupted: true,\n',
+             'after': '          ]),\n'
+                      '      }));\n'
+                      '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '        createStreamFromEvents([\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 5 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      "      await runNonInteractive(mockConfig, mockSettings, '', "
+                      "'prompt-c-plan', {\n"
+                      '        continueInterrupted: true,\n',
+             'review_before': '          ]),\n'
+                              '      }));\n'
+                              '      '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '        createStreamFromEvents([\n'
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: { reason: undefined, usageMetadata: '
+                              '{ totalTokenCount: 5 } },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n'
+                              '      await runNonInteractive(mockConfig, mockSettings, '
+                              "'', 'prompt-c-plan', {\n"
+                              '        continueInterrupted: true,\n',
+             'review_after': '          ]),\n'
+                             '      }));\n'
+                             '      '
+                             'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '        createStreamFromEvents([\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 5 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'
+                             '      await runNonInteractive(mockConfig, mockSettings, '
+                             "'', 'prompt-c-plan', {\n"
+                             '        continueInterrupted: true,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-21',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '        ]),\n'
+                       '      }));\n'
+                       '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '        createStreamFromEvents([\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       "      await runNonInteractive(mockConfig, mockSettings, '', "
+                       "'prompt-c2', {\n"
+                       '        continueInterrupted: true,\n',
+             'after': '        ]),\n'
+                      '      }));\n'
+                      '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '        createStreamFromEvents([\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 5 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      "      await runNonInteractive(mockConfig, mockSettings, '', "
+                      "'prompt-c2', {\n"
+                      '        continueInterrupted: true,\n',
+             'review_before': '        ]),\n'
+                              '      }));\n'
+                              '      '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '        createStreamFromEvents([\n'
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: { reason: undefined, usageMetadata: '
+                              '{ totalTokenCount: 5 } },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n'
+                              '      await runNonInteractive(mockConfig, mockSettings, '
+                              "'', 'prompt-c2', {\n"
+                              '        continueInterrupted: true,\n',
+             'review_after': '        ]),\n'
+                             '      }));\n'
+                             '      '
+                             'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '        createStreamFromEvents([\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 5 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'
+                             '      await runNonInteractive(mockConfig, mockSettings, '
+                             "'', 'prompt-c2', {\n"
+                             '        continueInterrupted: true,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-22',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      );\n'
                        '      expect(request).toEqual([\n'
@@ -4554,7 +5774,71 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    it('adds plan mode reminders to a continued tool "
                              "result without moving function responses', async () => "
                              '{\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-5',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-23',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '        ]),\n'
+                       '      }));\n'
+                       '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '        createStreamFromEvents([\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '      await runNonInteractive(\n'
+                       '        mockConfig,\n',
+             'after': '        ]),\n'
+                      '      }));\n'
+                      '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '        createStreamFromEvents([\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 5 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '      await runNonInteractive(\n'
+                      '        mockConfig,\n',
+             'review_before': '        ]),\n'
+                              '      }));\n'
+                              '      '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '        createStreamFromEvents([\n'
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: { reason: undefined, usageMetadata: '
+                              '{ totalTokenCount: 5 } },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n'
+                              '      await runNonInteractive(\n'
+                              '        mockConfig,\n',
+             'review_after': '        ]),\n'
+                             '      }));\n'
+                             '      '
+                             'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '        createStreamFromEvents([\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 5 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'
+                             '      await runNonInteractive(\n'
+                             '        mockConfig,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-24',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      );\n'
                        '      expect(request).toEqual([\n'
@@ -4616,7 +5900,3918 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      ]);\n'
                              '    });\n'
                              '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-25',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "          Object.assign(new Error('EPIPE'), { code: 'EPIPE' "
+                       '}),\n'
+                       '        );\n'
+                       "        yield { type: GeminiEventType.Content, value: 'Hello' "
+                       '};\n'
+                       '        yield {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: {\n'
+                       '            reason: undefined,\n'
+                       '            usageMetadata: { totalTokenCount: 0 },\n'
+                       '          },\n'
+                       '        };\n'
+                       '      },\n'
+                       '    );\n'
+                       '\n',
+             'after': "          Object.assign(new Error('EPIPE'), { code: 'EPIPE' "
+                      '}),\n'
+                      '        );\n'
+                      "        yield { type: GeminiEventType.Content, value: 'Hello' "
+                      '};\n'
+                      '        yield {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 0 },\n'
+                      '          },\n'
+                      '        };\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n',
+             'review_before': "          Object.assign(new Error('EPIPE'), { code: "
+                              "'EPIPE' }),\n"
+                              '        );\n'
+                              '        yield { type: GeminiEventType.Content, value: '
+                              "'Hello' };\n"
+                              '        yield {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: {\n'
+                              '            reason: undefined,\n'
+                              '            usageMetadata: { totalTokenCount: 0 },\n'
+                              '          },\n'
+                              '        };\n'
+                              '      },\n'
+                              '    );\n'
+                              '\n',
+             'review_after': "          Object.assign(new Error('EPIPE'), { code: "
+                             "'EPIPE' }),\n"
+                             '        );\n'
+                             '        yield { type: GeminiEventType.Content, value: '
+                             "'Hello' };\n"
+                             '        yield {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 0 },\n'
+                             '          },\n'
+                             '        };\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-26',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    expect(resultMessage?.is_error).toBe(true);\n'
+                       '    expect(resultMessage?.error?.message).toContain(\n'
+                       "      'Loop detection halted the run',\n"
+                       '    );\n'
+                       '  });\n'
+                       '\n'
+                       "  it('finalizes and reports recording failure before the JSON "
+                       "terminal result', async () => {\n"
+                       '    (mockConfig.getOutputFormat as '
+                       'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                       '    setupMetricsMock();\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents([\n'
+                       "        { type: GeminiEventType.Content, value: 'Answer' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 1 } },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '    const order: string[] = [];\n'
+                       '    let recordingFailureListener:\n'
+                       '      | ((event: { sessionId: string; error: Error }) => '
+                       'void)\n',
+             'after': '    expect(resultMessage?.is_error).toBe(true);\n'
+                      '    expect(resultMessage?.error?.message).toContain(\n'
+                      "      'Loop detection halted the run',\n"
+                      '    );\n'
+                      '  });\n'
+                      '\n'
+                      '  it.each([\n'
+                      '    {\n'
+                      "      name: 'the output cap',\n"
+                      '      reason: FinishReason.MAX_TOKENS,\n'
+                      "      described: 'MAX_TOKENS',\n"
+                      '    },\n'
+                      '    {\n'
+                      "      name: 'a content filter',\n"
+                      '      reason: FinishReason.SAFETY,\n'
+                      "      described: 'SAFETY',\n"
+                      '    },\n'
+                      '    {\n'
+                      "      name: 'a reason this build does not recognise',\n"
+                      '      reason: FinishReason.FINISH_REASON_UNSPECIFIED,\n'
+                      "      described: 'FINISH_REASON_UNSPECIFIED',\n"
+                      '    },\n'
+                      '  ])(\n'
+                      "    'reports a run whose last generation was stopped by $name "
+                      "as incomplete',\n"
+                      '    async ({ reason, described }) => {\n'
+                      '      (mockConfig.getOutputFormat as '
+                      'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                      '      setupMetricsMock();\n'
+                      '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Writing the "
+                      "summary now:' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: { reason, usageMetadata: { totalTokenCount: '
+                      '10 } },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '      const exitCode = await runNonInteractive(\n'
+                      '        mockConfig,\n'
+                      '        mockSettings,\n'
+                      "        'Summarize the corpus',\n"
+                      '        `prompt-incomplete-${described}`,\n'
+                      '      );\n'
+                      '\n'
+                      '      expect(exitCode).toBe(1);\n'
+                      '      const output = processStdoutSpy.mock.calls.at(-1)?.[0] as '
+                      'string;\n'
+                      '      const messages = JSON.parse(output) as Array<{\n'
+                      '        type?: string;\n'
+                      '        subtype?: string;\n'
+                      '        is_error?: boolean;\n'
+                      '        error?: { message?: string };\n'
+                      '      }>;\n'
+                      '      const result = messages.find((message) => message.type '
+                      "=== 'result');\n"
+                      '      expect(result?.is_error).toBe(true);\n'
+                      '      '
+                      "expect(result?.subtype).toBe('error_incomplete_generation');\n"
+                      '      expect(result?.error?.message).toContain(described);\n'
+                      "      expect(result?.error?.message).toContain('carries no "
+                      "final answer');\n"
+                      '    },\n'
+                      '  );\n'
+                      '\n'
+                      "  it('reports a run whose last generation ended on its own as a "
+                      "success', async () => {\n"
+                      '    (mockConfig.getOutputFormat as '
+                      'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                      '    setupMetricsMock();\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      "        { type: GeminiEventType.Content, value: 'Here is the "
+                      "summary.' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 10 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n'
+                      '    const exitCode = await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n'
+                      "      'Summarize the corpus',\n"
+                      "      'prompt-complete-generation',\n"
+                      '    );\n'
+                      '\n'
+                      '    expect(exitCode).toBe(0);\n'
+                      '    const output = processStdoutSpy.mock.calls.at(-1)?.[0] as '
+                      'string;\n'
+                      '    const messages = JSON.parse(output) as Array<{\n'
+                      '      type?: string;\n'
+                      '      subtype?: string;\n'
+                      '      is_error?: boolean;\n'
+                      '    }>;\n'
+                      '    const result = messages.find((message) => message.type === '
+                      "'result');\n"
+                      '    expect(result?.is_error).toBe(false);\n'
+                      "    expect(result?.subtype).toBe('success');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('reads the last generation of the run, not an earlier "
+                      "completed one', async () => {\n"
+                      '    (mockConfig.getOutputFormat as '
+                      'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                      '    setupMetricsMock();\n'
+                      '    mockCoreExecuteToolCall.mockResolvedValue({\n'
+                      "      responseParts: [{ text: 'chunk 18' }],\n"
+                      "      executionStatus: 'success',\n"
+                      '    });\n'
+                      '    mockGeminiClient.sendMessageStream\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      '          {\n'
+                      '            type: GeminiEventType.ToolCallRequest,\n'
+                      '            value: {\n'
+                      "              callId: 'read-18',\n"
+                      "              name: 'testTool',\n"
+                      '              args: {},\n'
+                      '              isClientInitiated: false,\n'
+                      "              prompt_id: 'prompt-late-truncation',\n"
+                      '            },\n'
+                      '          },\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 10 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Writing "
+                      "note_18:' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.MAX_TOKENS,\n'
+                      '              usageMetadata: { totalTokenCount: 20 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    const exitCode = await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n'
+                      "      'Summarize the corpus',\n"
+                      "      'prompt-late-truncation',\n"
+                      '    );\n'
+                      '\n'
+                      '    expect(exitCode).toBe(1);\n'
+                      '    const output = processStdoutSpy.mock.calls.at(-1)?.[0] as '
+                      'string;\n'
+                      '    const messages = JSON.parse(output) as Array<{\n'
+                      '      type?: string;\n'
+                      '      subtype?: string;\n'
+                      '      error?: { message?: string };\n'
+                      '    }>;\n'
+                      '    const result = messages.find((message) => message.type === '
+                      "'result');\n"
+                      '    '
+                      "expect(result?.subtype).toBe('error_incomplete_generation');\n"
+                      "    expect(result?.error?.message).toContain('turn 2');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('finalizes and reports recording failure before the JSON "
+                      "terminal result', async () => {\n"
+                      '    (mockConfig.getOutputFormat as '
+                      'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                      '    setupMetricsMock();\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      "        { type: GeminiEventType.Content, value: 'Answer' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 1 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '    const order: string[] = [];\n'
+                      '    let recordingFailureListener:\n'
+                      '      | ((event: { sessionId: string; error: Error }) => '
+                      'void)\n',
+             'review_before': '    expect(resultMessage?.is_error).toBe(true);\n'
+                              '    expect(resultMessage?.error?.message).toContain(\n'
+                              "      'Loop detection halted the run',\n"
+                              '    );\n'
+                              '  });\n'
+                              '\n'
+                              "  it('finalizes and reports recording failure before "
+                              "the JSON terminal result', async () => {\n"
+                              '    (mockConfig.getOutputFormat as '
+                              'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                              '    setupMetricsMock();\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents([\n'
+                              '        { type: GeminiEventType.Content, value: '
+                              "'Answer' },\n"
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 1 } },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '    const order: string[] = [];\n'
+                              '    let recordingFailureListener:\n'
+                              '      | ((event: { sessionId: string; error: Error }) '
+                              '=> void)\n',
+             'review_after': '    expect(resultMessage?.is_error).toBe(true);\n'
+                             '    expect(resultMessage?.error?.message).toContain(\n'
+                             "      'Loop detection halted the run',\n"
+                             '    );\n'
+                             '  });\n'
+                             '\n'
+                             '  it.each([\n'
+                             '    {\n'
+                             "      name: 'the output cap',\n"
+                             '      reason: FinishReason.MAX_TOKENS,\n'
+                             "      described: 'MAX_TOKENS',\n"
+                             '    },\n'
+                             '    {\n'
+                             "      name: 'a content filter',\n"
+                             '      reason: FinishReason.SAFETY,\n'
+                             "      described: 'SAFETY',\n"
+                             '    },\n'
+                             '    {\n'
+                             "      name: 'a reason this build does not recognise',\n"
+                             '      reason: FinishReason.FINISH_REASON_UNSPECIFIED,\n'
+                             "      described: 'FINISH_REASON_UNSPECIFIED',\n"
+                             '    },\n'
+                             '  ])(\n'
+                             "    'reports a run whose last generation was stopped by "
+                             "$name as incomplete',\n"
+                             '    async ({ reason, described }) => {\n'
+                             '      (mockConfig.getOutputFormat as '
+                             'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                             '      setupMetricsMock();\n'
+                             '      '
+                             'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Writing the summary now:' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: { reason, usageMetadata: { '
+                             'totalTokenCount: 10 } },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'
+                             '      const exitCode = await runNonInteractive(\n'
+                             '        mockConfig,\n'
+                             '        mockSettings,\n'
+                             "        'Summarize the corpus',\n"
+                             '        `prompt-incomplete-${described}`,\n'
+                             '      );\n'
+                             '\n'
+                             '      expect(exitCode).toBe(1);\n'
+                             '      const output = '
+                             'processStdoutSpy.mock.calls.at(-1)?.[0] as string;\n'
+                             '      const messages = JSON.parse(output) as Array<{\n'
+                             '        type?: string;\n'
+                             '        subtype?: string;\n'
+                             '        is_error?: boolean;\n'
+                             '        error?: { message?: string };\n'
+                             '      }>;\n'
+                             '      const result = messages.find((message) => '
+                             "message.type === 'result');\n"
+                             '      expect(result?.is_error).toBe(true);\n'
+                             '      '
+                             "expect(result?.subtype).toBe('error_incomplete_generation');\n"
+                             '      '
+                             'expect(result?.error?.message).toContain(described);\n'
+                             "      expect(result?.error?.message).toContain('carries "
+                             "no final answer');\n"
+                             '    },\n'
+                             '  );\n'
+                             '\n'
+                             "  it('reports a run whose last generation ended on its "
+                             "own as a success', async () => {\n"
+                             '    (mockConfig.getOutputFormat as '
+                             'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                             '    setupMetricsMock();\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             "        { type: GeminiEventType.Content, value: 'Here is "
+                             "the summary.' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 10 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'
+                             '    const exitCode = await runNonInteractive(\n'
+                             '      mockConfig,\n'
+                             '      mockSettings,\n'
+                             "      'Summarize the corpus',\n"
+                             "      'prompt-complete-generation',\n"
+                             '    );\n'
+                             '\n'
+                             '    expect(exitCode).toBe(0);\n'
+                             '    const output = '
+                             'processStdoutSpy.mock.calls.at(-1)?.[0] as string;\n'
+                             '    const messages = JSON.parse(output) as Array<{\n'
+                             '      type?: string;\n'
+                             '      subtype?: string;\n'
+                             '      is_error?: boolean;\n'
+                             '    }>;\n'
+                             '    const result = messages.find((message) => '
+                             "message.type === 'result');\n"
+                             '    expect(result?.is_error).toBe(false);\n'
+                             "    expect(result?.subtype).toBe('success');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('reads the last generation of the run, not an "
+                             "earlier completed one', async () => {\n"
+                             '    (mockConfig.getOutputFormat as '
+                             'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                             '    setupMetricsMock();\n'
+                             '    mockCoreExecuteToolCall.mockResolvedValue({\n'
+                             "      responseParts: [{ text: 'chunk 18' }],\n"
+                             "      executionStatus: 'success',\n"
+                             '    });\n'
+                             '    mockGeminiClient.sendMessageStream\n'
+                             '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          {\n'
+                             '            type: GeminiEventType.ToolCallRequest,\n'
+                             '            value: {\n'
+                             "              callId: 'read-18',\n"
+                             "              name: 'testTool',\n"
+                             '              args: {},\n'
+                             '              isClientInitiated: false,\n'
+                             "              prompt_id: 'prompt-late-truncation',\n"
+                             '            },\n'
+                             '          },\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 10 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      )\n'
+                             '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Writing note_18:' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.MAX_TOKENS,\n'
+                             '              usageMetadata: { totalTokenCount: 20 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'
+                             '    const exitCode = await runNonInteractive(\n'
+                             '      mockConfig,\n'
+                             '      mockSettings,\n'
+                             "      'Summarize the corpus',\n"
+                             "      'prompt-late-truncation',\n"
+                             '    );\n'
+                             '\n'
+                             '    expect(exitCode).toBe(1);\n'
+                             '    const output = '
+                             'processStdoutSpy.mock.calls.at(-1)?.[0] as string;\n'
+                             '    const messages = JSON.parse(output) as Array<{\n'
+                             '      type?: string;\n'
+                             '      subtype?: string;\n'
+                             '      error?: { message?: string };\n'
+                             '    }>;\n'
+                             '    const result = messages.find((message) => '
+                             "message.type === 'result');\n"
+                             '    '
+                             "expect(result?.subtype).toBe('error_incomplete_generation');\n"
+                             "    expect(result?.error?.message).toContain('turn 2');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('finalizes and reports recording failure before the "
+                             "JSON terminal result', async () => {\n"
+                             '    (mockConfig.getOutputFormat as '
+                             'Mock).mockReturnValue(OutputFormat.JSON);\n'
+                             '    setupMetricsMock();\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             "        { type: GeminiEventType.Content, value: 'Answer' "
+                             '},\n'
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 1 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '    const order: string[] = [];\n'
+                             '    let recordingFailureListener:\n'
+                             '      | ((event: { sessionId: string; error: Error }) => '
+                             'void)\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-27',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    setupMetricsMock();\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents([\n'
+                       "        { type: GeminiEventType.Content, value: 'Answer' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 1 } },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '    const finalize = vi.fn();\n'
+                       '    const flush = vi.fn().mockResolvedValue(undefined);\n'
+                       '    (\n',
+             'after': '    setupMetricsMock();\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      "        { type: GeminiEventType.Content, value: 'Answer' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 1 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '    const finalize = vi.fn();\n'
+                      '    const flush = vi.fn().mockResolvedValue(undefined);\n'
+                      '    (\n',
+             'review_before': '    setupMetricsMock();\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents([\n'
+                              '        { type: GeminiEventType.Content, value: '
+                              "'Answer' },\n"
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 1 } },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '    const finalize = vi.fn();\n'
+                              '    const flush = '
+                              'vi.fn().mockResolvedValue(undefined);\n'
+                              '    (\n',
+             'review_after': '    setupMetricsMock();\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             "        { type: GeminiEventType.Content, value: 'Answer' "
+                             '},\n'
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 1 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '    const finalize = vi.fn();\n'
+                             '    const flush = vi.fn().mockResolvedValue(undefined);\n'
+                             '    (\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-28',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                       '[toolCallEvent];\n'
+                       '    const secondCallEvents: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Final answer' "
+                       '},\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 10 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '\n'
+                       '    mockGeminiClient.sendMessageStream\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'after': '\n'
+                      '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                      '[toolCallEvent];\n'
+                      '    const secondCallEvents: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Final answer' "
+                      '},\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 10 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '\n'
+                      '    mockGeminiClient.sendMessageStream\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'review_before': '\n'
+                              '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                              '[toolCallEvent];\n'
+                              '    const secondCallEvents: ServerGeminiStreamEvent[] = '
+                              '[\n'
+                              "      { type: GeminiEventType.Content, value: 'Final "
+                              "answer' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 10 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '\n'
+                              '    mockGeminiClient.sendMessageStream\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'review_after': '\n'
+                             '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                             '[toolCallEvent];\n'
+                             '    const secondCallEvents: ServerGeminiStreamEvent[] = '
+                             '[\n'
+                             "      { type: GeminiEventType.Content, value: 'Final "
+                             "answer' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 10 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '\n'
+                             '    mockGeminiClient.sendMessageStream\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-29',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "              name: 'skill_tool',\n"
+                       '              args: {},\n'
+                       '              isClientInitiated: false,\n'
+                       "              prompt_id: 'prompt-tool-image',\n"
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Image "
+                       "understood' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n'
+                       '      mockSettings,\n'
+                       "      'Use the screenshot tool',\n"
+                       "      'prompt-tool-image',\n"
+                       '    );\n'
+                       '\n'
+                       '    '
+                       'expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(\n',
+             'after': "              name: 'skill_tool',\n"
+                      '              args: {},\n'
+                      '              isClientInitiated: false,\n'
+                      "              prompt_id: 'prompt-tool-image',\n"
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Image "
+                      "understood' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n'
+                      "      'Use the screenshot tool',\n"
+                      "      'prompt-tool-image',\n"
+                      '    );\n'
+                      '\n'
+                      '    '
+                      'expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Image understood' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'Image "
+                             "understood' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-30',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': "              name: 'screenshot_tool',\n"
+                       '              args: {},\n'
+                       '              isClientInitiated: false,\n'
+                       "              prompt_id: 'prompt-tool-image',\n"
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Image "
+                       "understood' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n'
+                       '      mockSettings,\n'
+                       "      'Use the screenshot tool',\n"
+                       "      'prompt-tool-image',\n"
+                       '    );\n'
+                       '\n'
+                       "    expect(accepted['a']).toBe(true);\n",
+             'after': "              name: 'screenshot_tool',\n"
+                      '              args: {},\n'
+                      '              isClientInitiated: false,\n'
+                      "              prompt_id: 'prompt-tool-image',\n"
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Image "
+                      "understood' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n'
+                      "      'Use the screenshot tool',\n"
+                      "      'prompt-tool-image',\n"
+                      '    );\n'
+                      '\n'
+                      "    expect(accepted['a']).toBe(true);\n",
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Image understood' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'Image "
+                             "understood' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-31',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Main done' "
+                       '},\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(\n',
+             'after': '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Main done' "
+                      '},\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              "          { type: GeminiEventType.Content, value: 'Main "
+                              "done' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      )\n'
+                              '      .mockReturnValueOnce(\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'Main "
+                             "done' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      )\n'
+                             '      .mockReturnValueOnce(\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-32',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Drain done' "
+                       '},\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n',
+             'after': '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Drain done' "
+                      '},\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Drain done' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'Drain "
+                             "done' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-33',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       "  describe('parallel tool execution', () => {\n"
+                       '    const finishTurn: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'done' },\n"
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 1 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '\n'
+                       '    function toolCallEvents(\n'
+                       '      ids: string[],\n'
+                       '      name: string,\n',
+             'after': '\n'
+                      "  describe('parallel tool execution', () => {\n"
+                      '    const finishTurn: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'done' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 1 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '\n'
+                      '    function toolCallEvents(\n'
+                      '      ids: string[],\n'
+                      '      name: string,\n',
+             'review_before': '\n'
+                              "  describe('parallel tool execution', () => {\n"
+                              '    const finishTurn: ServerGeminiStreamEvent[] = [\n'
+                              "      { type: GeminiEventType.Content, value: 'done' "
+                              '},\n'
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 1 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '\n'
+                              '    function toolCallEvents(\n'
+                              '      ids: string[],\n'
+                              '      name: string,\n',
+             'review_after': '\n'
+                             "  describe('parallel tool execution', () => {\n"
+                             '    const finishTurn: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'done' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 1 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '\n'
+                             '    function toolCallEvents(\n'
+                             '      ids: string[],\n'
+                             '      name: string,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-34',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      '
+                       '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Final "
+                       "answer' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 10 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n',
+             'after': '      '
+                      '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Final "
+                      "answer' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 10 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Final answer' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 10 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'Final "
+                             "answer' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 10 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-35',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Monitor "
+                       "launched.' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 2 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents([duplicateToolCallEvent]))\n',
+             'after': '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Monitor "
+                      "launched.' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 2 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents([duplicateToolCallEvent]))\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Monitor launched.' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 2 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      )\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents([duplicateToolCallEvent]))\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Monitor launched.' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 2 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      )\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents([duplicateToolCallEvent]))\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-36',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockGeminiClient.sendMessageStream\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Final "
+                       "answer' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 10 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n',
+             'after': '    mockGeminiClient.sendMessageStream\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Final "
+                      "answer' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 10 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Final answer' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 10 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'Final "
+                             "answer' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 10 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-37',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Final "
+                       "answer' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 10 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '    await runNonInteractive(\n',
+             'after': '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Final "
+                      "answer' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 10 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    await runNonInteractive(\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Final answer' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 10 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'Final "
+                             "answer' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 10 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-38',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      {\n'
+                       '        type: GeminiEventType.Content,\n'
+                       "        value: 'Sorry, let me try again.',\n"
+                       '      },\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 10 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
+                       '\n',
+             'after': '      {\n'
+                      '        type: GeminiEventType.Content,\n'
+                      "        value: 'Sorry, let me try again.',\n"
+                      '      },\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 10 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
+                      '\n',
+             'review_before': '      {\n'
+                              '        type: GeminiEventType.Content,\n'
+                              "        value: 'Sorry, let me try again.',\n"
+                              '      },\n'
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 10 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    mockGeminiClient.sendMessageStream\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
+                              '\n',
+             'review_after': '      {\n'
+                             '        type: GeminiEventType.Content,\n'
+                             "        value: 'Sorry, let me try again.',\n"
+                             '      },\n'
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 10 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-39',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      {\n'
+                       '        type: GeminiEventType.Content,\n'
+                       '        value: "Sorry, I can\'t find that tool.",\n'
+                       '      },\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 10 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '\n'
+                       '    mockGeminiClient.sendMessageStream\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n',
+             'after': '      {\n'
+                      '        type: GeminiEventType.Content,\n'
+                      '        value: "Sorry, I can\'t find that tool.",\n'
+                      '      },\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 10 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '\n'
+                      '    mockGeminiClient.sendMessageStream\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n',
+             'review_before': '      {\n'
+                              '        type: GeminiEventType.Content,\n'
+                              '        value: "Sorry, I can\'t find that tool.",\n'
+                              '      },\n'
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 10 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '\n'
+                              '    mockGeminiClient.sendMessageStream\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n',
+             'review_after': '      {\n'
+                             '        type: GeminiEventType.Content,\n'
+                             '        value: "Sorry, I can\'t find that tool.",\n'
+                             '      },\n'
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 10 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '\n'
+                             '    mockGeminiClient.sendMessageStream\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-40',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       '    // Mock a simple stream response from the Gemini client\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Summary "
+                       "complete.' },\n"
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 10 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '\n'
+                      '    // Mock a simple stream response from the Gemini client\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Summary "
+                      "complete.' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 10 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '\n'
+                              '    // Mock a simple stream response from the Gemini '
+                              'client\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              "      { type: GeminiEventType.Content, value: 'Summary "
+                              "complete.' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 10 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '\n'
+                             '    // Mock a simple stream response from the Gemini '
+                             'client\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'Summary "
+                             "complete.' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 10 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-41',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       "  it('should process input and write JSON output with stats', "
+                       'async () => {\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Hello World' "
+                       '},\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 10 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '    (mockConfig.getOutputFormat as '
+                       'Mock).mockReturnValue(OutputFormat.JSON);\n',
+             'after': '\n'
+                      "  it('should process input and write JSON output with stats', "
+                      'async () => {\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Hello World' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 10 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '    (mockConfig.getOutputFormat as '
+                      'Mock).mockReturnValue(OutputFormat.JSON);\n',
+             'review_before': '\n'
+                              "  it('should process input and write JSON output with "
+                              "stats', async () => {\n"
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              "      { type: GeminiEventType.Content, value: 'Hello "
+                              "World' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 10 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '    (mockConfig.getOutputFormat as '
+                              'Mock).mockReturnValue(OutputFormat.JSON);\n',
+             'review_after': '\n'
+                             "  it('should process input and write JSON output with "
+                             "stats', async () => {\n"
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'Hello "
+                             "World' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 10 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '    (mockConfig.getOutputFormat as '
+                             'Mock).mockReturnValue(OutputFormat.JSON);\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-42',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       '    // First call returns only tool call, no content\n'
+                       '    const firstCallEvents: ServerGeminiStreamEvent[] = [\n'
+                       '      toolCallEvent,\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '\n'
+                       '    // Second call returns no content (tool-only completion)\n'
+                       '    const secondCallEvents: ServerGeminiStreamEvent[] = [\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 3 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '\n'
+                       '    mockGeminiClient.sendMessageStream\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'after': '\n'
+                      '    // First call returns only tool call, no content\n'
+                      '    const firstCallEvents: ServerGeminiStreamEvent[] = [\n'
+                      '      toolCallEvent,\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 5 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '\n'
+                      '    // Second call returns no content (tool-only completion)\n'
+                      '    const secondCallEvents: ServerGeminiStreamEvent[] = [\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 3 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '\n'
+                      '    mockGeminiClient.sendMessageStream\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'review_before': '\n'
+                              '    // First call returns only tool call, no content\n'
+                              '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                              '[\n'
+                              '      toolCallEvent,\n'
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 5 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '\n'
+                              '    // Second call returns no content (tool-only '
+                              'completion)\n'
+                              '    const secondCallEvents: ServerGeminiStreamEvent[] = '
+                              '[\n'
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 3 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '\n'
+                              '    mockGeminiClient.sendMessageStream\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'review_after': '\n'
+                             '    // First call returns only tool call, no content\n'
+                             '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                             '[\n'
+                             '      toolCallEvent,\n'
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 5 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '\n'
+                             '    // Second call returns no content (tool-only '
+                             'completion)\n'
+                             '    const secondCallEvents: ServerGeminiStreamEvent[] = '
+                             '[\n'
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 3 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '\n'
+                             '    mockGeminiClient.sendMessageStream\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-43',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       "  it('should write JSON output with stats for empty response "
+                       "commands', async () => {\n"
+                       '    // Test the scenario where a command completes but '
+                       'produces no content at all\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 1 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '    (mockConfig.getOutputFormat as '
+                       'Mock).mockReturnValue(OutputFormat.JSON);\n',
+             'after': '\n'
+                      "  it('should write JSON output with stats for empty response "
+                      "commands', async () => {\n"
+                      '    // Test the scenario where a command completes but produces '
+                      'no content at all\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 1 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '    (mockConfig.getOutputFormat as '
+                      'Mock).mockReturnValue(OutputFormat.JSON);\n',
+             'review_before': '\n'
+                              "  it('should write JSON output with stats for empty "
+                              "response commands', async () => {\n"
+                              '    // Test the scenario where a command completes but '
+                              'produces no content at all\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 1 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '    (mockConfig.getOutputFormat as '
+                              'Mock).mockReturnValue(OutputFormat.JSON);\n',
+             'review_after': '\n'
+                             "  it('should write JSON output with stats for empty "
+                             "response commands', async () => {\n"
+                             '    // Test the scenario where a command completes but '
+                             'produces no content at all\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 1 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '    (mockConfig.getOutputFormat as '
+                             'Mock).mockReturnValue(OutputFormat.JSON);\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-44',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
+                       '\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Response from "
+                       "command' },\n"
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
+                      '\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Response from "
+                      "command' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 5 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
+                              '\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              "      { type: GeminiEventType.Content, value: 'Response "
+                              "from command' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 5 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
+                             '\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'Response "
+                             "from command' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 5 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-45',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockGetCommands.mockReturnValue([]);\n'
+                       '\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Response to "
+                       "unknown' },\n"
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    mockGetCommands.mockReturnValue([]);\n'
+                      '\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Response to "
+                      "unknown' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 5 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    mockGetCommands.mockReturnValue([]);\n'
+                              '\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              "      { type: GeminiEventType.Content, value: 'Response "
+                              "to unknown' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 5 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    mockGetCommands.mockReturnValue([]);\n'
+                             '\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'Response "
+                             "to unknown' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 5 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-46',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
+                       '\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Acknowledged' "
+                       '},\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 1 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
+                      '\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Acknowledged' "
+                      '},\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 1 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
+                              '\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              '      { type: GeminiEventType.Content, value: '
+                              "'Acknowledged' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 1 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
+                             '\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             '      { type: GeminiEventType.Content, value: '
+                             "'Acknowledged' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 1 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-47',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    });\n'
+                       '\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Hello stream' "
+                       '},\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 4 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    });\n'
+                      '\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Hello stream' "
+                      '},\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 4 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    });\n'
+                              '\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              "      { type: GeminiEventType.Content, value: 'Hello "
+                              "stream' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 4 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    });\n'
+                             '\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'Hello "
+                             "stream' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 4 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-48',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    const turnAbortController = new AbortController();\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      (async function* () {\n'
+                       '        turnAbortController.abort(new '
+                       'TurnInterruptedError());\n'
+                       '        yield {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 0 } },\n'
+                       '        } as ServerGeminiStreamEvent;\n'
+                       '      })(),\n'
+                       '    );\n'
+                       '\n'
+                       '    const exitCode = await runNonInteractive(\n'
+                       '      mockConfig,\n',
+             'after': '    const turnAbortController = new AbortController();\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      (async function* () {\n'
+                      '        turnAbortController.abort(new TurnInterruptedError());\n'
+                      '        yield {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 0 },\n'
+                      '          },\n'
+                      '        } as ServerGeminiStreamEvent;\n'
+                      '      })(),\n'
+                      '    );\n'
+                      '\n'
+                      '    const exitCode = await runNonInteractive(\n'
+                      '      mockConfig,\n',
+             'review_before': '    const turnAbortController = new AbortController();\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      (async function* () {\n'
+                              '        turnAbortController.abort(new '
+                              'TurnInterruptedError());\n'
+                              '        yield {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 0 } },\n'
+                              '        } as ServerGeminiStreamEvent;\n'
+                              '      })(),\n'
+                              '    );\n'
+                              '\n'
+                              '    const exitCode = await runNonInteractive(\n'
+                              '      mockConfig,\n',
+             'review_after': '    const turnAbortController = new AbortController();\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      (async function* () {\n'
+                             '        turnAbortController.abort(new '
+                             'TurnInterruptedError());\n'
+                             '        yield {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 0 },\n'
+                             '          },\n'
+                             '        } as ServerGeminiStreamEvent;\n'
+                             '      })(),\n'
+                             '    );\n'
+                             '\n'
+                             '    const exitCode = await runNonInteractive(\n'
+                             '      mockConfig,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-49',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents([\n'
+                       "        { type: GeminiEventType.Content, value: 'Fork "
+                       "launched.' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: {\n'
+                       '            reason: undefined,\n'
+                       '            usageMetadata: { totalTokenCount: 2 },\n'
+                       '          },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      "        { type: GeminiEventType.Content, value: 'Fork "
+                      "launched.' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 2 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents([\n'
+                              "        { type: GeminiEventType.Content, value: 'Fork "
+                              "launched.' },\n"
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: {\n'
+                              '            reason: undefined,\n'
+                              '            usageMetadata: { totalTokenCount: 2 },\n'
+                              '          },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             "        { type: GeminiEventType.Content, value: 'Fork "
+                             "launched.' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 2 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-50',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockGeminiClient.sendMessageStream\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Monitor "
+                       "launched.' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 2 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Observed.' "
+                       '},\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '    await runNonInteractive(\n',
+             'after': '    mockGeminiClient.sendMessageStream\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Monitor "
+                      "launched.' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 2 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Observed.' "
+                      '},\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    await runNonInteractive(\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Monitor launched.' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 2 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      )\n'
+                              '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Observed.' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Monitor launched.' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 2 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      )\n'
+                             '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Observed.' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-51',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Started.' "
+                       '},\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'First "
+                       "notification.' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Second "
+                       "notification.' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n',
+             'after': '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Started.' "
+                      '},\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'First "
+                      "notification.' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Second "
+                      "notification.' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Started.' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      )\n'
+                              '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'First notification.' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      )\n'
+                              '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Second notification.' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Started.' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      )\n'
+                             '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'First "
+                             "notification.' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      )\n'
+                             '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Second notification.' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-52',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents([\n'
+                       "        { type: GeminiEventType.Content, value: 'Handled once' "
+                       '},\n'
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 2 } },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '\n'
+                       '    const userEnvelope = {\n'
+                       "      type: 'user',\n",
+             'after': '\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      "        { type: GeminiEventType.Content, value: 'Handled once' "
+                      '},\n'
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 2 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n'
+                      '    const userEnvelope = {\n'
+                      "      type: 'user',\n",
+             'review_before': '\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents([\n'
+                              '        { type: GeminiEventType.Content, value: '
+                              "'Handled once' },\n"
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 2 } },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '\n'
+                              '    const userEnvelope = {\n'
+                              "      type: 'user',\n",
+             'review_after': '\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             "        { type: GeminiEventType.Content, value: 'Handled "
+                             "once' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 2 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'
+                             '    const userEnvelope = {\n'
+                             "      type: 'user',\n"},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-53',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                       '      createStreamFromEvents([\n'
+                       "        { type: GeminiEventType.Content, value: 'Monitor "
+                       "stopped.' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: {\n'
+                       '            reason: undefined,\n'
+                       '            usageMetadata: { totalTokenCount: 2 },\n'
+                       '          },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                      '      createStreamFromEvents([\n'
+                      "        { type: GeminiEventType.Content, value: 'Monitor "
+                      "stopped.' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 2 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                              '      createStreamFromEvents([\n'
+                              '        { type: GeminiEventType.Content, value: '
+                              "'Monitor stopped.' },\n"
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: {\n'
+                              '            reason: undefined,\n'
+                              '            usageMetadata: { totalTokenCount: 2 },\n'
+                              '          },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    '
+                             'mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                             '      createStreamFromEvents([\n'
+                             "        { type: GeminiEventType.Content, value: 'Monitor "
+                             "stopped.' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 2 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-54',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '          eventCount: 2,\n'
+                       '        },\n'
+                       '      );\n'
+                       '      yield {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: {\n'
+                       '          reason: undefined,\n'
+                       '          usageMetadata: { totalTokenCount: 1 },\n'
+                       '        },\n'
+                       '      };\n'
+                       '    }\n'
+                       '\n'
+                       '    mockGeminiClient.sendMessageStream\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Monitor "
+                       "launched.' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 2 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(secondTurnStream());\n',
+             'after': '          eventCount: 2,\n'
+                      '        },\n'
+                      '      );\n'
+                      '      yield {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 1 },\n'
+                      '        },\n'
+                      '      };\n'
+                      '    }\n'
+                      '\n'
+                      '    mockGeminiClient.sendMessageStream\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Monitor "
+                      "launched.' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 2 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(secondTurnStream());\n',
+             'review_before': '          eventCount: 2,\n'
+                              '        },\n'
+                              '      );\n'
+                              '      yield {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: {\n'
+                              '          reason: undefined,\n'
+                              '          usageMetadata: { totalTokenCount: 1 },\n'
+                              '        },\n'
+                              '      };\n'
+                              '    }\n'
+                              '\n'
+                              '    mockGeminiClient.sendMessageStream\n'
+                              '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Monitor launched.' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 2 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      )\n'
+                              '      .mockReturnValueOnce(secondTurnStream());\n',
+             'review_after': '          eventCount: 2,\n'
+                             '        },\n'
+                             '      );\n'
+                             '      yield {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 1 },\n'
+                             '        },\n'
+                             '      };\n'
+                             '    }\n'
+                             '\n'
+                             '    mockGeminiClient.sendMessageStream\n'
+                             '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Monitor launched.' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 2 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      )\n'
+                             '      .mockReturnValueOnce(secondTurnStream());\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-55',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockGeminiClient.sendMessageStream\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Monitor "
+                       "launched.' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 2 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'Observed.' "
+                       '},\n'
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '    const runPromise = runNonInteractive(\n',
+             'after': '    mockGeminiClient.sendMessageStream\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Monitor "
+                      "launched.' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 2 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'Observed.' "
+                      '},\n'
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    const runPromise = runNonInteractive(\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Monitor launched.' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 2 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      )\n'
+                              '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'Observed.' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Monitor launched.' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 2 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      )\n'
+                             '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             '          { type: GeminiEventType.Content, value: '
+                             "'Observed.' },\n"
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-56',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    });\n'
+                       '\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Response from "
+                       "envelope' },\n"
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    });\n'
+                      '\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Response from "
+                      "envelope' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 5 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    });\n'
+                              '\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              "      { type: GeminiEventType.Content, value: 'Response "
+                              "from envelope' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 5 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    });\n'
+                             '\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'Response "
+                             "from envelope' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 5 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-57',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                       '[toolCallEvent];\n'
+                       '    const secondCallEvents: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Final response' "
+                       '},\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 10 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '\n'
+                       '    mockGeminiClient.sendMessageStream\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'after': '\n'
+                      '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                      '[toolCallEvent];\n'
+                      '    const secondCallEvents: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Final response' "
+                      '},\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 10 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '\n'
+                      '    mockGeminiClient.sendMessageStream\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'review_before': '\n'
+                              '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                              '[toolCallEvent];\n'
+                              '    const secondCallEvents: ServerGeminiStreamEvent[] = '
+                              '[\n'
+                              "      { type: GeminiEventType.Content, value: 'Final "
+                              "response' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 10 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '\n'
+                              '    mockGeminiClient.sendMessageStream\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'review_after': '\n'
+                             '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                             '[toolCallEvent];\n'
+                             '    const secondCallEvents: ServerGeminiStreamEvent[] = '
+                             '[\n'
+                             "      { type: GeminiEventType.Content, value: 'Final "
+                             "response' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 10 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '\n'
+                             '    mockGeminiClient.sendMessageStream\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-58',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      {\n'
+                       '        type: GeminiEventType.Content,\n'
+                       "        value: 'I encountered an error',\n"
+                       '      },\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 10 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
+                       '\n',
+             'after': '      {\n'
+                      '        type: GeminiEventType.Content,\n'
+                      "        value: 'I encountered an error',\n"
+                      '      },\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 10 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
+                      '\n',
+             'review_before': '      {\n'
+                              '        type: GeminiEventType.Content,\n'
+                              "        value: 'I encountered an error',\n"
+                              '      },\n'
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 10 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    mockGeminiClient.sendMessageStream\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
+                              '\n',
+             'review_after': '      {\n'
+                             '        type: GeminiEventType.Content,\n'
+                             "        value: 'I encountered an error',\n"
+                             '      },\n'
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 10 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-59',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Hello' },\n"
+                       "      { type: GeminiEventType.Content, value: ' World' },\n"
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Hello' },\n"
+                      "      { type: GeminiEventType.Content, value: ' World' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 5 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              "      { type: GeminiEventType.Content, value: 'Hello' "
+                              '},\n'
+                              "      { type: GeminiEventType.Content, value: ' World' "
+                              '},\n'
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 5 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'Hello' "
+                             '},\n'
+                             "      { type: GeminiEventType.Content, value: ' World' "
+                             '},\n'
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 5 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-60',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '        type: GeminiEventType.Thought,\n'
+                       "        value: { subject: 'Analysis', description: 'Processing "
+                       "request' },\n"
+                       '      },\n'
+                       "      { type: GeminiEventType.Content, value: 'Response text' "
+                       '},\n'
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 8 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '        type: GeminiEventType.Thought,\n'
+                      "        value: { subject: 'Analysis', description: 'Processing "
+                      "request' },\n"
+                      '      },\n'
+                      "      { type: GeminiEventType.Content, value: 'Response text' "
+                      '},\n'
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 8 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '        type: GeminiEventType.Thought,\n'
+                              "        value: { subject: 'Analysis', description: "
+                              "'Processing request' },\n"
+                              '      },\n'
+                              "      { type: GeminiEventType.Content, value: 'Response "
+                              "text' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 8 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '        type: GeminiEventType.Thought,\n'
+                             "        value: { subject: 'Analysis', description: "
+                             "'Processing request' },\n"
+                             '      },\n'
+                             "      { type: GeminiEventType.Content, value: 'Response "
+                             "text' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 8 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-61',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '\n'
+                       '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                       '[toolCall1, toolCall2];\n'
+                       '    const secondCallEvents: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Combined "
+                       "response' },\n"
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 15 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '\n'
+                       '    mockGeminiClient.sendMessageStream\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                       '      '
+                       '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'after': '\n'
+                      '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                      '[toolCall1, toolCall2];\n'
+                      '    const secondCallEvents: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Combined "
+                      "response' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 15 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '\n'
+                      '    mockGeminiClient.sendMessageStream\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                      '      '
+                      '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'review_before': '\n'
+                              '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                              '[toolCall1, toolCall2];\n'
+                              '    const secondCallEvents: ServerGeminiStreamEvent[] = '
+                              '[\n'
+                              "      { type: GeminiEventType.Content, value: 'Combined "
+                              "response' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 15 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '\n'
+                              '    mockGeminiClient.sendMessageStream\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                              '      '
+                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n',
+             'review_after': '\n'
+                             '    const firstCallEvents: ServerGeminiStreamEvent[] = '
+                             '[toolCall1, toolCall2];\n'
+                             '    const secondCallEvents: ServerGeminiStreamEvent[] = '
+                             '[\n'
+                             "      { type: GeminiEventType.Content, value: 'Combined "
+                             "response' },\n"
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 15 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '\n'
+                             '    mockGeminiClient.sendMessageStream\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
+                             '      '
+                             '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-62',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '        createStreamFromEvents([duplicateToolCall, '
+                       'replayedToolCall]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'done' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n',
+             'after': '        createStreamFromEvents([duplicateToolCall, '
+                      'replayedToolCall]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'done' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'done' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'done' "
+                             '},\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-63',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '        createStreamFromEvents([firstToolCall, '
+                       'secondToolCall]),\n'
+                       '      )\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       "          { type: GeminiEventType.Content, value: 'done' },\n"
+                       '          {\n'
+                       '            type: GeminiEventType.Finished,\n'
+                       '            value: {\n'
+                       '              reason: undefined,\n'
+                       '              usageMetadata: { totalTokenCount: 1 },\n'
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      );\n'
+                       '\n'
+                       '    await runNonInteractive(\n'
+                       '      mockConfig,\n',
+             'after': '        createStreamFromEvents([firstToolCall, '
+                      'secondToolCall]),\n'
+                      '      )\n'
+                      '      .mockReturnValueOnce(\n'
+                      '        createStreamFromEvents([\n'
+                      "          { type: GeminiEventType.Content, value: 'done' },\n"
+                      '          {\n'
+                      '            type: GeminiEventType.Finished,\n'
+                      '            value: {\n'
+                      '              reason: FinishReason.STOP,\n'
+                      '              usageMetadata: { totalTokenCount: 1 },\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ]),\n'
+                      '      );\n'
+                      '\n'
+                      '    await runNonInteractive(\n'
+                      '      mockConfig,\n',
+             'review_before': '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          { type: GeminiEventType.Content, value: '
+                              "'done' },\n"
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 1 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      .mockReturnValueOnce(\n'
+                             '        createStreamFromEvents([\n'
+                             "          { type: GeminiEventType.Content, value: 'done' "
+                             '},\n'
+                             '          {\n'
+                             '            type: GeminiEventType.Finished,\n'
+                             '            value: {\n'
+                             '              reason: FinishReason.STOP,\n'
+                             '              usageMetadata: { totalTokenCount: 1 },\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ]),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-64',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    });\n'
+                       '\n'
+                       '    const events: ServerGeminiStreamEvent[] = [\n'
+                       "      { type: GeminiEventType.Content, value: 'Response' },\n"
+                       '      {\n'
+                       '        type: GeminiEventType.Finished,\n'
+                       '        value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 3 } },\n'
+                       '      },\n'
+                       '    ];\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents(events),\n'
+                       '    );\n'
+                       '\n',
+             'after': '    });\n'
+                      '\n'
+                      '    const events: ServerGeminiStreamEvent[] = [\n'
+                      "      { type: GeminiEventType.Content, value: 'Response' },\n"
+                      '      {\n'
+                      '        type: GeminiEventType.Finished,\n'
+                      '        value: {\n'
+                      '          reason: FinishReason.STOP,\n'
+                      '          usageMetadata: { totalTokenCount: 3 },\n'
+                      '        },\n'
+                      '      },\n'
+                      '    ];\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents(events),\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    });\n'
+                              '\n'
+                              '    const events: ServerGeminiStreamEvent[] = [\n'
+                              '      { type: GeminiEventType.Content, value: '
+                              "'Response' },\n"
+                              '      {\n'
+                              '        type: GeminiEventType.Finished,\n'
+                              '        value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 3 } },\n'
+                              '      },\n'
+                              '    ];\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents(events),\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    });\n'
+                             '\n'
+                             '    const events: ServerGeminiStreamEvent[] = [\n'
+                             "      { type: GeminiEventType.Content, value: 'Response' "
+                             '},\n'
+                             '      {\n'
+                             '        type: GeminiEventType.Finished,\n'
+                             '        value: {\n'
+                             '          reason: FinishReason.STOP,\n'
+                             '          usageMetadata: { totalTokenCount: 3 },\n'
+                             '        },\n'
+                             '      },\n'
+                             '    ];\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents(events),\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-65',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    mockConfig.getCronScheduler = '
+                       'vi.fn().mockReturnValue(scheduler);\n'
+                       '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '      createStreamFromEvents([\n'
+                       "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 1 } },\n'
+                       '        },\n'
+                       '      ]),\n'
+                       '    );\n'
+                       '\n'
+                       "    await runNonInteractive(mockConfig, mockSettings, 'test', "
+                       "'p-cron-wiring');\n"
+                       '\n',
+             'after': '    mockConfig.getCronScheduler = '
+                      'vi.fn().mockReturnValue(scheduler);\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '      createStreamFromEvents([\n'
+                      "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 1 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n'
+                      "    await runNonInteractive(mockConfig, mockSettings, 'test', "
+                      "'p-cron-wiring');\n"
+                      '\n',
+             'review_before': '    mockConfig.getCronScheduler = '
+                              'vi.fn().mockReturnValue(scheduler);\n'
+                              '    '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '      createStreamFromEvents([\n'
+                              "        { type: GeminiEventType.Content, value: 'ok' "
+                              '},\n'
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 1 } },\n'
+                              '        },\n'
+                              '      ]),\n'
+                              '    );\n'
+                              '\n'
+                              '    await runNonInteractive(mockConfig, mockSettings, '
+                              "'test', 'p-cron-wiring');\n"
+                              '\n',
+             'review_after': '    mockConfig.getCronScheduler = '
+                             'vi.fn().mockReturnValue(scheduler);\n'
+                             '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '      createStreamFromEvents([\n'
+                             "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 1 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'
+                             '    await runNonInteractive(mockConfig, mockSettings, '
+                             "'test', 'p-cron-wiring');\n"
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-66',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      });\n'
+                       '\n'
+                       '      const plainTextTurn: ServerGeminiStreamEvent[] = [\n'
+                       "        { type: GeminiEventType.Content, value: 'Here is my "
+                       "answer as text.' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 5 } },\n'
+                       '        },\n'
+                       '      ];\n'
+                       '      mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                       '        createStreamFromEvents(plainTextTurn),\n'
+                       '      );\n'
+                       '\n',
+             'after': '      });\n'
+                      '\n'
+                      '      const plainTextTurn: ServerGeminiStreamEvent[] = [\n'
+                      "        { type: GeminiEventType.Content, value: 'Here is my "
+                      "answer as text.' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 5 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ];\n'
+                      '      mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                      '        createStreamFromEvents(plainTextTurn),\n'
+                      '      );\n'
+                      '\n',
+             'review_before': '      });\n'
+                              '\n'
+                              '      const plainTextTurn: ServerGeminiStreamEvent[] = '
+                              '[\n'
+                              "        { type: GeminiEventType.Content, value: 'Here "
+                              "is my answer as text.' },\n"
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 5 } },\n'
+                              '        },\n'
+                              '      ];\n'
+                              '      '
+                              'mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                              '        createStreamFromEvents(plainTextTurn),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '      });\n'
+                             '\n'
+                             '      const plainTextTurn: ServerGeminiStreamEvent[] = '
+                             '[\n'
+                             "        { type: GeminiEventType.Content, value: 'Here is "
+                             "my answer as text.' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 5 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ];\n'
+                             '      '
+                             'mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                             '        createStreamFromEvents(plainTextTurn),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-67',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '        .mockReturnValueOnce(\n'
+                       '          createStreamFromEvents([\n'
+                       "            { type: GeminiEventType.Content, value: 'Monitor "
+                       "launched.' },\n"
+                       '            {\n'
+                       '              type: GeminiEventType.Finished,\n'
+                       '              value: {\n'
+                       '                reason: undefined,\n'
+                       '                usageMetadata: { totalTokenCount: 2 },\n'
+                       '              },\n'
+                       '            },\n'
+                       '          ]),\n'
+                       '        )\n'
+                       '        '
+                       '.mockReturnValueOnce(createStreamFromEvents([drainStructuredCall]));\n',
+             'after': '        .mockReturnValueOnce(\n'
+                      '          createStreamFromEvents([\n'
+                      "            { type: GeminiEventType.Content, value: 'Monitor "
+                      "launched.' },\n"
+                      '            {\n'
+                      '              type: GeminiEventType.Finished,\n'
+                      '              value: {\n'
+                      '                reason: FinishReason.STOP,\n'
+                      '                usageMetadata: { totalTokenCount: 2 },\n'
+                      '              },\n'
+                      '            },\n'
+                      '          ]),\n'
+                      '        )\n'
+                      '        '
+                      '.mockReturnValueOnce(createStreamFromEvents([drainStructuredCall]));\n',
+             'review_before': '        .mockReturnValueOnce(\n'
+                              '          createStreamFromEvents([\n'
+                              '            { type: GeminiEventType.Content, value: '
+                              "'Monitor launched.' },\n"
+                              '            {\n'
+                              '              type: GeminiEventType.Finished,\n'
+                              '              value: {\n'
+                              '                reason: undefined,\n'
+                              '                usageMetadata: { totalTokenCount: 2 },\n'
+                              '              },\n'
+                              '            },\n'
+                              '          ]),\n'
+                              '        )\n'
+                              '        '
+                              '.mockReturnValueOnce(createStreamFromEvents([drainStructuredCall]));\n',
+             'review_after': '        .mockReturnValueOnce(\n'
+                             '          createStreamFromEvents([\n'
+                             '            { type: GeminiEventType.Content, value: '
+                             "'Monitor launched.' },\n"
+                             '            {\n'
+                             '              type: GeminiEventType.Finished,\n'
+                             '              value: {\n'
+                             '                reason: FinishReason.STOP,\n'
+                             '                usageMetadata: { totalTokenCount: 2 },\n'
+                             '              },\n'
+                             '            },\n'
+                             '          ]),\n'
+                             '        )\n'
+                             '        '
+                             '.mockReturnValueOnce(createStreamFromEvents([drainStructuredCall]));\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-68',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      const sessionService = {\n'
+                       '        getWorktreeSessionPath: '
+                       'vi.fn().mockReturnValue(sidecarPath),\n'
+                       '      };\n'
+                       '      (mockConfig as { getSessionService?: () => unknown '
+                       '}).getSessionService =\n'
+                       '        vi.fn().mockReturnValue(sessionService);\n'
+                       '\n'
+                       '      setupMetricsMock();\n'
+                       '      const events: ServerGeminiStreamEvent[] = [\n'
+                       "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 1 } },\n'
+                       '        },\n'
+                       '      ];\n'
+                       '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '        createStreamFromEvents(events),\n'
+                       '      );\n'
+                       '\n'
+                       '      try {\n'
+                       '        await runNonInteractive(\n'
+                       '          mockConfig,\n'
+                       '          mockSettings,\n'
+                       "          'continue work',\n",
+             'after': '      const sessionService = {\n'
+                      '        getWorktreeSessionPath: '
+                      'vi.fn().mockReturnValue(sidecarPath),\n'
+                      '      };\n'
+                      '      (mockConfig as { getSessionService?: () => unknown '
+                      '}).getSessionService =\n'
+                      '        vi.fn().mockReturnValue(sessionService);\n'
+                      '\n'
+                      '      setupMetricsMock();\n'
+                      '      const events: ServerGeminiStreamEvent[] = [\n'
+                      "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 1 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ];\n'
+                      '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '        createStreamFromEvents(events),\n'
+                      '      );\n'
+                      '\n'
+                      '      try {\n'
+                      '        await runNonInteractive(\n'
+                      '          mockConfig,\n'
+                      '          mockSettings,\n'
+                      "          'continue work',\n",
+             'review_before': '\n'
+                              '      setupMetricsMock();\n'
+                              '      const events: ServerGeminiStreamEvent[] = [\n'
+                              "        { type: GeminiEventType.Content, value: 'ok' "
+                              '},\n'
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 1 } },\n'
+                              '        },\n'
+                              '      ];\n'
+                              '      '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '        createStreamFromEvents(events),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '\n'
+                             '      setupMetricsMock();\n'
+                             '      const events: ServerGeminiStreamEvent[] = [\n'
+                             "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 1 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ];\n'
+                             '      '
+                             'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '        createStreamFromEvents(events),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-69',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      (mockConfig.getResumedSessionData as '
+                       'Mock).mockReturnValue(undefined);\n'
+                       '\n'
+                       '      setupMetricsMock();\n'
+                       '      const events: ServerGeminiStreamEvent[] = [\n'
+                       "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 1 } },\n'
+                       '        },\n'
+                       '      ];\n'
+                       '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '        createStreamFromEvents(events),\n'
+                       '      );\n'
+                       '\n'
+                       '      await runNonInteractive(\n',
+             'after': '      (mockConfig.getResumedSessionData as '
+                      'Mock).mockReturnValue(undefined);\n'
+                      '\n'
+                      '      setupMetricsMock();\n'
+                      '      const events: ServerGeminiStreamEvent[] = [\n'
+                      "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 1 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ];\n'
+                      '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '        createStreamFromEvents(events),\n'
+                      '      );\n'
+                      '\n'
+                      '      await runNonInteractive(\n',
+             'review_before': '\n'
+                              '      setupMetricsMock();\n'
+                              '      const events: ServerGeminiStreamEvent[] = [\n'
+                              "        { type: GeminiEventType.Content, value: 'ok' "
+                              '},\n'
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 1 } },\n'
+                              '        },\n'
+                              '      ];\n'
+                              '      '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '        createStreamFromEvents(events),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '\n'
+                             '      setupMetricsMock();\n'
+                             '      const events: ServerGeminiStreamEvent[] = [\n'
+                             "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 1 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ];\n'
+                             '      '
+                             'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '        createStreamFromEvents(events),\n'
+                             '      );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-70',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '      const sessionService = {\n'
+                       '        getWorktreeSessionPath: '
+                       'vi.fn().mockReturnValue(sidecarPath),\n'
+                       '      };\n'
+                       '      (mockConfig as { getSessionService?: () => unknown '
+                       '}).getSessionService =\n'
+                       '        vi.fn().mockReturnValue(sessionService);\n'
+                       '\n'
+                       '      setupMetricsMock();\n'
+                       '      const events: ServerGeminiStreamEvent[] = [\n'
+                       "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                       '        {\n'
+                       '          type: GeminiEventType.Finished,\n'
+                       '          value: { reason: undefined, usageMetadata: { '
+                       'totalTokenCount: 1 } },\n'
+                       '        },\n'
+                       '      ];\n'
+                       '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                       '        createStreamFromEvents(events),\n'
+                       '      );\n'
+                       '\n'
+                       '      try {\n'
+                       '        await runNonInteractive(\n'
+                       '          mockConfig,\n'
+                       '          mockSettings,\n'
+                       "          'hello',\n",
+             'after': '      const sessionService = {\n'
+                      '        getWorktreeSessionPath: '
+                      'vi.fn().mockReturnValue(sidecarPath),\n'
+                      '      };\n'
+                      '      (mockConfig as { getSessionService?: () => unknown '
+                      '}).getSessionService =\n'
+                      '        vi.fn().mockReturnValue(sessionService);\n'
+                      '\n'
+                      '      setupMetricsMock();\n'
+                      '      const events: ServerGeminiStreamEvent[] = [\n'
+                      "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                      '        {\n'
+                      '          type: GeminiEventType.Finished,\n'
+                      '          value: {\n'
+                      '            reason: FinishReason.STOP,\n'
+                      '            usageMetadata: { totalTokenCount: 1 },\n'
+                      '          },\n'
+                      '        },\n'
+                      '      ];\n'
+                      '      mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                      '        createStreamFromEvents(events),\n'
+                      '      );\n'
+                      '\n'
+                      '      try {\n'
+                      '        await runNonInteractive(\n'
+                      '          mockConfig,\n'
+                      '          mockSettings,\n'
+                      "          'hello',\n",
+             'review_before': '\n'
+                              '      setupMetricsMock();\n'
+                              '      const events: ServerGeminiStreamEvent[] = [\n'
+                              "        { type: GeminiEventType.Content, value: 'ok' "
+                              '},\n'
+                              '        {\n'
+                              '          type: GeminiEventType.Finished,\n'
+                              '          value: { reason: undefined, usageMetadata: { '
+                              'totalTokenCount: 1 } },\n'
+                              '        },\n'
+                              '      ];\n'
+                              '      '
+                              'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                              '        createStreamFromEvents(events),\n'
+                              '      );\n'
+                              '\n',
+             'review_after': '\n'
+                             '      setupMetricsMock();\n'
+                             '      const events: ServerGeminiStreamEvent[] = [\n'
+                             "        { type: GeminiEventType.Content, value: 'ok' },\n"
+                             '        {\n'
+                             '          type: GeminiEventType.Finished,\n'
+                             '          value: {\n'
+                             '            reason: FinishReason.STOP,\n'
+                             '            usageMetadata: { totalTokenCount: 1 },\n'
+                             '          },\n'
+                             '        },\n'
+                             '      ];\n'
+                             '      '
+                             'mockGeminiClient.sendMessageStream.mockReturnValue(\n'
+                             '        createStreamFromEvents(events),\n'
+                             '      );\n'
+                             '\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-1',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': 'import type {\n'
+                       '  BackgroundTaskStatus,\n'
+                       '  ConcurrencyBatch,\n'
+                       '  Config,\n'
+                       '  CronJob,\n'
+                       '  CronScheduler,\n'
+                       '  GoalRuntime,\n'
+                       '  GoalSnapshotV2,\n'
+                       '  GoalTurnHost,\n'
+                       '  GoalTurnPermit,\n'
+                       '  ActiveGoal,\n'
+                       '  ToolCallRequestInfo,\n',
+             'after': 'import type {\n'
+                      '  BackgroundTaskStatus,\n'
+                      '  ConcurrencyBatch,\n'
+                      '  Config,\n'
+                      '  CronJob,\n'
+                      '  CronScheduler,\n'
+                      '  GeminiFinishedEventValue,\n'
+                      '  GoalRuntime,\n'
+                      '  GoalSnapshotV2,\n'
+                      '  GoalTurnHost,\n'
+                      '  GoalTurnPermit,\n'
+                      '  ActiveGoal,\n'
+                      '  ToolCallRequestInfo,\n',
+             'review_before': 'import type {\n'
+                              '  BackgroundTaskStatus,\n'
+                              '  ConcurrencyBatch,\n'
+                              '  Config,\n'
+                              '  CronJob,\n'
+                              '  CronScheduler,\n'
+                              '  GoalRuntime,\n'
+                              '  GoalSnapshotV2,\n'
+                              '  GoalTurnHost,\n'
+                              '  GoalTurnPermit,\n'
+                              '  ActiveGoal,\n'
+                              '  ToolCallRequestInfo,\n',
+             'review_after': 'import type {\n'
+                             '  BackgroundTaskStatus,\n'
+                             '  ConcurrencyBatch,\n'
+                             '  Config,\n'
+                             '  CronJob,\n'
+                             '  CronScheduler,\n'
+                             '  GeminiFinishedEventValue,\n'
+                             '  GoalRuntime,\n'
+                             '  GoalSnapshotV2,\n'
+                             '  GoalTurnHost,\n'
+                             '  GoalTurnPermit,\n'
+                             '  ActiveGoal,\n'
+                             '  ToolCallRequestInfo,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-2',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '  GeminiEventType,\n'
                        '  FatalInputError,\n'
@@ -4636,6 +9831,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  OutputFormat,\n'
                       '  InputFormat,\n'
                       '  LoopType,\n'
+                      '  describeIncompleteGeneration,\n'
                       '  describeLoopType,\n'
                       '  ToolNames,\n'
                       '  uiTelemetryService,\n'
@@ -4661,6 +9857,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  OutputFormat,\n'
                              '  InputFormat,\n'
                              '  LoopType,\n'
+                             '  describeIncompleteGeneration,\n'
                              '  describeLoopType,\n'
                              '  ToolNames,\n'
                              '  uiTelemetryService,\n'
@@ -4668,7 +9865,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  createDebugLogger,\n'
                              '  detectAutonomousSentinel,\n'
                              '  detectLoopSentinel,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-2',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-3',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '    ? SUPPRESSED_OUTPUT_SUCCESS\n'
                        '    : SUPPRESSED_OUTPUT_RETRY;\n'
@@ -4878,7 +10075,87 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  const isAlwaysOn =\n'
                              '    loopType === '
                              'LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS ||\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-3',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-4',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': '      });\n'
+                       '    const unregisterReviewWorktreeCleanup = registerCleanup(() '
+                       '=>\n'
+                       '      cleanupReviewWorktrees(1_000),\n'
+                       '    );\n'
+                       '\n'
+                       '    let turnCount = 0;\n'
+                       '    let limitedTurnCount = 0;\n'
+                       '    let totalApiDurationMs = 0;\n'
+                       '    const startTime = Date.now();\n'
+                       '    let activeInteractionPromptId = prompt_id;\n'
+                       '    let activeInteractionOwner: ReturnType<typeof '
+                       'getActiveInteractionSpan>;\n'
+                       '    const selectActiveInteraction = (\n',
+             'after': '      });\n'
+                      '    const unregisterReviewWorktreeCleanup = registerCleanup(() '
+                      '=>\n'
+                      '      cleanupReviewWorktrees(1_000),\n'
+                      '    );\n'
+                      '\n'
+                      '    let turnCount = 0;\n'
+                      '    // Terminal reason of the generation this run is currently '
+                      'standing on,\n'
+                      '    // cleared at the head of every turn so a turn that reports '
+                      'none is read\n'
+                      "    // as none rather than inheriting the previous turn's. Both "
+                      'reasoning\n'
+                      '    // loops write it; the success path reads it to decide '
+                      'whether the run\n'
+                      '    // has an answer to report at all.\n'
+                      '    let lastGenerationFinishReason: '
+                      "GeminiFinishedEventValue['reason'];\n"
+                      '    let limitedTurnCount = 0;\n'
+                      '    let totalApiDurationMs = 0;\n'
+                      '    const startTime = Date.now();\n'
+                      '    let activeInteractionPromptId = prompt_id;\n'
+                      '    let activeInteractionOwner: ReturnType<typeof '
+                      'getActiveInteractionSpan>;\n'
+                      '    const selectActiveInteraction = (\n',
+             'review_before': '      });\n'
+                              '    const unregisterReviewWorktreeCleanup = '
+                              'registerCleanup(() =>\n'
+                              '      cleanupReviewWorktrees(1_000),\n'
+                              '    );\n'
+                              '\n'
+                              '    let turnCount = 0;\n'
+                              '    let limitedTurnCount = 0;\n'
+                              '    let totalApiDurationMs = 0;\n'
+                              '    const startTime = Date.now();\n'
+                              '    let activeInteractionPromptId = prompt_id;\n'
+                              '    let activeInteractionOwner: ReturnType<typeof '
+                              'getActiveInteractionSpan>;\n'
+                              '    const selectActiveInteraction = (\n',
+             'review_after': '      });\n'
+                             '    const unregisterReviewWorktreeCleanup = '
+                             'registerCleanup(() =>\n'
+                             '      cleanupReviewWorktrees(1_000),\n'
+                             '    );\n'
+                             '\n'
+                             '    let turnCount = 0;\n'
+                             '    // Terminal reason of the generation this run is '
+                             'currently standing on,\n'
+                             '    // cleared at the head of every turn so a turn that '
+                             'reports none is read\n'
+                             '    // as none rather than inheriting the previous '
+                             "turn's. Both reasoning\n"
+                             '    // loops write it; the success path reads it to '
+                             'decide whether the run\n'
+                             '    // has an answer to report at all.\n'
+                             '    let lastGenerationFinishReason: '
+                             "GeminiFinishedEventValue['reason'];\n"
+                             '    let limitedTurnCount = 0;\n'
+                             '    let totalApiDurationMs = 0;\n'
+                             '    const startTime = Date.now();\n'
+                             '    let activeInteractionPromptId = prompt_id;\n'
+                             '    let activeInteractionOwner: ReturnType<typeof '
+                             'getActiveInteractionSpan>;\n'
+                             '    const selectActiveInteraction = (\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-5',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '          }\n'
                        '        }\n'
@@ -4937,7 +10214,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            config,\n'
                              '            settings,\n'
                              '          );\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-4',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-6',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '        }\n'
                        '      }\n'
@@ -4999,7 +10276,151 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'recoveredAgentsNotice);\n'
                              '      }\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-5',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-7',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': '        selectActiveInteraction(\n'
+                       '          currentPromptId,\n'
+                       '          sendType !== SendMessageType.ToolResult,\n'
+                       '        );\n'
+                       '\n'
+                       '        const toolCallRequests: ToolCallRequestInfo[] = [];\n'
+                       '        const apiStartTime = Date.now();\n'
+                       '        const responseStream = '
+                       'geminiClient.sendMessageStream(\n'
+                       '          currentMessages[0]?.parts || [],\n'
+                       '          abortController.signal,\n'
+                       '          currentPromptId,\n'
+                       '          {\n',
+             'after': '        selectActiveInteraction(\n'
+                      '          currentPromptId,\n'
+                      '          sendType !== SendMessageType.ToolResult,\n'
+                      '        );\n'
+                      '\n'
+                      '        const toolCallRequests: ToolCallRequestInfo[] = [];\n'
+                      '        lastGenerationFinishReason = undefined;\n'
+                      '        const apiStartTime = Date.now();\n'
+                      '        const responseStream = geminiClient.sendMessageStream(\n'
+                      '          currentMessages[0]?.parts || [],\n'
+                      '          abortController.signal,\n'
+                      '          currentPromptId,\n'
+                      '          {\n',
+             'review_before': '        selectActiveInteraction(\n'
+                              '          currentPromptId,\n'
+                              '          sendType !== SendMessageType.ToolResult,\n'
+                              '        );\n'
+                              '\n'
+                              '        const toolCallRequests: ToolCallRequestInfo[] = '
+                              '[];\n'
+                              '        const apiStartTime = Date.now();\n'
+                              '        const responseStream = '
+                              'geminiClient.sendMessageStream(\n'
+                              '          currentMessages[0]?.parts || [],\n'
+                              '          abortController.signal,\n'
+                              '          currentPromptId,\n'
+                              '          {\n',
+             'review_after': '        selectActiveInteraction(\n'
+                             '          currentPromptId,\n'
+                             '          sendType !== SendMessageType.ToolResult,\n'
+                             '        );\n'
+                             '\n'
+                             '        const toolCallRequests: ToolCallRequestInfo[] = '
+                             '[];\n'
+                             '        lastGenerationFinishReason = undefined;\n'
+                             '        const apiStartTime = Date.now();\n'
+                             '        const responseStream = '
+                             'geminiClient.sendMessageStream(\n'
+                             '          currentMessages[0]?.parts || [],\n'
+                             '          abortController.signal,\n'
+                             '          currentPromptId,\n'
+                             '          {\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-8',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': '          }\n'
+                       '          // Use adapter for all event processing\n'
+                       '          adapter.processEvent(event);\n'
+                       '          if (event.type === GeminiEventType.ToolCallRequest) '
+                       '{\n'
+                       '            toolCallRequests.push(event.value);\n'
+                       '          }\n'
+                       '          if (event.type === GeminiEventType.ModelFallback) {\n'
+                       '            toolCallRequests.length = 0;\n'
+                       '          }\n'
+                       '          if (\n'
+                       '            event.type === GeminiEventType.Content &&\n'
+                       '            plainTextPreview.length < '
+                       'PLAIN_TEXT_PREVIEW_LIMIT\n'
+                       '          ) {\n'
+                       '            const remaining =\n',
+             'after': '          }\n'
+                      '          // Use adapter for all event processing\n'
+                      '          adapter.processEvent(event);\n'
+                      '          if (event.type === GeminiEventType.ToolCallRequest) '
+                      '{\n'
+                      '            toolCallRequests.push(event.value);\n'
+                      '          }\n'
+                      '          if (event.type === GeminiEventType.Finished) {\n'
+                      '            lastGenerationFinishReason = event.value.reason;\n'
+                      '          }\n'
+                      '          if (event.type === GeminiEventType.ModelFallback) {\n'
+                      "            // A fallback abandons the previous model's partial "
+                      'response, so\n'
+                      '            // its tool calls and its terminal reason both stop '
+                      'describing\n'
+                      '            // the turn that is still being generated.\n'
+                      '            toolCallRequests.length = 0;\n'
+                      '            lastGenerationFinishReason = undefined;\n'
+                      '          }\n'
+                      '          if (\n'
+                      '            event.type === GeminiEventType.Content &&\n'
+                      '            plainTextPreview.length < PLAIN_TEXT_PREVIEW_LIMIT\n'
+                      '          ) {\n'
+                      '            const remaining =\n',
+             'review_before': '          }\n'
+                              '          // Use adapter for all event processing\n'
+                              '          adapter.processEvent(event);\n'
+                              '          if (event.type === '
+                              'GeminiEventType.ToolCallRequest) {\n'
+                              '            toolCallRequests.push(event.value);\n'
+                              '          }\n'
+                              '          if (event.type === '
+                              'GeminiEventType.ModelFallback) {\n'
+                              '            toolCallRequests.length = 0;\n'
+                              '          }\n'
+                              '          if (\n'
+                              '            event.type === GeminiEventType.Content &&\n'
+                              '            plainTextPreview.length < '
+                              'PLAIN_TEXT_PREVIEW_LIMIT\n'
+                              '          ) {\n'
+                              '            const remaining =\n',
+             'review_after': '          }\n'
+                             '          // Use adapter for all event processing\n'
+                             '          adapter.processEvent(event);\n'
+                             '          if (event.type === '
+                             'GeminiEventType.ToolCallRequest) {\n'
+                             '            toolCallRequests.push(event.value);\n'
+                             '          }\n'
+                             '          if (event.type === GeminiEventType.Finished) '
+                             '{\n'
+                             '            lastGenerationFinishReason = '
+                             'event.value.reason;\n'
+                             '          }\n'
+                             '          if (event.type === '
+                             'GeminiEventType.ModelFallback) {\n'
+                             "            // A fallback abandons the previous model's "
+                             'partial response, so\n'
+                             '            // its tool calls and its terminal reason '
+                             'both stop describing\n'
+                             '            // the turn that is still being generated.\n'
+                             '            toolCallRequests.length = 0;\n'
+                             '            lastGenerationFinishReason = undefined;\n'
+                             '          }\n'
+                             '          if (\n'
+                             '            event.type === GeminiEventType.Content &&\n'
+                             '            plainTextPreview.length < '
+                             'PLAIN_TEXT_PREVIEW_LIMIT\n'
+                             '          ) {\n'
+                             '            const remaining =\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-9',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '                config,\n'
                        '                event.value?.loopType,\n'
@@ -5133,9 +10554,89 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        captureActiveInteractionOwner();\n'
                              '\n'
                              '        // Finalize assistant message\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-6',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-10',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
-             'before': '                      config,\n'
+             'before': '            let itemIsFirstTurn = true;\n'
+                       '            let itemModelOverride: string | undefined;\n'
+                       '            const itemPromptId = '
+                       '`${prompt_id}/automatic/${turnCount}`;\n'
+                       '\n'
+                       '            while (true) {\n'
+                       '              const itemToolCallRequests: '
+                       'ToolCallRequestInfo[] = [];\n'
+                       '              const itemApiStartTime = Date.now();\n'
+                       '              selectActiveInteraction(itemPromptId, '
+                       'itemIsFirstTurn);\n'
+                       '              const itemStream = '
+                       'geminiClient.sendMessageStream(\n'
+                       '                itemMessages[0]?.parts || [],\n'
+                       '                abortController.signal,\n'
+                       '                itemPromptId,\n',
+             'after': '            let itemIsFirstTurn = true;\n'
+                      '            let itemModelOverride: string | undefined;\n'
+                      '            const itemPromptId = '
+                      '`${prompt_id}/automatic/${turnCount}`;\n'
+                      '\n'
+                      '            while (true) {\n'
+                      '              const itemToolCallRequests: ToolCallRequestInfo[] '
+                      '= [];\n'
+                      '              lastGenerationFinishReason = undefined;\n'
+                      '              const itemApiStartTime = Date.now();\n'
+                      '              selectActiveInteraction(itemPromptId, '
+                      'itemIsFirstTurn);\n'
+                      '              const itemStream = '
+                      'geminiClient.sendMessageStream(\n'
+                      '                itemMessages[0]?.parts || [],\n'
+                      '                abortController.signal,\n'
+                      '                itemPromptId,\n',
+             'review_before': '            let itemIsFirstTurn = true;\n'
+                              '            let itemModelOverride: string | undefined;\n'
+                              '            const itemPromptId = '
+                              '`${prompt_id}/automatic/${turnCount}`;\n'
+                              '\n'
+                              '            while (true) {\n'
+                              '              const itemToolCallRequests: '
+                              'ToolCallRequestInfo[] = [];\n'
+                              '              const itemApiStartTime = Date.now();\n'
+                              '              selectActiveInteraction(itemPromptId, '
+                              'itemIsFirstTurn);\n'
+                              '              const itemStream = '
+                              'geminiClient.sendMessageStream(\n'
+                              '                itemMessages[0]?.parts || [],\n'
+                              '                abortController.signal,\n'
+                              '                itemPromptId,\n',
+             'review_after': '            let itemIsFirstTurn = true;\n'
+                             '            let itemModelOverride: string | undefined;\n'
+                             '            const itemPromptId = '
+                             '`${prompt_id}/automatic/${turnCount}`;\n'
+                             '\n'
+                             '            while (true) {\n'
+                             '              const itemToolCallRequests: '
+                             'ToolCallRequestInfo[] = [];\n'
+                             '              lastGenerationFinishReason = undefined;\n'
+                             '              const itemApiStartTime = Date.now();\n'
+                             '              selectActiveInteraction(itemPromptId, '
+                             'itemIsFirstTurn);\n'
+                             '              const itemStream = '
+                             'geminiClient.sendMessageStream(\n'
+                             '                itemMessages[0]?.parts || [],\n'
+                             '                abortController.signal,\n'
+                             '                itemPromptId,\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-11',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': '                  await routeAbort();\n'
+                       '                }\n'
+                       '                adapter.processEvent(event);\n'
+                       '                if (event.type === '
+                       'GeminiEventType.ToolCallRequest) {\n'
+                       '                  itemToolCallRequests.push(event.value);\n'
+                       '                }\n'
+                       '                if (event.type === '
+                       'GeminiEventType.LoopDetected) {\n'
+                       '                  if (!loopDetected) {\n'
+                       '                    loopDetectedMessage = '
+                       'emitLoopDetectedMessage(\n'
+                       '                      config,\n'
                        '                      event.value?.loopType,\n'
                        '                    );\n'
                        '                  }\n'
@@ -5162,7 +10663,23 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '              captureActiveInteractionOwner();\n'
                        '\n'
                        '              adapter.finalizeAssistantMessage();\n',
-             'after': '                      config,\n'
+             'after': '                  await routeAbort();\n'
+                      '                }\n'
+                      '                adapter.processEvent(event);\n'
+                      '                if (event.type === '
+                      'GeminiEventType.ToolCallRequest) {\n'
+                      '                  itemToolCallRequests.push(event.value);\n'
+                      '                }\n'
+                      '                if (event.type === GeminiEventType.Finished) {\n'
+                      '                  lastGenerationFinishReason = '
+                      'event.value.reason;\n'
+                      '                }\n'
+                      '                if (event.type === '
+                      'GeminiEventType.LoopDetected) {\n'
+                      '                  if (!loopDetected) {\n'
+                      '                    loopDetectedMessage = '
+                      'emitLoopDetectedMessage(\n'
+                      '                      config,\n'
                       '                      event.value?.loopType,\n'
                       '                    );\n'
                       '                  }\n'
@@ -5188,7 +10705,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '              captureActiveInteractionOwner();\n'
                       '\n'
                       '              adapter.finalizeAssistantMessage();\n',
-             'review_before': '                      config,\n'
+             'review_before': '                  await routeAbort();\n'
+                              '                }\n'
+                              '                adapter.processEvent(event);\n'
+                              '                if (event.type === '
+                              'GeminiEventType.ToolCallRequest) {\n'
+                              '                  '
+                              'itemToolCallRequests.push(event.value);\n'
+                              '                }\n'
+                              '                if (event.type === '
+                              'GeminiEventType.LoopDetected) {\n'
+                              '                  if (!loopDetected) {\n'
+                              '                    loopDetectedMessage = '
+                              'emitLoopDetectedMessage(\n'
+                              '                      config,\n'
                               '                      event.value?.loopType,\n'
                               '                    );\n'
                               '                  }\n'
@@ -5219,7 +10749,25 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '              captureActiveInteractionOwner();\n'
                               '\n'
                               '              adapter.finalizeAssistantMessage();\n',
-             'review_after': '                      config,\n'
+             'review_after': '                  await routeAbort();\n'
+                             '                }\n'
+                             '                adapter.processEvent(event);\n'
+                             '                if (event.type === '
+                             'GeminiEventType.ToolCallRequest) {\n'
+                             '                  '
+                             'itemToolCallRequests.push(event.value);\n'
+                             '                }\n'
+                             '                if (event.type === '
+                             'GeminiEventType.Finished) {\n'
+                             '                  lastGenerationFinishReason = '
+                             'event.value.reason;\n'
+                             '                }\n'
+                             '                if (event.type === '
+                             'GeminiEventType.LoopDetected) {\n'
+                             '                  if (!loopDetected) {\n'
+                             '                    loopDetectedMessage = '
+                             'emitLoopDetectedMessage(\n'
+                             '                      config,\n'
                              '                      event.value?.loopType,\n'
                              '                    );\n'
                              '                  }\n'
@@ -5249,6 +10797,179 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              captureActiveInteractionOwner();\n'
                              '\n'
                              '              adapter.finalizeAssistantMessage();\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-12',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': '          // metrics snapshot after the holdback so any task '
+                       'notifications\n'
+                       '          // that landed during shutdown contribute to the '
+                       'totals.\n'
+                       '          if (structuredSubmission !== undefined) {\n'
+                       '            return emitStructuredSuccess();\n'
+                       '          }\n'
+                       '\n'
+                       '          // --json-schema contract: the model MUST terminate '
+                       'via the\n'
+                       '          // structured_output tool. Reaching this branch '
+                       'means it emitted\n'
+                       '          // plain text instead — surface as an error rather '
+                       'than silently\n'
+                       '          // returning whatever free-form summary the adapter '
+                       'collected.\n'
+                       '          // Returning a non-zero exit code (rather than '
+                       'throwing) avoids\n'
+                       '          // the outer catch re-emitting the result a second '
+                       'time.\n',
+             'after': '          // metrics snapshot after the holdback so any task '
+                      'notifications\n'
+                      '          // that landed during shutdown contribute to the '
+                      'totals.\n'
+                      '          if (structuredSubmission !== undefined) {\n'
+                      '            return emitStructuredSuccess();\n'
+                      '          }\n'
+                      '\n'
+                      '          // The run reaches this point because the last turn '
+                      'asked for no\n'
+                      "          // tools. That is the model's answer only if the "
+                      'model wrote that\n'
+                      '          // turn to the end; when generation was stopped from '
+                      'outside, the\n'
+                      '          // same silence is the cut itself, and the text the '
+                      'adapter\n'
+                      '          // collected is the prefix that was interrupted. '
+                      'Reported here\n'
+                      '          // rather than repaired: a severed generation cannot '
+                      'be continued\n'
+                      '          // under the strict terminal contract, so the honest '
+                      'terminal\n'
+                      '          // record is the one that names the reason. It '
+                      'precedes the\n'
+                      '          // --json-schema check below because a cut-off turn '
+                      'explains a\n'
+                      '          // missing structured_output call, and the reverse '
+                      'diagnosis would\n'
+                      '          // send the caller after a schema that was never '
+                      'reached.\n'
+                      '          const incompleteGeneration = '
+                      'describeIncompleteGeneration(\n'
+                      '            lastGenerationFinishReason,\n'
+                      '            turnCount,\n'
+                      '          );\n'
+                      '          if (incompleteGeneration) {\n'
+                      "            endActiveInteraction('error', {\n"
+                      "              errorMessage: 'generation did not complete',\n"
+                      "              errorType: 'incomplete_generation',\n"
+                      '            });\n'
+                      '            await emitResult({\n'
+                      '              isError: true,\n'
+                      "              subtype: 'error_incomplete_generation',\n"
+                      '              durationMs: Date.now() - startTime,\n'
+                      '              apiDurationMs: totalApiDurationMs,\n'
+                      '              numTurns: turnCount,\n'
+                      '              errorMessage: incompleteGeneration,\n'
+                      '              usage,\n'
+                      '              stats,\n'
+                      '            });\n'
+                      '            return 1;\n'
+                      '          }\n'
+                      '\n'
+                      '          // --json-schema contract: the model MUST terminate '
+                      'via the\n'
+                      '          // structured_output tool. Reaching this branch means '
+                      'it emitted\n'
+                      '          // plain text instead — surface as an error rather '
+                      'than silently\n'
+                      '          // returning whatever free-form summary the adapter '
+                      'collected.\n'
+                      '          // Returning a non-zero exit code (rather than '
+                      'throwing) avoids\n'
+                      '          // the outer catch re-emitting the result a second '
+                      'time.\n',
+             'review_before': '          // metrics snapshot after the holdback so any '
+                              'task notifications\n'
+                              '          // that landed during shutdown contribute to '
+                              'the totals.\n'
+                              '          if (structuredSubmission !== undefined) {\n'
+                              '            return emitStructuredSuccess();\n'
+                              '          }\n'
+                              '\n'
+                              '          // --json-schema contract: the model MUST '
+                              'terminate via the\n'
+                              '          // structured_output tool. Reaching this '
+                              'branch means it emitted\n'
+                              '          // plain text instead — surface as an error '
+                              'rather than silently\n'
+                              '          // returning whatever free-form summary the '
+                              'adapter collected.\n'
+                              '          // Returning a non-zero exit code (rather '
+                              'than throwing) avoids\n'
+                              '          // the outer catch re-emitting the result a '
+                              'second time.\n',
+             'review_after': '          // metrics snapshot after the holdback so any '
+                             'task notifications\n'
+                             '          // that landed during shutdown contribute to '
+                             'the totals.\n'
+                             '          if (structuredSubmission !== undefined) {\n'
+                             '            return emitStructuredSuccess();\n'
+                             '          }\n'
+                             '\n'
+                             '          // The run reaches this point because the last '
+                             'turn asked for no\n'
+                             "          // tools. That is the model's answer only if "
+                             'the model wrote that\n'
+                             '          // turn to the end; when generation was '
+                             'stopped from outside, the\n'
+                             '          // same silence is the cut itself, and the '
+                             'text the adapter\n'
+                             '          // collected is the prefix that was '
+                             'interrupted. Reported here\n'
+                             '          // rather than repaired: a severed generation '
+                             'cannot be continued\n'
+                             '          // under the strict terminal contract, so the '
+                             'honest terminal\n'
+                             '          // record is the one that names the reason. It '
+                             'precedes the\n'
+                             '          // --json-schema check below because a cut-off '
+                             'turn explains a\n'
+                             '          // missing structured_output call, and the '
+                             'reverse diagnosis would\n'
+                             '          // send the caller after a schema that was '
+                             'never reached.\n'
+                             '          const incompleteGeneration = '
+                             'describeIncompleteGeneration(\n'
+                             '            lastGenerationFinishReason,\n'
+                             '            turnCount,\n'
+                             '          );\n'
+                             '          if (incompleteGeneration) {\n'
+                             "            endActiveInteraction('error', {\n"
+                             "              errorMessage: 'generation did not "
+                             "complete',\n"
+                             "              errorType: 'incomplete_generation',\n"
+                             '            });\n'
+                             '            await emitResult({\n'
+                             '              isError: true,\n'
+                             "              subtype: 'error_incomplete_generation',\n"
+                             '              durationMs: Date.now() - startTime,\n'
+                             '              apiDurationMs: totalApiDurationMs,\n'
+                             '              numTurns: turnCount,\n'
+                             '              errorMessage: incompleteGeneration,\n'
+                             '              usage,\n'
+                             '              stats,\n'
+                             '            });\n'
+                             '            return 1;\n'
+                             '          }\n'
+                             '\n'
+                             '          // --json-schema contract: the model MUST '
+                             'terminate via the\n'
+                             '          // structured_output tool. Reaching this '
+                             'branch means it emitted\n'
+                             '          // plain text instead — surface as an error '
+                             'rather than silently\n'
+                             '          // returning whatever free-form summary the '
+                             'adapter collected.\n'
+                             '          // Returning a non-zero exit code (rather than '
+                             'throwing) avoids\n'
+                             '          // the outer catch re-emitting the result a '
+                             'second time.\n'},
             {'name': 'packages/cli/src/ui/hooks/useGeminiStream.ts:landmark-1',
              'path': 'packages/cli/src/ui/hooks/useGeminiStream.ts',
              'before': '            case ServerGeminiEventType.ChatCompressed:\n'
@@ -6963,6 +12684,334 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' *\n'},
             {'name': 'packages/core/src/agents/runtime/agent-core.test.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-core.test.ts',
+             'before': "} from '../../core/contentGenerator.js';\n"
+                       'import {\n'
+                       '  getInvocationContext,\n'
+                       '  runWithInvocationContext,\n'
+                       '  type InvocationContextV1,\n'
+                       "} from '../../utils/invocation-context.js';\n"
+                       "import { GeminiChat } from '../../core/geminiChat.js';\n"
+                       "import { ContextState } from './agent-headless.js';\n"
+                       '\n'
+                       "describe('AgentCore.createChat manual plan-exit notice "
+                       "ownership', () => {\n"
+                       "  it('enables notices only for interactive agent chats', async "
+                       '() => {\n'
+                       '    const core = new AgentCore(\n'
+                       "      'notice-agent',\n"
+                       '      {} as Config,\n',
+             'after': "} from '../../core/contentGenerator.js';\n"
+                      'import {\n'
+                      '  getInvocationContext,\n'
+                      '  runWithInvocationContext,\n'
+                      '  type InvocationContextV1,\n'
+                      "} from '../../utils/invocation-context.js';\n"
+                      'import { GeminiChat, StreamEventType } from '
+                      "'../../core/geminiChat.js';\n"
+                      "import { ContextState } from './agent-headless.js';\n"
+                      "import { AgentTerminateMode } from './agent-types.js';\n"
+                      "import { FinishReason } from '../../core/genai-compat.js';\n"
+                      '\n'
+                      "describe('AgentCore.createChat manual plan-exit notice "
+                      "ownership', () => {\n"
+                      "  it('enables notices only for interactive agent chats', async "
+                      '() => {\n'
+                      '    const core = new AgentCore(\n'
+                      "      'notice-agent',\n"
+                      '      {} as Config,\n',
+             'review_before': "} from '../../core/contentGenerator.js';\n"
+                              'import {\n'
+                              '  getInvocationContext,\n'
+                              '  runWithInvocationContext,\n'
+                              '  type InvocationContextV1,\n'
+                              "} from '../../utils/invocation-context.js';\n"
+                              "import { GeminiChat } from '../../core/geminiChat.js';\n"
+                              "import { ContextState } from './agent-headless.js';\n"
+                              '\n'
+                              "describe('AgentCore.createChat manual plan-exit notice "
+                              "ownership', () => {\n"
+                              "  it('enables notices only for interactive agent "
+                              "chats', async () => {\n"
+                              '    const core = new AgentCore(\n'
+                              "      'notice-agent',\n"
+                              '      {} as Config,\n',
+             'review_after': "} from '../../core/contentGenerator.js';\n"
+                             'import {\n'
+                             '  getInvocationContext,\n'
+                             '  runWithInvocationContext,\n'
+                             '  type InvocationContextV1,\n'
+                             "} from '../../utils/invocation-context.js';\n"
+                             'import { GeminiChat, StreamEventType } from '
+                             "'../../core/geminiChat.js';\n"
+                             "import { ContextState } from './agent-headless.js';\n"
+                             "import { AgentTerminateMode } from './agent-types.js';\n"
+                             'import { FinishReason } from '
+                             "'../../core/genai-compat.js';\n"
+                             '\n'
+                             "describe('AgentCore.createChat manual plan-exit notice "
+                             "ownership', () => {\n"
+                             "  it('enables notices only for interactive agent chats', "
+                             'async () => {\n'
+                             '    const core = new AgentCore(\n'
+                             "      'notice-agent',\n"
+                             '      {} as Config,\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.test.ts:landmark-2',
+             'path': 'packages/core/src/agents/runtime/agent-core.test.ts',
+             'before': '    expect(enableSpy).toHaveBeenCalledTimes(1);\n'
+                       '\n'
+                       '    enableSpy.mockRestore();\n'
+                       '  });\n'
+                       '});\n'
+                       '\n'
+                       "describe('AgentCore.runInAgentFrames', () => {\n"
+                       '  // The deferred-approval `respond` callback that AgentCore '
+                       'hands to the\n'
+                       '  // UI must restore both ALS frames the agent normally runs '
+                       'under, so any\n'
+                       '  // tool body resumed via approval — including ones that '
+                       'trigger LLM\n'
+                       "  // calls — sees the agent's ContentGenerator (modalities, "
+                       'auth) and is\n'
+                       '  // attributed to the agent in token stats.\n',
+             'after': '    expect(enableSpy).toHaveBeenCalledTimes(1);\n'
+                      '\n'
+                      '    enableSpy.mockRestore();\n'
+                      '  });\n'
+                      '});\n'
+                      '\n'
+                      "describe('AgentCore round terminal reason', () => {\n"
+                      "  // A round that requests no tools is the agent's report only "
+                      'when the model\n'
+                      '  // wrote it to the end. These drive the reasoning loop over '
+                      'one round whose\n'
+                      '  // only difference is the terminal reason the provider '
+                      'returned.\n'
+                      '  function makeTruncationCore(): AgentCore {\n'
+                      '    const runtimeContext = {\n'
+                      "      getSessionId: () => 'test-session',\n"
+                      '      getSkipLoopDetection: () => true,\n'
+                      "      getModel: () => 'test-model',\n"
+                      '      getMaxToolCallsPerTurn: () => 1000,\n'
+                      '      isMaxToolCallsPerTurnExplicit: () => false,\n'
+                      '      getDebugLogger: () => ({\n'
+                      '        debug: () => {},\n'
+                      '        info: () => {},\n'
+                      '        warn: () => {},\n'
+                      '        error: () => {},\n'
+                      '      }),\n'
+                      '    } as unknown as Config;\n'
+                      '    return new AgentCore(\n'
+                      "      'reader',\n"
+                      '      runtimeContext,\n'
+                      "      { systemPrompt: '' } as PromptConfig,\n"
+                      "      { model: 'test-model' } as ModelConfig,\n"
+                      '      { max_turns: 5 } as RunConfig,\n'
+                      '    );\n'
+                      '  }\n'
+                      '\n'
+                      '  function makeChat(reason: FinishReason): GeminiChat {\n'
+                      '    return {\n'
+                      '      getHistoryFunctionResponseIds: () => [],\n'
+                      '      sendMessageStream: async () =>\n'
+                      '        (async function* () {\n'
+                      '          yield {\n'
+                      '            type: StreamEventType.CHUNK,\n'
+                      '            value: {\n'
+                      '              candidates: [\n'
+                      '                {\n'
+                      "                  content: { parts: [{ text: 'Writing note_18:' "
+                      '}] },\n'
+                      '                  finishReason: reason,\n'
+                      '                },\n'
+                      '              ],\n'
+                      '            },\n'
+                      '          };\n'
+                      '        })(),\n'
+                      '    } as unknown as GeminiChat;\n'
+                      '  }\n'
+                      '\n'
+                      '  async function runOneRound(\n'
+                      '    reason: FinishReason,\n'
+                      '  ): Promise<ReasoningLoopResult> {\n'
+                      '    const core = makeTruncationCore();\n'
+                      '    return await (\n'
+                      '      core as unknown as {\n'
+                      '        _runReasoningLoopInner: (\n'
+                      '          chat: GeminiChat,\n'
+                      '          initialMessages: unknown[],\n'
+                      '          toolsList: FunctionDeclaration[],\n'
+                      '          abortController: AbortController,\n'
+                      '        ) => Promise<ReasoningLoopResult>;\n'
+                      '      }\n'
+                      '    )._runReasoningLoopInner(\n'
+                      '      makeChat(reason),\n'
+                      "      [{ role: 'user', parts: [{ text: 'summarize' }] }],\n"
+                      '      [],\n'
+                      '      new AbortController(),\n'
+                      '    );\n'
+                      '  }\n'
+                      '\n'
+                      "  it('stops the agent when its generation was cut off before "
+                      "the message ended', async () => {\n"
+                      '    const result = await runOneRound(FinishReason.MAX_TOKENS);\n'
+                      '\n'
+                      '    '
+                      'expect(result.terminateMode).toBe(AgentTerminateMode.INCOMPLETE_GENERATION);\n'
+                      '    expect(result.turnsUsed).toBe(1);\n'
+                      '    // The interrupted prefix is kept as evidence; what it is '
+                      'not is a report.\n'
+                      "    expect(result.text).toBe('Writing note_18:');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('takes a self-ended generation with no tool call as the "
+                      "final report', async () => {\n"
+                      '    const result = await runOneRound(FinishReason.STOP);\n'
+                      '\n'
+                      '    expect(result.terminateMode).toBeNull();\n'
+                      "    expect(result.text).toBe('Writing note_18:');\n"
+                      '  });\n'
+                      '});\n'
+                      '\n'
+                      "describe('AgentCore.runInAgentFrames', () => {\n"
+                      '  // The deferred-approval `respond` callback that AgentCore '
+                      'hands to the\n'
+                      '  // UI must restore both ALS frames the agent normally runs '
+                      'under, so any\n'
+                      '  // tool body resumed via approval — including ones that '
+                      'trigger LLM\n'
+                      "  // calls — sees the agent's ContentGenerator (modalities, "
+                      'auth) and is\n'
+                      '  // attributed to the agent in token stats.\n',
+             'review_before': '    expect(enableSpy).toHaveBeenCalledTimes(1);\n'
+                              '\n'
+                              '    enableSpy.mockRestore();\n'
+                              '  });\n'
+                              '});\n'
+                              '\n'
+                              "describe('AgentCore.runInAgentFrames', () => {\n"
+                              '  // The deferred-approval `respond` callback that '
+                              'AgentCore hands to the\n'
+                              '  // UI must restore both ALS frames the agent normally '
+                              'runs under, so any\n'
+                              '  // tool body resumed via approval — including ones '
+                              'that trigger LLM\n'
+                              "  // calls — sees the agent's ContentGenerator "
+                              '(modalities, auth) and is\n'
+                              '  // attributed to the agent in token stats.\n',
+             'review_after': '    expect(enableSpy).toHaveBeenCalledTimes(1);\n'
+                             '\n'
+                             '    enableSpy.mockRestore();\n'
+                             '  });\n'
+                             '});\n'
+                             '\n'
+                             "describe('AgentCore round terminal reason', () => {\n"
+                             "  // A round that requests no tools is the agent's "
+                             'report only when the model\n'
+                             '  // wrote it to the end. These drive the reasoning loop '
+                             'over one round whose\n'
+                             '  // only difference is the terminal reason the provider '
+                             'returned.\n'
+                             '  function makeTruncationCore(): AgentCore {\n'
+                             '    const runtimeContext = {\n'
+                             "      getSessionId: () => 'test-session',\n"
+                             '      getSkipLoopDetection: () => true,\n'
+                             "      getModel: () => 'test-model',\n"
+                             '      getMaxToolCallsPerTurn: () => 1000,\n'
+                             '      isMaxToolCallsPerTurnExplicit: () => false,\n'
+                             '      getDebugLogger: () => ({\n'
+                             '        debug: () => {},\n'
+                             '        info: () => {},\n'
+                             '        warn: () => {},\n'
+                             '        error: () => {},\n'
+                             '      }),\n'
+                             '    } as unknown as Config;\n'
+                             '    return new AgentCore(\n'
+                             "      'reader',\n"
+                             '      runtimeContext,\n'
+                             "      { systemPrompt: '' } as PromptConfig,\n"
+                             "      { model: 'test-model' } as ModelConfig,\n"
+                             '      { max_turns: 5 } as RunConfig,\n'
+                             '    );\n'
+                             '  }\n'
+                             '\n'
+                             '  function makeChat(reason: FinishReason): GeminiChat {\n'
+                             '    return {\n'
+                             '      getHistoryFunctionResponseIds: () => [],\n'
+                             '      sendMessageStream: async () =>\n'
+                             '        (async function* () {\n'
+                             '          yield {\n'
+                             '            type: StreamEventType.CHUNK,\n'
+                             '            value: {\n'
+                             '              candidates: [\n'
+                             '                {\n'
+                             "                  content: { parts: [{ text: 'Writing "
+                             "note_18:' }] },\n"
+                             '                  finishReason: reason,\n'
+                             '                },\n'
+                             '              ],\n'
+                             '            },\n'
+                             '          };\n'
+                             '        })(),\n'
+                             '    } as unknown as GeminiChat;\n'
+                             '  }\n'
+                             '\n'
+                             '  async function runOneRound(\n'
+                             '    reason: FinishReason,\n'
+                             '  ): Promise<ReasoningLoopResult> {\n'
+                             '    const core = makeTruncationCore();\n'
+                             '    return await (\n'
+                             '      core as unknown as {\n'
+                             '        _runReasoningLoopInner: (\n'
+                             '          chat: GeminiChat,\n'
+                             '          initialMessages: unknown[],\n'
+                             '          toolsList: FunctionDeclaration[],\n'
+                             '          abortController: AbortController,\n'
+                             '        ) => Promise<ReasoningLoopResult>;\n'
+                             '      }\n'
+                             '    )._runReasoningLoopInner(\n'
+                             '      makeChat(reason),\n'
+                             "      [{ role: 'user', parts: [{ text: 'summarize' }] "
+                             '}],\n'
+                             '      [],\n'
+                             '      new AbortController(),\n'
+                             '    );\n'
+                             '  }\n'
+                             '\n'
+                             "  it('stops the agent when its generation was cut off "
+                             "before the message ended', async () => {\n"
+                             '    const result = await '
+                             'runOneRound(FinishReason.MAX_TOKENS);\n'
+                             '\n'
+                             '    '
+                             'expect(result.terminateMode).toBe(AgentTerminateMode.INCOMPLETE_GENERATION);\n'
+                             '    expect(result.turnsUsed).toBe(1);\n'
+                             '    // The interrupted prefix is kept as evidence; what '
+                             'it is not is a report.\n'
+                             "    expect(result.text).toBe('Writing note_18:');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('takes a self-ended generation with no tool call as "
+                             "the final report', async () => {\n"
+                             '    const result = await '
+                             'runOneRound(FinishReason.STOP);\n'
+                             '\n'
+                             '    expect(result.terminateMode).toBeNull();\n'
+                             "    expect(result.text).toBe('Writing note_18:');\n"
+                             '  });\n'
+                             '});\n'
+                             '\n'
+                             "describe('AgentCore.runInAgentFrames', () => {\n"
+                             '  // The deferred-approval `respond` callback that '
+                             'AgentCore hands to the\n'
+                             '  // UI must restore both ALS frames the agent normally '
+                             'runs under, so any\n'
+                             '  // tool body resumed via approval — including ones '
+                             'that trigger LLM\n'
+                             "  // calls — sees the agent's ContentGenerator "
+                             '(modalities, auth) and is\n'
+                             '  // attributed to the agent in token stats.\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-core.test.ts:landmark-3',
+             'path': 'packages/core/src/agents/runtime/agent-core.test.ts',
              'before': '      core as unknown as {\n'
                        '        _runReasoningLoopInner: () => '
                        'Promise<ReasoningLoopResult>;\n'
@@ -7042,7 +13091,24 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '  runWithAgentContext,\n'
                        '  runWithRuntimeContentGenerator,\n'
                        '  spawnBlockReason,\n'
-                       '  type RuntimeContentGeneratorView,\n',
+                       '  type RuntimeContentGeneratorView,\n'
+                       "} from './agent-context.js';\n"
+                       'import {\n'
+                       '  createDuplicateProviderToolCallResponse,\n'
+                       '  findRepeatedDuplicateProviderToolCall,\n'
+                       '  GeminiEventType,\n'
+                       '  markDuplicateProviderToolCallResponseSent,\n'
+                       '  type ServerGeminiStreamEvent,\n'
+                       '  type ToolCallRequestInfo,\n'
+                       "} from '../../core/turn.js';\n"
+                       'import { LoopDetectionService } from '
+                       "'../../services/loopDetectionService.js';\n"
+                       'import {\n'
+                       '  CoreToolScheduler,\n'
+                       '  type ToolCall,\n'
+                       '  type ExecutingToolCall,\n'
+                       '  type WaitingToolCall,\n'
+                       "} from '../../core/coreToolScheduler.js';\n",
              'after': 'import { subagentNameContext } from '
                       "'../../utils/subagentNameContext.js';\n"
                       'import { runWithInvocationContext } from '
@@ -7057,7 +13123,26 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  runWithAgentContext,\n'
                       '  runWithRuntimeContentGenerator,\n'
                       '  spawnBlockReason,\n'
-                      '  type RuntimeContentGeneratorView,\n',
+                      '  type RuntimeContentGeneratorView,\n'
+                      "} from './agent-context.js';\n"
+                      'import {\n'
+                      '  createDuplicateProviderToolCallResponse,\n'
+                      '  describeIncompleteGeneration,\n'
+                      '  findRepeatedDuplicateProviderToolCall,\n'
+                      '  GeminiEventType,\n'
+                      '  markDuplicateProviderToolCallResponseSent,\n'
+                      '  type ServerGeminiStreamEvent,\n'
+                      '  type ToolCallRequestInfo,\n'
+                      "} from '../../core/turn.js';\n"
+                      'import { LoopDetectionService } from '
+                      "'../../services/loopDetectionService.js';\n"
+                      "import type { LoopType } from '../../telemetry/types.js';\n"
+                      'import {\n'
+                      '  CoreToolScheduler,\n'
+                      '  type ToolCall,\n'
+                      '  type ExecutingToolCall,\n'
+                      '  type WaitingToolCall,\n'
+                      "} from '../../core/coreToolScheduler.js';\n",
              'review_before': 'import { subagentNameContext } from '
                               "'../../utils/subagentNameContext.js';\n"
                               'import { runWithInvocationContext } from '
@@ -7071,7 +13156,24 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  runWithAgentContext,\n'
                               '  runWithRuntimeContentGenerator,\n'
                               '  spawnBlockReason,\n'
-                              '  type RuntimeContentGeneratorView,\n',
+                              '  type RuntimeContentGeneratorView,\n'
+                              "} from './agent-context.js';\n"
+                              'import {\n'
+                              '  createDuplicateProviderToolCallResponse,\n'
+                              '  findRepeatedDuplicateProviderToolCall,\n'
+                              '  GeminiEventType,\n'
+                              '  markDuplicateProviderToolCallResponseSent,\n'
+                              '  type ServerGeminiStreamEvent,\n'
+                              '  type ToolCallRequestInfo,\n'
+                              "} from '../../core/turn.js';\n"
+                              'import { LoopDetectionService } from '
+                              "'../../services/loopDetectionService.js';\n"
+                              'import {\n'
+                              '  CoreToolScheduler,\n'
+                              '  type ToolCall,\n'
+                              '  type ExecutingToolCall,\n'
+                              '  type WaitingToolCall,\n'
+                              "} from '../../core/coreToolScheduler.js';\n",
              'review_after': 'import { subagentNameContext } from '
                              "'../../utils/subagentNameContext.js';\n"
                              'import { runWithInvocationContext } from '
@@ -7086,50 +13188,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  runWithAgentContext,\n'
                              '  runWithRuntimeContentGenerator,\n'
                              '  spawnBlockReason,\n'
-                             '  type RuntimeContentGeneratorView,\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-2',
-             'path': 'packages/core/src/agents/runtime/agent-core.ts',
-             'before': '  GeminiEventType,\n'
-                       '  markDuplicateProviderToolCallResponseSent,\n'
-                       '  type ServerGeminiStreamEvent,\n'
-                       '  type ToolCallRequestInfo,\n'
-                       "} from '../../core/turn.js';\n"
-                       'import { LoopDetectionService } from '
-                       "'../../services/loopDetectionService.js';\n"
-                       'import {\n'
-                       '  CoreToolScheduler,\n'
-                       '  type ToolCall,\n'
-                       '  type ExecutingToolCall,\n'
-                       '  type WaitingToolCall,\n'
-                       "} from '../../core/coreToolScheduler.js';\n",
-             'after': '  GeminiEventType,\n'
-                      '  markDuplicateProviderToolCallResponseSent,\n'
-                      '  type ServerGeminiStreamEvent,\n'
-                      '  type ToolCallRequestInfo,\n'
-                      "} from '../../core/turn.js';\n"
-                      'import { LoopDetectionService } from '
-                      "'../../services/loopDetectionService.js';\n"
-                      "import type { LoopType } from '../../telemetry/types.js';\n"
-                      'import {\n'
-                      '  CoreToolScheduler,\n'
-                      '  type ToolCall,\n'
-                      '  type ExecutingToolCall,\n'
-                      '  type WaitingToolCall,\n'
-                      "} from '../../core/coreToolScheduler.js';\n",
-             'review_before': '  GeminiEventType,\n'
-                              '  markDuplicateProviderToolCallResponseSent,\n'
-                              '  type ServerGeminiStreamEvent,\n'
-                              '  type ToolCallRequestInfo,\n'
-                              "} from '../../core/turn.js';\n"
-                              'import { LoopDetectionService } from '
-                              "'../../services/loopDetectionService.js';\n"
-                              'import {\n'
-                              '  CoreToolScheduler,\n'
-                              '  type ToolCall,\n'
-                              '  type ExecutingToolCall,\n'
-                              '  type WaitingToolCall,\n'
-                              "} from '../../core/coreToolScheduler.js';\n",
-             'review_after': '  GeminiEventType,\n'
+                             '  type RuntimeContentGeneratorView,\n'
+                             "} from './agent-context.js';\n"
+                             'import {\n'
+                             '  createDuplicateProviderToolCallResponse,\n'
+                             '  describeIncompleteGeneration,\n'
+                             '  findRepeatedDuplicateProviderToolCall,\n'
+                             '  GeminiEventType,\n'
                              '  markDuplicateProviderToolCallResponseSent,\n'
                              '  type ServerGeminiStreamEvent,\n'
                              '  type ToolCallRequestInfo,\n'
@@ -7144,7 +13209,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  type ExecutingToolCall,\n'
                              '  type WaitingToolCall,\n'
                              "} from '../../core/coreToolScheduler.js';\n"},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-3',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-2',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '  GenerateContentConfig,\n'
                        '  FunctionDeclaration,\n'
@@ -7206,7 +13271,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "} from '../../core/toolCallIdUtils.js';\n"
                              'import type {\n'
                              '  PromptConfig,\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-4',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-3',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '  ToolConfig,\n'
                        '  AgentMessage,\n'
@@ -7258,7 +13323,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  AgentToolResultEvent,\n'
                              '  AgentToolOutputUpdateEvent,\n'
                              '  AgentUsageEvent,\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-5',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-4',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '  /** The final model text response (empty if terminated by '
                        'abort/limits). */\n'
@@ -7337,7 +13402,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' * Options for configuring a reasoning loop invocation.\n'
                              ' */\n'
                              'export interface ReasoningLoopOptions {\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-6',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-5',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': ' *\n'
                        ' * It does NOT manage lifecycle (start/stop/terminate), abort '
@@ -7478,7 +13543,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  readonly promptConfig: PromptConfig;\n'
                              '  readonly modelConfig: ModelConfig;\n'
                              '  readonly runConfig: RunConfig;\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-7',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-6',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': "    // carries the parent's exact rendered systemInstruction "
                        'so the fork\n'
@@ -7558,7 +13623,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const systemInstruction = '
                              'this.buildChatSystemPrompt(context, options);\n'
                              '      if (systemInstruction) {\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-8',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-7',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '    abortController: AbortController,\n'
                        '    options?: ReasoningLoopOptions,\n'
@@ -7632,7 +13697,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'a tool-result loop.\n'
                              '    const duplicateProviderToolCallResponseIds = new '
                              'Set<string>();\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-9',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-8',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      if (abortController.signal.aborted) {\n'
                        '        terminateMode = AgentTerminateMode.CANCELLED;\n'
@@ -7698,7 +13763,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '* 60);\n'
                              '      if (options?.maxTimeMinutes && durationMin >= '
                              'options.maxTimeMinutes) {\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-10',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-9',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      // parent propagation; the try/finally below guarantees '
                        'reverse-cleanup\n'
@@ -7769,7 +13834,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            abortSignal: roundAbortController.signal,\n'
                              '            tools: [{ functionDeclarations: toolsList '
                              '}],\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-11',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-10',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '            DEFAULT_QWEN_MODEL,\n'
                        '          messageParams,\n'
@@ -7783,51 +13848,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        } as AgentRoundEvent);\n'
                        '\n'
                        '        const functionCalls: FunctionCall[] = [];\n'
-                       "        let roundText = '';\n",
-             'after': '            DEFAULT_QWEN_MODEL,\n'
-                      '          messageParams,\n'
-                      '          promptId,\n'
-                      '        );\n'
-                      '        this.eventEmitter?.emit(AgentEventType.ROUND_START, {\n'
-                      '          subagentId: this.subagentId,\n'
-                      '          round: this.reasoningTurnsUsed,\n'
-                      '          promptId,\n'
-                      '          timestamp: Date.now(),\n'
-                      '        } as AgentRoundEvent);\n'
-                      '\n'
-                      '        const functionCalls: FunctionCall[] = [];\n'
-                      "        let roundText = '';\n",
-             'review_before': '            DEFAULT_QWEN_MODEL,\n'
-                              '          messageParams,\n'
-                              '          promptId,\n'
-                              '        );\n'
-                              '        '
-                              'this.eventEmitter?.emit(AgentEventType.ROUND_START, {\n'
-                              '          subagentId: this.subagentId,\n'
-                              '          round: turnCounter,\n'
-                              '          promptId,\n'
-                              '          timestamp: Date.now(),\n'
-                              '        } as AgentRoundEvent);\n'
-                              '\n'
-                              '        const functionCalls: FunctionCall[] = [];\n'
-                              "        let roundText = '';\n",
-             'review_after': '            DEFAULT_QWEN_MODEL,\n'
-                             '          messageParams,\n'
-                             '          promptId,\n'
-                             '        );\n'
-                             '        '
-                             'this.eventEmitter?.emit(AgentEventType.ROUND_START, {\n'
-                             '          subagentId: this.subagentId,\n'
-                             '          round: this.reasoningTurnsUsed,\n'
-                             '          promptId,\n'
-                             '          timestamp: Date.now(),\n'
-                             '        } as AgentRoundEvent);\n'
-                             '\n'
-                             '        const functionCalls: FunctionCall[] = [];\n'
-                             "        let roundText = '';\n"},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-12',
-             'path': 'packages/core/src/agents/runtime/agent-core.ts',
-             'before': '\n'
+                       "        let roundText = '';\n"
+                       "        let roundThoughtText = '';\n"
+                       '        let lastUsage: GenerateContentResponseUsageMetadata | '
+                       'undefined =\n'
+                       '          undefined;\n'
+                       '        let currentResponseId: string | undefined = '
+                       'undefined;\n'
+                       '        let wasOutputTruncated = false;\n'
+                       '        let loopDetectedInStream = false;\n'
+                       '\n'
                        '        for await (const streamEvent of responseStream) {\n'
                        '          if (roundAbortController.signal.aborted) {\n'
                        '            return {\n'
@@ -7842,7 +13872,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '          // retry does not inherit stale data (e.g. '
                        'wasOutputTruncated) from a\n'
                        '          // previous attempt that may have hit MAX_TOKENS.\n',
-             'after': '\n'
+             'after': '            DEFAULT_QWEN_MODEL,\n'
+                      '          messageParams,\n'
+                      '          promptId,\n'
+                      '        );\n'
+                      '        this.eventEmitter?.emit(AgentEventType.ROUND_START, {\n'
+                      '          subagentId: this.subagentId,\n'
+                      '          round: this.reasoningTurnsUsed,\n'
+                      '          promptId,\n'
+                      '          timestamp: Date.now(),\n'
+                      '        } as AgentRoundEvent);\n'
+                      '\n'
+                      '        const functionCalls: FunctionCall[] = [];\n'
+                      "        let roundText = '';\n"
+                      "        let roundThoughtText = '';\n"
+                      '        let lastUsage: GenerateContentResponseUsageMetadata | '
+                      'undefined =\n'
+                      '          undefined;\n'
+                      '        let currentResponseId: string | undefined = undefined;\n'
+                      '        let wasOutputTruncated = false;\n'
+                      '        let roundFinishReason: FinishReason | undefined;\n'
+                      '        let loopDetectedInStream = false;\n'
+                      '\n'
                       '        for await (const streamEvent of responseStream) {\n'
                       '          if (roundAbortController.signal.aborted) {\n'
                       '            return {\n'
@@ -7858,7 +13909,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          // retry does not inherit stale data (e.g. '
                       'wasOutputTruncated) from a\n'
                       '          // previous attempt that may have hit MAX_TOKENS.\n',
-             'review_before': '\n'
+             'review_before': '            DEFAULT_QWEN_MODEL,\n'
+                              '          messageParams,\n'
+                              '          promptId,\n'
+                              '        );\n'
+                              '        '
+                              'this.eventEmitter?.emit(AgentEventType.ROUND_START, {\n'
+                              '          subagentId: this.subagentId,\n'
+                              '          round: turnCounter,\n'
+                              '          promptId,\n'
+                              '          timestamp: Date.now(),\n'
+                              '        } as AgentRoundEvent);\n'
+                              '\n'
+                              '        const functionCalls: FunctionCall[] = [];\n'
+                              "        let roundText = '';\n"
+                              "        let roundThoughtText = '';\n"
+                              '        let lastUsage: '
+                              'GenerateContentResponseUsageMetadata | undefined =\n'
+                              '          undefined;\n'
+                              '        let currentResponseId: string | undefined = '
+                              'undefined;\n'
+                              '        let wasOutputTruncated = false;\n'
+                              '        let loopDetectedInStream = false;\n'
+                              '\n'
                               '        for await (const streamEvent of responseStream) '
                               '{\n'
                               '          if (roundAbortController.signal.aborted) {\n'
@@ -7876,7 +13949,31 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'wasOutputTruncated) from a\n'
                               '          // previous attempt that may have hit '
                               'MAX_TOKENS.\n',
-             'review_after': '\n'
+             'review_after': '            DEFAULT_QWEN_MODEL,\n'
+                             '          messageParams,\n'
+                             '          promptId,\n'
+                             '        );\n'
+                             '        '
+                             'this.eventEmitter?.emit(AgentEventType.ROUND_START, {\n'
+                             '          subagentId: this.subagentId,\n'
+                             '          round: this.reasoningTurnsUsed,\n'
+                             '          promptId,\n'
+                             '          timestamp: Date.now(),\n'
+                             '        } as AgentRoundEvent);\n'
+                             '\n'
+                             '        const functionCalls: FunctionCall[] = [];\n'
+                             "        let roundText = '';\n"
+                             "        let roundThoughtText = '';\n"
+                             '        let lastUsage: '
+                             'GenerateContentResponseUsageMetadata | undefined =\n'
+                             '          undefined;\n'
+                             '        let currentResponseId: string | undefined = '
+                             'undefined;\n'
+                             '        let wasOutputTruncated = false;\n'
+                             '        let roundFinishReason: FinishReason | '
+                             'undefined;\n'
+                             '        let loopDetectedInStream = false;\n'
+                             '\n'
                              '        for await (const streamEvent of responseStream) '
                              '{\n'
                              '          if (roundAbortController.signal.aborted) {\n'
@@ -7895,9 +13992,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'wasOutputTruncated) from a\n'
                              '          // previous attempt that may have hit '
                              'MAX_TOKENS.\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-13',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-11',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
-             'before': '            lastUsage = undefined;\n'
+             'before': '            functionCalls.length = 0;\n'
+                       "            roundText = '';\n"
+                       "            roundThoughtText = '';\n"
+                       '            lastUsage = undefined;\n'
                        '            currentResponseId = undefined;\n'
                        '            wasOutputTruncated = false;\n'
                        '            continue;\n'
@@ -7926,10 +14026,44 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '            // Track the response ID for tool call '
                        'correlation\n'
                        '            if (resp.responseId) {\n'
-                       '              currentResponseId = resp.responseId;\n',
-             'after': '            lastUsage = undefined;\n'
+                       '              currentResponseId = resp.responseId;\n'
+                       '            }\n'
+                       '            const chunkFunctionCalls = resp.functionCalls ?? '
+                       '[];\n'
+                       '            functionCalls.push(...chunkFunctionCalls);\n'
+                       '            if (\n'
+                       '              resp.candidates?.[0]?.finishReason === '
+                       'FinishReason.MAX_TOKENS\n'
+                       '            ) {\n'
+                       '              wasOutputTruncated = true;\n'
+                       '            }\n'
+                       '            const content = resp.candidates?.[0]?.content;\n'
+                       '            const parts = content?.parts || [];\n'
+                       '            for (const p of parts) {\n'
+                       '              const txt = p.text;\n'
+                       '              const isThought = p.thought ?? false;\n'
+                       '              if (txt && isThought) roundThoughtText += txt;\n'
+                       '              if (txt && !isThought) roundText += txt;\n'
+                       '              if (txt)\n'
+                       '                '
+                       'this.eventEmitter?.emit(AgentEventType.STREAM_TEXT, {\n'
+                       '                  subagentId: this.subagentId,\n'
+                       '                  runId,\n'
+                       '                  round: turnCounter,\n'
+                       '                  text: txt,\n'
+                       '                  thought: isThought,\n'
+                       '                  timestamp: Date.now(),\n'
+                       '                });\n'
+                       '            }\n'
+                       '            if (resp.usageMetadata) lastUsage = '
+                       'resp.usageMetadata;\n',
+             'after': '            functionCalls.length = 0;\n'
+                      "            roundText = '';\n"
+                      "            roundThoughtText = '';\n"
+                      '            lastUsage = undefined;\n'
                       '            currentResponseId = undefined;\n'
                       '            wasOutputTruncated = false;\n'
+                      '            roundFinishReason = undefined;\n'
                       '            continue;\n'
                       '          }\n'
                       '\n'
@@ -7975,8 +14109,44 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            const resp = streamEvent.value;\n'
                       '            // Track the response ID for tool call correlation\n'
                       '            if (resp.responseId) {\n'
-                      '              currentResponseId = resp.responseId;\n',
-             'review_before': '            lastUsage = undefined;\n'
+                      '              currentResponseId = resp.responseId;\n'
+                      '            }\n'
+                      '            const chunkFunctionCalls = resp.functionCalls ?? '
+                      '[];\n'
+                      '            functionCalls.push(...chunkFunctionCalls);\n'
+                      '            const chunkFinishReason = '
+                      'resp.candidates?.[0]?.finishReason;\n'
+                      '            if (chunkFinishReason) {\n'
+                      '              roundFinishReason = chunkFinishReason;\n'
+                      '              if (chunkFinishReason === '
+                      'FinishReason.MAX_TOKENS) {\n'
+                      '                wasOutputTruncated = true;\n'
+                      '              }\n'
+                      '            }\n'
+                      '            const content = resp.candidates?.[0]?.content;\n'
+                      '            const parts = content?.parts || [];\n'
+                      '            for (const p of parts) {\n'
+                      '              const txt = p.text;\n'
+                      '              const isThought = p.thought ?? false;\n'
+                      '              if (txt && isThought) roundThoughtText += txt;\n'
+                      '              if (txt && !isThought) roundText += txt;\n'
+                      '              if (txt)\n'
+                      '                '
+                      'this.eventEmitter?.emit(AgentEventType.STREAM_TEXT, {\n'
+                      '                  subagentId: this.subagentId,\n'
+                      '                  runId,\n'
+                      '                  round: this.reasoningTurnsUsed,\n'
+                      '                  text: txt,\n'
+                      '                  thought: isThought,\n'
+                      '                  timestamp: Date.now(),\n'
+                      '                });\n'
+                      '            }\n'
+                      '            if (resp.usageMetadata) lastUsage = '
+                      'resp.usageMetadata;\n',
+             'review_before': '            functionCalls.length = 0;\n'
+                              "            roundText = '';\n"
+                              "            roundThoughtText = '';\n"
+                              '            lastUsage = undefined;\n'
                               '            currentResponseId = undefined;\n'
                               '            wasOutputTruncated = false;\n'
                               '            continue;\n'
@@ -8005,10 +14175,46 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '            // Track the response ID for tool call '
                               'correlation\n'
                               '            if (resp.responseId) {\n'
-                              '              currentResponseId = resp.responseId;\n',
-             'review_after': '            lastUsage = undefined;\n'
+                              '              currentResponseId = resp.responseId;\n'
+                              '            }\n'
+                              '            const chunkFunctionCalls = '
+                              'resp.functionCalls ?? [];\n'
+                              '            functionCalls.push(...chunkFunctionCalls);\n'
+                              '            if (\n'
+                              '              resp.candidates?.[0]?.finishReason === '
+                              'FinishReason.MAX_TOKENS\n'
+                              '            ) {\n'
+                              '              wasOutputTruncated = true;\n'
+                              '            }\n'
+                              '            const content = '
+                              'resp.candidates?.[0]?.content;\n'
+                              '            const parts = content?.parts || [];\n'
+                              '            for (const p of parts) {\n'
+                              '              const txt = p.text;\n'
+                              '              const isThought = p.thought ?? false;\n'
+                              '              if (txt && isThought) roundThoughtText += '
+                              'txt;\n'
+                              '              if (txt && !isThought) roundText += txt;\n'
+                              '              if (txt)\n'
+                              '                '
+                              'this.eventEmitter?.emit(AgentEventType.STREAM_TEXT, {\n'
+                              '                  subagentId: this.subagentId,\n'
+                              '                  runId,\n'
+                              '                  round: turnCounter,\n'
+                              '                  text: txt,\n'
+                              '                  thought: isThought,\n'
+                              '                  timestamp: Date.now(),\n'
+                              '                });\n'
+                              '            }\n'
+                              '            if (resp.usageMetadata) lastUsage = '
+                              'resp.usageMetadata;\n',
+             'review_after': '            functionCalls.length = 0;\n'
+                             "            roundText = '';\n"
+                             "            roundThoughtText = '';\n"
+                             '            lastUsage = undefined;\n'
                              '            currentResponseId = undefined;\n'
                              '            wasOutputTruncated = false;\n'
+                             '            roundFinishReason = undefined;\n'
                              '            continue;\n'
                              '          }\n'
                              '\n'
@@ -8057,56 +14263,27 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            // Track the response ID for tool call '
                              'correlation\n'
                              '            if (resp.responseId) {\n'
-                             '              currentResponseId = resp.responseId;\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-14',
-             'path': 'packages/core/src/agents/runtime/agent-core.ts',
-             'before': '              if (txt && isThought) roundThoughtText += txt;\n'
-                       '              if (txt && !isThought) roundText += txt;\n'
-                       '              if (txt)\n'
-                       '                '
-                       'this.eventEmitter?.emit(AgentEventType.STREAM_TEXT, {\n'
-                       '                  subagentId: this.subagentId,\n'
-                       '                  runId,\n'
-                       '                  round: turnCounter,\n'
-                       '                  text: txt,\n'
-                       '                  thought: isThought,\n'
-                       '                  timestamp: Date.now(),\n'
-                       '                });\n'
-                       '            }\n'
-                       '            if (resp.usageMetadata) lastUsage = '
-                       'resp.usageMetadata;\n',
-             'after': '              if (txt && isThought) roundThoughtText += txt;\n'
-                      '              if (txt && !isThought) roundText += txt;\n'
-                      '              if (txt)\n'
-                      '                '
-                      'this.eventEmitter?.emit(AgentEventType.STREAM_TEXT, {\n'
-                      '                  subagentId: this.subagentId,\n'
-                      '                  runId,\n'
-                      '                  round: this.reasoningTurnsUsed,\n'
-                      '                  text: txt,\n'
-                      '                  thought: isThought,\n'
-                      '                  timestamp: Date.now(),\n'
-                      '                });\n'
-                      '            }\n'
-                      '            if (resp.usageMetadata) lastUsage = '
-                      'resp.usageMetadata;\n',
-             'review_before': '              if (txt && isThought) roundThoughtText += '
-                              'txt;\n'
-                              '              if (txt && !isThought) roundText += txt;\n'
-                              '              if (txt)\n'
-                              '                '
-                              'this.eventEmitter?.emit(AgentEventType.STREAM_TEXT, {\n'
-                              '                  subagentId: this.subagentId,\n'
-                              '                  runId,\n'
-                              '                  round: turnCounter,\n'
-                              '                  text: txt,\n'
-                              '                  thought: isThought,\n'
-                              '                  timestamp: Date.now(),\n'
-                              '                });\n'
-                              '            }\n'
-                              '            if (resp.usageMetadata) lastUsage = '
-                              'resp.usageMetadata;\n',
-             'review_after': '              if (txt && isThought) roundThoughtText += '
+                             '              currentResponseId = resp.responseId;\n'
+                             '            }\n'
+                             '            const chunkFunctionCalls = '
+                             'resp.functionCalls ?? [];\n'
+                             '            functionCalls.push(...chunkFunctionCalls);\n'
+                             '            const chunkFinishReason = '
+                             'resp.candidates?.[0]?.finishReason;\n'
+                             '            if (chunkFinishReason) {\n'
+                             '              roundFinishReason = chunkFinishReason;\n'
+                             '              if (chunkFinishReason === '
+                             'FinishReason.MAX_TOKENS) {\n'
+                             '                wasOutputTruncated = true;\n'
+                             '              }\n'
+                             '            }\n'
+                             '            const content = '
+                             'resp.candidates?.[0]?.content;\n'
+                             '            const parts = content?.parts || [];\n'
+                             '            for (const p of parts) {\n'
+                             '              const txt = p.text;\n'
+                             '              const isThought = p.thought ?? false;\n'
+                             '              if (txt && isThought) roundThoughtText += '
                              'txt;\n'
                              '              if (txt && !isThought) roundText += txt;\n'
                              '              if (txt)\n'
@@ -8122,7 +14299,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            }\n'
                              '            if (resp.usageMetadata) lastUsage = '
                              'resp.usageMetadata;\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-15',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-12',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '        }\n'
                        '\n'
@@ -8311,9 +14488,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            handledProviderToolCallIds,\n'
                              '            duplicateProviderToolCallResponseIds,\n'
                              '          );\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-16',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-13',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
-             'before': '              immediateExternalInputs,\n'
+             'before': '          }\n'
+                       '          if ((currentMessages[0]?.parts?.length ?? 0) === 0) '
+                       '{\n'
+                       '            terminateMode = AgentTerminateMode.ERROR;\n'
+                       '            break;\n'
+                       '          }\n'
+                       '        } else {\n'
+                       '          const immediateExternalInputs = '
+                       'this.drainExternalInputs(options);\n'
+                       '          if (immediateExternalInputs.length > 0) {\n'
+                       '            currentMessages = this.externalInputsToContent(\n'
+                       '              immediateExternalInputs,\n'
                        '            );\n'
                        '            '
                        'this.emitExternalInputEvents(immediateExternalInputs);\n'
@@ -8339,7 +14527,39 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '              terminateMode = waitResult.terminateMode;\n'
                        '              break;\n'
                        '            }\n',
-             'after': '              immediateExternalInputs,\n'
+             'after': '          }\n'
+                      '          if ((currentMessages[0]?.parts?.length ?? 0) === 0) '
+                      '{\n'
+                      '            terminateMode = AgentTerminateMode.ERROR;\n'
+                      '            break;\n'
+                      '          }\n'
+                      '        } else {\n'
+                      "          // A round that asked for no tools is the agent's "
+                      'report only if\n'
+                      '          // the model wrote it to the end. When generation was '
+                      'stopped from\n'
+                      '          // outside, that silence is the cut itself and the '
+                      'round holds the\n'
+                      '          // interrupted prefix, so the agent stops here and '
+                      'says so rather\n'
+                      '          // than handing the parent a fragment shaped like a '
+                      'conclusion.\n'
+                      '          if (\n'
+                      '            describeIncompleteGeneration(\n'
+                      '              roundFinishReason,\n'
+                      '              this.reasoningTurnsUsed,\n'
+                      '            )\n'
+                      '          ) {\n'
+                      '            finalText = roundText.trim();\n'
+                      '            terminateMode = '
+                      'AgentTerminateMode.INCOMPLETE_GENERATION;\n'
+                      '            break;\n'
+                      '          }\n'
+                      '          const immediateExternalInputs = '
+                      'this.drainExternalInputs(options);\n'
+                      '          if (immediateExternalInputs.length > 0) {\n'
+                      '            currentMessages = this.externalInputsToContent(\n'
+                      '              immediateExternalInputs,\n'
                       '            );\n'
                       '            '
                       'this.emitExternalInputEvents(immediateExternalInputs);\n'
@@ -8365,7 +14585,19 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '              terminateMode = waitResult.terminateMode;\n'
                       '              break;\n'
                       '            }\n',
-             'review_before': '              immediateExternalInputs,\n'
+             'review_before': '          }\n'
+                              '          if ((currentMessages[0]?.parts?.length ?? 0) '
+                              '=== 0) {\n'
+                              '            terminateMode = AgentTerminateMode.ERROR;\n'
+                              '            break;\n'
+                              '          }\n'
+                              '        } else {\n'
+                              '          const immediateExternalInputs = '
+                              'this.drainExternalInputs(options);\n'
+                              '          if (immediateExternalInputs.length > 0) {\n'
+                              '            currentMessages = '
+                              'this.externalInputsToContent(\n'
+                              '              immediateExternalInputs,\n'
                               '            );\n'
                               '            '
                               'this.emitExternalInputEvents(immediateExternalInputs);\n'
@@ -8392,7 +14624,40 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'waitResult.terminateMode;\n'
                               '              break;\n'
                               '            }\n',
-             'review_after': '              immediateExternalInputs,\n'
+             'review_after': '          }\n'
+                             '          if ((currentMessages[0]?.parts?.length ?? 0) '
+                             '=== 0) {\n'
+                             '            terminateMode = AgentTerminateMode.ERROR;\n'
+                             '            break;\n'
+                             '          }\n'
+                             '        } else {\n'
+                             '          // A round that asked for no tools is the '
+                             "agent's report only if\n"
+                             '          // the model wrote it to the end. When '
+                             'generation was stopped from\n'
+                             '          // outside, that silence is the cut itself and '
+                             'the round holds the\n'
+                             '          // interrupted prefix, so the agent stops here '
+                             'and says so rather\n'
+                             '          // than handing the parent a fragment shaped '
+                             'like a conclusion.\n'
+                             '          if (\n'
+                             '            describeIncompleteGeneration(\n'
+                             '              roundFinishReason,\n'
+                             '              this.reasoningTurnsUsed,\n'
+                             '            )\n'
+                             '          ) {\n'
+                             '            finalText = roundText.trim();\n'
+                             '            terminateMode = '
+                             'AgentTerminateMode.INCOMPLETE_GENERATION;\n'
+                             '            break;\n'
+                             '          }\n'
+                             '          const immediateExternalInputs = '
+                             'this.drainExternalInputs(options);\n'
+                             '          if (immediateExternalInputs.length > 0) {\n'
+                             '            currentMessages = '
+                             'this.externalInputsToContent(\n'
+                             '              immediateExternalInputs,\n'
                              '            );\n'
                              '            '
                              'this.emitExternalInputEvents(immediateExternalInputs);\n'
@@ -8418,9 +14683,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              terminateMode = waitResult.terminateMode;\n'
                              '              break;\n'
                              '            }\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-17',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-14',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
-             'before': '              finalText = roundText.trim();\n'
+             'before': '                  },\n'
+                       '                ],\n'
+                       '              },\n'
+                       '            ];\n'
+                       '            continue;\n'
+                       '          } else {\n'
+                       "            // No tool calls — treat this as the model's final "
+                       'answer.\n'
+                       '            if (roundText && roundText.trim().length > 0) {\n'
+                       '              finalText = roundText.trim();\n'
                        '              // Emit ROUND_END for the final round so all '
                        'consumers see it.\n'
                        '              // Previously this was skipped, requiring '
@@ -8437,7 +14711,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '              // null terminateMode = normal text completion\n'
                        '              break;\n'
                        '            }\n',
-             'after': '              finalText = roundText.trim();\n'
+             'after': '                  },\n'
+                      '                ],\n'
+                      '              },\n'
+                      '            ];\n'
+                      '            continue;\n'
+                      '          } else {\n'
+                      '            // No tool calls and a self-ended generation — this '
+                      'is the\n'
+                      "            // model's final answer.\n"
+                      '            if (roundText && roundText.trim().length > 0) {\n'
+                      '              finalText = roundText.trim();\n'
                       '              // Emit ROUND_END for the final round so all '
                       'consumers see it.\n'
                       '              // Previously this was skipped, requiring '
@@ -8454,7 +14738,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '              // null terminateMode = normal text completion\n'
                       '              break;\n'
                       '            }\n',
-             'review_before': '              finalText = roundText.trim();\n'
+             'review_before': '                  },\n'
+                              '                ],\n'
+                              '              },\n'
+                              '            ];\n'
+                              '            continue;\n'
+                              '          } else {\n'
+                              '            // No tool calls — treat this as the '
+                              "model's final answer.\n"
+                              '            if (roundText && roundText.trim().length > '
+                              '0) {\n'
+                              '              finalText = roundText.trim();\n'
                               '              // Emit ROUND_END for the final round so '
                               'all consumers see it.\n'
                               '              // Previously this was skipped, requiring '
@@ -8472,7 +14766,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'completion\n'
                               '              break;\n'
                               '            }\n',
-             'review_after': '              finalText = roundText.trim();\n'
+             'review_after': '                  },\n'
+                             '                ],\n'
+                             '              },\n'
+                             '            ];\n'
+                             '            continue;\n'
+                             '          } else {\n'
+                             '            // No tool calls and a self-ended generation '
+                             '— this is the\n'
+                             "            // model's final answer.\n"
+                             '            if (roundText && roundText.trim().length > '
+                             '0) {\n'
+                             '              finalText = roundText.trim();\n'
                              '              // Emit ROUND_END for the final round so '
                              'all consumers see it.\n'
                              '              // Previously this was skipped, requiring '
@@ -8490,7 +14795,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'completion\n'
                              '              break;\n'
                              '            }\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-18',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-15',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '            ];\n'
                        '          }\n'
@@ -8554,7 +14859,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'ended normally, broke,\n'
                              '        // returned, or threw — preventing '
                              'parent-listener accumulation on\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-19',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-16',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      }\n'
                        '    }\n'
@@ -8617,7 +14922,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  private drainExternalInputs(\n'
                              '    options?: ReasoningLoopOptions,\n'
                              '  ): AgentExternalInput[] {\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-20',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-17',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      });\n'
                        '    }\n'
@@ -8682,7 +14987,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    options: ReasoningLoopOptions | undefined,\n'
                              '    startTime: number,\n'
                              '  ): number | undefined {\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-21',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-18',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '  }\n'
                        '\n'
@@ -8738,7 +15043,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    while (true) {\n'
                              '      const immediate = '
                              'this.drainExternalInputs(options);\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-22',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-19',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      }\n'
                        '\n'
@@ -8816,7 +15121,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'remainingTimeMs <= 0) {\n'
                              '        return { inputs: [], terminateMode: '
                              'AgentTerminateMode.TIMEOUT };\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-23',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-20',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': ' - Use tools only when necessary to obtain facts or make '
                        'changes.\n'
@@ -8960,7 +15265,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '|| 0);\n'
                              '    const cachedTok = '
                              'Number(usage.cachedContentTokenCount || 0);\n'},
-            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-24',
+            {'name': 'packages/core/src/agents/runtime/agent-core.ts:landmark-21',
              'path': 'packages/core/src/agents/runtime/agent-core.ts',
              'before': '      this.executionStats.totalTokens =\n'
                        '        (this.executionStats.totalTokens || 0) +\n'
@@ -9490,6 +15795,152 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '──────────────────────────────────────────\n'},
             {'name': 'packages/core/src/agents/runtime/agent-headless.test.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-headless.test.ts',
+             'before': '  return vi.fn().mockImplementation(async () => {\n'
+                       "    const response = functionCallsList[index] || 'stop';\n"
+                       '    index++;\n'
+                       '\n'
+                       '    return (async function* () {\n'
+                       "      if (response === 'stop') {\n"
+                       '        // When stopping, the model might return text, but the '
+                       'subagent logic primarily cares about the absence of '
+                       'functionCalls.\n'
+                       '        yield {\n'
+                       "          type: 'chunk',\n"
+                       '          value: {\n'
+                       '            candidates: [\n'
+                       '              {\n'
+                       '                content: {\n'
+                       "                  parts: [{ text: 'Done.' }],\n"
+                       '                },\n'
+                       '              },\n'
+                       '            ],\n'
+                       '          },\n',
+             'after': '  return vi.fn().mockImplementation(async () => {\n'
+                      "    const response = functionCallsList[index] || 'stop';\n"
+                      '    index++;\n'
+                      '\n'
+                      '    return (async function* () {\n'
+                      "      if (response === 'stop') {\n"
+                      '        // A round that ends the loop: text, no function calls, '
+                      'and the STOP\n'
+                      '        // terminal that says the model wrote the message to '
+                      'the end. The\n'
+                      '        // terminal reason is what separates that from a '
+                      'severed generation,\n'
+                      '        // so a stopping round has to state it.\n'
+                      '        yield {\n'
+                      "          type: 'chunk',\n"
+                      '          value: {\n'
+                      '            candidates: [\n'
+                      '              {\n'
+                      "                finishReason: 'STOP',\n"
+                      '                content: {\n'
+                      "                  parts: [{ text: 'Done.' }],\n"
+                      '                },\n'
+                      '              },\n'
+                      '            ],\n'
+                      '          },\n',
+             'review_before': '  return vi.fn().mockImplementation(async () => {\n'
+                              '    const response = functionCallsList[index] || '
+                              "'stop';\n"
+                              '    index++;\n'
+                              '\n'
+                              '    return (async function* () {\n'
+                              "      if (response === 'stop') {\n"
+                              '        // When stopping, the model might return text, '
+                              'but the subagent logic primarily cares about the '
+                              'absence of functionCalls.\n'
+                              '        yield {\n'
+                              "          type: 'chunk',\n"
+                              '          value: {\n'
+                              '            candidates: [\n'
+                              '              {\n'
+                              '                content: {\n'
+                              "                  parts: [{ text: 'Done.' }],\n"
+                              '                },\n'
+                              '              },\n'
+                              '            ],\n'
+                              '          },\n',
+             'review_after': '  return vi.fn().mockImplementation(async () => {\n'
+                             '    const response = functionCallsList[index] || '
+                             "'stop';\n"
+                             '    index++;\n'
+                             '\n'
+                             '    return (async function* () {\n'
+                             "      if (response === 'stop') {\n"
+                             '        // A round that ends the loop: text, no function '
+                             'calls, and the STOP\n'
+                             '        // terminal that says the model wrote the '
+                             'message to the end. The\n'
+                             '        // terminal reason is what separates that from a '
+                             'severed generation,\n'
+                             '        // so a stopping round has to state it.\n'
+                             '        yield {\n'
+                             "          type: 'chunk',\n"
+                             '          value: {\n'
+                             '            candidates: [\n'
+                             '              {\n'
+                             "                finishReason: 'STOP',\n"
+                             '                content: {\n'
+                             "                  parts: [{ text: 'Done.' }],\n"
+                             '                },\n'
+                             '              },\n'
+                             '            ],\n'
+                             '          },\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.test.ts:landmark-2',
+             'path': 'packages/core/src/agents/runtime/agent-headless.test.ts',
+             'before': '      } else {\n'
+                       '        yield {\n'
+                       "          type: 'chunk',\n"
+                       '          value: {\n'
+                       '            candidates: [\n'
+                       '              {\n'
+                       '                content: {\n'
+                       "                  parts: [{ text: 'Done.' }],\n"
+                       '                },\n'
+                       '              },\n'
+                       '            ],\n'
+                       '          },\n',
+             'after': '      } else {\n'
+                      '        yield {\n'
+                      "          type: 'chunk',\n"
+                      '          value: {\n'
+                      '            candidates: [\n'
+                      '              {\n'
+                      "                finishReason: 'STOP',\n"
+                      '                content: {\n'
+                      "                  parts: [{ text: 'Done.' }],\n"
+                      '                },\n'
+                      '              },\n'
+                      '            ],\n'
+                      '          },\n',
+             'review_before': '      } else {\n'
+                              '        yield {\n'
+                              "          type: 'chunk',\n"
+                              '          value: {\n'
+                              '            candidates: [\n'
+                              '              {\n'
+                              '                content: {\n'
+                              "                  parts: [{ text: 'Done.' }],\n"
+                              '                },\n'
+                              '              },\n'
+                              '            ],\n'
+                              '          },\n',
+             'review_after': '      } else {\n'
+                             '        yield {\n'
+                             "          type: 'chunk',\n"
+                             '          value: {\n'
+                             '            candidates: [\n'
+                             '              {\n'
+                             "                finishReason: 'STOP',\n"
+                             '                content: {\n'
+                             "                  parts: [{ text: 'Done.' }],\n"
+                             '                },\n'
+                             '              },\n'
+                             '            ],\n'
+                             '          },\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.test.ts:landmark-3',
+             'path': 'packages/core/src/agents/runtime/agent-headless.test.ts',
              'before': '        );\n'
                        '\n'
                        '        await expect(scope.execute(new '
@@ -9646,6 +16097,170 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const promptConfig: PromptConfig = { systemPrompt: '
                              "'Execute task.' };\n"
                              '\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.test.ts:landmark-4',
+             'path': 'packages/core/src/agents/runtime/agent-headless.test.ts',
+             'before': '          (async function* () {\n'
+                       '            yield {\n'
+                       "              type: 'chunk',\n"
+                       '              value: {\n'
+                       '                candidates: [\n'
+                       '                  {\n'
+                       '                    content: { parts },\n'
+                       '                  },\n'
+                       '                ],\n'
+                       '              },\n'
+                       '            };\n'
+                       '          })(),\n',
+             'after': '          (async function* () {\n'
+                      '            yield {\n'
+                      "              type: 'chunk',\n"
+                      '              value: {\n'
+                      '                candidates: [\n'
+                      '                  {\n'
+                      "                    finishReason: 'STOP',\n"
+                      '                    content: { parts },\n'
+                      '                  },\n'
+                      '                ],\n'
+                      '              },\n'
+                      '            };\n'
+                      '          })(),\n',
+             'review_before': '          (async function* () {\n'
+                              '            yield {\n'
+                              "              type: 'chunk',\n"
+                              '              value: {\n'
+                              '                candidates: [\n'
+                              '                  {\n'
+                              '                    content: { parts },\n'
+                              '                  },\n'
+                              '                ],\n'
+                              '              },\n'
+                              '            };\n'
+                              '          })(),\n',
+             'review_after': '          (async function* () {\n'
+                             '            yield {\n'
+                             "              type: 'chunk',\n"
+                             '              value: {\n'
+                             '                candidates: [\n'
+                             '                  {\n'
+                             "                    finishReason: 'STOP',\n"
+                             '                    content: { parts },\n'
+                             '                  },\n'
+                             '                ],\n'
+                             '              },\n'
+                             '            };\n'
+                             '          })(),\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.test.ts:landmark-5',
+             'path': 'packages/core/src/agents/runtime/agent-headless.test.ts',
+             'before': '            if (idx === 0) {\n'
+                       '              yield {\n'
+                       "                type: 'chunk',\n"
+                       '                value: {\n'
+                       '                  candidates: [\n'
+                       '                    {\n'
+                       '                      content: {\n'
+                       '                        parts: [\n'
+                       '                          {\n'
+                       "                            text: 'Just thinking...' as "
+                       'string,\n'
+                       '                            thought: true,\n'
+                       '                          },\n',
+             'after': '            if (idx === 0) {\n'
+                      '              yield {\n'
+                      "                type: 'chunk',\n"
+                      '                value: {\n'
+                      '                  candidates: [\n'
+                      '                    {\n'
+                      "                      finishReason: 'STOP',\n"
+                      '                      content: {\n'
+                      '                        parts: [\n'
+                      '                          {\n'
+                      "                            text: 'Just thinking...' as "
+                      'string,\n'
+                      '                            thought: true,\n'
+                      '                          },\n',
+             'review_before': '            if (idx === 0) {\n'
+                              '              yield {\n'
+                              "                type: 'chunk',\n"
+                              '                value: {\n'
+                              '                  candidates: [\n'
+                              '                    {\n'
+                              '                      content: {\n'
+                              '                        parts: [\n'
+                              '                          {\n'
+                              "                            text: 'Just thinking...' as "
+                              'string,\n'
+                              '                            thought: true,\n'
+                              '                          },\n',
+             'review_after': '            if (idx === 0) {\n'
+                             '              yield {\n'
+                             "                type: 'chunk',\n"
+                             '                value: {\n'
+                             '                  candidates: [\n'
+                             '                    {\n'
+                             "                      finishReason: 'STOP',\n"
+                             '                      content: {\n'
+                             '                        parts: [\n'
+                             '                          {\n'
+                             "                            text: 'Just thinking...' as "
+                             'string,\n'
+                             '                            thought: true,\n'
+                             '                          },\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-headless.test.ts:landmark-6',
+             'path': 'packages/core/src/agents/runtime/agent-headless.test.ts',
+             'before': '            } else {\n'
+                       '              yield {\n'
+                       "                type: 'chunk',\n"
+                       '                value: {\n'
+                       '                  candidates: [\n'
+                       '                    {\n'
+                       '                      content: {\n'
+                       "                        parts: [{ text: 'Actual output.' as "
+                       'string }],\n'
+                       '                      },\n'
+                       '                    },\n'
+                       '                  ],\n'
+                       '                },\n',
+             'after': '            } else {\n'
+                      '              yield {\n'
+                      "                type: 'chunk',\n"
+                      '                value: {\n'
+                      '                  candidates: [\n'
+                      '                    {\n'
+                      "                      finishReason: 'STOP',\n"
+                      '                      content: {\n'
+                      "                        parts: [{ text: 'Actual output.' as "
+                      'string }],\n'
+                      '                      },\n'
+                      '                    },\n'
+                      '                  ],\n'
+                      '                },\n',
+             'review_before': '            } else {\n'
+                              '              yield {\n'
+                              "                type: 'chunk',\n"
+                              '                value: {\n'
+                              '                  candidates: [\n'
+                              '                    {\n'
+                              '                      content: {\n'
+                              "                        parts: [{ text: 'Actual "
+                              "output.' as string }],\n"
+                              '                      },\n'
+                              '                    },\n'
+                              '                  ],\n'
+                              '                },\n',
+             'review_after': '            } else {\n'
+                             '              yield {\n'
+                             "                type: 'chunk',\n"
+                             '                value: {\n'
+                             '                  candidates: [\n'
+                             '                    {\n'
+                             "                      finishReason: 'STOP',\n"
+                             '                      content: {\n'
+                             "                        parts: [{ text: 'Actual output.' "
+                             'as string }],\n'
+                             '                      },\n'
+                             '                    },\n'
+                             '                  ],\n'
+                             '                },\n'},
             {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before': '  ToolConfig,\n'
@@ -10193,6 +16808,94 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' *\n'
                              ' * TODO: Consider adding max_tokens as a form of '
                              'budgeting.\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-types.ts:landmark-2',
+             'path': 'packages/core/src/agents/runtime/agent-types.ts',
+             'before': "  /** The agent's execution successfully completed all its "
+                       'defined goals. */\n'
+                       "  GOAL = 'GOAL',\n"
+                       "  /** The agent's execution terminated because it exceeded the "
+                       'maximum number of turns. */\n'
+                       "  MAX_TURNS = 'MAX_TURNS',\n"
+                       "  /** The agent's execution terminated after detecting a "
+                       'tool-call loop. */\n'
+                       "  LOOP_DETECTED = 'LOOP_DETECTED',\n"
+                       "  /** The agent's execution was cancelled via an abort signal. "
+                       '*/\n'
+                       "  CANCELLED = 'CANCELLED',\n"
+                       '  /** The agent was gracefully shut down (e.g., arena/team '
+                       'session ended). */\n'
+                       "  SHUTDOWN = 'SHUTDOWN',\n"
+                       '}\n'
+                       '\n',
+             'after': "  /** The agent's execution successfully completed all its "
+                      'defined goals. */\n'
+                      "  GOAL = 'GOAL',\n"
+                      "  /** The agent's execution terminated because it exceeded the "
+                      'maximum number of turns. */\n'
+                      "  MAX_TURNS = 'MAX_TURNS',\n"
+                      "  /** The agent's execution terminated after detecting a "
+                      'tool-call loop. */\n'
+                      "  LOOP_DETECTED = 'LOOP_DETECTED',\n"
+                      '  /**\n'
+                      "   * The provider stopped the agent's generation from outside "
+                      '-- the output\n'
+                      '   * cap, a content filter, a reason this build does not '
+                      'recognise -- so the\n'
+                      '   * round it ended on holds a cut-off prefix rather than a '
+                      'report.\n'
+                      '   */\n'
+                      "  INCOMPLETE_GENERATION = 'INCOMPLETE_GENERATION',\n"
+                      "  /** The agent's execution was cancelled via an abort signal. "
+                      '*/\n'
+                      "  CANCELLED = 'CANCELLED',\n"
+                      '  /** The agent was gracefully shut down (e.g., arena/team '
+                      'session ended). */\n'
+                      "  SHUTDOWN = 'SHUTDOWN',\n"
+                      '}\n'
+                      '\n',
+             'review_before': "  /** The agent's execution successfully completed all "
+                              'its defined goals. */\n'
+                              "  GOAL = 'GOAL',\n"
+                              "  /** The agent's execution terminated because it "
+                              'exceeded the maximum number of turns. */\n'
+                              "  MAX_TURNS = 'MAX_TURNS',\n"
+                              "  /** The agent's execution terminated after detecting "
+                              'a tool-call loop. */\n'
+                              "  LOOP_DETECTED = 'LOOP_DETECTED',\n"
+                              "  /** The agent's execution was cancelled via an abort "
+                              'signal. */\n'
+                              "  CANCELLED = 'CANCELLED',\n"
+                              '  /** The agent was gracefully shut down (e.g., '
+                              'arena/team session ended). */\n'
+                              "  SHUTDOWN = 'SHUTDOWN',\n"
+                              '}\n'
+                              '\n',
+             'review_after': "  /** The agent's execution successfully completed all "
+                             'its defined goals. */\n'
+                             "  GOAL = 'GOAL',\n"
+                             "  /** The agent's execution terminated because it "
+                             'exceeded the maximum number of turns. */\n'
+                             "  MAX_TURNS = 'MAX_TURNS',\n"
+                             "  /** The agent's execution terminated after detecting a "
+                             'tool-call loop. */\n'
+                             "  LOOP_DETECTED = 'LOOP_DETECTED',\n"
+                             '  /**\n'
+                             "   * The provider stopped the agent's generation from "
+                             'outside -- the output\n'
+                             '   * cap, a content filter, a reason this build does not '
+                             'recognise -- so the\n'
+                             '   * round it ended on holds a cut-off prefix rather '
+                             'than a report.\n'
+                             '   */\n'
+                             "  INCOMPLETE_GENERATION = 'INCOMPLETE_GENERATION',\n"
+                             "  /** The agent's execution was cancelled via an abort "
+                             'signal. */\n'
+                             "  CANCELLED = 'CANCELLED',\n"
+                             '  /** The agent was gracefully shut down (e.g., '
+                             'arena/team session ended). */\n'
+                             "  SHUTDOWN = 'SHUTDOWN',\n"
+                             '}\n'
+                             '\n'},
             {'name': 'packages/core/src/agents/subagent-result.test.ts:landmark-1',
              'path': 'packages/core/src/agents/subagent-result.test.ts',
              'before': ' * Copyright 2026 Qwen\n'
@@ -10668,6 +17371,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    } else if (terminateMode === AgentTerminateMode.CANCELLED) '
                       '{\n'
                       '      reason = `was cancelled${turns}`;\n'
+                      '    } else if (terminateMode === '
+                      'AgentTerminateMode.INCOMPLETE_GENERATION) {\n'
+                      '      reason = `was cut off mid-generation${turns}`;\n'
                       '    } else {\n'
                       '      reason = `stopped as '
                       '${String(terminateMode).toLowerCase()}${detail}${turns}`;\n'
@@ -10744,6 +17450,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    } else if (terminateMode === '
                              'AgentTerminateMode.CANCELLED) {\n'
                              '      reason = `was cancelled${turns}`;\n'
+                             '    } else if (terminateMode === '
+                             'AgentTerminateMode.INCOMPLETE_GENERATION) {\n'
+                             '      reason = `was cut off mid-generation${turns}`;\n'
                              '    } else {\n'
                              '      reason = `stopped as '
                              '${String(terminateMode).toLowerCase()}${detail}${turns}`;\n'
@@ -34979,6 +41688,188 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "  'persisted artifacts before deciding what to do next; "
                              "do not blindly repeat ' +\n"
                              "  'a non-idempotent operation.';\n"},
+            {'name': 'packages/core/src/core/turn.test.ts:landmark-1',
+             'path': 'packages/core/src/core/turn.test.ts',
+             'before': "} from './turn.js';\n"
+                       'import {\n'
+                       '  CompressionStatus,\n'
+                       '  Turn,\n'
+                       '  GeminiEventType,\n'
+                       '  createDuplicateProviderToolCallResponse,\n'
+                       '  findRepeatedDuplicateProviderToolCall,\n'
+                       "} from './turn.js';\n"
+                       'import type {\n'
+                       '  GenerateContentResponse,\n'
+                       '  Part,\n'
+                       '  Content,\n'
+                       '  PartListUnion,\n'
+                       "} from '@google/genai';\n",
+             'after': "} from './turn.js';\n"
+                      'import {\n'
+                      '  CompressionStatus,\n'
+                      '  Turn,\n'
+                      '  GeminiEventType,\n'
+                      '  createDuplicateProviderToolCallResponse,\n'
+                      '  describeIncompleteGeneration,\n'
+                      '  findRepeatedDuplicateProviderToolCall,\n'
+                      "} from './turn.js';\n"
+                      "import { FinishReason } from './genai-compat.js';\n"
+                      'import type {\n'
+                      '  GenerateContentResponse,\n'
+                      '  Part,\n'
+                      '  Content,\n'
+                      '  PartListUnion,\n'
+                      "} from '@google/genai';\n",
+             'review_before': "} from './turn.js';\n"
+                              'import {\n'
+                              '  CompressionStatus,\n'
+                              '  Turn,\n'
+                              '  GeminiEventType,\n'
+                              '  createDuplicateProviderToolCallResponse,\n'
+                              '  findRepeatedDuplicateProviderToolCall,\n'
+                              "} from './turn.js';\n"
+                              'import type {\n'
+                              '  GenerateContentResponse,\n'
+                              '  Part,\n'
+                              '  Content,\n'
+                              '  PartListUnion,\n'
+                              "} from '@google/genai';\n",
+             'review_after': "} from './turn.js';\n"
+                             'import {\n'
+                             '  CompressionStatus,\n'
+                             '  Turn,\n'
+                             '  GeminiEventType,\n'
+                             '  createDuplicateProviderToolCallResponse,\n'
+                             '  describeIncompleteGeneration,\n'
+                             '  findRepeatedDuplicateProviderToolCall,\n'
+                             "} from './turn.js';\n"
+                             "import { FinishReason } from './genai-compat.js';\n"
+                             'import type {\n'
+                             '  GenerateContentResponse,\n'
+                             '  Part,\n'
+                             '  Content,\n'
+                             '  PartListUnion,\n'
+                             "} from '@google/genai';\n"},
+            {'name': 'packages/core/src/core/turn.test.ts:landmark-2',
+             'path': 'packages/core/src/core/turn.test.ts',
+             'before': '    });\n'
+                       '\n'
+                       "    expect(response.executionStatus).toBe('not_started');\n"
+                       '  });\n'
+                       '});\n'
+                       '\n'
+                       "describe('Turn', () => {\n"
+                       '  let turn: Turn;\n'
+                       '  // Define a type for the mocked Chat instance for clarity\n'
+                       '  type MockedChatInstance = {\n'
+                       '    sendMessageStream: typeof mockSendMessageStream;\n'
+                       '    getHistory: typeof mockGetHistory;\n',
+             'after': '    });\n'
+                      '\n'
+                      "    expect(response.executionStatus).toBe('not_started');\n"
+                      '  });\n'
+                      '});\n'
+                      '\n'
+                      "describe('describeIncompleteGeneration', () => {\n"
+                      "  it('says nothing about a generation the model ended itself', "
+                      '() => {\n'
+                      '    expect(describeIncompleteGeneration(FinishReason.STOP, '
+                      '7)).toBeNull();\n'
+                      '  });\n'
+                      '\n'
+                      '  it.each([\n'
+                      "    ['MAX_TOKENS', FinishReason.MAX_TOKENS],\n"
+                      "    ['SAFETY', 'SAFETY' as FinishReason],\n"
+                      "    ['FINISH_REASON_UNSPECIFIED', 'FINISH_REASON_UNSPECIFIED' "
+                      'as FinishReason],\n'
+                      "  ])('names %s as a generation stopped from outside', "
+                      '(spelling, reason) => {\n'
+                      '    const described = describeIncompleteGeneration(reason, '
+                      '66);\n'
+                      '\n'
+                      '    expect(described).toContain(spelling);\n'
+                      "    expect(described).toContain('turn 66');\n"
+                      "    expect(described).toContain('carries no final answer');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('describes a generation whose terminal reason never "
+                      "arrived', () => {\n"
+                      '    const described = describeIncompleteGeneration(undefined, '
+                      '1);\n'
+                      '\n'
+                      "    expect(described).toContain('no terminal reason');\n"
+                      "    expect(described).toContain('turn 1');\n"
+                      '  });\n'
+                      '});\n'
+                      '\n'
+                      "describe('Turn', () => {\n"
+                      '  let turn: Turn;\n'
+                      '  // Define a type for the mocked Chat instance for clarity\n'
+                      '  type MockedChatInstance = {\n'
+                      '    sendMessageStream: typeof mockSendMessageStream;\n'
+                      '    getHistory: typeof mockGetHistory;\n',
+             'review_before': '    });\n'
+                              '\n'
+                              '    '
+                              "expect(response.executionStatus).toBe('not_started');\n"
+                              '  });\n'
+                              '});\n'
+                              '\n'
+                              "describe('Turn', () => {\n"
+                              '  let turn: Turn;\n'
+                              '  // Define a type for the mocked Chat instance for '
+                              'clarity\n'
+                              '  type MockedChatInstance = {\n'
+                              '    sendMessageStream: typeof mockSendMessageStream;\n'
+                              '    getHistory: typeof mockGetHistory;\n',
+             'review_after': '    });\n'
+                             '\n'
+                             '    '
+                             "expect(response.executionStatus).toBe('not_started');\n"
+                             '  });\n'
+                             '});\n'
+                             '\n'
+                             "describe('describeIncompleteGeneration', () => {\n"
+                             "  it('says nothing about a generation the model ended "
+                             "itself', () => {\n"
+                             '    '
+                             'expect(describeIncompleteGeneration(FinishReason.STOP, '
+                             '7)).toBeNull();\n'
+                             '  });\n'
+                             '\n'
+                             '  it.each([\n'
+                             "    ['MAX_TOKENS', FinishReason.MAX_TOKENS],\n"
+                             "    ['SAFETY', 'SAFETY' as FinishReason],\n"
+                             "    ['FINISH_REASON_UNSPECIFIED', "
+                             "'FINISH_REASON_UNSPECIFIED' as FinishReason],\n"
+                             "  ])('names %s as a generation stopped from outside', "
+                             '(spelling, reason) => {\n'
+                             '    const described = '
+                             'describeIncompleteGeneration(reason, 66);\n'
+                             '\n'
+                             '    expect(described).toContain(spelling);\n'
+                             "    expect(described).toContain('turn 66');\n"
+                             "    expect(described).toContain('carries no final "
+                             "answer');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('describes a generation whose terminal reason never "
+                             "arrived', () => {\n"
+                             '    const described = '
+                             'describeIncompleteGeneration(undefined, 1);\n'
+                             '\n'
+                             "    expect(described).toContain('no terminal reason');\n"
+                             "    expect(described).toContain('turn 1');\n"
+                             '  });\n'
+                             '});\n'
+                             '\n'
+                             "describe('Turn', () => {\n"
+                             '  let turn: Turn;\n'
+                             '  // Define a type for the mocked Chat instance for '
+                             'clarity\n'
+                             '  type MockedChatInstance = {\n'
+                             '    sendMessageStream: typeof mockSendMessageStream;\n'
+                             '    getHistory: typeof mockGetHistory;\n'},
             {'name': 'packages/core/src/core/turn.ts:landmark-1',
              'path': 'packages/core/src/core/turn.ts',
              'before': "  StopHookLoop = 'stop_hook_loop',\n"
@@ -35070,6 +41961,151 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  /** When true, the retry is a continuation (recovery) '
                              'rather than a fresh\n'},
             {'name': 'packages/core/src/core/turn.ts:landmark-2',
+             'path': 'packages/core/src/core/turn.ts',
+             'before': '\n'
+                       'export interface GeminiFinishedEventValue {\n'
+                       '  reason: FinishReason | undefined;\n'
+                       '  usageMetadata: GenerateContentResponseUsageMetadata | '
+                       'undefined;\n'
+                       '}\n'
+                       '\n'
+                       'export interface ToolCallRequestInfo {\n'
+                       '  callId: string;\n'
+                       '  /**\n'
+                       '   * Original tool-call id emitted by the provider/model. When '
+                       'present, this is\n'
+                       '   * the idempotency key for suppressing duplicate provider '
+                       'tool calls.\n'
+                       '   */\n',
+             'after': '\n'
+                      'export interface GeminiFinishedEventValue {\n'
+                      '  reason: FinishReason | undefined;\n'
+                      '  usageMetadata: GenerateContentResponseUsageMetadata | '
+                      'undefined;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * Describes a generation the provider stopped from outside, or '
+                      '`null` when\n'
+                      ' * the model ended its own message.\n'
+                      ' *\n'
+                      ' * `STOP` is the only terminal reason that means the model '
+                      'wrote its message\n'
+                      ' * to the end. Under every other reason -- the output cap, a '
+                      'content filter,\n'
+                      ' * a spelling this build does not recognise -- the text on the '
+                      'wire is a\n'
+                      ' * prefix that was cut off mid-message, and the absence of a '
+                      'tool call in\n'
+                      ' * such a turn records where the cut landed rather than a '
+                      'decision to stop\n'
+                      ' * calling tools. A reasoning loop that reads "this turn '
+                      'requested no tools"\n'
+                      ' * as "the model is done" must therefore consult this first, '
+                      'and report what\n'
+                      ' * it says in place of a final answer it does not have. A '
+                      'generation whose\n'
+                      ' * terminal reason never arrived is described here too: '
+                      'asserting that the\n'
+                      ' * model finished requires the provider to have said so.\n'
+                      ' */\n'
+                      'export function describeIncompleteGeneration(\n'
+                      '  reason: FinishReason | undefined,\n'
+                      '  turn: number,\n'
+                      '): string | null {\n'
+                      '  if (reason === FinishReason.STOP) {\n'
+                      '    return null;\n'
+                      '  }\n'
+                      '  return (\n'
+                      "    `Generation on turn ${turn} ended as ${reason ?? 'no "
+                      "terminal reason'} ` +\n"
+                      '    `rather than the model completing its message, so its text '
+                      'is a cut-off ` +\n'
+                      '    `prefix and this run carries no final answer.`\n'
+                      '  );\n'
+                      '}\n'
+                      '\n'
+                      'export interface ToolCallRequestInfo {\n'
+                      '  callId: string;\n'
+                      '  /**\n'
+                      '   * Original tool-call id emitted by the provider/model. When '
+                      'present, this is\n'
+                      '   * the idempotency key for suppressing duplicate provider '
+                      'tool calls.\n'
+                      '   */\n',
+             'review_before': '\n'
+                              'export interface GeminiFinishedEventValue {\n'
+                              '  reason: FinishReason | undefined;\n'
+                              '  usageMetadata: GenerateContentResponseUsageMetadata | '
+                              'undefined;\n'
+                              '}\n'
+                              '\n'
+                              'export interface ToolCallRequestInfo {\n'
+                              '  callId: string;\n'
+                              '  /**\n'
+                              '   * Original tool-call id emitted by the '
+                              'provider/model. When present, this is\n'
+                              '   * the idempotency key for suppressing duplicate '
+                              'provider tool calls.\n'
+                              '   */\n',
+             'review_after': '\n'
+                             'export interface GeminiFinishedEventValue {\n'
+                             '  reason: FinishReason | undefined;\n'
+                             '  usageMetadata: GenerateContentResponseUsageMetadata | '
+                             'undefined;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * Describes a generation the provider stopped from '
+                             'outside, or `null` when\n'
+                             ' * the model ended its own message.\n'
+                             ' *\n'
+                             ' * `STOP` is the only terminal reason that means the '
+                             'model wrote its message\n'
+                             ' * to the end. Under every other reason -- the output '
+                             'cap, a content filter,\n'
+                             ' * a spelling this build does not recognise -- the text '
+                             'on the wire is a\n'
+                             ' * prefix that was cut off mid-message, and the absence '
+                             'of a tool call in\n'
+                             ' * such a turn records where the cut landed rather than '
+                             'a decision to stop\n'
+                             ' * calling tools. A reasoning loop that reads "this turn '
+                             'requested no tools"\n'
+                             ' * as "the model is done" must therefore consult this '
+                             'first, and report what\n'
+                             ' * it says in place of a final answer it does not have. '
+                             'A generation whose\n'
+                             ' * terminal reason never arrived is described here too: '
+                             'asserting that the\n'
+                             ' * model finished requires the provider to have said '
+                             'so.\n'
+                             ' */\n'
+                             'export function describeIncompleteGeneration(\n'
+                             '  reason: FinishReason | undefined,\n'
+                             '  turn: number,\n'
+                             '): string | null {\n'
+                             '  if (reason === FinishReason.STOP) {\n'
+                             '    return null;\n'
+                             '  }\n'
+                             '  return (\n'
+                             "    `Generation on turn ${turn} ended as ${reason ?? 'no "
+                             "terminal reason'} ` +\n"
+                             '    `rather than the model completing its message, so '
+                             'its text is a cut-off ` +\n'
+                             '    `prefix and this run carries no final answer.`\n'
+                             '  );\n'
+                             '}\n'
+                             '\n'
+                             'export interface ToolCallRequestInfo {\n'
+                             '  callId: string;\n'
+                             '  /**\n'
+                             '   * Original tool-call id emitted by the '
+                             'provider/model. When present, this is\n'
+                             '   * the idempotency key for suppressing duplicate '
+                             'provider tool calls.\n'
+                             '   */\n'},
+            {'name': 'packages/core/src/core/turn.ts:landmark-3',
              'path': 'packages/core/src/core/turn.ts',
              'before': '   * `COMPRESSION_FAILED_EMPTY_SUMMARY` so telemetry can '
                        'separate\n'
@@ -35507,7 +42543,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'export type ServerGeminiSessionTokenLimitExceededEvent = '
                              '{\n'
                              '  type: GeminiEventType.SessionTokenLimitExceeded;\n'},
-            {'name': 'packages/core/src/core/turn.ts:landmark-3',
+            {'name': 'packages/core/src/core/turn.ts:landmark-4',
              'path': 'packages/core/src/core/turn.ts',
              'before': '};\n'
                        '\n'
@@ -35563,7 +42599,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  | ServerGeminiErrorEvent\n'
                              '  | ServerGeminiFinishedEvent\n'
                              '  | ServerGeminiHookSystemMessageEvent\n'},
-            {'name': 'packages/core/src/core/turn.ts:landmark-4',
+            {'name': 'packages/core/src/core/turn.ts:landmark-5',
              'path': 'packages/core/src/core/turn.ts',
              'before': '            statusCode: streamEvent.info.statusCode,\n'
                        '            fallbackIndex: streamEvent.info.fallbackIndex,\n'
@@ -95445,22 +102481,22 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '3ca41ffb0c577065f99d6d88a32ab5df694900f015e7416d0942c4bfe5749ed5',
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'f706013e343b204a8ee8227813dc97b5b45a61177cdbd5ce1a54fd3a0fb49863',
- 'packages/cli/src/nonInteractive/types.ts': '3725d444892394fd27c7f8f6f2b769c6a071c8b456a2e84ab9345e97f351562e',
- 'packages/cli/src/nonInteractiveCli.test.ts': '36499ab60a63edfb90c470d3593014c9c07499fe07d56b9ed3aaf9395ac0c52a',
- 'packages/cli/src/nonInteractiveCli.ts': 'ecdd192c690882e67189edc322d8d02b0af1cf25f13d5b218f567e071f25bec9',
+ 'packages/cli/src/nonInteractive/types.ts': '4fec37bb31d9163236680e7f85af4f30d8c11c295f75a529bf4f6b4d1b4df719',
+ 'packages/cli/src/nonInteractiveCli.test.ts': 'b276345e12ab5f713a875f9f591c36e274fefe5982807304537b48903f4fbc05',
+ 'packages/cli/src/nonInteractiveCli.ts': '8aef0166070eba53a77e1bc23bfe08c75377558308bf56b1af461cbc2bc9b958',
  'packages/cli/src/ui/hooks/useGeminiStream.ts': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e',
  'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'f66258a3b847539dec79c84ec2c38a82646a2f1d89cf9d7b63e4f9feb26540fd',
  'packages/cli/src/utils/nonInteractiveHelpers.ts': '05bf1bb209b455a0fa1b386321198442d08c332cdd1a2f2c08fc05a9948e752c',
  'packages/core/src/agents/runtime/agent-context.test.ts': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a',
  'packages/core/src/agents/runtime/agent-context.ts': '9a286ed839eead2632b70153b0ea1c4ca6df2e5b5e4d98eb3106db9b80db41e6',
- 'packages/core/src/agents/runtime/agent-core.test.ts': '5ce2e138841cfd514818d12a56ce0a426974f633e81bbbaad4b0cf38cc0437de',
- 'packages/core/src/agents/runtime/agent-core.ts': '2c998619b919b775143d554cadee7173cdc5d6cb180852ada9ad92c694a35bbf',
+ 'packages/core/src/agents/runtime/agent-core.test.ts': '8b9e1b7b517d13cbb89b6077455c185a5424dba3c37d881b0401429f8c05033b',
+ 'packages/core/src/agents/runtime/agent-core.ts': '1ab48df33b3672b9e2512008ea833047d2b5420e59268343b8c8c7954fc101cd',
  'packages/core/src/agents/runtime/agent-events.ts': 'f8ddde1eb314785fbc47470dda432f2296b9d4d024cbe3c2241e12db69e99dcb',
- 'packages/core/src/agents/runtime/agent-headless.test.ts': '25c436dc1471f6e4add077a719151c339378f0950d313f48d69cfc4cc31f66be',
+ 'packages/core/src/agents/runtime/agent-headless.test.ts': 'b9bb1b3221091d0d4b348d228c31d6ba098a5549cfec6aef195f98bd8a60ed4d',
  'packages/core/src/agents/runtime/agent-headless.ts': '24f953533bc130c33687e2cbe1b324dc0f49fb5a3f78860e30682193ac272cf5',
- 'packages/core/src/agents/runtime/agent-types.ts': '09a5db201308cae2598fb36f4a79b645b73705e3dd54d2b3a88a27a034ee449b',
+ 'packages/core/src/agents/runtime/agent-types.ts': '25c86534f944d3c5e66c948cc16ae9710c539bbd63238b8390d6c3e36c727647',
  'packages/core/src/agents/subagent-result.test.ts': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91',
- 'packages/core/src/agents/subagent-result.ts': '6dc6f199ba394f6e0520aca1d54a5d7c529eea9b0d94f76ab0fffa29327b12e2',
+ 'packages/core/src/agents/subagent-result.ts': 'dc0a14c242f52a03c13423a0e0314517f2c270bdf48e2974d0e106db1c0c4379',
  'packages/core/src/config/config.ts': '5ba9fff7bc14fe4fd4d8495b918832801e9b6f3cf9e6c17a09ab51095c42af49',
  'packages/core/src/config/qwen38-agent-service-contract.test.ts': '1bea1f3fecc42a4e1ece933d9b7e88e9cf32f0d7386928c9260b91b611bb19ad',
  'packages/core/src/core/baseLlmClient.test.ts': '643b5f7c90bbb9a63300c3ec02cffea86f4ecdbb65f06b1ec94eb18fda7e7674',
@@ -95490,7 +102526,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/tokenLimits.test.ts': '1c1d958c41c9e446ca2a54de2d411b7e2e217e2bf97164c371463486469559eb',
  'packages/core/src/core/tokenLimits.ts': '479cabd59ab6e4971787519c26496d811b4d30cd13bcc2df2d6eb362bd1b28e3',
  'packages/core/src/core/toolOutcome.ts': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9',
- 'packages/core/src/core/turn.ts': '6c2707d2ebf84fb82cc2fe2b0e7be92275a5e09a330d527a52000a32035add72',
+ 'packages/core/src/core/turn.test.ts': '5de15292c793f4227c500e3680a621ce492a7bb11fb88375a1ee6deb42d313c9',
+ 'packages/core/src/core/turn.ts': '5978a86c11c663318c6a5c0aaa19492686e9e1e8e5c8c383327b28b7412625ee',
  'packages/core/src/index.ts': '6ce05101bad847681232aae4d4b738afa4e7d6206a495a6210df2a913b9dbcef',
  'packages/core/src/models/constants.ts': '11cf01eda085973eedc575e4b8cd0c7bf469ced519e66bbac72129c47e8b2d38',
  'packages/core/src/models/content-generator-config.ts': '6f8c6321a1171425eec010e05e72e5e71b6ae1f7415075779a935f4b58565503',

@@ -175,11 +175,13 @@ pub struct SessionBody {
     ///   137 SIGKILL'd by `docker stop` after a cancel
     ///   other non-zero: qwen-code internal error; see events.jsonl
     pub agent_exit_code: i32,
-    /// True iff the qwen-code process itself terminated abnormally
-    /// (structured error envelope, mid-run crash, or setup failure
-    /// before model/tokenizer readiness). **Does not mean "the response is useful"**: a
-    /// vLLM 400 that becomes the agent's final answer leaves this
-    /// false. Inspect `response` for wire-error envelopes if needed.
+    /// True iff the run did not end cleanly: a terminal record reporting an
+    /// error, an abnormal container or agent exit, a setup failure before
+    /// model/tokenizer readiness, or a capture/teardown failure this service
+    /// observed around the run. **It describes how the run ended, never
+    /// whether the answer is useful**: whether a response satisfies the
+    /// prompt is not decidable here, and nothing in this service claims it
+    /// is. `agent_result_subtype` names which ending it was.
     pub is_process_error: bool,
     pub response: String,
     /// Wall time the agent itself reported, or `None` when no terminal
@@ -200,6 +202,18 @@ pub struct SessionBody {
     // persisted-data schema migration, not a runtime behavior fallback.
     #[serde(default)]
     pub agent_api_duration_ms: Option<u64>,
+    /// How the agent's own terminal record named the run's ending, verbatim:
+    /// `success` when the model wrote its final message to the end, or the
+    /// `error_*` spelling of the state that stopped it instead — the turn
+    /// budget, a failure during execution, or a generation the provider cut
+    /// short. `None` exactly when no terminal result was parsed and there is
+    /// therefore nothing the agent asserted about its own ending.
+    // `#[serde(default)]` admits a committed record that carries no terminal
+    // state, and absent is its only honest reading of one: nothing here
+    // synthesizes a spelling the agent did not assert. That is an admission
+    // of the persisted schema, not a runtime behavior fallback.
+    #[serde(default)]
+    pub agent_result_subtype: Option<String>,
     /// Per-subagent accounting from the strict terminal parse, in order of
     /// first appearance in the stream. Each row is one scope: the id-resolved
     /// `tool_use` call that spawned it, the turns the stream billed to it,
@@ -1786,6 +1800,7 @@ fn running_body(
         response: String::new(),
         agent_duration_ms: None,
         agent_api_duration_ms: None,
+        agent_result_subtype: None,
         subagent_scopes: Vec::new(),
         subagent_scope_count: 0,
         subagent_error_count: 0,
@@ -4215,6 +4230,7 @@ mod tests {
             response: "done".to_string(),
             agent_duration_ms: Some(1),
             agent_api_duration_ms: Some(1),
+            agent_result_subtype: Some("success".to_string()),
             subagent_scopes: Vec::new(),
             subagent_scope_count: 0,
             subagent_error_count: 0,
@@ -4269,6 +4285,42 @@ mod tests {
         let restored: SessionBody = serde_json::from_value(json).expect("deserialize");
         assert_eq!(restored.agent_api_duration_ms, None);
         assert_eq!(restored.agent_duration_ms, Some(1));
+    }
+
+    #[test]
+    fn the_terminal_state_is_carried_verbatim_or_absent() {
+        // The agent's own name for its ending is evidence, so a run that
+        // never produced a terminal record must serialize null rather than a
+        // spelling nothing asserted. Every spelling the parser admits round
+        // trips unchanged.
+        let mut unparsed = body("s-44444444444444444444444444444444");
+        unparsed.agent_result_subtype = None;
+        let json = serde_json::to_value(&unparsed).expect("serialize");
+        assert!(json["agent_result_subtype"].is_null());
+
+        for subtype in [
+            "success",
+            "error_max_turns",
+            "error_during_execution",
+            "error_incomplete_generation",
+        ] {
+            let mut reported = body("s-55555555555555555555555555555555");
+            reported.agent_result_subtype = Some(subtype.to_string());
+            let json = serde_json::to_value(&reported).expect("serialize");
+            assert_eq!(json["agent_result_subtype"], serde_json::json!(subtype));
+            let restored: SessionBody = serde_json::from_value(json).expect("deserialize");
+            assert_eq!(restored.agent_result_subtype.as_deref(), Some(subtype));
+        }
+
+        // A record written without the field reads as an unreported ending,
+        // never as a fabricated success.
+        let mut json =
+            serde_json::to_value(body("s-66666666666666666666666666666666")).expect("serialize");
+        json.as_object_mut()
+            .expect("object")
+            .remove("agent_result_subtype");
+        let restored: SessionBody = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(restored.agent_result_subtype, None);
     }
 
     fn test_config(state_dir: PathBuf, results_dir: PathBuf) -> Config {
