@@ -15,8 +15,7 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Review-diff SHA-256: `40a5199c1610458b987576f71c3b80b3bc8a63ce5277d839dbde966f5bdaa330`
 - Semantic transformer: `source_patch_v1/`
 - Transformer-manifest SHA-256: `d93b6d78edcfb6719f224d76849692beb57d26a6a9733e3a6b8d7a34cad15871`
-- Official npm package integrity: `sha512-jN1OahOckJkrc8mnT/uqLbarYLKLmlc8gttmcHOg2WXYItu7S0sBzP+0dwBUoi/zBvywu5Sq1ilj6Eh/k0r07Q==`
-- Official npm package SHA-1: `ec637654144c77505da331162a5915f50c416557`
+- Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The semantic transformer adds the requirements that upstream 0.21.12 does not
@@ -290,7 +289,7 @@ provide as one fail-closed mode:
   full, and so is the test file adjacent to every source file the patch
   modifies, when one exists. A patched test file that is missing fails the
   build. There are no `-t` filters left, so a test the build does not run is
-  no longer a reachable state; coverage rises from 28 files to 54.
+  no longer a reachable state; coverage rises from 28 files to 57.
 - evidentiary stream-json tool results: the emitted record prefers the
   model-facing responseParts over the short human-facing display string, so
   captured event streams carry what the model actually received (two
@@ -402,8 +401,8 @@ Verification performed in the pinned Node image:
   idempotence, new-file handling, source/output drift, intermediate-state refusal,
   review-diff drift, time-of-check/time-of-use mutation, and transactional rollback;
 - the complete patched TypeScript/CLI build passed;
-- the full build-derived suite passed: all 58 derived test files (5,318
-  tests: 5,297 passed and 1 environment-skip in the bare pinned image, the
+- the full build-derived suite passed: all 57 derived test files (5,241
+  tests: 5,240 passed and 1 environment-skip in the bare pinned image, the
   20 git-dependent cases with git present as the production image provides
   it) -- zero failures;
 - the same 20 environment-gated failures reproduce byte-identically on the

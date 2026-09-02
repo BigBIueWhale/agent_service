@@ -33,7 +33,7 @@ The fixed stack is:
 | Corrected model SHA-256 | `5fd70b38b3708e47adc1e9e9ab90f5d688ec01177d0718fdd16678696fdb0988` |
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
-| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v13 profile |
+| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v18 profile |
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
 | Context | Native `262144` tokens |
@@ -43,13 +43,13 @@ The fixed stack is:
 | MTP/speculative decoding | Disabled |
 | Thinking | Required, `xhigh` |
 | Qwen Code | `0.21.12`, commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38` |
-| Agent image | `sha256:0d6d47d0516964c1f952b2d1506ba33614aad47e16899611b7ac0dedfd68b013` |
-| Service | Rust, one session at a time, Docker-only; implementation commit `46af008ad9673ec2fcbc7bd84b8d95867d3e90e2` |
-| Release lock commit | `a236fcceae7babb5a752f1b40283035afb40428f` |
-| Service image | `sha256:9a68fb95b9707e178d1c9c9061450b5ecab08ee2d57e9b6e81f954fae034b260` |
-| Docker broker image | `sha256:ae9dfef94486f86f0b6da4cd96ec76c5a245d23635c5b8a76d8f8e414e982a30` |
-| Fixed-relay image | `sha256:5153a46bc03fa920b0d09000eca1848af255010bda99cc50e8a6110ebcd02690` |
-| Stream-capture image | `sha256:2d38ea4ae0f33894740a1a067c7fa8e3e3d864ff58ef439d6d432fd4739b9aef` |
+| Agent image | Pinned by [`config/release.lock.json`](config/release.lock.json) (`.images.agent`) |
+| Service | Rust, one session at a time, Docker-only |
+| Release lock | [`config/release.lock.json`](config/release.lock.json), which pins the implementation commit and all five image IDs |
+| Service image | Pinned by [`config/release.lock.json`](config/release.lock.json) (`.images.service`) |
+| Docker broker image | Pinned by [`config/release.lock.json`](config/release.lock.json) (`.images.broker`) |
+| Fixed-relay image | Pinned by [`config/release.lock.json`](config/release.lock.json) (`.images.relay`) |
+| Stream-capture image | Pinned by [`config/release.lock.json`](config/release.lock.json) (`.images.capture`) |
 | Service listener | `127.0.0.1:8090` only |
 | Model listener | `127.0.0.1:8000` only |
 
@@ -66,7 +66,7 @@ The service independently requires `/model` to be the exact corrected directory 
 one read-only bind mount and requires the backend container's source revision,
 official revision, correction recipe, corrected model digest, and manifest digest
 labels. It also requires a read-only backend root running as `2000:0`, exact bounded
-`/tmp` and `/run` tmpfs contracts, exactly one labelled v13 vLLM cache volume at
+`/tmp` and `/run` tmpfs contracts, exactly one labelled v18 vLLM cache volume at
 `/home/vllm/.cache/vllm`, and no other mount. Every persistent JIT/cache path is
 rooted beneath that exact volume; runtime writes cannot mutate the container layer.
 The backend's own status performs the complete file-manifest verification.
@@ -276,9 +276,9 @@ second application must be byte-for-byte idempotent.
 is generated review evidence for humans; it is independently hashed and compared
 to the transformer's exact output, but is not a second patching path. Its current
 SHA-256 is
-`d5b35f57467bf50a8bff0a1ad739863d27f84f1b065fbdd7c1cdcc0c1372c3fd`.
+`40a5199c1610458b987576f71c3b80b3bc8a63ce5277d839dbde966f5bdaa330`.
 The transformer's manifest SHA-256 is
-`a809f5db500b9bbbba42481f4a04cf85bdfe6422ca2dfbbaa34f5f62b4d5d915`.
+`d93b6d78edcfb6719f224d76849692beb57d26a6a9733e3a6b8d7a34cad15871`.
 Both identities are locked, checked on the host, checked again inside the Docker
 build, and recorded as image labels.
 
@@ -637,31 +637,28 @@ by exact image ID plus labels for the upstream version/commit/archive/patch and 
 locked runtime/configuration identity. The service image is sealed by committed
 source, build-input, stack-lock, and Cargo-lock labels.
 
-The current agent image is
-`sha256:0d6d47d0516964c1f952b2d1506ba33614aad47e16899611b7ac0dedfd68b013`.
-Its build reconstructed exactly sixty-one changed/new files from pristine upstream
-and passed 2,427 tests across twenty-three focused test files. The sealed runtime
+The current agent image is the one
+[`config/release.lock.json`](config/release.lock.json) names in `.images.agent`.
+Its build reconstructed exactly 104 changed/new files from pristine upstream
+and passed 5,241 tests across fifty-seven focused test files. The sealed runtime
 reports `0.21.12`, embeds commit `b965d5f8c24f`, and carries matching archive,
 review-diff, semantic-manifest, settings, instruction, and wrapper labels. The
 build script treats any other image ID as drift. The image also carries Qwen
 Code's exact upstream Apache-2.0 license plus this repository's Unlicense and
 third-party scope notice; those documentation files do not alter the executable
 client or its locked behavior.
-The pinned Rust 1.95.0 stages passed all sixty tests: forty-four service,
-nine broker, three fixed-relay, two stream-capture, and two agent-exec tests. A
+The pinned Rust 1.95.0 stages passed all 114 tests: ninety-seven service,
+nine broker, three fixed-relay, two stream-capture, and three agent-exec tests. A
 full clean no-cache release build reproduced the exact locked agent, relay, capture,
 broker, and service image IDs; candidate build directories were absent afterward.
-The release lock pins implementation commit
-`46af008ad9673ec2fcbc7bd84b8d95867d3e90e2`, the 74-entry build-input manifest
-hash `b74df26f6feafb035fbe7180f8c97b3f9b30264b4063da65db9f40573bdbc210`,
-stack-lock hash `9e6ed8d6d7d7fb3e37a110c9c9d4e0e301f400a9a7e7864ef734c5618b903bb0`,
-and all five resulting image IDs. Release-lock commit
-`a236fcceae7babb5a752f1b40283035afb40428f` freezes that complete set; the
-release-lock file itself hashes to
-`d8194d257f2b17209e814cf6b7f7290b079f56b159ea6662bab844f3d92fca16`.
+[`config/release.lock.json`](config/release.lock.json) pins the implementation
+commit, the build-input manifest hash, the stack-lock hash, and all five
+resulting image IDs, and the commit that writes it freezes that complete
+set. It is the only place those identities are stated, so there is no second
+copy to disagree with it.
 
 Pinning is not a claim that the upstream dependency graph has no security debt. The
-Qwen `npm ci` build currently reports 66 audit advisories (2 low, 36 moderate, 25
+Qwen `npm ci` build currently reports 68 audit advisories (3 low, 35 moderate, 27
 high, 3 critical). The build records that fact and does not run `npm audit fix`:
 doing so would introduce an unreviewed mutable dependency graph. Remediation means
 reviewing a newer exact upstream tree or a narrow explicit patch, then rebuilding
@@ -824,13 +821,13 @@ misleading 404. Shutdown has no arbitrary teardown deadline.
 ## Acceptance gates
 
 A release is not complete merely because the images build. Every required gate below
-passed against the current pinned agent release and the exact live v13 corrected
+passed against the current pinned agent release and the exact live v18 corrected
 backend; unchanged historical cache measurements are identified as such:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
 2. clean Qwen archive extraction, semantic drift/idempotence/rollback checks,
    transactional source transformation, review-diff equivalence, full patched
-   build, and all 2,427 assertions in twenty-three focused test files;
+   build, and all 5,241 assertions in fifty-seven focused test files;
 3. independent no-cache reproduction of all five locked images, exact label/hash/
    version checks, and network-none route proofs;
 4. exact live backend container/image/user/labels/command/mounts/cache/listener/
@@ -898,14 +895,8 @@ and an independent evaluator pass — not a benchmark-suite score.
 
 The first two attempts are retained and classified as infrastructure failures, not
 model scores. The second is the run that exposed the `--since 0s` capture race above.
-The accepted pilot used release commit
-`7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc`, agent image
-`sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec`,
-broker image
-`sha256:f9d3b77ed2e10d69648c2e443fa5e49ff06fca7eedf6fc580f9d8762d9bfb054`,
-and service image
-`sha256:8f8d4b2e68bf47c9d92c6c5c0f77fdbf60d0056ef32155a34ecc96357dfd41f4`.
-Exact methodology, limitations, hashes, results, and replay instructions are in
+The accepted pilot's release commit and agent, broker, and service image IDs,
+with exact methodology, limitations, hashes, results, and replay instructions, are in
 [`docs/production-swe-rebench-pilot.md`](docs/production-swe-rebench-pilot.md).
 
 Any future changed input must rerun the affected gates. There is no fallback
