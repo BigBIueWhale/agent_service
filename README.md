@@ -149,6 +149,32 @@ high and max to the canonical xhigh rendering and rejects medium, low, or disabl
 thinking in this profile. A client cannot accidentally obtain the old Qwen3.6
 repetition intervention or a weaker fast path.
 
+Thinking from every prior assistant turn is rendered into every request. The
+chat template gates that on `preserve_thinking is undefined or preserve_thinking
+is true or loop.index0 > ns.last_query_index`, and this deployment sends no
+`preserve_thinking`, so the first clause applies and the full reasoning trace is
+rendered unconditionally. The third clause is the one worth understanding,
+because it is what makes retention unavailable as a setting rather than merely
+unset. `ns.last_query_index` is the index of the most recent `role: "user"`
+message whose rendered content is not wrapped in `<tool_response>`, and thinking
+is dropped from every assistant turn at or before it. That wrapper test never
+matches in an agent loop: tool results travel as `role: "tool"` messages and
+vLLM's chat parser keeps that role, so the template wraps them in
+`<tool_response>` only while rendering, after the backwards scan has already
+run. What does match is the client's own active-todo reminder — Qwen Code
+re-injects it every third tool turn (`ACTIVE_TODO_REMINDER_REFRESH_TURNS = 3`),
+its text opens with `<system-reminder>`, and the OpenAI converter emits it as a
+separate `role: "user"` message following the tool messages. Each injection
+becomes the new `ns.last_query_index` and moves the cut forward. A shedding form
+of that gate therefore expresses no retention policy at all: how much reasoning
+survives is decided by where the model last called `todo_write`, a property of
+the trajectory rather than of the request. Across the 132 recorded full-suite
+runs under `artifacts/swe-rebench-2026-07-production-service/`, `todo_write` is
+called in 100 and never called in the other 32; where it is never called the cut
+never leaves the opening prompt and nothing is shed. Thinking retention is not
+separable from tool-loop structure, which is why this deployment does not
+express it as a separable option.
+
 Every main-turn context-boundary decision that can trigger compaction or set the
 outbound generation limit uses the real vLLM tokenizer on the fully rendered
 request. Before compaction and again before generation, Qwen Code sends the exact

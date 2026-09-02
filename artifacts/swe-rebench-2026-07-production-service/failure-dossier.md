@@ -13,45 +13,45 @@ the referenced artifacts.
 
 In seven of the nine failed tasks, the run did not miss the winning
 answer — it **generated the winning answer and rejected it**, in
-writing, usually in both thinking modes independently:
+writing, usually in both runs of the pair independently:
 
-- **arcadedb-4281** (both modes): articulated the golden hybrid
+- **arcadedb-4281** (both runs): articulated the golden hybrid
   ("try MessageFormat first… fall back to String.format-style… could
   handle both") and rejected it as "too clever" / "non-conformant usage
   shouldn't be silently supported" — deleting observable behavior the
   hidden PASS_TO_PASS tests lock in, despite the repo's own CLAUDE.md
   saying "maintain backward compatibility". The real PR's review bot had
   flagged the identical regression on the identical first draft.
-- **nanobot-4274** (both): read, quoted, and *predicted the failure of*
+- **nanobot-4274** (both runs): read, quoted, and *predicted the failure of*
   the exact four legacy tests that later failed them — then overruled
   the tests as "probably stale" ("the evaluation harness probably has
   updated tests"). Run A's workspace was grader-RESOLVED-equivalent from
   turn 61 through turn 112, until its own wrong-oracle verification
   harness "found a real bug" in the accidentally-correct code and edited
   the winning patch into a losing one.
-- **dubbo-go-3357** (both): voiced "should removal be pointer or value
+- **dubbo-go-3357** (both runs): voiced "should removal be pointer or value
   equality?… the hidden tests probably use the same pointer; keep
   consistency" and bet wrong; voiced the match-key wipe scenario
   verbatim and closed it with "no problem". One line
   (`u == url` → `u.URLEqual(url)`) separated both runs from most of
   their failures.
-- **agno-8148** (both): cited the flat-kwargs precedent in
+- **agno-8148** (both runs): cited the flat-kwargs precedent in
   `delegate_task_to_member` as "the cleanest approach", then rejected it
   because `continue_run` lacks a `session_state` parameter — choosing a
   `run_context` object handoff that is plausibly functionally correct
   but invisible to the graded `kwargs["dependencies"]` assertion.
-- **pulsar-25793** (both): run A hypothesized "the hidden tests will
+- **pulsar-25793** (both runs): run A hypothesized "the hidden tests will
   count the number of scheduled retries" and still shipped a 100 ms
   polling design whose own harness printed the polling ("reschedules…
   total=5" per half-second). Run B *held the reference-shaped
   completion-driven design first* and retreated to polling when a
   fixable handoff race looked complex.
-- **pulsar-25865** (both): asked the decisive question — "what if a raw
+- **pulsar-25865** (both runs): asked the decisive question — "what if a raw
   RuntimeException leaked out of fromByteArray?" — and answered "the
   constructor's catch would return 500 — that's acceptable", which is a
   precise description of the hidden test and the wrong verdict. Both
   patches were one `| RuntimeException` clause from resolving.
-- **arcadedb-4455** (both): the instruction's own root-cause analysis is
+- **arcadedb-4455** (both runs): the instruction's own root-cause analysis is
   wrong (the bug is a compaction-phase race it never mentions). Run A
   proved the stated mechanism impossible dozens of times, touched the
   true answer twice ("unless page 1 is being reset. `clearDataPages()`…"
@@ -114,27 +114,18 @@ pair reframes "solved but couldn't stop": the fixes landed at 67% and
 87% of budget and the remaining turns were the prompt's own second
 deliverable (regression tests) — a scheduling failure, not scope creep.
 
-## 5. Thinking modes change the texture of failure, not the outcome
+## 5. Outcome is stable run to run; the one split is a grading artifact
 
-Ten of eleven honestly-recorded pairs agree in outcome across modes; the
-one split (arcadedb-4411) is luck, not capability: both modes produced
-functionally identical fixes (the loser's planner hunk is
+Ten of eleven honestly-recorded pairs agree in outcome across their two
+runs; the one split (arcadedb-4411) is luck, not capability: both runs
+produced functionally identical fixes (the loser's planner hunk is
 character-identical to the maintainer's), and the reward difference was
 test-file placement — the winner's tests (carrying the same latent
 compile bug) went into a file the grader force-resets, the loser's new
 file survived into the graded build and broke compilation.
 
-- **Unpreserved**: re-derivation tax (the same conclusion re-derived up
-  to 30 times; 2.5× the thinking volume for the same work), decision
-  drift (4411's test-placement choice flipped on its fifth cold
-  re-litigation — the fatal flip), and tool-glitch perseveration.
-- **Preserved**: cheap, fast, decision-stable — and doubt-suppressing
-  (dubbo-A quit at 33% of budget with its two decisive doubts voiced
-  once and closed forever) and detour-persistent (hugegraph-B followed a
-  phantom state-leak through five classes of bytecode).
-
-Neither mode produced budget awareness, and both modes made the same
-wrong design calls independently — strong evidence these are
+No run produced budget awareness, and independent runs of the same task
+made the same wrong design calls — strong evidence these are
 model-level priors, not sampling noise.
 
 ## 6. Benchmark-construction hazards observed (recorded, not excuses)

@@ -1,36 +1,30 @@
 #!/usr/bin/env python3
-"""Per-variant context-compaction analysis over suite result bundles.
+"""Per-run context-trajectory analysis over suite result bundles.
 
 The agent's event stream records per-turn ``input_tokens`` on assistant
-events. Between compressions the conversation context is append-only, so
-the per-turn input-token trajectory is non-decreasing; any strict drop
-marks a history compaction, and the value it dropped from is the context
-size at which the compressor fired. Qwen Code 0.21.12 emits no explicit
-compression event in stream-json, so this trajectory analysis is the
-authoritative detector.
+events. That trajectory is the only context-size signal the stream
+carries: Qwen Code 0.21.12 emits no explicit compression event in
+stream-json, so a strict drop between consecutive usage-bearing turns is
+the sole observable that the rendered prompt got smaller, and the value
+it dropped from is the context size it shrank from.
 
-For every variant this reports: number of graded turns carrying usage,
-peak and final context size (absolute and as a fraction of the 262144
-window), and each compaction as
-``{usage_index, input_tokens_before, input_tokens_after,
-cumulative_input_tokens_before}``. Every drop is listed regardless of
-size, so nothing is silently classified away.
+What a drop is and is not. A drop is a measurement: the rendered prompt
+for turn N was smaller than for turn N-1. It is not a labelled cause.
+The stream records no reason for a shrink, and this script does not
+infer one -- it reports every drop, regardless of size, so nothing is
+silently classified away. Attributing a drop to any particular mechanism
+requires evidence this trajectory does not contain.
+
+For every run this reports: number of graded turns carrying usage, peak
+and final context size (absolute and as a fraction of the 262144
+window), and each drop as ``{usage_index, input_tokens_before,
+input_tokens_after, cumulative_input_tokens_before}``.
 """
 import json
 import pathlib
 import sys
 
 CONTEXT_WINDOW = 262144
-
-def classify(variant: str, result: dict) -> dict:
-    """Preserved histories are append-only, so every drop there is a true
-    compaction. Unpreserved histories legitimately shed prior thinking, so
-    their drops are the mode's own history-thinning dynamics; the near-limit
-    compressor has never been observed to fire and is claimed only for a
-    preserved-mode drop."""
-    key = "compactions" if "-preserved" in variant else "history_drops"
-    result[key] = result.pop("drops")
-    return result
 
 def analyze_events(path: pathlib.Path) -> dict:
     trajectory = []
@@ -74,19 +68,17 @@ def main() -> int:
     root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "full-suite-v3/runs")
     rows = []
     for events in sorted(root.glob("*/0*/bundle/output/events.jsonl")):
-        variant_dir = events.parents[2]
+        run_dir = events.parents[2]
         rows.append({
-            "task": variant_dir.parent.name,
-            "variant": variant_dir.name,
-            **classify(variant_dir.name, analyze_events(events)),
+            "task": run_dir.parent.name,
+            "run": run_dir.name,
+            **analyze_events(events),
         })
-    json.dump({"context_window": CONTEXT_WINDOW, "variants": rows},
+    json.dump({"context_window": CONTEXT_WINDOW, "runs": rows},
               sys.stdout, indent=2)
     print()
-    compactions = sum(len(r.get("compactions", [])) for r in rows)
-    thinning = sum(len(r.get("history_drops", [])) for r in rows)
-    print(f"variants={len(rows)} true_compactions={compactions} "
-          f"unpreserved_history_drops={thinning}", file=sys.stderr)
+    drops = sum(len(row["drops"]) for row in rows)
+    print(f"runs={len(rows)} input_token_drops={drops}", file=sys.stderr)
     return 0
 
 if __name__ == "__main__":

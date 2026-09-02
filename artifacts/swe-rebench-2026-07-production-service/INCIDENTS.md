@@ -9,7 +9,7 @@ issues** — these are the issues.
 ## Incident 1 — reading a running session self-deadlocks the read
 
 - **Observed** (first suite launch, task `ArcadeData__arcadedb-4281`,
-  `preserve_thinking=false`, session
+  session
   `s-2fa664506a2bcdc615a3708099dd072e189c64c6215ee88322ed4ee5ff07c03d`):
   the very first status poll of the running session timed out after 30 s
   with zero response bytes, so the fail-closed suite driver aborted.
@@ -72,8 +72,7 @@ current-handle read paths that only a live production session exercises.
 
 ## Incident 3 — agent loop-detection halt killed the whole pass instead of one variant
 
-- **Observed** (task `ArcadeData__arcadedb-4455`, `preserve_thinking=true`,
-  session
+- **Observed** (task `ArcadeData__arcadedb-4455`, session
   `s-bb316d9fc3c2e4e23a56c9c9068fc504640e191e4fd1759f7f427b7784674e8a`):
   the suite driver died with
   `production terminal body or required bundle contract failed` after 28
@@ -100,17 +99,16 @@ current-handle read paths that only a live production session exercises.
   session may survive. Recorded agent failure flows to
   `production_agent_process_failure` and the pass continues. The partial
   variant evidence is archived at
-  `runs/ArcadeData__arcadedb-4455/02-preserved.incident3-loop-halt-archived/`
+  `full-suite-v3/runs/ArcadeData__arcadedb-4455/02-preserved.incident3-loop-halt-archived/`
   and the variant reruns fresh.
 - **Benchmark note**: the loop-halt itself is a legitimate
-  model-behavior data point for the preserved-thinking comparison — the
-  agent's own final thinking read "I'm repeatedly making the same
-  mistake by including a `pages` pa…" while the guard fired.
+  model-behavior data point — the agent's own final thinking read "I'm
+  repeatedly making the same mistake by including a `pages` pa…" while
+  the guard fired.
 
 ## Incident 4 — dataset images with baked-dirty worktrees killed the pass silently
 
-- **Observed** (task `apache__hugegraph-3037`, `preserve_thinking=false`,
-  session
+- **Observed** (task `apache__hugegraph-3037`, session
   `s-3a2ba23e9e3a388da594922e2b8060d043401ba340f4a23bd69578fcfece972f`):
   after a healthy timeout run and a verified 2.9 GB bundle download, the
   driver died with no error message at the patch-construction step.
@@ -140,13 +138,12 @@ current-handle read paths that only a live production session exercises.
   materializer's `initial-git-status.z` (working-tree drift dies
   loudly); both docker invocations now fail with explicit diagnostics.
   The healthy-but-unfinished variant evidence is archived at
-  `runs/apache__hugegraph-3037/01-unpreserved.incident4-archived/` and
-  the variant reruns fresh.
+  `full-suite-v3/runs/apache__hugegraph-3037/01-unpreserved.incident4-archived/`
+  and the variant reruns fresh.
 
 ## Incident 5 — indexing the candidate patch defeated the dataset's test-collision guard
 
-- **Observed** (task `docker__docker-agent-2992`, `preserve_thinking=true`,
-  session
+- **Observed** (task `docker__docker-agent-2992`, session
   `s-56e5f62d4cc1df716743c83c621be613338347e0fd3e6baef08f37d9632f7bb6`):
   the grader ran but the official verifier wrote no reward
   (`official verifier did not write its reward and report`); its log
@@ -165,8 +162,8 @@ current-handle read paths that only a live production session exercises.
   `--index`), restoring the dataset's assumed state. Rewards read
   worktree bytes, so the 26 previously graded variants are unaffected.
   The partial variant evidence is archived at
-  `runs/docker__docker-agent-2992/01-preserved.incident5-archived/` and
-  the variant reruns fresh.
+  `full-suite-v3/runs/docker__docker-agent-2992/01-preserved.incident5-archived/`
+  and the variant reruns fresh.
 - **Benchmark note**: the collision itself is informative — the model
   independently chose the exact test path the maintainers used.
 

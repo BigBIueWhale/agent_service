@@ -9,7 +9,7 @@ guard fired. In each run the last 4 logged tool calls are byte-identical and
 the run halts while producing the 5th (guard threshold = 5). No run ever
 reached an `edit`/`write_file` — all three died during code exploration.
 
-## Failure 1 — arcadedb-4455 (preserve_thinking=TRUE), 94 events, num_turns=29
+## Failure 1 — arcadedb-4455, 94 events, num_turns=29
 
 **The loop.** Wanting lines 678–990 of `TransactionContext.java` (990 lines;
 a prior full read returned a truncation at line 677), the model emitted
@@ -41,7 +41,7 @@ PDF-only param exposed on text files, truncation pressure), loop guard 0%
 (correct, even lenient), serving stack ~10% (copy-attractor caveat; history
 provably visible, generation live).
 
-## Failure 2 — HKUDS__nanobot-4048 (preserve_thinking=TRUE), 68 events, num_turns=20
+## Failure 2 — HKUDS__nanobot-4048, 68 events, num_turns=20
 
 **The loop.** After three successful `offset` reads, the model switched to
 `pages` at ev 29 and never emitted `offset` again; terminal streak ev
@@ -66,7 +66,7 @@ write `offset: 770` and `limit: 130`." The next call was again
 capacity error that affirms the wrong mental model), loop guard 0% (a
 clear positive), serving ~10%.
 
-## Failure 3 — cloudnative-pg-10747 (preserve_thinking=FALSE), 67 events, num_turns=22
+## Failure 3 — cloudnative-pg-10747, 67 events, num_turns=22
 
 **The loop.** Three separate `pages` episodes on Go files with two genuine
 recoveries in between (ev 36 and ev 48 both switched to working
@@ -80,15 +80,13 @@ the range — would have landed in the silent-ignore trap.
 
 **Thinking.** Every terminal-loop turn re-derived the correct fix on the
 spot; ev 65 spells out the exact intended JSON ("`offset`: 600, `limit`:
-121. I'll try this.") — and the run died producing the opposite. With
-thinking stripped (unpreserved), the lessons learned at each recovery
-vanished from context and the model relapsed at the very next file both
-times — surviving history showed its own prior `pages` calls, i.e. bad
-examples without the corrections.
+121. I'll try this.") — and the run died producing the opposite. Neither
+mid-run recovery held: the model relapsed at the very next file both
+times, with the corrections it had just written still standing in its
+rendered history alongside its own prior `pages` calls.
 
 **Fault split:** model ~55%, tool/harness ~35% (inaccurate capacity error
-as the only feedback; unpreserved history erasing self-corrections enabled
-the relapses), loop guard 0%, serving ~10%.
+as the only feedback), loop guard 0%, serving ~10%.
 
 ## Cross-case synthesis
 
@@ -115,31 +113,20 @@ the relapses), loop guard 0%, serving ~10%.
    `pages` on non-PDFs with an explicit redirect, run the file-type check
    first, never silently drop a supplied parameter.
 
-4. **preserve_thinking made self-correction worse, not better.** The two
-   preserved runs had zero recoveries once the loop began (0/13 post-onset
-   `pages` calls corrected); the unpreserved run recovered twice mid-run.
-   Preserved history keeps every prior turn's meta-commentary — dozens of
-   additional literal `pages` tokens — lexically reinforcing the very
-   pattern the semantics forbid. Stripping weakened the attractor enough to
-   allow escapes but deleted the learned lesson, causing fresh relapses
-   until one ran the streak out. Neither setting prevented the death; the
-   preserved runs died deeper in the rut, the unpreserved run died of
-   amnesia-driven relapse.
-
-5. **Operational note (client-side).** `cache_read_input_tokens: 0` on
+4. **Operational note (client-side).** `cache_read_input_tokens: 0` on
    every call in all three runs; totals 913k/425k/469k input tokens for
    29/20/22 turns.
 
 ## Addendum (session operator)
 
-The operational note in (5) reflects the client-visible usage fields only.
+The operational note in (4) reflects the client-visible usage fields only.
 The vLLM engine's own counters over this deployment show 176.1M of 181.8M
 prefix-cache queries hit (96.8%) with mean prefill 0.63 s per request, so
 prompt reprocessing was in fact almost entirely cache-served; Qwen Code's
 stream-json usage simply does not propagate vLLM's cached-token accounting.
 The token totals above are nominal API input, not recompute cost.
 
-## Post-fix confirmation — v6 on the v14 release (arcadedb-4455, unpreserved)
+## Post-fix confirmation — v6 on the v14 release (arcadedb-4455)
 
 The `non-pdf-pages-rejection` contract (qwen-code source patch, baked into the
 v14 agent runtime) is live and behaves exactly as designed. In the v6 rerun,

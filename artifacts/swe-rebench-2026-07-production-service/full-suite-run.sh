@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# One resumable paired pass of every eligible SWE-rebench task through the
-# production agent service on the wire-transport release. For each task the
-# exact materialized workspace is frozen into a hash-committed zip receipt,
-# submitted once per history policy in the task's planned order, waited on by
-# polling the connection-independent session resource, retrieved back over
-# the connection with its bundle commitment, and graded by the preserved
-# immutable per-task evaluator image. Infrastructure failures fail closed and
-# are never recorded as model scores; a completed variant is never rerun and
-# never overwritten.
+# One resumable pass of every eligible SWE-rebench task through the
+# production agent service on the wire-transport release. Each task is run
+# twice under the identical deployed configuration, so the two runs are
+# independent samples of the same task rather than two conditions. For each
+# run the exact materialized workspace is frozen into a hash-committed zip
+# receipt, submitted, waited on by polling the connection-independent session
+# resource, retrieved back over the connection with its bundle commitment, and
+# graded by the preserved immutable per-task evaluator image. Infrastructure
+# failures fail closed and are never recorded as model scores; a completed run
+# is never rerun and never overwritten.
 set -Eeuo pipefail
 umask 077
 
@@ -51,7 +52,7 @@ done
 
 readonly API='http://127.0.0.1:8090'
 readonly SUITE_ROOT="${BENCH_ROOT}/full-suite-v1"
-# Pass v5 is the corrected-conditions pass: every variant's prompt is the
+# Pass v5 is the corrected-conditions pass: every run's prompt is the
 # committed harness preamble (time budget, grading mechanics, environment)
 # plus the untouched task statement, and every workspace carries the task's
 # warmed toolchain and dependency caches (.task-env.tar.gz, produced by
@@ -299,16 +300,16 @@ poll_until_terminal() {
   done
 }
 
-run_variant() {
-  local task_id="$1" task_dir="$2" ordinal="$3" policy="$4" label="$5"
-  local run_dir="${RUNS_ROOT}/${task_id}/${ordinal}-${label}"
+run_once() {
+  local task_id="$1" task_dir="$2" ordinal="$3"
+  local run_dir="${RUNS_ROOT}/${task_id}/${ordinal}"
   local dataset_dir="${DATASET_ROOT}/${task_id}"
   if [[ -f "${run_dir}/result.json" ]]; then
-    printf 'Variant %s of %s already has an accepted result; skipping.\n' "${label}" "${task_id}" >&2
+    printf 'Run %s of %s already has an accepted result; skipping.\n' "${ordinal}" "${task_id}" >&2
     return 0
   fi
   [[ ! -e "${run_dir}" ]] ||
-    die "partial variant evidence already exists at ${run_dir}; archive it explicitly before rerunning"
+    die "partial run evidence already exists at ${run_dir}; archive it explicitly before rerunning"
   # Non-recursive mkdir is the atomic mutual exclusion: the parent (the task's
   # runs dir) already exists from run_task, and a plain mkdir fails closed if the
   # run_dir appeared between the check above and here.
@@ -358,26 +359,26 @@ run_variant() {
   cp -al -- "${task_dir}/source/." "${composed_ws}/" ||
     { discard_workspace "${composed_ws}"; die "workspace hardlink copy failed for ${task_id}"; }
   cp -- "${env_dir}/task-env.tar.gz" "${composed_ws}/.task-env.tar.gz"
-  request_file="$(submission_create_receipt "${session_id}" "${composed_ws}" "${composed_prompt}" "${policy}")" ||
-    { discard_workspace "${composed_ws}"; die "receipt construction failed for ${task_id} ${label}"; }
+  request_file="$(submission_create_receipt "${session_id}" "${composed_ws}" "${composed_prompt}")" ||
+    { discard_workspace "${composed_ws}"; die "receipt construction failed for ${task_id} ${ordinal}"; }
   discard_workspace "${composed_ws}"
   created="${run_dir}/created.json"
   submission_post_receipt "${session_id}" "${request_file}" >"${created}" ||
-    die "submission failed for ${task_id} ${label}"
-  jq -e --arg id "${session_id}" --argjson policy "${policy}" \
+    die "submission failed for ${task_id} ${ordinal}"
+  jq -e --arg id "${session_id}" \
     '.session_id == $id and .status == "running" and .model == "qwen3.8-27b-nvfp4-k8v4" and
-     .context_window == 262144 and .preserve_thinking == $policy' \
+     .context_window == 262144' \
     "${created}" >/dev/null || die 'session creation body violated the locked contract'
-  printf 'Production session %s is running (%s, preserve_thinking=%s); polling the connection-independent resource.\n' \
-    "${session_id}" "${task_id}" "${policy}" >&2
+  printf 'Production session %s is running (%s run %s); polling the connection-independent resource.\n' \
+    "${session_id}" "${task_id}" "${ordinal}" >&2
 
   # --- terminal ------------------------------------------------------------
   local terminal="${run_dir}/terminal.json"
   poll_until_terminal "${session_id}" "${terminal}"
-  jq -e --arg id "${session_id}" --argjson policy "${policy}" \
+  jq -e --arg id "${session_id}" \
     '.session_id == $id and .status == "completed" and
      .model == "qwen3.8-27b-nvfp4-k8v4" and .context_window == 262144 and
-     .preserve_thinking == $policy and .finished_at_unix > 0 and
+     .finished_at_unix > 0 and
      (.bundle_sha256 | test("^[0-9a-f]{64}$")) and .bundle_compressed_bytes > 0 and
      .bundle_file_count > 0 and .raw_session_tree_retained == false' \
     "${terminal}" >/dev/null || die 'production terminal body or required bundle contract failed'
@@ -420,11 +421,9 @@ run_variant() {
   [[ -d "${run_dir}/bundle/staged" && ! -L "${run_dir}/bundle/staged" ]] || die 'bundle lacks a real staged workspace'
   cmp -- "${composed_prompt}" "${run_dir}/bundle/control/prompt.txt" ||
     die 'bundle prompt differs from the composed preamble+instruction prompt'
-  jq -e --argjson policy "${policy}" '.preserve_thinking == $policy and (keys == ["preserve_thinking"])' \
-    "${run_dir}/bundle/control/history-policy.json" >/dev/null || die 'bundle history policy mismatch'
-  jq -e --argjson policy "${policy}" --arg sandbox "${AGENT_SANDBOX}" \
+  jq -e --arg sandbox "${AGENT_SANDBOX}" \
     '.model == "qwen3.8-27b-nvfp4-k8v4" and .context_window == 262144 and
-     .preserve_thinking == $policy and .sandbox == $sandbox' \
+     .sandbox == $sandbox' \
     "${run_dir}/bundle/output/ready.json" >/dev/null || die 'bundle readiness record mismatch'
 
   # --- trusted candidate patch --------------------------------------------
@@ -458,7 +457,7 @@ run_variant() {
   done < <(find "${staged_root}" -type f -name env.sh -print0)
   [[ -z "${task_env_excludes}" ]] ||
     printf 'NOTE: %s %s extracted the task environment inside the workspace; excluding it from the candidate patch:\n%s' \
-      "${task_id}" "${label}" "${task_env_excludes}" >&2
+      "${task_id}" "${ordinal}" "${task_env_excludes}" >&2
 
   mkdir -- "${run_dir}/patch"
   docker run --rm --network none --security-opt no-new-privileges \
@@ -491,7 +490,7 @@ run_variant() {
       git diff --cached --stat -- > /out/candidate.stat
       git diff --cached --name-status -- > /out/candidate.name-status
       chmod 0644 /out/baseline.status /out/candidate.patch /out/candidate.stat /out/candidate.name-status
-    ' || die "candidate patch construction failed for ${task_id} ${label}"
+    ' || die "candidate patch construction failed for ${task_id} ${ordinal}"
   [[ -f "${run_dir}/patch/candidate.patch" && ! -L "${run_dir}/patch/candidate.patch" ]] ||
     die 'trusted patch construction failed'
   # The observed baked baseline must byte-match what materialization
@@ -540,7 +539,7 @@ run_variant() {
       rm -rf /tests
       cp -a /benchmark-tests /tests
       exec bash /tests/test.sh
-    ' >/dev/null || die "grader container creation failed for ${task_id} ${label}"
+    ' >/dev/null || die "grader container creation failed for ${task_id} ${ordinal}"
   printf 'Grading %s session %s in the preserved evaluator image.\n' "${task_id}" "${session_id}" >&2
   set +e
   timeout --signal=TERM --kill-after=10s "${VERIFIER_TIMEOUT_SEC}s" \
@@ -590,7 +589,6 @@ run_variant() {
     --slurpfile release "${PROVENANCE_ROOT}/release.json" \
     --arg task_id "${task_id}" \
     --arg ordinal "${ordinal}" \
-    --argjson preserve_thinking "${policy}" \
     --arg session_id "${session_id}" \
     --arg bundle_sha256 "${bundle_sha}" \
     --arg patch_sha256 "${patch_sha}" \
@@ -602,25 +600,24 @@ run_variant() {
     --arg prompt_sha256 "${prompt_sha}" \
     --slurpfile task_env "${run_dir}/task-env-manifest.json" \
     '{
-      schema_version:3,
+      schema_version:4,
       task_id:$task_id,
       release:$release[0],
       prompt_sha256:$prompt_sha256,
       task_env:$task_env[0],
       run_order:($ordinal|tonumber),
-      variant:{preserve_thinking:$preserve_thinking},
       production:{created:$created[0],terminal:$terminal[0],session_id:$session_id,turn_budget_exhausted:$turn_budget_exhausted},
       evidence:{bundle_sha256:$bundle_sha256,candidate_patch_sha256:$patch_sha256,candidate_patch_bytes:$patch_bytes},
       verifier:{exit_code:$grader_exit_code,reward:$reward,report:$verifier[0]},
       outcome:{classification:$classification,resolved:($reward == 1)}
     }' >"${run_dir}/result.json.partial"
   [[ -s "${run_dir}/result.json.partial" ]] ||
-    die "result summary for ${task_id} ${label} serialized to an empty file"
+    die "result summary for ${task_id} ${ordinal} serialized to an empty file"
   sync -f -- "${run_dir}/result.json.partial"
   mv -- "${run_dir}/result.json.partial" "${run_dir}/result.json"
   sync -f -- "${run_dir}"
-  printf 'Variant complete: %s %s reward=%s classification=%s turns=%s input_tokens_visible_in_bundle\n' \
-    "${task_id}" "${label}" "${reward}" "${classification}" "$(jq -er '.num_turns' "${terminal}")" >&2
+  printf 'Run complete: %s %s reward=%s classification=%s turns=%s input_tokens_visible_in_bundle\n' \
+    "${task_id}" "${ordinal}" "${reward}" "${classification}" "$(jq -er '.num_turns' "${terminal}")" >&2
 }
 
 run_task() {
@@ -672,12 +669,12 @@ run_task() {
       --argjson staged_entries "${staged_entries}" \
       --argjson max_staged_bytes "${MAX_STAGED_BYTES}" --argjson max_archive_bytes "${SUBMISSION_MAX_ARCHIVE_BYTES}" \
       --argjson max_staged_files "${MAX_STAGED_FILES}" --argjson max_staged_entries "${MAX_STAGED_ENTRIES}" \
-      '{schema_version:2, task_id:$task, excluded:true,
+      '{schema_version:3, task_id:$task, excluded:true,
         exclusion:{reason:"composed_workspace_exceeds_service_staging_cap", detail:$reason,
                    estimated:{staged_bytes:$staged_bytes, staged_files:$staged_files, staged_entries:$staged_entries},
                    caps:{max_staged_bytes:$max_staged_bytes, max_archive_bytes:$max_archive_bytes,
                          max_staged_files:$max_staged_files, max_staged_entries:$max_staged_entries}},
-        runs:[], paired:null}' >"${target}/pair-summary.json.partial"
+        runs:[]}' >"${target}/pair-summary.json.partial"
     [[ -s "${target}/pair-summary.json.partial" ]] ||
       die "exclusion summary for ${task_id} serialized to an empty file"
     sync -f -- "${target}/pair-summary.json.partial"
@@ -690,47 +687,26 @@ run_task() {
   verify_dataset_inputs "${task_id}" "${task_dir}"
   ensure_environment_image "${task_id}" "${task_dir}"
 
-  local order ordinal label policy
-  order="$(jq -cer '.policy_order' "${task_dir}/manifest.json")"
-  # The pair aggregation below pivots on exactly one false and one true variant.
-  # A policy_order that is not a permutation of [false, true] would make the
-  # paired select()s empty, and jq -n would then write a zero-byte pair-summary
-  # (proven: `jq -n '{a:(empty)}'` emits nothing and exits 0), marking the task
-  # complete forever with no result. Reject anything else fail-closed.
-  jq -e 'type == "array" and length == 2 and sort == [false, true]' <<<"${order}" >/dev/null ||
-    die "policy_order for ${task_id} is not a permutation of [false, true]: ${order}"
-  local index=0 first_result="" second_result=""
-  for policy in $(jq -r '.[]' <<<"${order}"); do
-    index=$((index + 1))
+  local index ordinal first_result="" second_result=""
+  for index in 1 2; do
     ordinal="$(printf '%02d' "${index}")"
-    if [[ "${policy}" == false ]]; then label=unpreserved; else label=preserved; fi
-    run_variant "${task_id}" "${task_dir}" "${ordinal}" "${policy}" "${label}"
-    # Aggregate from the exact variant directory this loop produced, never a
-    # glob that could also match an archived sibling (e.g. 01-*.archived).
-    if (( index == 1 )); then first_result="${target}/${ordinal}-${label}/result.json"
-    else second_result="${target}/${ordinal}-${label}/result.json"; fi
+    run_once "${task_id}" "${task_dir}" "${ordinal}"
+    # Aggregate from the exact run directory this loop produced, never a glob
+    # that could also match an archived sibling (e.g. 01.archived).
+    if (( index == 1 )); then first_result="${target}/${ordinal}/result.json"
+    else second_result="${target}/${ordinal}/result.json"; fi
   done
   [[ -f "${first_result}" && -f "${second_result}" ]] ||
-    die "pair aggregation for ${task_id} is missing an exact variant result.json"
+    die "pair aggregation for ${task_id} is missing an exact run result.json"
 
   jq -n \
     --slurpfile first "${first_result}" \
     --slurpfile second "${second_result}" \
     --arg task_id "${task_id}" \
     '{
-      schema_version:2,
+      schema_version:3,
       task_id:$task_id,
-      runs:[$first[0],$second[0]],
-      paired:{
-        resolved:{
-          unpreserved:([$first[0],$second[0]][] | select(.variant.preserve_thinking == false) | .outcome.resolved),
-          preserved:([$first[0],$second[0]][] | select(.variant.preserve_thinking == true) | .outcome.resolved)
-        },
-        turns:{
-          unpreserved:([$first[0],$second[0]][] | select(.variant.preserve_thinking == false) | .production.terminal.num_turns),
-          preserved:([$first[0],$second[0]][] | select(.variant.preserve_thinking == true) | .production.terminal.num_turns)
-        }
-      }
+      runs:[$first[0],$second[0]]
     }' >"${target}/pair-summary.json.partial"
   [[ -s "${target}/pair-summary.json.partial" ]] ||
     die "pair summary for ${task_id} serialized to an empty file"
