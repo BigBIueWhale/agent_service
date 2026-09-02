@@ -35,9 +35,20 @@ mapfile -t identifiers < <(
   exit 1
 }
 
+# Evidence is hunk content: the added and context lines that together are the
+# result of applying the diff. A `+++ ` file header carries the same leading
+# `+` but names a path, so an identifier occurring only inside a path name is
+# not evidence that any code mentions it.
+if ! hunk_content="$(
+  grep -E '^[+ ]' "${REVIEW_DIFF}" | grep -vE '^\+\+\+ '
+)"; then
+  printf 'ERROR: the review diff carries no hunk content to check against.\n' >&2
+  exit 1
+fi
+
 undocumented=()
 for identifier in "${identifiers[@]}"; do
-  if ! grep -qE "^[+ ].*\\b${identifier}\\b" "${REVIEW_DIFF}"; then
+  if ! grep -qE "\\b${identifier}\\b" <<<"${hunk_content}"; then
     undocumented+=("${identifier}")
   fi
 done
