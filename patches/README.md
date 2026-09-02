@@ -312,12 +312,16 @@ provide as one fail-closed mode:
   carrying the rendered prompt token count before and after, the
   `CompressionStatus` spelling, and a `succeeded` flag, under the same
   `parent_tool_use_id` convention as every other message (`null` for the main
-  session, the `agent` tool-call id for a subagent). A NOOP — no attempt was
-  made — stays silent, and the narrower `ChatCompressed` event keeps its
-  exact meaning of "the history was replaced", so startup-context restoration
-  and the interactive notice still fire only on real successes (seven
-  `[compaction-event]` and compaction-ordering tests execute this in the
-  build);
+  session, the `agent` tool-call id for a subagent). The send that refuses an
+  oversized prompt reports its attempt on the same path: the record reaches
+  the caller as the stream's first event and the refusal follows it, so the
+  one send that ends a session is not the one attempt that left no trace. A
+  NOOP — no attempt was made — stays silent, and the narrower
+  `ChatCompressed` event keeps its exact meaning of "the history was
+  replaced", so startup-context restoration and the interactive notice still
+  fire only on real successes, and a refusal that put the pre-compaction
+  history back does not claim one (eight `[compaction-event]` and
+  compaction-ordering tests execute this in the build);
 - a subagent's own terminal record scoped to the subagent that produced it.
   Every emitted event names its scope — `parent_tool_use_id` is `null` for
   the main session and the owning `agent` tool-call id for a subagent — but

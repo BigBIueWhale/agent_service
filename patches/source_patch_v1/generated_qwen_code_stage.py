@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'e3dfd6c2c4770ebd895ac45ccab980a5a35d950c7dbe89dd26f69aee469a8fdc',
+  'review_sha256': '40a5199c1610458b987576f71c3b80b3bc8a63ce5277d839dbde966f5bdaa330',
   'files': ({'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
@@ -109,10 +109,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e'},
             {'path': 'packages/core/src/core/geminiChat.test.ts',
              'before_sha256': 'c3ec701c78d99698ad538c188e08d10b78b266c372b850907def72f9badb8830',
-             'after_sha256': '7ef9277810eaa314832a3ecac7e9f83d626bb83833407580dcdd878219ae1e31'},
+             'after_sha256': '60dd2aee89abc059c70254ee58fa66a9359e3f7add35b2089c194179548d4f09'},
             {'path': 'packages/core/src/core/geminiChat.ts',
              'before_sha256': '384de52c73dc5c387d3147713046713d34de0b6724b12feb00574508a4d7cc6c',
-             'after_sha256': 'd4e020551f7fa36de936d79a0a0b44f5b4181fd1c07b0555d01a5782f5680578'},
+             'after_sha256': '7a4da2ab02a2d624f0c3b299ad098117a95287c751ffd847d6d6a755b772c4e9'},
             {'path': 'packages/core/src/core/genai-compat.test.ts',
              'before_sha256': 'b454f3c146c1be79cbc43aadceda5010756ada9f80a5ec33186c9826feaccf76',
              'after_sha256': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50'},
@@ -15978,6 +15978,458 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '}])),\n'},
             {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-3',
              'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '          chat as unknown as { getRequestHistory: () => '
+                       'Content[] },\n'
+                       "          'getRequestHistory',\n"
+                       '        ).mockImplementationOnce(() => {\n'
+                       "          throw new Error('history setup failed');\n"
+                       '        });\n'
+                       '\n'
+                       '        await expect(\n'
+                       '          chat.sendMessageStream(\n'
+                       "            'test-model',\n"
+                       "            { message: 'first' },\n"
+                       "            'prompt-id-plan-exit-rollback-1',\n"
+                       '          ),\n'
+                       "        ).rejects.toThrow('history setup failed');\n"
+                       '\n'
+                       '        expect(\n'
+                       '          mockConfig.restorePendingManualPlanExitNotice,\n'
+                       '        ).toHaveBeenCalledWith(11);\n'
+                       '\n',
+             'after': '          chat as unknown as { getRequestHistory: () => '
+                      'Content[] },\n'
+                      "          'getRequestHistory',\n"
+                      '        ).mockImplementationOnce(() => {\n'
+                      "          throw new Error('history setup failed');\n"
+                      '        });\n'
+                      '\n'
+                      '        const failedSetup = await chat.sendMessageStream(\n'
+                      "          'test-model',\n"
+                      "          { message: 'first' },\n"
+                      "          'prompt-id-plan-exit-rollback-1',\n"
+                      '        );\n'
+                      '        await expect(\n'
+                      '          (async () => {\n'
+                      '            for await (const _ of failedSetup) {\n'
+                      '              /* consume */\n'
+                      '            }\n'
+                      '          })(),\n'
+                      "        ).rejects.toThrow('history setup failed');\n"
+                      '\n'
+                      '        expect(\n'
+                      '          mockConfig.restorePendingManualPlanExitNotice,\n'
+                      '        ).toHaveBeenCalledWith(11);\n'
+                      '\n',
+             'review_before': '          chat as unknown as { getRequestHistory: () => '
+                              'Content[] },\n'
+                              "          'getRequestHistory',\n"
+                              '        ).mockImplementationOnce(() => {\n'
+                              "          throw new Error('history setup failed');\n"
+                              '        });\n'
+                              '\n'
+                              '        await expect(\n'
+                              '          chat.sendMessageStream(\n'
+                              "            'test-model',\n"
+                              "            { message: 'first' },\n"
+                              "            'prompt-id-plan-exit-rollback-1',\n"
+                              '          ),\n'
+                              "        ).rejects.toThrow('history setup failed');\n"
+                              '\n'
+                              '        expect(\n'
+                              '          '
+                              'mockConfig.restorePendingManualPlanExitNotice,\n'
+                              '        ).toHaveBeenCalledWith(11);\n'
+                              '\n',
+             'review_after': '          chat as unknown as { getRequestHistory: () => '
+                             'Content[] },\n'
+                             "          'getRequestHistory',\n"
+                             '        ).mockImplementationOnce(() => {\n'
+                             "          throw new Error('history setup failed');\n"
+                             '        });\n'
+                             '\n'
+                             '        const failedSetup = await '
+                             'chat.sendMessageStream(\n'
+                             "          'test-model',\n"
+                             "          { message: 'first' },\n"
+                             "          'prompt-id-plan-exit-rollback-1',\n"
+                             '        );\n'
+                             '        await expect(\n'
+                             '          (async () => {\n'
+                             '            for await (const _ of failedSetup) {\n'
+                             '              /* consume */\n'
+                             '            }\n'
+                             '          })(),\n'
+                             "        ).rejects.toThrow('history setup failed');\n"
+                             '\n'
+                             '        expect(\n'
+                             '          '
+                             'mockConfig.restorePendingManualPlanExitNotice,\n'
+                             '        ).toHaveBeenCalledWith(11);\n'
+                             '\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-4',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '\n'
+                       "    it('releases the send-lock when auto-compression throws "
+                       "(no deadlock)', async () => {\n"
+                       '      const compressSpy = vi\n'
+                       "        .spyOn(ChatCompressionService.prototype, 'compress')\n"
+                       "        .mockRejectedValueOnce(new Error('compression API "
+                       "down'));\n"
+                       '\n'
+                       '      // First send: compression rejects, error propagates to '
+                       'caller. The\n'
+                       '      // streamDoneResolver must run so this.sendPromise '
+                       'resolves; otherwise\n'
+                       '      // every subsequent send blocks forever.\n'
+                       '      await expect(\n'
+                       '        chat.sendMessageStream(\n'
+                       "          'test-model',\n"
+                       "          { message: 'first' },\n"
+                       "          'prompt-id-deadlock-1',\n"
+                       '        ),\n'
+                       "      ).rejects.toThrow('compression API down');\n"
+                       '\n'
+                       '      // Second send: compress returns NOOP, request goes '
+                       'through. If the\n'
+                       '      // lock leaked, this await would never resolve.\n'
+                       '      compressSpy.mockResolvedValueOnce({\n'
+                       '        newHistory: null,\n'
+                       '        info: {\n',
+             'after': '\n'
+                      "    it('releases the send-lock when auto-compression throws (no "
+                      "deadlock)', async () => {\n"
+                      '      const compressSpy = vi\n'
+                      "        .spyOn(ChatCompressionService.prototype, 'compress')\n"
+                      "        .mockRejectedValueOnce(new Error('compression API "
+                      "down'));\n"
+                      '\n'
+                      '      // First send: compression rejects. The '
+                      'streamDoneResolver must run so\n'
+                      '      // this.sendPromise resolves; otherwise every subsequent '
+                      'send blocks\n'
+                      '      // forever. Its stream is left unread until the end of '
+                      'the test, so the\n'
+                      '      // release below is proven to happen without anyone '
+                      'consuming it.\n'
+                      '      const abandoned = await chat.sendMessageStream(\n'
+                      "        'test-model',\n"
+                      "        { message: 'first' },\n"
+                      "        'prompt-id-deadlock-1',\n"
+                      '      );\n'
+                      '\n'
+                      '      // Second send: compress returns NOOP, request goes '
+                      'through. If the\n'
+                      '      // lock leaked, this await would never resolve.\n'
+                      '      compressSpy.mockResolvedValueOnce({\n'
+                      '        newHistory: null,\n'
+                      '        info: {\n',
+             'review_before': '\n'
+                              "    it('releases the send-lock when auto-compression "
+                              "throws (no deadlock)', async () => {\n"
+                              '      const compressSpy = vi\n'
+                              '        .spyOn(ChatCompressionService.prototype, '
+                              "'compress')\n"
+                              "        .mockRejectedValueOnce(new Error('compression "
+                              "API down'));\n"
+                              '\n'
+                              '      // First send: compression rejects, error '
+                              'propagates to caller. The\n'
+                              '      // streamDoneResolver must run so '
+                              'this.sendPromise resolves; otherwise\n'
+                              '      // every subsequent send blocks forever.\n'
+                              '      await expect(\n'
+                              '        chat.sendMessageStream(\n'
+                              "          'test-model',\n"
+                              "          { message: 'first' },\n"
+                              "          'prompt-id-deadlock-1',\n"
+                              '        ),\n'
+                              "      ).rejects.toThrow('compression API down');\n"
+                              '\n'
+                              '      // Second send: compress returns NOOP, request '
+                              'goes through. If the\n'
+                              '      // lock leaked, this await would never resolve.\n'
+                              '      compressSpy.mockResolvedValueOnce({\n'
+                              '        newHistory: null,\n'
+                              '        info: {\n',
+             'review_after': '\n'
+                             "    it('releases the send-lock when auto-compression "
+                             "throws (no deadlock)', async () => {\n"
+                             '      const compressSpy = vi\n'
+                             '        .spyOn(ChatCompressionService.prototype, '
+                             "'compress')\n"
+                             "        .mockRejectedValueOnce(new Error('compression "
+                             "API down'));\n"
+                             '\n'
+                             '      // First send: compression rejects. The '
+                             'streamDoneResolver must run so\n'
+                             '      // this.sendPromise resolves; otherwise every '
+                             'subsequent send blocks\n'
+                             '      // forever. Its stream is left unread until the '
+                             'end of the test, so the\n'
+                             '      // release below is proven to happen without '
+                             'anyone consuming it.\n'
+                             '      const abandoned = await chat.sendMessageStream(\n'
+                             "        'test-model',\n"
+                             "        { message: 'first' },\n"
+                             "        'prompt-id-deadlock-1',\n"
+                             '      );\n'
+                             '\n'
+                             '      // Second send: compress returns NOOP, request '
+                             'goes through. If the\n'
+                             '      // lock leaked, this await would never resolve.\n'
+                             '      compressSpy.mockResolvedValueOnce({\n'
+                             '        newHistory: null,\n'
+                             '        info: {\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-5',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '      );\n'
+                       '      for await (const _ of stream) {\n'
+                       '        /* consume */\n'
+                       '      }\n'
+                       '\n'
+                       '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('releases the send-lock when setup throws after "
+                       "compression', async () => {\n"
+                       '      const compressSpy = vi\n'
+                       "        .spyOn(ChatCompressionService.prototype, 'compress')\n"
+                       '        .mockResolvedValue({\n',
+             'after': '      );\n'
+                      '      for await (const _ of stream) {\n'
+                      '        /* consume */\n'
+                      '      }\n'
+                      '\n'
+                      '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
+                      '\n'
+                      '      // The unread stream still carries the failure for '
+                      'whoever reads it.\n'
+                      '      await expect(\n'
+                      '        (async () => {\n'
+                      '          for await (const _ of abandoned) {\n'
+                      '            /* consume */\n'
+                      '          }\n'
+                      '        })(),\n'
+                      "      ).rejects.toThrow('compression API down');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('releases the send-lock when setup throws after "
+                      "compression', async () => {\n"
+                      '      const compressSpy = vi\n'
+                      "        .spyOn(ChatCompressionService.prototype, 'compress')\n"
+                      '        .mockResolvedValue({\n',
+             'review_before': '      );\n'
+                              '      for await (const _ of stream) {\n'
+                              '        /* consume */\n'
+                              '      }\n'
+                              '\n'
+                              '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('releases the send-lock when setup throws after "
+                              "compression', async () => {\n"
+                              '      const compressSpy = vi\n'
+                              '        .spyOn(ChatCompressionService.prototype, '
+                              "'compress')\n"
+                              '        .mockResolvedValue({\n',
+             'review_after': '      );\n'
+                             '      for await (const _ of stream) {\n'
+                             '        /* consume */\n'
+                             '      }\n'
+                             '\n'
+                             '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
+                             '\n'
+                             '      // The unread stream still carries the failure for '
+                             'whoever reads it.\n'
+                             '      await expect(\n'
+                             '        (async () => {\n'
+                             '          for await (const _ of abandoned) {\n'
+                             '            /* consume */\n'
+                             '          }\n'
+                             '        })(),\n'
+                             "      ).rejects.toThrow('compression API down');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('releases the send-lock when setup throws after "
+                             "compression', async () => {\n"
+                             '      const compressSpy = vi\n'
+                             '        .spyOn(ChatCompressionService.prototype, '
+                             "'compress')\n"
+                             '        .mockResolvedValue({\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-6',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '        chat as unknown as { getRequestHistory: () => '
+                       'Content[] },\n'
+                       "        'getRequestHistory',\n"
+                       '      ).mockImplementationOnce(() => {\n'
+                       "        throw new Error('history setup failed');\n"
+                       '      });\n'
+                       '\n'
+                       '      await expect(\n'
+                       '        chat.sendMessageStream(\n'
+                       "          'test-model',\n"
+                       "          { message: 'first' },\n"
+                       "          'prompt-id-setup-deadlock-1',\n"
+                       '        ),\n'
+                       "      ).rejects.toThrow('history setup failed');\n"
+                       '\n'
+                       '      '
+                       'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                       "        makeStreamResponse('second response'),\n"
+                       '      );\n'
+                       '      const stream = await chat.sendMessageStream(\n'
+                       "        'test-model',\n",
+             'after': '        chat as unknown as { getRequestHistory: () => Content[] '
+                      '},\n'
+                      "        'getRequestHistory',\n"
+                      '      ).mockImplementationOnce(() => {\n'
+                      "        throw new Error('history setup failed');\n"
+                      '      });\n'
+                      '\n'
+                      '      // Left unread until the end, so the release is proven to '
+                      'happen\n'
+                      "      // without a consumer driving the stream's finally.\n"
+                      '      const abandoned = await chat.sendMessageStream(\n'
+                      "        'test-model',\n"
+                      "        { message: 'first' },\n"
+                      "        'prompt-id-setup-deadlock-1',\n"
+                      '      );\n'
+                      '\n'
+                      '      '
+                      'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                      "        makeStreamResponse('second response'),\n"
+                      '      );\n'
+                      '      const stream = await chat.sendMessageStream(\n'
+                      "        'test-model',\n",
+             'review_before': '        chat as unknown as { getRequestHistory: () => '
+                              'Content[] },\n'
+                              "        'getRequestHistory',\n"
+                              '      ).mockImplementationOnce(() => {\n'
+                              "        throw new Error('history setup failed');\n"
+                              '      });\n'
+                              '\n'
+                              '      await expect(\n'
+                              '        chat.sendMessageStream(\n'
+                              "          'test-model',\n"
+                              "          { message: 'first' },\n"
+                              "          'prompt-id-setup-deadlock-1',\n"
+                              '        ),\n'
+                              "      ).rejects.toThrow('history setup failed');\n"
+                              '\n'
+                              '      '
+                              'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                              "        makeStreamResponse('second response'),\n"
+                              '      );\n'
+                              '      const stream = await chat.sendMessageStream(\n'
+                              "        'test-model',\n",
+             'review_after': '        chat as unknown as { getRequestHistory: () => '
+                             'Content[] },\n'
+                             "        'getRequestHistory',\n"
+                             '      ).mockImplementationOnce(() => {\n'
+                             "        throw new Error('history setup failed');\n"
+                             '      });\n'
+                             '\n'
+                             '      // Left unread until the end, so the release is '
+                             'proven to happen\n'
+                             "      // without a consumer driving the stream's "
+                             'finally.\n'
+                             '      const abandoned = await chat.sendMessageStream(\n'
+                             "        'test-model',\n"
+                             "        { message: 'first' },\n"
+                             "        'prompt-id-setup-deadlock-1',\n"
+                             '      );\n'
+                             '\n'
+                             '      '
+                             'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                             "        makeStreamResponse('second response'),\n"
+                             '      );\n'
+                             '      const stream = await chat.sendMessageStream(\n'
+                             "        'test-model',\n"},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-7',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '        chat\n'
+                       '          .getHistory()\n'
+                       '          .some((content) =>\n'
+                       '            content.parts?.some((part) => part.text === '
+                       "'first'),\n"
+                       '          ),\n'
+                       '      ).toBe(false);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('seeds inherited token count via "
+                       "setLastPromptTokenCount', async () => {\n"
+                       '      '
+                       'vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({\n'
+                       '        authType: AuthType.USE_GEMINI,\n'
+                       "        model: 'test-model',\n",
+             'after': '        chat\n'
+                      '          .getHistory()\n'
+                      '          .some((content) =>\n'
+                      '            content.parts?.some((part) => part.text === '
+                      "'first'),\n"
+                      '          ),\n'
+                      '      ).toBe(false);\n'
+                      '\n'
+                      '      // The unread stream still carries the failure for '
+                      'whoever reads it.\n'
+                      '      await expect(\n'
+                      '        (async () => {\n'
+                      '          for await (const _ of abandoned) {\n'
+                      '            /* consume */\n'
+                      '          }\n'
+                      '        })(),\n'
+                      "      ).rejects.toThrow('history setup failed');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('seeds inherited token count via "
+                      "setLastPromptTokenCount', async () => {\n"
+                      '      '
+                      'vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({\n'
+                      '        authType: AuthType.USE_GEMINI,\n'
+                      "        model: 'test-model',\n",
+             'review_before': '        chat\n'
+                              '          .getHistory()\n'
+                              '          .some((content) =>\n'
+                              '            content.parts?.some((part) => part.text === '
+                              "'first'),\n"
+                              '          ),\n'
+                              '      ).toBe(false);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('seeds inherited token count via "
+                              "setLastPromptTokenCount', async () => {\n"
+                              '      '
+                              'vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({\n'
+                              '        authType: AuthType.USE_GEMINI,\n'
+                              "        model: 'test-model',\n",
+             'review_after': '        chat\n'
+                             '          .getHistory()\n'
+                             '          .some((content) =>\n'
+                             '            content.parts?.some((part) => part.text === '
+                             "'first'),\n"
+                             '          ),\n'
+                             '      ).toBe(false);\n'
+                             '\n'
+                             '      // The unread stream still carries the failure for '
+                             'whoever reads it.\n'
+                             '      await expect(\n'
+                             '        (async () => {\n'
+                             '          for await (const _ of abandoned) {\n'
+                             '            /* consume */\n'
+                             '          }\n'
+                             '        })(),\n'
+                             "      ).rejects.toThrow('history setup failed');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('seeds inherited token count via "
+                             "setLastPromptTokenCount', async () => {\n"
+                             '      '
+                             'vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({\n'
+                             '        authType: AuthType.USE_GEMINI,\n'
+                             "        model: 'test-model',\n"},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-8',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      }\n'
                        '\n'
                        '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
@@ -16040,7 +16492,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      ];\n'
                              '      vi.spyOn(\n'
                              '        ChatCompressionService.prototype,\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-4',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-9',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      );\n'
                        '      const events: Array<{ type: StreamEventType }> = [];\n'
@@ -16394,7 +16846,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'compaction. This test\n'
                              '      // pins the wiring: sendMessageStream MUST pass '
                              'the user message it just\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-5',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-10',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      ];\n'
                        '      const stream = await chat.sendMessageStream(\n'
@@ -16492,7 +16944,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        /* consume */\n'
                              '      }\n'
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-6',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-11',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      ).toBe(true);\n'
                        '      '
@@ -16763,7 +17215,88 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        "        { role: 'user', parts: [{ text: 'summary' }] },\n"
                        "        { role: 'model', parts: [{ text: 'ack' }] },\n"
                        "        { role: 'user', parts: [{ text: 'latest' }] },\n"
-                       '      ];\n',
+                       '      ];\n'
+                       '      const expectedRequestContents = '
+                       'structuredClone(compressedHistory);\n'
+                       '      const compressSpy = vi\n'
+                       "        .spyOn(ChatCompressionService.prototype, 'compress')\n"
+                       '        .mockResolvedValueOnce({\n'
+                       '          newHistory: null,\n'
+                       '          info: {\n'
+                       '            originalTokenCount: 0,\n'
+                       '            newTokenCount: 0,\n'
+                       '            compressionStatus: CompressionStatus.NOOP,\n'
+                       '          },\n'
+                       '        })\n'
+                       '        .mockResolvedValueOnce({\n'
+                       '          newHistory: compressedHistory,\n'
+                       '          info: {\n'
+                       '            originalTokenCount: 135_000,\n'
+                       '            newTokenCount: 40_000,\n'
+                       '            compressionStatus: CompressionStatus.COMPRESSED,\n'
+                       '          },\n'
+                       '        });\n'
+                       '      vi.mocked(mockContentGenerator.generateContentStream)\n'
+                       '        .mockRejectedValueOnce(\n'
+                       '          new Error(\n'
+                       '            "This model\'s maximum context length is 128000 '
+                       'tokens. However, your messages resulted in 135000 tokens.",\n'
+                       '          ),\n'
+                       '        )\n'
+                       "        .mockResolvedValueOnce(makeStreamResponse('answer "
+                       "after compact'));\n"
+                       '\n'
+                       '      const stream = await chat.sendMessageStream(\n'
+                       "        'test-model',\n"
+                       "        { message: 'latest' },\n"
+                       "        'prompt-id-reactive-compact',\n"
+                       '      );\n'
+                       '\n'
+                       '      const events: StreamEvent[] = [];\n'
+                       '      for await (const event of stream) {\n'
+                       '        events.push(event);\n'
+                       '      }\n'
+                       '\n'
+                       '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
+                       '      expect(compressSpy.mock.calls[1][1].force).toBe(true);\n'
+                       '      '
+                       "expect(compressSpy.mock.calls[1][1].trigger).toBe('auto');\n"
+                       '      '
+                       'expect(compressSpy.mock.calls[1][1].originalTokenCount).toBe(135_000);\n'
+                       '      '
+                       'expect(compressSpy.mock.calls[1][1].precomputedEffectiveTokens).toBe(\n'
+                       '        135_000,\n'
+                       '      );\n'
+                       '      '
+                       'expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(\n'
+                       '        2,\n'
+                       '      );\n'
+                       '\n'
+                       '      const secondRequest = vi.mocked(\n'
+                       '        mockContentGenerator.generateContentStream,\n'
+                       '      ).mock.calls[1]![0];\n'
+                       '      '
+                       'expect(secondRequest.contents).toEqual(expectedRequestContents);\n'
+                       '      '
+                       'expect(events[0]?.type).toBe(StreamEventType.COMPRESSED);\n'
+                       '      expect(events[1]?.type).toBe(StreamEventType.RETRY);\n'
+                       "      expect(events[1]).not.toHaveProperty('retryInfo');\n"
+                       '      expect(\n'
+                       '        events.some(\n'
+                       '          (event) =>\n'
+                       '            event.type === StreamEventType.CHUNK &&\n'
+                       '            '
+                       'event.value.candidates?.[0]?.content?.parts?.[0]?.text ===\n'
+                       "              'answer after compact',\n"
+                       '        ),\n'
+                       '      ).toBe(true);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('uses the parsed context limit when reactive overflow "
+                       "lacks an actual token count', async () => {\n"
+                       '      const compressedHistory: Content[] = [\n'
+                       "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                       "        { role: 'model', parts: [{ text: 'ack' }] },\n",
              'after': '      ).toBe(true);\n'
                       '      '
                       'expect(compressSpy.mock.calls[0][1].requestGenerationConfig?.tools).toBe(\n'
@@ -16777,7 +17310,93 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "        { role: 'user', parts: [{ text: 'summary' }] },\n"
                       "        { role: 'model', parts: [{ text: 'ack' }] },\n"
                       "        { role: 'user', parts: [{ text: 'latest' }] },\n"
-                      '      ];\n',
+                      '      ];\n'
+                      '      const expectedRequestContents = '
+                      'structuredClone(compressedHistory);\n'
+                      '      const compressSpy = vi\n'
+                      "        .spyOn(ChatCompressionService.prototype, 'compress')\n"
+                      '        .mockResolvedValueOnce({\n'
+                      '          newHistory: null,\n'
+                      '          info: {\n'
+                      '            originalTokenCount: 0,\n'
+                      '            newTokenCount: 0,\n'
+                      '            compressionStatus: CompressionStatus.NOOP,\n'
+                      '          },\n'
+                      '        })\n'
+                      '        .mockResolvedValueOnce({\n'
+                      '          newHistory: compressedHistory,\n'
+                      '          info: {\n'
+                      '            originalTokenCount: 135_000,\n'
+                      '            newTokenCount: 40_000,\n'
+                      '            compressionStatus: CompressionStatus.COMPRESSED,\n'
+                      '          },\n'
+                      '        });\n'
+                      '      vi.mocked(mockContentGenerator.generateContentStream)\n'
+                      '        .mockRejectedValueOnce(\n'
+                      '          new Error(\n'
+                      '            "This model\'s maximum context length is 128000 '
+                      'tokens. However, your messages resulted in 135000 tokens.",\n'
+                      '          ),\n'
+                      '        )\n'
+                      "        .mockResolvedValueOnce(makeStreamResponse('answer after "
+                      "compact'));\n"
+                      '\n'
+                      '      const stream = await chat.sendMessageStream(\n'
+                      "        'test-model',\n"
+                      "        { message: 'latest' },\n"
+                      "        'prompt-id-reactive-compact',\n"
+                      '      );\n'
+                      '\n'
+                      '      const events: StreamEvent[] = [];\n'
+                      '      for await (const event of stream) {\n'
+                      '        events.push(event);\n'
+                      '      }\n'
+                      '\n'
+                      '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
+                      '      expect(compressSpy.mock.calls[1][1].force).toBe(true);\n'
+                      '      '
+                      "expect(compressSpy.mock.calls[1][1].trigger).toBe('auto');\n"
+                      '      '
+                      'expect(compressSpy.mock.calls[1][1].originalTokenCount).toBe(135_000);\n'
+                      '      '
+                      'expect(compressSpy.mock.calls[1][1].precomputedEffectiveTokens).toBe(\n'
+                      '        135_000,\n'
+                      '      );\n'
+                      '      '
+                      'expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(\n'
+                      '        2,\n'
+                      '      );\n'
+                      '\n'
+                      '      const secondRequest = vi.mocked(\n'
+                      '        mockContentGenerator.generateContentStream,\n'
+                      '      ).mock.calls[1]![0];\n'
+                      '      '
+                      'expect(secondRequest.contents).toEqual(expectedRequestContents);\n'
+                      '      // The pre-stream pass was a NOOP and stays silent; the '
+                      'reactive rescue\n'
+                      '      // is recorded before the COMPRESSED event it produced.\n'
+                      '      '
+                      'expect(events[0]?.type).toBe(StreamEventType.COMPACTION);\n'
+                      '      '
+                      'expect(events[1]?.type).toBe(StreamEventType.COMPRESSED);\n'
+                      '      expect(events[2]?.type).toBe(StreamEventType.RETRY);\n'
+                      "      expect(events[2]).not.toHaveProperty('retryInfo');\n"
+                      '      expect(\n'
+                      '        events.some(\n'
+                      '          (event) =>\n'
+                      '            event.type === StreamEventType.CHUNK &&\n'
+                      '            '
+                      'event.value.candidates?.[0]?.content?.parts?.[0]?.text ===\n'
+                      "              'answer after compact',\n"
+                      '        ),\n'
+                      '      ).toBe(true);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('uses the parsed context limit when reactive overflow "
+                      "lacks an actual token count', async () => {\n"
+                      '      const compressedHistory: Content[] = [\n'
+                      "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                      "        { role: 'model', parts: [{ text: 'ack' }] },\n",
              'review_before': '      ).toBe(true);\n'
                               '      '
                               'expect(compressSpy.mock.calls[0][1].requestGenerationConfig?.tools).toBe(\n'
@@ -17060,65 +17679,68 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '},\n'
                               "        { role: 'model', parts: [{ text: 'ack' }] },\n"
                               "        { role: 'user', parts: [{ text: 'latest' }] },\n"
-                              '      ];\n',
-             'review_after': '      ).toBe(true);\n'
-                             '      '
-                             'expect(compressSpy.mock.calls[0][1].requestGenerationConfig?.tools).toBe(\n'
-                             '        requestTools,\n'
-                             '      );\n'
-                             '    });\n'
-                             '\n'
-                             "    it('reactively compresses and retries once after a "
-                             "context overflow error', async () => {\n"
-                             '      const compressedHistory: Content[] = [\n'
-                             "        { role: 'user', parts: [{ text: 'summary' }] },\n"
-                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"
-                             "        { role: 'user', parts: [{ text: 'latest' }] },\n"
-                             '      ];\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-7',
-             'path': 'packages/core/src/core/geminiChat.test.ts',
-             'before': '      );\n'
-                       '\n'
-                       '      const secondRequest = vi.mocked(\n'
-                       '        mockContentGenerator.generateContentStream,\n'
-                       '      ).mock.calls[1]![0];\n'
-                       '      '
-                       'expect(secondRequest.contents).toEqual(expectedRequestContents);\n'
-                       '      '
-                       'expect(events[0]?.type).toBe(StreamEventType.COMPRESSED);\n'
-                       '      expect(events[1]?.type).toBe(StreamEventType.RETRY);\n'
-                       "      expect(events[1]).not.toHaveProperty('retryInfo');\n"
-                       '      expect(\n'
-                       '        events.some(\n'
-                       '          (event) =>\n'
-                       '            event.type === StreamEventType.CHUNK &&\n'
-                       '            '
-                       'event.value.candidates?.[0]?.content?.parts?.[0]?.text ===\n'
-                       "              'answer after compact',\n",
-             'after': '      );\n'
-                      '\n'
-                      '      const secondRequest = vi.mocked(\n'
-                      '        mockContentGenerator.generateContentStream,\n'
-                      '      ).mock.calls[1]![0];\n'
-                      '      '
-                      'expect(secondRequest.contents).toEqual(expectedRequestContents);\n'
-                      '      // The pre-stream pass was a NOOP and stays silent; the '
-                      'reactive rescue\n'
-                      '      // is recorded before the COMPRESSED event it produced.\n'
-                      '      '
-                      'expect(events[0]?.type).toBe(StreamEventType.COMPACTION);\n'
-                      '      '
-                      'expect(events[1]?.type).toBe(StreamEventType.COMPRESSED);\n'
-                      '      expect(events[2]?.type).toBe(StreamEventType.RETRY);\n'
-                      "      expect(events[2]).not.toHaveProperty('retryInfo');\n"
-                      '      expect(\n'
-                      '        events.some(\n'
-                      '          (event) =>\n'
-                      '            event.type === StreamEventType.CHUNK &&\n'
-                      '            '
-                      'event.value.candidates?.[0]?.content?.parts?.[0]?.text ===\n'
-                      "              'answer after compact',\n",
-             'review_before': '      );\n'
+                              '      ];\n'
+                              '      const expectedRequestContents = '
+                              'structuredClone(compressedHistory);\n'
+                              '      const compressSpy = vi\n'
+                              '        .spyOn(ChatCompressionService.prototype, '
+                              "'compress')\n"
+                              '        .mockResolvedValueOnce({\n'
+                              '          newHistory: null,\n'
+                              '          info: {\n'
+                              '            originalTokenCount: 0,\n'
+                              '            newTokenCount: 0,\n'
+                              '            compressionStatus: CompressionStatus.NOOP,\n'
+                              '          },\n'
+                              '        })\n'
+                              '        .mockResolvedValueOnce({\n'
+                              '          newHistory: compressedHistory,\n'
+                              '          info: {\n'
+                              '            originalTokenCount: 135_000,\n'
+                              '            newTokenCount: 40_000,\n'
+                              '            compressionStatus: '
+                              'CompressionStatus.COMPRESSED,\n'
+                              '          },\n'
+                              '        });\n'
+                              '      '
+                              'vi.mocked(mockContentGenerator.generateContentStream)\n'
+                              '        .mockRejectedValueOnce(\n'
+                              '          new Error(\n'
+                              '            "This model\'s maximum context length is '
+                              '128000 tokens. However, your messages resulted in '
+                              '135000 tokens.",\n'
+                              '          ),\n'
+                              '        )\n'
+                              '        '
+                              ".mockResolvedValueOnce(makeStreamResponse('answer after "
+                              "compact'));\n"
+                              '\n'
+                              '      const stream = await chat.sendMessageStream(\n'
+                              "        'test-model',\n"
+                              "        { message: 'latest' },\n"
+                              "        'prompt-id-reactive-compact',\n"
+                              '      );\n'
+                              '\n'
+                              '      const events: StreamEvent[] = [];\n'
+                              '      for await (const event of stream) {\n'
+                              '        events.push(event);\n'
+                              '      }\n'
+                              '\n'
+                              '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
+                              '      '
+                              'expect(compressSpy.mock.calls[1][1].force).toBe(true);\n'
+                              '      '
+                              "expect(compressSpy.mock.calls[1][1].trigger).toBe('auto');\n"
+                              '      '
+                              'expect(compressSpy.mock.calls[1][1].originalTokenCount).toBe(135_000);\n'
+                              '      '
+                              'expect(compressSpy.mock.calls[1][1].precomputedEffectiveTokens).toBe(\n'
+                              '        135_000,\n'
+                              '      );\n'
+                              '      '
+                              'expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(\n'
+                              '        2,\n'
+                              '      );\n'
                               '\n'
                               '      const secondRequest = vi.mocked(\n'
                               '        mockContentGenerator.generateContentStream,\n'
@@ -17138,8 +17760,92 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '            '
                               'event.value.candidates?.[0]?.content?.parts?.[0]?.text '
                               '===\n'
-                              "              'answer after compact',\n",
-             'review_after': '      );\n'
+                              "              'answer after compact',\n"
+                              '        ),\n'
+                              '      ).toBe(true);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('uses the parsed context limit when reactive "
+                              "overflow lacks an actual token count', async () => {\n"
+                              '      const compressedHistory: Content[] = [\n'
+                              "        { role: 'user', parts: [{ text: 'summary' }] "
+                              '},\n'
+                              "        { role: 'model', parts: [{ text: 'ack' }] },\n",
+             'review_after': '      ).toBe(true);\n'
+                             '      '
+                             'expect(compressSpy.mock.calls[0][1].requestGenerationConfig?.tools).toBe(\n'
+                             '        requestTools,\n'
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('reactively compresses and retries once after a "
+                             "context overflow error', async () => {\n"
+                             '      const compressedHistory: Content[] = [\n'
+                             "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                             "        { role: 'user', parts: [{ text: 'latest' }] },\n"
+                             '      ];\n'
+                             '      const expectedRequestContents = '
+                             'structuredClone(compressedHistory);\n'
+                             '      const compressSpy = vi\n'
+                             '        .spyOn(ChatCompressionService.prototype, '
+                             "'compress')\n"
+                             '        .mockResolvedValueOnce({\n'
+                             '          newHistory: null,\n'
+                             '          info: {\n'
+                             '            originalTokenCount: 0,\n'
+                             '            newTokenCount: 0,\n'
+                             '            compressionStatus: CompressionStatus.NOOP,\n'
+                             '          },\n'
+                             '        })\n'
+                             '        .mockResolvedValueOnce({\n'
+                             '          newHistory: compressedHistory,\n'
+                             '          info: {\n'
+                             '            originalTokenCount: 135_000,\n'
+                             '            newTokenCount: 40_000,\n'
+                             '            compressionStatus: '
+                             'CompressionStatus.COMPRESSED,\n'
+                             '          },\n'
+                             '        });\n'
+                             '      '
+                             'vi.mocked(mockContentGenerator.generateContentStream)\n'
+                             '        .mockRejectedValueOnce(\n'
+                             '          new Error(\n'
+                             '            "This model\'s maximum context length is '
+                             '128000 tokens. However, your messages resulted in 135000 '
+                             'tokens.",\n'
+                             '          ),\n'
+                             '        )\n'
+                             '        '
+                             ".mockResolvedValueOnce(makeStreamResponse('answer after "
+                             "compact'));\n"
+                             '\n'
+                             '      const stream = await chat.sendMessageStream(\n'
+                             "        'test-model',\n"
+                             "        { message: 'latest' },\n"
+                             "        'prompt-id-reactive-compact',\n"
+                             '      );\n'
+                             '\n'
+                             '      const events: StreamEvent[] = [];\n'
+                             '      for await (const event of stream) {\n'
+                             '        events.push(event);\n'
+                             '      }\n'
+                             '\n'
+                             '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
+                             '      '
+                             'expect(compressSpy.mock.calls[1][1].force).toBe(true);\n'
+                             '      '
+                             "expect(compressSpy.mock.calls[1][1].trigger).toBe('auto');\n"
+                             '      '
+                             'expect(compressSpy.mock.calls[1][1].originalTokenCount).toBe(135_000);\n'
+                             '      '
+                             'expect(compressSpy.mock.calls[1][1].precomputedEffectiveTokens).toBe(\n'
+                             '        135_000,\n'
+                             '      );\n'
+                             '      '
+                             'expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(\n'
+                             '        2,\n'
+                             '      );\n'
                              '\n'
                              '      const secondRequest = vi.mocked(\n'
                              '        mockContentGenerator.generateContentStream,\n'
@@ -17165,8 +17871,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            '
                              'event.value.candidates?.[0]?.content?.parts?.[0]?.text '
                              '===\n'
-                             "              'answer after compact',\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-8',
+                             "              'answer after compact',\n"
+                             '        ),\n'
+                             '      ).toBe(true);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('uses the parsed context limit when reactive "
+                             "overflow lacks an actual token count', async () => {\n"
+                             '      const compressedHistory: Content[] = [\n'
+                             "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-12',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      expect(compressSpy).toHaveBeenCalledTimes(2);\n'
                        '      '
@@ -17232,7 +17947,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        .spyOn(ChatCompressionService.prototype, '
                              "'compress')\n"
                              '        .mockResolvedValueOnce({\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-9',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-13',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': "        'prompt-id-after-reactive-failed-latch',\n"
                        '      );\n'
@@ -17326,7 +18041,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "        'prompt is too long: 135000 tokens > 128000 "
                              "maximum',\n"
                              '      );\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-10',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-14',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': "              'next request ok',\n"
                        '        ),\n'
@@ -17432,7 +18147,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "GenerateContentResponse['usageMetadata'],\n"
                              '    ) {\n'
                              '      return (async function* () {\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-11',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-15',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '          text: () => text,\n'
                        '        } as unknown as GenerateContentResponse;\n'
@@ -17523,9 +18238,568 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        authType: AuthType.USE_GEMINI,\n'
                              "        model: 'test-model',\n"
                              '        contextWindowSize: 200_000,\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-12',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-16',
              'path': 'packages/core/src/core/geminiChat.test.ts',
-             'before': '      await expect(\n'
+             'before': '      expect(recordPayload.compressedHistory).toEqual([\n'
+                       "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                       "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                       '      ]);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('rejects before request serialization when oversized "
+                       "resumed history cannot be compressed', async () => {\n"
+                       '      const oversizedResumedHistory: Content[] = [\n'
+                       "        { role: 'user', parts: [{ text: 'x'.repeat(720_000) }] "
+                       '},\n'
+                       "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                       '      ];\n'
+                       '      chat.setHistory(oversizedResumedHistory);\n'
+                       '      expect(chat.getLastPromptTokenCount()).toBe(0);\n',
+             'after': '      expect(recordPayload.compressedHistory).toEqual([\n'
+                      "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                      "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                      '      ]);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('refuses before request serialization when oversized "
+                      "resumed history cannot be compressed', async () => {\n"
+                      '      const oversizedResumedHistory: Content[] = [\n'
+                      "        { role: 'user', parts: [{ text: 'x'.repeat(720_000) }] "
+                      '},\n'
+                      "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                      '      ];\n'
+                      '      chat.setHistory(oversizedResumedHistory);\n'
+                      '      expect(chat.getLastPromptTokenCount()).toBe(0);\n',
+             'review_before': '      '
+                              'expect(recordPayload.compressedHistory).toEqual([\n'
+                              "        { role: 'user', parts: [{ text: 'summary' }] "
+                              '},\n'
+                              "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                              '      ]);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('rejects before request serialization when "
+                              "oversized resumed history cannot be compressed', async "
+                              '() => {\n'
+                              '      const oversizedResumedHistory: Content[] = [\n'
+                              "        { role: 'user', parts: [{ text: "
+                              "'x'.repeat(720_000) }] },\n"
+                              "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                              '      ];\n'
+                              '      chat.setHistory(oversizedResumedHistory);\n'
+                              '      expect(chat.getLastPromptTokenCount()).toBe(0);\n',
+             'review_after': '      expect(recordPayload.compressedHistory).toEqual([\n'
+                             "        { role: 'user', parts: [{ text: 'summary' }] },\n"
+                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                             '      ]);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('refuses before request serialization when "
+                             "oversized resumed history cannot be compressed', async "
+                             '() => {\n'
+                             '      const oversizedResumedHistory: Content[] = [\n'
+                             "        { role: 'user', parts: [{ text: "
+                             "'x'.repeat(720_000) }] },\n"
+                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                             '      ];\n'
+                             '      chat.setHistory(oversizedResumedHistory);\n'
+                             '      expect(chat.getLastPromptTokenCount()).toBe(0);\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-17',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '          },\n'
+                       '        });\n'
+                       '      '
+                       'vi.mocked(mockContentGenerator.generateContentStream).mockRejectedValue(\n'
+                       "        new Error('Invalid string length'),\n"
+                       '      );\n'
+                       '\n'
+                       '      await expect(\n'
+                       '        chat.sendMessageStream(\n'
+                       "          'test-model',\n"
+                       "          { message: 'continue' },\n"
+                       "          'prompt-id-oversized-resume-guard',\n"
+                       '        ),\n'
+                       '      ).rejects.toThrow(\n'
+                       '        /compression status: '
+                       'COMPRESSION_FAILED_EMPTY_SUMMARY/i,\n'
+                       '      );\n'
+                       '\n'
+                       '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
+                       '      expect(compressSpy.mock.calls[0][1].force).toBe(true);\n'
+                       '      '
+                       'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                       '      expect(chat.getLastPromptTokenCount()).toBe(0);\n'
+                       '      expect(chat.getHistory()).toHaveLength(2);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('rejects before request serialization and restores "
+                       "history when hard-rescue compression is still oversized', "
+                       'async () => {\n'
+                       '      const originalHistory: Content[] = [\n'
+                       "        { role: 'user', parts: [{ text: 'x'.repeat(720_000) }] "
+                       '},\n'
+                       "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                       '      ];\n'
+                       '      const recordChatCompression = vi.fn();\n'
+                       '      const chatWithRecording = new GeminiChat(\n',
+             'after': '          },\n'
+                      '        });\n'
+                      '      '
+                      'vi.mocked(mockContentGenerator.generateContentStream).mockRejectedValue(\n'
+                      "        new Error('Invalid string length'),\n"
+                      '      );\n'
+                      '\n'
+                      '      const refused = await chat.sendMessageStream(\n'
+                      "        'test-model',\n"
+                      "        { message: 'continue' },\n"
+                      "        'prompt-id-oversized-resume-guard',\n"
+                      '      );\n'
+                      '      await expect(\n'
+                      '        (async () => {\n'
+                      '          for await (const _ of refused) {\n'
+                      '            /* consume */\n'
+                      '          }\n'
+                      '        })(),\n'
+                      '      ).rejects.toThrow(\n'
+                      '        /compression status: '
+                      'COMPRESSION_FAILED_EMPTY_SUMMARY/i,\n'
+                      '      );\n'
+                      '\n'
+                      '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
+                      '      expect(compressSpy.mock.calls[0][1].force).toBe(true);\n'
+                      '      '
+                      'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                      '      expect(chat.getLastPromptTokenCount()).toBe(0);\n'
+                      '      expect(chat.getHistory()).toHaveLength(2);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('refuses before request serialization and restores "
+                      "history when hard-rescue compression is still oversized', async "
+                      '() => {\n'
+                      '      const originalHistory: Content[] = [\n'
+                      "        { role: 'user', parts: [{ text: 'x'.repeat(720_000) }] "
+                      '},\n'
+                      "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                      '      ];\n'
+                      '      const recordChatCompression = vi.fn();\n'
+                      '      const chatWithRecording = new GeminiChat(\n',
+             'review_before': '          },\n'
+                              '        });\n'
+                              '      '
+                              'vi.mocked(mockContentGenerator.generateContentStream).mockRejectedValue(\n'
+                              "        new Error('Invalid string length'),\n"
+                              '      );\n'
+                              '\n'
+                              '      await expect(\n'
+                              '        chat.sendMessageStream(\n'
+                              "          'test-model',\n"
+                              "          { message: 'continue' },\n"
+                              "          'prompt-id-oversized-resume-guard',\n"
+                              '        ),\n'
+                              '      ).rejects.toThrow(\n'
+                              '        /compression status: '
+                              'COMPRESSION_FAILED_EMPTY_SUMMARY/i,\n'
+                              '      );\n'
+                              '\n'
+                              '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
+                              '      '
+                              'expect(compressSpy.mock.calls[0][1].force).toBe(true);\n'
+                              '      '
+                              'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                              '      expect(chat.getLastPromptTokenCount()).toBe(0);\n'
+                              '      expect(chat.getHistory()).toHaveLength(2);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('rejects before request serialization and "
+                              'restores history when hard-rescue compression is still '
+                              "oversized', async () => {\n"
+                              '      const originalHistory: Content[] = [\n'
+                              "        { role: 'user', parts: [{ text: "
+                              "'x'.repeat(720_000) }] },\n"
+                              "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                              '      ];\n'
+                              '      const recordChatCompression = vi.fn();\n'
+                              '      const chatWithRecording = new GeminiChat(\n',
+             'review_after': '          },\n'
+                             '        });\n'
+                             '      '
+                             'vi.mocked(mockContentGenerator.generateContentStream).mockRejectedValue(\n'
+                             "        new Error('Invalid string length'),\n"
+                             '      );\n'
+                             '\n'
+                             '      const refused = await chat.sendMessageStream(\n'
+                             "        'test-model',\n"
+                             "        { message: 'continue' },\n"
+                             "        'prompt-id-oversized-resume-guard',\n"
+                             '      );\n'
+                             '      await expect(\n'
+                             '        (async () => {\n'
+                             '          for await (const _ of refused) {\n'
+                             '            /* consume */\n'
+                             '          }\n'
+                             '        })(),\n'
+                             '      ).rejects.toThrow(\n'
+                             '        /compression status: '
+                             'COMPRESSION_FAILED_EMPTY_SUMMARY/i,\n'
+                             '      );\n'
+                             '\n'
+                             '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
+                             '      '
+                             'expect(compressSpy.mock.calls[0][1].force).toBe(true);\n'
+                             '      '
+                             'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                             '      expect(chat.getLastPromptTokenCount()).toBe(0);\n'
+                             '      expect(chat.getHistory()).toHaveLength(2);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('refuses before request serialization and "
+                             'restores history when hard-rescue compression is still '
+                             "oversized', async () => {\n"
+                             '      const originalHistory: Content[] = [\n'
+                             "        { role: 'user', parts: [{ text: "
+                             "'x'.repeat(720_000) }] },\n"
+                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                             '      ];\n'
+                             '      const recordChatCompression = vi.fn();\n'
+                             '      const chatWithRecording = new GeminiChat(\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-18',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '        },\n'
+                       '      });\n'
+                       '      '
+                       'vi.mocked(mockContentGenerator.generateContentStream).mockRejectedValue(\n'
+                       "        new Error('Invalid string length'),\n"
+                       '      );\n'
+                       '\n'
+                       '      await expect(\n'
+                       '        chatWithRecording.sendMessageStream(\n'
+                       "          'test-model',\n"
+                       "          { message: 'continue' },\n"
+                       "          'prompt-id-oversized-after-compression',\n"
+                       '        ),\n'
+                       '      ).rejects.toThrow(/compression status: COMPRESSED/i);\n'
+                       '\n'
+                       '      '
+                       'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                       '      expect(recordChatCompression).not.toHaveBeenCalled();\n'
+                       '      '
+                       'expect(chatWithRecording.getLastPromptTokenCount()).toBe(176_999);\n'
+                       '      '
+                       'expect(chatWithRecording.isLastPromptTokenCountEstimated()).toBe(false);\n'
+                       '      '
+                       'expect(chatWithRecording.getHistory()[0].parts?.[0].text).toBe(\n'
+                       '        originalHistory[0].parts?.[0].text,\n'
+                       '      );\n'
+                       '    });\n'
+                       '\n'
+                       "    it('rejects when compressed history is below hard but the "
+                       "pending user message pushes it over', async () => {\n"
+                       '      const originalHistory: Content[] = [\n'
+                       "        { role: 'user', parts: [{ text: 'x'.repeat(720_000) }] "
+                       '},\n'
+                       "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                       '      ];\n'
+                       '      const recordChatCompression = vi.fn();\n'
+                       '      const chatWithRecording = new GeminiChat(\n',
+             'after': '        },\n'
+                      '      });\n'
+                      '      '
+                      'vi.mocked(mockContentGenerator.generateContentStream).mockRejectedValue(\n'
+                      "        new Error('Invalid string length'),\n"
+                      '      );\n'
+                      '\n'
+                      '      const refused = await '
+                      'chatWithRecording.sendMessageStream(\n'
+                      "        'test-model',\n"
+                      "        { message: 'continue' },\n"
+                      "        'prompt-id-oversized-after-compression',\n"
+                      '      );\n'
+                      '      await expect(\n'
+                      '        (async () => {\n'
+                      '          for await (const _ of refused) {\n'
+                      '            /* consume */\n'
+                      '          }\n'
+                      '        })(),\n'
+                      '      ).rejects.toThrow(/compression status: COMPRESSED/i);\n'
+                      '\n'
+                      '      '
+                      'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                      '      expect(recordChatCompression).not.toHaveBeenCalled();\n'
+                      '      '
+                      'expect(chatWithRecording.getLastPromptTokenCount()).toBe(176_999);\n'
+                      '      '
+                      'expect(chatWithRecording.isLastPromptTokenCountEstimated()).toBe(false);\n'
+                      '      '
+                      'expect(chatWithRecording.getHistory()[0].parts?.[0].text).toBe(\n'
+                      '        originalHistory[0].parts?.[0].text,\n'
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      "    it('reports the compaction attempt before refusing an "
+                      "oversized send', async () => {\n"
+                      '      // The refusal is the path that ends a session, so the '
+                      'record of the\n'
+                      '      // attempt that preceded it has to reach the caller: a '
+                      'dead session that\n'
+                      '      // reported nothing is indistinguishable from one that '
+                      'never compacted,\n'
+                      '      // which is exactly what makes the ramp unreadable after '
+                      'the fact.\n'
+                      '      const originalHistory: Content[] = [\n'
+                      "        { role: 'user', parts: [{ text: 'x'.repeat(720_000) }] "
+                      '},\n'
+                      "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                      '      ];\n'
+                      '      chat.setHistory(originalHistory);\n'
+                      '      chat.setLastPromptTokenCount(176_999);\n'
+                      '\n'
+                      '      vi.spyOn(\n'
+                      '        ChatCompressionService.prototype,\n'
+                      "        'compress',\n"
+                      '      ).mockResolvedValueOnce({\n'
+                      '        newHistory: [\n'
+                      "          { role: 'user', parts: [{ text: 'still large summary' "
+                      '}] },\n'
+                      "          { role: 'model', parts: [{ text: 'ack' }] },\n"
+                      '        ],\n'
+                      '        info: {\n'
+                      '          originalTokenCount: 180_000,\n'
+                      '          newTokenCount: 177_000,\n'
+                      '          compressionStatus: CompressionStatus.COMPRESSED,\n'
+                      '        },\n'
+                      '      });\n'
+                      '\n'
+                      '      const refused = await chat.sendMessageStream(\n'
+                      "        'test-model',\n"
+                      "        { message: 'continue' },\n"
+                      "        'prompt-id-refusal-reports-compaction',\n"
+                      '      );\n'
+                      '      const events: Array<{ type: StreamEventType }> = [];\n'
+                      '      await expect(\n'
+                      '        (async () => {\n'
+                      '          for await (const event of refused) {\n'
+                      '            events.push(event as { type: StreamEventType });\n'
+                      '          }\n'
+                      '        })(),\n'
+                      '      ).rejects.toThrow(/compression status: COMPRESSED/i);\n'
+                      '\n'
+                      '      expect(events).toHaveLength(1);\n'
+                      '      expect(events[0].type).toBe(StreamEventType.COMPACTION);\n'
+                      '      expect(\n'
+                      '        (events[0] as { type: StreamEventType; record: '
+                      'CompactionRecord })\n'
+                      '          .record,\n'
+                      '      ).toEqual({\n'
+                      "        status: 'COMPRESSED',\n"
+                      '        succeeded: true,\n'
+                      '        originalTokenCount: 180_000,\n'
+                      '        newTokenCount: 177_000,\n'
+                      '        triggerReason: null,\n'
+                      '        output: null,\n'
+                      '      });\n'
+                      '      // The rescue put back the history it had replaced, so '
+                      'the narrower\n'
+                      '      // event — which promises a replacement — must stay '
+                      'silent.\n'
+                      '      expect(\n'
+                      '        events.some((event) => event.type === '
+                      'StreamEventType.COMPRESSED),\n'
+                      '      ).toBe(false);\n'
+                      '      '
+                      'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                      '      expect(chat.getHistory()[0].parts?.[0].text).toBe(\n'
+                      '        originalHistory[0].parts?.[0].text,\n'
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      "    it('refuses when compressed history is below hard but the "
+                      "pending user message pushes it over', async () => {\n"
+                      '      const originalHistory: Content[] = [\n'
+                      "        { role: 'user', parts: [{ text: 'x'.repeat(720_000) }] "
+                      '},\n'
+                      "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                      '      ];\n'
+                      '      const recordChatCompression = vi.fn();\n'
+                      '      const chatWithRecording = new GeminiChat(\n',
+             'review_before': '        },\n'
+                              '      });\n'
+                              '      '
+                              'vi.mocked(mockContentGenerator.generateContentStream).mockRejectedValue(\n'
+                              "        new Error('Invalid string length'),\n"
+                              '      );\n'
+                              '\n'
+                              '      await expect(\n'
+                              '        chatWithRecording.sendMessageStream(\n'
+                              "          'test-model',\n"
+                              "          { message: 'continue' },\n"
+                              "          'prompt-id-oversized-after-compression',\n"
+                              '        ),\n'
+                              '      ).rejects.toThrow(/compression status: '
+                              'COMPRESSED/i);\n'
+                              '\n'
+                              '      '
+                              'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                              '      '
+                              'expect(recordChatCompression).not.toHaveBeenCalled();\n'
+                              '      '
+                              'expect(chatWithRecording.getLastPromptTokenCount()).toBe(176_999);\n'
+                              '      '
+                              'expect(chatWithRecording.isLastPromptTokenCountEstimated()).toBe(false);\n'
+                              '      '
+                              'expect(chatWithRecording.getHistory()[0].parts?.[0].text).toBe(\n'
+                              '        originalHistory[0].parts?.[0].text,\n'
+                              '      );\n'
+                              '    });\n'
+                              '\n'
+                              "    it('rejects when compressed history is below hard "
+                              "but the pending user message pushes it over', async () "
+                              '=> {\n'
+                              '      const originalHistory: Content[] = [\n'
+                              "        { role: 'user', parts: [{ text: "
+                              "'x'.repeat(720_000) }] },\n"
+                              "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                              '      ];\n'
+                              '      const recordChatCompression = vi.fn();\n'
+                              '      const chatWithRecording = new GeminiChat(\n',
+             'review_after': '        },\n'
+                             '      });\n'
+                             '      '
+                             'vi.mocked(mockContentGenerator.generateContentStream).mockRejectedValue(\n'
+                             "        new Error('Invalid string length'),\n"
+                             '      );\n'
+                             '\n'
+                             '      const refused = await '
+                             'chatWithRecording.sendMessageStream(\n'
+                             "        'test-model',\n"
+                             "        { message: 'continue' },\n"
+                             "        'prompt-id-oversized-after-compression',\n"
+                             '      );\n'
+                             '      await expect(\n'
+                             '        (async () => {\n'
+                             '          for await (const _ of refused) {\n'
+                             '            /* consume */\n'
+                             '          }\n'
+                             '        })(),\n'
+                             '      ).rejects.toThrow(/compression status: '
+                             'COMPRESSED/i);\n'
+                             '\n'
+                             '      '
+                             'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                             '      '
+                             'expect(recordChatCompression).not.toHaveBeenCalled();\n'
+                             '      '
+                             'expect(chatWithRecording.getLastPromptTokenCount()).toBe(176_999);\n'
+                             '      '
+                             'expect(chatWithRecording.isLastPromptTokenCountEstimated()).toBe(false);\n'
+                             '      '
+                             'expect(chatWithRecording.getHistory()[0].parts?.[0].text).toBe(\n'
+                             '        originalHistory[0].parts?.[0].text,\n'
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('reports the compaction attempt before refusing "
+                             "an oversized send', async () => {\n"
+                             '      // The refusal is the path that ends a session, so '
+                             'the record of the\n'
+                             '      // attempt that preceded it has to reach the '
+                             'caller: a dead session that\n'
+                             '      // reported nothing is indistinguishable from one '
+                             'that never compacted,\n'
+                             '      // which is exactly what makes the ramp unreadable '
+                             'after the fact.\n'
+                             '      const originalHistory: Content[] = [\n'
+                             "        { role: 'user', parts: [{ text: "
+                             "'x'.repeat(720_000) }] },\n"
+                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                             '      ];\n'
+                             '      chat.setHistory(originalHistory);\n'
+                             '      chat.setLastPromptTokenCount(176_999);\n'
+                             '\n'
+                             '      vi.spyOn(\n'
+                             '        ChatCompressionService.prototype,\n'
+                             "        'compress',\n"
+                             '      ).mockResolvedValueOnce({\n'
+                             '        newHistory: [\n'
+                             "          { role: 'user', parts: [{ text: 'still large "
+                             "summary' }] },\n"
+                             "          { role: 'model', parts: [{ text: 'ack' }] },\n"
+                             '        ],\n'
+                             '        info: {\n'
+                             '          originalTokenCount: 180_000,\n'
+                             '          newTokenCount: 177_000,\n'
+                             '          compressionStatus: '
+                             'CompressionStatus.COMPRESSED,\n'
+                             '        },\n'
+                             '      });\n'
+                             '\n'
+                             '      const refused = await chat.sendMessageStream(\n'
+                             "        'test-model',\n"
+                             "        { message: 'continue' },\n"
+                             "        'prompt-id-refusal-reports-compaction',\n"
+                             '      );\n'
+                             '      const events: Array<{ type: StreamEventType }> = '
+                             '[];\n'
+                             '      await expect(\n'
+                             '        (async () => {\n'
+                             '          for await (const event of refused) {\n'
+                             '            events.push(event as { type: StreamEventType '
+                             '});\n'
+                             '          }\n'
+                             '        })(),\n'
+                             '      ).rejects.toThrow(/compression status: '
+                             'COMPRESSED/i);\n'
+                             '\n'
+                             '      expect(events).toHaveLength(1);\n'
+                             '      '
+                             'expect(events[0].type).toBe(StreamEventType.COMPACTION);\n'
+                             '      expect(\n'
+                             '        (events[0] as { type: StreamEventType; record: '
+                             'CompactionRecord })\n'
+                             '          .record,\n'
+                             '      ).toEqual({\n'
+                             "        status: 'COMPRESSED',\n"
+                             '        succeeded: true,\n'
+                             '        originalTokenCount: 180_000,\n'
+                             '        newTokenCount: 177_000,\n'
+                             '        triggerReason: null,\n'
+                             '        output: null,\n'
+                             '      });\n'
+                             '      // The rescue put back the history it had '
+                             'replaced, so the narrower\n'
+                             '      // event — which promises a replacement — must '
+                             'stay silent.\n'
+                             '      expect(\n'
+                             '        events.some((event) => event.type === '
+                             'StreamEventType.COMPRESSED),\n'
+                             '      ).toBe(false);\n'
+                             '      '
+                             'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
+                             '      '
+                             'expect(chat.getHistory()[0].parts?.[0].text).toBe(\n'
+                             '        originalHistory[0].parts?.[0].text,\n'
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('refuses when compressed history is below hard "
+                             "but the pending user message pushes it over', async () "
+                             '=> {\n'
+                             '      const originalHistory: Content[] = [\n'
+                             "        { role: 'user', parts: [{ text: "
+                             "'x'.repeat(720_000) }] },\n"
+                             "        { role: 'model', parts: [{ text: 'ack' }] },\n"
+                             '      ];\n'
+                             '      const recordChatCompression = vi.fn();\n'
+                             '      const chatWithRecording = new GeminiChat(\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-19',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '        },\n'
+                       '      });\n'
+                       '      '
+                       'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                       "        makeStreamResponse('should not send'),\n"
+                       '      );\n'
+                       '\n'
+                       '      await expect(\n'
                        '        chatWithRecording.sendMessageStream(\n'
                        "          'test-model',\n"
                        "          { message: 'x'.repeat(8_000) },\n"
@@ -17543,12 +18817,25 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'expect(chatWithRecording.isLastPromptTokenCountEstimated()).toBe(false);\n'
                        '      '
                        'expect(chatWithRecording.getHistory()[0].parts?.[0].text).toBe(\n',
-             'after': '      await expect(\n'
-                      '        chatWithRecording.sendMessageStream(\n'
-                      "          'test-model',\n"
-                      "          { message: 'x'.repeat(8_000) },\n"
-                      "          'prompt-id-oversized-after-compression-and-user',\n"
-                      '        ),\n'
+             'after': '        },\n'
+                      '      });\n'
+                      '      '
+                      'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                      "        makeStreamResponse('should not send'),\n"
+                      '      );\n'
+                      '\n'
+                      '      const refused = await '
+                      'chatWithRecording.sendMessageStream(\n'
+                      "        'test-model',\n"
+                      "        { message: 'x'.repeat(8_000) },\n"
+                      "        'prompt-id-oversized-after-compression-and-user',\n"
+                      '      );\n'
+                      '      await expect(\n'
+                      '        (async () => {\n'
+                      '          for await (const _ of refused) {\n'
+                      '            /* consume */\n'
+                      '          }\n'
+                      '        })(),\n'
                       '      ).rejects.toThrow(/Estimated prompt tokens: 178000; hard '
                       'limit: 147848/i);\n'
                       '\n'
@@ -17561,7 +18848,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'expect(chatWithRecording.isLastPromptTokenCountEstimated()).toBe(false);\n'
                       '      '
                       'expect(chatWithRecording.getHistory()[0].parts?.[0].text).toBe(\n',
-             'review_before': '      await expect(\n'
+             'review_before': '        },\n'
+                              '      });\n'
+                              '      '
+                              'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                              "        makeStreamResponse('should not send'),\n"
+                              '      );\n'
+                              '\n'
+                              '      await expect(\n'
                               '        chatWithRecording.sendMessageStream(\n'
                               "          'test-model',\n"
                               "          { message: 'x'.repeat(8_000) },\n"
@@ -17581,13 +18875,26 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'expect(chatWithRecording.isLastPromptTokenCountEstimated()).toBe(false);\n'
                               '      '
                               'expect(chatWithRecording.getHistory()[0].parts?.[0].text).toBe(\n',
-             'review_after': '      await expect(\n'
-                             '        chatWithRecording.sendMessageStream(\n'
-                             "          'test-model',\n"
-                             "          { message: 'x'.repeat(8_000) },\n"
-                             '          '
+             'review_after': '        },\n'
+                             '      });\n'
+                             '      '
+                             'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
+                             "        makeStreamResponse('should not send'),\n"
+                             '      );\n'
+                             '\n'
+                             '      const refused = await '
+                             'chatWithRecording.sendMessageStream(\n'
+                             "        'test-model',\n"
+                             "        { message: 'x'.repeat(8_000) },\n"
+                             '        '
                              "'prompt-id-oversized-after-compression-and-user',\n"
-                             '        ),\n'
+                             '      );\n'
+                             '      await expect(\n'
+                             '        (async () => {\n'
+                             '          for await (const _ of refused) {\n'
+                             '            /* consume */\n'
+                             '          }\n'
+                             '        })(),\n'
                              '      ).rejects.toThrow(/Estimated prompt tokens: '
                              '178000; hard limit: 147848/i);\n'
                              '\n'
@@ -17601,7 +18908,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'expect(chatWithRecording.isLastPromptTokenCountEstimated()).toBe(false);\n'
                              '      '
                              'expect(chatWithRecording.getHistory()[0].parts?.[0].text).toBe(\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-13',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-20',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '          newHistory: [\n'
                        "            { role: 'user', parts: [{ text: 'summary' }] },\n"
@@ -17665,7 +18972,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
                              "        makeStreamResponse('sent after compression'),\n"
                              '      );\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-14',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-21',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      expect(compressSpy).toHaveBeenCalledTimes(1);\n'
                        '      expect(compressSpy.mock.calls[0][1].force).toBe(true);\n'
@@ -17735,7 +19042,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const compressSpy = vi.spyOn(\n'
                              '        ChatCompressionService.prototype,\n'
                              "        'compress',\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-15',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-22',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '            compressionStatus: CompressionStatus.COMPRESSED,\n'
                        '          },\n'
@@ -17808,7 +19115,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      chat.setLastPromptTokenCount(50_000);\n'
                              '      const firstStream = await '
                              'chat.sendMessageStream(\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-16',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-23',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      for await (const _ of rescueStream) {\n'
                        '        /* consume */\n'
@@ -17894,7 +19201,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const compressSpy = vi.spyOn(\n'
                              '        ChatCompressionService.prototype,\n'
                              "        'compress',\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-17',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-24',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '        },\n'
                        '      });\n'
@@ -17954,7 +19261,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      chat.setLastPromptTokenCount(50_000);\n'
                              '      const firstStream = await '
                              'chat.sendMessageStream(\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-18',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-25',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      );\n'
                        '      for await (const _ of secondStream) {\n'
@@ -18038,7 +19345,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const compressSpy = vi.spyOn(\n'
                              '        ChatCompressionService.prototype,\n'
                              "        'compress',\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-19',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-26',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '            compressionStatus: CompressionStatus.COMPRESSED,\n'
                        '          },\n'
@@ -18115,7 +19422,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      chat.setLastPromptTokenCount(50_000);\n'
                              '      const firstStream = await '
                              'chat.sendMessageStream(\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-20',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-27',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      }\n'
                        '\n'
@@ -18179,7 +19486,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const compressSpy = vi.spyOn(\n'
                              '        ChatCompressionService.prototype,\n'
                              "        'compress',\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-21',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-28',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '            compressionStatus: CompressionStatus.COMPRESSED,\n'
                        '          },\n'
@@ -18242,7 +19549,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "        .mockResolvedValueOnce(makeStreamResponse('after "
                              "rescue'));\n"
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-22',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-29',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      }\n'
                        '\n'
@@ -18402,7 +19709,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      chat.setLastPromptTokenCount(50_000);\n'
                              '      const firstStream = await '
                              'chat.sendMessageStream(\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-23',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-30',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      );\n'
                        '      for await (const _ of secondStream) {\n'
@@ -18488,7 +19795,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        .spyOn(ChatCompressionService.prototype, '
                              "'compress')\n"
                              '        .mockResolvedValue({\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-24',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-31',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': "        'prompt-collect-candidates',\n"
                        '      );\n'
@@ -18616,7 +19923,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const compressSpy = vi.spyOn(\n'
                              '        ChatCompressionService.prototype,\n'
                              "        'compress',\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-25',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-32',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      expect(compressSpy.mock.calls[1][1].force).toBe(true);\n'
                        '      expect(\n'
@@ -18871,15 +20178,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '\n'
                       "    it('attempts rescue on every hard-tier send and recovers "
                       "the moment one commits', async () => {\n"
-                      '      // The skip-after-N-strikes rule was removed: a skipped '
-                      'hard-tier send\n'
-                      '      // grows the prompt with nothing above this tier left to '
-                      'shrink it,\n'
-                      '      // which is the exact ramp the dead production session '
-                      'walked. Every\n'
-                      '      // hard-tier send now attempts, and each failure refuses '
-                      'the send\n'
-                      '      // rather than sending an oversized prompt.\n'
+                      '      // A skipped hard-tier send grows the prompt with nothing '
+                      'above this\n'
+                      '      // tier left to shrink it, which is the exact ramp the '
+                      'dead production\n'
+                      '      // session walked. Every hard-tier send attempts, and '
+                      'each failure\n'
+                      '      // refuses the send rather than sending an oversized '
+                      'prompt.\n'
                       '      const compressSpy = vi\n'
                       "        .spyOn(ChatCompressionService.prototype, 'compress')\n"
                       '        .mockResolvedValue({\n'
@@ -18900,12 +20206,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      chat.setLastPromptTokenCount(176_999);\n'
                       '      const FAILING_SENDS = 4;\n'
                       '      for (let i = 0; i < FAILING_SENDS; i++) {\n'
+                      '        const refused = await chat.sendMessageStream(\n'
+                      "          'test-model',\n"
+                      '          { message: `hard-rescue-${i}` },\n'
+                      '          `prompt-hard-rescue-every-send-${i}`,\n'
+                      '        );\n'
                       '        await expect(\n'
-                      '          chat.sendMessageStream(\n'
-                      "            'test-model',\n"
-                      '            { message: `hard-rescue-${i}` },\n'
-                      '            `prompt-hard-rescue-every-send-${i}`,\n'
-                      '          ),\n'
+                      '          (async () => {\n'
+                      '            for await (const _ of refused) {\n'
+                      '              /* consume */\n'
+                      '            }\n'
+                      '          })(),\n'
                       '        ).rejects.toThrow(\n'
                       '          /compression status: '
                       'COMPRESSION_FAILED_EMPTY_SUMMARY/i,\n'
@@ -18956,12 +20267,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      chat.setLastPromptTokenCount(176_999);\n'
                       '      const SENDS = 4;\n'
                       '      for (let i = 0; i < SENDS; i++) {\n'
+                      '        const refused = await chat.sendMessageStream(\n'
+                      "          'test-model',\n"
+                      '          { message: `throwing-hard-rescue-${i}` },\n'
+                      '          `prompt-hard-rescue-throw-${i}`,\n'
+                      '        );\n'
                       '        await expect(\n'
-                      '          chat.sendMessageStream(\n'
-                      "            'test-model',\n"
-                      '            { message: `throwing-hard-rescue-${i}` },\n'
-                      '            `prompt-hard-rescue-throw-${i}`,\n'
-                      '          ),\n'
+                      '          (async () => {\n'
+                      '            for await (const _ of refused) {\n'
+                      '              /* consume */\n'
+                      '            }\n'
+                      '          })(),\n'
                       '        ).rejects.toThrow(compressionError);\n'
                       '      }\n'
                       '\n'
@@ -19254,15 +20570,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              "    it('attempts rescue on every hard-tier send and "
                              "recovers the moment one commits', async () => {\n"
-                             '      // The skip-after-N-strikes rule was removed: a '
-                             'skipped hard-tier send\n'
-                             '      // grows the prompt with nothing above this tier '
-                             'left to shrink it,\n'
-                             '      // which is the exact ramp the dead production '
-                             'session walked. Every\n'
-                             '      // hard-tier send now attempts, and each failure '
-                             'refuses the send\n'
-                             '      // rather than sending an oversized prompt.\n'
+                             '      // A skipped hard-tier send grows the prompt with '
+                             'nothing above this\n'
+                             '      // tier left to shrink it, which is the exact ramp '
+                             'the dead production\n'
+                             '      // session walked. Every hard-tier send attempts, '
+                             'and each failure\n'
+                             '      // refuses the send rather than sending an '
+                             'oversized prompt.\n'
                              '      const compressSpy = vi\n'
                              '        .spyOn(ChatCompressionService.prototype, '
                              "'compress')\n"
@@ -19285,12 +20600,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      chat.setLastPromptTokenCount(176_999);\n'
                              '      const FAILING_SENDS = 4;\n'
                              '      for (let i = 0; i < FAILING_SENDS; i++) {\n'
+                             '        const refused = await chat.sendMessageStream(\n'
+                             "          'test-model',\n"
+                             '          { message: `hard-rescue-${i}` },\n'
+                             '          `prompt-hard-rescue-every-send-${i}`,\n'
+                             '        );\n'
                              '        await expect(\n'
-                             '          chat.sendMessageStream(\n'
-                             "            'test-model',\n"
-                             '            { message: `hard-rescue-${i}` },\n'
-                             '            `prompt-hard-rescue-every-send-${i}`,\n'
-                             '          ),\n'
+                             '          (async () => {\n'
+                             '            for await (const _ of refused) {\n'
+                             '              /* consume */\n'
+                             '            }\n'
+                             '          })(),\n'
                              '        ).rejects.toThrow(\n'
                              '          /compression status: '
                              'COMPRESSION_FAILED_EMPTY_SUMMARY/i,\n'
@@ -19344,12 +20664,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      chat.setLastPromptTokenCount(176_999);\n'
                              '      const SENDS = 4;\n'
                              '      for (let i = 0; i < SENDS; i++) {\n'
+                             '        const refused = await chat.sendMessageStream(\n'
+                             "          'test-model',\n"
+                             '          { message: `throwing-hard-rescue-${i}` },\n'
+                             '          `prompt-hard-rescue-throw-${i}`,\n'
+                             '        );\n'
                              '        await expect(\n'
-                             '          chat.sendMessageStream(\n'
-                             "            'test-model',\n"
-                             '            { message: `throwing-hard-rescue-${i}` },\n'
-                             '            `prompt-hard-rescue-throw-${i}`,\n'
-                             '          ),\n'
+                             '          (async () => {\n'
+                             '            for await (const _ of refused) {\n'
+                             '              /* consume */\n'
+                             '            }\n'
+                             '          })(),\n'
                              '        ).rejects.toThrow(compressionError);\n'
                              '      }\n'
                              '\n'
@@ -19366,7 +20691,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        info: {\n'
                              '          originalTokenCount: 123_456,\n'
                              '          newTokenCount: 123_456,\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-26',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-33',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '\n'
                        '      expect(estimatePromptTokens(history, userMessage, 0, '
@@ -19723,7 +21048,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        .mockResolvedValueOnce({\n'
                              '          newHistory: null,\n'
                              '          info: {\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-27',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-34',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      }\n'
                        '\n'
@@ -19887,7 +21212,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(\n'
                              "        makeStreamResponse('clamped response'),\n"
                              '      );\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-28',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-35',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '        mockConfig,\n'
                        '        config,\n'
@@ -20067,7 +21392,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "room (unknown model → 32K)', async () => {\n"
                              '      '
                              'vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-29',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-36',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      const requestConfig = vi.mocked(\n'
                        '        mockContentGenerator.generateContentStream,\n'
@@ -20165,12 +21490,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        undefined,\n'
                       '        uiTelemetryService,\n'
                       '      );\n'
+                      '      const refused = await chatInstance.sendMessageStream(\n'
+                      "        'qwen3.8-27b-nvfp4-k8v4',\n"
+                      "        { message: 'hi' },\n"
+                      "        'prompt-vllm-exact-missing',\n"
+                      '      );\n'
                       '      await expect(\n'
-                      '        chatInstance.sendMessageStream(\n'
-                      "          'qwen3.8-27b-nvfp4-k8v4',\n"
-                      "          { message: 'hi' },\n"
-                      "          'prompt-vllm-exact-missing',\n"
-                      '        ),\n'
+                      '        (async () => {\n'
+                      '          for await (const _ of refused) {\n'
+                      '            /* consume */\n'
+                      '          }\n'
+                      '        })(),\n'
                       "      ).rejects.toThrow('cannot count rendered requests');\n"
                       '      '
                       'expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();\n'
@@ -20284,12 +21614,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        undefined,\n'
                              '        uiTelemetryService,\n'
                              '      );\n'
+                             '      const refused = await '
+                             'chatInstance.sendMessageStream(\n'
+                             "        'qwen3.8-27b-nvfp4-k8v4',\n"
+                             "        { message: 'hi' },\n"
+                             "        'prompt-vllm-exact-missing',\n"
+                             '      );\n'
                              '      await expect(\n'
-                             '        chatInstance.sendMessageStream(\n'
-                             "          'qwen3.8-27b-nvfp4-k8v4',\n"
-                             "          { message: 'hi' },\n"
-                             "          'prompt-vllm-exact-missing',\n"
-                             '        ),\n'
+                             '        (async () => {\n'
+                             '          for await (const _ of refused) {\n'
+                             '            /* consume */\n'
+                             '          }\n'
+                             '        })(),\n'
                              "      ).rejects.toThrow('cannot count rendered "
                              "requests');\n"
                              '      '
@@ -20304,7 +21640,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "        model: 'test-model',\n"
                              '        contextWindowSize: 40_000,\n'
                              '      });\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-30',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-37',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '\n'
                        '      '
@@ -20407,7 +21743,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        contextWindowSize: 65_536,\n'
                              '      });\n'
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-31',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-38',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      // Normal auto-path cheap-gate (force=false), NOT '
                        'hard-tier rescue.\n'
@@ -20476,7 +21812,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    it('should add a new content item to the history', "
                              '() => {\n'
                              '      const newContent: Content = {\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-32',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-39',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': "    it('should retry on invalid content, succeed, and report "
                        "metrics', async () => {\n"
@@ -21324,7 +22660,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        vi.mocked(\n'
                              '          mockContentGenerator.generateContentStream,\n'
                              '        ).mockImplementation(async () =>\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-33',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-40',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '        } finally {\n'
                        '          vi.useRealTimers();\n'
@@ -21424,7 +22760,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            '
                              ".mockResolvedValueOnce(cutAfter([textChunk('The result "
                              "is')]))\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-34',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-41',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      const calls = '
                        'vi.mocked(mockContentGenerator.generateContentStream).mock\n'
@@ -21536,7 +22872,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'recovery where the FIRST\n'
                              '      // truncated response reports usage but the SECOND '
                              'omits it. The\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-35',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-42',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      const recovery1Config = calls[1]![0].config as {\n'
                        '        maxOutputTokens?: number;\n'
@@ -21641,7 +22977,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "response is also truncated', async () => {\n"
                              '      // Three streams: initial (MAX_TOKENS) → escalated '
                              '(MAX_TOKENS) →\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-36',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-43',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '      redactStructuredOutputArgsForRecording(original);\n'
                        '      expect(original).toEqual(snapshot);\n'
@@ -21713,7 +23049,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      parts: [{ text }],\n'
                              '    });\n'
                              '    const modelMsg = (text: string) => ({\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-37',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-44',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': "      const info = await subagentChat.tryCompress('p3');\n"
                        '      '
@@ -21903,7 +23239,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "mockCompressionService('compressed');\n"
                              '\n'
                              "      await chat.tryCompress('p1', true);\n"},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-38',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-45',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '          info: expect.objectContaining({ '
                        'newTokenCountIsEstimated: true }),\n'
@@ -22311,7 +23647,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      finishReason?: string,\n'
                              '    ): GenerateContentResponse {\n'
                              '      return {\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-39',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-46',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '            ...(finishReason ? { finishReason } : {}),\n'
                        '          },\n'
@@ -24079,7 +25415,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'sysInstr;\n'},
             {'name': 'packages/core/src/core/geminiChat.ts:landmark-17',
              'path': 'packages/core/src/core/geminiChat.ts',
-             'before': '    let requestContents: Content[];\n'
+             'before': '    // stash gets the same per-send reset for the same reason: '
+                       'a\n'
+                       '    // leftover from a prior unretryable break would otherwise '
+                       'get\n'
+                       "    // appended to JSONL by THIS send's retry-loop flush, "
+                       'attaching\n'
+                       "    // someone else's failed turn to this conversation.\n"
+                       '    this.clearPendingPartialState();\n'
+                       '\n'
+                       '    let compressionInfo: ChatCompressionInfo;\n'
+                       '    let requestContents: Content[];\n'
                        '    let userContentAdded = false;\n'
                        '    let manualPlanExitNoticeVersion: number | undefined;\n'
                        '    let manualPlanExitNoticeText: string | undefined;\n'
@@ -24105,7 +25451,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        "    // defaultOutputCeiling(model) (the model's output limit "
                        'clipped to\n'
                        '    // OUTPUT_TOKEN_CEILING).\n',
-             'after': '    let requestContents: Content[];\n'
+             'after': '    // stash gets the same per-send reset for the same reason: '
+                      'a\n'
+                      '    // leftover from a prior unretryable break would otherwise '
+                      'get\n'
+                      "    // appended to JSONL by THIS send's retry-loop flush, "
+                      'attaching\n'
+                      "    // someone else's failed turn to this conversation.\n"
+                      '    this.clearPendingPartialState();\n'
+                      '\n'
+                      '    // The stream below reports this whatever happens before '
+                      'it, so it starts\n'
+                      '    // at the outcome meaning no attempt was made.\n'
+                      '    let compressionInfo: ChatCompressionInfo = {\n'
+                      '      originalTokenCount: 0,\n'
+                      '      newTokenCount: 0,\n'
+                      '      compressionStatus: CompressionStatus.NOOP,\n'
+                      '    };\n'
+                      '    // Boxed so that any thrown value, falsy ones included, '
+                      'stays\n'
+                      '    // distinguishable from a preparation that succeeded.\n'
+                      '    let preparationFailure: { error: unknown } | undefined;\n'
+                      '    let requestContents: Content[];\n'
                       '    let userContentAdded = false;\n'
                       '    let manualPlanExitNoticeVersion: number | undefined;\n'
                       '    let manualPlanExitNoticeText: string | undefined;\n'
@@ -24129,7 +25496,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    // defaultOutputCeiling(model) (the model's output limit "
                       'clipped to\n'
                       '    // OUTPUT_TOKEN_CEILING).\n',
-             'review_before': '    let requestContents: Content[];\n'
+             'review_before': '    // stash gets the same per-send reset for the same '
+                              'reason: a\n'
+                              '    // leftover from a prior unretryable break would '
+                              'otherwise get\n'
+                              "    // appended to JSONL by THIS send's retry-loop "
+                              'flush, attaching\n'
+                              "    // someone else's failed turn to this "
+                              'conversation.\n'
+                              '    this.clearPendingPartialState();\n'
+                              '\n'
+                              '    let compressionInfo: ChatCompressionInfo;\n'
+                              '    let requestContents: Content[];\n'
                               '    let userContentAdded = false;\n'
                               '    let manualPlanExitNoticeVersion: number | '
                               'undefined;\n'
@@ -24157,7 +25535,30 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               "    // defaultOutputCeiling(model) (the model's output "
                               'limit clipped to\n'
                               '    // OUTPUT_TOKEN_CEILING).\n',
-             'review_after': '    let requestContents: Content[];\n'
+             'review_after': '    // stash gets the same per-send reset for the same '
+                             'reason: a\n'
+                             '    // leftover from a prior unretryable break would '
+                             'otherwise get\n'
+                             "    // appended to JSONL by THIS send's retry-loop "
+                             'flush, attaching\n'
+                             "    // someone else's failed turn to this conversation.\n"
+                             '    this.clearPendingPartialState();\n'
+                             '\n'
+                             '    // The stream below reports this whatever happens '
+                             'before it, so it starts\n'
+                             '    // at the outcome meaning no attempt was made.\n'
+                             '    let compressionInfo: ChatCompressionInfo = {\n'
+                             '      originalTokenCount: 0,\n'
+                             '      newTokenCount: 0,\n'
+                             '      compressionStatus: CompressionStatus.NOOP,\n'
+                             '    };\n'
+                             '    // Boxed so that any thrown value, falsy ones '
+                             'included, stays\n'
+                             '    // distinguishable from a preparation that '
+                             'succeeded.\n'
+                             '    let preparationFailure: { error: unknown } | '
+                             'undefined;\n'
+                             '    let requestContents: Content[];\n'
                              '    let userContentAdded = false;\n'
                              '    let manualPlanExitNoticeVersion: number | '
                              'undefined;\n'
@@ -25420,7 +26821,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        },\n'},
             {'name': 'packages/core/src/core/geminiChat.ts:landmark-25',
              'path': 'packages/core/src/core/geminiChat.ts',
-             'before': '    return (async function* () {\n'
+             'before': '      }\n'
+                       '      if (manualPlanExitNoticeVersion !== undefined) {\n'
+                       '        this.config.restorePendingManualPlanExitNotice(\n'
+                       '          manualPlanExitNoticeVersion,\n'
+                       '        );\n'
+                       '      }\n'
+                       '      streamDoneResolver!();\n'
+                       '      throw error;\n'
+                       '    }\n'
+                       '\n'
+                       '    // eslint-disable-next-line '
+                       '@typescript-eslint/no-this-alias\n'
+                       '    const self = this;\n'
+                       '    return (async function* () {\n'
                        '      const sleepInhibitorHandle = acquireSleepInhibitor(\n'
                        '        self.config,\n'
                        "        'Qwen Code is streaming a model response',\n"
@@ -25443,7 +26857,24 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '          yield {\n'
                        '            type: StreamEventType.COMPRESSED,\n'
                        '            info: compressionInfo,\n',
-             'after': '    return (async function* () {\n'
+             'after': '      }\n'
+                      '      if (manualPlanExitNoticeVersion !== undefined) {\n'
+                      '        this.config.restorePendingManualPlanExitNotice(\n'
+                      '          manualPlanExitNoticeVersion,\n'
+                      '        );\n'
+                      '      }\n'
+                      "      // Released here rather than in the stream's finally: a "
+                      'caller that never\n'
+                      '      // consumes the stream must not leave the next send '
+                      'waiting on this one.\n'
+                      '      streamDoneResolver!();\n'
+                      '      preparationFailure = { error };\n'
+                      '    }\n'
+                      '\n'
+                      '    // eslint-disable-next-line '
+                      '@typescript-eslint/no-this-alias\n'
+                      '    const self = this;\n'
+                      '    return (async function* () {\n'
                       '      const sleepInhibitorHandle = acquireSleepInhibitor(\n'
                       '        self.config,\n'
                       "        'Qwen Code is streaming a model response',\n"
@@ -25473,6 +26904,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            record: toCompactionRecord(compressionInfo),\n'
                       '          };\n'
                       '        }\n'
+                      '        // Anything that refuses this send between the '
+                      'compaction gate and the\n'
+                      '        // first request is raised here, after the record '
+                      'above, so the attempt\n'
+                      '        // it interrupted stays observable. It precedes '
+                      'COMPRESSED because that\n'
+                      '        // event promises the history was replaced, which a '
+                      'refused send has\n'
+                      '        // already undone.\n'
+                      '        if (preparationFailure) {\n'
+                      '          throw preparationFailure.error;\n'
+                      '        }\n'
                       '        // The narrower COMPRESSED event still means "the '
                       'history was\n'
                       '        // replaced", so startup-context restoration and the '
@@ -25486,7 +26929,21 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          yield {\n'
                       '            type: StreamEventType.COMPRESSED,\n'
                       '            info: compressionInfo,\n',
-             'review_before': '    return (async function* () {\n'
+             'review_before': '      }\n'
+                              '      if (manualPlanExitNoticeVersion !== undefined) {\n'
+                              '        '
+                              'this.config.restorePendingManualPlanExitNotice(\n'
+                              '          manualPlanExitNoticeVersion,\n'
+                              '        );\n'
+                              '      }\n'
+                              '      streamDoneResolver!();\n'
+                              '      throw error;\n'
+                              '    }\n'
+                              '\n'
+                              '    // eslint-disable-next-line '
+                              '@typescript-eslint/no-this-alias\n'
+                              '    const self = this;\n'
+                              '    return (async function* () {\n'
                               '      const sleepInhibitorHandle = '
                               'acquireSleepInhibitor(\n'
                               '        self.config,\n'
@@ -25510,7 +26967,24 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '          yield {\n'
                               '            type: StreamEventType.COMPRESSED,\n'
                               '            info: compressionInfo,\n',
-             'review_after': '    return (async function* () {\n'
+             'review_after': '      }\n'
+                             '      if (manualPlanExitNoticeVersion !== undefined) {\n'
+                             '        this.config.restorePendingManualPlanExitNotice(\n'
+                             '          manualPlanExitNoticeVersion,\n'
+                             '        );\n'
+                             '      }\n'
+                             "      // Released here rather than in the stream's "
+                             'finally: a caller that never\n'
+                             '      // consumes the stream must not leave the next '
+                             'send waiting on this one.\n'
+                             '      streamDoneResolver!();\n'
+                             '      preparationFailure = { error };\n'
+                             '    }\n'
+                             '\n'
+                             '    // eslint-disable-next-line '
+                             '@typescript-eslint/no-this-alias\n'
+                             '    const self = this;\n'
+                             '    return (async function* () {\n'
                              '      const sleepInhibitorHandle = '
                              'acquireSleepInhibitor(\n'
                              '        self.config,\n'
@@ -25541,6 +27015,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            record: '
                              'toCompactionRecord(compressionInfo),\n'
                              '          };\n'
+                             '        }\n'
+                             '        // Anything that refuses this send between the '
+                             'compaction gate and the\n'
+                             '        // first request is raised here, after the '
+                             'record above, so the attempt\n'
+                             '        // it interrupted stays observable. It precedes '
+                             'COMPRESSED because that\n'
+                             '        // event promises the history was replaced, '
+                             'which a refused send has\n'
+                             '        // already undone.\n'
+                             '        if (preparationFailure) {\n'
+                             '          throw preparationFailure.error;\n'
                              '        }\n'
                              '        // The narrower COMPRESSED event still means '
                              '"the history was\n'
@@ -93984,8 +95470,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/contentGenerator.ts': '27fa593f8dbf0e75106b2d4aa8f9d22801dcf016b112d56046542ed4fd3ff303',
  'packages/core/src/core/coreToolScheduler.test.ts': 'de21e1f4528091327c67e81ea7acd5a159b4cbd83189f09f3ddc5ed28b71943e',
  'packages/core/src/core/coreToolScheduler.ts': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e',
- 'packages/core/src/core/geminiChat.test.ts': '7ef9277810eaa314832a3ecac7e9f83d626bb83833407580dcdd878219ae1e31',
- 'packages/core/src/core/geminiChat.ts': 'd4e020551f7fa36de936d79a0a0b44f5b4181fd1c07b0555d01a5782f5680578',
+ 'packages/core/src/core/geminiChat.test.ts': '60dd2aee89abc059c70254ee58fa66a9359e3f7add35b2089c194179548d4f09',
+ 'packages/core/src/core/geminiChat.ts': '7a4da2ab02a2d624f0c3b299ad098117a95287c751ffd847d6d6a755b772c4e9',
  'packages/core/src/core/genai-compat.test.ts': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50',
  'packages/core/src/core/genai-compat.ts': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81',
  'packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts': '39cb515dfc3afb39edfe8dbabd3956351dd4b7b71e82f2fd77e4f6dc2b8ce695',
