@@ -93,9 +93,7 @@ impl ServiceError {
             | Self::SessionFinalizing { .. }
             | Self::SessionRunning { .. }
             | Self::SessionDeleting { .. }
-            | Self::SourceChanged(_) => {
-                StatusCode::CONFLICT
-            }
+            | Self::SourceChanged(_) => StatusCode::CONFLICT,
             Self::DockerUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::ServiceShuttingDown => StatusCode::SERVICE_UNAVAILABLE,
             Self::DockerCommand(_) | Self::AgentOutputMissing(_) => StatusCode::BAD_GATEWAY,
@@ -182,9 +180,7 @@ impl ServiceError {
             | Self::SessionFinalizing { session_id }
             | Self::AcceptanceDurabilityFailed { session_id, .. }
             | Self::CancellationDurabilityFailed { session_id, .. }
-            | Self::IdempotencyConflict { session_id, .. } => {
-                session_id.as_str()
-            }
+            | Self::IdempotencyConflict { session_id, .. } => session_id.as_str(),
             _ => "",
         }
     }
@@ -215,10 +211,9 @@ impl IntoResponse for ServiceError {
             session_id: self.session_id().to_string(),
         };
         let mut response = (self.http_status(), Json(body)).into_response();
-        response.headers_mut().insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_static("no-store"),
-        );
+        response
+            .headers_mut()
+            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
         response
     }
 }

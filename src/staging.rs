@@ -199,13 +199,13 @@ impl SessionPaths {
             ServiceError::Staging(io_msg("write turn-budget.json", &path, &error))
         })?;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o444)).map_err(
-            |error| {
-                ServiceError::Staging(io_msg("chmod 0444 turn-budget.json", &path, &error))
-            },
+            |error| ServiceError::Staging(io_msg("chmod 0444 turn-budget.json", &path, &error)),
         )?;
-        file.flush().and_then(|_| file.sync_all()).map_err(|error| {
-            ServiceError::Staging(io_msg("flush/sync turn-budget.json", &path, &error))
-        })?;
+        file.flush()
+            .and_then(|_| file.sync_all())
+            .map_err(|error| {
+                ServiceError::Staging(io_msg("flush/sync turn-budget.json", &path, &error))
+            })?;
         sync_directory(&self.control, "sync turn-budget publication")?;
         Ok(path)
     }
@@ -424,8 +424,7 @@ pub fn validate_archive_structure(
                 "submitted archive entry {index} is unreadable: {error}"
             ))
         })?;
-        let (name, has_directory_suffix) =
-            canonical_archive_entry_name(entry.name_raw(), index)?;
+        let (name, has_directory_suffix) = canonical_archive_entry_name(entry.name_raw(), index)?;
         let declared_bytes = entry.size();
         let mode = entry.unix_mode();
         let kind = archive_entry_kind(&name, has_directory_suffix, mode, index)?;
@@ -445,11 +444,12 @@ pub fn validate_archive_structure(
                 }
             }
             ArchiveEntryKind::RegularFile => {
-                declared_regular_files = declared_regular_files.checked_add(1).ok_or_else(|| {
-                    ServiceError::InvalidRequest(
-                        "archive regular-file counter overflowed u64".into(),
-                    )
-                })?;
+                declared_regular_files =
+                    declared_regular_files.checked_add(1).ok_or_else(|| {
+                        ServiceError::InvalidRequest(
+                            "archive regular-file counter overflowed u64".into(),
+                        )
+                    })?;
                 declared_regular_file_bytes = declared_regular_file_bytes
                     .checked_add(declared_bytes)
                     .ok_or_else(|| {
@@ -542,13 +542,14 @@ fn declared_central_entry_count(file: &mut File, archive_path: &Path) -> Service
         )));
     }
     let tail_length = length.min(EOCD_BYTES + MAX_COMMENT_BYTES + EOCD64_LOCATOR_BYTES);
-    file.seek(SeekFrom::Start(length - tail_length)).map_err(|error| {
-        ServiceError::Staging(io_msg(
-            "seek submitted archive container tail",
-            archive_path,
-            &error,
-        ))
-    })?;
+    file.seek(SeekFrom::Start(length - tail_length))
+        .map_err(|error| {
+            ServiceError::Staging(io_msg(
+                "seek submitted archive container tail",
+                archive_path,
+                &error,
+            ))
+        })?;
     let mut tail = vec![0u8; usize::try_from(tail_length).expect("bounded tail length")];
     file.read_exact(&mut tail).map_err(|error| {
         ServiceError::Staging(io_msg(
@@ -571,8 +572,7 @@ fn declared_central_entry_count(file: &mut File, archive_path: &Path) -> Service
     }
     let eocd = eocd_offset.ok_or_else(|| {
         ServiceError::InvalidRequest(
-            "submitted archive has no end-of-central-directory record terminating the file"
-                .into(),
+            "submitted archive has no end-of-central-directory record terminating the file".into(),
         )
     })?;
     let disk_number = read_u16(eocd + 4);
@@ -610,13 +610,14 @@ fn declared_central_entry_count(file: &mut File, archive_path: &Path) -> Service
             .expect("static slice length"),
     );
     let mut eocd64 = [0u8; 56];
-    file.seek(SeekFrom::Start(eocd64_position)).map_err(|error| {
-        ServiceError::Staging(io_msg(
-            "seek submitted archive Zip64 directory record",
-            archive_path,
-            &error,
-        ))
-    })?;
+    file.seek(SeekFrom::Start(eocd64_position))
+        .map_err(|error| {
+            ServiceError::Staging(io_msg(
+                "seek submitted archive Zip64 directory record",
+                archive_path,
+                &error,
+            ))
+        })?;
     file.read_exact(&mut eocd64).map_err(|error| {
         ServiceError::InvalidRequest(format!(
             "submitted archive Zip64 end-of-central-directory record is unreadable: {}",
@@ -636,8 +637,7 @@ fn declared_central_entry_count(file: &mut File, archive_path: &Path) -> Service
         u64::from_le_bytes(eocd64[24..32].try_into().expect("static slice length"));
     let zip64_total_entries =
         u64::from_le_bytes(eocd64[32..40].try_into().expect("static slice length"));
-    if zip64_disk != 0 || zip64_directory_disk != 0 || zip64_disk_entries != zip64_total_entries
-    {
+    if zip64_disk != 0 || zip64_directory_disk != 0 || zip64_disk_entries != zip64_total_entries {
         return Err(ServiceError::InvalidRequest(format!(
             "submitted archive is not a single-part Zip64 zip: disk={zip64_disk} directory_disk={zip64_directory_disk} disk_entries={zip64_disk_entries} total_entries={zip64_total_entries}"
         )));
@@ -760,11 +760,7 @@ where
                     ))
                 })?;
                 let staged_meta = std::fs::symlink_metadata(&destination).map_err(|error| {
-                    ServiceError::Staging(io_msg(
-                        "stat staged symbolic link",
-                        &destination,
-                        &error,
-                    ))
+                    ServiceError::Staging(io_msg("stat staged symbolic link", &destination, &error))
                 })?;
                 if !staged_meta.file_type().is_symlink() {
                     return Err(ServiceError::Staging(format!(
@@ -773,11 +769,7 @@ where
                     )));
                 }
                 let staged_target = std::fs::read_link(&destination).map_err(|error| {
-                    ServiceError::Staging(io_msg(
-                        "read staged symbolic link",
-                        &destination,
-                        &error,
-                    ))
+                    ServiceError::Staging(io_msg("read staged symbolic link", &destination, &error))
                 })?;
                 if staged_target.as_os_str() != target.as_os_str() {
                     return Err(ServiceError::Staging(format!(
@@ -967,9 +959,7 @@ fn canonical_archive_entry_name(raw: &[u8], index: usize) -> ServiceResult<(Stri
         )));
     }
     let text = std::str::from_utf8(raw).map_err(|_| {
-        ServiceError::InvalidRequest(format!(
-            "archive entry {index} name is not valid UTF-8"
-        ))
+        ServiceError::InvalidRequest(format!("archive entry {index} name is not valid UTF-8"))
     })?;
     if text.starts_with('/') {
         return Err(ServiceError::InvalidRequest(format!(
@@ -1102,8 +1092,8 @@ mod tests {
 
     use super::{require_staging_caps, SessionPaths};
     use crate::config::{
-        DEFAULT_MAX_SESSION_TURNS, MAX_SESSION_TURNS_CEILING, MAX_STAGED_BYTES,
-        MAX_STAGED_ENTRIES, MAX_STAGED_FILES,
+        DEFAULT_MAX_SESSION_TURNS, MAX_SESSION_TURNS_CEILING, MAX_STAGED_BYTES, MAX_STAGED_ENTRIES,
+        MAX_STAGED_FILES,
     };
     use crate::error::ServiceError;
 
@@ -1142,8 +1132,7 @@ mod tests {
                 "qwen38-turn-budget-{turns}-{}",
                 uuid::Uuid::new_v4().simple()
             ));
-            std::fs::create_dir_all(root.join("sessions"))
-                .expect("create fixed sessions parent");
+            std::fs::create_dir_all(root.join("sessions")).expect("create fixed sessions parent");
             let paths = SessionPaths::new(&root, "s-22222222222222222222222222222222");
             paths.create_dirs().expect("create fixture layout");
             let path = paths
@@ -1184,7 +1173,11 @@ mod tests {
             "{\"unrelated_record\":false}\n".as_bytes(),
             "{\"max_session_turns\":0}\n".as_bytes(),
             "{\"max_session_turns\":-1}\n".as_bytes(),
-            format!("{{\"max_session_turns\":{}}}\n", MAX_SESSION_TURNS_CEILING + 1).as_bytes(),
+            format!(
+                "{{\"max_session_turns\":{}}}\n",
+                MAX_SESSION_TURNS_CEILING + 1
+            )
+            .as_bytes(),
             format!("{{\"max_session_turns\":{}}}\n", u64::from(u32::MAX) + 1).as_bytes(),
             "".as_bytes(),
         ] {
@@ -1339,7 +1332,10 @@ mod tests {
     {
         let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
         populate(&mut writer);
-        writer.finish().expect("finish fixture archive").into_inner()
+        writer
+            .finish()
+            .expect("finish fixture archive")
+            .into_inner()
     }
 
     fn archive_fixture(root: &std::path::Path, bytes: &[u8]) -> std::path::PathBuf {
@@ -1351,7 +1347,11 @@ mod tests {
     /// Replace every occurrence of a unique needle. Lengths must match so
     /// header offsets stay valid.
     fn patch_all(buffer: &mut [u8], needle: &[u8], replacement: &[u8]) -> usize {
-        assert_eq!(needle.len(), replacement.len(), "patch must preserve length");
+        assert_eq!(
+            needle.len(),
+            replacement.len(),
+            "patch must preserve length"
+        );
         let mut patched = 0;
         let mut index = 0;
         while index + needle.len() <= buffer.len() {
@@ -1372,7 +1372,10 @@ mod tests {
             if &buffer[index..index + 4] == signature
                 && &buffer[index + fixed..index + fixed + name.len()] == name
             {
-                assert!(found.is_none(), "fixture entry name is not unique in archive");
+                assert!(
+                    found.is_none(),
+                    "fixture entry name is not unique in archive"
+                );
                 found = Some(index);
             }
         }
@@ -1406,8 +1409,7 @@ mod tests {
             writer
                 .start_file("hidden.txt", stored_options())
                 .expect("start inner entry");
-            std::io::Write::write_all(writer, b"never extracted")
-                .expect("write inner entry");
+            std::io::Write::write_all(writer, b"never extracted").expect("write inner entry");
         });
         let bytes = build_zip(|writer| {
             writer
@@ -1421,34 +1423,20 @@ mod tests {
             writer
                 .start_file("nested/data.bin", stored_options().unix_permissions(0o664))
                 .expect("start nested data");
-            std::io::Write::write_all(writer, b"archive-extract-proof")
-                .expect("write nested data");
+            std::io::Write::write_all(writer, b"archive-extract-proof").expect("write nested data");
             writer
-                .add_symlink(
-                    "dangling",
-                    "missing-relative-target",
-                    stored_options(),
-                )
+                .add_symlink("dangling", "missing-relative-target", stored_options())
                 .expect("add dangling symlink");
             writer
-                .add_symlink(
-                    "relative-escape",
-                    "../outside-tree",
-                    stored_options(),
-                )
+                .add_symlink("relative-escape", "../outside-tree", stored_options())
                 .expect("add relative-escape symlink");
             writer
-                .add_symlink(
-                    "absolute",
-                    "/usr/local/bin/python3.13",
-                    stored_options(),
-                )
+                .add_symlink("absolute", "/usr/local/bin/python3.13", stored_options())
                 .expect("add absolute symlink");
             writer
                 .start_file("inner.zip", stored_options().unix_permissions(0o664))
                 .expect("start inner archive entry");
-            std::io::Write::write_all(writer, &inner_archive)
-                .expect("write inner archive entry");
+            std::io::Write::write_all(writer, &inner_archive).expect("write inner archive entry");
         });
         let archive_path = archive_fixture(&root, &bytes);
 
@@ -1530,7 +1518,10 @@ mod tests {
 
     #[test]
     fn archive_names_escaping_or_colliding_fail_closed_before_extraction() {
-        let hostile: [(&str, Box<dyn Fn(&mut zip::ZipWriter<std::io::Cursor<Vec<u8>>>)>); 6] = [
+        let hostile: [(
+            &str,
+            Box<dyn Fn(&mut zip::ZipWriter<std::io::Cursor<Vec<u8>>>)>,
+        ); 6] = [
             (
                 "duplicate entry",
                 Box::new(|writer| {
@@ -1663,8 +1654,9 @@ mod tests {
         // scales with the cap instead of hard-coding one deployment's size, and
         // stays far below the file/entry caps so only the byte bound trips.
         let entry_count = (crate::config::MAX_STAGED_BYTES / u32::MAX as u64 + 1) as usize;
-        let names: Vec<String> =
-            (0..entry_count).map(|i| format!("oversized-{i}.bin")).collect();
+        let names: Vec<String> = (0..entry_count)
+            .map(|i| format!("oversized-{i}.bin"))
+            .collect();
         let mut bytes = build_zip(|writer| {
             for name in &names {
                 writer
@@ -1788,11 +1780,7 @@ mod tests {
                 .expect("start non-utf8 entry");
         });
         assert_eq!(
-            patch_all(
-                &mut bytes,
-                b"nonutf8-marker.txt",
-                b"nonutf8-mark\xffr.txt",
-            ),
+            patch_all(&mut bytes, b"nonutf8-marker.txt", b"nonutf8-mark\xffr.txt",),
             2,
             "entry name must be patched in both the local and central headers"
         );

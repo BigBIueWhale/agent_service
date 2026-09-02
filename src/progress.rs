@@ -155,9 +155,10 @@ impl ProgressReporter {
     ) -> ServiceResult<ProgressEvent> {
         let message = message.into();
         validate_message(&message)?;
-        let mut state = self.state.lock().map_err(|_| {
-            ServiceError::Internal("progress state mutex was poisoned".to_string())
-        })?;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ServiceError::Internal("progress state mutex was poisoned".to_string()))?;
         if state.durable_failed {
             return Err(ServiceError::Internal(format!(
                 "durable progress snapshot {} had already failed; refusing another publication",
@@ -251,7 +252,11 @@ fn require_monotonic_counters(
 ) -> ServiceResult<()> {
     for (label, old, new) in [
         ("staged_bytes", previous.staged_bytes, next.staged_bytes),
-        ("staged_entries", previous.staged_entries, next.staged_entries),
+        (
+            "staged_entries",
+            previous.staged_entries,
+            next.staged_entries,
+        ),
         (
             "staged_regular_files",
             previous.staged_regular_files,
@@ -372,9 +377,7 @@ fn replace_atomically(
                         )));
                     }
                 }
-                if let Err(cleanup) =
-                    sync_directory(parent, "sync unpublished progress rollback")
-                {
+                if let Err(cleanup) = sync_directory(parent, "sync unpublished progress rollback") {
                     return Err(ServiceError::Internal(format!(
                         "{error}; durable cleanup of unpublished progress replacement {} also failed: {cleanup}",
                         next.display()
@@ -584,7 +587,11 @@ fn read_private_bytes(path: &Path, role: &str) -> ServiceResult<Vec<u8>> {
         .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
         .open(path)
         .map_err(|error| {
-            ServiceError::Internal(io_msg(&format!("open {role} without following links"), path, &error))
+            ServiceError::Internal(io_msg(
+                &format!("open {role} without following links"),
+                path,
+                &error,
+            ))
         })?;
     let metadata = file.metadata().map_err(|error| {
         ServiceError::Internal(io_msg(&format!("fstat opened {role}"), path, &error))
@@ -632,10 +639,8 @@ mod tests {
 
     #[test]
     fn progress_is_atomic_monotonic_complete_and_reopenable() {
-        let root = std::env::temp_dir().join(format!(
-            "qwen38-progress-{}",
-            uuid::Uuid::new_v4().simple()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("qwen38-progress-{}", uuid::Uuid::new_v4().simple()));
         std::fs::create_dir(&root).expect("create progress fixture");
         let path = root.join("progress.json");
         let session_id = "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -667,7 +672,10 @@ mod tests {
             ProgressCounters::default(),
         );
         assert!(regression.is_err());
-        assert_eq!(reopened.latest().expect("latest after rejected regression"), second);
+        assert_eq!(
+            reopened.latest().expect("latest after rejected regression"),
+            second
+        );
 
         // A crash before rename may leave a partial unpublished candidate.
         // Reopen validates the committed snapshot and removes only that exact

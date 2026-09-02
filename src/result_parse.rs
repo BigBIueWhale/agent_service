@@ -119,11 +119,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
             ))
         })?;
     let metadata = file.metadata().map_err(|error| {
-        ServiceError::AgentOutputMissing(io_msg(
-            "fstat opened events.jsonl",
-            path,
-            &error,
-        ))
+        ServiceError::AgentOutputMissing(io_msg("fstat opened events.jsonl", path, &error))
     })?;
     if !metadata.is_file()
         || metadata.permissions().mode() & 0o777 != 0o600
@@ -395,11 +391,7 @@ pub(crate) fn read_bounded_record<R: BufRead>(
 ) -> ServiceResult<bool> {
     loop {
         let available = reader.fill_buf().map_err(|error| {
-            ServiceError::AgentOutputMissing(io_msg(
-                "read opened events.jsonl",
-                path,
-                &error,
-            ))
+            ServiceError::AgentOutputMissing(io_msg("read opened events.jsonl", path, &error))
         })?;
         if available.is_empty() {
             return Ok(false);

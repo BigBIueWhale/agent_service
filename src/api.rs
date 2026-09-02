@@ -261,14 +261,17 @@ async fn require_next_part<'a>(
     Ok(field)
 }
 
-fn require_part_content_type(
-    field: &Field<'_>,
-    part: &str,
-    expected: &str,
-) -> ServiceResult<()> {
+fn require_part_content_type(field: &Field<'_>, part: &str, expected: &str) -> ServiceResult<()> {
     let declared = field
         .content_type()
-        .map(|value| value.split(';').next().unwrap_or_default().trim().to_ascii_lowercase())
+        .map(|value| {
+            value
+                .split(';')
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_ascii_lowercase()
+        })
         .unwrap_or_default();
     if declared != expected {
         return Err(ServiceError::UnsupportedMediaType(format!(
@@ -485,9 +488,7 @@ async fn download_bundle(
     headers.insert(
         HeaderName::from_static("x-bundle-sha256"),
         HeaderValue::from_str(&body.bundle_sha256).map_err(|error| {
-            ServiceError::Internal(format!(
-                "construct bundle hash header for {id}: {error}"
-            ))
+            ServiceError::Internal(format!("construct bundle hash header for {id}: {error}"))
         })?,
     );
     let stream = tokio_util::io::ReaderStream::new(file);
@@ -544,9 +545,9 @@ fn require_idempotency_key(headers: &HeaderMap) -> ServiceResult<String> {
             "Idempotency-Key must appear exactly once".into(),
         ));
     }
-    let value = value.to_str().map_err(|_| {
-        ServiceError::InvalidRequest("Idempotency-Key is not visible ASCII".into())
-    })?;
+    let value = value
+        .to_str()
+        .map_err(|_| ServiceError::InvalidRequest("Idempotency-Key is not visible ASCII".into()))?;
     if !crate::runtime::is_current_session_id(value) {
         return Err(ServiceError::InvalidRequest(format!(
             "Idempotency-Key {value:?} is not `s-` plus exactly 64 lowercase hexadecimal characters"
@@ -559,7 +560,10 @@ async fn list_sessions(
     State(state): State<AppState>,
 ) -> Result<(HeaderMap, Json<ListResponse>), ServiceError> {
     let sessions = state.manager.list().await?;
-    Ok((collection_response_headers(), Json(ListResponse { sessions })))
+    Ok((
+        collection_response_headers(),
+        Json(ListResponse { sessions }),
+    ))
 }
 
 async fn get_session(
@@ -1072,12 +1076,14 @@ async fn verify_service_container(cfg: &Config, value: &serde_json::Value) -> Se
             .unwrap_or("<missing>"),
         &mounted_manifest_sha,
     )?;
-    let manifest = tokio::fs::read_to_string(manifest_path).await.map_err(|error| {
-        ServiceError::Internal(format!(
-            "read mounted build-input manifest {}: {error}",
-            manifest_path.display()
-        ))
-    })?;
+    let manifest = tokio::fs::read_to_string(manifest_path)
+        .await
+        .map_err(|error| {
+            ServiceError::Internal(format!(
+                "read mounted build-input manifest {}: {error}",
+                manifest_path.display()
+            ))
+        })?;
     let cargo_line = manifest
         .lines()
         .find(|line| line.ends_with("  Cargo.lock"))
@@ -2661,13 +2667,7 @@ fn read_private_service_file(
             path.display()
         ))
     })?;
-    validate_private_service_file(
-        path,
-        &opened_metadata,
-        service_uid,
-        service_gid,
-        role,
-    )?;
+    validate_private_service_file(path, &opened_metadata, service_uid, service_gid, role)?;
     if opened_metadata.dev() != expected_metadata.dev()
         || opened_metadata.ino() != expected_metadata.ino()
     {
@@ -2819,9 +2819,9 @@ fn validate_raw_cause_for_terminal(
         matches!(
             cause,
             RawEvidenceCause::RequiredBundleFailure
-            | RawEvidenceCause::PanicRecoveryBundleFailure
-            | RawEvidenceCause::SetupForensicBundleFailure
-            | RawEvidenceCause::ServiceRestartBundleFailure
+                | RawEvidenceCause::PanicRecoveryBundleFailure
+                | RawEvidenceCause::SetupForensicBundleFailure
+                | RawEvidenceCause::ServiceRestartBundleFailure
                 | RawEvidenceCause::ContainerQuiescenceUnproved
         )
     };
@@ -3030,15 +3030,15 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use super::{
-        committed_terminal_for_sweep, require_owned_runtime_directory, sweep_partial_results,
-        sweep_state_dir, validate_terminal_storage, verify_capture_image, BrokerPreflight,
-        CreateRequest, require_idempotency_key,
+        committed_terminal_for_sweep, require_idempotency_key, require_owned_runtime_directory,
+        sweep_partial_results, sweep_state_dir, validate_terminal_storage, verify_capture_image,
+        BrokerPreflight, CreateRequest,
     };
-    use axum::http::{HeaderMap, HeaderValue};
     use crate::config::{Config, StackLock, STACK_LOCK_JSON};
     use crate::progress::ProgressPhase;
     use crate::runtime::{SessionBody, SessionStatus};
     use crate::staging::SessionPaths;
+    use axum::http::{HeaderMap, HeaderValue};
 
     struct TestTree(PathBuf);
 
@@ -3108,8 +3108,7 @@ mod tests {
 
     #[test]
     fn idempotency_key_is_exact_single_and_256_bit_shaped() {
-        let canonical =
-            "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let canonical = "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let mut headers = HeaderMap::new();
         headers.insert("idempotency-key", HeaderValue::from_static(canonical));
         assert_eq!(
@@ -3543,8 +3542,7 @@ mod tests {
         body.bundle_compressed_bytes = 0;
         body.bundle_uncompressed_bytes = 0;
         body.bundle_file_count = 0;
-        std::fs::remove_file(result_dir.join("finished.json"))
-            .expect("replace terminal fixture");
+        std::fs::remove_file(result_dir.join("finished.json")).expect("replace terminal fixture");
         write_terminal(&result_dir.join("finished.json"), &body);
         let error = sweep_state_dir(&state, &results, uid, gid)
             .expect_err("cleanup-failure cause without an accepted bundle must fail");
@@ -3577,7 +3575,9 @@ mod tests {
         let paths = SessionPaths::new(&state, session_id);
         mkdir_0755(&state.join("sessions"));
         paths.create_dirs().expect("create exact session layout");
-        paths.write_prompt("uncommitted prompt").expect("write exact prompt");
+        paths
+            .write_prompt("uncommitted prompt")
+            .expect("write exact prompt");
         paths
             .write_turn_budget(crate::config::DEFAULT_MAX_SESSION_TURNS)
             .expect("write exact turn budget");
@@ -3595,8 +3595,7 @@ mod tests {
         }
         mkdir_0755(&results);
 
-        sweep_state_dir(&state, &results, 1000, 1000)
-            .expect("remove exact uncommitted state");
+        sweep_state_dir(&state, &results, 1000, 1000).expect("remove exact uncommitted state");
         assert!(!paths.root.exists());
     }
 

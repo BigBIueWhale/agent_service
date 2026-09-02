@@ -539,8 +539,9 @@ pub(crate) fn hash_file_sha256(path: &Path) -> ServiceResult<String> {
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; 1024 * 1024];
     loop {
-        let read = std::io::Read::read(&mut file, &mut buffer)
-            .map_err(|error| ServiceError::Internal(io_msg("read file for hashing", path, &error)))?;
+        let read = std::io::Read::read(&mut file, &mut buffer).map_err(|error| {
+            ServiceError::Internal(io_msg("read file for hashing", path, &error))
+        })?;
         if read == 0 {
             break;
         }

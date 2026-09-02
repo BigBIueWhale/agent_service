@@ -68,9 +68,7 @@ enum TopologyCreation {
 /// that serialized teardown whenever it still exists.
 enum TopologyFinalization {
     NeverSubmitted,
-    Submitted {
-        start_gate: Option<std::fs::File>,
-    },
+    Submitted { start_gate: Option<std::fs::File> },
 }
 
 /// Select the sole raw-tree disposition from facts that have already been
@@ -679,8 +677,8 @@ pub async fn run_one(
             diagnostics.push(format!("read final agent logs: {error}"));
             "<agent logs unavailable>".into()
         });
-    let pre_teardown_observed =
-        crate::runtime::read_running_progress(&paths.events_jsonl()).unwrap_or_else(|error| {
+    let pre_teardown_observed = crate::runtime::read_running_progress(&paths.events_jsonl())
+        .unwrap_or_else(|error| {
             diagnostics.push(format!(
                 "read pre-teardown event progress metadata: {error}"
             ));
@@ -939,8 +937,7 @@ async fn wait_for_agent_ready(
     if ready.model != cfg.vllm_model_name
         || ready.context_window != cfg.lock.backend.max_model_len
         || ready.token_count == 0
-        || ready.sandbox
-            != "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
+        || ready.sandbox != "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
     {
         return Err(ServiceError::Internal(format!(
             "broker returned a drifted agent readiness contract: {ready:?}"
@@ -1302,10 +1299,7 @@ pub async fn recover_after_service_restart(
         (paths.output.join("qwen.stderr"), b"".as_slice()),
         (paths.output.join("qwen-exit-code"), b"-1\n".as_slice()),
         (paths.output.join("response.txt"), response.as_bytes()),
-        (
-            paths.control.join("container-logs.txt"),
-            logs.as_bytes(),
-        ),
+        (paths.control.join("container-logs.txt"), logs.as_bytes()),
     ] {
         ensure_private_forensic_file(&path, contents)?;
     }
@@ -1469,10 +1463,7 @@ fn ensure_prompt_record(paths: &SessionPaths, prompt: &str) -> ServiceResult<()>
     }
 }
 
-fn ensure_turn_budget_record(
-    paths: &SessionPaths,
-    max_session_turns: u32,
-) -> ServiceResult<()> {
+fn ensure_turn_budget_record(paths: &SessionPaths, max_session_turns: u32) -> ServiceResult<()> {
     let path = paths.control.join("turn-budget.json");
     let expected = staging::turn_budget_record(max_session_turns);
     match std::fs::symlink_metadata(&path) {
@@ -1532,10 +1523,7 @@ fn read_exact_owned_regular_file(
             ))
         })?;
     let metadata = file.metadata().map_err(|error| {
-        ServiceError::Internal(format!(
-            "fstat opened {role} {}: {error}",
-            path.display()
-        ))
+        ServiceError::Internal(format!("fstat opened {role} {}: {error}", path.display()))
     })?;
     if !metadata.is_file()
         || metadata.permissions().mode() & 0o777 != mode
@@ -1556,10 +1544,7 @@ fn read_exact_owned_regular_file(
     })?;
     let mut bytes = Vec::with_capacity(capacity);
     file.read_to_end(&mut bytes).map_err(|error| {
-        ServiceError::Internal(format!(
-            "read opened {role} {}: {error}",
-            path.display()
-        ))
+        ServiceError::Internal(format!("read opened {role} {}: {error}", path.display()))
     })?;
     if bytes.len() as u64 != metadata.len() {
         return Err(ServiceError::Internal(format!(
@@ -1765,11 +1750,9 @@ async fn finalize_setup_failure(
             "normal execution did not begin or did not reach readiness; removing exact-owned topology and proving quiescence before forensic bundling"
         }
     };
-    if let Err(progress_error) = progress.publish(
-        ProgressPhase::TearingDown,
-        teardown_message,
-        counters,
-    ) {
+    if let Err(progress_error) =
+        progress.publish(ProgressPhase::TearingDown, teardown_message, counters)
+    {
         diagnostics.push(format!(
             "publish setup/cancellation teardown progress: {progress_error}"
         ));
@@ -1777,8 +1760,7 @@ async fn finalize_setup_failure(
     }
     let (captured_logs, teardown) = match topology {
         TopologyFinalization::NeverSubmitted => (
-            "<session topology was never submitted; no owned container logs exist>\n"
-                .to_string(),
+            "<session topology was never submitted; no owned container logs exist>\n".to_string(),
             // This is not an optimistic Docker observation. The only code
             // that can create a session topology is below the transition to
             // `Submitted`, so the execution's bind-mounted producers never
@@ -1866,11 +1848,14 @@ async fn finalize_setup_failure(
         }
     };
 
-    let final_counters = merge_progress_counters(counters, ProgressCounters {
-        output_event_bytes: observed.output_event_bytes,
-        num_turns: observed.num_turns,
-        ..ProgressCounters::default()
-    });
+    let final_counters = merge_progress_counters(
+        counters,
+        ProgressCounters {
+            output_event_bytes: observed.output_event_bytes,
+            num_turns: observed.num_turns,
+            ..ProgressCounters::default()
+        },
+    );
     if let Err(progress_error) = progress.publish(
         ProgressPhase::Bundling,
         "creating the deterministic forensic bundle after exact container quiescence",

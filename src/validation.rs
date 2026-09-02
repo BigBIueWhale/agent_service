@@ -200,8 +200,7 @@ mod tests {
         validate_spooled_archive, SpooledArchive,
     };
     use crate::config::{
-        DEFAULT_MAX_SESSION_TURNS, MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES,
-        MAX_SESSION_TURNS_CEILING,
+        DEFAULT_MAX_SESSION_TURNS, MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES, MAX_SESSION_TURNS_CEILING,
     };
 
     fn decode_turns(json: &str) -> crate::error::ServiceResult<u32> {
@@ -225,8 +224,7 @@ mod tests {
         );
 
         let just_above_ceiling = (MAX_SESSION_TURNS_CEILING + 1).to_string();
-        let ceiling_fragment =
-            format!("exceeds the {MAX_SESSION_TURNS_CEILING}-turn ceiling");
+        let ceiling_fragment = format!("exceeds the {MAX_SESSION_TURNS_CEILING}-turn ceiling");
         for (json, fragment) in [
             ("0", "is zero"),
             ("-1", "is negative"),
@@ -239,8 +237,9 @@ mod tests {
             (just_above_ceiling.as_str(), ceiling_fragment.as_str()),
             ("1000000", ceiling_fragment.as_str()),
         ] {
-            let error = decode_turns(json)
-                .expect_err(&format!("turn budget {json} must be refused, never clamped"));
+            let error = decode_turns(json).expect_err(&format!(
+                "turn budget {json} must be refused, never clamped"
+            ));
             let message = error.to_string();
             assert!(
                 message.contains(fragment) && message.contains("max_session_turns"),
@@ -255,7 +254,6 @@ mod tests {
         assert!(validate_session_turn_budget(MAX_SESSION_TURNS_CEILING).is_ok());
         assert!(validate_session_turn_budget(MAX_SESSION_TURNS_CEILING + 1).is_err());
     }
-
 
     #[test]
     fn prompt_validation_is_exact_and_fail_closed() {

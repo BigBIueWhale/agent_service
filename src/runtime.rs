@@ -53,8 +53,8 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, Notify};
-use tokio_util::task::TaskTracker;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 
 use crate::config::Config;
 use crate::error::{io_msg, ServiceError, ServiceResult};
@@ -641,15 +641,17 @@ pub async fn recover_interrupted_acceptances(cfg: &Config) -> ServiceResult<()> 
             "service restart recovery began after the broker orphan sweep; no abandoned container will be adopted or resumed",
             prior.counters,
         )?;
-        let mut body =
-            session::recover_after_service_restart(cfg, &acceptance, cancelled).await?;
-        let counters = merge_progress_counters(prior.counters, ProgressCounters {
-            staged_bytes: body.staged_bytes,
-            staged_entries: body.staged_entries,
-            staged_regular_files: body.staged_regular_files,
-            output_event_bytes: body.output_event_bytes,
-            num_turns: body.num_turns,
-        });
+        let mut body = session::recover_after_service_restart(cfg, &acceptance, cancelled).await?;
+        let counters = merge_progress_counters(
+            prior.counters,
+            ProgressCounters {
+                staged_bytes: body.staged_bytes,
+                staged_entries: body.staged_entries,
+                staged_regular_files: body.staged_regular_files,
+                output_event_bytes: body.output_event_bytes,
+                num_turns: body.num_turns,
+            },
+        );
         progress.publish(
             ProgressPhase::PersistingTerminal,
             "restart recovery completed quiescence and forensic bundle handling; preparing the no-clobber terminal resource",
@@ -759,7 +761,6 @@ fn remove_exact_uncommitted_acceptance(
     result_dir: &Path,
     session_id: &str,
 ) -> ServiceResult<()> {
-
     let state = SessionPaths::new(&cfg.state_dir, session_id);
     match std::fs::symlink_metadata(&state.root) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -787,8 +788,7 @@ fn remove_exact_uncommitted_acceptance(
                 None
             };
             validate_exact_uncommitted_state_tree(&state, record.as_ref())?;
-            let diagnostics =
-                remove_terminalized_state(&cfg.state_dir, session_id, 1000, 1000);
+            let diagnostics = remove_terminalized_state(&cfg.state_dir, session_id, 1000, 1000);
             if !diagnostics.is_empty() {
                 return Err(ServiceError::Internal(format!(
                     "remove exact uncommitted state for {session_id}: {}",
@@ -863,7 +863,12 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
             paths.root.display()
         )));
     }
-    for directory in [&paths.staged, &paths.artifacts, &paths.streams, &paths.output] {
+    for directory in [
+        &paths.staged,
+        &paths.artifacts,
+        &paths.streams,
+        &paths.output,
+    ] {
         if !names(directory)?.is_empty() {
             return Err(ServiceError::Internal(format!(
                 "uncommitted state directory {} is nonempty; refusing destructive cleanup",
@@ -871,10 +876,8 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
             )));
         }
     }
-    let expected_control = BTreeSet::from([
-        "prompt.txt".to_string(),
-        "turn-budget.json".to_string(),
-    ]);
+    let expected_control =
+        BTreeSet::from(["prompt.txt".to_string(), "turn-budget.json".to_string()]);
     if names(&paths.control)? != expected_control {
         return Err(ServiceError::Internal(format!(
             "uncommitted control directory {} differs from the exact pre-commit layout",
@@ -899,10 +902,8 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
         )));
     }
     if let Some(acceptance) = acceptance {
-        let expected_turn_budget =
-            crate::staging::turn_budget_record(acceptance.max_session_turns);
-        if prompt != acceptance.prompt.as_bytes()
-            || turn_budget != expected_turn_budget.as_bytes()
+        let expected_turn_budget = crate::staging::turn_budget_record(acceptance.max_session_turns);
+        if prompt != acceptance.prompt.as_bytes() || turn_budget != expected_turn_budget.as_bytes()
         {
             return Err(ServiceError::Internal(format!(
                 "uncommitted state controls for {} do not exactly match accepted.json.next",
@@ -958,11 +959,7 @@ fn validate_uncommitted_regular_file(
     })?;
     let mut bytes = Vec::with_capacity(capacity);
     file.read_to_end(&mut bytes).map_err(|error| {
-        ServiceError::Internal(io_msg(
-            "read opened uncommitted control file",
-            path,
-            &error,
-        ))
+        ServiceError::Internal(io_msg("read opened uncommitted control file", path, &error))
     })?;
     if bytes.len() as u64 != metadata.len() {
         return Err(ServiceError::Internal(format!(
@@ -1158,9 +1155,7 @@ impl Manager {
             launch_decision: Arc::new(Mutex::new(())),
             terminal_decision: Mutex::new(TerminalDecision::Open),
         });
-        inner
-            .running
-            .insert(session_id.clone(), Arc::clone(&entry));
+        inner.running.insert(session_id.clone(), Arc::clone(&entry));
         drop(inner);
 
         // Spawn a tracked supervisor that owns this session through
@@ -1470,8 +1465,8 @@ impl Manager {
                     ))
                 })?;
                 if name.starts_with(DELETE_INTENT_PREFIX) {
-                    let (session_id, unpublished) =
-                        session_id_from_delete_control_name(&name).ok_or_else(|| {
+                    let (session_id, unpublished) = session_id_from_delete_control_name(&name)
+                        .ok_or_else(|| {
                             ServiceError::Internal(format!(
                                 "list: malformed deletion control entry {name:?}"
                             ))
@@ -1482,12 +1477,11 @@ impl Manager {
                             path.display()
                         )));
                     }
-                    read_delete_intent(&self.cfg.results_dir, session_id)?
-                        .ok_or_else(|| {
-                            ServiceError::Internal(format!(
-                                "list: deletion control {name:?} disappeared while resolving it"
-                            ))
-                        })?;
+                    read_delete_intent(&self.cfg.results_dir, session_id)?.ok_or_else(|| {
+                        ServiceError::Internal(format!(
+                            "list: deletion control {name:?} disappeared while resolving it"
+                        ))
+                    })?;
                     deleting.insert(session_id.to_string());
                     continue;
                 }
@@ -1811,7 +1805,12 @@ fn running_body_for_entry(cfg: &Config, entry: &RunningEntry) -> ServiceResult<S
         ServiceError::Internal("progress snapshot has no initial accepted event".into())
     })?;
     let output = read_running_progress(&events_jsonl_path(cfg, &entry.snapshot.session_id))?;
-    Ok(running_body(&entry.snapshot, &progress, progress_events, output))
+    Ok(running_body(
+        &entry.snapshot,
+        &progress,
+        progress_events,
+        output,
+    ))
 }
 
 pub(crate) fn apply_progress(body: &mut SessionBody, progress: &ProgressEvent) {
@@ -1841,9 +1840,7 @@ pub(crate) fn merge_progress_counters(
     ProgressCounters {
         staged_bytes: left.staged_bytes.max(right.staged_bytes),
         staged_entries: left.staged_entries.max(right.staged_entries),
-        staged_regular_files: left
-            .staged_regular_files
-            .max(right.staged_regular_files),
+        staged_regular_files: left.staged_regular_files.max(right.staged_regular_files),
         output_event_bytes: left.output_event_bytes.max(right.output_event_bytes),
         num_turns: left.num_turns.max(right.num_turns),
     }
@@ -1879,7 +1876,9 @@ pub struct RunningOutputProgress {
 ///
 /// Cost: a linear byte scan per explicit API read of one session's live
 /// progress, so this favors exactness over a mutable cache.
-pub fn read_running_progress(events_path: &std::path::Path) -> ServiceResult<RunningOutputProgress> {
+pub fn read_running_progress(
+    events_path: &std::path::Path,
+) -> ServiceResult<RunningOutputProgress> {
     use std::io::{BufReader, Read};
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
@@ -1947,11 +1946,8 @@ pub fn read_running_progress(events_path: &std::path::Path) -> ServiceResult<Run
     let mut chunk = Vec::new();
     loop {
         chunk.clear();
-        let terminated = crate::result_parse::read_bounded_record(
-            &mut reader,
-            &mut chunk,
-            events_path,
-        )?;
+        let terminated =
+            crate::result_parse::read_bounded_record(&mut reader, &mut chunk, events_path)?;
         if chunk.is_empty() && !terminated {
             break;
         }
@@ -2328,11 +2324,7 @@ fn read_acceptance_file(
             ))
         })?;
     let metadata = file.metadata().map_err(|error| {
-        ServiceError::Internal(io_msg(
-            &format!("fstat opened {role}"),
-            path,
-            &error,
-        ))
+        ServiceError::Internal(io_msg(&format!("fstat opened {role}"), path, &error))
     })?;
     if !metadata.is_file()
         || metadata.permissions().mode() & 0o777 != 0o600
@@ -2353,11 +2345,7 @@ fn read_acceptance_file(
     })?;
     let mut bytes = Vec::with_capacity(capacity);
     file.read_to_end(&mut bytes).map_err(|error| {
-        ServiceError::Internal(io_msg(
-            &format!("read opened {role}"),
-            path,
-            &error,
-        ))
+        ServiceError::Internal(io_msg(&format!("read opened {role}"), path, &error))
     })?;
     if bytes.len() as u64 != metadata.len() {
         return Err(ServiceError::Internal(format!(
@@ -2368,10 +2356,7 @@ fn read_acceptance_file(
         )));
     }
     let record: AcceptanceRecord = serde_json::from_slice(&bytes).map_err(|error| {
-        ServiceError::Internal(format!(
-            "{role} {} is malformed: {error}",
-            path.display()
-        ))
+        ServiceError::Internal(format!("{role} {} is malformed: {error}", path.display()))
     })?;
     // Durable acceptance records were introduced together with the 256-bit
     // caller-known-handle wire protocol, and that protocol has only ever
@@ -2629,10 +2614,7 @@ fn persist_cancel_intent(
     }
 }
 
-fn read_cancel_intent(
-    results_dir: &Path,
-    session_id: &str,
-) -> ServiceResult<Option<CancelIntent>> {
+fn read_cancel_intent(results_dir: &Path, session_id: &str) -> ServiceResult<Option<CancelIntent>> {
     use std::io::Read;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
@@ -2653,11 +2635,7 @@ fn read_cancel_intent(
         }
     };
     let metadata = file.metadata().map_err(|error| {
-        ServiceError::Internal(io_msg(
-            "fstat opened cancellation intent",
-            &path,
-            &error,
-        ))
+        ServiceError::Internal(io_msg("fstat opened cancellation intent", &path, &error))
     })?;
     if !metadata.is_file()
         || metadata.permissions().mode() & 0o777 != 0o600
@@ -2672,11 +2650,7 @@ fn read_cancel_intent(
     }
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
     file.read_to_end(&mut bytes).map_err(|error| {
-        ServiceError::Internal(io_msg(
-            "read opened cancellation intent",
-            &path,
-            &error,
-        ))
+        ServiceError::Internal(io_msg("read opened cancellation intent", &path, &error))
     })?;
     if bytes.len() as u64 != metadata.len() {
         return Err(ServiceError::Internal(format!(
@@ -2706,10 +2680,7 @@ fn read_cancel_intent(
 /// or interpreted as intent. If the final marker exists it remains
 /// authoritative; otherwise restart recovery terminalizes the accepted job
 /// as an interrupted operation rather than inventing a cancellation.
-fn reconcile_unpublished_cancel_intent(
-    results_dir: &Path,
-    session_id: &str,
-) -> ServiceResult<()> {
+fn reconcile_unpublished_cancel_intent(results_dir: &Path, session_id: &str) -> ServiceResult<()> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
     let next = cancel_intent_next_path(results_dir, session_id);
@@ -2766,10 +2737,7 @@ fn delete_intent_exists(results_dir: &Path, session_id: &str) -> ServiceResult<b
     )
 }
 
-fn read_delete_intent(
-    results_dir: &Path,
-    session_id: &str,
-) -> ServiceResult<Option<DeleteIntent>> {
+fn read_delete_intent(results_dir: &Path, session_id: &str) -> ServiceResult<Option<DeleteIntent>> {
     use std::io::Read;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
@@ -2865,7 +2833,9 @@ fn persist_delete_intent(results_dir: &Path, session_id: &str) -> ServiceResult<
         session_id: session_id.to_string(),
     };
     let mut bytes = serde_json::to_vec_pretty(&intent).map_err(|error| {
-        ServiceError::Internal(format!("serialize deletion intent for {session_id}: {error}"))
+        ServiceError::Internal(format!(
+            "serialize deletion intent for {session_id}: {error}"
+        ))
     })?;
     bytes.push(b'\n');
     let mut candidate_created = false;
@@ -2876,11 +2846,7 @@ fn persist_delete_intent(results_dir: &Path, session_id: &str) -> ServiceResult<
             .mode(0o600)
             .open(&next)
             .map_err(|error| {
-                ServiceError::Internal(io_msg(
-                    "create unpublished deletion intent",
-                    &next,
-                    &error,
-                ))
+                ServiceError::Internal(io_msg("create unpublished deletion intent", &next, &error))
             })?;
         candidate_created = true;
         file.write_all(&bytes)
@@ -3016,10 +2982,7 @@ fn finish_delete_intent(
     )
 }
 
-fn reconcile_unpublished_delete_intent(
-    results_dir: &Path,
-    session_id: &str,
-) -> ServiceResult<()> {
+fn reconcile_unpublished_delete_intent(results_dir: &Path, session_id: &str) -> ServiceResult<()> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
     let next = delete_intent_next_path(results_dir, session_id);
@@ -3053,7 +3016,10 @@ fn reconcile_unpublished_delete_intent(
             &error,
         ))
     })?;
-    sync_directory(results_dir, "restart recovery: sync deletion-intent rollback")?;
+    sync_directory(
+        results_dir,
+        "restart recovery: sync deletion-intent rollback",
+    )?;
     tracing::warn!(
         session_id,
         committed = delete_intent_exists(results_dir, session_id)?,
@@ -3088,8 +3054,8 @@ pub async fn recover_interrupted_deletions(cfg: &Config) -> ServiceResult<()> {
             ))
         })?;
         if name.starts_with(DELETE_INTENT_PREFIX) {
-            let (session_id, unpublished) = session_id_from_delete_control_name(&name)
-                .ok_or_else(|| {
+            let (session_id, unpublished) =
+                session_id_from_delete_control_name(&name).ok_or_else(|| {
                     ServiceError::Internal(format!(
                         "restart deletion recovery: malformed control entry {name:?}"
                     ))
@@ -3648,9 +3614,7 @@ fn grant_owner_write_recursively(root: &Path) {
         for entry in entries.flatten() {
             let child = entry.path();
             match std::fs::symlink_metadata(&child) {
-                Ok(child_meta)
-                    if child_meta.is_dir() && !child_meta.file_type().is_symlink() =>
-                {
+                Ok(child_meta) if child_meta.is_dir() && !child_meta.file_type().is_symlink() => {
                     stack.push(child);
                 }
                 _ => {}
@@ -3822,8 +3786,7 @@ fn validate_delete_state_marker(
             } else {
                 matches!(
                     cause,
-                    "cause=container-teardown-incomplete"
-                        | "cause=raw-state-cleanup-failure"
+                    "cause=container-teardown-incomplete" | "cause=raw-state-cleanup-failure"
                 )
             };
             if header != Some("RAW_SESSION_TREE_RETAINED")
@@ -3870,12 +3833,7 @@ async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionB
     }
     let body = read_terminal_body_file(&path, session_id, "committed terminal")?;
     validate_terminal_resource(cfg, session_id, &body)?;
-    crate::api::validate_terminal_storage(
-        &cfg.results_dir.join(session_id),
-        &body,
-        1000,
-        1000,
-    )?;
+    crate::api::validate_terminal_storage(&cfg.results_dir.join(session_id), &body, 1000, 1000)?;
     validate_terminal_state_storage(cfg, &body)?;
     Ok(body)
 }
@@ -4112,16 +4070,15 @@ mod tests {
     use std::sync::Arc;
 
     use super::{
-        apply_progress, await_connection_independent, cancel_intent_next_path,
-        cancel_intent_path, commit_prepared_terminal, delete_intent_next_path,
-        delete_intent_path, finish_delete_intent, grant_owner_write_recursively,
-        is_current_session_id, is_safe_session_id,
-        persist_cancel_intent, persist_delete_intent, persist_terminal_transaction,
-        prepare_durable_acceptance, prepare_terminal, read_cancel_intent, read_delete_intent,
-        read_running_progress, read_terminal, reconcile_unpublished_cancel_intent,
-        reconcile_unpublished_delete_intent, remove_terminalized_state,
-        resume_prepared_terminal_transaction, rewrite_prepared_terminal, AcceptanceRecord,
-        CancelIntent, LifecycleTracker, SessionBody, SessionStatus,
+        apply_progress, await_connection_independent, cancel_intent_next_path, cancel_intent_path,
+        commit_prepared_terminal, delete_intent_next_path, delete_intent_path,
+        finish_delete_intent, grant_owner_write_recursively, is_current_session_id,
+        is_safe_session_id, persist_cancel_intent, persist_delete_intent,
+        persist_terminal_transaction, prepare_durable_acceptance, prepare_terminal,
+        read_cancel_intent, read_delete_intent, read_running_progress, read_terminal,
+        reconcile_unpublished_cancel_intent, reconcile_unpublished_delete_intent,
+        remove_terminalized_state, resume_prepared_terminal_transaction, rewrite_prepared_terminal,
+        AcceptanceRecord, CancelIntent, LifecycleTracker, SessionBody, SessionStatus,
     };
     use crate::config::{Config, StackLock, STACK_LOCK_JSON};
     use crate::error::ServiceError;
@@ -4161,7 +4118,8 @@ mod tests {
             .mode(0o600)
             .open(path)
             .expect("create private runtime fixture");
-        file.write_all(bytes).expect("write private runtime fixture");
+        file.write_all(bytes)
+            .expect("write private runtime fixture");
         file.sync_all().expect("sync private runtime fixture");
     }
 
@@ -4303,8 +4261,8 @@ mod tests {
         // Historical committed records cannot supply the newer field. Absent
         // is its one valid migration value; defaulting it to 0 would claim a
         // measurement that was never taken.
-        let mut json = serde_json::to_value(body("s-33333333333333333333333333333333"))
-            .expect("serialize");
+        let mut json =
+            serde_json::to_value(body("s-33333333333333333333333333333333")).expect("serialize");
         json.as_object_mut()
             .expect("object")
             .remove("agent_api_duration_ms");
@@ -4385,13 +4343,11 @@ mod tests {
             .running
             .insert(session_id.clone(), entry);
 
-        let body = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            manager.get(&session_id),
-        )
-        .await
-        .expect("running-session read must complete instead of self-deadlocking")
-        .expect("running-session read returns the live body");
+        let body =
+            tokio::time::timeout(std::time::Duration::from_secs(5), manager.get(&session_id))
+                .await
+                .expect("running-session read must complete instead of self-deadlocking")
+                .expect("running-session read returns the live body");
         assert_eq!(body.status, SessionStatus::Running);
         assert_eq!(body.session_id, session_id);
         assert_eq!(body.progress_revision, 1);
@@ -4409,8 +4365,7 @@ mod tests {
         let results = tree.0.join("results");
         std::fs::create_dir(&state).expect("create state root");
         std::fs::create_dir(&results).expect("create results root");
-        let session_id =
-            "s-2222222222222222222222222222222222222222222222222222222222222222";
+        let session_id = "s-2222222222222222222222222222222222222222222222222222222222222222";
         let result_dir = results.join(session_id);
         std::fs::create_dir(&result_dir).expect("create result dir");
 
@@ -4473,8 +4428,7 @@ mod tests {
         // the strict reader must reject one instead of trusting it.
         let mut downgraded = acceptance;
         downgraded.schema_version = 1;
-        std::fs::remove_file(result_dir.join("accepted.json"))
-            .expect("remove schema-2 fixture");
+        std::fs::remove_file(result_dir.join("accepted.json")).expect("remove schema-2 fixture");
         private_write(
             &result_dir.join("accepted.json"),
             &serde_json::to_vec_pretty(&downgraded).expect("serialize downgraded fixture"),
@@ -4516,12 +4470,10 @@ mod tests {
             .await
             .expect("server-owned task reaches its independent boundary");
         transport.abort();
-        assert!(
-            transport
-                .await
-                .expect_err("aborted transport future must not complete")
-                .is_cancelled()
-        );
+        assert!(transport
+            .await
+            .expect_err("aborted transport future must not complete")
+            .is_cancelled());
         release_tx
             .send(())
             .expect("detached server-owned task still receives release");
@@ -4560,12 +4512,10 @@ mod tests {
             .await
             .expect("tracked mutation reaches detached execution");
         transport.abort();
-        assert!(
-            transport
-                .await
-                .expect_err("transport waiter is independently abortable")
-                .is_cancelled()
-        );
+        assert!(transport
+            .await
+            .expect_err("transport waiter is independently abortable")
+            .is_cancelled());
 
         tracker.close().expect("close lifecycle admission");
         let rejected = match tracker.start() {
@@ -4714,9 +4664,8 @@ mod tests {
         std::fs::create_dir(&spool_dir).expect("create spool fixture dir");
         let spool_file = spool_dir.join("archive.zip");
         std::fs::write(&spool_file, b"fixture-archive-payload!").expect("write spool fixture");
-        let preparation =
-            prepare_durable_acceptance(&results, &paths, &acceptance, &spool_file)
-                .expect("prepare durable accepted fixture");
+        let preparation = prepare_durable_acceptance(&results, &paths, &acceptance, &spool_file)
+            .expect("prepare durable accepted fixture");
         let terminal_event = preparation
             .progress
             .publish(
@@ -4777,8 +4726,7 @@ mod tests {
     #[test]
     fn session_handle_shapes_keep_current_writes_and_historical_reads_distinct() {
         let historical = "s-0123456789abcdef0123456789abcdef";
-        let current =
-            "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let current = "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         assert!(is_safe_session_id(historical));
         assert!(!is_current_session_id(historical));
         assert!(is_safe_session_id(current));
@@ -4799,13 +4747,12 @@ mod tests {
     fn cancellation_intent_publication_is_atomic_and_idempotent() {
         let tree = TestTree::new("cancel-publication");
         let results = tree.0.join("results");
-        let session_id =
-            "s-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let session_id = "s-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let result_dir = results.join(session_id);
         std::fs::create_dir_all(&result_dir).expect("create cancellation result directory");
 
-        let first = persist_cancel_intent(&results, session_id)
-            .expect("publish exact cancellation intent");
+        let first =
+            persist_cancel_intent(&results, session_id).expect("publish exact cancellation intent");
         assert!(first.response_error.is_none());
         let final_path = cancel_intent_path(&results, session_id);
         let next_path = cancel_intent_next_path(&results, session_id);
@@ -4848,8 +4795,7 @@ mod tests {
         let results = tree.0.join("results");
         std::fs::create_dir_all(&sessions).expect("create deletion state parent");
         std::fs::create_dir(&results).expect("create deletion results root");
-        let session_id =
-            "s-abababababababababababababababababababababababababababababababab";
+        let session_id = "s-abababababababababababababababababababababababababababababababab";
         let state_root = sessions.join(session_id);
         let result_dir = results.join(session_id);
         std::fs::create_dir(&state_root).expect("create deletion state target");
@@ -4900,8 +4846,7 @@ mod tests {
     fn restart_reconciliation_never_promotes_unpublished_cancellation() {
         let tree = TestTree::new("cancel-reconcile");
         let results = tree.0.join("results");
-        let session_id =
-            "s-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let session_id = "s-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         let result_dir = results.join(session_id);
         std::fs::create_dir_all(&result_dir).expect("create cancellation result directory");
         let final_path = cancel_intent_path(&results, session_id);
@@ -4939,8 +4884,7 @@ mod tests {
     fn cancellation_reconciliation_refuses_symlink_candidates_without_following() {
         let tree = TestTree::new("cancel-reconcile-symlink");
         let results = tree.0.join("results");
-        let session_id =
-            "s-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        let session_id = "s-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
         let result_dir = results.join(session_id);
         std::fs::create_dir_all(&result_dir).expect("create cancellation result directory");
         let outside = tree.0.join("outside-sentinel");

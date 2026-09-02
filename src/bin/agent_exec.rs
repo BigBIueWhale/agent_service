@@ -17,8 +17,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::process::{Command, ExitCode};
 
-const SANDBOX_ID: &str =
-    "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1";
+const SANDBOX_ID: &str = "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1";
 const EVENTS_SOCKET: &str = "/streams/events.sock";
 const STDERR_SOCKET: &str = "/streams/stderr.sock";
 /// The sole per-session turn budget input.
@@ -208,9 +207,8 @@ fn run() -> Result<std::convert::Infallible, String> {
 /// sealed default, because a session that quietly ran on a different budget
 /// than the one it was accepted with would be graded as though it had not.
 fn read_session_turn_budget() -> Result<u32, String> {
-    let metadata = std::fs::symlink_metadata(TURN_BUDGET_FILE).map_err(|error| {
-        format!("stat sealed session turn budget {TURN_BUDGET_FILE}: {error}")
-    })?;
+    let metadata = std::fs::symlink_metadata(TURN_BUDGET_FILE)
+        .map_err(|error| format!("stat sealed session turn budget {TURN_BUDGET_FILE}: {error}"))?;
     if !metadata.is_file()
         || metadata.file_type().is_symlink()
         || metadata.uid() != 1000
@@ -259,7 +257,9 @@ fn parse_session_turn_budget(raw: &[u8]) -> Result<u32, String> {
         .parse()
         .map_err(|error| malformed(&format!("turn count {digits:?}: {error}")))?;
     if turns == 0 || turns > MAX_SESSION_TURNS_CEILING {
-        return Err(malformed(&format!("turn count {turns} is outside the accepted range")));
+        return Err(malformed(&format!(
+            "turn count {turns} is outside the accepted range"
+        )));
     }
     Ok(turns)
 }
@@ -448,36 +448,38 @@ mod tests {
         // real ruleset and PTY allocation in a child so the Rust test harness
         // remains unaffected, then require an exact clean exit.
         let child = unsafe { libc::fork() };
-        assert!(child >= 0, "fork PTY sandbox test: {}", io::Error::last_os_error());
+        assert!(
+            child >= 0,
+            "fork PTY sandbox test: {}",
+            io::Error::last_os_error()
+        );
         if child == 0 {
-            let exit_code = match install_filesystem_sandbox_with_rules(&[(
-                "/dev/pts",
-                DEVICE_WRITE_ACCESS,
-            )]) {
-                Ok(()) => {
-                    let mut master = -1;
-                    let mut slave = -1;
-                    let opened = unsafe {
-                        libc::openpty(
-                            &mut master,
-                            &mut slave,
-                            std::ptr::null_mut(),
-                            std::ptr::null(),
-                            std::ptr::null(),
-                        )
-                    };
-                    if opened == 0 {
-                        unsafe {
-                            libc::close(master);
-                            libc::close(slave);
+            let exit_code =
+                match install_filesystem_sandbox_with_rules(&[("/dev/pts", DEVICE_WRITE_ACCESS)]) {
+                    Ok(()) => {
+                        let mut master = -1;
+                        let mut slave = -1;
+                        let opened = unsafe {
+                            libc::openpty(
+                                &mut master,
+                                &mut slave,
+                                std::ptr::null_mut(),
+                                std::ptr::null(),
+                                std::ptr::null(),
+                            )
+                        };
+                        if opened == 0 {
+                            unsafe {
+                                libc::close(master);
+                                libc::close(slave);
+                            }
+                            0
+                        } else {
+                            82
                         }
-                        0
-                    } else {
-                        82
                     }
-                }
-                Err(_) => 81,
-            };
+                    Err(_) => 81,
+                };
             unsafe { libc::_exit(exit_code) };
         }
 
@@ -533,7 +535,10 @@ mod tests {
             // Outside the accepted range.
             "{\"max_session_turns\":0}\n".to_string(),
             "{\"max_session_turns\":-1}\n".to_string(),
-            format!("{{\"max_session_turns\":{}}}\n", MAX_SESSION_TURNS_CEILING + 1),
+            format!(
+                "{{\"max_session_turns\":{}}}\n",
+                MAX_SESSION_TURNS_CEILING + 1
+            ),
             format!("{{\"max_session_turns\":{}}}\n", u64::from(u32::MAX) + 1),
         ] {
             let error = parse_session_turn_budget(malformed.as_bytes())

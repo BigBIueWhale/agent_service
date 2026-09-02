@@ -2532,13 +2532,7 @@ mod tests {
     fn late_log_subscribers_replay_from_the_unix_epoch() {
         assert_eq!(
             docker_log_follow_args("exact-owned-container"),
-            [
-                "logs",
-                "--follow",
-                "--since",
-                "0",
-                "exact-owned-container"
-            ]
+            ["logs", "--follow", "--since", "0", "exact-owned-container"]
         );
         assert_ne!(docker_log_follow_args("fixture")[3], "0s");
     }

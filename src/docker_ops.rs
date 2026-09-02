@@ -92,10 +92,7 @@ pub async fn sweep_orphans(cfg: &Config) -> ServiceResult<()> {
     )
 }
 
-pub async fn create_session(
-    cfg: &Config,
-    session_id: &str,
-) -> ServiceResult<SessionNames> {
+pub async fn create_session(cfg: &Config, session_id: &str) -> ServiceResult<SessionNames> {
     validate_session_id(session_id)?;
     let value = call(
         cfg,

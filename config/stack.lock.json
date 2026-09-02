@@ -42,7 +42,7 @@
     "image_id": "sha256:f2dc1de373a22d453933e09ad9dda151f738729564006627d7e033e1bf87a5da",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
     "policy_sha256": "4e2b3d2e591bddc4f3cb3234716a3b16910058d44a78534957221d8418a53d08",
-    "source_sha256": "502789965b86e163d45daa5f9bd41475a8414f559a9a461157685a575157e0ca",
+    "source_sha256": "7fe406c0f7aff8622b7dacd8f2310a0e61113a4246bc49fa0af60b64586ba4f3",
     "memory": "64m",
     "memory_swap": "64m",
     "pids_limit": 64
@@ -86,7 +86,7 @@
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
     "runtime_contract_sha256": "2c3b59dbeae51983034bf02bf988f16c8f0dc6824bcdfa45119788f9d0e7f20b",
     "wrapper_sha256": "51fe0901413a12b408f1f446c7d732046caf34d1dca440eba73dc63f1ca3ab36",
-    "agent_exec_source_sha256": "ee421cf216de9caa7619f0bd38006d8bf5a5b2cf672c429e59e4a263940682c8",
+    "agent_exec_source_sha256": "ab75e7ef2170fd11e7ba540fdc22b57615195907b8c4347f1e8c355377ca3b33",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
     "model_base_url": "http://127.0.0.1:18000/v1",
     "model_proxy_port": 18000,

@@ -576,8 +576,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.build.docker_cli_archive
             != "https://download.docker.com/linux/static/stable/x86_64/docker-29.7.2.tgz"
         || !is_sha256(&lock.build.docker_cli_archive_sha256)
-        || lock.build.go_archive
-            != "https://dl.google.com/go/go1.25.13.linux-amd64.tar.gz"
+        || lock.build.go_archive != "https://dl.google.com/go/go1.25.13.linux-amd64.tar.gz"
         || !is_sha256(&lock.build.go_archive_sha256)
         || !is_sha256(&lock.build.agent_apt_lock_sha256)
         || !is_sha256(&lock.build.jks_normalizer_sha256)
@@ -898,8 +897,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.host.container_apparmor_profile != "docker-default"
     {
         return fail(
-            "host container-isolation contract (apparmor/seccomp/cgroupns) is not satisfied"
-                .into(),
+            "host container-isolation contract (apparmor/seccomp/cgroupns) is not satisfied".into(),
         );
     }
     if !lock.host.docker_socket.starts_with('/') {
@@ -926,7 +924,11 @@ fn validate_embedded_broker_policy(lock: &StackLock) -> ServiceResult<()> {
     }
 
     same!("schema_version", policy.schema_version, lock.schema_version);
-    same!("policy_id", policy.policy_id.as_str(), lock.broker.policy_id.as_str());
+    same!(
+        "policy_id",
+        policy.policy_id.as_str(),
+        lock.broker.policy_id.as_str()
+    );
     same!("profile", policy.profile.as_str(), lock.profile.as_str());
     same!(
         "broker_container_name",
@@ -1035,7 +1037,11 @@ fn validate_embedded_broker_policy(lock: &StackLock) -> ServiceResult<()> {
         policy.agent.memory_swap.as_str(),
         lock.agent.memory_swap.as_str()
     );
-    same!("agent.pids_limit", policy.agent.pids_limit, lock.agent.pids_limit);
+    same!(
+        "agent.pids_limit",
+        policy.agent.pids_limit,
+        lock.agent.pids_limit
+    );
     same!(
         "agent.tmpfs_tmp",
         policy.agent.tmpfs_tmp.as_str(),
@@ -1085,7 +1091,11 @@ fn validate_embedded_broker_policy(lock: &StackLock) -> ServiceResult<()> {
         policy.relay.memory_swap.as_str(),
         lock.relay.memory_swap.as_str()
     );
-    same!("relay.pids_limit", policy.relay.pids_limit, lock.relay.pids_limit);
+    same!(
+        "relay.pids_limit",
+        policy.relay.pids_limit,
+        lock.relay.pids_limit
+    );
     same!("relay.role", policy.relay.role.as_str(), "agent-model");
     same!(
         "capture.image_tag",
