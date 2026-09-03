@@ -276,9 +276,9 @@ second application must be byte-for-byte idempotent.
 is generated review evidence for humans; it is independently hashed and compared
 to the transformer's exact output, but is not a second patching path. Its current
 SHA-256 is
-`cf13e1df2cb144a01ad8bbd6f39e9a61dc763713b9c62b003a9a6b1f22398062`.
+`8a5b2d9ef0ca36b4d0559a3f6835de2ea027ca3eea11a47ba87ee98a436dced4`.
 The transformer's manifest SHA-256 is
-`9e2c7d5597fc42e2c6f05cc7988932d3a6a39453e694a7bc356d060335ca9f5c`.
+`a13d633350e0d4b4c4c2630b317564972261d6d9934e5291976a2c59b7b82344`.
 Both identities are locked, checked on the host, checked again inside the Docker
 build, and recorded as image labels.
 

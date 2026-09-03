@@ -1929,6 +1929,172 @@ def _validate_required_read_offset_after(state: State) -> None:
     )
 
 
+def _validate_text_read_fidelity_before(state: State) -> None:
+    label = "text read fidelity precondition"
+    files = "packages/core/src/utils/fileUtils.ts"
+    sync = "packages/core/src/utils/sync-file-encoding.ts"
+    ranges = "packages/core/src/utils/read-text-range.ts"
+
+    # Upstream infers an encoding from the shape of the bytes and, failing
+    # that, decodes as UTF-8 with replacement characters, so a file that is
+    # not what it is read as comes back as plausible text.
+    require_text(
+        state, files, "  const detected = detectEncodingFromBuffer(full);", label=label
+    )
+    require_text(
+        state, files, "        content: iconvLite.decode(full, detected),", label=label
+    )
+    require_text(
+        state,
+        files,
+        "  // Final fallback: UTF-8 with replacement characters",
+        label=label,
+    )
+    require_text(state, sync, "          content: iconvDecode(full, detected),", label=label)
+    # The BOM decoders are lossy in the same way: an ill-formed code unit
+    # becomes U+FFFD rather than an error.
+    require_text(state, files, "      out += '\\uFFFD';", label=label)
+    # A sampled guess and an exact decode answer different questions, and only
+    # the second one decides what is returned.
+    require_text(state, files, "    const sampleSize = Math.min(8192, stats.size);", label=label)
+    # The refusal the streamed reader already has is named for the size of the
+    # file rather than for the property that fails.
+    require_text(state, ranges, "export class LargeNonUtf8TextError extends Error {", label=label)
+    require_text(state, ranges, "    readonly reason?: 'invalid-utf8',", label=label)
+    # A page drops trailing whitespace from every line it returns, and ends a
+    # line short with a marker of its own rather than at a line boundary.
+    require_text(
+        state,
+        files,
+        "        const selectedLines = content.split('\\n').map((line) => line.trimEnd());",
+        label=label,
+    )
+    require_text(
+        state,
+        files,
+        "                line.substring(0, remaining) + '... [truncated]',",
+        label=label,
+    )
+
+
+def _validate_text_read_fidelity_after(state: State) -> None:
+    label = "text read fidelity result"
+    files = "packages/core/src/utils/fileUtils.ts"
+    sync = "packages/core/src/utils/sync-file-encoding.ts"
+    ranges = "packages/core/src/utils/read-text-range.ts"
+    files_test = "packages/core/src/utils/fileUtils.test.ts"
+    tool_test = "packages/core/src/tools/read-file.test.ts"
+
+    # One decode, and it is the encoding the file declares. `fatal: true` is
+    # the whole rule, so a sequence that encoding does not define raises rather
+    # than resolving to a character the file does not contain.
+    _require_all(
+        state,
+        files,
+        (
+            "export function decodeBufferWithEncodingInfo(full: Buffer): FileReadResult {",
+            "function decodeUnicode(",
+            "new TextDecoder(encoding, { fatal: true, ignoreBOM: true })",
+            "throw new NonUtf8TextError(declared, 'undecodable');",
+        ),
+        label=label,
+    )
+    # Nothing in the read path infers an encoding, and nothing substitutes a
+    # replacement character for one it could not read.
+    for path in (files, sync):
+        for absent in (
+            "detectEncodingFromBuffer",
+            "isUtf8CompatibleEncoding",
+            "\\uFFFD",
+        ):
+            forbid_text(state, path, absent, label=label)
+    forbid_text(state, files, "loadIconvLite", label=label)
+    forbid_text(state, sync, "iconvDecode(full", label=label)
+    # There is one buffer decoder, and it is synchronous because nothing it
+    # does is asynchronous.
+    forbid_text(state, files, "decodeBufferWithEncodingInfoAsync", label=label)
+    forbid_text(state, sync, "decodeBufferWithEncodingInfo", label=label)
+    # The declaration is read from the BOM window and settles nothing else.
+    _require_all(
+        state,
+        files,
+        (
+            "const MAX_BOM_BYTES = 4;",
+            "    const windowSize = Math.min(MAX_BOM_BYTES, stats.size);",
+            "    return bom ? bomEncodingToName(bom.encoding) : 'utf-8';",
+        ),
+        label=label,
+    )
+    # One refusal, named for the property that fails rather than for a file
+    # size, carrying the conversion the caller's next move needs.
+    _require_all(
+        state,
+        ranges,
+        (
+            "export class NonUtf8TextError extends Error {",
+            "    readonly reason: 'undecodable' | 'not-streamable',",
+            "iconv -f SOURCE_ENCODING -t UTF-8",
+        ),
+        label=label,
+    )
+    forbid_text(state, ranges, "LargeNonUtf8TextError", label=label)
+
+    # A page is a contiguous slice of the file: lines verbatim, and the
+    # newline that terminates the last one whenever the file continues past
+    # it, so the pages a caller is told to read concatenate to the file.
+    _require_all(
+        state,
+        files,
+        (
+            "        const rangeReachedEof =",
+            "            index === selectedLines.length - 1 && rangeReachedEof ? '' : '\\n';",
+            "          llmContent += line + terminator;",
+            "                  offset: actualEndLine,",
+        ),
+        label=label,
+    )
+    forbid_text(state, files, "trimEnd()", label=label)
+    forbid_text(state, files, "... [truncated]", label=label)
+    # A line the result cannot carry whole is refused, with the two moves that
+    # get past it, rather than halved into a fragment that reads like the line.
+    _require_all(
+        state,
+        files,
+        (
+            "          const overlongLine =",
+            "            `no read starting there can return it. Read it in slices with a ` +",
+            "            errorType: ToolErrorType.FILE_TOO_LARGE,",
+        ),
+        label=label,
+    )
+
+    # Executable evidence, in the suites the image runs.
+    require_text(
+        state,
+        files_test,
+        "[encoding-contract] refuses a multi-byte sequence the file cuts short",
+        label=label,
+    )
+    require_text(
+        state,
+        files_test,
+        "[read-contract] refuses a line wider than one result instead of halving it",
+        label=label,
+    )
+    require_text(
+        state,
+        tool_test,
+        "[read-contract] pages a file back exactly, following the call each page carries",
+        label=label,
+    )
+    require_text(
+        state,
+        tool_test,
+        "[encoding-contract] refuses bytes that are not valid UTF-8 instead of decoding them as something else",
+        label=label,
+    )
+
+
 def _validate_residue_quarantine_before(state: State) -> None:
     label = "residue quarantine precondition"
     chat = "packages/core/src/core/geminiChat.ts"
@@ -3097,6 +3263,53 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_pages_affordance_before,
         validate_after=_validate_pages_affordance_after,
+    ),
+    SemanticConcern(
+        name="text-read-fidelity",
+        rationale=(
+            "A read returned text that was not in the file, in two ways. A "
+            "file whose bytes are not valid UTF-8 was handed to a statistical "
+            "charset detector and decoded under whatever it guessed, and when "
+            "that produced nothing the bytes were decoded as UTF-8 with "
+            "replacement characters; either way the result came back as the "
+            "file's contents, with no error, no warning, and nothing in the "
+            "result to say the bytes were not what the file holds. A "
+            "benchmark corpus split on byte boundaries put four such files in "
+            "front of the model -- roughly 100,000 bytes, 7.7% of the "
+            "corpus -- as cp1252 mojibake, and it read straight through them. "
+            "The same reader already refused a non-UTF-8 file it had to "
+            "stream, so the guess was not even the one behaviour: it was what "
+            "happened to files small enough to buffer. Reading is now one "
+            "rule at every size. A file is read under the encoding it "
+            "declares -- the Unicode BOM at its head, or UTF-8 when it "
+            "carries none -- every decoder is `fatal`, and a sequence the "
+            "declared encoding does not define ends the read with the "
+            "conversion command the caller needs. Second, paging lost "
+            "characters. Every returned line was right-trimmed, and a page "
+            "that stopped at a line boundary carried no terminator, so the "
+            "newline between two pages was in neither: over one 26-file run, "
+            "12 files could not be reproduced from the union of everything "
+            "returned, each short by exactly one character. A page is now a "
+            "contiguous slice of the file -- lines verbatim, each carrying "
+            "its newline whenever the file continues past it -- so following "
+            "the continuation call from offset 0 concatenates to the file. A "
+            "line wider than the result budget is the one thing this "
+            "interface cannot page, and it was the case that behaved worst: "
+            "the first budget-worth was returned with a marker appended and "
+            "the continuation named the same offset again, so a caller "
+            "following it re-read the identical result until the loop "
+            "detector stopped the session. It is refused, naming the shell "
+            "command that reads the line in slices and the offset that "
+            "continues past it."
+        ),
+        removal_condition=(
+            "Remove only when upstream reads a text file under the encoding "
+            "it declares and refuses the rest instead of inferring one, and "
+            "when the pages it tells a caller to read concatenate to the "
+            "file's exact bytes."
+        ),
+        validate_before=_validate_text_read_fidelity_before,
+        validate_after=_validate_text_read_fidelity_after,
     ),
     SemanticConcern(
         name="closed-tool-parameter-schemas",

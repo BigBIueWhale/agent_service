@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `cf13e1df2cb144a01ad8bbd6f39e9a61dc763713b9c62b003a9a6b1f22398062`
+- Review-diff SHA-256: `8a5b2d9ef0ca36b4d0559a3f6835de2ea027ca3eea11a47ba87ee98a436dced4`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `9e2c7d5597fc42e2c6f05cc7988932d3a6a39453e694a7bc356d060335ca9f5c`
+- Transformer-manifest SHA-256: `a13d633350e0d4b4c4c2630b317564972261d6d9934e5291976a2c59b7b82344`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -246,6 +246,48 @@ provide as one fail-closed mode:
   call: `To continue from where this read stopped, call read_file with
   file_path: "/workspace/src/main.rs", offset: 2000, limit: 2000.` A read
   that reached the end of the file carries nothing.
+- text that is the file's own. A read decoded whatever it was given: bytes
+  that are not valid UTF-8 went to a statistical charset detector and were
+  decoded under its guess, and when that produced nothing they were decoded as
+  UTF-8 with replacement characters. Either way the result was returned as the
+  file's contents, with no error, no warning, and nothing in it to say the
+  bytes were not what the file holds. A benchmark corpus split on byte
+  boundaries put four such files in front of the model -- roughly 100,000
+  bytes, 7.7% of the corpus -- as cp1252 mojibake, and it read straight
+  through them. The streamed reader already refused a non-UTF-8 file it could
+  not decode, so the guess was not even the one behaviour: it was what
+  happened to files small enough to buffer. Reading is one rule at every size
+  now. A file is read under the encoding it declares -- the Unicode BOM at its
+  head, or UTF-8 when it carries none -- `decodeUnicode` runs every decoder
+  `fatal`, and a sequence the declared encoding does not define ends the read
+  naming the conversion the caller's next move needs. The BOM decoders are
+  strict on the same rule, so an ill-formed UTF-16 or UTF-32 code unit is
+  refused rather than resolved to U+FFFD. Sniffing is gone from the read path
+  entirely, with the second, sampled answer it existed to give: what a file
+  declares is read from its BOM window, and whether the rest of it decodes is
+  settled by the decoder, on the whole file. One buffer decoder replaces the
+  identical asynchronous and synchronous pair the guess needed, and the
+  refusal is named for the property that fails rather than for the size of the
+  file that failed it.
+- a page that is a slice of the file. Every returned line was right-trimmed,
+  and a page that stopped on a line boundary carried no terminator, so a
+  trailing space and the newline between two pages were in neither page:
+  across one 26-file corpus, 12 files could not be reproduced from the union
+  of everything a complete read returned, each short by exactly one character.
+  A page now carries each line exactly as the file spells it and the newline
+  that terminates it whenever the file continues past it, so following the
+  continuation call from the beginning concatenates to the file. Whole lines
+  are the unit, and a line the range reader's byte budget stopped inside
+  belongs to the next page rather than to this one. A line wider than the
+  result budget is the one thing this interface cannot page, and it behaved
+  worst: its first budget-worth came back with a marker appended, and the
+  continuation named the offset the read had just started at, so a caller
+  following it re-read a byte-identical result until loop detection ended the
+  session. It is refused, naming the shell command that reads that line in
+  slices and the offset that continues past it. Seven `[encoding-contract]`
+  and six `[read-contract]` cases execute both halves in the build, among them
+  a multi-byte sequence a byte-boundary split cut in half and a paged read
+  reassembled byte-for-byte from the calls its own notices carry.
 - PDF page selection named for the file that was asked for. One exported
   remedy already sent every large-, truncated-, or overflowing-PDF message to
   the same place, but it named `<absolute path>`, a value the message already
@@ -347,7 +389,7 @@ provide as one fail-closed mode:
   full, and so is the test file adjacent to every source file the patch
   modifies, when one exists. A patched test file that is missing fails the
   build. There are no `-t` filters left, so a test the build does not run is
-  no longer a reachable state; coverage rises from 28 files to 57.
+  no longer a reachable state; coverage rises from 28 files to 60.
 - evidentiary stream-json tool results: the emitted record prefers the
   model-facing responseParts over the short human-facing display string, so
   captured event streams carry what the model actually received (two
@@ -459,8 +501,8 @@ Verification performed in the pinned Node image:
   idempotence, new-file handling, source/output drift, intermediate-state refusal,
   review-diff drift, time-of-check/time-of-use mutation, and transactional rollback;
 - the complete patched TypeScript/CLI build passed;
-- the full build-derived suite passed: all 57 derived test files (5,259
-  tests: 5,258 passed and 1 environment-skip in the bare pinned image, the
+- the full build-derived suite passed: all 60 derived test files (5,450
+  tests: 5,447 passed and 3 environment-skips in the bare pinned image, the
   20 git-dependent cases with git present as the production image provides
   it) -- zero failures;
 - the same 20 environment-gated failures reproduce byte-identically on the

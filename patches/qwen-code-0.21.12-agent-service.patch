@@ -2926,6 +2926,145 @@ index 6dfe8f8..26cc139 100644
            // returning whatever free-form summary the adapter collected.
            // Returning a non-zero exit code (rather than throwing) avoids
            // the outer catch re-emitting the result a second time.
+diff --git a/packages/cli/src/serve/fs/workspace-file-system.test.ts b/packages/cli/src/serve/fs/workspace-file-system.test.ts
+index 4b5f5ff..5fc5920 100644
+--- a/packages/cli/src/serve/fs/workspace-file-system.test.ts
++++ b/packages/cli/src/serve/fs/workspace-file-system.test.ts
+@@ -28,12 +28,21 @@ interface Harness {
+   fs: WorkspaceFileSystem;
+   events: BridgeEvent[];
+   workspace: string;
+   scratch: string;
+ }
+ 
++/**
++ * Whether a directory this process created can be made unreadable to it.
++ * Discretionary permissions do not apply to uid 0, so a mode-0 directory is
++ * still readable there and a test that needs one cannot build the state it
++ * asserts on.
++ */
++const canObserveUnreadableDirectories =
++  process.platform !== 'win32' && process.getuid?.() !== 0;
++
+ async function makeHarness(opts?: {
+   trusted?: boolean;
+   ignore?: Ignore;
+   includeRawPaths?: boolean;
+   generationGuard?: { assertOpen(): void };
+ }): Promise<Harness> {
+@@ -2184,13 +2193,13 @@ describe('WorkspaceFileSystem - multi-root workspaces', () => {
+ 
+     const hits = await h.fs.glob('*.ts', { maxResults: 3 });
+ 
+     expect(hits).toHaveLength(3);
+   });
+ 
+-  it.skipIf(process.platform === 'win32')(
++  it.skipIf(!canObserveUnreadableDirectories)(
+     'returns healthy root glob results when one workspace root fails',
+     async () => {
+       await fsp.writeFile(path.join(h.workspace, 'primary.ts'), '');
+       await fsp.chmod(h.secondWorkspace, 0o000);
+       try {
+         await expect(h.fs.glob('*.ts')).resolves.toEqual([
+@@ -2199,13 +2208,13 @@ describe('WorkspaceFileSystem - multi-root workspaces', () => {
+       } finally {
+         await fsp.chmod(h.secondWorkspace, 0o700);
+       }
+     },
+   );
+ 
+-  it.skipIf(process.platform === 'win32')(
++  it.skipIf(!canObserveUnreadableDirectories)(
+     'throws AggregateError when every workspace root glob fails',
+     async () => {
+       await fsp.chmod(h.workspace, 0o000);
+       await fsp.chmod(h.secondWorkspace, 0o000);
+       try {
+         const err = await h.fs.glob('*.ts').catch((e: unknown) => e);
+diff --git a/packages/cli/src/serve/fs/workspace-file-system.ts b/packages/cli/src/serve/fs/workspace-file-system.ts
+index c90f8a1..4cf890f 100644
+--- a/packages/cli/src/serve/fs/workspace-file-system.ts
++++ b/packages/cli/src/serve/fs/workspace-file-system.ts
+@@ -16,16 +16,16 @@ import { glob as globAsync } from 'glob';
+ // + 31 tests post-commit. The inline `type` modifiers below tell the
+ // `consistent-type-imports` rule per-symbol intent so future autofixes
+ // don't repeat the regression.
+ 
+ import {
+   CursorNotAtLineBoundaryError,
+-  LargeNonUtf8TextError,
++  NonUtf8TextError,
+   StandardFileSystemService,
+   TextScanBudgetExceededError,
+-  decodeBufferWithEncodingInfoAsync,
++  decodeBufferWithEncodingInfo,
+   detectLineEnding,
+   encodeTextFileContentAsync,
+   isUtf8CompatibleEncoding,
+   loadIgnoreRules,
+   isWithinRoot,
+   type Ignore,
+@@ -1739,13 +1739,13 @@ async function readTextSnapshotFromResolvedFile(
+   if (looksBinary(raw)) {
+     throw new FsError('binary_file', `binary file: ${p}`, {
+       hint: 'use readBytes for binary content',
+     });
+   }
+ 
+-  const decoded = await decodeBufferWithEncodingInfoAsync(raw);
++  const decoded = decodeBufferWithEncodingInfo(raw);
+   const startLineIndex = opts.line !== undefined ? opts.line - 1 : 0;
+   const sliced = sliceDecodedText(
+     decoded.content,
+     startLineIndex,
+     opts.limit ?? Number.POSITIVE_INFINITY,
+   );
+@@ -1799,13 +1799,13 @@ async function readTextSnapshotFromResolvedFile(
+   // the tail of a line it was only shown part of.
+   const bomBytes = decoded.bom ? 3 : 0;
+   const decodedBytesMatchSource =
+     isUtf8CompatibleEncoding(decoded.encoding) &&
+     Buffer.from(decoded.content, 'utf-8').equals(raw.subarray(bomBytes));
+   if (meta.hasMore && !byteTruncated && decodedBytesMatchSource) {
+-    // `decodeBufferWithEncodingInfoAsync` strips the BOM, so decoded offsets
++    // `decodeBufferWithEncodingInfo` strips the BOM, so decoded offsets
+     // run short by its length. A BOM on a byte-compatible encoding is UTF-8,
+     // whose marker is three bytes.
+     const startByte = bomBytes + sliced.startByteOffset;
+     const contentBytes = Buffer.byteLength(content, 'utf-8');
+     // Whole lines consumed their terminator; a byte-truncated slice stopped
+     // mid-line and resumes at exactly what was returned.
+@@ -1945,13 +1945,13 @@ async function readTextCursorWindowFromResolvedFile(
+   assertSameFile(opened, afterRead, p as string, 'read');
+   assertStreamWindowStable(opened, afterRead, p, 'file changed during read');
+   assertSameFile(opened, post, p as string, 'read');
+   assertStreamWindowStable(opened, post, p, 'file changed during read');
+ 
+   if (hasPrimaryError) {
+-    if (primaryError instanceof LargeNonUtf8TextError) {
++    if (primaryError instanceof NonUtf8TextError) {
+       throw new FsError('binary_file', primaryError.message, {
+         cause: primaryError,
+         hint: 'convert the file to UTF-8, or use readBytes for the raw bytes',
+       });
+     }
+     // The offset is malformed, not the file oversized — a cursor this daemon
+@@ -2056,13 +2056,13 @@ async function readLargeTextWindowFromResolvedFile(
+   assertStreamWindowStable(opened, post, p, 'file changed during read');
+ 
+   if (hasPrimaryError) {
+     // An encoding the text route can't represent is the same class of refusal
+     // as sniffed-binary content, and `binary_file` already tells clients to
+     // fall back to `readBytes`.
+-    if (primaryError instanceof LargeNonUtf8TextError) {
++    if (primaryError instanceof NonUtf8TextError) {
+       throw new FsError('binary_file', primaryError.message, {
+         cause: primaryError,
+         hint: 'convert the file to UTF-8, or use readBytes for the raw bytes',
+       });
+     }
+     if (primaryError instanceof TextScanBudgetExceededError) {
 diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/hooks/useGeminiStream.ts
 index 27f4a60..e10b89a 100644
 --- a/packages/cli/src/ui/hooks/useGeminiStream.ts
@@ -12684,10 +12823,27 @@ index d2801d0..f2019cf 100644
          // GeminiClient.tryCompressChat.
          if (streamEvent.type === 'compressed') {
 diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
-index 9ae7c40..998925b 100644
+index 9ae7c40..2d49e59 100644
 --- a/packages/core/src/index.ts
 +++ b/packages/core/src/index.ts
-@@ -281,12 +281,14 @@ export {
+@@ -266,27 +266,26 @@ export {
+ } from './services/cronTasksFile.js';
+ export * from './services/fileDiscoveryService.js';
+ export * from './services/fileHistoryService.js';
+ export * from './services/fileReadCache.js';
+ export * from './services/fileSystemService.js';
+ export * from './services/tool-write-origin.js';
+-export {
+-  decodeBufferWithEncodingInfo,
+-  encodeTextFileContent,
+-} from './utils/sync-file-encoding.js';
++export { encodeTextFileContent } from './utils/sync-file-encoding.js';
+ export {
+   CursorNotAtLineBoundaryError,
+-  LargeNonUtf8TextError,
++  NonUtf8TextError,
+   TextScanBudgetExceededError,
+ } from './utils/read-text-range.js';
  export type { ReadTextRangeResult } from './utils/read-text-range.js';
  export { isUtf8CompatibleEncoding } from './utils/encoding.js';
  export * from './services/gitWorktreeService.js';
@@ -22069,7 +22225,7 @@ index eee97c1..b89a876 100644
  
    /**
 diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools/read-file.test.ts
-index 4cbf249..748eeb9 100644
+index 4cbf249..7a5afb6 100644
 --- a/packages/core/src/tools/read-file.test.ts
 +++ b/packages/core/src/tools/read-file.test.ts
 @@ -17,80 +17,49 @@ import type { Config } from '../config/config.js';
@@ -22558,14 +22714,21 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -492,13 +537,13 @@ describe('ReadFileTool', () => {
+@@ -488,37 +533,136 @@ describe('ReadFileTool', () => {
+           message: `Path is a directory, not a file: ${dirPath}`,
+           type: ToolErrorType.TARGET_IS_DIRECTORY,
+         },
+       });
      });
  
-     it('should read and truncate a text file larger than 10MB', async () => {
+-    it('should read and truncate a text file larger than 10MB', async () => {
++    it('should page a text file larger than 10MB by whole lines', async () => {
        const filePath = path.join(tempRootDir, 'largefile.txt');
-       const largeContent = 'x'.repeat(11 * 1024 * 1024);
-       await fsp.writeFile(filePath, largeContent, 'utf-8');
+-      const largeContent = 'x'.repeat(11 * 1024 * 1024);
+-      await fsp.writeFile(filePath, largeContent, 'utf-8');
 -      const params: ReadFileToolParams = { file_path: filePath };
++      const line = `${'x'.repeat(999)}\n`;
++      await fsp.writeFile(filePath, line.repeat(12_000), 'utf-8');
 +      const params: ReadFileToolParams = { file_path: filePath, offset: 0 };
        const invocation = tool.build(params) as ToolInvocation<
          ReadFileToolParams,
@@ -22573,8 +22736,116 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -512,13 +557,13 @@ describe('ReadFileTool', () => {
-       expect(result.llmContent).toContain('... [truncated]');
+       expect(result.error).toBeUndefined();
++      // The 2,500-character budget admits two 1,000-character lines and their
++      // terminators; the page ends on a line boundary and says where to resume.
+       expect(result.returnDisplay).toBe(
+-        'Read lines 1-1 of at least 1 from largefile.txt (truncated)',
++        'Read lines 1-2 of at least 27 from largefile.txt',
++      );
++      const llmContent = result.llmContent as string;
++      expect(llmContent).toContain(
++        'Showing lines 1-2 of at least 27 total lines',
+       );
++      expect(llmContent.endsWith(line.repeat(2))).toBe(true);
++      expect(llmContent).toContain('offset: 2, limit: 2.');
++    });
++
++    it('[read-contract] refuses a file whose single line is wider than one result', async () => {
++      const filePath = path.join(tempRootDir, 'oneline.txt');
++      await fsp.writeFile(filePath, 'x'.repeat(11 * 1024 * 1024), 'utf-8');
++      const params: ReadFileToolParams = { file_path: filePath, offset: 0 };
++      const invocation = tool.build(params) as ToolInvocation<
++        ReadFileToolParams,
++        ToolResult
++      >;
++
++      const result = await invocation.execute(abortSignal);
++      expect(result.error?.type).toBe(ToolErrorType.FILE_TOO_LARGE);
+       expect(result.llmContent).toContain(
+-        'Showing lines 1-1 of at least 1 total lines',
++        'Line 1 of oneline.txt is longer than one result can carry',
++      );
++      // The refusal is what the model receives; no prefix of the line is
++      // returned alongside it.
++      expect(result.llmContent).not.toContain('xxxxxxxxxx');
++    });
++
++    it('[read-contract] pages a file back exactly, following the call each page carries', async () => {
++      const filePath = path.join(tempRootDir, 'paged.txt');
++      // Trailing spaces, an empty line, a multi-byte character, and a final
++      // newline: every character in the file has to come back, in one page or
++      // another, exactly once.
++      const fileContent = `${Array.from({ length: 60 }, (_, index) => {
++        if (index % 7 === 0) return `line ${index} ends in spaces   `;
++        if (index % 11 === 0) return '';
++        return `line ${index} — ${'abcdefghij'.repeat(8)}`;
++      }).join('\n')}\n`;
++      await fsp.writeFile(filePath, fileContent, 'utf-8');
++
++      const notice =
++        /^Showing lines \d+-\d+ of (?:at least )?\d+ total lines\.(.*?)\n\n---\n\n/s;
++      let params: ReadFileToolParams = { file_path: filePath, offset: 0 };
++      let assembled = '';
++      let pages = 0;
++      for (;;) {
++        const invocation = tool.build(params) as ToolInvocation<
++          ReadFileToolParams,
++          ToolResult
++        >;
++        const result = await invocation.execute(abortSignal);
++        expect(result.error).toBeUndefined();
++        pages++;
++        expect(pages).toBeLessThan(20);
++
++        const text = result.llmContent as string;
++        const header = notice.exec(text);
++        if (header === null) {
++          assembled += text;
++          break;
++        }
++        assembled += text.slice(header[0].length);
++        const next = /offset: (\d+), limit: (\d+)\./.exec(header[1]!);
++        if (next === null) break;
++        params = {
++          file_path: filePath,
++          offset: Number(next[1]),
++          limit: Number(next[2]),
++        };
++      }
++
++      expect(pages).toBeGreaterThan(1);
++      expect(assembled).toBe(fileContent);
++    });
++
++    it('[encoding-contract] refuses bytes that are not valid UTF-8 instead of decoding them as something else', async () => {
++      const filePath = path.join(tempRootDir, 'mojibake.txt');
++      // A left double quotation mark, then the first two bytes of an em dash:
++      // what a byte-boundary split of a UTF-8 file leaves behind.
++      await fsp.writeFile(
++        filePath,
++        Buffer.concat([
++          Buffer.from('“the quotation opens', 'utf8'),
++          Buffer.from([0xe2, 0x80]),
++        ]),
+       );
+-      expect(result.llmContent).toContain('... [truncated]');
++      const invocation = tool.build({
++        file_path: filePath,
++        offset: 0,
++      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
++
++      const result = await invocation.execute(abortSignal);
++
++      expect(result.error?.type).toBe(ToolErrorType.READ_CONTENT_FAILURE);
++      const llmContent = result.llmContent as string;
++      expect(llmContent).toContain('mojibake.txt');
++      expect(llmContent).toContain('is not valid UTF-8');
++      expect(llmContent).toContain('iconv -f SOURCE_ENCODING -t UTF-8');
++      // Not one byte of a single-byte reading of those bytes comes back.
++      expect(llmContent).not.toContain('â€œ');
++      expect(llmContent).not.toContain('the quotation opens');
++      expect(llmContent).not.toContain('\uFFFD');
      });
  
      it('should propagate an aborted signal before reading', async () => {
@@ -22588,7 +22859,7 @@ index 4cbf249..748eeb9 100644
        const controller = new AbortController();
        controller.abort();
  
-@@ -529,13 +574,13 @@ describe('ReadFileTool', () => {
+@@ -529,21 +673,24 @@ describe('ReadFileTool', () => {
  
      it('should handle text file with lines exceeding maximum length', async () => {
        const filePath = path.join(tempRootDir, 'longlines.txt');
@@ -22603,7 +22874,19 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -553,42 +598,44 @@ describe('ReadFileTool', () => {
+       expect(result.returnDisplay).toContain(
+-        'Read lines 1-2 of 3 from longlines.txt (truncated)',
++        'Read lines 1-1 of 3 from longlines.txt',
++      );
++      expect(result.llmContent).toContain(
++        `call read_file with file_path: ${JSON.stringify(filePath)}, offset: 1, limit: 1.`,
+       );
+     });
+ 
+     it('should handle image file and return appropriate content', async () => {
+       const imagePath = path.join(tempRootDir, 'image.png');
+       await sharp({
+@@ -553,42 +700,44 @@ describe('ReadFileTool', () => {
            channels: 3,
            background: '#306090',
          },
@@ -22653,7 +22936,7 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -599,340 +646,18 @@ describe('ReadFileTool', () => {
+@@ -599,340 +748,18 @@ describe('ReadFileTool', () => {
            displayName: 'document.pdf',
          },
        });
@@ -22995,7 +23278,7 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -943,13 +668,13 @@ describe('ReadFileTool', () => {
+@@ -943,13 +770,13 @@ describe('ReadFileTool', () => {
      });
  
      it('should handle SVG file as text', async () => {
@@ -23010,7 +23293,7 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -959,13 +684,13 @@ describe('ReadFileTool', () => {
+@@ -959,13 +786,13 @@ describe('ReadFileTool', () => {
  
      it('should handle large SVG file', async () => {
        const svgPath = path.join(tempRootDir, 'large.svg');
@@ -23025,7 +23308,7 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -977,13 +702,13 @@ describe('ReadFileTool', () => {
+@@ -977,13 +804,13 @@ describe('ReadFileTool', () => {
        );
      });
  
@@ -23040,7 +23323,7 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1003,13 +728,13 @@ describe('ReadFileTool', () => {
+@@ -1003,13 +830,13 @@ describe('ReadFileTool', () => {
              metadata: {},
            },
          ],
@@ -23055,7 +23338,7 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1032,12 +757,13 @@ describe('ReadFileTool', () => {
+@@ -1032,12 +859,13 @@ describe('ReadFileTool', () => {
          })),
          metadata: { language_info: { name: 'python' } },
        };
@@ -23069,7 +23352,7 @@ index 4cbf249..748eeb9 100644
        expect(typeof result.llmContent).toBe('string');
        expect(result.llmContent).toContain('remaining cells truncated');
        expect(result.llmContent).not.toContain('Showing lines');
-@@ -1047,54 +773,148 @@ describe('ReadFileTool', () => {
+@@ -1047,54 +875,148 @@ describe('ReadFileTool', () => {
        if (status.state === 'fresh') {
          expect(status.entry.lastReadWasFull).toBe(false);
          expect(status.entry.lastReadCacheable).toBe(false);
@@ -23246,7 +23529,7 @@ index 4cbf249..748eeb9 100644
        const filePath = path.join(tempRootDir, 'paginated.txt');
        const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
        const fileContent = lines.join('\n');
-@@ -1126,13 +946,13 @@ describe('ReadFileTool', () => {
+@@ -1126,13 +1048,13 @@ describe('ReadFileTool', () => {
        const tempDir = path.join(tempRootDir, '.temp');
        await fsp.mkdir(tempDir, { recursive: true });
        const tempFilePath = path.join(tempDir, 'temp-output.txt');
@@ -23261,7 +23544,7 @@ index 4cbf249..748eeb9 100644
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1146,13 +966,13 @@ describe('ReadFileTool', () => {
+@@ -1146,13 +1068,13 @@ describe('ReadFileTool', () => {
        );
        const tempFilePath = path.join(osTempFile, 'pr-review-context.md');
        const tempFileContent = '## PR #123\nFix encoding issues';
@@ -23276,7 +23559,7 @@ index 4cbf249..748eeb9 100644
          >;
  
          const result = await invocation.execute(abortSignal);
-@@ -1195,28 +1015,28 @@ describe('ReadFileTool', () => {
+@@ -1195,28 +1117,28 @@ describe('ReadFileTool', () => {
            getContentGeneratorConfig: () => ({ modalities: {} }),
            getFileReadCache: () => fileReadCache,
            getFileReadCacheDisabled: () => false,
@@ -23309,7 +23592,7 @@ index 4cbf249..748eeb9 100644
          );
          // Placeholder must not echo the original content.
          expect(second.llmContent).not.toContain('hello world');
-@@ -1224,89 +1044,89 @@ describe('ReadFileTool', () => {
+@@ -1224,89 +1146,89 @@ describe('ReadFileTool', () => {
        });
  
        it('re-emits bytes (no placeholder) after the read was evicted from history by microcompaction (issue #4239)', async () => {
@@ -23410,7 +23693,7 @@ index 4cbf249..748eeb9 100644
            offset: 1,
            limit: 2,
          });
-@@ -1326,20 +1146,20 @@ describe('ReadFileTool', () => {
+@@ -1326,20 +1248,20 @@ describe('ReadFileTool', () => {
          const bigContent = Array.from(
            { length: 700 },
            (_, i) => `line ${i + 1}`,
@@ -23433,7 +23716,7 @@ index 4cbf249..748eeb9 100644
        });
  
        it('does not arm the placeholder if the first Read was ranged', async () => {
-@@ -1348,26 +1168,26 @@ describe('ReadFileTool', () => {
+@@ -1348,26 +1270,26 @@ describe('ReadFileTool', () => {
          // pipeline, since the cache cannot prove the model has already
          // seen the entire file.
          const filePath = path.join(tempRootDir, 'big.txt');
@@ -23463,7 +23746,7 @@ index 4cbf249..748eeb9 100644
  
        it('records an auto-memory read in the cache so a follow-up Edit can pass enforcement', async () => {
          // Auto-memory files skip the file_unchanged fast-path (they
-@@ -1386,13 +1206,13 @@ describe('ReadFileTool', () => {
+@@ -1386,13 +1308,13 @@ describe('ReadFileTool', () => {
            clearAutoMemoryRootCache();
            const memRoot = getAutoMemoryRoot(tempRootDir);
            await fsp.mkdir(memRoot, { recursive: true });
@@ -23478,7 +23761,7 @@ index 4cbf249..748eeb9 100644
            // The cache must contain the auto-memory file's entry, AND
            // the entry must be in a shape that satisfies prior-read
            // enforcement on Edit / WriteFile (fresh + lastReadAt set +
-@@ -1428,13 +1248,13 @@ describe('ReadFileTool', () => {
+@@ -1428,13 +1350,13 @@ describe('ReadFileTool', () => {
          await fsp.writeFile(
            svgPath,
            '<svg xmlns="http://www.w3.org/2000/svg"></svg>\n',
@@ -23493,7 +23776,7 @@ index 4cbf249..748eeb9 100644
          // The cache must record this as a full, cacheable read so
          // that prior-read enforcement on Edit / WriteFile would
          // recognise it as the model having seen the bytes.
-@@ -1492,13 +1312,13 @@ describe('ReadFileTool', () => {
+@@ -1492,13 +1414,13 @@ describe('ReadFileTool', () => {
          const bigContent = Array.from(
            { length: 700 },
            (_, i) => `line ${i + 1}`,
@@ -23508,7 +23791,7 @@ index 4cbf249..748eeb9 100644
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
            // Truncated → model has not seen every byte.
-@@ -1527,13 +1347,13 @@ describe('ReadFileTool', () => {
+@@ -1527,13 +1449,13 @@ describe('ReadFileTool', () => {
          // content to a `.cpp` file. The test relies on the
          // extension override winning over any future content-side
          // heuristic — there is no isBinaryFile mocking in scope.
@@ -23523,7 +23806,7 @@ index 4cbf249..748eeb9 100644
          const status = fileReadCache.check(fs.statSync(filePath));
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
-@@ -1551,17 +1371,17 @@ describe('ReadFileTool', () => {
+@@ -1551,17 +1473,17 @@ describe('ReadFileTool', () => {
              background: '#306090',
            },
          })
@@ -23543,7 +23826,7 @@ index 4cbf249..748eeb9 100644
  
        it('completely bypasses the cache when getFileReadCacheDisabled() is true', async () => {
          // Build a fresh ReadFileTool with a Config whose cache is
-@@ -1592,14 +1412,14 @@ describe('ReadFileTool', () => {
+@@ -1592,14 +1514,14 @@ describe('ReadFileTool', () => {
          } as unknown as Config;
          const disabledTool = new ReadFileTool(disabledConfig);
  
@@ -23560,7 +23843,7 @@ index 4cbf249..748eeb9 100644
          expect(second.llmContent).not.toMatch(/unchanged since/);
          expect(isolatedCache.size()).toBe(0);
        });
-@@ -1615,12 +1435,13 @@ describe('ReadFileTool', () => {
+@@ -1615,12 +1537,13 @@ describe('ReadFileTool', () => {
  
        it('should throw error if path is ignored by a .qwenignore pattern', async () => {
          const ignoredFilePath = path.join(tempRootDir, 'foo.bar');
@@ -23574,7 +23857,7 @@ index 4cbf249..748eeb9 100644
        });
  
        it('should throw error if path is ignored by .agentignore or .aiignore', async () => {
-@@ -1634,16 +1455,16 @@ describe('ReadFileTool', () => {
+@@ -1634,16 +1557,16 @@ describe('ReadFileTool', () => {
          );
          const agentIgnoredFilePath = path.join(tempRootDir, 'agent-secret.txt');
          const aiIgnoredFilePath = path.join(tempRootDir, 'ai-secret.txt');
@@ -23593,7 +23876,7 @@ index 4cbf249..748eeb9 100644
  
        it('should throw error using configured custom ignore file display', async () => {
          await fsp.writeFile(
-@@ -1672,34 +1493,36 @@ describe('ReadFileTool', () => {
+@@ -1672,34 +1595,36 @@ describe('ReadFileTool', () => {
            getFileReadCacheDisabled: () => false,
          } as unknown as Config;
          const customTool = new ReadFileTool(customConfig);
@@ -24618,13 +24901,24 @@ index 9ef1b47..f75ca00 100644
      // that may reach the LLM via at-completion or manual typing.
      const filePath = unescapePath(params.file_path.trim());
 diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils/fileUtils.test.ts
-index 4987635..1a6e6d2 100644
+index 4987635..693730a 100644
 --- a/packages/core/src/utils/fileUtils.test.ts
 +++ b/packages/core/src/utils/fileUtils.test.ts
-@@ -39,18 +39,13 @@ import {
- import { decodeBufferWithEncodingInfo } from './sync-file-encoding.js';
+@@ -30,27 +30,22 @@ import {
+   detectFileType,
+   processSingleFileContent,
+   detectBOM,
+   readFileWithLineAndLimit,
+   readFileWithEncoding,
+   readFileWithEncodingInfo,
++  decodeBufferWithEncodingInfo,
+   detectFileEncoding,
+   fileExists,
+ } from './fileUtils.js';
+-import { decodeBufferWithEncodingInfo } from './sync-file-encoding.js';
  import { iconvEncode } from './iconvHelper.js';
- import { LargeNonUtf8TextError } from './read-text-range.js';
+-import { LargeNonUtf8TextError } from './read-text-range.js';
++import { NonUtf8TextError } from './read-text-range.js';
  import type { Config } from '../config/config.js';
  import { StandardFileSystemService } from '../services/fileSystemService.js';
  import { ToolErrorType } from '../tools/tool-error.js';
@@ -24666,7 +24960,168 @@ index 4987635..1a6e6d2 100644
    stderr: string;
    code: number;
  }) {
-@@ -1067,18 +1052,12 @@ describe('fileUtils', () => {
+@@ -502,47 +487,46 @@ describe('fileUtils', () => {
+         await fsPromises.writeFile(filePath, '');
+ 
+         const result = await readFileWithEncoding(filePath);
+         expect(result).toBe('');
+       });
+ 
+-      it('should read GBK-encoded file with Chinese characters correctly', async () => {
+-        // GBK encoding of "你好世界这是中文内容用于测试编码检测"
+-        // Needs enough content for chardet to reliably detect the encoding
++      it('[encoding-contract] refuses a file whose bytes are not the encoding it declares', async () => {
++        // GBK bytes for "你好世界这是中文内容用于测试编码检测". The file declares
++        // no BOM, so it is read as UTF-8, which these bytes are not.
+         const gbkBuffer = Buffer.from([
+           0xc4, 0xe3, 0xba, 0xc3, 0xca, 0xc0, 0xbd, 0xe7, 0xd5, 0xe2, 0xca,
+           0xc7, 0xd6, 0xd0, 0xce, 0xc4, 0xc4, 0xda, 0xc8, 0xdd, 0xd3, 0xc3,
+           0xd3, 0xda, 0xb2, 0xe2, 0xca, 0xd4, 0xb1, 0xe0, 0xc2, 0xeb, 0xbc,
+           0xec, 0xb2, 0xe2,
+         ]);
+         const filePath = path.join(testDir, 'gbk-chinese.txt');
+         await fsPromises.writeFile(filePath, gbkBuffer);
+ 
+-        const result = await readFileWithEncoding(filePath);
+-        expect(result).toBe('你好世界这是中文内容用于测试编码检测');
++        await expect(readFileWithEncoding(filePath)).rejects.toThrow(
++          NonUtf8TextError,
++        );
+       });
+ 
+-      it('should read GBK-encoded file with mixed ASCII and Chinese correctly', async () => {
+-        // GBK encoding of "// 这是注释内容用于测试\nhello你好世界测试中文编码检测\n函数返回值正确"
+-        // Needs enough Chinese content for chardet to reliably detect as GB18030/GBK
+-        const gbkBuffer = Buffer.from([
+-          0x2f, 0x2f, 0x20, 0xd5, 0xe2, 0xca, 0xc7, 0xd7, 0xa2, 0xca, 0xcd,
+-          0xc4, 0xda, 0xc8, 0xdd, 0xd3, 0xc3, 0xd3, 0xda, 0xb2, 0xe2, 0xca,
+-          0xd4, 0x0a, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0xc4, 0xe3, 0xba, 0xc3,
+-          0xca, 0xc0, 0xbd, 0xe7, 0xb2, 0xe2, 0xca, 0xd4, 0xd6, 0xd0, 0xce,
+-          0xc4, 0xb1, 0xe0, 0xc2, 0xeb, 0xbc, 0xec, 0xb2, 0xe2, 0x0a, 0xba,
+-          0xaf, 0xca, 0xfd, 0xb7, 0xb5, 0xbb, 0xd8, 0xd6, 0xb5, 0xd5, 0xfd,
+-          0xc8, 0xb7,
+-        ]);
+-        const filePath = path.join(testDir, 'gbk-mixed.txt');
+-        await fsPromises.writeFile(filePath, gbkBuffer);
++      it('[encoding-contract] refuses a multi-byte sequence the file cuts short', async () => {
++        // The first two bytes of the UTF-8 encoding of "—" (E2 80 94), which
++        // is what a byte-boundary split of a UTF-8 file leaves behind.
++        const filePath = path.join(testDir, 'split-sequence.txt');
++        await fsPromises.writeFile(
++          filePath,
++          Buffer.concat([
++            Buffer.from('the sentence ends here', 'utf8'),
++            Buffer.from([0xe2, 0x80]),
++          ]),
++        );
+ 
+-        const result = await readFileWithEncoding(filePath);
+-        expect(result).toContain('hello');
+-        expect(result).toContain('你好世界');
+-        expect(result).toContain('函数返回值正确');
++        const attempt = readFileWithEncoding(filePath);
++        await expect(attempt).rejects.toThrow(NonUtf8TextError);
++        // The refusal replaces the text, rather than accompanying a decoded
++        // approximation of it.
++        await expect(attempt).rejects.toThrow(/is not valid UTF-8/);
+       });
+     });
+ 
+     describe('readFileWithEncodingInfo', () => {
+       it('should decode plain UTF-8 buffers without reading from a path', () => {
+         const result = decodeBufferWithEncodingInfo(
+@@ -606,26 +590,38 @@ describe('fileUtils', () => {
+         expect(result.content).toBe('Hi');
+         expect(result.encoding).toBe('utf-16le');
+         // Non-UTF-8 BOM should also be flagged so it is preserved on write-back
+         expect(result.bom).toBe(true);
+       });
+ 
+-      it('should return bom: false for GBK file (no BOM)', async () => {
++      it('[encoding-contract] refuses a BOM-less non-UTF-8 file rather than naming an encoding for it', async () => {
+         const gbkBuffer = Buffer.from([
+           0xc4, 0xe3, 0xba, 0xc3, 0xca, 0xc0, 0xbd, 0xe7, 0xd5, 0xe2, 0xca,
+           0xc7, 0xd6, 0xd0, 0xce, 0xc4, 0xc4, 0xda, 0xc8, 0xdd, 0xd3, 0xc3,
+           0xd3, 0xda, 0xb2, 0xe2, 0xca, 0xd4, 0xb1, 0xe0, 0xc2, 0xeb, 0xbc,
+           0xec, 0xb2, 0xe2,
+         ]);
+         const filePath = path.join(testDir, 'info-gbk.txt');
+         await fsPromises.writeFile(filePath, gbkBuffer);
+ 
+-        const result = await readFileWithEncodingInfo(filePath);
+-        expect(result.bom).toBe(false);
+-        expect(result.encoding).toBe('gb18030');
+-        expect(result.content).toBe('你好世界这是中文内容用于测试编码检测');
++        await expect(readFileWithEncodingInfo(filePath)).rejects.toThrow(
++          NonUtf8TextError,
++        );
++      });
++
++      it('[encoding-contract] refuses a declared UTF-16 file whose code units are malformed', async () => {
++        // A UTF-16LE BOM followed by a high surrogate with no low surrogate.
++        const filePath = path.join(testDir, 'info-lone-surrogate.txt');
++        await fsPromises.writeFile(
++          filePath,
++          Buffer.from([0xff, 0xfe, 0x00, 0xd8]),
++        );
++
++        await expect(readFileWithEncodingInfo(filePath)).rejects.toThrow(
++          NonUtf8TextError,
++        );
+       });
+     });
+ 
+     describe('detectFileEncoding', () => {
+       it('should detect UTF-8 for plain ASCII file', async () => {
+         const filePath = path.join(testDir, 'ascii.txt');
+@@ -642,27 +638,41 @@ describe('fileUtils', () => {
+         await fsPromises.writeFile(filePath, Buffer.concat([utf8Bom, content]));
+ 
+         const encoding = await detectFileEncoding(filePath);
+         expect(encoding).toBe('utf-8');
+       });
+ 
+-      it('should detect GBK encoding for Chinese text in GBK', async () => {
+-        // GBK encoding of "你好世界这是中文内容用于测试编码检测"
+-        // Needs enough content for chardet to reliably detect
++      it('[encoding-contract] reports utf-8 for a file that declares nothing, whatever its bytes look like', async () => {
++        // GBK bytes for Chinese text. Nothing about them is a declaration, so
++        // they are not read as one; whether they decode is settled by the
++        // decoder, on the whole file, rather than guessed from a sample.
+         const gbkBuffer = Buffer.from([
+           0xc4, 0xe3, 0xba, 0xc3, 0xca, 0xc0, 0xbd, 0xe7, 0xd5, 0xe2, 0xca,
+           0xc7, 0xd6, 0xd0, 0xce, 0xc4, 0xc4, 0xda, 0xc8, 0xdd, 0xd3, 0xc3,
+           0xd3, 0xda, 0xb2, 0xe2, 0xca, 0xd4, 0xb1, 0xe0, 0xc2, 0xeb, 0xbc,
+           0xec, 0xb2, 0xe2,
+         ]);
+         const filePath = path.join(testDir, 'gbk-detect.txt');
+         await fsPromises.writeFile(filePath, gbkBuffer);
+ 
+         const encoding = await detectFileEncoding(filePath);
+-        // chardet detects GBK as 'gb18030' (its superset)
+-        expect(encoding).toBe('gb18030');
++        expect(encoding).toBe('utf-8');
++      });
++
++      it('[encoding-contract] reports the encoding a UTF-16 BOM declares', async () => {
++        const filePath = path.join(testDir, 'utf16le-detect.txt');
++        await fsPromises.writeFile(
++          filePath,
++          Buffer.concat([
++            Buffer.from([0xff, 0xfe]),
++            Buffer.from('Hi', 'utf16le'),
++          ]),
++        );
++
++        const encoding = await detectFileEncoding(filePath);
++        expect(encoding).toBe('utf-16le');
+       });
+ 
+       it('should return utf-8 for empty file', async () => {
+         const filePath = path.join(testDir, 'empty-detect.txt');
+         await fsPromises.writeFile(filePath, '');
+ 
+@@ -1067,18 +1077,12 @@ describe('fileUtils', () => {
        }
      });
    });
@@ -24685,7 +25140,7 @@ index 4987635..1a6e6d2 100644
        if (actualNodeFs.existsSync(testImageFilePath))
          actualNodeFs.unlinkSync(testImageFilePath);
        if (actualNodeFs.existsSync(testPdfFilePath))
-@@ -1176,84 +1155,40 @@ describe('fileUtils', () => {
+@@ -1176,84 +1180,40 @@ describe('fileUtils', () => {
          mockConfig,
        );
        expect(result.error).toContain('Simulated image read error');
@@ -24765,12 +25220,12 @@ index 4987635..1a6e6d2 100644
 -      expect(overview.mimeType).toBe('image/jpeg');
 -      expect(Buffer.from(overview.data!, 'base64').length).toBeLessThanOrEqual(
 -        9 * 1024 * 1024,
+-      );
+-      expect(Math.max(metadata.width!, metadata.height!)).toBeLessThanOrEqual(
+-        1568,
 +      expect(Buffer.from(parts[1]!.inlineData!.data!, 'base64')).toEqual(
 +        actualNodeFs.readFileSync(testImageFilePath),
        );
--      expect(Math.max(metadata.width!, metadata.height!)).toBeLessThanOrEqual(
--        1568,
--      );
 -      expect(
 -        Math.ceil(metadata.width! / 28) * Math.ceil(metadata.height! / 28),
 -      ).toBeLessThanOrEqual(1568);
@@ -24781,7 +25236,7 @@ index 4987635..1a6e6d2 100644
        const oversizedPath = path.join(tempRootDir, 'oversized.png');
        const handle = await fsPromises.open(oversizedPath, 'w');
        await handle.truncate(100 * 1024 * 1024 + 1);
-@@ -1263,152 +1198,59 @@ describe('fileUtils', () => {
+@@ -1263,152 +1223,59 @@ describe('fileUtils', () => {
        const result = await processSingleFileContent(oversizedPath, mockConfig);
  
        expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);
@@ -24962,7 +25417,7 @@ index 4987635..1a6e6d2 100644
        const fakePngData = Buffer.from('fake png data');
        actualNodeFs.writeFileSync(testImageFilePath, fakePngData);
        mockMimeGetType.mockReturnValue('image/png');
-@@ -1425,20 +1267,15 @@ describe('fileUtils', () => {
+@@ -1425,20 +1292,15 @@ describe('fileUtils', () => {
        expect(typeof result.llmContent).toBe('string');
        expect(result.llmContent).toContain('Unsupported image file');
        expect(result.llmContent).toContain('does not support image input');
@@ -24985,7 +25440,7 @@ index 4987635..1a6e6d2 100644
        mockMimeGetType.mockReturnValue('image/png');
  
        const mockConfigNoImage = {
-@@ -1448,21 +1285,22 @@ describe('fileUtils', () => {
+@@ -1448,21 +1310,22 @@ describe('fileUtils', () => {
  
        const result = await processSingleFileContent(
          testImageFilePath,
@@ -25012,7 +25467,7 @@ index 4987635..1a6e6d2 100644
        const fakePngData = Buffer.from('fake png data');
        actualNodeFs.writeFileSync(testImageFilePath, fakePngData);
        mockMimeGetType.mockReturnValue('image/png');
-@@ -1592,13 +1430,13 @@ describe('fileUtils', () => {
+@@ -1592,13 +1455,13 @@ describe('fileUtils', () => {
        const result = await processSingleFileContent(
          testPdfFilePath,
          mockConfigNoPdf,
@@ -25027,7 +25482,7 @@ index 4987635..1a6e6d2 100644
        expect(mockExecFile.mock.calls[1]![0]).toBe('pdftotext');
      });
  
-@@ -1678,13 +1516,13 @@ describe('fileUtils', () => {
+@@ -1678,13 +1541,13 @@ describe('fileUtils', () => {
          testPdfFilePath,
          mockConfigNoPdf,
        );
@@ -25042,7 +25497,7 @@ index 4987635..1a6e6d2 100644
  
      it('returns a reference instead of an error for large @-attached PDFs', async () => {
        actualNodeFs.writeFileSync(
-@@ -1708,13 +1546,13 @@ describe('fileUtils', () => {
+@@ -1708,13 +1571,13 @@ describe('fileUtils', () => {
          testPdfFilePath,
          mockConfigNoPdf,
          { largePdfBehavior: 'reference' },
@@ -25057,7 +25512,7 @@ index 4987635..1a6e6d2 100644
  
      it('returns a reference for large @-attached PDFs when pdftotext is unavailable', async () => {
        actualNodeFs.writeFileSync(
-@@ -1737,120 +1575,104 @@ describe('fileUtils', () => {
+@@ -1737,120 +1600,104 @@ describe('fileUtils', () => {
          testPdfFilePath,
          mockConfigNoPdf,
          { largePdfBehavior: 'reference' },
@@ -25246,7 +25701,7 @@ index 4987635..1a6e6d2 100644
        actualNodeFs.writeFileSync(testPdfFilePath, Buffer.from('%PDF-1.7'));
        mockMimeGetType.mockReturnValue('application/pdf');
        mockExecResult({
-@@ -1903,35 +1725,12 @@ describe('fileUtils', () => {
+@@ -1903,35 +1750,12 @@ describe('fileUtils', () => {
  
        expect(result.error).toBeUndefined();
        expect(result.returnDisplay).toContain('Referenced large PDF');
@@ -25282,7 +25737,7 @@ index 4987635..1a6e6d2 100644
        mockExecResult({
          stdout: 'Pages:          2\n',
          stderr: '',
-@@ -1984,890 +1783,98 @@ describe('fileUtils', () => {
+@@ -1984,869 +1808,77 @@ describe('fileUtils', () => {
            mockConfigNoPdf,
            { largePdfBehavior: 'reference' },
          );
@@ -25389,38 +25844,19 @@ index 4987635..1a6e6d2 100644
 -      } finally {
 -        statSpy.mockRestore();
 -      }
-+      const result = await processSingleFileContent(
-+        testPdfFilePath,
-+        mockConfigWithPdf,
-+      );
-+      expect(result.llmContent).toHaveProperty('inlineData');
-+      expect(
-+        (result.llmContent as { inlineData: { mimeType: string } }).inlineData
-+          .mimeType,
-+      ).toBe('application/pdf');
-+      expect(result.returnDisplay).toContain('Read pdf file');
-     });
- 
+-    });
+-
 -    it('rejects explicit page ranges above the paged text-extraction size cap', async () => {
 -      const fakePdfData = Buffer.from('fake pdf data');
 -      actualNodeFs.writeFileSync(testPdfFilePath, fakePdfData);
 -      mockMimeGetType.mockReturnValue('application/pdf');
-+    it('should read an SVG file as text when under 1MB', async () => {
-+      const svgContent = `
-+    <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
-+      <rect width="100" height="100" fill="blue" />
-+    </svg>
-+  `;
-+      const testSvgFilePath = path.join(tempRootDir, 'test.svg');
-+      actualNodeFs.writeFileSync(testSvgFilePath, svgContent, 'utf-8');
- 
+-
 -      const statSpy = vi.spyOn(fs.promises, 'stat').mockResolvedValueOnce({
 -        size: 600 * 1024 * 1024,
 -        isDirectory: () => false,
 -        isFile: () => true,
 -      } as fs.Stats);
-+      mockMimeGetType.mockReturnValue('image/svg+xml');
- 
+-
 -      try {
 -        const mockConfigNoPdf = {
 -          ...mockConfig,
@@ -25428,11 +25864,7 @@ index 4987635..1a6e6d2 100644
 -            modalities: { image: true },
 -          }),
 -        } as unknown as Config;
-+      const result = await processSingleFileContent(
-+        testSvgFilePath,
-+        mockConfig,
-+      );
- 
+-
 -        const result = await processSingleFileContent(
 -          testPdfFilePath,
 -          mockConfigNoPdf,
@@ -26187,37 +26619,260 @@ index 4987635..1a6e6d2 100644
 -        expect(result.llmContent).toContain('Unsupported image file');
 -        expect(Array.isArray(result.llmContent)).toBe(false);
 -      });
--    });
--
--    it('should read an SVG file as text when under 1MB', async () => {
--      const svgContent = `
--    <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
--      <rect width="100" height="100" fill="blue" />
--    </svg>
--  `;
--      const testSvgFilePath = path.join(tempRootDir, 'test.svg');
--      actualNodeFs.writeFileSync(testSvgFilePath, svgContent, 'utf-8');
--
--      mockMimeGetType.mockReturnValue('image/svg+xml');
--
--      const result = await processSingleFileContent(
--        testSvgFilePath,
--        mockConfig,
--      );
--
--      expect(result.llmContent).toBe(svgContent);
--      expect(result.returnDisplay).toContain('Read SVG as text');
--    });
-+      expect(result.llmContent).toBe(svgContent);
-+      expect(result.returnDisplay).toContain('Read SVG as text');
-+    });
++      const result = await processSingleFileContent(
++        testPdfFilePath,
++        mockConfigWithPdf,
++      );
++      expect(result.llmContent).toHaveProperty('inlineData');
++      expect(
++        (result.llmContent as { inlineData: { mimeType: string } }).inlineData
++          .mimeType,
++      ).toBe('application/pdf');
++      expect(result.returnDisplay).toContain('Read pdf file');
+     });
  
-     it('should skip binary files', async () => {
-       actualNodeFs.writeFileSync(
-         testBinaryFilePath,
-         Buffer.from([0x00, 0x01, 0x02]),
+     it('should read an SVG file as text when under 1MB', async () => {
+       const svgContent = `
+     <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+       <rect width="100" height="100" fill="blue" />
+@@ -2909,13 +1941,15 @@ describe('fileUtils', () => {
+ 
+       const result = await processSingleFileContent(
+         testTextFilePath,
+         mockConfig,
+         { offset: 5, limit: 5 },
+       ); // Read lines 6-10
+-      const expectedContent = lines.slice(5, 10).join('\n');
++      // The file continues past line 10, so the page carries the newline that
++      // terminates it: pages join back into the file.
++      const expectedContent = `${lines.slice(5, 10).join('\n')}\n`;
+ 
+       expect(result.llmContent).toBe(expectedContent);
+       expect(result.returnDisplay).toBe('Read lines 6-10 of 20 from test.txt');
+       expect(result.isTruncated).toBe(true);
+       expect(result.originalLineCount).toBe(20);
+       expect(result.linesShown).toEqual([6, 10]);
+@@ -2929,13 +1963,13 @@ describe('fileUtils', () => {
+         testTextFilePath,
+         mockConfig,
+         5,
+         5,
        );
-@@ -3344,59 +2351,24 @@ describe('fileUtils', () => {
+ 
+-      expect(result.llmContent).toBe(lines.slice(5, 10).join('\n'));
++      expect(result.llmContent).toBe(`${lines.slice(5, 10).join('\n')}\n`);
+       expect(result.returnDisplay).toBe('Read lines 6-10 of 20 from test.txt');
+       expect(result.linesShown).toEqual([6, 10]);
+     });
+ 
+     it('should identify truncation when reading the end of a file', async () => {
+       const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
+@@ -3044,13 +2078,13 @@ describe('fileUtils', () => {
+       await expect(
+         readFileWithLineAndLimit({
+           path: testTextFilePath,
+           limit: 10,
+           maxOutputBytes: 10_000,
+         }),
+-      ).rejects.toThrow(LargeNonUtf8TextError);
++      ).rejects.toThrow(NonUtf8TextError);
+     });
+ 
+     it('should propagate aborts from unbounded full reads', async () => {
+       actualNodeFs.writeFileSync(testTextFilePath, 'hello\nworld');
+       const controller = new AbortController();
+       controller.abort();
+@@ -3135,33 +2169,47 @@ describe('fileUtils', () => {
+ 
+       expect(result.llmContent).toBe(content);
+       expect(result.returnDisplay).toBe('');
+       expect(result.isTruncated).toBe(false);
+     });
+ 
+-    it('should truncate long lines in text files', async () => {
++    it('[read-contract] stops before a line the budget cannot hold, and resumes at it', async () => {
+       const longLine = 'a'.repeat(2500);
+       actualNodeFs.writeFileSync(
+         testTextFilePath,
+         `Short line\n${longLine}\nAnother short line`,
+       );
+ 
+       const result = await processSingleFileContent(
+         testTextFilePath,
+         mockConfig,
+       );
+ 
+-      expect(result.llmContent).toContain('Short line');
+-      expect(result.llmContent).toContain(
+-        longLine.substring(0, 2000) + '... [truncated]',
+-      );
+-      expect(result.llmContent).not.toContain('Another short line');
+-      expect(result.returnDisplay).toBe(
+-        'Read lines 1-2 of 3 from test.txt (truncated)',
+-      );
++      // Whole lines only: the page is exactly the first line and the newline
++      // that terminates it, and the next read starts at the long line.
++      expect(result.llmContent).toBe('Short line\n');
++      expect(result.returnDisplay).toBe('Read lines 1-1 of 3 from test.txt');
+       expect(result.isTruncated).toBe(true);
++      expect(result.nextRead).toEqual({ offset: 1, limit: 1 });
++    });
++
++    it('[read-contract] refuses a line wider than one result instead of halving it', async () => {
++      const longLine = 'a'.repeat(2500);
++      actualNodeFs.writeFileSync(testTextFilePath, `${longLine}\ntail`);
++
++      const result = await processSingleFileContent(
++        testTextFilePath,
++        mockConfig,
++      );
++
++      expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);
++      expect(result.error).toContain('Line 1 of test.txt is longer than one');
++      expect(result.error).toContain("sed -n '1p'");
++      expect(result.error).toContain('the line after it, offset 1.');
++      expect(result.llmContent).toBe(result.error);
++      expect(result.llmContent).not.toContain(longLine.substring(0, 100));
+     });
+ 
+     it('should truncate when line count exceeds the limit', async () => {
+       const lines = Array.from({ length: 11 }, (_, i) => `Line ${i + 1}`);
+       actualNodeFs.writeFileSync(testTextFilePath, lines.join('\n'));
+ 
+@@ -3173,13 +2221,13 @@ describe('fileUtils', () => {
+       );
+ 
+       expect(result.isTruncated).toBe(true);
+       expect(result.returnDisplay).toBe('Read lines 1-5 of 11 from test.txt');
+     });
+ 
+-    it('should truncate when a line length exceeds the character limit', async () => {
++    it('should stop at the last whole line the character limit admits', async () => {
+       const longLine = 'b'.repeat(2500);
+       const lines = Array.from({ length: 10 }, (_, i) => `Line ${i + 1}`);
+       lines.push(longLine); // Total 11 lines
+       actualNodeFs.writeFileSync(testTextFilePath, lines.join('\n'));
+ 
+       // Read all 11 lines, including the long one
+@@ -3187,15 +2235,15 @@ describe('fileUtils', () => {
+         testTextFilePath,
+         mockConfig,
+         { offset: 0, limit: 11 },
+       );
+ 
+       expect(result.isTruncated).toBe(true);
+-      expect(result.returnDisplay).toBe(
+-        'Read lines 1-11 of 11 from test.txt (truncated)',
+-      );
++      expect(result.returnDisplay).toBe('Read lines 1-10 of 11 from test.txt');
++      expect(result.llmContent).toBe(`${lines.slice(0, 10).join('\n')}\n`);
++      expect(result.nextRead).toEqual({ offset: 10, limit: 10 });
+     });
+ 
+     it('should truncate both line count and line length when both exceed limits', async () => {
+       const linesWithLongInMiddle = Array.from(
+         { length: 20 },
+         (_, i) => `Line ${i + 1}`,
+@@ -3210,15 +2258,14 @@ describe('fileUtils', () => {
+       const result = await processSingleFileContent(
+         testTextFilePath,
+         mockConfig,
+         { offset: 0, limit: 10 },
+       );
+       expect(result.isTruncated).toBe(true);
+-      expect(result.returnDisplay).toBe(
+-        'Read lines 1-5 of 20 from test.txt (truncated)',
+-      );
++      expect(result.returnDisplay).toBe('Read lines 1-4 of 20 from test.txt');
++      expect(result.nextRead).toEqual({ offset: 4, limit: 4 });
+     });
+ 
+     it('should read large text files through bounded truncation instead of the 10MB gate', async () => {
+       const lines = Array.from(
+         { length: 65_000 },
+         (_, index) => `Line ${index + 1} ${'x'.repeat(180)}`,
+@@ -3239,13 +2286,13 @@ describe('fileUtils', () => {
+       );
+       expect(result.originalLineCount).toBeLessThan(65_000);
+       expect(result.originalLineCountExact).toBe(false);
+       expect(result.linesShown?.[0]).toBe(1);
+     });
+ 
+-    it('should stream large text files when line truncation is disabled', async () => {
++    it('[read-contract] refuses a streamed file that is one line wider than a result', async () => {
+       actualNodeFs.writeFileSync(
+         testTextFilePath,
+         'x'.repeat(11 * 1024 * 1024),
+       );
+       const noLineLimitConfig = {
+         ...mockConfig,
+@@ -3254,52 +2301,48 @@ describe('fileUtils', () => {
+ 
+       const result = await processSingleFileContent(
+         testTextFilePath,
+         noLineLimitConfig,
+       );
+ 
+-      expect(result.error).toBeUndefined();
+-      expect(typeof result.llmContent).toBe('string');
+-      expect(result.llmContent).toContain('... [truncated]');
+-      expect(result.returnDisplay).toBe(
+-        'Read lines 1-1 of at least 1 from test.txt (truncated)',
++      expect(result.errorType).toBe(ToolErrorType.FILE_TOO_LARGE);
++      expect(result.error).toContain('Line 1 of test.txt is longer than one');
++      expect(result.returnDisplay).toContain(
++        'Line 1 exceeds the result budget',
+       );
+-      expect(result.isTruncated).toBe(true);
+-      expect(result.originalLineCountExact).toBe(false);
+     });
+ 
+-    it('should mark byte truncation metadata without character truncation', async () => {
+-      actualNodeFs.writeFileSync(testTextFilePath, 'visible');
++    it('[read-contract] leaves a byte-cut line to the next page instead of returning its head', async () => {
++      actualNodeFs.writeFileSync(testTextFilePath, 'visible\nnext line');
+       const byteTruncatedConfig = {
+         ...mockConfig,
+-        getTruncateToolOutputThreshold: () => Number.POSITIVE_INFINITY,
+         getFileSystemService: () => ({
+           readTextFile: vi.fn().mockResolvedValue({
+-            content: 'visible',
++            // The range reader stopped inside the second line.
++            content: 'visible\nnext li',
+             _meta: {
+-              originalLineCount: 1,
++              originalLineCount: 2,
+               originalLineCountExact: false,
+               truncatedByBytes: true,
+             },
+           }),
+         }),
+       } as unknown as Config;
+ 
+       const result = await processSingleFileContent(
+         testTextFilePath,
+         byteTruncatedConfig,
+       );
+ 
+-      expect(typeof result.llmContent).toBe('string');
+-      const llmContent = result.llmContent as string;
+-      expect(llmContent).toBe('visible\n... [truncated]');
+-      expect(llmContent.match(/\.\.\. \[truncated\]/g)).toHaveLength(1);
++      expect(result.error).toBeUndefined();
++      expect(result.llmContent).toBe('visible\n');
+       expect(result.returnDisplay).toBe(
+-        'Read lines 1-1 of at least 1 from test.txt (truncated)',
++        'Read lines 1-1 of at least 2 from test.txt',
+       );
+       expect(result.isTruncated).toBe(true);
++      expect(result.nextRead).toEqual({ offset: 1, limit: 1 });
+     });
+ 
+     it('should use selected range as a lower bound when large file metadata is missing', async () => {
+       actualNodeFs.writeFileSync(
+         testTextFilePath,
+         'x'.repeat(11 * 1024 * 1024),
+@@ -3344,59 +2387,24 @@ describe('fileUtils', () => {
        expect(llmContent).toHaveLength(byteLength);
        expect(llmContent).not.toContain('... [truncated]');
        expect(result.returnDisplay).toBe('');
@@ -26284,10 +26939,10 @@ index 4987635..1a6e6d2 100644
  
        // A FIFO / socket / /dev/zero shows up as a non-file, non-directory
 diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/fileUtils.ts
-index 211be6c..42fa3c2 100644
+index 211be6c..b6264e2 100644
 --- a/packages/core/src/utils/fileUtils.ts
 +++ b/packages/core/src/utils/fileUtils.ts
-@@ -5,40 +5,35 @@
+@@ -5,42 +5,35 @@
   */
  
  import fs from 'node:fs';
@@ -26297,15 +26952,15 @@ index 211be6c..42fa3c2 100644
 -import type { Part, PartListUnion } from '@google/genai';
 +import type { PartListUnion } from '@google/genai';
  import mime from 'mime/lite';
- import { isUtf8CompatibleEncoding } from './encoding.js';
- import { loadIconvLite } from './load-iconv-lite.js';
+-import { isUtf8CompatibleEncoding } from './encoding.js';
+-import { loadIconvLite } from './load-iconv-lite.js';
  import { ToolErrorType } from '../tools/tool-error.js';
  import { BINARY_EXTENSIONS } from './ignorePatterns.js';
  import type { Config } from '../config/config.js';
  import { createDebugLogger } from './debugLogger.js';
  import { getErrorMessage, isAbortError, isNodeError } from './errors.js';
  import type { InputModalities } from '../core/contentGenerator.js';
- import { detectEncodingFromBuffer } from './systemEncoding.js';
+-import { detectEncodingFromBuffer } from './systemEncoding.js';
 -import type { PDFRenderedImage } from './pdf.js';
  import {
    buildLargePDFGuidance,
@@ -26326,11 +26981,14 @@ index 211be6c..42fa3c2 100644
 -import type { VisionBridgePdfContinuation } from '../services/visionBridge/vision-bridge-service.js';
  import { readNotebookWithMetadata } from './notebook.js';
  import {
++  NonUtf8TextError,
    readTextRange,
    type ReadTextRangeResult,
    detectLineEndingFromContent,
  } from './read-text-range.js';
-@@ -50,28 +45,21 @@ import {
+ import {
+   DEFAULT_RANGE_READ_BYTES,
+@@ -50,28 +43,21 @@ import {
    IMAGE_MAX_SOURCE_BYTES,
    ImageViewError,
    renderImageOverview,
@@ -26361,7 +27019,326 @@ index 211be6c..42fa3c2 100644
  export type UnicodeEncoding =
    | 'utf8'
    | 'utf16le'
-@@ -890,55 +878,42 @@ export async function detectFileType(filePath: string): Promise<FileType> {
+@@ -81,12 +67,15 @@ export type UnicodeEncoding =
+ 
+ export interface BOMInfo {
+   encoding: UnicodeEncoding;
+   bomLength: number;
+ }
+ 
++/** Widest Unicode BOM, and so the whole window {@link detectBOM} reads. */
++const MAX_BOM_BYTES = 4;
++
+ /**
+  * Detect a Unicode BOM (Byte Order Mark) if present.
+  * Reads up to the first 4 bytes and returns encoding + BOM length, else null.
+  */
+ export function detectBOM(buf: Buffer): BOMInfo | null {
+   if (buf.length >= 4) {
+@@ -129,66 +118,78 @@ export function detectBOM(buf: Buffer): BOMInfo | null {
+       return { encoding: 'utf16be', bomLength: 2 };
+     }
+   }
+   return null;
+ }
+ 
++/**
++ * Decode a buffer under a Unicode encoding `TextDecoder` implements, refusing
++ * every byte sequence that encoding does not define. `fatal: true` is the
++ * whole rule: what the encoding cannot express, this reader does not return.
++ */
++function decodeUnicode(
++  buf: Buffer,
++  encoding: 'utf-8' | 'utf-16le',
++  declared: string,
++): string {
++  try {
++    return new TextDecoder(encoding, { fatal: true, ignoreBOM: true }).decode(
++      buf,
++    );
++  } catch {
++    throw new NonUtf8TextError(declared, 'undecodable');
++  }
++}
++
+ /**
+  * Convert a UTF-16 BE buffer to a JS string by swapping to LE then using Node's decoder.
+  * (Node has 'utf16le' but not 'utf16be'.)
+  */
+ function decodeUTF16BE(buf: Buffer): string {
+   if (buf.length === 0) return '';
++  if (buf.length % 2 !== 0) {
++    throw new NonUtf8TextError('utf-16be', 'undecodable');
++  }
+   const swapped = Buffer.from(buf); // swap16 mutates in place, so copy
+   swapped.swap16();
+-  return swapped.toString('utf16le');
++  return decodeUnicode(swapped, 'utf-16le', 'utf-16be');
+ }
+ 
+ /**
+- * Decode a UTF-32 buffer (LE or BE) into a JS string.
+- * Invalid code points are replaced with U+FFFD, partial trailing bytes are ignored.
++ * Decode a UTF-32 buffer (LE or BE) into a JS string. Node has no UTF-32
++ * decoder, so this is the one place the code-unit rules are spelled out
++ * rather than delegated; a code point the encoding does not define, and a
++ * trailing group of fewer than four bytes, are both refused.
+  */
+ function decodeUTF32(buf: Buffer, littleEndian: boolean): string {
+-  if (buf.length < 4) return '';
+-  const usable = buf.length - (buf.length % 4);
++  const declared = littleEndian ? 'utf-32le' : 'utf-32be';
++  if (buf.length % 4 !== 0) {
++    throw new NonUtf8TextError(declared, 'undecodable');
++  }
+   let out = '';
+-  for (let i = 0; i < usable; i += 4) {
++  for (let i = 0; i < buf.length; i += 4) {
+     const cp = littleEndian
+       ? (buf[i] |
+           (buf[i + 1] << 8) |
+           (buf[i + 2] << 16) |
+           (buf[i + 3] << 24)) >>>
+         0
+       : (buf[i + 3] |
+           (buf[i + 2] << 8) |
+           (buf[i + 1] << 16) |
+           (buf[i] << 24)) >>>
+         0;
+     // Valid planes: 0x0000..0x10FFFF excluding surrogates
+-    if (cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff)) {
+-      out += String.fromCodePoint(cp);
+-    } else {
+-      out += '\uFFFD';
++    if (cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
++      throw new NonUtf8TextError(declared, 'undecodable');
+     }
++    out += String.fromCodePoint(cp);
+   }
+   return out;
+ }
+ 
+-/**
+- * Check whether a buffer is valid UTF-8 by attempting a strict decode.
+- * If any invalid byte sequence is encountered, TextDecoder with `fatal: true` throws.
+- */
+-export function isValidUtf8(buffer: Buffer): boolean {
+-  try {
+-    new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+-    return true;
+-  } catch {
+-    return false;
+-  }
+-}
+-
+ /**
+  * Result of reading a file with encoding detection.
+  */
+ export interface FileReadResult {
+   /** Decoded text content of the file (BOM stripped if present). */
+   content: string;
+@@ -199,15 +200,22 @@ export interface FileReadResult {
+    * When true, the same BOM should be re-written on save to preserve the file's
+    * original byte-order mark.
+    */
+   bom: boolean;
+ }
+ 
+-export async function decodeBufferWithEncodingInfoAsync(
+-  full: Buffer,
+-): Promise<FileReadResult> {
++/**
++ * Decode a file's bytes into the text it holds.
++ *
++ * A file is read under the encoding it declares: the Unicode BOM at its head,
++ * or UTF-8 when it carries none. The encoding is never inferred from the shape
++ * of the bytes, and a sequence the declared encoding does not define is
++ * refused rather than replaced, so every character returned from here is one
++ * the file actually contains.
++ */
++export function decodeBufferWithEncodingInfo(full: Buffer): FileReadResult {
+   if (full.length === 0) {
+     return { content: '', encoding: 'utf-8', bom: false };
+   }
+ 
+   const bomInfo = detectBOM(full);
+   if (bomInfo) {
+@@ -217,60 +225,39 @@ export async function decodeBufferWithEncodingInfoAsync(
+       // Mark bom: true for all Unicode BOM variants (UTF-8/16/32) so that
+       // the BOM is re-written on save and the file's original format is preserved.
+       bom: true,
+     };
+   }
+ 
+-  // No BOM — check if it's valid UTF-8 first (fast path for the common case)
+-  if (isValidUtf8(full)) {
+-    return { content: full.toString('utf8'), encoding: 'utf-8', bom: false };
+-  }
+-
+-  // Not valid UTF-8 — try chardet statistical detection
+-  const detected = detectEncodingFromBuffer(full);
+-  if (detected && !isUtf8CompatibleEncoding(detected)) {
+-    try {
+-      const iconvLite = await loadIconvLite();
+-      if (iconvLite.encodingExists(detected)) {
+-        return {
+-          content: iconvLite.decode(full, detected),
+-          encoding: detected,
+-          bom: false,
+-        };
+-      }
+-    } catch (e) {
+-      debugLogger.warn(
+-        `Failed to decode buffer as ${detected}: ${e instanceof Error ? e.message : String(e)}`,
+-      );
+-    }
+-  }
+-
+-  // Final fallback: UTF-8 with replacement characters
+-  return { content: full.toString('utf8'), encoding: 'utf-8', bom: false };
++  return {
++    content: decodeUnicode(full, 'utf-8', 'utf-8'),
++    encoding: 'utf-8',
++    bom: false,
++  };
+ }
+ 
+ /**
+  * Internal helper: decode a buffer given a BOMInfo.
+  * Returns the decoded string for each supported BOM encoding.
+  */
+ export function decodeBOMBuffer(buf: Buffer, bomInfo: BOMInfo): string {
+   const content = buf.subarray(bomInfo.bomLength);
+   switch (bomInfo.encoding) {
+     case 'utf8':
+-      return content.toString('utf8');
++      return decodeUnicode(content, 'utf-8', 'utf-8');
+     case 'utf16le':
+-      return content.toString('utf16le');
++      return decodeUnicode(content, 'utf-16le', 'utf-16le');
+     case 'utf16be':
+       return decodeUTF16BE(content);
+     case 'utf32le':
+       return decodeUTF32(content, true);
+     case 'utf32be':
+       return decodeUTF32(content, false);
+     default:
+       // Defensive fallback; should be unreachable
+-      return content.toString('utf8');
++      return decodeUnicode(content, 'utf-8', 'utf-8');
+   }
+ }
+ 
+ /**
+  * Map a BOMInfo encoding to a canonical encoding name string.
+  */
+@@ -289,37 +276,35 @@ export function bomEncodingToName(bomEncoding: UnicodeEncoding): string {
+     default:
+       return 'utf-8';
+   }
+ }
+ 
+ /**
+- * Read a file as text, honoring BOM encodings (UTF‑8/16/32) and stripping the BOM.
+- * For files without BOM, validates UTF-8 first. If invalid UTF-8, uses chardet
+- * to detect encoding (e.g. GBK, Big5, Shift_JIS) and iconv-lite to decode.
+- * Falls back to utf8 when detection fails.
++ * Read a file as text, honoring BOM encodings (UTF‑8/16/32) and stripping the
++ * BOM. A file that declares no BOM is UTF-8, and bytes the declared encoding
++ * does not define raise {@link NonUtf8TextError}.
+  *
+- * Returns both the decoded content and the detected encoding/BOM information
++ * Returns both the decoded content and the declared encoding/BOM information
+  * in a single I/O pass, avoiding redundant file reads.
+  */
+ export async function readFileWithEncodingInfo(
+   filePath: string,
+   signal?: AbortSignal,
+ ): Promise<FileReadResult> {
+   // Read the file once; detect BOM and decode from the single buffer.
+   const full = await fs.promises.readFile(
+     filePath,
+     signal === undefined ? undefined : { signal },
+   );
+-  return await decodeBufferWithEncodingInfoAsync(full);
++  return decodeBufferWithEncodingInfo(full);
+ }
+ 
+ /**
+- * Read a file as text, honoring BOM encodings (UTF‑8/16/32) and stripping the BOM.
+- * For files without BOM, validates UTF-8 first. If invalid UTF-8, uses chardet
+- * to detect encoding (e.g. GBK, Big5, Shift_JIS) and iconv-lite to decode.
+- * Falls back to utf8 when detection fails.
++ * Read a file as text, honoring BOM encodings (UTF‑8/16/32) and stripping the
++ * BOM. A file that declares no BOM is UTF-8, and bytes the declared encoding
++ * does not define raise {@link NonUtf8TextError}.
+  */
+ export async function readFileWithEncoding(filePath: string): Promise<string> {
+   const result = await readFileWithEncodingInfo(filePath);
+   return result.content;
+ }
+ 
+@@ -379,15 +364,17 @@ export async function readFileWithLineAndLimit(params: {
+     truncatedByBytes: false,
+     lineEnding: detectLineEndingFromContent(joined),
+   };
+ }
+ 
+ /**
+- * Detect the encoding of a file by reading a sample from its beginning.
+- * Returns the encoding name (e.g. 'utf-8', 'gbk', 'shift_jis').
+- * Uses BOM detection first, then UTF-8 validation, then chardet as fallback.
++ * The encoding a file declares: the name of the Unicode BOM at its head, or
++ * 'utf-8' for a file that carries none. Reading the declaration costs one
++ * bounded read of the BOM window and says nothing about whether the rest of
++ * the file decodes -- that is settled by the decoders, exactly, on the bytes
++ * they are given.
+  *
+  * Accepts an already-open handle so a caller that has pinned an inode can be
+  * told the encoding of *that* inode rather than of whatever the path resolves
+  * to now. A supplied handle is borrowed: reads go through explicit positions so
+  * the caller's file position is untouched, and it is never closed here.
+  */
+@@ -400,33 +387,19 @@ export async function detectFileEncoding(
+       typeof source === 'string'
+         ? (opened = await fs.promises.open(source, 'r'))
+         : source;
+     const stats = await fh.stat();
+     if (stats.size === 0) return 'utf-8';
+ 
+-    // Read a sample (up to 8KB) for detection
+-    const sampleSize = Math.min(8192, stats.size);
+-    const buf = Buffer.alloc(sampleSize);
+-    const { bytesRead } = await fh.read(buf, 0, sampleSize, 0);
++    const windowSize = Math.min(MAX_BOM_BYTES, stats.size);
++    const buf = Buffer.alloc(windowSize);
++    const { bytesRead } = await fh.read(buf, 0, windowSize, 0);
+     if (bytesRead === 0) return 'utf-8';
+-    const sample = buf.subarray(0, bytesRead);
+-
+-    // 1. Check for BOM
+-    const bom = detectBOM(sample);
+-    if (bom) return bomEncodingToName(bom.encoding);
+ 
+-    // 2. Validate UTF-8
+-    if (isValidUtf8(sample)) return 'utf-8';
+-
+-    // 3. Use chardet for detection
+-    const detected = detectEncodingFromBuffer(sample);
+-    if (detected && !isUtf8CompatibleEncoding(detected)) {
+-      return detected;
+-    }
+-
+-    return 'utf-8';
++    const bom = detectBOM(buf.subarray(0, bytesRead));
++    return bom ? bomEncodingToName(bom.encoding) : 'utf-8';
+   } catch {
+     // If file can't be read, default to UTF-8
+     return 'utf-8';
+   } finally {
+     // Only what we opened. A borrowed handle outlives this call.
+     if (opened) {
+@@ -890,55 +863,40 @@ export async function detectFileType(filePath: string): Promise<FileType> {
    }
  
    return 'text';
@@ -26386,11 +27363,9 @@ index 211be6c..42fa3c2 100644
 +   * For a truncated text read, the 0-based line to pass as `offset` to resume
 +   * exactly where this read stopped, and the window size to pass as `limit`
 +   * to keep reading at the same rate. Computed here because this is the only
-+   * layer that knows whether the last emitted line was itself cut short by
-+   * the character budget -- resuming after a half-line would silently skip
-+   * its tail, which is precisely the kind of plausible wrong answer a
-+   * truncation notice exists to prevent. Absent when the read reached the
-+   * end of the file.
++   * layer that knows how many lines the result budget actually admitted, and
++   * a resume line derived from anything else would skip or repeat content.
++   * Absent when the read reached the end of the file.
 +   */
 +  nextRead?: { offset: number; limit: number };
    /**
@@ -26431,7 +27406,7 @@ index 211be6c..42fa3c2 100644
   * Whether a {@link ProcessedFileReadResult} may be cached for prior-read
   * enforcement: the payload must be plain text (not an image / PDF `Part`)
   * and carry a known line count. Shared by `read-file.ts` and
-@@ -954,29 +929,23 @@ export function isCacheableReadResult(
+@@ -954,29 +912,23 @@ export function isCacheableReadResult(
    );
  }
  
@@ -26464,7 +27439,7 @@ index 211be6c..42fa3c2 100644
    textFileHandle?: FileHandle;
    textFileStats?: import('node:fs').Stats;
    textFileMaxScanBytes?: number;
-@@ -1028,35 +997,30 @@ export async function processSingleFileContent(
+@@ -1028,35 +980,30 @@ export async function processSingleFileContent(
  ): Promise<ProcessedFileReadResult>;
  export async function processSingleFileContent(
    filePath: string,
@@ -26500,7 +27475,7 @@ index 211be6c..42fa3c2 100644
    } = options;
    const rootDirectory = config.getTargetDir();
    const relativePathForDisplay = (
-@@ -1108,133 +1072,113 @@ export async function processSingleFileContent(
+@@ -1108,133 +1055,113 @@ export async function processSingleFileContent(
        };
      }
  
@@ -26650,20 +27625,20 @@ index 211be6c..42fa3c2 100644
 +        llmContent: tooLargeMessage,
          returnDisplay: `PDF file too large (${fileSizeInMB.toFixed(2)}MB > ${PDF_FULL_TEXT_EXTRACTION_MAX_MB}MB).`,
 -        error: `PDF exceeds extraction size limit: ${displayPath} (${fileSizeInMB.toFixed(2)}MB)`,
-+        error: tooLargeMessage,
-         errorType: ToolErrorType.FILE_TOO_LARGE,
-         stats,
-       };
-     }
+-        errorType: ToolErrorType.FILE_TOO_LARGE,
+-        stats,
+-      };
+-    }
 -    if (pageRange && fileSizeInMB > PDF_PAGED_TEXT_EXTRACTION_MAX_MB) {
 -      return {
 -        llmContent: `PDF file is too large for page-range text extraction: ${fileSizeInMB.toFixed(2)}MB exceeds the ${PDF_PAGED_TEXT_EXTRACTION_MAX_MB}MB limit. Split the document into smaller files before retrying.`,
 -        returnDisplay: `PDF file too large (${fileSizeInMB.toFixed(2)}MB > ${PDF_PAGED_TEXT_EXTRACTION_MAX_MB}MB).`,
 -        error: `PDF exceeds page-range extraction size limit: ${displayPath} (${fileSizeInMB.toFixed(2)}MB)`,
--        errorType: ToolErrorType.FILE_TOO_LARGE,
--        stats,
--      };
--    }
++        error: tooLargeMessage,
+         errorType: ToolErrorType.FILE_TOO_LARGE,
+         stats,
+       };
+     }
 -    if (willExtractPdfText && !pageRange) {
 -      pdfPageCount = await getPDFPageCount(filePath);
 +    if (willExtractPdfText) {
@@ -26704,20 +27679,168 @@ index 211be6c..42fa3c2 100644
              : `PDF requires page range: ${relativePathForDisplay}`;
          return {
            llmContent: guidance,
-@@ -1447,94 +1391,91 @@ export async function processSingleFileContent(
-           }-${actualEndLine} of ${lineCountLabel} from ${relativePathForDisplay}`;
-           if (contentLengthTruncated) {
-             returnDisplay += ' (truncated)';
+@@ -1355,14 +1282,21 @@ export async function processSingleFileContent(
+               limit: limit ?? config.getTruncateToolOutputLines(),
+               line: offset,
+               maxOutputBytes,
+               stats,
+               ...(signal !== undefined ? { signal } : {}),
+             });
+-        const selectedLines = content.split('\n').map((line) => line.trimEnd());
+         const startLine = offset || 0;
++        const rangeLines = content.split('\n');
++        // The range reader returns whole lines, except that its byte budget
++        // can stop inside the last one. A partial line is not this page's to
++        // return: it is where the next page begins.
++        const selectedLines =
++          _meta?.truncatedByBytes === true
++            ? rangeLines.slice(0, -1)
++            : rangeLines;
+         const selectedLineCount =
+           content.length === 0 ? 0 : selectedLines.length;
+         const hasOriginalLineCount = _meta?.originalLineCount !== undefined;
+         const originalLineCount =
+           _meta?.originalLineCount ??
+           (stats.size >= TEXT_RANGE_FAST_PATH_MAX_SIZE
+@@ -1372,169 +1306,157 @@ export async function processSingleFileContent(
+           _meta?.originalLineCountExact === false
+             ? false
+             : hasOriginalLineCount ||
+               stats.size < TEXT_RANGE_FAST_PATH_MAX_SIZE;
+         const configCharLimit = config.getTruncateToolOutputThreshold();
+ 
+-        // Apply character limit truncation
++        // Whether the range this read was given ends where the file does. It
++        // decides one character: the newline after the last line, which the
++        // file has whenever anything follows it.
++        const rangeReachedEof =
++          originalLineCountExact &&
++          _meta?.truncatedByBytes !== true &&
++          startLine + selectedLines.length >= originalLineCount;
++
++        // A page is a contiguous slice of the file: each line exactly as the
++        // file spells it, and the newline that terminates it whenever the file
++        // continues past it. Concatenating the pages a caller is told to read
++        // therefore reproduces the file, which is the property that makes
++        // paging a way to read a large file rather than a way to sample one.
+         let llmContent = '';
+-        let contentLengthTruncated = false;
+         let linesIncluded = 0;
+-
+-        if (Number.isFinite(configCharLimit)) {
+-          const formattedLines: string[] = [];
+-          let currentLength = 0;
+-
+-          for (const line of selectedLines) {
+-            const sep = linesIncluded > 0 ? 1 : 0; // newline separator
+-            linesIncluded++;
+-
+-            const projectedLength = currentLength + line.length + sep;
+-            if (projectedLength <= configCharLimit) {
+-              formattedLines.push(line);
+-              currentLength = projectedLength;
+-            } else {
+-              // Truncate the current line to fit
+-              const remaining = Math.max(
+-                configCharLimit - currentLength - sep,
+-                10,
+-              );
+-              formattedLines.push(
+-                line.substring(0, remaining) + '... [truncated]',
+-              );
+-              contentLengthTruncated = true;
+-              break;
+-            }
++        for (let index = 0; index < selectedLines.length; index++) {
++          const line = selectedLines[index];
++          const terminator =
++            index === selectedLines.length - 1 && rangeReachedEof ? '' : '\n';
++          const projectedLength =
++            llmContent.length + line.length + terminator.length;
++          if (
++            Number.isFinite(configCharLimit) &&
++            projectedLength > configCharLimit
++          ) {
++            break;
            }
+-
+-          llmContent = formattedLines.join('\n');
+-        } else {
+-          // No character limit, use all selected lines
+-          llmContent = selectedLines.join('\n');
+-          linesIncluded = selectedLines.length;
++          llmContent += line + terminator;
++          linesIncluded++;
          }
  
-+        // Resume point for a read that stopped early. A line cut short by the
-+        // character budget is re-read from its start rather than skipped.
-+        const resumeOffset = contentLengthTruncated
-+          ? Math.max(actualEndLine - 1, startLine)
-+          : actualEndLine;
+-        if (_meta?.truncatedByBytes === true) {
+-          const marker = '... [truncated]';
+-          if (!llmContent.endsWith(marker)) {
+-            const prefix = Number.isFinite(configCharLimit)
+-              ? llmContent.slice(
+-                  0,
+-                  Math.max(configCharLimit - marker.length - 1, 0),
+-                )
+-              : llmContent;
+-            const separator =
+-              prefix.length === 0 || prefix.endsWith('\n') ? '' : '\n';
+-            llmContent = prefix + separator + marker;
+-          }
+-          contentLengthTruncated = true;
++        // A whole line is the smallest thing a page can carry, so a line
++        // wider than the budget has no page to appear in. Returning its first
++        // budget-worth would put a fragment in front of the model as if it
++        // were the line, and continuing after it would drop the rest; both are
++        // the plausible wrong answer the budget exists to avoid producing.
++        if (linesIncluded === 0 && content.length > 0) {
++          const overlongLine =
++            `Line ${startLine + 1} of ${relativePathForDisplay} is longer ` +
++            `than one result can carry, and a read returns whole lines, so ` +
++            `no read starting there can return it. Read it in slices with a ` +
++            `shell command: sed -n '${startLine + 1}p' ${displayPath} | ` +
++            `cut -c1-2000. The rest of the file starts at the line after ` +
++            `it, offset ${startLine + 1}.`;
++          return {
++            llmContent: overlongLine,
++            returnDisplay: `Line ${startLine + 1} exceeds the result budget: ${relativePathForDisplay}`,
++            error: overlongLine,
++            errorType: ToolErrorType.FILE_TOO_LARGE,
++            stats,
++          };
+         }
+ 
+         const actualEndLine = startLine + linesIncluded;
+-        const contentRangeTruncated =
++        const isTruncated =
+           startLine > 0 ||
+           !originalLineCountExact ||
+           actualEndLine < originalLineCount;
+-        const isTruncated = contentRangeTruncated || contentLengthTruncated;
+         const lineCountLabel = originalLineCountExact
+           ? `${originalLineCount}`
+           : `at least ${originalLineCount}`;
+ 
+         // By default, return nothing to streamline the common case of a successful read_file.
+-        let returnDisplay = '';
+-        if (isTruncated) {
+-          returnDisplay = `Read lines ${
+-            startLine + 1
+-          }-${actualEndLine} of ${lineCountLabel} from ${relativePathForDisplay}`;
+-          if (contentLengthTruncated) {
+-            returnDisplay += ' (truncated)';
+-          }
+-        }
+-
++        const returnDisplay = isTruncated
++          ? `Read lines ${
++              startLine + 1
++            }-${actualEndLine} of ${lineCountLabel} from ${relativePathForDisplay}`
++          : '';
++
++        // The page ended on a line boundary, so the next one starts at the
++        // next line: a continuation always advances.
 +        const moreRemains =
-+          !originalLineCountExact || resumeOffset < originalLineCount;
++          !originalLineCountExact || actualEndLine < originalLineCount;
          return {
            llmContent,
            returnDisplay,
@@ -26728,7 +27851,7 @@ index 211be6c..42fa3c2 100644
 +          ...(isTruncated && moreRemains && linesIncluded > 0
 +            ? {
 +                nextRead: {
-+                  offset: resumeOffset,
++                  offset: actualEndLine,
 +                  limit: Math.max(linesIncluded, 1),
 +                },
 +              }
@@ -26863,7 +27986,7 @@ index 211be6c..42fa3c2 100644
          const contentBuffer = await fs.promises.readFile(filePath);
          const base64Data = contentBuffer.toString('base64');
          const base64SizeInMB = base64Data.length / (1024 * 1024);
-@@ -1556,304 +1497,90 @@ export async function processSingleFileContent(
+@@ -1556,304 +1478,90 @@ export async function processSingleFileContent(
              },
            },
            returnDisplay: `Read ${fileType} file: ${relativePathForDisplay}`,
@@ -28857,11 +29980,271 @@ index 0000000..132eec8
 +    expect(wideResult.error).toMatch(/30:1/);
 +  });
 +});
+diff --git a/packages/core/src/utils/read-text-range.test.ts b/packages/core/src/utils/read-text-range.test.ts
+index 757650c..d282f8b 100644
+--- a/packages/core/src/utils/read-text-range.test.ts
++++ b/packages/core/src/utils/read-text-range.test.ts
+@@ -8,13 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import * as fs from 'node:fs/promises';
+ import * as os from 'node:os';
+ import * as path from 'node:path';
+ import { iconvEncode } from './iconvHelper.js';
+ import {
+   CursorNotAtLineBoundaryError,
+-  LargeNonUtf8TextError,
++  NonUtf8TextError,
+   detectLineEndingFromContent,
+   readTextCursorWindowFromHandle,
+   readTextRange,
+   readTextRangeFromHandle,
+ } from './read-text-range.js';
+ 
+@@ -541,13 +541,13 @@ describe('readTextRange', () => {
+     expect(result.content).toBe('a');
+     expect(result.content).not.toContain('\uFFFD');
+     expect(result.truncatedByBytes).toBe(true);
+     expect(result.originalLineCountExact).toBe(true);
+   });
+ 
+-  it('rejects large non-UTF-8 files with a targeted error', async () => {
++  it('rejects large files whose bytes are not the encoding they declare', async () => {
+     const gbkLine = iconvEncode('中文日志行\n', 'gbk');
+     const repeatCount = Math.ceil((11 * 1024 * 1024) / gbkLine.length);
+     const filePath = await writeFile(
+       'gbk.log',
+       Buffer.concat(Array.from({ length: repeatCount }, () => gbkLine)),
+     );
+@@ -556,16 +556,16 @@ describe('readTextRange', () => {
+       readTextRange({
+         path: filePath,
+         offset: 0,
+         limit: 10,
+         maxOutputBytes: 10_000,
+       }),
+-    ).rejects.toThrow(LargeNonUtf8TextError);
++    ).rejects.toThrow(NonUtf8TextError);
+   });
+ 
+-  it('rejects large files with invalid UTF-8 beyond the encoding sample', async () => {
++  it('rejects large files whose first invalid sequence is far from the head', async () => {
+     const mostlyAsciiThenGbk = Buffer.concat([
+       Buffer.alloc(9 * 1024, 'a'),
+       iconvEncode('你好', 'gbk'),
+       Buffer.alloc(11 * 1024 * 1024, 'b'),
+     ]);
+     const filePath = await writeFile('late-gbk.log', mostlyAsciiThenGbk);
+@@ -574,15 +574,15 @@ describe('readTextRange', () => {
+       path: filePath,
+       offset: 0,
+       limit: 500,
+       maxOutputBytes: 20_000,
+     });
+ 
+-    await expect(promise).rejects.toThrow(LargeNonUtf8TextError);
+-    await expect(promise).rejects.toThrow(/invalid UTF-8 byte sequence/);
+-    await expect(promise).rejects.toMatchObject({ reason: 'invalid-utf8' });
++    await expect(promise).rejects.toThrow(NonUtf8TextError);
++    await expect(promise).rejects.toThrow(/File is not valid UTF-8/);
++    await expect(promise).rejects.toMatchObject({ reason: 'undecodable' });
+   });
+ 
+   it('bounds selected output for a large single-line file', async () => {
+     const filePath = await writeFile(
+       'single-line.log',
+       'x'.repeat(11 * 1024 * 1024),
+@@ -1090,13 +1090,13 @@ describe('readTextCursorWindowFromHandle', () => {
+         readTextCursorWindowFromHandle(fh, {
+           startOffset: 0,
+           fileSize: size,
+           maxOutputBytes: 1_024,
+           maxSnapBytes: 1_024,
+         }),
+-      ).rejects.toBeInstanceOf(LargeNonUtf8TextError);
++      ).rejects.toBeInstanceOf(NonUtf8TextError);
+     });
+   });
+ 
+   it('pages a file larger than one read chunk', async () => {
+     // Forces lines to span chunk boundaries (chunks are 512 KiB).
+     const body = Array.from(
+diff --git a/packages/core/src/utils/read-text-range.ts b/packages/core/src/utils/read-text-range.ts
+index e6a4fd1..b38dce7 100644
+--- a/packages/core/src/utils/read-text-range.ts
++++ b/packages/core/src/utils/read-text-range.ts
+@@ -118,29 +118,37 @@ export class CursorNotAtLineBoundaryError extends Error {
+       `Byte offset ${startOffset} is not the start of a line, and no line break was found within ${maxSnapBytes} bytes after it. Resume from a cursor this reader returned.`,
+     );
+     this.name = 'CursorNotAtLineBoundaryError';
+   }
+ }
+ 
+-export class LargeNonUtf8TextError extends Error {
++/**
++ * Raised when a file has no text form this reader can return: its bytes do not
++ * decode under the encoding it declares, or it declares one that the streaming
++ * reader, which decodes UTF-8, does not read. Both messages name the file's own
++ * encoding and the command that converts it, because the caller's next move is
++ * to obtain a UTF-8 copy rather than to retry the read.
++ */
++export class NonUtf8TextError extends Error {
+   constructor(
+     readonly encoding: string,
+-    readonly reason?: 'invalid-utf8',
++    readonly reason: 'undecodable' | 'not-streamable',
+   ) {
++    const declared = encoding.toUpperCase();
+     super(
+-      reason === 'invalid-utf8'
+-        ? 'Large text file contains invalid UTF-8 byte sequence beyond the initial encoding sample. Convert or extract a smaller UTF-8 slice and read that instead.'
+-        : `Large non-UTF-8 text files are not supported for streaming reads (detected ${encoding}). Convert or extract a smaller UTF-8 slice and read that instead.`,
++      reason === 'undecodable'
++        ? `File is not valid ${declared}. Text is returned exactly as the file encodes it and no encoding is inferred, so this file has no text form to return. Convert it with 'iconv -f SOURCE_ENCODING -t UTF-8' and read the converted file, or read its bytes with a shell command.`
++        : `File is ${declared}. A text file this large is read as UTF-8. Convert it with 'iconv -f ${declared} -t UTF-8' and read the converted file, or read a smaller UTF-8 slice of it.`,
+     );
+-    this.name = 'LargeNonUtf8TextError';
++    this.name = 'NonUtf8TextError';
+   }
+ }
+ 
+ /**
+  * Raised when locating the requested line window would require reading more
+- * than `maxScanBytes`. Distinct from `LargeNonUtf8TextError`: the file is
++ * than `maxScanBytes`. Distinct from `NonUtf8TextError`: the file is
+  * readable, the *offset* is what cannot be reached affordably.
+  */
+ export class TextScanBudgetExceededError extends Error {
+   constructor(
+     readonly scannedBytes: number,
+     readonly maxScanBytes: number,
+@@ -230,19 +238,19 @@ export async function readTextRangeFromHandle(
+ export async function readTextCursorWindowFromHandle(
+   fileHandle: FileHandle,
+   request: ReadTextCursorWindowRequest,
+ ): Promise<ReadTextCursorWindowResult> {
+   request.signal?.throwIfAborted();
+ 
+-  // Same refusal as the streamed line path. Without it a large GBK file — which
++  // Same refusal as the streamed line path. Without it a UTF-16 file — which
+   // that path already rejects — would be byte-paged and decoded as UTF-8
+   // garbage, which is worse than the error it replaces.
+   const encoding = await detectFileEncoding(fileHandle);
+   request.signal?.throwIfAborted();
+   if (!isUtf8CompatibleEncoding(encoding)) {
+-    throw new LargeNonUtf8TextError(encoding);
++    throw new NonUtf8TextError(encoding, 'not-streamable');
+   }
+ 
+   const bom = await hasUtf8Bom(fileHandle, request.fileSize);
+   const maxOutputBytes = normalizeMaxBytes(request.maxOutputBytes);
+   const startOffset = await snapToLineStart(fileHandle, request);
+ 
+@@ -259,13 +267,13 @@ export async function readTextCursorWindowFromHandle(
+ 
+   const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+   const decode = (chunk?: Buffer, options?: TextDecodeOptions): string => {
+     try {
+       return decoder.decode(chunk, options);
+     } catch {
+-      throw new LargeNonUtf8TextError(encoding, 'invalid-utf8');
++      throw new NonUtf8TextError(encoding, 'undecodable');
+     }
+   };
+ 
+   const lines: string[] = [];
+   let contentBytes = 0;
+   // Bytes of the file consumed, relative to `startOffset`. Counts the newline
+@@ -532,17 +540,18 @@ async function readLargeUtf8Range(
+   request: { offset?: number; limit?: number; signal?: AbortSignal },
+   maxOutputBytes: number,
+   maxScanBytes: number,
+   sourceSize?: number,
+ ): Promise<ReadTextRangeResult> {
+   const encoding = await detectFileEncoding(source);
+-  // Detection is one bounded 8 KiB read, but check here anyway so an abort
+-  // that lands during it is still observed before the streaming loop starts.
++  // Reading the declaration is one bounded read of the BOM window, but check
++  // here anyway so an abort that lands during it is still observed before the
++  // streaming loop starts.
+   request.signal?.throwIfAborted();
+   if (!isUtf8CompatibleEncoding(encoding)) {
+-    throw new LargeNonUtf8TextError(encoding);
++    throw new NonUtf8TextError(encoding, 'not-streamable');
+   }
+ 
+   const offset = Math.max(0, request.offset ?? 0);
+   const endLine =
+     offset + Math.max(0, request.limit ?? Number.POSITIVE_INFINITY);
+   let currentLine = 0;
+@@ -616,13 +625,13 @@ async function readLargeUtf8Range(
+     chunk?: Buffer,
+     options?: TextDecodeOptions,
+   ): string {
+     try {
+       return decoder.decode(chunk, options);
+     } catch {
+-      throw new LargeNonUtf8TextError(encoding, 'invalid-utf8');
++      throw new NonUtf8TextError(encoding, 'undecodable');
+     }
+   }
+ 
+   try {
+     for await (const rawChunk of chunks) {
+       request.signal?.throwIfAborted();
 diff --git a/packages/core/src/utils/readManyFiles.test.ts b/packages/core/src/utils/readManyFiles.test.ts
-index 6cb0844..f05aafd 100644
+index 6cb0844..82f95a3 100644
 --- a/packages/core/src/utils/readManyFiles.test.ts
 +++ b/packages/core/src/utils/readManyFiles.test.ts
-@@ -500,13 +500,13 @@ describe('readManyFiles', () => {
+@@ -281,13 +281,14 @@ describe('readManyFiles', () => {
+             [absolutePath, { dev: approvedStats.dev, ino: approvedStats.ino }],
+           ]),
+         });
+         const content = contentToString(result.contentParts);
+ 
+         expect(content).toContain('Showing lines 1-');
+-        expect(content).toContain('... [truncated]');
++        // `contentToString` JSON-encodes each part, so match the encoded form.
++        expect(content).toContain(JSON.stringify(line.repeat(2)).slice(1, -1));
+         expect(result.files).toHaveLength(1);
+         expect(result.files[0]!.error).toBeUndefined();
+         expect(readTextFileFromHandleSpy).toHaveBeenCalled();
+         expect(readTextFileSpy).not.toHaveBeenCalled();
+         expect(mkdtempSpy).not.toHaveBeenCalledWith(
+           expect.stringContaining('qwen-validated-read-'),
+@@ -455,23 +456,29 @@ describe('readManyFiles', () => {
+       } finally {
+         await fs.unlink(absolutePath).catch(() => {});
+         await fs.rename(backupPath, absolutePath).catch(() => {});
+       }
+     });
+ 
+-    it('should include truncated large text files instead of reporting a size error', async () => {
++    it('should include a page of a large text file instead of reporting a size error', async () => {
+       const relativePath = 'large.log';
+       const absolutePath = path.join(tempRootDir, relativePath);
+-      await fs.writeFile(absolutePath, 'x'.repeat(11 * 1024 * 1024), 'utf-8');
++      const line = `${'x'.repeat(20)}\n`;
++      await fs.writeFile(
++        absolutePath,
++        line.repeat(Math.ceil((11 * 1024 * 1024) / line.length)),
++        'utf-8',
++      );
+       const mockConfig = createMockConfig(tempRootDir);
+ 
+       const result = await readManyFiles(mockConfig, { paths: [relativePath] });
+ 
+       const content = contentToString(result.contentParts);
+-      expect(content).toContain('Showing lines 1-1 of at least 1 total lines');
+-      expect(content).toContain('... [truncated]');
++      expect(content).toContain('Showing lines 1-');
++      // `contentToString` JSON-encodes each part, so match the encoded form.
++      expect(content).toContain(JSON.stringify(line.repeat(2)).slice(1, -1));
+       expect(result.files).toHaveLength(1);
+       expect(result.files[0]!.error).toBeUndefined();
+       expect(result.files[0]!.filePath).toBe(absolutePath);
+     });
+ 
+     it('should include truncated notebooks that do not expose text line ranges', async () => {
+@@ -500,13 +507,13 @@ describe('readManyFiles', () => {
          'No files matching the criteria were found',
        );
        expect(result.files).toHaveLength(1);
@@ -28876,7 +30259,7 @@ index 6cb0844..f05aafd 100644
          create: {
            width: 20,
            height: 10,
-@@ -526,23 +526,23 @@ describe('readManyFiles', () => {
+@@ -526,23 +533,23 @@ describe('readManyFiles', () => {
        const imagePart = findInlineDataPart(result.contentParts);
        expect(imagePart).toBeDefined();
        expect(
@@ -28902,7 +30285,7 @@ index 6cb0844..f05aafd 100644
          parts[imageIndex - 1],
          imagePart,
        ]);
-@@ -729,13 +729,13 @@ describe('readManyFiles', () => {
+@@ -729,13 +736,13 @@ describe('readManyFiles', () => {
        const result = await readManyFiles(mockConfig, { paths: [relativePath] });
        const content = contentToString(result.contentParts);
  
@@ -32548,6 +33931,125 @@ index 1d7dc09..b9e81e6 100644
    if (isShellTracePropagationEnabled()) {
      const ctx = getTraceContext();
      env['TRACEPARENT'] = ctx ? formatTraceparent(ctx) : '';
+diff --git a/packages/core/src/utils/sync-file-encoding.test.ts b/packages/core/src/utils/sync-file-encoding.test.ts
+index f1e2b85..56154f7 100644
+--- a/packages/core/src/utils/sync-file-encoding.test.ts
++++ b/packages/core/src/utils/sync-file-encoding.test.ts
+@@ -3,42 +3,15 @@
+  * Copyright 2026 Qwen Team
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import { describe, expect, it } from 'vitest';
+ import { encodeTextFileContentAsync } from '../services/fileSystemService.js';
+-import { decodeBufferWithEncodingInfoAsync } from './fileUtils.js';
+-import {
+-  decodeBufferWithEncodingInfo,
+-  encodeTextFileContent,
+-} from './sync-file-encoding.js';
++import { encodeTextFileContent } from './sync-file-encoding.js';
+ 
+ describe('sync file encoding compatibility', () => {
+-  it.each([
+-    ['empty', Buffer.alloc(0)],
+-    ['UTF-8', Buffer.from('Hello, 世界', 'utf8')],
+-    [
+-      'UTF-8 BOM',
+-      Buffer.concat([
+-        Buffer.from([0xef, 0xbb, 0xbf]),
+-        Buffer.from('Hello', 'utf8'),
+-      ]),
+-    ],
+-    [
+-      'GBK',
+-      Buffer.from([
+-        0xc4, 0xe3, 0xba, 0xc3, 0xca, 0xc0, 0xbd, 0xe7, 0xd5, 0xe2, 0xca, 0xc7,
+-        0xd6, 0xd0, 0xce, 0xc4, 0xb2, 0xe2, 0xca, 0xd4,
+-      ]),
+-    ],
+-  ])('matches the async decoder for %s input', async (_name, input) => {
+-    expect(await decodeBufferWithEncodingInfoAsync(input)).toEqual(
+-      decodeBufferWithEncodingInfo(input),
+-    );
+-  });
+-
+   it.each([
+     ['UTF-8', undefined],
+     ['CRLF', { lineEnding: 'crlf' as const }],
+     ['UTF-8 BOM', { bom: true }],
+     ['GBK', { encoding: 'gb18030' }],
+     ['unsupported encoding', { encoding: 'unsupported-codec' }],
+diff --git a/packages/core/src/utils/sync-file-encoding.ts b/packages/core/src/utils/sync-file-encoding.ts
+index 47a5cc0..f9c80be 100644
+--- a/packages/core/src/utils/sync-file-encoding.ts
++++ b/packages/core/src/utils/sync-file-encoding.ts
+@@ -6,66 +6,16 @@
+ 
+ import {
+   iconvDecode,
+   iconvEncode,
+   iconvEncodingExists,
+ } from './iconvHelper.js';
+-import {
+-  bomEncodingToName,
+-  decodeBOMBuffer,
+-  detectBOM,
+-  isValidUtf8,
+-  type FileReadResult,
+-} from './fileUtils.js';
+ import {
+   prepareTextFileContent,
+   type ReadTextFileResponse,
+ } from '../services/fileSystemService.js';
+-import { detectEncodingFromBuffer } from './systemEncoding.js';
+-import { isUtf8CompatibleEncoding } from './encoding.js';
+-import { createDebugLogger } from './debugLogger.js';
+-
+-const debugLogger = createDebugLogger('SYNC_FILE_ENCODING');
+-
+-export function decodeBufferWithEncodingInfo(full: Buffer): FileReadResult {
+-  if (full.length === 0) {
+-    return { content: '', encoding: 'utf-8', bom: false };
+-  }
+-
+-  const bomInfo = detectBOM(full);
+-  if (bomInfo) {
+-    return {
+-      content: decodeBOMBuffer(full, bomInfo),
+-      encoding: bomEncodingToName(bomInfo.encoding),
+-      bom: true,
+-    };
+-  }
+-
+-  if (isValidUtf8(full)) {
+-    return { content: full.toString('utf8'), encoding: 'utf-8', bom: false };
+-  }
+-
+-  const detected = detectEncodingFromBuffer(full);
+-  if (detected && !isUtf8CompatibleEncoding(detected)) {
+-    try {
+-      if (iconvEncodingExists(detected)) {
+-        return {
+-          content: iconvDecode(full, detected),
+-          encoding: detected,
+-          bom: false,
+-        };
+-      }
+-    } catch (error) {
+-      debugLogger.warn(
+-        `Failed to decode buffer as ${detected}: ${error instanceof Error ? error.message : String(error)}`,
+-      );
+-    }
+-  }
+-
+-  return { content: full.toString('utf8'), encoding: 'utf-8', bom: false };
+-}
+ 
+ export function encodeTextFileContent(
+   filePath: string,
+   content: string,
+   meta?: ReadTextFileResponse['_meta'] | null,
+ ): Buffer {
 diff --git a/packages/core/src/utils/toolCallResidue.test.ts b/packages/core/src/utils/toolCallResidue.test.ts
 new file mode 100644
 index 0000000..9b63b42
