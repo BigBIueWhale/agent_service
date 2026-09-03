@@ -12,7 +12,7 @@
     "agent_apt_lock_sha256": "b653bee65b0d55f999b96a73102bdd3de03d72a4136a62810b9c89f091997770",
     "toolchain_verifier_sha256": "092f465dc47c3d102d7abe9d92d8317eea7e732d3133a7449607eb1dd46fe3ec",
     "toolchain_verifier_test_sha256": "932d6c5956a0e18a9f31a473ef68d1359d7bbd88a5b4fecdd5741568c3183011",
-    "runtime_contract_verifier_sha256": "2ded95eb048199604160dcfc17c9ff82211e6057ee446e1e73c1696ee67a7eaa",
+    "runtime_contract_verifier_sha256": "6c75c7378295d2138a93acea15de61eec63664e28e8507da7054dbe01d6ebd9b",
     "runtime_contract_verifier_test_sha256": "2439cca18a39bd6715f96f5ed05ec3210dd0debd3e63e7dcc9177c311ca04f08",
     "wrapper_contract_test_sha256": "aa5fcad61e7a61e8f5d5d1fe7818d00aea769a0a14cff2f38d7cdd7f2d7baa3e",
     "jks_normalizer_sha256": "309570025cc08c1ea865d67607e357d92cbb32ce2afe9af5e17c2cd7af8c3d6a",
@@ -84,9 +84,9 @@
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "25bd4ab4f1ef94794a507f371ff2a36019d7d4ec23e5ff00906e0ace9bc6a336",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "runtime_contract_sha256": "f2c2731729aa9c8b986f0d75f79c1beef162107618c2d793c4e0b89bb456c939",
-    "wrapper_sha256": "51fe0901413a12b408f1f446c7d732046caf34d1dca440eba73dc63f1ca3ab36",
-    "agent_exec_source_sha256": "ab75e7ef2170fd11e7ba540fdc22b57615195907b8c4347f1e8c355377ca3b33",
+    "runtime_contract_sha256": "209125c69b14bac421a5fd634f977cc9b1bd1220b6e45ce5e8d6a63986be4ed8",
+    "wrapper_sha256": "b32cd546debbecfdc04c427cf04e8612c4340c8b822270612ea366fc05ccda0e",
+    "agent_exec_source_sha256": "47be663991c5f5860966f43c441c72e65effcc23fb34420666486d67f71401bd",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
     "model_base_url": "http://127.0.0.1:18000/v1",
     "model_proxy_port": 18000,
@@ -108,8 +108,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "19455bb10d64c7d58b2ad406cb1c44b569534fb3e9d106f395e5668cfa84b37f",
-      "source_patch_manifest_sha256": "c4056c78a64c0698d51d3c324c3c372f1a611d330e65c6f891373b5bd2177486"
+      "patch_sha256": "d1c86e91cb7d774a3fadebac51ff31a40f18da1725c8bf14822325c4c8315855",
+      "source_patch_manifest_sha256": "fbba75c5640fd7eb7085f3ce566b68213600f608ed4b2b7c29f647721f08b87a"
     }
   },
   "backend": {

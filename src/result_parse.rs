@@ -57,12 +57,12 @@ pub struct AgentResult {
 /// its final message to the end; `ERROR_SUBTYPES` are the states that stopped
 /// a run instead, one name per state — a failure during execution, each of
 /// the three caller-supplied bounds, a loop the detector halted, a generation
-/// the provider cut short, a cancellation from outside, and a shutdown by the
-/// run's owner. The two lists are this service's whole terminal vocabulary:
-/// the parser admits nothing else, the public `agent_result_subtype` carries
-/// exactly what it admits, and the README names the same lists.
+/// the provider cut short, and a cancellation from outside. The two lists are
+/// this service's whole terminal vocabulary: the parser admits nothing else,
+/// the public `agent_result_subtype` carries exactly what it admits, and the
+/// README names the same lists.
 pub const SUCCESS_SUBTYPE: &str = "success";
-pub const ERROR_SUBTYPES: [&str; 8] = [
+pub const ERROR_SUBTYPES: [&str; 7] = [
     "error_during_execution",
     "error_timeout",
     "error_max_turns",
@@ -70,7 +70,6 @@ pub const ERROR_SUBTYPES: [&str; 8] = [
     "error_loop_detected",
     "error_incomplete_generation",
     "error_cancelled",
-    "error_shutdown",
 ];
 
 /// One resolved subagent scope. Identification follows the Claude Code CLI

@@ -1,3 +1,367 @@
+diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
+index 44bf2b2..ea74ad1 100644
+--- a/packages/cli/src/cli.test.ts
++++ b/packages/cli/src/cli.test.ts
+@@ -20,25 +20,33 @@ import {
+   writeFileSync,
+ } from 'node:fs';
+ import { execFileSync } from 'node:child_process';
+ import { createHash } from 'node:crypto';
+ import { tmpdir } from 'node:os';
+ import path from 'node:path';
++import { fileURLToPath } from 'node:url';
+ import { FatalError } from '@qwen-code/qwen-code-core';
+-import { AlreadyReportedError } from './utils/errors.js';
+ import {
+   MCP_COMMANDS,
+   TOP_LEVEL_COMMANDS,
+   handleCriticalError,
+   isExpectedPtyRaceError,
+   resolveBootstrapRoute,
+   runCliEntry,
+   runCliEntryPoint,
+   stampCliEntryEnv,
+ } from './cli.js';
+ 
++// Sources this suite reads are located from the test file, so the assertions
++// hold under every runner and working directory. `import.meta.url` is the one
++// self-location a bundler leaves intact: the `new URL(<literal>, import.meta.url)`
++// form is rewritten to a server URL under Vite and cannot be read from disk.
++const CLI_SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
++const REPO_ROOT = path.resolve(CLI_SRC_DIR, '..', '..', '..');
++const CLI_ENTRY_SCRIPT = path.join(REPO_ROOT, 'scripts', 'cli-entry.js');
++
+ const mocks = vi.hoisted(() => ({
+   main: vi.fn(),
+   tryRunServeFastPath: vi.fn(),
+   initStartupProfiler: vi.fn(),
+   initializeAcpStartupProfiler: vi.fn(),
+   markAcpStartup: vi.fn(),
+@@ -484,13 +492,13 @@ describe('stampCliEntryEnv', () => {
+   it('derives the bin entry one level up from the compiled module', () => {
+     // cli.ts emits to dist/src/cli.js and the shebang bin is dist/index.js —
+     // one level up, not two. Two lands on the unbuilt packages/cli/index.js,
+     // which fails the existence check and silently never stamps, and no other
+     // test can catch that: the derivation is only reachable under a built
+     // layout, where vitest never runs.
+-    const source = readFileSync('src/cli.ts', 'utf8');
++    const source = readFileSync(path.join(CLI_SRC_DIR, 'cli.ts'), 'utf8');
+     expect(source).toContain("new URL('../index.js', import.meta.url)");
+     expect(
+       new URL('../index.js', 'file:///repo/packages/cli/dist/src/cli.js')
+         .pathname,
+     ).toBe('/repo/packages/cli/dist/index.js');
+   });
+@@ -506,23 +514,23 @@ describe('stampCliEntryEnv', () => {
+     expect(process.env['QWEN_CODE_CLI']).toBeUndefined();
+   });
+ });
+ 
+ describe('bootstrap import boundaries', () => {
+   it('keeps fast-path-only dependencies out of static imports', () => {
+-    const source = readFileSync('src/cli.ts', 'utf8');
++    const source = readFileSync(path.join(CLI_SRC_DIR, 'cli.ts'), 'utf8');
+ 
+     expect(source).not.toContain("import yargs from 'yargs'");
+     expect(source).not.toContain("from '@qwen-code/qwen-code-core'");
+     expect(source).not.toContain("import './gemini.js'");
+     expect(source).not.toContain("import { main } from './gemini.js'");
+     expect(source).not.toContain("from './utils/acp-startup-profiler.js'");
+   });
+ 
+   it('initializes profilers during bootstrap module evaluation', () => {
+-    const source = readFileSync('src/cli.ts', 'utf8');
++    const source = readFileSync(path.join(CLI_SRC_DIR, 'cli.ts'), 'utf8');
+ 
+     expect(source).toContain(
+       "import { initStartupProfiler } from './utils/startupProfiler.js'",
+     );
+     expect(source).toContain(
+       "import { initCpuProfiler } from './utils/cpuProfiler.js'",
+@@ -533,19 +541,22 @@ describe('bootstrap import boundaries', () => {
+     expect(source.indexOf('initCpuProfiler();')).toBeLessThan(
+       source.indexOf('export async function runCliEntry('),
+     );
+   });
+ 
+   it('uses the bootstrap file as the production bundle entry', () => {
+-    const source = readFileSync('../../esbuild.config.js', 'utf8');
++    const source = readFileSync(
++      path.join(REPO_ROOT, 'esbuild.config.js'),
++      'utf8',
++    );
+ 
+     expect(source).toContain("entryPoints: { cli: 'packages/cli/src/cli.ts' }");
+   });
+ 
+   it('keeps bootstrap fast paths in-process in the npm bin wrapper', () => {
+-    const source = readFileSync('../../scripts/cli-entry.js', 'utf8');
++    const source = readFileSync(CLI_ENTRY_SCRIPT, 'utf8');
+ 
+     expect(source).toContain('function isInProcessFastPath()');
+     expect(source).toContain("first === 'serve'");
+     expect(source).toContain("first === 'mcp'");
+     expect(source).toContain("hasFlag('--help', '-h')");
+     expect(source).toContain("hasFlag('--version', '-v')");
+@@ -558,16 +569,16 @@ describe('bootstrap import boundaries', () => {
+     const unsupportedEntryPath = path.join(
+       tempDir,
+       'unsupported-cli-entry.mjs',
+     );
+     const probeEntryPath = path.join(tempDir, 'compile-cache-probe.mjs');
+     try {
+-      copyFileSync('../../scripts/cli-entry.js', entryPath);
++      copyFileSync(CLI_ENTRY_SCRIPT, entryPath);
+       writeFileSync(
+         unsupportedEntryPath,
+-        readFileSync('../../scripts/cli-entry.js', 'utf8').replace(
++        readFileSync(CLI_ENTRY_SCRIPT, 'utf8').replace(
+           "const { default: module } = await import('node:module');",
+           'const module = {};',
+         ),
+       );
+       writeFileSync(
+         probeEntryPath,
+@@ -647,20 +658,14 @@ describe('bootstrap import boundaries', () => {
+       const oldDir = path.join(tempDir, 'old');
+       const newDir = path.join(tempDir, 'new');
+       const binPath = path.join(tempDir, 'qwen');
+       try {
+         mkdirSync(oldDir);
+         mkdirSync(newDir);
+-        copyFileSync(
+-          '../../scripts/cli-entry.js',
+-          path.join(oldDir, 'entry.mjs'),
+-        );
+-        copyFileSync(
+-          '../../scripts/cli-entry.js',
+-          path.join(newDir, 'entry.mjs'),
+-        );
++        copyFileSync(CLI_ENTRY_SCRIPT, path.join(oldDir, 'entry.mjs'));
++        copyFileSync(CLI_ENTRY_SCRIPT, path.join(newDir, 'entry.mjs'));
+         writeFileSync(
+           path.join(oldDir, 'cli.js'),
+           `import { chmodSync, rmSync, writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(binPath)}, ${JSON.stringify(`#!/bin/sh\nexec "${process.execPath}" "${path.join(newDir, 'entry.mjs')}" "$@"\n`)});\nchmodSync(${JSON.stringify(binPath)}, 0o755);\nrmSync(${JSON.stringify(oldDir)}, { recursive: true, force: true });\nprocess.exit(44);\n`,
+         );
+         writeFileSync(
+           path.join(newDir, 'cli.js'),
+@@ -699,13 +704,13 @@ describe('bootstrap import boundaries', () => {
+ 
+   it('does not pass the standalone launcher hint to child processes', () => {
+     const tempDir = mkdtempSync(path.join(tmpdir(), 'qwen-cli-launcher-env-'));
+     const entryPath = path.join(tempDir, 'entry.mjs');
+     const launcherPath = path.join(tempDir, 'qwen');
+     try {
+-      copyFileSync('../../scripts/cli-entry.js', entryPath);
++      copyFileSync(CLI_ENTRY_SCRIPT, entryPath);
+       writeFileSync(
+         path.join(tempDir, 'cli.js'),
+         'process.stdout.write(JSON.stringify({ launcherPath: process.env.QWEN_CODE_LAUNCHER_PATH }));\n',
+       );
+       writeFileSync(launcherPath, '#!/bin/sh\n');
+       chmodSync(launcherPath, 0o755);
+@@ -724,45 +729,45 @@ describe('bootstrap import boundaries', () => {
+     }
+   });
+ 
+   it('ignores malformed relaunch args in the npm bin wrapper', () => {
+     const output = execFileSync(
+       process.execPath,
+-      ['../../scripts/cli-entry.js', '--version'],
++      [CLI_ENTRY_SCRIPT, '--version'],
+       {
+         encoding: 'utf8',
+         env: { ...process.env, QWEN_CODE_RELAUNCH_ARGS: 'not-json' },
+       },
+     );
+ 
+     expect(output.trim()).toMatch(/^\d+\.\d+\.\d+/);
+   });
+ 
+   it('prints CLI_VERSION from the npm bin wrapper version shortcut', () => {
+     const output = execFileSync(
+       process.execPath,
+-      ['../../scripts/cli-entry.js', '--version'],
++      [CLI_ENTRY_SCRIPT, '--version'],
+       {
+         encoding: 'utf8',
+         env: { ...process.env, CLI_VERSION: '7.7.7-test' },
+       },
+     );
+ 
+     expect(output).toBe('7.7.7-test\n');
+   });
+ 
+   it('reads package.json from the npm bin wrapper version shortcut', () => {
+     const expectedVersion = JSON.parse(
+-      readFileSync('../../package.json', 'utf8'),
++      readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'),
+     ).version;
+     const env = { ...process.env };
+     delete env['CLI_VERSION'];
+ 
+     const output = execFileSync(
+       process.execPath,
+-      ['../../scripts/cli-entry.js', '--version'],
++      [CLI_ENTRY_SCRIPT, '--version'],
+       {
+         encoding: 'utf8',
+         env,
+       },
+     );
+ 
+@@ -773,13 +778,13 @@ describe('bootstrap import boundaries', () => {
+     const tempDir = mkdtempSync(path.join(tmpdir(), 'qwen-managed-npm-'));
+     const entryDir = path.join(tempDir, 'bootstrap');
+     const entryPath = path.join(entryDir, 'cli-entry.mjs');
+     const qwenHome = path.join(tempDir, 'custom', 'qwen');
+     try {
+       mkdirSync(entryDir, { recursive: true });
+-      copyFileSync('../../scripts/cli-entry.js', entryPath);
++      copyFileSync(CLI_ENTRY_SCRIPT, entryPath);
+       const bootstrapId = createHash('sha256')
+         .update(realpathSync(entryPath))
+         .digest('hex')
+         .slice(0, 16);
+       const launcherRoot = path.join(qwenHome, 'updates', 'npm', bootstrapId);
+       const packageRoot = path.join(
+@@ -1019,16 +1024,13 @@ describe('bootstrap import boundaries', () => {
+ 
+   it('falls through to cli.js when wrapper package.json lookup fails', () => {
+     const tempDir = mkdtempSync(path.join(tmpdir(), 'qwen-cli-entry-'));
+     const entryDir = path.join(tempDir, 'bin');
+     try {
+       mkdirSync(entryDir);
+-      copyFileSync(
+-        '../../scripts/cli-entry.js',
+-        path.join(entryDir, 'cli-entry.mjs'),
+-      );
++      copyFileSync(CLI_ENTRY_SCRIPT, path.join(entryDir, 'cli-entry.mjs'));
+       writeFileSync(
+         path.join(entryDir, 'cli.js'),
+         "process.stdout.write('fallback-cli\\n');\n",
+       );
+       const env = { ...process.env };
+       delete env['CLI_VERSION'];
+@@ -1046,22 +1048,28 @@ describe('bootstrap import boundaries', () => {
+     } finally {
+       rmSync(tempDir, { recursive: true, force: true });
+     }
+   });
+ 
+   it('copies the npm bin wrapper into the package instead of duplicating it', () => {
+-    const source = readFileSync('../../scripts/prepare-package.js', 'utf8');
++    const source = readFileSync(
++      path.join(REPO_ROOT, 'scripts', 'prepare-package.js'),
++      'utf8',
++    );
+ 
+     expect(source).toContain(
+       "fs.copyFileSync(path.join(__dirname, 'cli-entry.js'), cliEntryPath)",
+     );
+     expect(source).not.toContain('const cliEntryContent = `');
+   });
+ 
+   it('keeps bootstrap top-level help commands aligned with config registrations', () => {
+-    const configSource = readFileSync('src/config/config.ts', 'utf8');
++    const configSource = readFileSync(
++      path.join(CLI_SRC_DIR, 'config', 'config.ts'),
++      'utf8',
++    );
+     const commandNameByIdentifier = new Map([
+       ['authCommand', 'auth'],
+       ['channelCommand', 'channel'],
+       ['extensionsCommand', 'extensions'],
+       ['hooksCommand', 'hooks'],
+       ['mcpCommand', 'mcp'],
+@@ -1083,13 +1091,16 @@ describe('bootstrap import boundaries', () => {
+       expect(commandName, `missing mapping for ${identifier}`).toBeDefined();
+       expect(bootstrapCommands).toContain(commandName);
+     }
+   });
+ 
+   it('keeps bootstrap MCP help commands aligned with MCP registrations', () => {
+-    const mcpSource = readFileSync('src/commands/mcp.ts', 'utf8');
++    const mcpSource = readFileSync(
++      path.join(CLI_SRC_DIR, 'commands', 'mcp.ts'),
++      'utf8',
++    );
+     const commandNameByIdentifier = new Map([
+       ['addCommand', 'add'],
+       ['removeCommand', 'remove'],
+       ['listCommand', 'list'],
+       ['reconnectCommand', 'reconnect'],
+       ['approveCommand', 'approve'],
+@@ -1157,20 +1168,12 @@ describe('bootstrap error handling', () => {
+       handleCriticalError(new FatalError('fatal color', 42)),
+     ).rejects.toThrow('process.exit:42');
+ 
+     expect(stderr.join('')).toContain('\x1b[31mfatal color\x1b[0m');
+   });
+ 
+-  it('exits AlreadyReportedError without printing another error', async () => {
+-    await expect(
+-      handleCriticalError(new AlreadyReportedError('already printed', 7)),
+-    ).rejects.toThrow('process.exit:7');
+-
+-    expect(stderr.join('')).toBe('');
+-  });
+-
+   it('prints unexpected errors with the generic critical header', async () => {
+     await expect(
+       handleCriticalError(new Error('generic boom')),
+     ).rejects.toThrow('process.exit:1');
+ 
+     const output = stderr.join('');
+@@ -1242,13 +1245,13 @@ describe('bootstrap error handling', () => {
+     expect(output).toContain('run failed');
+     expect(output).toContain('Error handler failed:');
+     expect(output).toContain('handler failed');
+   });
+ 
+   it('wires stampCliEntryEnv into the entry point', () => {
+-    const source = readFileSync('src/cli.ts', 'utf8');
++    const source = readFileSync(path.join(CLI_SRC_DIR, 'cli.ts'), 'utf8');
+     const entryPoint = source.slice(
+       source.indexOf('export async function runCliEntryPoint'),
+     );
+     expect(entryPoint).toContain('stampCliEntryEnv()');
+     // "First thing in runCliEntryPoint" is the property the doc relies on: the
+     // stamp must land before the CLI runs, not merely somewhere in the body —
+diff --git a/packages/cli/src/cli.ts b/packages/cli/src/cli.ts
+index 7e2929b..89d5b35 100644
+--- a/packages/cli/src/cli.ts
++++ b/packages/cli/src/cli.ts
+@@ -401,28 +401,22 @@ export async function runCliEntry(
+   const { main } = await import('./gemini.js');
+   acpStartupProfiler?.markAcpStartup('geminiImportEnd');
+   await main();
+ }
+ 
+ export async function handleCriticalError(error: unknown): Promise<void> {
+-  const [{ FatalError }, { AlreadyReportedError }] = await Promise.all([
+-    import('./utils/deferred-core-runtime.js'),
+-    import('./utils/errors.js'),
+-  ]);
++  const { FatalError } = await import('./utils/deferred-core-runtime.js');
+ 
+   if (error instanceof FatalError) {
+     let errorMessage = error.message;
+     if (!process.env['NO_COLOR']) {
+       errorMessage = `\x1b[31m${errorMessage}\x1b[0m`;
+     }
+     writeStderrLine(errorMessage);
+     process.exit(error.exitCode);
+   }
+-  if (error instanceof AlreadyReportedError) {
+-    process.exit(error.exitCode);
+-  }
+   writeStderrLine('An unexpected critical error occurred:');
+   if (error instanceof Error) {
+     writeStderrLine(error.stack ?? error.message);
+   } else {
+     writeStderrLine(String(error));
+   }
 diff --git a/packages/cli/src/config/auth.test.ts b/packages/cli/src/config/auth.test.ts
 index 276fd5f..a34ccf7 100644
 --- a/packages/cli/src/config/auth.test.ts
@@ -627,7 +991,7 @@ index 72409fd..aced76c 100644
        const restartExtensionWatcher = () =>
          extensionFileWatcher.restartWatching();
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-index e687181..4971a83 100644
+index e687181..896b4cb 100644
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 @@ -4,23 +4,25 @@
@@ -1002,7 +1366,7 @@ index e687181..4971a83 100644
        );
        expect(assistantMessage).toBeDefined();
      });
-@@ -1619,25 +1759,125 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1619,25 +1759,124 @@ describe('BaseJsonOutputAdapter', () => {
      });
    });
  
@@ -1036,7 +1400,6 @@ index e687181..4971a83 100644
 +        'error_incomplete_generation',
 +      ],
 +      [AgentTerminateMode.CANCELLED, 'error_cancelled'],
-+      [AgentTerminateMode.SHUTDOWN, 'error_shutdown'],
 +      [AgentTerminateMode.MAX_TOOL_CALLS, 'error_max_tool_calls'],
 +      [AgentTerminateMode.ERROR, 'error_during_execution'],
 +    ] as const)('names a scope that stopped in %s as %s', (mode, subtype) => {
@@ -1128,7 +1491,7 @@ index e687181..4971a83 100644
    describe('getSessionId and getModel', () => {
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
-@@ -1764,12 +2004,44 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1764,12 +2003,44 @@ describe('BaseJsonOutputAdapter', () => {
  
          const result = toolResultContent(response);
  
@@ -1173,7 +1536,7 @@ index e687181..4971a83 100644
            resultDisplay: {
              type: 'vision_bridge_notice' as const,
              summary: 'Transcribed PDF pages 20-23; remaining pages 24-25',
-@@ -1810,13 +2082,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1810,13 +2081,13 @@ describe('BaseJsonOutputAdapter', () => {
            error: undefined,
            errorType: undefined,
          };
@@ -2033,7 +2396,7 @@ index 357c502..2b543b2 100644
        usage: undefined,
      });
 diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInteractive/types.ts
-index 53801c8..240a83f 100644
+index 53801c8..0597b98 100644
 --- a/packages/cli/src/nonInteractive/types.ts
 +++ b/packages/cli/src/nonInteractive/types.ts
 @@ -1,7 +1,8 @@
@@ -2065,7 +2428,7 @@ index 53801c8..240a83f 100644
    num_turns: number;
    result: string;
    usage: ExtendedUsage;
-@@ -173,15 +181,41 @@ export interface CLIResultMessageSuccess {
+@@ -173,15 +181,44 @@ export interface CLIResultMessageSuccess {
    permission_denials: CLIPermissionDenial[];
    [key: string]: unknown;
  }
@@ -2085,9 +2448,13 @@ index 53801c8..240a83f 100644
 +   * generation from outside -- the output cap, a content filter, a reason
 +   * this build does not recognise -- so the scope holds a cut-off prefix
 +   * rather than an answer. `error_cancelled` is an abort signal from
-+   * outside, and `error_shutdown` is the owner ending the scope. Each is a
-+   * counterpart of `success`, which asserts the model wrote its final
-+   * message to the end.
++   * outside. Each is a counterpart of `success`, which asserts the model
++   * wrote its final message to the end.
++   *
++   * A state earns a name here when it names an authority other than the run
++   * itself that ended the run, or a bound the caller set and can raise.
++   * Everything the run did to itself is `error_during_execution`,
++   * distinguished by `error.message`.
 +   */
 +  subtype:
 +    | 'error_during_execution'
@@ -2096,8 +2463,7 @@ index 53801c8..240a83f 100644
 +    | 'error_max_tool_calls'
 +    | 'error_loop_detected'
 +    | 'error_incomplete_generation'
-+    | 'error_cancelled'
-+    | 'error_shutdown';
++    | 'error_cancelled';
    uuid: string;
    session_id: string;
 +  /** See {@link CLIResultMessageSuccess.parent_tool_use_id}. */
@@ -2108,7 +2474,7 @@ index 53801c8..240a83f 100644
    num_turns: number;
    usage: ExtendedUsage;
    modelUsage?: Record<string, ModelUsage>;
-@@ -193,12 +227,119 @@ export interface CLIResultMessageError {
+@@ -193,12 +230,114 @@ export interface CLIResultMessageError {
    };
    [key: string]: unknown;
  }
@@ -2188,11 +2554,6 @@ index 53801c8..240a83f 100644
 +    isError: true,
 +    exitCode: 130,
 +  },
-+  [AgentTerminateMode.SHUTDOWN]: {
-+    subtype: 'error_shutdown',
-+    isError: true,
-+    exitCode: 1,
-+  },
 +} as const satisfies Record<AgentTerminateMode, TerminalResult>;
 +
 +/**
@@ -2229,7 +2590,7 @@ index 53801c8..240a83f 100644
    type: 'message_start';
    message: {
 diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonInteractiveCli.test.ts
-index e6950ce..57a4274 100644
+index e6950ce..68517e9 100644
 --- a/packages/cli/src/nonInteractiveCli.test.ts
 +++ b/packages/cli/src/nonInteractiveCli.test.ts
 @@ -42,14 +42,15 @@ import {
@@ -2404,26 +2765,81 @@ index e6950ce..57a4274 100644
        ]),
      );
  
-@@ -1049,13 +1063,13 @@ describe('runNonInteractive', () => {
-       )
-       .mockReturnValueOnce(
-         createStreamFromEvents([
-           {
-             type: GeminiEventType.Finished,
-             value: {
--              reason: undefined,
-+              reason: FinishReason.STOP,
-               usageMetadata: { totalTokenCount: 0 },
-             },
-           },
-         ]),
-       );
- 
-@@ -1071,37 +1085,47 @@ describe('runNonInteractive', () => {
-     expect(mockCoreExecuteToolCall).toHaveBeenCalledOnce();
+@@ -1020,88 +1034,85 @@ describe('runNonInteractive', () => {
+     expect(finishTurn).toHaveBeenCalledOnce();
+     expect(flush.mock.invocationCallOrder[0]).toBeLessThan(
+       finishTurn.mock.invocationCallOrder[0]!,
+     );
    });
  
-   it('still applies the generic turn cap to real user input during a Goal', async () => {
+-  it('does not charge runtime Goal segments to the generic session turn cap', async () => {
++  it('charges a runtime Goal continuation to the session turn budget', async () => {
+     setupMetricsMock();
+     mockGetCommands.mockReturnValue([goalCommand]);
+     await prepareGoalState('paused');
+     vi.spyOn(goalRuntime, 'finishTurn').mockResolvedValue(undefined);
+-    vi.mocked(mockConfig.getMaxSessionTurns).mockReturnValue(0);
++    vi.mocked(mockConfig.getMaxSessionTurns).mockReturnValue(1);
+     mockCoreExecuteToolCall.mockResolvedValue({
+       responseParts: [{ text: 'tool response' }],
+     });
+-    mockGeminiClient.sendMessageStream
+-      .mockReturnValueOnce(
+-        createStreamFromEvents([
+-          {
+-            type: GeminiEventType.ToolCallRequest,
+-            value: {
+-              callId: 'goal-unlimited-turns-tool',
+-              name: 'testTool',
+-              args: {},
+-              isClientInitiated: false,
+-              prompt_id: 'goal-unlimited-turns',
+-            },
+-          },
+-        ]),
+-      )
+-      .mockReturnValueOnce(
+-        createStreamFromEvents([
+-          {
+-            type: GeminiEventType.Finished,
+-            value: {
+-              reason: undefined,
+-              usageMetadata: { totalTokenCount: 0 },
+-            },
++    mockGeminiClient.sendMessageStream.mockReturnValueOnce(
++      createStreamFromEvents([
++        {
++          type: GeminiEventType.ToolCallRequest,
++          value: {
++            callId: 'goal-budget-tool',
++            name: 'testTool',
++            args: {},
++            isClientInitiated: false,
++            prompt_id: 'goal-budget',
+           },
+-        ]),
+-      );
++        },
++      ]),
++    );
+ 
+     const exitCode = await runNonInteractive(
+       mockConfig,
+       mockSettings,
+       '/goal resume',
+-      'goal-unlimited-turns',
++      'goal-budget',
+     );
+ 
+-    expect(exitCode).toBe(0);
+-    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
+-    expect(mockCoreExecuteToolCall).toHaveBeenCalledOnce();
++    expect(exitCode).toBe(53);
++    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);
+   });
+ 
+-  it('still applies the generic turn cap to real user input during a Goal', async () => {
++  it('pauses an active Goal when the session turn budget stops the run', async () => {
      setupMetricsMock();
      await prepareGoalState('active');
 -    vi.mocked(mockConfig.getMaxSessionTurns).mockReturnValue(0);
@@ -2483,7 +2899,7 @@ index e6950ce..57a4274 100644
          {
            type: GeminiEventType.ToolCallRequest,
            value: {
-@@ -1130,13 +1154,13 @@ describe('runNonInteractive', () => {
+@@ -1130,13 +1141,13 @@ describe('runNonInteractive', () => {
        ),
      );
      expect(endInteractionSpanSpy).toHaveBeenCalledWith('error', {
@@ -2498,7 +2914,7 @@ index e6950ce..57a4274 100644
        expect.objectContaining({ promptId: 'goal-explicit-budget' }),
      );
  
-@@ -1166,27 +1190,26 @@ describe('runNonInteractive', () => {
+@@ -1166,27 +1177,26 @@ describe('runNonInteractive', () => {
            });
          }
          throw new Error('stream aborted after budget expiry');
@@ -2535,7 +2951,7 @@ index e6950ce..57a4274 100644
        expect.objectContaining({ promptId: 'budget-stream-abort' }),
      );
    });
-@@ -1345,13 +1368,13 @@ describe('runNonInteractive', () => {
+@@ -1345,13 +1355,13 @@ describe('runNonInteractive', () => {
      { inlineData: { mimeType: 'image/png', data: 'AAAA' } },
    ];
    const finishedEvents: ServerGeminiStreamEvent[] = [
@@ -2550,7 +2966,7 @@ index e6950ce..57a4274 100644
    ];
  
    async function mockHeadlessImageInput(): Promise<void> {
-@@ -1390,13 +1413,16 @@ describe('runNonInteractive', () => {
+@@ -1390,13 +1400,16 @@ describe('runNonInteractive', () => {
      setupMetricsMock();
      const events: ServerGeminiStreamEvent[] = [
        { type: GeminiEventType.Content, value: 'Hello' },
@@ -2568,7 +2984,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -1447,13 +1473,13 @@ describe('runNonInteractive', () => {
+@@ -1447,13 +1460,13 @@ describe('runNonInteractive', () => {
            { command: 'echo safe' },
            approvalSignal,
          );
@@ -2583,7 +2999,7 @@ index e6950ce..57a4274 100644
        },
      );
  
-@@ -1478,13 +1504,13 @@ describe('runNonInteractive', () => {
+@@ -1478,13 +1491,13 @@ describe('runNonInteractive', () => {
      });
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
@@ -2598,7 +3014,7 @@ index e6950ce..57a4274 100644
        ]),
      );
  
-@@ -1501,13 +1527,16 @@ describe('runNonInteractive', () => {
+@@ -1501,13 +1514,16 @@ describe('runNonInteractive', () => {
        'Restored 2 background agents from the previous session.',
      );
      mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -2616,7 +3032,7 @@ index e6950ce..57a4274 100644
  
      await runNonInteractive(
        mockConfig,
-@@ -1551,13 +1580,16 @@ describe('runNonInteractive', () => {
+@@ -1551,13 +1567,16 @@ describe('runNonInteractive', () => {
        ]),
      }));
      mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -2634,7 +3050,7 @@ index e6950ce..57a4274 100644
  
      await runNonInteractive(mockConfig, mockSettings, '', 'prompt-c-notice', {
        continueInterrupted: true,
-@@ -1571,13 +1603,13 @@ describe('runNonInteractive', () => {
+@@ -1571,13 +1590,13 @@ describe('runNonInteractive', () => {
      const [request] = mockGeminiClient.sendMessageStream.mock.calls[0]!;
      expect(request).toEqual([
        {
@@ -2649,7 +3065,7 @@ index e6950ce..57a4274 100644
    });
  
    it('does not let headless YOLO bypass explicit teammate approval', async () => {
-@@ -1611,13 +1643,13 @@ describe('runNonInteractive', () => {
+@@ -1611,13 +1630,13 @@ describe('runNonInteractive', () => {
              timestamp: Date.now(),
            });
          }
@@ -2664,7 +3080,7 @@ index e6950ce..57a4274 100644
        },
      );
  
-@@ -1672,13 +1704,13 @@ describe('runNonInteractive', () => {
+@@ -1672,13 +1691,13 @@ describe('runNonInteractive', () => {
              timestamp: Date.now(),
            });
          }
@@ -2679,7 +3095,7 @@ index e6950ce..57a4274 100644
        },
      );
  
-@@ -1722,13 +1754,16 @@ describe('runNonInteractive', () => {
+@@ -1722,13 +1741,16 @@ describe('runNonInteractive', () => {
            ]),
        }));
        mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -2697,7 +3113,7 @@ index e6950ce..57a4274 100644
  
        await runNonInteractive(mockConfig, mockSettings, '', 'prompt-c1', {
          continueInterrupted: true,
-@@ -1755,13 +1790,16 @@ describe('runNonInteractive', () => {
+@@ -1755,13 +1777,16 @@ describe('runNonInteractive', () => {
            ]),
        }));
        mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -2715,7 +3131,7 @@ index e6950ce..57a4274 100644
  
        await runNonInteractive(mockConfig, mockSettings, '', 'prompt-c-plan', {
          continueInterrupted: true,
-@@ -1790,13 +1828,16 @@ describe('runNonInteractive', () => {
+@@ -1790,13 +1815,16 @@ describe('runNonInteractive', () => {
          ]),
        }));
        mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -2733,7 +3149,7 @@ index e6950ce..57a4274 100644
  
        await runNonInteractive(mockConfig, mockSettings, '', 'prompt-c2', {
          continueInterrupted: true,
-@@ -1809,13 +1850,13 @@ describe('runNonInteractive', () => {
+@@ -1809,13 +1837,13 @@ describe('runNonInteractive', () => {
        );
        expect(request).toEqual([
          {
@@ -2748,7 +3164,7 @@ index e6950ce..57a4274 100644
      });
  
      it('adds plan mode reminders to a continued tool result without moving function responses', async () => {
-@@ -1831,13 +1872,16 @@ describe('runNonInteractive', () => {
+@@ -1831,13 +1859,16 @@ describe('runNonInteractive', () => {
          ]),
        }));
        mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -2766,7 +3182,7 @@ index e6950ce..57a4274 100644
  
        await runNonInteractive(
          mockConfig,
-@@ -1856,13 +1900,13 @@ describe('runNonInteractive', () => {
+@@ -1856,13 +1887,13 @@ describe('runNonInteractive', () => {
        );
        expect(request).toEqual([
          {
@@ -2781,7 +3197,7 @@ index e6950ce..57a4274 100644
        ]);
      });
  
-@@ -1900,13 +1944,13 @@ describe('runNonInteractive', () => {
+@@ -1900,13 +1931,13 @@ describe('runNonInteractive', () => {
            Object.assign(new Error('EPIPE'), { code: 'EPIPE' }),
          );
          yield { type: GeminiEventType.Content, value: 'Hello' };
@@ -2796,7 +3212,7 @@ index e6950ce..57a4274 100644
        },
      );
  
-@@ -2105,31 +2149,235 @@ describe('runNonInteractive', () => {
+@@ -2105,31 +2136,235 @@ describe('runNonInteractive', () => {
        (call) => typeof call[0] === 'string',
      );
      const lastOutput = outputCalls.at(-1)?.[0];
@@ -3033,7 +3449,7 @@ index e6950ce..57a4274 100644
      const order: string[] = [];
      let recordingFailureListener:
        | ((event: { sessionId: string; error: Error }) => void)
-@@ -2204,13 +2452,16 @@ describe('runNonInteractive', () => {
+@@ -2204,13 +2439,16 @@ describe('runNonInteractive', () => {
      setupMetricsMock();
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
@@ -3051,7 +3467,7 @@ index e6950ce..57a4274 100644
      const finalize = vi.fn();
      const flush = vi.fn().mockResolvedValue(undefined);
      (
-@@ -2255,13 +2506,16 @@ describe('runNonInteractive', () => {
+@@ -2255,13 +2493,16 @@ describe('runNonInteractive', () => {
  
      const firstCallEvents: ServerGeminiStreamEvent[] = [toolCallEvent];
      const secondCallEvents: ServerGeminiStreamEvent[] = [
@@ -3069,7 +3485,7 @@ index e6950ce..57a4274 100644
      mockGeminiClient.sendMessageStream
        .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
        .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
-@@ -2360,13 +2614,13 @@ describe('runNonInteractive', () => {
+@@ -2360,13 +2601,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Image understood' },
@@ -3084,7 +3500,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -2438,13 +2692,13 @@ describe('runNonInteractive', () => {
+@@ -2438,13 +2679,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Image understood' },
@@ -3099,7 +3515,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -2530,13 +2784,13 @@ describe('runNonInteractive', () => {
+@@ -2530,13 +2771,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Main done' },
@@ -3114,7 +3530,7 @@ index e6950ce..57a4274 100644
          ]),
        )
        .mockReturnValueOnce(
-@@ -2566,13 +2820,13 @@ describe('runNonInteractive', () => {
+@@ -2566,13 +2807,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Drain done' },
@@ -3129,7 +3545,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -2596,13 +2850,16 @@ describe('runNonInteractive', () => {
+@@ -2596,13 +2837,16 @@ describe('runNonInteractive', () => {
  
    describe('parallel tool execution', () => {
      const finishTurn: ServerGeminiStreamEvent[] = [
@@ -3147,7 +3563,7 @@ index e6950ce..57a4274 100644
      function toolCallEvents(
        ids: string[],
        name: string,
-@@ -3167,13 +3424,13 @@ describe('runNonInteractive', () => {
+@@ -3167,13 +3411,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Final answer' },
@@ -3162,7 +3578,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -3313,13 +3570,13 @@ describe('runNonInteractive', () => {
+@@ -3313,13 +3557,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Monitor launched.' },
@@ -3177,7 +3593,7 @@ index e6950ce..57a4274 100644
          ]),
        )
        .mockReturnValueOnce(createStreamFromEvents([duplicateToolCallEvent]))
-@@ -3376,13 +3633,13 @@ describe('runNonInteractive', () => {
+@@ -3376,13 +3620,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Final answer' },
@@ -3192,7 +3608,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -3483,13 +3740,13 @@ describe('runNonInteractive', () => {
+@@ -3483,13 +3727,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Final answer' },
@@ -3207,7 +3623,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -3552,13 +3809,16 @@ describe('runNonInteractive', () => {
+@@ -3552,13 +3796,16 @@ describe('runNonInteractive', () => {
        {
          type: GeminiEventType.Content,
          value: 'Sorry, let me try again.',
@@ -3225,7 +3641,7 @@ index e6950ce..57a4274 100644
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(createStreamFromEvents(finalResponse));
  
-@@ -3587,27 +3847,27 @@ describe('runNonInteractive', () => {
+@@ -3587,27 +3834,27 @@ describe('runNonInteractive', () => {
        'prompt-id-3',
        { type: SendMessageType.ToolResult },
      );
@@ -3264,7 +3680,7 @@ index e6950ce..57a4274 100644
      setupMetricsMock();
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -3628,13 +3888,16 @@ describe('runNonInteractive', () => {
+@@ -3628,13 +3875,16 @@ describe('runNonInteractive', () => {
        {
          type: GeminiEventType.Content,
          value: "Sorry, I can't find that tool.",
@@ -3282,7 +3698,7 @@ index e6950ce..57a4274 100644
      mockGeminiClient.sendMessageStream
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(createStreamFromEvents(finalResponse));
-@@ -3650,23 +3913,71 @@ describe('runNonInteractive', () => {
+@@ -3650,23 +3900,71 @@ describe('runNonInteractive', () => {
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
      expect(processStdoutSpy).toHaveBeenCalledWith(
        "Sorry, I can't find that tool.\n",
@@ -3364,7 +3780,7 @@ index e6950ce..57a4274 100644
      setupMetricsMock();
      // 1. Mock the imported atCommandProcessor
      const { handleAtCommand } = await import(
-@@ -3691,13 +4002,16 @@ describe('runNonInteractive', () => {
+@@ -3691,13 +3989,16 @@ describe('runNonInteractive', () => {
  
      // Mock a simple stream response from the Gemini client
      const events: ServerGeminiStreamEvent[] = [
@@ -3382,7 +3798,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -4085,33 +4399,36 @@ describe('runNonInteractive', () => {
+@@ -4085,33 +4386,36 @@ describe('runNonInteractive', () => {
      const { resolveForModel } = configureHeadlessVisionModel({
        id: 'vision-agent',
        agentCapable: true,
@@ -3428,7 +3844,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
-@@ -4175,21 +4492,27 @@ describe('runNonInteractive', () => {
+@@ -4175,21 +4479,27 @@ describe('runNonInteractive', () => {
  
      // First call returns only tool call, no content
      const firstCallEvents: ServerGeminiStreamEvent[] = [
@@ -3458,7 +3874,7 @@ index e6950ce..57a4274 100644
      mockGeminiClient.sendMessageStream
        .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
        .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
-@@ -4264,13 +4587,16 @@ describe('runNonInteractive', () => {
+@@ -4264,13 +4574,16 @@ describe('runNonInteractive', () => {
  
    it('should write JSON output with stats for empty response commands', async () => {
      // Test the scenario where a command completes but produces no content at all
@@ -3476,7 +3892,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
-@@ -4322,41 +4648,45 @@ describe('runNonInteractive', () => {
+@@ -4322,41 +4635,45 @@ describe('runNonInteractive', () => {
      const testError = new Error('Invalid input provided');
  
      mockGeminiClient.sendMessageStream.mockImplementation(() => {
@@ -3548,7 +3964,7 @@ index e6950ce..57a4274 100644
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.TEXT);
      setupMetricsMock();
  
-@@ -4372,50 +4702,38 @@ describe('runNonInteractive', () => {
+@@ -4372,50 +4689,38 @@ describe('runNonInteractive', () => {
      };
  
      mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -3612,7 +4028,7 @@ index e6950ce..57a4274 100644
      const flush = vi.fn().mockResolvedValue(undefined);
      (
        mockConfig as unknown as {
-@@ -4437,21 +4755,20 @@ describe('runNonInteractive', () => {
+@@ -4437,21 +4742,20 @@ describe('runNonInteractive', () => {
      };
  
      mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -3641,7 +4057,7 @@ index e6950ce..57a4274 100644
      const stderrOutput = processStderrSpy.mock.calls
        .map((call) => String(call[0]))
        .join('');
-@@ -4484,41 +4801,47 @@ describe('runNonInteractive', () => {
+@@ -4484,41 +4788,47 @@ describe('runNonInteractive', () => {
      const fatalError = new FatalInputError('Invalid command syntax provided');
  
      mockGeminiClient.sendMessageStream.mockImplementation(() => {
@@ -3715,7 +4131,7 @@ index e6950ce..57a4274 100644
      setupMetricsMock();
      const mockCommand = {
        name: 'testcommand',
-@@ -4532,13 +4855,16 @@ describe('runNonInteractive', () => {
+@@ -4532,13 +4842,16 @@ describe('runNonInteractive', () => {
      mockGetCommands.mockReturnValue([mockCommand]);
  
      const events: ServerGeminiStreamEvent[] = [
@@ -3733,7 +4149,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -4596,13 +4922,16 @@ describe('runNonInteractive', () => {
+@@ -4596,13 +4909,16 @@ describe('runNonInteractive', () => {
      mockGetCommands.mockReturnValue([]);
  
      const events: ServerGeminiStreamEvent[] = [
@@ -3751,7 +4167,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -4692,13 +5021,16 @@ describe('runNonInteractive', () => {
+@@ -4692,13 +5008,16 @@ describe('runNonInteractive', () => {
      mockGetCommands.mockReturnValue([mockCommand]);
  
      const events: ServerGeminiStreamEvent[] = [
@@ -3769,7 +4185,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -4730,13 +5062,16 @@ describe('runNonInteractive', () => {
+@@ -4730,13 +5049,16 @@ describe('runNonInteractive', () => {
      });
  
      const events: ServerGeminiStreamEvent[] = [
@@ -3787,7 +4203,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -4770,13 +5105,13 @@ describe('runNonInteractive', () => {
+@@ -4770,13 +5092,13 @@ describe('runNonInteractive', () => {
        type: 'result',
        is_error: false,
        num_turns: 1,
@@ -3802,7 +4218,7 @@ index e6950ce..57a4274 100644
  
      const writes: string[] = [];
      processStdoutSpy.mockImplementation((chunk: string | Uint8Array) => {
-@@ -4788,37 +5123,38 @@ describe('runNonInteractive', () => {
+@@ -4788,37 +5110,38 @@ describe('runNonInteractive', () => {
      const turnAbortController = new AbortController();
      mockGeminiClient.sendMessageStream.mockReturnValue(
        (async function* () {
@@ -3846,7 +4262,7 @@ index e6950ce..57a4274 100644
      expect(endInteractionSpanSpy).toHaveBeenCalledWith('cancelled', {
        promptId: 'prompt-recoverable-interrupt',
      });
-@@ -4851,13 +5187,13 @@ describe('runNonInteractive', () => {
+@@ -4851,13 +5174,13 @@ describe('runNonInteractive', () => {
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
          { type: GeminiEventType.Content, value: 'Fork launched.' },
@@ -3861,7 +4277,7 @@ index e6950ce..57a4274 100644
        ]),
      );
  
-@@ -4960,25 +5296,25 @@ describe('runNonInteractive', () => {
+@@ -4960,25 +5283,25 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Monitor launched.' },
@@ -3889,7 +4305,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -5075,37 +5411,37 @@ describe('runNonInteractive', () => {
+@@ -5075,37 +5398,37 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Started.' },
@@ -3930,7 +4346,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -5153,13 +5489,16 @@ describe('runNonInteractive', () => {
+@@ -5153,13 +5476,16 @@ describe('runNonInteractive', () => {
  
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
@@ -3948,7 +4364,7 @@ index e6950ce..57a4274 100644
  
      const userEnvelope = {
        type: 'user',
-@@ -5236,13 +5575,13 @@ describe('runNonInteractive', () => {
+@@ -5236,13 +5562,13 @@ describe('runNonInteractive', () => {
      mockGeminiClient.sendMessageStream.mockReturnValueOnce(
        createStreamFromEvents([
          { type: GeminiEventType.Content, value: 'Monitor stopped.' },
@@ -3963,7 +4379,7 @@ index e6950ce..57a4274 100644
        ]),
      );
  
-@@ -5374,26 +5713,26 @@ describe('runNonInteractive', () => {
+@@ -5374,26 +5700,26 @@ describe('runNonInteractive', () => {
            eventCount: 2,
          },
        );
@@ -3992,7 +4408,7 @@ index e6950ce..57a4274 100644
          ]),
        )
        .mockReturnValueOnce(secondTurnStream());
-@@ -5532,25 +5871,25 @@ describe('runNonInteractive', () => {
+@@ -5532,25 +5858,25 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Monitor launched.' },
@@ -4020,7 +4436,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -5681,13 +6020,16 @@ describe('runNonInteractive', () => {
+@@ -5681,13 +6007,16 @@ describe('runNonInteractive', () => {
      });
  
      const events: ServerGeminiStreamEvent[] = [
@@ -4038,7 +4454,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -5781,13 +6123,16 @@ describe('runNonInteractive', () => {
+@@ -5781,13 +6110,16 @@ describe('runNonInteractive', () => {
  
      const firstCallEvents: ServerGeminiStreamEvent[] = [toolCallEvent];
      const secondCallEvents: ServerGeminiStreamEvent[] = [
@@ -4056,7 +4472,7 @@ index e6950ce..57a4274 100644
      mockGeminiClient.sendMessageStream
        .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
        .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
-@@ -5892,13 +6237,16 @@ describe('runNonInteractive', () => {
+@@ -5892,13 +6224,16 @@ describe('runNonInteractive', () => {
        {
          type: GeminiEventType.Content,
          value: 'I encountered an error',
@@ -4074,7 +4490,7 @@ index e6950ce..57a4274 100644
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(createStreamFromEvents(finalResponse));
  
-@@ -5960,13 +6308,16 @@ describe('runNonInteractive', () => {
+@@ -5960,13 +6295,16 @@ describe('runNonInteractive', () => {
  
      const events: ServerGeminiStreamEvent[] = [
        { type: GeminiEventType.Content, value: 'Hello' },
@@ -4092,7 +4508,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -6020,13 +6371,16 @@ describe('runNonInteractive', () => {
+@@ -6020,13 +6358,16 @@ describe('runNonInteractive', () => {
          type: GeminiEventType.Thought,
          value: { subject: 'Analysis', description: 'Processing request' },
        },
@@ -4110,7 +4526,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -6104,13 +6458,16 @@ describe('runNonInteractive', () => {
+@@ -6104,13 +6445,16 @@ describe('runNonInteractive', () => {
  
      const firstCallEvents: ServerGeminiStreamEvent[] = [toolCall1, toolCall2];
      const secondCallEvents: ServerGeminiStreamEvent[] = [
@@ -4128,7 +4544,7 @@ index e6950ce..57a4274 100644
      mockGeminiClient.sendMessageStream
        .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
        .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
-@@ -6220,13 +6577,13 @@ describe('runNonInteractive', () => {
+@@ -6220,13 +6564,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'done' },
@@ -4143,7 +4559,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -6322,13 +6679,13 @@ describe('runNonInteractive', () => {
+@@ -6322,13 +6666,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'done' },
@@ -4158,7 +4574,7 @@ index e6950ce..57a4274 100644
          ]),
        );
  
-@@ -6378,13 +6735,16 @@ describe('runNonInteractive', () => {
+@@ -6378,13 +6722,16 @@ describe('runNonInteractive', () => {
      });
  
      const events: ServerGeminiStreamEvent[] = [
@@ -4176,7 +4592,7 @@ index e6950ce..57a4274 100644
        createStreamFromEvents(events),
      );
  
-@@ -6478,13 +6838,16 @@ describe('runNonInteractive', () => {
+@@ -6478,13 +6825,16 @@ describe('runNonInteractive', () => {
      mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
@@ -4194,7 +4610,7 @@ index e6950ce..57a4274 100644
  
      await runNonInteractive(mockConfig, mockSettings, 'test', 'p-cron-wiring');
  
-@@ -6996,13 +7359,16 @@ describe('runNonInteractive', () => {
+@@ -6996,13 +7346,16 @@ describe('runNonInteractive', () => {
        });
  
        const plainTextTurn: ServerGeminiStreamEvent[] = [
@@ -4212,7 +4628,7 @@ index e6950ce..57a4274 100644
          createStreamFromEvents(plainTextTurn),
        );
  
-@@ -7027,14 +7393,14 @@ describe('runNonInteractive', () => {
+@@ -7027,14 +7380,14 @@ describe('runNonInteractive', () => {
              (m as { type?: string }).type === 'result',
          );
        expect(result?.is_error).toBe(true);
@@ -4229,7 +4645,7 @@ index e6950ce..57a4274 100644
      it('synthesises tool_result for suppressed sibling calls when structured_output fails validation', async () => {
        // Same-turn batch: [side_effect_tool, structured_output(bad)]. The
        // pre-scan suppresses the side_effect_tool; structured_output then
-@@ -7383,13 +7749,13 @@ describe('runNonInteractive', () => {
+@@ -7383,13 +7736,13 @@ describe('runNonInteractive', () => {
          .mockReturnValueOnce(
            createStreamFromEvents([
              { type: GeminiEventType.Content, value: 'Monitor launched.' },
@@ -4244,7 +4660,7 @@ index e6950ce..57a4274 100644
            ]),
          )
          .mockReturnValueOnce(createStreamFromEvents([drainStructuredCall]));
-@@ -7698,13 +8064,16 @@ describe('runNonInteractive', () => {
+@@ -7698,13 +8051,16 @@ describe('runNonInteractive', () => {
  
        setupMetricsMock();
        const events: ServerGeminiStreamEvent[] = [
@@ -4262,7 +4678,7 @@ index e6950ce..57a4274 100644
          createStreamFromEvents(events),
        );
  
-@@ -7739,13 +8108,16 @@ describe('runNonInteractive', () => {
+@@ -7739,13 +8095,16 @@ describe('runNonInteractive', () => {
  
        setupMetricsMock();
        const events: ServerGeminiStreamEvent[] = [
@@ -4280,7 +4696,7 @@ index e6950ce..57a4274 100644
          createStreamFromEvents(events),
        );
  
-@@ -7794,13 +8166,16 @@ describe('runNonInteractive', () => {
+@@ -7794,13 +8153,16 @@ describe('runNonInteractive', () => {
  
        setupMetricsMock();
        const events: ServerGeminiStreamEvent[] = [
@@ -4299,7 +4715,7 @@ index e6950ce..57a4274 100644
        );
  
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
-index 6dfe8f8..389f9e8 100644
+index 6dfe8f8..b6e59c6 100644
 --- a/packages/cli/src/nonInteractiveCli.ts
 +++ b/packages/cli/src/nonInteractiveCli.ts
 @@ -7,12 +7,13 @@
@@ -4369,7 +4785,7 @@ index 6dfe8f8..389f9e8 100644
 -  handleMaxTurnsExceededError,
 -  handleBudgetExceededError,
 -} from './utils/errors.js';
-+import { AlreadyReportedError, handleToolError } from './utils/errors.js';
++import { handleToolError } from './utils/errors.js';
  import { RunBudgetEnforcer } from './utils/runBudget.js';
 +import type { BudgetKind } from './utils/runBudget.js';
  import {
@@ -4594,7 +5010,7 @@ index 6dfe8f8..389f9e8 100644
     * transcript: an orphaned trailing user entry is re-submitted with Retry
     * semantics, and dangling tool calls are closed with synthesized error
     * functionResponses sent as a ToolResult. When the last turn ended
-@@ -548,13 +525,24 @@ export async function runNonInteractive(
+@@ -548,13 +525,18 @@ export async function runNonInteractive(
        });
      const unregisterReviewWorktreeCleanup = registerCleanup(() =>
        cleanupReviewWorktrees(1_000),
@@ -4602,12 +5018,6 @@ index 6dfe8f8..389f9e8 100644
  
      let turnCount = 0;
 -    let limitedTurnCount = 0;
-+    // Turns charged against the session turn budget. Every turn the run
-+    // starts advances `turnCount`, which is what the terminal record reports;
-+    // a runtime Goal continuation is the one kind of turn the generic session
-+    // budget does not charge, so the two counts are the same number on every
-+    // run that sets no Goal.
-+    let budgetedTurnCount = 0;
 +    // Terminal reason of the generation this run is currently standing on,
 +    // cleared at the head of every turn so a turn that reports none is read
 +    // as none rather than inheriting the previous turn's. Both reasoning
@@ -4620,7 +5030,7 @@ index 6dfe8f8..389f9e8 100644
      let activeInteractionOwner: ReturnType<typeof getActiveInteractionSpan>;
      const selectActiveInteraction = (
        promptId: string,
-@@ -606,26 +594,34 @@ export async function runNonInteractive(
+@@ -606,25 +588,31 @@ export async function runNonInteractive(
          value: projectLegacyActiveGoal(snapshot),
        });
      };
@@ -4630,17 +5040,18 @@ index 6dfe8f8..389f9e8 100644
 -    const enforceSessionTurnLimit = async (
 -      isRuntimeGoalTurn: boolean,
 -    ): Promise<void> => {
-+    /**
-+     * Charges the turn about to start against the session turn budget, and
-+     * ends the run when the budget has nothing left to charge. The question
-+     * is asked before the turn is counted, so a run stopped here reports
-+     * exactly the budget it was given and has started no turn it could not
-+     * finish.
-+     */
-+    const admitBudgetedTurn = (isRuntimeGoalTurn: boolean): void => {
-       if (isRuntimeGoalTurn) return;
- 
+-      if (isRuntimeGoalTurn) return;
+-
 -      limitedTurnCount++;
++    /**
++     * Admits the turn about to start, ending the run when the session turn
++     * budget has nothing left. Every turn the run starts is charged, so the
++     * budget and the `num_turns` the record reports are one number. The
++     * question is asked before the caller counts the turn, so a run stopped
++     * here reports exactly the budget it was given and has started no turn it
++     * could not finish.
++     */
++    const admitBudgetedTurn = (): void => {
        const maxSessionTurns = config.getMaxSessionTurns();
 -      if (maxSessionTurns >= 0 && limitedTurnCount > maxSessionTurns) {
 -        await failClosedActiveGoalTurn(
@@ -4648,7 +5059,7 @@ index 6dfe8f8..389f9e8 100644
 -        );
 -        await settleBeforeTerminalOutput();
 -        await handleMaxTurnsExceededError(config);
-+      if (sessionTurnBudgetReached(maxSessionTurns, budgetedTurnCount)) {
++      if (sessionTurnBudgetReached(maxSessionTurns, turnCount)) {
 +        throw new SessionEnded({
 +          terminateMode: AgentTerminateMode.MAX_TURNS,
 +          message: describeSessionTurnBudget(
@@ -4658,14 +5069,29 @@ index 6dfe8f8..389f9e8 100644
 +          ),
 +        });
        }
-+      budgetedTurnCount++;
      };
      let goalHostUnbind: (() => void) | undefined;
      const goalHost: GoalTurnHost = {
        startGoalTurn: async (input) => {
          if (
-           queuedGoalTurns.some(
-@@ -763,51 +759,32 @@ export async function runNonInteractive(
+@@ -747,15 +735,13 @@ export async function runNonInteractive(
+         abortController.signal.removeEventListener('abort', pauseOnAbort);
+         await abortSettlement;
+       }
+     };
+ 
+     // Run-level budget enforcement for headless / unattended runs
+-    // (issue #4103). Explicit per-request safety limits still apply to Goal
+-    // turns; only the generic session turn limit excludes runtime Goal
+-    // continuations. Tied to the same abortController as user-initiated
++    // (issue #4103). Tied to the same abortController as user-initiated
+     // SIGINT so the existing cancellation plumbing carries the abort;
+     // `routeAbort` below interprets the reason so the user sees
+     // "budget exceeded" instead of a generic "cancelled" envelope.
+     const budgetEnforcer = new RunBudgetEnforcer(
+       {
+         maxWallTimeSeconds: config.getMaxWallTimeSeconds(),
+@@ -763,51 +749,32 @@ export async function runNonInteractive(
        },
        abortController,
      );
@@ -4732,7 +5158,7 @@ index 6dfe8f8..389f9e8 100644
        displayText: string;
        modelText: string;
        sendMessageType: SendMessageType;
-@@ -859,17 +836,104 @@ export async function runNonInteractive(
+@@ -859,17 +826,104 @@ export async function runNonInteractive(
        oneShotMonitorsFinalized = true;
        captureMonitorTurnsInLocalQueue = false;
        config.getMonitorRegistry().abortAll();
@@ -4842,7 +5268,7 @@ index 6dfe8f8..389f9e8 100644
        if (err.code === 'EPIPE' && !pipeBroken) {
          pipeBroken = true;
          process.stdout.destroy();
-@@ -1075,21 +1139,18 @@ export async function runNonInteractive(
+@@ -1075,21 +1129,18 @@ export async function runNonInteractive(
          debugLogger.info('[runNonInteractive] continueInterrupted recovery', {
            kind: recoveryPlan.kind,
            repairs: recoveryPlan.repairs,
@@ -4869,7 +5295,7 @@ index 6dfe8f8..389f9e8 100644
          if (recoveryPlan.continuation.mode === 'retry_user_parts') {
            continueSendType = SendMessageType.Retry;
          } else {
-@@ -1110,13 +1171,13 @@ export async function runNonInteractive(
+@@ -1110,13 +1161,13 @@ export async function runNonInteractive(
            }
          }
        }
@@ -4884,7 +5310,7 @@ index 6dfe8f8..389f9e8 100644
              config,
              settings,
            );
-@@ -1175,21 +1236,17 @@ export async function runNonInteractive(
+@@ -1175,21 +1226,17 @@ export async function runNonInteractive(
  
                const message = formatGoalState(
                  snapshot,
@@ -4909,7 +5335,7 @@ index 6dfe8f8..389f9e8 100644
                  process.stdout.write(`${message}\n`);
                }
                bindGoalHost();
-@@ -1202,36 +1259,31 @@ export async function runNonInteractive(
+@@ -1202,36 +1249,31 @@ export async function runNonInteractive(
                initialPartList = buildGoalContinuationParts(activeGoalTurn);
                slashHandled = true;
                break;
@@ -4955,7 +5381,7 @@ index 6dfe8f8..389f9e8 100644
              default: {
                const _exhaustive: never = slashCommandResult;
                throw new FatalInputError(
-@@ -1318,13 +1370,13 @@ export async function runNonInteractive(
+@@ -1318,13 +1360,13 @@ export async function runNonInteractive(
          }
        }
  
@@ -4970,7 +5396,7 @@ index 6dfe8f8..389f9e8 100644
          initialPartList = withReminder(initialPartList, recoveredAgentsNotice);
        }
  
-@@ -1408,13 +1460,13 @@ export async function runNonInteractive(
+@@ -1408,13 +1450,13 @@ export async function runNonInteractive(
              const permit = await claimUserGoalTurn(
                runtime,
                prompt_id,
@@ -4985,7 +5411,7 @@ index 6dfe8f8..389f9e8 100644
                if (!goal) {
                  throw new Error('Goal turn admission lost its active Goal');
                }
-@@ -1553,23 +1605,17 @@ export async function runNonInteractive(
+@@ -1553,23 +1595,17 @@ export async function runNonInteractive(
        // actually said instead of a static, context-free message.
        let plainTextPreview = '';
        const PLAIN_TEXT_PREVIEW_LIMIT = 200;
@@ -5014,7 +5440,7 @@ index 6dfe8f8..389f9e8 100644
            getActiveInteractionSpan(activeInteractionPromptId) === owner
          ) {
            let responseText: string | undefined;
-@@ -1583,17 +1629,13 @@ export async function runNonInteractive(
+@@ -1583,17 +1619,13 @@ export async function runNonInteractive(
                config,
                owner,
                responseText,
@@ -5032,7 +5458,7 @@ index 6dfe8f8..389f9e8 100644
          // task's natural handler. Hold back briefly (capped at
          // STRUCTURED_SHUTDOWN_HOLDBACK_MS) so consumers see every
          // `task_started` paired with its terminal notification, without
-@@ -1603,65 +1645,24 @@ export async function runNonInteractive(
+@@ -1603,65 +1635,24 @@ export async function runNonInteractive(
          while (
            Date.now() < holdbackDeadline &&
            registry.hasUnfinalizedTasks()
@@ -5105,7 +5531,7 @@ index 6dfe8f8..389f9e8 100644
         * Shared per-turn tool-call dispatch for the main-turn loop and
         * `drainBatch`. Both call sites used to reproduce ~120 lines of
         * near-identical logic that filtered `structured_output` to its
-@@ -2054,13 +2055,13 @@ export async function runNonInteractive(
+@@ -2054,13 +2045,13 @@ export async function runNonInteractive(
                // A tick that trips the budget (or an external SIGINT) aborts
                // here; stop launching and route the abort after the
                // already-launched calls settle. Mark the request executed
@@ -5120,7 +5546,7 @@ index 6dfe8f8..389f9e8 100644
                const promise = launchToolCall(requestInfo);
                launched.push({ requestInfo, promise });
                // Track a never-rejecting settle marker for the in-flight
-@@ -2104,13 +2105,13 @@ export async function runNonInteractive(
+@@ -2104,13 +2095,13 @@ export async function runNonInteractive(
                // call to completion before the tick that trips, whereas here
                // the in-budget siblings were launched before the aborting tick,
                // so when their execution reaches the scheduler's abort re-check
@@ -5135,7 +5561,7 @@ index 6dfe8f8..389f9e8 100644
              // identical to the pre-parallelisation behaviour.
              for (const requestInfo of batch.calls) {
                if (
-@@ -2120,13 +2121,13 @@ export async function runNonInteractive(
+@@ -2120,13 +2111,13 @@ export async function runNonInteractive(
                  finalizePlanModeEntrySiblingSkip(requestInfo);
                  continue;
                }
@@ -5150,7 +5576,7 @@ index 6dfe8f8..389f9e8 100644
                  sessionEnded = true;
                  break;
                }
-@@ -2257,15 +2258,15 @@ export async function runNonInteractive(
+@@ -2257,15 +2248,15 @@ export async function runNonInteractive(
            // leading functionResponse parts stay paired with their
            // functionCall.
            isTeammateTurn = true;
@@ -5160,7 +5586,7 @@ index 6dfe8f8..389f9e8 100644
 -        turnCount++;
          const goalTurn = activeGoalTurn;
 -        await enforceSessionTurnLimit(goalTurn?.origin === 'runtime');
-+        admitBudgetedTurn(goalTurn?.origin === 'runtime');
++        admitBudgetedTurn();
 +        turnCount++;
  
          let sendType: SendMessageType;
@@ -5168,7 +5594,7 @@ index 6dfe8f8..389f9e8 100644
            sendType =
              goalTurn.origin === 'runtime'
                ? SendMessageType.Goal
-@@ -2290,12 +2291,13 @@ export async function runNonInteractive(
+@@ -2290,12 +2281,13 @@ export async function runNonInteractive(
          selectActiveInteraction(
            currentPromptId,
            sendType !== SendMessageType.ToolResult,
@@ -5182,7 +5608,7 @@ index 6dfe8f8..389f9e8 100644
            abortController.signal,
            currentPromptId,
            {
-@@ -2328,54 +2330,75 @@ export async function runNonInteractive(
+@@ -2328,55 +2320,80 @@ export async function runNonInteractive(
          for await (const event of responseStream) {
            captureActiveInteractionOwner();
            if (abortController.signal.aborted) {
@@ -5256,21 +5682,27 @@ index 6dfe8f8..389f9e8 100644
 -            // throw so the top-level handleError doesn't reformat (which
 -            // would yield "[API Error: [API Error: ...]]") or print it a
 -            // second time. Exit code stays 1 — same as before.
+-            throw new AlreadyReportedError(errorText);
 +            // An API or transport error ends the run in every output format.
 +            // Gating this on TEXT let JSON and STREAM_JSON consumers receive
 +            // the error string as ordinary assistant text and then a
 +            // `success` result with exit 0 — a failed turn presented as a
 +            // finished answer. stderr carries the live human-readable line
 +            // and the terminal record carries the same text as an error;
-+            // AlreadyReportedError marks the line as written so text mode,
++            // `reportedOnStderr` marks the line as written so text mode,
 +            // whose record is a stderr line, does not print it twice.
-             throw new AlreadyReportedError(errorText);
++            throw new SessionEnded({
++              terminateMode: AgentTerminateMode.ERROR,
++              message: errorText,
++              reportedOnStderr: true,
++            });
            }
          }
          captureActiveInteractionOwner();
  
          // Finalize assistant message
-@@ -2428,14 +2451,13 @@ export async function runNonInteractive(
+         adapter.finalizeAssistantMessage();
+@@ -2428,14 +2445,13 @@ export async function runNonInteractive(
              return emitStructuredSuccess();
            }
            if (
@@ -5286,7 +5718,7 @@ index 6dfe8f8..389f9e8 100644
            }
            if (terminateTurn && activeGoalTurn) {
              geminiClient.addHistory({
-@@ -2549,13 +2571,13 @@ export async function runNonInteractive(
+@@ -2549,13 +2565,13 @@ export async function runNonInteractive(
            }
  
            // If the session was aborted (e.g. Ctrl+C), stop
@@ -5301,14 +5733,14 @@ index 6dfe8f8..389f9e8 100644
            // A teammate may have written its final send_message
            // and gone IDLE between the last 500ms poll and now —
            // without this, that message is lost.
-@@ -2603,24 +2625,25 @@ export async function runNonInteractive(
+@@ -2603,24 +2619,25 @@ export async function runNonInteractive(
                displayText: batch.map((i) => i.displayText).join('; '),
                modelText: batch.map((i) => i.modelText).join('\n\n'),
                sendMessageType: targetType,
                todoWorkChainId: batch[0]?.todoWorkChainId,
              };
  
-+            admitBudgetedTurn(false);
++            admitBudgetedTurn();
              turnCount++;
 -            await enforceSessionTurnLimit(false);
  
@@ -5328,7 +5760,7 @@ index 6dfe8f8..389f9e8 100644
                  itemMessages[0]?.parts || [],
                  abortController.signal,
                  itemPromptId,
-@@ -2641,54 +2664,54 @@ export async function runNonInteractive(
+@@ -2641,55 +2658,59 @@ export async function runNonInteractive(
  
                for await (const event of itemStream) {
                  captureActiveInteractionOwner();
@@ -5398,14 +5830,20 @@ index 6dfe8f8..389f9e8 100644
                    // See the matching note in the first stream loop above —
 -                  // we mark the throw so handleError doesn't reformat or
 -                  // reprint downstream.
+-                  throw new AlreadyReportedError(errorText);
 +                  // every output format ends the run on an API error.
-                   throw new AlreadyReportedError(errorText);
++                  throw new SessionEnded({
++                    terminateMode: AgentTerminateMode.ERROR,
++                    message: errorText,
++                    reportedOnStderr: true,
++                  });
                  }
                }
                captureActiveInteractionOwner();
  
                adapter.finalizeAssistantMessage();
-@@ -2728,14 +2751,13 @@ export async function runNonInteractive(
+               totalApiDurationMs += Date.now() - itemApiStartTime;
+@@ -2728,14 +2749,13 @@ export async function runNonInteractive(
                    return;
                  }
                  if (
@@ -5421,7 +5859,7 @@ index 6dfe8f8..389f9e8 100644
                    return;
                  }
                  itemMessages = [{ role: 'user', parts: itemToolResponseParts }];
-@@ -2876,25 +2898,20 @@ export async function runNonInteractive(
+@@ -2876,25 +2896,20 @@ export async function runNonInteractive(
  
                // Check immediately in case jobs were already deleted
                checkCronDone();
@@ -5452,7 +5890,7 @@ index 6dfe8f8..389f9e8 100644
              // through the model, but later monitor output is SDK-only.
              captureMonitorTurnsInLocalQueue = false;
              await drainLocalQueue();
-@@ -2920,30 +2937,42 @@ export async function runNonInteractive(
+@@ -2920,30 +2935,42 @@ export async function runNonInteractive(
              .consumePendingMemoryTaskPromises();
            if (memoryTaskPromises.length > 0) {
              await Promise.allSettled(memoryTaskPromises);
@@ -5506,7 +5944,7 @@ index 6dfe8f8..389f9e8 100644
            // returning whatever free-form summary the adapter collected.
            // Returning a non-zero exit code (rather than throwing) avoids
            // the outer catch re-emitting the result a second time.
-@@ -2959,155 +2988,59 @@ export async function runNonInteractive(
+@@ -2959,155 +2986,56 @@ export async function runNonInteractive(
                    plainTextPreview.length >= PLAIN_TEXT_PREVIEW_LIMIT ? '+' : ''
                  } chars): ${JSON.stringify(previewSnippet)}.`
                : '';
@@ -5516,7 +5954,10 @@ index 6dfe8f8..389f9e8 100644
 -            endActiveInteraction('error', {
 -              errorMessage: 'model did not produce structured output',
 -              errorType: 'structured_output_missing',
--            });
++            return finish({
++              terminateMode: AgentTerminateMode.ERROR,
++              message: errorMessage,
+             });
 -            await emitResult({
 -              isError: true,
 -              durationMs: Date.now() - startTime,
@@ -5525,10 +5966,7 @@ index 6dfe8f8..389f9e8 100644
 -              errorMessage,
 -              usage,
 -              stats,
-+            return finish({
-+              terminateMode: AgentTerminateMode.ERROR,
-+              message: errorMessage,
-             });
+-            });
 -            return 1;
            }
  
@@ -5577,16 +6015,7 @@ index 6dfe8f8..389f9e8 100644
 -        adapter.finalizeAssistantMessage();
 -      } catch {
 -        // Expected when no message was started or already finalized
-+      // Every ending raised from inside the run's nested control flow arrives
-+      // here carrying the state it decided. Anything else that reached this
-+      // point is a failure, and the abort controller's own reason separates a
-+      // run stopped from outside from one that threw: a run-level budget's
-+      // abort surfaces as the underlying fetch's AbortError before the
-+      // explicit abort sites can fire, and a cancellation reaches here the
-+      // same way.
-+      if (error instanceof SessionEnded) {
-+        return finish(error.ending);
-       }
+-      }
 -
 -      flushQueuedNotificationsToSdk(localQueue);
 -      finalizeOneShotMonitors();
@@ -5659,7 +6088,16 @@ index 6dfe8f8..389f9e8 100644
 -            }`,
 -          );
 -        }
--      }
++      // Every ending raised from inside the run's nested control flow arrives
++      // here carrying the state it decided. Anything else that reached this
++      // point is a failure, and the abort controller's own reason separates a
++      // run stopped from outside from one that threw: a run-level budget's
++      // abort surfaces as the underlying fetch's AbortError before the
++      // explicit abort sites can fire, and a cancellation reaches here the
++      // same way.
++      if (error instanceof SessionEnded) {
++        return finish(error.ending);
+       }
 -      if (budgetExceeded) {
 -        // Always exit AFTER emitResult so STREAM_JSON / JSON consumers
 -        // see a terminal result envelope before the process dies.
@@ -5686,13 +6124,10 @@ index 6dfe8f8..389f9e8 100644
 +      return finish({
 +        terminateMode: AgentTerminateMode.ERROR,
 +        message: error instanceof Error ? error.message : String(error),
-+        reportedOnStderr: error instanceof AlreadyReportedError,
-+        // A thrown FatalError or AlreadyReportedError classifies the failure
-+        // in the exit-code taxonomy the CLI already publishes; the state is
-+        // still the one state a run that threw ends in.
-+        ...(error instanceof FatalError || error instanceof AlreadyReportedError
-+          ? { exitCode: error.exitCode }
-+          : {}),
++        // A thrown FatalError classifies the failure in the exit-code
++        // taxonomy the CLI already publishes; the state is still the one
++        // state a run that threw ends in.
++        ...(error instanceof FatalError ? { exitCode: error.exitCode } : {}),
 +      });
      } finally {
        await failClosedActiveGoalTurn(
@@ -5700,7 +6135,7 @@ index 6dfe8f8..389f9e8 100644
        );
        goalRuntimeUnsubscribe?.();
        goalRuntimeUnsubscribe = undefined;
-@@ -3159,12 +3092,12 @@ export async function runNonInteractive(
+@@ -3159,12 +3087,12 @@ export async function runNonInteractive(
        process.removeListener('SIGINT', shutdownHandler);
        process.removeListener('SIGTERM', shutdownHandler);
        if (isTelemetrySdkInitialized()) {
@@ -6459,10 +6894,10 @@ index 7dec71f..f4a5495 100644
 -  });
  });
 diff --git a/packages/cli/src/utils/errors.ts b/packages/cli/src/utils/errors.ts
-index 82afca4..faca703 100644
+index 82afca4..123606d 100644
 --- a/packages/cli/src/utils/errors.ts
 +++ b/packages/cli/src/utils/errors.ts
-@@ -4,192 +4,40 @@
+@@ -4,192 +4,18 @@
   * SPDX-License-Identifier: Apache-2.0
   */
  
@@ -6483,34 +6918,28 @@ index 82afca4..faca703 100644
  
  const debugLogger = createDebugLogger('CLI_ERRORS');
  
- /**
-  * Marker thrown when a producer has already formatted the error message and
+-/**
+- * Marker thrown when a producer has already formatted the error message and
 - * written it to stderr — the downstream `handleError` should propagate the
 - * exit code without printing or reformatting again.
-+ * written it to stderr as the run's live human-readable line.
-  *
-  * The non-interactive runner uses this when an upstream API error event
+- *
+- * The non-interactive runner uses this when an upstream API error event
 - * arrives mid-stream: it formats with parseAndFormatApiError, writes once,
 - * and then throws. Without this marker, handleError would call
 - * parseAndFormatApiError a second time on the (now formatted) Error.message,
 - * yielding "[API Error: [API Error: ...]]" plus a duplicate stderr line.
-+ * arrives mid-stream: it formats with parseAndFormatApiError, writes once, and
-+ * then throws. Under `--output-format text` the run's terminal record is
-+ * itself a line on stderr, so the marker is what keeps that one ending from
-+ * printing the same text twice. `exitCode` is the status the run leaves
-+ * behind when the failure names one.
-  */
- export class AlreadyReportedError extends Error {
-   /** Exit code to surface — defaults to 1 for generic upstream failures. */
-   exitCode: number;
- 
-   constructor(message: string, exitCode = 1) {
-     super(message);
-     this.name = 'AlreadyReportedError';
-     this.exitCode = exitCode;
-   }
- }
- 
+- */
+-export class AlreadyReportedError extends Error {
+-  /** Exit code to surface — defaults to 1 for generic upstream failures. */
+-  exitCode: number;
+-
+-  constructor(message: string, exitCode = 1) {
+-    super(message);
+-    this.name = 'AlreadyReportedError';
+-    this.exitCode = exitCode;
+-  }
+-}
+-
 -export function getErrorMessage(error: unknown): string {
 -  if (error instanceof Error) {
 -    return error.message;
@@ -6661,7 +7090,7 @@ index 82afca4..faca703 100644
   * The error will be properly formatted in the tool_result block by the adapter,
   * allowing the session to continue so the LLM can decide what to do next.
   * In text mode, outputs error message to stderr only.
-@@ -223,88 +71,35 @@ export function handleToolError(
+@@ -223,88 +49,35 @@ export function handleToolError(
  
    debugLogger.error(
      `Error executing tool ${toolName}: ${resultDisplay || toolError.message}`,
@@ -6690,7 +7119,7 @@ index 82afca4..faca703 100644
    }
 -  return exitAfterCleanup(cancellationError.exitCode);
 -}
--
+ 
 -/**
 - * Handles max session turns exceeded consistently.
 - *
@@ -6711,7 +7140,7 @@ index 82afca4..faca703 100644
 -    ? `${baseMessage}\nNote: --json-schema is active. If the model never called structured_output, verify it isn't denied by permissions.deny / --exclude-tools and that the schema is satisfiable.`
 -    : baseMessage;
 -  const maxTurnsError = new FatalTurnLimitedError(message);
- 
+-
 -  if (config.getOutputFormat() === OutputFormat.JSON) {
 -    const formatter = new JsonFormatter();
 -    const formattedError = formatter.formatError(
@@ -8631,8 +9060,40 @@ index 2870d4b..0b6c8ee 100644
     */
    setExternalMessageProvider(provider: () => AgentExternalInput[]): void {
      this.externalMessageProvider = provider;
+diff --git a/packages/core/src/agents/runtime/agent-interactive.ts b/packages/core/src/agents/runtime/agent-interactive.ts
+index 0fdb801..cbad7b2 100644
+--- a/packages/core/src/agents/runtime/agent-interactive.ts
++++ b/packages/core/src/agents/runtime/agent-interactive.ts
+@@ -513,13 +513,13 @@ export class AgentInteractive {
+ 
+ /**
+  * Map a non-GOAL terminate mode to a visible status message for the UI,
+  * or return null to suppress the message entirely.
+  *
+  * CANCELLED is suppressed here because cancelCurrentRound() already emits
+- * its own warning. SHUTDOWN is suppressed as a normal lifecycle end.
++ * its own warning.
+  */
+ function terminateModeMessage(
+   mode: AgentTerminateMode,
+ ): { text: string; level: 'info' | 'warning' | 'error' } | null {
+   switch (mode) {
+     case AgentTerminateMode.MAX_TURNS:
+@@ -534,12 +534,11 @@ function terminateModeMessage(
+     case AgentTerminateMode.LOOP_DETECTED:
+       return {
+         text: 'Agent stopped: duplicate tool-call loop detected.',
+         level: 'error',
+       };
+     case AgentTerminateMode.CANCELLED:
+-    case AgentTerminateMode.SHUTDOWN:
+       return null;
+     default:
+       return null;
+   }
+ }
 diff --git a/packages/core/src/agents/runtime/agent-types.ts b/packages/core/src/agents/runtime/agent-types.ts
-index 03c4213..5ac8d21 100644
+index 03c4213..6195288 100644
 --- a/packages/core/src/agents/runtime/agent-types.ts
 +++ b/packages/core/src/agents/runtime/agent-types.ts
 @@ -49,12 +49,19 @@ export interface ModelConfig {
@@ -8655,7 +9116,7 @@ index 03c4213..5ac8d21 100644
   * Configures the execution environment and constraints for an agent.
   *
   * TODO: Consider adding max_tokens as a form of budgeting.
-@@ -111,14 +118,22 @@ export enum AgentTerminateMode {
+@@ -111,18 +118,24 @@ export enum AgentTerminateMode {
    /** The agent's execution terminated because it exceeded the maximum allowed working time. */
    TIMEOUT = 'TIMEOUT',
    /** The agent's execution successfully completed all its defined goals. */
@@ -8674,10 +9135,14 @@ index 03c4213..5ac8d21 100644
 +  INCOMPLETE_GENERATION = 'INCOMPLETE_GENERATION',
    /** The agent's execution was cancelled via an abort signal. */
    CANCELLED = 'CANCELLED',
-   /** The agent was gracefully shut down (e.g., arena/team session ended). */
-   SHUTDOWN = 'SHUTDOWN',
+-  /** The agent was gracefully shut down (e.g., arena/team session ended). */
+-  SHUTDOWN = 'SHUTDOWN',
  }
  
+ // ─── Agent Status ────────────────────────────────────────────
+ 
+ /**
+  * Canonical lifecycle status for any agent (headless, interactive, arena).
 diff --git a/packages/core/src/agents/subagent-result.test.ts b/packages/core/src/agents/subagent-result.test.ts
 index 691da33..1a33e6b 100644
 --- a/packages/core/src/agents/subagent-result.test.ts
@@ -9959,7 +10424,7 @@ index 1939fef..2c5b735 100644
        // The top-level beforeEach stubs tryCompressChat to NOOP for unrelated
        // tests; restore the real implementation here so we can observe it.
 diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
-index 60ffda3..f524d58 100644
+index 60ffda3..2be7511 100644
 --- a/packages/core/src/core/client.ts
 +++ b/packages/core/src/core/client.ts
 @@ -15,12 +15,13 @@ import type {
@@ -9990,13 +10455,15 @@ index 60ffda3..f524d58 100644
              uiTelemetryService,
            ),
        );
-@@ -2845,12 +2847,31 @@ export class GeminiClient {
+@@ -2844,13 +2846,32 @@ export class GeminiClient {
+         const checkpoint = this.lastHookMicrocompactionTimestamp;
          if (await this.microcompactHistoryBeforeSend(checkpoint)) {
            this.lastHookMicrocompactionTimestamp = Date.now();
          }
        }
  
-       if (messageType !== SendMessageType.Retry && !isGoalRuntimeTurn) {
+-      if (messageType !== SendMessageType.Retry && !isGoalRuntimeTurn) {
++      if (messageType !== SendMessageType.Retry) {
 +        // The budget decides the turn before the turn is charged to it, so a
 +        // run stopped here has started no turn it could not finish and its
 +        // turn count is exactly the budget it was given.
@@ -10049,7 +10516,7 @@ index 60ffda3..f524d58 100644
        const boundedTurns =
          messageType === SendMessageType.Goal
            ? MAX_TURNS
-@@ -2914,17 +2921,18 @@ export class GeminiClient {
+@@ -2914,17 +2921,17 @@ export class GeminiClient {
            !signal ||
            signal.aborted ||
            !options?.getSteerInput
@@ -10058,7 +10525,7 @@ index 60ffda3..f524d58 100644
          }
 -        const maxSessionTurns = this.config.getMaxSessionTurns();
          if (
-           !isGoalRuntimeTurn &&
+-          !isGoalRuntimeTurn &&
 -          maxSessionTurns > 0 &&
 -          this.sessionTurnCount >= maxSessionTurns
 +          sessionTurnBudgetReached(
@@ -24661,7 +25128,7 @@ index ecd9117..7031b5a 100644
    <good-example>
    pytest /foo/bar/tests
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..c20a0cc 100644
+index 6d3fb50..97b4fb2 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
 @@ -28,13 +28,15 @@ import {
@@ -24982,7 +25449,32 @@ index 6d3fb50..c20a0cc 100644
        vi.mocked(mockAgent.getFinalText).mockReturnValue(
          '<analysis>scratch only</analysis>',
        );
-@@ -3404,12 +3654,14 @@ describe('AgentTool', () => {
+@@ -3213,24 +3463,12 @@ describe('AgentTool', () => {
+         // mode came from inside the subagent itself).
+         const meta = lastEndMeta();
+         expect(meta.status).toBe('cancelled');
+         expect(meta.terminateReason).toBe('subagent_cancelled');
+       });
+ 
+-      it('SHUTDOWN terminateMode → status="cancelled" + terminateReason="subagent_shutdown"', async () => {
+-        // SHUTDOWN is graceful arena/team-session-end, not failure.
+-        // wenshao @ #4410 DeepSeek 3291876034.
+-        vi.mocked(mockAgent.getTerminateMode).mockReturnValue(
+-          AgentTerminateMode.SHUTDOWN,
+-        );
+-        await runForegroundOnce();
+-        const meta = lastEndMeta();
+-        expect(meta.status).toBe('cancelled');
+-        expect(meta.terminateReason).toBe('subagent_shutdown');
+-      });
+-
+       it('ERROR terminateMode populates error + errorType for OTel exception attrs', async () => {
+         // Non-throwing failure paths (ERROR/MAX_TURNS/TIMEOUT) must
+         // populate error/errorType so endSubagentSpan sets the standard
+         // OTel exception attributes — generic 'subagent failed' was
+         // hiding the reason from dashboards. wenshao @ #4410 DeepSeek
+         // 3291876053.
+@@ -3404,12 +3642,14 @@ describe('AgentTool', () => {
            totalDurationMs: 0,
            totalToolCalls: 0,
            successfulToolCalls: 0,
@@ -24997,7 +25489,7 @@ index 6d3fb50..c20a0cc 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4667,12 +4919,14 @@ describe('AgentTool', () => {
+@@ -4667,12 +4907,14 @@ describe('AgentTool', () => {
            totalDurationMs: 500,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -25012,7 +25504,7 @@ index 6d3fb50..c20a0cc 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4863,12 +5117,14 @@ describe('AgentTool', () => {
+@@ -4863,12 +5105,14 @@ describe('AgentTool', () => {
            totalDurationMs: 500,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -25027,7 +25519,7 @@ index 6d3fb50..c20a0cc 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -5214,12 +5470,14 @@ describe('AgentTool', () => {
+@@ -5214,12 +5458,14 @@ describe('AgentTool', () => {
            totalDurationMs: 100,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -25042,7 +25534,7 @@ index 6d3fb50..c20a0cc 100644
          emitDuringExecute(capturedInvocation.eventEmitter);
        });
  
-@@ -5283,12 +5541,82 @@ describe('AgentTool', () => {
+@@ -5283,12 +5529,82 @@ describe('AgentTool', () => {
          (entry) => entry.callId === 'call-read-1',
        );
        expect(toolCall?.args).toEqual({ path: '/test.ts' });
@@ -25125,7 +25617,7 @@ index 6d3fb50..c20a0cc 100644
        const snapshots: AgentResultDisplay[] = [];
  
        const invocation = createInvocationWithEventDrivenAgent((emitter) => {
-@@ -5590,12 +5918,14 @@ describe('AgentTool', () => {
+@@ -5590,12 +5906,14 @@ describe('AgentTool', () => {
      beforeEach(() => {
        mockAgent = {
          execute: vi.fn().mockResolvedValue(undefined),
@@ -25141,7 +25633,7 @@ index 6d3fb50..c20a0cc 100644
          // test-time listener hookup doesn't throw.
          getCore: vi.fn().mockReturnValue({
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..564f1fc 100644
+index 4bcea69..2d1579d 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -3,13 +3,18 @@
@@ -25420,7 +25912,30 @@ index 4bcea69..564f1fc 100644
      const invocationParams = params.working_dir
        ? { ...params, isolation: undefined }
        : params;
-@@ -1422,12 +1550,15 @@ function deriveSubagentExceptionMetadata(
+@@ -1372,22 +1500,12 @@ function deriveSubagentOutcomeMetadata(opts: {
+     return {
+       status: 'cancelled',
+       terminateReason: signalAborted ? 'signal_aborted' : 'subagent_cancelled',
+       resultSummaryPresent,
+     };
+   }
+-  // SHUTDOWN is a graceful arena/team-session-end, not a failure — group it
+-  // with cancellations so dashboards don't count it against subagent error
+-  // rate. Review wenshao @ #4410.
+-  if (terminateMode === AgentTerminateMode.SHUTDOWN) {
+-    return {
+-      status: 'cancelled',
+-      terminateReason: 'subagent_shutdown',
+-      resultSummaryPresent,
+-    };
+-  }
+   if (terminateMode === AgentTerminateMode.GOAL) {
+     return { status: 'completed', resultSummaryPresent };
+   }
+   // Non-throwing failure paths (ERROR / MAX_TURNS / TIMEOUT) — populate
+   // `error`/`errorType` so endSubagentSpan sets standard OTel exception
+   // attributes instead of a generic `'subagent failed'` placeholder.
+@@ -1422,12 +1540,15 @@ function deriveSubagentExceptionMetadata(
  }
  
  class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
@@ -25436,7 +25951,7 @@ index 4bcea69..564f1fc 100644
      private readonly config: Config,
      private readonly subagentManager: SubagentManager,
      params: AgentParams,
-@@ -1549,29 +1680,52 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1549,29 +1670,52 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            },
            updateOutput,
          );
@@ -25490,7 +26005,7 @@ index 4bcea69..564f1fc 100644
      });
  
      // Track real-time token consumption from subagent API calls.
-@@ -1873,13 +2027,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1873,13 +2017,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      }
  
      const subagent = await AgentHeadless.create(
@@ -25505,7 +26020,7 @@ index 4bcea69..564f1fc 100644
      );
  
      return { subagent, initialMessages, taskPrompt, toolConfig };
-@@ -2171,13 +2325,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2171,13 +2315,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
  
        // Get the results
@@ -25525,7 +26040,7 @@ index 4bcea69..564f1fc 100644
        const executionSummary = subagent.getExecutionSummary();
  
        // Publish span outcome BEFORE side-effectful UI/registry calls — if
-@@ -2196,28 +2355,40 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2196,28 +2345,40 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            resultSummaryPresent: Boolean(
              subagentRawText && subagentRawText.length > 0,
            ),
@@ -25567,7 +26082,7 @@ index 4bcea69..564f1fc 100644
        }
        return stopHookWarning;
      } catch (error) {
-@@ -2231,12 +2402,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2231,12 +2392,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        debugLogger.error(
          `[AgentTool] Error inside subagent background task: ${errorMessage}`,
        );
@@ -25581,7 +26096,7 @@ index 4bcea69..564f1fc 100644
        );
        return undefined;
      }
-@@ -2256,16 +2428,16 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2256,16 +2418,16 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // `error` marks the call failed in the scheduler, so tool-usage stats
        // record a failure — a blocked spawn must not count as a spawned
        // sub-agent (the scrollback summary derives its sub-agent count from
@@ -25602,7 +26117,7 @@ index 4bcea69..564f1fc 100644
          subagentName:
            this.params.subagent_type ?? DEFAULT_BUILTIN_SUBAGENT_TYPE,
          taskDescription: this.params.description,
-@@ -2564,12 +2736,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2564,12 +2726,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      let backgroundSlotReservationConsumed = false;
      // Concrete model ID the sub-agent will run with, resolved from its model
      // selector once subagentConfig is loaded. Used to enforce per-model
@@ -25616,7 +26131,7 @@ index 4bcea69..564f1fc 100644
            .getBackgroundTaskRegistry()
            .releaseBackgroundSlot(backgroundSlotReservation);
          backgroundSlotReservation = undefined;
-@@ -2693,14 +2866,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2693,14 +2856,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // BackgroundTaskRegistry's single session-level notification callback
        // would inject the child's completion into the top-level conversation
        // while the launcher (typically finished by then) never hears back.
@@ -25634,7 +26149,7 @@ index 4bcea69..564f1fc 100644
                (!isForkRequested &&
                  this.params.working_dir === undefined &&
                  // A `name` passed without an active team falls through to a regular
-@@ -3074,15 +3248,31 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3074,15 +3238,31 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        } else {
          const result = await this.subagentManager.createAgentHeadless(
            subagentConfig,
@@ -25668,7 +26183,7 @@ index 4bcea69..564f1fc 100644
            },
          );
          subagent = result.subagent;
-@@ -3259,12 +3449,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3259,12 +3439,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
              );
            }
  
@@ -25682,7 +26197,48 @@ index 4bcea69..564f1fc 100644
            );
            void agentConfig
              .getToolRegistry()
-@@ -3941,25 +4132,56 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3533,15 +3714,14 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+                 );
+               }
+ 
+               // Report terminate mode: only GOAL counts as success. CANCELLED
+               // keeps the 'cancelled' status so the model sees task_stop's
+               // effect accurately (with any partial result attached). ERROR,
+-              // MAX_TURNS, TIMEOUT, and SHUTDOWN are surfaced as failures so
+-              // the parent model (and the UI) don't treat incomplete runs as
+-              // completed.
++              // MAX_TURNS and TIMEOUT are surfaced as failures so the parent
++              // model (and the UI) don't treat incomplete runs as completed.
+               //
+               const terminateMode = bgSubagent.getTerminateMode();
+               const subagentRawText = bgSubagent.getFinalText();
+               const hadWorktreeIsolation = worktreeIsolation !== null;
+               const recordTerminalOutcome = () =>
+                 recordSpanOutcome(
+@@ -3617,21 +3797,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+                 patchAgentMeta(metaPath, {
+                   status: 'completed',
+                   lastUpdatedAt: new Date().toISOString(),
+                   lastError: undefined,
+                 });
+                 registry.complete(hookOpts.agentId, finalText, completionStats);
+-              } else if (
+-                terminateMode === AgentTerminateMode.CANCELLED ||
+-                terminateMode === AgentTerminateMode.SHUTDOWN
+-              ) {
+-                // SHUTDOWN is grouped with CANCELLED in the span taxonomy
+-                // (deriveSubagentOutcomeMetadata); align the registry side
+-                // so dashboards don't see span=cancelled / registry=failed
+-                // mismatch on graceful arena/team-session shutdown.
+-                // wenshao @ #4410.
++              } else if (terminateMode === AgentTerminateMode.CANCELLED) {
+                 registry.finalizeCancelled(
+                   hookOpts.agentId,
+                   finalText,
+                   completionStats,
+                 );
+                 persistBackgroundCancellation(
+@@ -3941,25 +4113,56 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          fgAbortController.abort();
        } else {
          signal?.addEventListener('abort', onParentAbort, { once: true });
@@ -25744,7 +26300,7 @@ index 4bcea69..564f1fc 100644
        // Register in BackgroundTaskRegistry with isBackgrounded:false so the
        // pill counts the run and the dialog can drill in. Foreground entries
        // skip XML notification and headless-holdback (see the registry for
-@@ -4109,18 +4331,59 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4109,18 +4312,59 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            resumeCount: 0,
            // Persisted so resume restores the original nesting level; see
            // childLaunchDepth() for the rationale.
@@ -25809,7 +26365,7 @@ index 4bcea69..564f1fc 100644
              llmContent: (finalText || 'Subagent execution failed.') + wtSuffix,
              returnDisplay: this.currentDisplay!,
            };
-@@ -4263,14 +4526,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4263,14 +4507,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        const errorDisplay: AgentResultDisplay = {
          ...this.currentDisplay!,
          status: 'failed',
@@ -38660,7 +39216,7 @@ index 0000000..001e228
 +  return { text: kept, removed };
 +}
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/message/SDKResultMessage.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/message/SDKResultMessage.java
-index 5888963..e610be3 100644
+index 5888963..374c0b7 100644
 --- a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/message/SDKResultMessage.java
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/message/SDKResultMessage.java
 @@ -17,13 +17,16 @@ import com.alibaba.qwen.code.cli.protocol.data.Usage;
@@ -38673,7 +39229,7 @@ index 5888963..e610be3 100644
 -    private String subtype; // 'error_max_turns' | 'error_during_execution'
 +    // 'error_during_execution' | 'error_timeout' | 'error_max_turns'
 +    // | 'error_max_tool_calls' | 'error_loop_detected'
-+    // | 'error_incomplete_generation' | 'error_cancelled' | 'error_shutdown'
++    // | 'error_incomplete_generation' | 'error_cancelled'
 +    private String subtype;
      /**
       * The UUID of the message.
@@ -38682,10 +39238,10 @@ index 5888963..e610be3 100644
  
      /**
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/protocol.ts b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/protocol.ts
-index 07d54a1..cc8edea 100644
+index 07d54a1..3647f5c 100644
 --- a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/protocol.ts
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/protocol.ts
-@@ -148,13 +148,21 @@ export interface SDKResultMessageSuccess {
+@@ -148,13 +148,20 @@ export interface SDKResultMessageSuccess {
    permission_denials: CLIPermissionDenial[];
    [key: string]: unknown;
  }
@@ -38700,8 +39256,7 @@ index 07d54a1..cc8edea 100644
 +    | 'error_max_tool_calls'
 +    | 'error_loop_detected'
 +    | 'error_incomplete_generation'
-+    | 'error_cancelled'
-+    | 'error_shutdown';
++    | 'error_cancelled';
    uuid: string;
    session_id: string;
    is_error: true;
@@ -38709,10 +39264,10 @@ index 07d54a1..cc8edea 100644
    duration_api_ms: number;
    num_turns: number;
 diff --git a/packages/sdk-python/src/qwen_code_sdk/protocol.py b/packages/sdk-python/src/qwen_code_sdk/protocol.py
-index 51a751a..ef7a5ac 100644
+index 51a751a..0b8078d 100644
 --- a/packages/sdk-python/src/qwen_code_sdk/protocol.py
 +++ b/packages/sdk-python/src/qwen_code_sdk/protocol.py
-@@ -140,13 +140,22 @@ class ResultErrorObject(TypedDict):
+@@ -140,13 +140,21 @@ class ResultErrorObject(TypedDict):
      message: str
      type: NotRequired[str]
  
@@ -38728,7 +39283,6 @@ index 51a751a..ef7a5ac 100644
 +        "error_loop_detected",
 +        "error_incomplete_generation",
 +        "error_cancelled",
-+        "error_shutdown",
 +    ]
      uuid: str
      session_id: str
@@ -38737,10 +39291,10 @@ index 51a751a..ef7a5ac 100644
      duration_api_ms: int
      num_turns: int
 diff --git a/packages/sdk-typescript/src/types/protocol.ts b/packages/sdk-typescript/src/types/protocol.ts
-index 97b765f..4d41852 100644
+index 97b765f..c564119 100644
 --- a/packages/sdk-typescript/src/types/protocol.ts
 +++ b/packages/sdk-typescript/src/types/protocol.ts
-@@ -148,13 +148,21 @@ export interface SDKResultMessageSuccess {
+@@ -148,13 +148,20 @@ export interface SDKResultMessageSuccess {
    permission_denials: CLIPermissionDenial[];
    [key: string]: unknown;
  }
@@ -38755,8 +39309,7 @@ index 97b765f..4d41852 100644
 +    | 'error_max_tool_calls'
 +    | 'error_loop_detected'
 +    | 'error_incomplete_generation'
-+    | 'error_cancelled'
-+    | 'error_shutdown';
++    | 'error_cancelled';
    uuid: string;
    session_id: string;
    is_error: true;

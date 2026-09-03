@@ -257,7 +257,4 @@ wait_for_child "${qwen_pid}" qwen_status
 set -e
 
 (( termination_forward_failed == 0 )) || fatal 101 "failed to forward a requested termination signal"
-if (( termination_exit != 0 && qwen_status == 0 )); then
-  qwen_status="${termination_exit}"
-fi
 exit "${qwen_status}"

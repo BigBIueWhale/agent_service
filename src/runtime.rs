@@ -210,9 +210,9 @@ pub struct SessionBody {
     /// `success` when the model wrote its final message to the end, or the
     /// `error_*` spelling of the state that stopped it instead — a failure
     /// during execution, one of the three caller-supplied bounds, a loop the
-    /// detector halted, a generation the provider cut short, a cancellation
-    /// from outside, or a shutdown by the run's owner. The complete set is
-    /// `result_parse::SUCCESS_SUBTYPE` and `result_parse::ERROR_SUBTYPES`.
+    /// detector halted, a generation the provider cut short, or a cancellation
+    /// from outside. The complete set is `result_parse::SUCCESS_SUBTYPE` and
+    /// `result_parse::ERROR_SUBTYPES`.
     /// `None` exactly when no terminal result was parsed and there is
     /// therefore nothing the agent asserted about its own ending.
     // `#[serde(default)]` admits a committed record that carries no terminal
@@ -226,9 +226,9 @@ pub struct SessionBody {
     /// `tool_use` call that spawned it, the turns the stream billed to it,
     /// and the terminal record it reported for itself, if any. Empty when the
     /// run delegated nothing — and empty on any session whose stream was
-    /// never strictly parsed (cancelled before terminal, capture unproved),
-    /// because an unparsed stream can prove nothing about subagents and a
-    /// fabricated row would read as evidence.
+    /// never strictly parsed (capture unproved, parse refused), because an
+    /// unparsed stream can prove nothing about subagents and a fabricated row
+    /// would read as evidence.
     // Terminal records committed before subagent surfacing existed carry no
     // scope rows and ran through the same parser, which validated and then
     // discarded exactly this information; empty is their only semantically

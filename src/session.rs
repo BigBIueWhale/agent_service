@@ -719,10 +719,9 @@ pub async fn run_one(
         ))
     };
     // Subagent scopes exist only as parser output: a session whose stream
-    // was never strictly parsed (cancelled before terminal, capture or parse
-    // refused) reports an empty scope list, because an unparsed stream can
-    // prove nothing about subagents and a fabricated row would read as
-    // evidence.
+    // was never strictly parsed (capture or parse refused) reports an empty
+    // scope list, because an unparsed stream can prove nothing about
+    // subagents and a fabricated row would read as evidence.
     let (
         mut response,
         agent_duration_ms,
@@ -744,17 +743,6 @@ pub async fn run_one(
             result.scopes,
             result.is_error,
             true,
-        ),
-        Err(error) if status == SessionStatus::Cancelled => (
-            format!("session cancelled before a terminal result event was emitted: {error}"),
-            None,
-            None,
-            None,
-            0,
-            0,
-            Vec::new(),
-            false,
-            false,
         ),
         Err(error) => {
             diagnostics.push(format!("strict event parse failed: {error}"));

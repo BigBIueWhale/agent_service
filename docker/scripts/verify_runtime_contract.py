@@ -454,7 +454,7 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             'const STDERR_SOCKET: &str = "/streams/stderr.sock";',
             f'const TURN_BUDGET_FILE: &str = "{sealed["turn_budget_path"]}";',
             'const NODE: &str = "/usr/local/bin/node";',
-            'const CLI: &str = "/opt/qwen-code/scripts/cli-entry.js";',
+            'const CLI: &str = "/opt/qwen-code/dist/cli.js";',
             'std::path::Path::new("/output").exists()',
             '("/workspace", DIRECTORY_WRITE_ACCESS)',
             '("/artifacts", DIRECTORY_WRITE_ACCESS)',
@@ -463,6 +463,9 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             '("/dev/pts", DEVICE_WRITE_ACCESS)',
             'libc::SYS_landlock_restrict_self',
             'libc::close_range(3, u32::MAX, 0)',
+            # Qwen Code's memory-pressure monitor calls global.gc() in its
+            # critical tier, which exists only under this flag.
+            '.arg("--expose-gc")',
             '.arg("--foreground-agents-only")',
             '.arg("--max-subagent-depth=1")',
             # The budget the launcher passes is the per-session one it read from

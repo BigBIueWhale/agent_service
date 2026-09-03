@@ -3079,12 +3079,21 @@ _DECLARED_SUCCESS = re.compile(
 _DECLARED_ERRORS = re.compile(
     r"\n  subtype:\n((?:    \| '[a-z_]+'(?:;|\n))+)"
 )
-_PRODUCED = re.compile(
+_NAMED = re.compile(
     r"\n  \[AgentTerminateMode\.([A-Z_]+)\]: \{\n"
     r"    subtype: '([a-z_]+)',\n"
     r"    isError: (true|false),\n"
     r"    exitCode: (\d+),\n"
     r"  \},"
+)
+# The two shapes that put a terminal state into a value: an ending carrying it
+# as `terminateMode`, and the table naming the state each run budget's overrun
+# ends the run in. A comparison against a state is not one of these -- reading a
+# state is not producing it, and the distinction is the whole point.
+_STATE_PRODUCER = re.compile(r"terminateMode\s*[:=]\s*AgentTerminateMode\.([A-Z_]+)")
+_BUDGET_STATE_TABLE = re.compile(
+    r"const BUDGET_STATE: Record<BudgetKind, AgentTerminateMode> = \{\n"
+    r"((?:  '[a-z-]+': AgentTerminateMode\.[A-Z_]+,\n)+)\};"
 )
 
 
@@ -3095,6 +3104,8 @@ def _validate_terminal_state_after(state: State) -> None:
     adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
     cli = "packages/cli/src/nonInteractiveCli.ts"
     cli_test = "packages/cli/src/nonInteractiveCli.test.ts"
+    bootstrap = "packages/cli/src/cli.ts"
+    bootstrap_test = "packages/cli/src/cli.test.ts"
     errors = "packages/cli/src/utils/errors.ts"
     agent_types = "packages/core/src/agents/runtime/agent-types.ts"
     agent = "packages/core/src/tools/agent/agent.ts"
@@ -3104,13 +3115,21 @@ def _validate_terminal_state_after(state: State) -> None:
     helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
     helpers_test = "packages/cli/src/utils/nonInteractiveHelpers.test.ts"
 
-    # ── The closed set, asserted in both directions ──────────────────────
+    # ── The closed set, asserted in every direction ──────────────────────
     #
     # A declared name with no producer is byte-identical, type-checks, parses
-    # and builds; nothing else in this pipeline can see it. The three sets
-    # below are read out of the post-patch source and required to be the same
-    # set: the states an agentic run can end in, the names the mapping
-    # produces for them, and the names the protocol declares.
+    # and builds; nothing else in this pipeline can see it. The four sets
+    # below are read out of the post-patch source and required to agree: the
+    # states an agentic run can end in, the states some statement in the tree
+    # constructs, the states the table names, and the names the protocol
+    # declares.
+    #
+    # The assertion is production, not reachability. Whether a given
+    # deployment's argv can reach a producing statement is a path-sensitive
+    # property of a call graph that no text-level check can decide, and the
+    # state set is instead kept equal to the states this build can reach, so
+    # the two coincide -- a property a reader checks by eye on an eight-member
+    # enum.
     enum_source = _source(state, agent_types, label=label)
     enum_body = enum_source.split("export enum AgentTerminateMode {", 1)[1].split(
         "\n}", 1
@@ -3142,39 +3161,63 @@ def _validate_terminal_state_after(state: State) -> None:
         f"{label}: {types} declares a duplicate error subtype",
     )
 
-    produced = _PRODUCED.findall(
+    named = _NAMED.findall(
         types_source.split("export const TERMINAL_RESULT_BY_STATE = {", 1)[1].split(
             "} as const satisfies Record<AgentTerminateMode, TerminalResult>;", 1
         )[0]
     )
-    _require(produced, f"{label}: {types} maps no state to a terminal record")
-    produced_states = {entry[0] for entry in produced}
+    _require(named, f"{label}: {types} maps no state to a terminal record")
+    named_states = {entry[0] for entry in named}
     _require(
-        produced_states == state_names,
+        named_states == state_names,
         f"{label}: the terminal-record table is not total over the states a run "
-        f"can end in; states without a record: {sorted(state_names - produced_states)!r}, "
-        f"records without a state: {sorted(produced_states - state_names)!r}",
+        f"can end in; states without a record: {sorted(state_names - named_states)!r}, "
+        f"records without a state: {sorted(named_states - state_names)!r}",
     )
-    produced_success = {name for _, name, is_error, _ in produced if is_error == "false"}
-    produced_errors = {name for _, name, is_error, _ in produced if is_error == "true"}
+    named_success = {name for _, name, is_error, _ in named if is_error == "false"}
+    named_errors = {name for _, name, is_error, _ in named if is_error == "true"}
     _require(
-        produced_success == declared_success,
-        f"{label}: the success name the table produces and the one {types} "
-        f"declares differ: produced {sorted(produced_success)!r}, "
+        named_success == declared_success,
+        f"{label}: the success name the table gives a state and the one {types} "
+        f"declares differ: named {sorted(named_success)!r}, "
         f"declared {sorted(declared_success)!r}",
     )
     _require(
-        produced_errors == declared_errors,
-        f"{label}: the error names the table produces and the ones {types} "
-        f"declares differ; declared with no producer: "
-        f"{sorted(declared_errors - produced_errors)!r}, produced but not "
-        f"declared: {sorted(produced_errors - declared_errors)!r}",
+        named_errors == declared_errors,
+        f"{label}: the error names the table gives states and the ones {types} "
+        f"declares differ; declared with no row in the table: "
+        f"{sorted(declared_errors - named_errors)!r}, in the table but not "
+        f"declared: {sorted(named_errors - declared_errors)!r}",
     )
-    for _, name, is_error, _ in produced:
+    for _, name, is_error, _ in named:
         _require(
             name.startswith("error_") == (is_error == "true"),
             f"{label}: {types} pairs the name {name!r} with isError {is_error}",
         )
+
+    # The producer half: a state earns its place in the enum -- and therefore
+    # its wire name -- when some statement in the tree constructs it. The scan
+    # covers every source file this patch touches, excluding the tests and the
+    # mapping table itself, so a state left in the enum with nothing to reach
+    # it is refused before a byte is written.
+    produced_states: set[str] = set()
+    for path, source in state.items():
+        if not path.endswith((".ts", ".tsx")) or path.endswith(
+            (".test.ts", ".test.tsx")
+        ):
+            continue
+        if path == types:
+            continue
+        produced_states.update(_STATE_PRODUCER.findall(source))
+        for rows in _BUDGET_STATE_TABLE.findall(source):
+            produced_states.update(re.findall(r"AgentTerminateMode\.([A-Z_]+)", rows))
+    _require(
+        produced_states == state_names,
+        f"{label}: the states a run can end in and the states this build "
+        f"constructs differ; declared with no producing statement: "
+        f"{sorted(state_names - produced_states)!r}, constructed but not "
+        f"declared: {sorted(produced_states - state_names)!r}",
+    )
 
     # The table is the only producer: no terminal name is written as a literal
     # where a record is built, and no cast reintroduces one.
@@ -3198,6 +3241,11 @@ def _validate_terminal_state_after(state: State) -> None:
         forbid_text(state, errors, helper, label=label)
         forbid_text(state, cli, helper, label=label)
     forbid_text(state, errors, "process.exit", label=label)
+    # SessionEnded is the one shape a terminal state is raised in. A second
+    # marker class carrying an ending's properties beside it is a second
+    # vocabulary for the same thing, which is how the two drift apart.
+    for path in (errors, cli, bootstrap):
+        forbid_text(state, path, "AlreadyReportedError", label=label)
     cli_source = _require_all(
         state,
         cli,
@@ -3239,11 +3287,12 @@ def _validate_terminal_state_after(state: State) -> None:
     for path in (cli, client):
         forbid_text(state, path, "getMaxSessionTurns() > 0", label=label)
     forbid_text(state, cli, "limitedTurnCount", label=label)
+    forbid_text(state, cli, "budgetedTurnCount", label=label)
     _require_ordered(
         cli_source,
         (
-            "admitBudgetedTurn(goalTurn?.origin === 'runtime');\n        turnCount++;",
-            "admitBudgetedTurn(false);\n            turnCount++;",
+            "admitBudgetedTurn();\n        turnCount++;",
+            "admitBudgetedTurn();\n            turnCount++;",
         ),
         label=label,
         location=cli,
@@ -3298,6 +3347,12 @@ def _validate_terminal_state_after(state: State) -> None:
     )
     require_text(
         state,
+        cli_test,
+        "charges a runtime Goal continuation to the session turn budget",
+        label=label,
+    )
+    require_text(
+        state,
         helpers_test,
         "reports a scope whose first update already reports it stopped",
         label=label,
@@ -3308,6 +3363,20 @@ def _validate_terminal_state_after(state: State) -> None:
         "admits exactly as many budgeted turns as the budget names",
         label=label,
     )
+    # The build derives the tests it runs from the files this patch touches,
+    # so the bootstrap suite covers the one classified shape a run can throw
+    # past its emitter. It locates the sources it asserts on from its own
+    # file: a path resolved against the working directory reads nothing under
+    # the root config the build runs, and a suite that cannot read what it
+    # asserts on cannot refuse anything.
+    require_text(
+        state,
+        bootstrap_test,
+        "path.dirname(fileURLToPath(import.meta.url))",
+        label=label,
+    )
+    for cwd_relative in ("readFileSync('", "copyFileSync('"):
+        forbid_text(state, bootstrap_test, cwd_relative, label=label)
 
 
 def _validate_compaction_rescue_before(state: State) -> None:
@@ -4065,33 +4134,47 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "process without emitting a terminal record at all. A caller "
             "then read a turn-exhausted run as invalid output, because the "
             "only evidence it had was a stream that stopped. The subagent "
-            "scope had the opposite problem: it carried a proper eight-state "
-            "enumeration and collapsed all of it to one wire name, so a "
-            "subagent that ran out of turns and one whose tool threw were "
-            "the same record. The protocol declared a third model again, a "
-            "closed set of names of which one, `error_max_turns`, no code "
-            "path could produce. "
+            "scope had the opposite problem: it carried a proper "
+            "enumeration of how a scope can stop and collapsed all of it to "
+            "one wire name, so a subagent that ran out of turns and one "
+            "whose tool threw were the same record. The protocol declared a "
+            "third model again, a closed set of names of which one, "
+            "`error_max_turns`, no code path could produce. "
             "The terminal state is now a value both scopes carry. One table "
             "maps each state an agentic run can end in to the record that "
             "reports it -- the wire name, whether that name is an error, and "
             "the exit code -- and the table is total over the state set, so a "
             "state added without a name is a compile error rather than a run "
             "reported under a neighbour's name. The wire vocabulary is the "
-            "set of names that table produces, which is what makes timeout, "
-            "cancellation, loop detection, shutdown and both remaining "
-            "budgets producible instead of masquerading as a generic "
-            "execution failure. Every ending in the runner returns or raises "
-            "a state and one emitter writes the record, so a run cannot end "
-            "without saying how. The session turn budget is asked once, "
-            "before the turn it decides is counted, so a run stopped by it "
-            "reports exactly the budget it was given and has interrupted "
-            "nothing."
+            "set of names that table produces, which is what makes a "
+            "timeout, a cancellation, a loop halt and both remaining budgets "
+            "nameable instead of masquerading as a generic execution "
+            "failure. That set is the set of states this build constructs: "
+            "every member has a statement somewhere in the tree that "
+            "produces it, and the assertion below reads both out of the "
+            "post-patch source and requires them to agree, so a name cannot "
+            "be declared for a state nothing reaches. The assertion is "
+            "production, not reachability -- whether a deployment's argv "
+            "reaches a producing statement is that deployment's business, "
+            "and the state set is kept equal to the states this build can "
+            "reach so the two coincide. Every ending in the runner returns "
+            "or raises a state and one emitter writes the record, so a run "
+            "cannot end without saying how, and one shape carries it: an "
+            "ending whose text is already on stderr says so, and one whose "
+            "thrown value classifies itself in the CLI's exit-code taxonomy "
+            "carries that code, both as fields of the ending rather than as "
+            "a second class beside it. The session turn budget charges every "
+            "turn the run starts and is asked once, before the turn it "
+            "decides is counted, so the budget and the `num_turns` the "
+            "record reports are one number, and a run stopped by it reports "
+            "exactly the budget it was given, having interrupted nothing."
         ),
         removal_condition=(
             "Remove only when upstream represents a run's terminal state as a "
             "value that both the session and every subagent carry to one "
             "emitter, with a total mapping from that state set to the "
-            "declared wire vocabulary, and no terminal path that ends the "
+            "declared wire vocabulary, no state in that set without a "
+            "statement that produces it, and no terminal path that ends the "
             "process without emitting its record."
         ),
         validate_before=_validate_terminal_state_before,

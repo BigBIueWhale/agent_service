@@ -57,7 +57,7 @@ const _: () = assert!(
     "the sealed default session turn budget must lie inside the accepted range"
 );
 const NODE: &str = "/usr/local/bin/node";
-const CLI: &str = "/opt/qwen-code/scripts/cli-entry.js";
+const CLI: &str = "/opt/qwen-code/dist/cli.js";
 const CONTROL_ATTEST_FD: RawFd = 3;
 const CONTROL_RELEASE_FD: RawFd = 4;
 
@@ -184,6 +184,7 @@ fn run() -> Result<std::convert::Infallible, String> {
 
     let error = std::os::unix::process::CommandExt::exec(
         Command::new(NODE)
+            .arg("--expose-gc")
             .arg(CLI)
             .arg("--input-format=text")
             .arg("--approval-mode=yolo")
@@ -560,7 +561,7 @@ mod tests {
         assert_eq!(TURN_BUDGET_FILE, "/run/agent/turn-budget.json");
         assert_eq!(DEFAULT_MAX_SESSION_TURNS, 400);
         assert_eq!(MAX_SESSION_TURNS_CEILING, 2000);
-        assert_eq!(CLI, "/opt/qwen-code/scripts/cli-entry.js");
+        assert_eq!(CLI, "/opt/qwen-code/dist/cli.js");
         assert_eq!(CONTROL_ATTEST_FD, 3);
         assert_eq!(CONTROL_RELEASE_FD, 4);
         assert_eq!(DIRECTORY_WRITE_ACCESS, 0x7ff2);

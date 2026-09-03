@@ -7,8 +7,14 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': '19455bb10d64c7d58b2ad406cb1c44b569534fb3e9d106f395e5668cfa84b37f',
-  'files': ({'path': 'packages/cli/src/config/auth.test.ts',
+  'review_sha256': 'd1c86e91cb7d774a3fadebac51ff31a40f18da1725c8bf14822325c4c8315855',
+  'files': ({'path': 'packages/cli/src/cli.test.ts',
+             'before_sha256': 'ce3666b170d5244e5aa425b4678b0bd3f20f1e3d584d418a95d6ac70b18da4e4',
+             'after_sha256': '31120aafcf051244bf4b18439877718a49c43a198693408a609c4fc0c45d3e71'},
+            {'path': 'packages/cli/src/cli.ts',
+             'before_sha256': '032f023cb9905282ec0a4a7c0b2131625298448348bab6ab9d9386f242b2e638',
+             'after_sha256': '2fae3b076048a11b87a71fc97fb6cd0fb9c955920a19fde90bffa2ce0fc7aa29'},
+            {'path': 'packages/cli/src/config/auth.test.ts',
              'before_sha256': '5cafa7bb7536bb008f6960acdae1537da5c3e8138fabf1de1da5dc8bc9c2f180',
              'after_sha256': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2'},
             {'path': 'packages/cli/src/config/auth.ts',
@@ -28,7 +34,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before_sha256': '17e660b5b946d5647814af611bc5b6aaf43c597e7b329e4926d90b8bf7fa72e8',
-             'after_sha256': '1bc6c8a6c3d33f04a584f33945ceaec40aa25ce00fbf486f02e6fefec3be336e'},
+             'after_sha256': 'c9cdb1093df8917fcd3b1f7a170dae36e4bc942797f08aa4c609114bac3e0e78'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before_sha256': 'd389950daa67e5b2578ed5da8e340e417d7f696486c81ed78f3aca735e22c0bd',
              'after_sha256': 'f0007862fbfa42e925ca6f45ece60230577908927b110a242ab9ffd51e794a29'},
@@ -46,13 +52,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '9c50443d208cea29438b5b67b06b50a9327a705291cfe3d0b6f07f7a905ee234'},
             {'path': 'packages/cli/src/nonInteractive/types.ts',
              'before_sha256': '6ad4da59e11d6a84d2b9bd03376b834d1737edfc7a8dc9af1e90783ccab2acdf',
-             'after_sha256': 'b3c6de1d02776fe22f042cf18fdd0c00a304603234bf89a3efba6c058d8f6a32'},
+             'after_sha256': 'bcdd5db1ebd4720911b1f4a101d60ccdc5e8b36c1fa5226bc7fab045b4a1e8c4'},
             {'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before_sha256': 'b2974af70f9b5f4beadaa1e9d632e95ff6eac1ee3aab8c3b366db8ce64d73afc',
-             'after_sha256': 'e9fac30b676d9361c13a52d4d723d17acb594f67fae8c7da2e173707c167a930'},
+             'after_sha256': '93d0423434b5894fb2210daaa49c17235d29e788cddcd38e1a262329ca25616d'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
-             'after_sha256': '99b495a37f313dffab29f2826361c7a4710d10535c9eb4d9ab1d002e591b0b76'},
+             'after_sha256': '878088e40b2ad61ec9594cc1d6c68342b4d4ec11b344864e2959d42fe0e778d4'},
             {'path': 'packages/cli/src/serve/fs/workspace-file-system.test.ts',
              'before_sha256': '1a69b02ae5e30300b24fbe2f883d0ae47eb04cee4d672e02ac3db01e743d2cb1',
              'after_sha256': 'eafa762f3777e7245878351f1552a15d823692850e74c681de5d2efedc208948'},
@@ -67,7 +73,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '309ecd8f307d32532f4942ad22980db2374fd2661a78610851701e4870554584'},
             {'path': 'packages/cli/src/utils/errors.ts',
              'before_sha256': '5650e05413ef8d64089b0a0cf14dbabde076fcbb99dc2546d22f5b5f3bcaddce',
-             'after_sha256': 'fe59b3121814d8ae29a4e7d4c862ac3056213474cedd00c9ae3a969bd10ff8c7'},
+             'after_sha256': 'eb931fdd1b8d1137c465b8de35ae13b76eeb52ef1e9b769b805f244ae58812b5'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before_sha256': 'd59f5e8a9a9efc2f10770df56e1ea201ec38400b9b1dd00ef317ce2f8e5a1448',
              'after_sha256': 'fec5551fbc322b637aa1f19681fd3b554c0a185ec0a4fe1ec94a2370fbb57206'},
@@ -101,9 +107,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before_sha256': 'db6d8ed8f7714a83483fb9f22c860a3f2e7e38cf53171e79c5fc49a363d3c3ce',
              'after_sha256': '24f953533bc130c33687e2cbe1b324dc0f49fb5a3f78860e30682193ac272cf5'},
+            {'path': 'packages/core/src/agents/runtime/agent-interactive.ts',
+             'before_sha256': 'cac28d09504895090d48ed0de3c3c0813a9631f1cc83780df59d53c35b7e1ff2',
+             'after_sha256': '68ecd4bb93b57778021f1cbfcf866060bc9ffc4f6dd875ee1e0ad20e72735986'},
             {'path': 'packages/core/src/agents/runtime/agent-types.ts',
              'before_sha256': 'b02dc24f71f260e089677cfe41dee1d99b0fea88a355bee14b1ce15cbc237750',
-             'after_sha256': '1e71e92bebe9b82a2db4c9645b484f354505cf4b603431edd81668abb3c9e1e4'},
+             'after_sha256': '8439101e8098fa07f4942fe28b9651cffe7d0c3b850c8c4585db262ecb44572e'},
             {'path': 'packages/core/src/agents/subagent-result.test.ts',
              'before_sha256': '044cd3646709a861e488f473d015f4238405dc37dd5c8d26ce8ab010a391ba6d',
              'after_sha256': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91'},
@@ -136,7 +145,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '672a46838231a8799545260380cc65c10782779b2a344660342b1dd1d3b57c89'},
             {'path': 'packages/core/src/core/client.ts',
              'before_sha256': 'b15faf13bc894ab9d9a60853bcadffdfd197a39779d05ecdef401b6f4d360c19',
-             'after_sha256': '908cb88e849298c3f5bd9d9678be3c268f053caaa4eca171dbcd6cdcf23ab534'},
+             'after_sha256': '4e7938239f783b08dd9b27a09a70b32e7df56ae58d25f6518e98afb68664290e'},
             {'path': 'packages/core/src/core/contentGenerator.ts',
              'before_sha256': '7bbdb216d8bbde513ce99d4f1160746942b6fc3c388ef222c1d47cc324a15247',
              'after_sha256': '27fa593f8dbf0e75106b2d4aa8f9d22801dcf016b112d56046542ed4fd3ff303'},
@@ -262,10 +271,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
-             'after_sha256': 'ff5f70a758e180e4b465ee568dffaa4b3ce9e8ae94781eb4d611f89c0eead510'},
+             'after_sha256': '2daecf5add00a1d3bd2e5b6bb0e2d3ae9307965c697792d5fcc6b32a412cb9a7'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': 'e1eb08b7e1b3ccd60f5437130a8b629ae36e526316196d11570d1b3e718f11cc'},
+             'after_sha256': '7875d5b8eec18227b07530f15531cd28fa5adcd49dee4183a9dbb4ee85d63728'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -373,20 +382,1541 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '45fd0561b4ca6f691f83c14b47bfe36bea7ffa692ff496c4ab430657b00c00fd'},
             {'path': 'packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/message/SDKResultMessage.java',
              'before_sha256': '19acd16704fd47be814254dea91c0d91ca845265940597f6dfa86ef788fba01f',
-             'after_sha256': 'a5bcc1d06d343ab7264945f30a0858a10f47ea68df9a08de49f8aab96c06a571'},
+             'after_sha256': '610f1522d93e22a4345e8f48304981352699ef53ab2ddeae5c0331deea92e857'},
             {'path': 'packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/protocol.ts',
              'before_sha256': '3e5b43fdee81889a94cb5d85ec3f09a9bfb859674994f7c2e8bca6c74edb7f6a',
-             'after_sha256': '520803aac827005f02d623f183bca0b912919dd4032e148e19cc07b051c4e630'},
+             'after_sha256': '62b07c26e2685416228d7f46d8e0189cb83580240b4e98dd557d6962ab08a6d1'},
             {'path': 'packages/sdk-python/src/qwen_code_sdk/protocol.py',
              'before_sha256': 'cd0be357f59398c21b230315b6d6b3d0b14caed48ead72cc6b86491b6a54c904',
-             'after_sha256': '23f6277f27aa1925b4739901b6e873f9936d39e643fe4c71ad9c97fb1aeeaf81'},
+             'after_sha256': '0b53900eada1e73c0322249af8a902c40f55e20c217598bbc861b5871d872cb5'},
             {'path': 'packages/sdk-typescript/src/types/protocol.ts',
              'before_sha256': 'e28063bf3b95f93bcc44238e5495327f44dc6549c5e99fc8d24b4c6ebf70e882',
-             'after_sha256': '733d8406d373a2635d96b2332c8f0124451e1daf2f8a483f9e6045083416c788'},
+             'after_sha256': '67e132804f2072c5600c40664a2a70a2677475ea0f4e46593658540b96e7f5f2'},
             {'path': 'scripts/generate-git-commit-info.js',
              'before_sha256': '0a25aad15ff2b569d047df9329af2ae8899b5358455692c95785042649ca9d34',
              'after_sha256': '73ccd206f6e620dd0e47ee678fbcfcc58e10c2e724a7ca5ff57d13212e83ffac'}),
-  'edits': ({'name': 'packages/cli/src/config/auth.test.ts:landmark-1',
+  'edits': ({'name': 'packages/cli/src/cli.test.ts:landmark-1',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': '  writeFileSync,\n'
+                       "} from 'node:fs';\n"
+                       "import { execFileSync } from 'node:child_process';\n"
+                       "import { createHash } from 'node:crypto';\n"
+                       "import { tmpdir } from 'node:os';\n"
+                       "import path from 'node:path';\n"
+                       "import { FatalError } from '@qwen-code/qwen-code-core';\n"
+                       "import { AlreadyReportedError } from './utils/errors.js';\n"
+                       'import {\n'
+                       '  MCP_COMMANDS,\n'
+                       '  TOP_LEVEL_COMMANDS,\n'
+                       '  handleCriticalError,\n'
+                       '  isExpectedPtyRaceError,\n'
+                       '  resolveBootstrapRoute,\n'
+                       '  runCliEntry,\n'
+                       '  runCliEntryPoint,\n'
+                       '  stampCliEntryEnv,\n'
+                       "} from './cli.js';\n"
+                       '\n'
+                       'const mocks = vi.hoisted(() => ({\n'
+                       '  main: vi.fn(),\n'
+                       '  tryRunServeFastPath: vi.fn(),\n'
+                       '  initStartupProfiler: vi.fn(),\n'
+                       '  initializeAcpStartupProfiler: vi.fn(),\n'
+                       '  markAcpStartup: vi.fn(),\n',
+             'after': '  writeFileSync,\n'
+                      "} from 'node:fs';\n"
+                      "import { execFileSync } from 'node:child_process';\n"
+                      "import { createHash } from 'node:crypto';\n"
+                      "import { tmpdir } from 'node:os';\n"
+                      "import path from 'node:path';\n"
+                      "import { fileURLToPath } from 'node:url';\n"
+                      "import { FatalError } from '@qwen-code/qwen-code-core';\n"
+                      'import {\n'
+                      '  MCP_COMMANDS,\n'
+                      '  TOP_LEVEL_COMMANDS,\n'
+                      '  handleCriticalError,\n'
+                      '  isExpectedPtyRaceError,\n'
+                      '  resolveBootstrapRoute,\n'
+                      '  runCliEntry,\n'
+                      '  runCliEntryPoint,\n'
+                      '  stampCliEntryEnv,\n'
+                      "} from './cli.js';\n"
+                      '\n'
+                      '// Sources this suite reads are located from the test file, so '
+                      'the assertions\n'
+                      '// hold under every runner and working directory. '
+                      '`import.meta.url` is the one\n'
+                      '// self-location a bundler leaves intact: the `new '
+                      'URL(<literal>, import.meta.url)`\n'
+                      '// form is rewritten to a server URL under Vite and cannot be '
+                      'read from disk.\n'
+                      'const CLI_SRC_DIR = '
+                      'path.dirname(fileURLToPath(import.meta.url));\n'
+                      "const REPO_ROOT = path.resolve(CLI_SRC_DIR, '..', '..', '..');\n"
+                      "const CLI_ENTRY_SCRIPT = path.join(REPO_ROOT, 'scripts', "
+                      "'cli-entry.js');\n"
+                      '\n'
+                      'const mocks = vi.hoisted(() => ({\n'
+                      '  main: vi.fn(),\n'
+                      '  tryRunServeFastPath: vi.fn(),\n'
+                      '  initStartupProfiler: vi.fn(),\n'
+                      '  initializeAcpStartupProfiler: vi.fn(),\n'
+                      '  markAcpStartup: vi.fn(),\n',
+             'review_before': '  writeFileSync,\n'
+                              "} from 'node:fs';\n"
+                              "import { execFileSync } from 'node:child_process';\n"
+                              "import { createHash } from 'node:crypto';\n"
+                              "import { tmpdir } from 'node:os';\n"
+                              "import path from 'node:path';\n"
+                              'import { FatalError } from '
+                              "'@qwen-code/qwen-code-core';\n"
+                              'import { AlreadyReportedError } from '
+                              "'./utils/errors.js';\n"
+                              'import {\n'
+                              '  MCP_COMMANDS,\n'
+                              '  TOP_LEVEL_COMMANDS,\n'
+                              '  handleCriticalError,\n'
+                              '  isExpectedPtyRaceError,\n'
+                              '  resolveBootstrapRoute,\n'
+                              '  runCliEntry,\n'
+                              '  runCliEntryPoint,\n'
+                              '  stampCliEntryEnv,\n'
+                              "} from './cli.js';\n"
+                              '\n'
+                              'const mocks = vi.hoisted(() => ({\n'
+                              '  main: vi.fn(),\n'
+                              '  tryRunServeFastPath: vi.fn(),\n'
+                              '  initStartupProfiler: vi.fn(),\n'
+                              '  initializeAcpStartupProfiler: vi.fn(),\n'
+                              '  markAcpStartup: vi.fn(),\n',
+             'review_after': '  writeFileSync,\n'
+                             "} from 'node:fs';\n"
+                             "import { execFileSync } from 'node:child_process';\n"
+                             "import { createHash } from 'node:crypto';\n"
+                             "import { tmpdir } from 'node:os';\n"
+                             "import path from 'node:path';\n"
+                             "import { fileURLToPath } from 'node:url';\n"
+                             "import { FatalError } from '@qwen-code/qwen-code-core';\n"
+                             'import {\n'
+                             '  MCP_COMMANDS,\n'
+                             '  TOP_LEVEL_COMMANDS,\n'
+                             '  handleCriticalError,\n'
+                             '  isExpectedPtyRaceError,\n'
+                             '  resolveBootstrapRoute,\n'
+                             '  runCliEntry,\n'
+                             '  runCliEntryPoint,\n'
+                             '  stampCliEntryEnv,\n'
+                             "} from './cli.js';\n"
+                             '\n'
+                             '// Sources this suite reads are located from the test '
+                             'file, so the assertions\n'
+                             '// hold under every runner and working directory. '
+                             '`import.meta.url` is the one\n'
+                             '// self-location a bundler leaves intact: the `new '
+                             'URL(<literal>, import.meta.url)`\n'
+                             '// form is rewritten to a server URL under Vite and '
+                             'cannot be read from disk.\n'
+                             'const CLI_SRC_DIR = '
+                             'path.dirname(fileURLToPath(import.meta.url));\n'
+                             "const REPO_ROOT = path.resolve(CLI_SRC_DIR, '..', '..', "
+                             "'..');\n"
+                             "const CLI_ENTRY_SCRIPT = path.join(REPO_ROOT, 'scripts', "
+                             "'cli-entry.js');\n"
+                             '\n'
+                             'const mocks = vi.hoisted(() => ({\n'
+                             '  main: vi.fn(),\n'
+                             '  tryRunServeFastPath: vi.fn(),\n'
+                             '  initStartupProfiler: vi.fn(),\n'
+                             '  initializeAcpStartupProfiler: vi.fn(),\n'
+                             '  markAcpStartup: vi.fn(),\n'},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-2',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': "  it('derives the bin entry one level up from the compiled "
+                       "module', () => {\n"
+                       '    // cli.ts emits to dist/src/cli.js and the shebang bin is '
+                       'dist/index.js —\n'
+                       '    // one level up, not two. Two lands on the unbuilt '
+                       'packages/cli/index.js,\n'
+                       '    // which fails the existence check and silently never '
+                       'stamps, and no other\n'
+                       '    // test can catch that: the derivation is only reachable '
+                       'under a built\n'
+                       '    // layout, where vitest never runs.\n'
+                       "    const source = readFileSync('src/cli.ts', 'utf8');\n"
+                       '    expect(source).toContain("new URL(\'../index.js\', '
+                       'import.meta.url)");\n'
+                       '    expect(\n'
+                       "      new URL('../index.js', "
+                       "'file:///repo/packages/cli/dist/src/cli.js')\n"
+                       '        .pathname,\n'
+                       "    ).toBe('/repo/packages/cli/dist/index.js');\n"
+                       '  });\n',
+             'after': "  it('derives the bin entry one level up from the compiled "
+                      "module', () => {\n"
+                      '    // cli.ts emits to dist/src/cli.js and the shebang bin is '
+                      'dist/index.js —\n'
+                      '    // one level up, not two. Two lands on the unbuilt '
+                      'packages/cli/index.js,\n'
+                      '    // which fails the existence check and silently never '
+                      'stamps, and no other\n'
+                      '    // test can catch that: the derivation is only reachable '
+                      'under a built\n'
+                      '    // layout, where vitest never runs.\n'
+                      '    const source = readFileSync(path.join(CLI_SRC_DIR, '
+                      "'cli.ts'), 'utf8');\n"
+                      '    expect(source).toContain("new URL(\'../index.js\', '
+                      'import.meta.url)");\n'
+                      '    expect(\n'
+                      "      new URL('../index.js', "
+                      "'file:///repo/packages/cli/dist/src/cli.js')\n"
+                      '        .pathname,\n'
+                      "    ).toBe('/repo/packages/cli/dist/index.js');\n"
+                      '  });\n',
+             'review_before': "  it('derives the bin entry one level up from the "
+                              "compiled module', () => {\n"
+                              '    // cli.ts emits to dist/src/cli.js and the shebang '
+                              'bin is dist/index.js —\n'
+                              '    // one level up, not two. Two lands on the unbuilt '
+                              'packages/cli/index.js,\n'
+                              '    // which fails the existence check and silently '
+                              'never stamps, and no other\n'
+                              '    // test can catch that: the derivation is only '
+                              'reachable under a built\n'
+                              '    // layout, where vitest never runs.\n'
+                              "    const source = readFileSync('src/cli.ts', 'utf8');\n"
+                              '    expect(source).toContain("new URL(\'../index.js\', '
+                              'import.meta.url)");\n'
+                              '    expect(\n'
+                              "      new URL('../index.js', "
+                              "'file:///repo/packages/cli/dist/src/cli.js')\n"
+                              '        .pathname,\n'
+                              "    ).toBe('/repo/packages/cli/dist/index.js');\n"
+                              '  });\n',
+             'review_after': "  it('derives the bin entry one level up from the "
+                             "compiled module', () => {\n"
+                             '    // cli.ts emits to dist/src/cli.js and the shebang '
+                             'bin is dist/index.js —\n'
+                             '    // one level up, not two. Two lands on the unbuilt '
+                             'packages/cli/index.js,\n'
+                             '    // which fails the existence check and silently '
+                             'never stamps, and no other\n'
+                             '    // test can catch that: the derivation is only '
+                             'reachable under a built\n'
+                             '    // layout, where vitest never runs.\n'
+                             '    const source = readFileSync(path.join(CLI_SRC_DIR, '
+                             "'cli.ts'), 'utf8');\n"
+                             '    expect(source).toContain("new URL(\'../index.js\', '
+                             'import.meta.url)");\n'
+                             '    expect(\n'
+                             "      new URL('../index.js', "
+                             "'file:///repo/packages/cli/dist/src/cli.js')\n"
+                             '        .pathname,\n'
+                             "    ).toBe('/repo/packages/cli/dist/index.js');\n"
+                             '  });\n'},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-3',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': "    expect(process.env['QWEN_CODE_CLI']).toBeUndefined();\n"
+                       '  });\n'
+                       '});\n'
+                       '\n'
+                       "describe('bootstrap import boundaries', () => {\n"
+                       "  it('keeps fast-path-only dependencies out of static "
+                       "imports', () => {\n"
+                       "    const source = readFileSync('src/cli.ts', 'utf8');\n"
+                       '\n'
+                       '    expect(source).not.toContain("import yargs from '
+                       '\'yargs\'");\n'
+                       '    expect(source).not.toContain("from '
+                       '\'@qwen-code/qwen-code-core\'");\n'
+                       '    expect(source).not.toContain("import \'./gemini.js\'");\n'
+                       '    expect(source).not.toContain("import { main } from '
+                       '\'./gemini.js\'");\n'
+                       '    expect(source).not.toContain("from '
+                       '\'./utils/acp-startup-profiler.js\'");\n'
+                       '  });\n'
+                       '\n'
+                       "  it('initializes profilers during bootstrap module "
+                       "evaluation', () => {\n"
+                       "    const source = readFileSync('src/cli.ts', 'utf8');\n"
+                       '\n'
+                       '    expect(source).toContain(\n'
+                       '      "import { initStartupProfiler } from '
+                       '\'./utils/startupProfiler.js\'",\n'
+                       '    );\n'
+                       '    expect(source).toContain(\n'
+                       '      "import { initCpuProfiler } from '
+                       '\'./utils/cpuProfiler.js\'",\n',
+             'after': "    expect(process.env['QWEN_CODE_CLI']).toBeUndefined();\n"
+                      '  });\n'
+                      '});\n'
+                      '\n'
+                      "describe('bootstrap import boundaries', () => {\n"
+                      "  it('keeps fast-path-only dependencies out of static imports', "
+                      '() => {\n'
+                      '    const source = readFileSync(path.join(CLI_SRC_DIR, '
+                      "'cli.ts'), 'utf8');\n"
+                      '\n'
+                      '    expect(source).not.toContain("import yargs from '
+                      '\'yargs\'");\n'
+                      '    expect(source).not.toContain("from '
+                      '\'@qwen-code/qwen-code-core\'");\n'
+                      '    expect(source).not.toContain("import \'./gemini.js\'");\n'
+                      '    expect(source).not.toContain("import { main } from '
+                      '\'./gemini.js\'");\n'
+                      '    expect(source).not.toContain("from '
+                      '\'./utils/acp-startup-profiler.js\'");\n'
+                      '  });\n'
+                      '\n'
+                      "  it('initializes profilers during bootstrap module "
+                      "evaluation', () => {\n"
+                      '    const source = readFileSync(path.join(CLI_SRC_DIR, '
+                      "'cli.ts'), 'utf8');\n"
+                      '\n'
+                      '    expect(source).toContain(\n'
+                      '      "import { initStartupProfiler } from '
+                      '\'./utils/startupProfiler.js\'",\n'
+                      '    );\n'
+                      '    expect(source).toContain(\n'
+                      '      "import { initCpuProfiler } from '
+                      '\'./utils/cpuProfiler.js\'",\n',
+             'review_before': '    '
+                              "expect(process.env['QWEN_CODE_CLI']).toBeUndefined();\n"
+                              '  });\n'
+                              '});\n'
+                              '\n'
+                              "describe('bootstrap import boundaries', () => {\n"
+                              "  it('keeps fast-path-only dependencies out of static "
+                              "imports', () => {\n"
+                              "    const source = readFileSync('src/cli.ts', 'utf8');\n"
+                              '\n'
+                              '    expect(source).not.toContain("import yargs from '
+                              '\'yargs\'");\n'
+                              '    expect(source).not.toContain("from '
+                              '\'@qwen-code/qwen-code-core\'");\n'
+                              '    expect(source).not.toContain("import '
+                              '\'./gemini.js\'");\n'
+                              '    expect(source).not.toContain("import { main } from '
+                              '\'./gemini.js\'");\n'
+                              '    expect(source).not.toContain("from '
+                              '\'./utils/acp-startup-profiler.js\'");\n'
+                              '  });\n'
+                              '\n'
+                              "  it('initializes profilers during bootstrap module "
+                              "evaluation', () => {\n"
+                              "    const source = readFileSync('src/cli.ts', 'utf8');\n"
+                              '\n'
+                              '    expect(source).toContain(\n'
+                              '      "import { initStartupProfiler } from '
+                              '\'./utils/startupProfiler.js\'",\n'
+                              '    );\n'
+                              '    expect(source).toContain(\n'
+                              '      "import { initCpuProfiler } from '
+                              '\'./utils/cpuProfiler.js\'",\n',
+             'review_after': '    '
+                             "expect(process.env['QWEN_CODE_CLI']).toBeUndefined();\n"
+                             '  });\n'
+                             '});\n'
+                             '\n'
+                             "describe('bootstrap import boundaries', () => {\n"
+                             "  it('keeps fast-path-only dependencies out of static "
+                             "imports', () => {\n"
+                             '    const source = readFileSync(path.join(CLI_SRC_DIR, '
+                             "'cli.ts'), 'utf8');\n"
+                             '\n'
+                             '    expect(source).not.toContain("import yargs from '
+                             '\'yargs\'");\n'
+                             '    expect(source).not.toContain("from '
+                             '\'@qwen-code/qwen-code-core\'");\n'
+                             '    expect(source).not.toContain("import '
+                             '\'./gemini.js\'");\n'
+                             '    expect(source).not.toContain("import { main } from '
+                             '\'./gemini.js\'");\n'
+                             '    expect(source).not.toContain("from '
+                             '\'./utils/acp-startup-profiler.js\'");\n'
+                             '  });\n'
+                             '\n'
+                             "  it('initializes profilers during bootstrap module "
+                             "evaluation', () => {\n"
+                             '    const source = readFileSync(path.join(CLI_SRC_DIR, '
+                             "'cli.ts'), 'utf8');\n"
+                             '\n'
+                             '    expect(source).toContain(\n'
+                             '      "import { initStartupProfiler } from '
+                             '\'./utils/startupProfiler.js\'",\n'
+                             '    );\n'
+                             '    expect(source).toContain(\n'
+                             '      "import { initCpuProfiler } from '
+                             '\'./utils/cpuProfiler.js\'",\n'},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-4',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': '    '
+                       "expect(source.indexOf('initCpuProfiler();')).toBeLessThan(\n"
+                       "      source.indexOf('export async function runCliEntry('),\n"
+                       '    );\n'
+                       '  });\n'
+                       '\n'
+                       "  it('uses the bootstrap file as the production bundle entry', "
+                       '() => {\n'
+                       "    const source = readFileSync('../../esbuild.config.js', "
+                       "'utf8');\n"
+                       '\n'
+                       '    expect(source).toContain("entryPoints: { cli: '
+                       '\'packages/cli/src/cli.ts\' }");\n'
+                       '  });\n'
+                       '\n'
+                       "  it('keeps bootstrap fast paths in-process in the npm bin "
+                       "wrapper', () => {\n"
+                       "    const source = readFileSync('../../scripts/cli-entry.js', "
+                       "'utf8');\n"
+                       '\n'
+                       "    expect(source).toContain('function "
+                       "isInProcessFastPath()');\n"
+                       '    expect(source).toContain("first === \'serve\'");\n'
+                       '    expect(source).toContain("first === \'mcp\'");\n'
+                       '    expect(source).toContain("hasFlag(\'--help\', \'-h\')");\n'
+                       '    expect(source).toContain("hasFlag(\'--version\', '
+                       '\'-v\')");\n',
+             'after': "    expect(source.indexOf('initCpuProfiler();')).toBeLessThan(\n"
+                      "      source.indexOf('export async function runCliEntry('),\n"
+                      '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('uses the bootstrap file as the production bundle entry', "
+                      '() => {\n'
+                      '    const source = readFileSync(\n'
+                      "      path.join(REPO_ROOT, 'esbuild.config.js'),\n"
+                      "      'utf8',\n"
+                      '    );\n'
+                      '\n'
+                      '    expect(source).toContain("entryPoints: { cli: '
+                      '\'packages/cli/src/cli.ts\' }");\n'
+                      '  });\n'
+                      '\n'
+                      "  it('keeps bootstrap fast paths in-process in the npm bin "
+                      "wrapper', () => {\n"
+                      "    const source = readFileSync(CLI_ENTRY_SCRIPT, 'utf8');\n"
+                      '\n'
+                      "    expect(source).toContain('function "
+                      "isInProcessFastPath()');\n"
+                      '    expect(source).toContain("first === \'serve\'");\n'
+                      '    expect(source).toContain("first === \'mcp\'");\n'
+                      '    expect(source).toContain("hasFlag(\'--help\', \'-h\')");\n'
+                      '    expect(source).toContain("hasFlag(\'--version\', '
+                      '\'-v\')");\n',
+             'review_before': '    '
+                              "expect(source.indexOf('initCpuProfiler();')).toBeLessThan(\n"
+                              "      source.indexOf('export async function "
+                              "runCliEntry('),\n"
+                              '    );\n'
+                              '  });\n'
+                              '\n'
+                              "  it('uses the bootstrap file as the production bundle "
+                              "entry', () => {\n"
+                              '    const source = '
+                              "readFileSync('../../esbuild.config.js', 'utf8');\n"
+                              '\n'
+                              '    expect(source).toContain("entryPoints: { cli: '
+                              '\'packages/cli/src/cli.ts\' }");\n'
+                              '  });\n'
+                              '\n'
+                              "  it('keeps bootstrap fast paths in-process in the npm "
+                              "bin wrapper', () => {\n"
+                              '    const source = '
+                              "readFileSync('../../scripts/cli-entry.js', 'utf8');\n"
+                              '\n'
+                              "    expect(source).toContain('function "
+                              "isInProcessFastPath()');\n"
+                              '    expect(source).toContain("first === \'serve\'");\n'
+                              '    expect(source).toContain("first === \'mcp\'");\n'
+                              '    expect(source).toContain("hasFlag(\'--help\', '
+                              '\'-h\')");\n'
+                              '    expect(source).toContain("hasFlag(\'--version\', '
+                              '\'-v\')");\n',
+             'review_after': '    '
+                             "expect(source.indexOf('initCpuProfiler();')).toBeLessThan(\n"
+                             "      source.indexOf('export async function "
+                             "runCliEntry('),\n"
+                             '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('uses the bootstrap file as the production bundle "
+                             "entry', () => {\n"
+                             '    const source = readFileSync(\n'
+                             "      path.join(REPO_ROOT, 'esbuild.config.js'),\n"
+                             "      'utf8',\n"
+                             '    );\n'
+                             '\n'
+                             '    expect(source).toContain("entryPoints: { cli: '
+                             '\'packages/cli/src/cli.ts\' }");\n'
+                             '  });\n'
+                             '\n'
+                             "  it('keeps bootstrap fast paths in-process in the npm "
+                             "bin wrapper', () => {\n"
+                             '    const source = readFileSync(CLI_ENTRY_SCRIPT, '
+                             "'utf8');\n"
+                             '\n'
+                             "    expect(source).toContain('function "
+                             "isInProcessFastPath()');\n"
+                             '    expect(source).toContain("first === \'serve\'");\n'
+                             '    expect(source).toContain("first === \'mcp\'");\n'
+                             '    expect(source).toContain("hasFlag(\'--help\', '
+                             '\'-h\')");\n'
+                             '    expect(source).toContain("hasFlag(\'--version\', '
+                             '\'-v\')");\n'},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-5',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': '    const unsupportedEntryPath = path.join(\n'
+                       '      tempDir,\n'
+                       "      'unsupported-cli-entry.mjs',\n"
+                       '    );\n'
+                       '    const probeEntryPath = path.join(tempDir, '
+                       "'compile-cache-probe.mjs');\n"
+                       '    try {\n'
+                       "      copyFileSync('../../scripts/cli-entry.js', entryPath);\n"
+                       '      writeFileSync(\n'
+                       '        unsupportedEntryPath,\n'
+                       "        readFileSync('../../scripts/cli-entry.js', "
+                       "'utf8').replace(\n"
+                       '          "const { default: module } = await '
+                       'import(\'node:module\');",\n'
+                       "          'const module = {};',\n"
+                       '        ),\n'
+                       '      );\n'
+                       '      writeFileSync(\n'
+                       '        probeEntryPath,\n',
+             'after': '    const unsupportedEntryPath = path.join(\n'
+                      '      tempDir,\n'
+                      "      'unsupported-cli-entry.mjs',\n"
+                      '    );\n'
+                      '    const probeEntryPath = path.join(tempDir, '
+                      "'compile-cache-probe.mjs');\n"
+                      '    try {\n'
+                      '      copyFileSync(CLI_ENTRY_SCRIPT, entryPath);\n'
+                      '      writeFileSync(\n'
+                      '        unsupportedEntryPath,\n'
+                      "        readFileSync(CLI_ENTRY_SCRIPT, 'utf8').replace(\n"
+                      '          "const { default: module } = await '
+                      'import(\'node:module\');",\n'
+                      "          'const module = {};',\n"
+                      '        ),\n'
+                      '      );\n'
+                      '      writeFileSync(\n'
+                      '        probeEntryPath,\n',
+             'review_before': '    const unsupportedEntryPath = path.join(\n'
+                              '      tempDir,\n'
+                              "      'unsupported-cli-entry.mjs',\n"
+                              '    );\n'
+                              '    const probeEntryPath = path.join(tempDir, '
+                              "'compile-cache-probe.mjs');\n"
+                              '    try {\n'
+                              "      copyFileSync('../../scripts/cli-entry.js', "
+                              'entryPath);\n'
+                              '      writeFileSync(\n'
+                              '        unsupportedEntryPath,\n'
+                              "        readFileSync('../../scripts/cli-entry.js', "
+                              "'utf8').replace(\n"
+                              '          "const { default: module } = await '
+                              'import(\'node:module\');",\n'
+                              "          'const module = {};',\n"
+                              '        ),\n'
+                              '      );\n'
+                              '      writeFileSync(\n'
+                              '        probeEntryPath,\n',
+             'review_after': '    const unsupportedEntryPath = path.join(\n'
+                             '      tempDir,\n'
+                             "      'unsupported-cli-entry.mjs',\n"
+                             '    );\n'
+                             '    const probeEntryPath = path.join(tempDir, '
+                             "'compile-cache-probe.mjs');\n"
+                             '    try {\n'
+                             '      copyFileSync(CLI_ENTRY_SCRIPT, entryPath);\n'
+                             '      writeFileSync(\n'
+                             '        unsupportedEntryPath,\n'
+                             "        readFileSync(CLI_ENTRY_SCRIPT, 'utf8').replace(\n"
+                             '          "const { default: module } = await '
+                             'import(\'node:module\');",\n'
+                             "          'const module = {};',\n"
+                             '        ),\n'
+                             '      );\n'
+                             '      writeFileSync(\n'
+                             '        probeEntryPath,\n'},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-6',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': "      const oldDir = path.join(tempDir, 'old');\n"
+                       "      const newDir = path.join(tempDir, 'new');\n"
+                       "      const binPath = path.join(tempDir, 'qwen');\n"
+                       '      try {\n'
+                       '        mkdirSync(oldDir);\n'
+                       '        mkdirSync(newDir);\n'
+                       '        copyFileSync(\n'
+                       "          '../../scripts/cli-entry.js',\n"
+                       "          path.join(oldDir, 'entry.mjs'),\n"
+                       '        );\n'
+                       '        copyFileSync(\n'
+                       "          '../../scripts/cli-entry.js',\n"
+                       "          path.join(newDir, 'entry.mjs'),\n"
+                       '        );\n'
+                       '        writeFileSync(\n'
+                       "          path.join(oldDir, 'cli.js'),\n"
+                       '          `import { chmodSync, rmSync, writeFileSync } from '
+                       "'node:fs';\\nwriteFileSync(${JSON.stringify(binPath)}, "
+                       '${JSON.stringify(`#!/bin/sh\\nexec "${process.execPath}" '
+                       '"${path.join(newDir, \'entry.mjs\')}" '
+                       '"$@"\\n`)});\\nchmodSync(${JSON.stringify(binPath)}, '
+                       '0o755);\\nrmSync(${JSON.stringify(oldDir)}, { recursive: true, '
+                       'force: true });\\nprocess.exit(44);\\n`,\n'
+                       '        );\n'
+                       '        writeFileSync(\n'
+                       "          path.join(newDir, 'cli.js'),\n",
+             'after': "      const oldDir = path.join(tempDir, 'old');\n"
+                      "      const newDir = path.join(tempDir, 'new');\n"
+                      "      const binPath = path.join(tempDir, 'qwen');\n"
+                      '      try {\n'
+                      '        mkdirSync(oldDir);\n'
+                      '        mkdirSync(newDir);\n'
+                      '        copyFileSync(CLI_ENTRY_SCRIPT, path.join(oldDir, '
+                      "'entry.mjs'));\n"
+                      '        copyFileSync(CLI_ENTRY_SCRIPT, path.join(newDir, '
+                      "'entry.mjs'));\n"
+                      '        writeFileSync(\n'
+                      "          path.join(oldDir, 'cli.js'),\n"
+                      '          `import { chmodSync, rmSync, writeFileSync } from '
+                      "'node:fs';\\nwriteFileSync(${JSON.stringify(binPath)}, "
+                      '${JSON.stringify(`#!/bin/sh\\nexec "${process.execPath}" '
+                      '"${path.join(newDir, \'entry.mjs\')}" '
+                      '"$@"\\n`)});\\nchmodSync(${JSON.stringify(binPath)}, '
+                      '0o755);\\nrmSync(${JSON.stringify(oldDir)}, { recursive: true, '
+                      'force: true });\\nprocess.exit(44);\\n`,\n'
+                      '        );\n'
+                      '        writeFileSync(\n'
+                      "          path.join(newDir, 'cli.js'),\n",
+             'review_before': "      const oldDir = path.join(tempDir, 'old');\n"
+                              "      const newDir = path.join(tempDir, 'new');\n"
+                              "      const binPath = path.join(tempDir, 'qwen');\n"
+                              '      try {\n'
+                              '        mkdirSync(oldDir);\n'
+                              '        mkdirSync(newDir);\n'
+                              '        copyFileSync(\n'
+                              "          '../../scripts/cli-entry.js',\n"
+                              "          path.join(oldDir, 'entry.mjs'),\n"
+                              '        );\n'
+                              '        copyFileSync(\n'
+                              "          '../../scripts/cli-entry.js',\n"
+                              "          path.join(newDir, 'entry.mjs'),\n"
+                              '        );\n'
+                              '        writeFileSync(\n'
+                              "          path.join(oldDir, 'cli.js'),\n"
+                              '          `import { chmodSync, rmSync, writeFileSync } '
+                              'from '
+                              "'node:fs';\\nwriteFileSync(${JSON.stringify(binPath)}, "
+                              '${JSON.stringify(`#!/bin/sh\\nexec '
+                              '"${process.execPath}" "${path.join(newDir, '
+                              '\'entry.mjs\')}" '
+                              '"$@"\\n`)});\\nchmodSync(${JSON.stringify(binPath)}, '
+                              '0o755);\\nrmSync(${JSON.stringify(oldDir)}, { '
+                              'recursive: true, force: true '
+                              '});\\nprocess.exit(44);\\n`,\n'
+                              '        );\n'
+                              '        writeFileSync(\n'
+                              "          path.join(newDir, 'cli.js'),\n",
+             'review_after': "      const oldDir = path.join(tempDir, 'old');\n"
+                             "      const newDir = path.join(tempDir, 'new');\n"
+                             "      const binPath = path.join(tempDir, 'qwen');\n"
+                             '      try {\n'
+                             '        mkdirSync(oldDir);\n'
+                             '        mkdirSync(newDir);\n'
+                             '        copyFileSync(CLI_ENTRY_SCRIPT, path.join(oldDir, '
+                             "'entry.mjs'));\n"
+                             '        copyFileSync(CLI_ENTRY_SCRIPT, path.join(newDir, '
+                             "'entry.mjs'));\n"
+                             '        writeFileSync(\n'
+                             "          path.join(oldDir, 'cli.js'),\n"
+                             '          `import { chmodSync, rmSync, writeFileSync } '
+                             'from '
+                             "'node:fs';\\nwriteFileSync(${JSON.stringify(binPath)}, "
+                             '${JSON.stringify(`#!/bin/sh\\nexec "${process.execPath}" '
+                             '"${path.join(newDir, \'entry.mjs\')}" '
+                             '"$@"\\n`)});\\nchmodSync(${JSON.stringify(binPath)}, '
+                             '0o755);\\nrmSync(${JSON.stringify(oldDir)}, { recursive: '
+                             'true, force: true });\\nprocess.exit(44);\\n`,\n'
+                             '        );\n'
+                             '        writeFileSync(\n'
+                             "          path.join(newDir, 'cli.js'),\n"},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-7',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': '\n'
+                       "  it('does not pass the standalone launcher hint to child "
+                       "processes', () => {\n"
+                       '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                       "'qwen-cli-launcher-env-'));\n"
+                       "    const entryPath = path.join(tempDir, 'entry.mjs');\n"
+                       "    const launcherPath = path.join(tempDir, 'qwen');\n"
+                       '    try {\n'
+                       "      copyFileSync('../../scripts/cli-entry.js', entryPath);\n"
+                       '      writeFileSync(\n'
+                       "        path.join(tempDir, 'cli.js'),\n"
+                       "        'process.stdout.write(JSON.stringify({ launcherPath: "
+                       "process.env.QWEN_CODE_LAUNCHER_PATH }));\\n',\n"
+                       '      );\n'
+                       "      writeFileSync(launcherPath, '#!/bin/sh\\n');\n"
+                       '      chmodSync(launcherPath, 0o755);\n',
+             'after': '\n'
+                      "  it('does not pass the standalone launcher hint to child "
+                      "processes', () => {\n"
+                      '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                      "'qwen-cli-launcher-env-'));\n"
+                      "    const entryPath = path.join(tempDir, 'entry.mjs');\n"
+                      "    const launcherPath = path.join(tempDir, 'qwen');\n"
+                      '    try {\n'
+                      '      copyFileSync(CLI_ENTRY_SCRIPT, entryPath);\n'
+                      '      writeFileSync(\n'
+                      "        path.join(tempDir, 'cli.js'),\n"
+                      "        'process.stdout.write(JSON.stringify({ launcherPath: "
+                      "process.env.QWEN_CODE_LAUNCHER_PATH }));\\n',\n"
+                      '      );\n'
+                      "      writeFileSync(launcherPath, '#!/bin/sh\\n');\n"
+                      '      chmodSync(launcherPath, 0o755);\n',
+             'review_before': '\n'
+                              "  it('does not pass the standalone launcher hint to "
+                              "child processes', () => {\n"
+                              '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                              "'qwen-cli-launcher-env-'));\n"
+                              "    const entryPath = path.join(tempDir, 'entry.mjs');\n"
+                              "    const launcherPath = path.join(tempDir, 'qwen');\n"
+                              '    try {\n'
+                              "      copyFileSync('../../scripts/cli-entry.js', "
+                              'entryPath);\n'
+                              '      writeFileSync(\n'
+                              "        path.join(tempDir, 'cli.js'),\n"
+                              "        'process.stdout.write(JSON.stringify({ "
+                              'launcherPath: process.env.QWEN_CODE_LAUNCHER_PATH '
+                              "}));\\n',\n"
+                              '      );\n'
+                              "      writeFileSync(launcherPath, '#!/bin/sh\\n');\n"
+                              '      chmodSync(launcherPath, 0o755);\n',
+             'review_after': '\n'
+                             "  it('does not pass the standalone launcher hint to "
+                             "child processes', () => {\n"
+                             '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                             "'qwen-cli-launcher-env-'));\n"
+                             "    const entryPath = path.join(tempDir, 'entry.mjs');\n"
+                             "    const launcherPath = path.join(tempDir, 'qwen');\n"
+                             '    try {\n'
+                             '      copyFileSync(CLI_ENTRY_SCRIPT, entryPath);\n'
+                             '      writeFileSync(\n'
+                             "        path.join(tempDir, 'cli.js'),\n"
+                             "        'process.stdout.write(JSON.stringify({ "
+                             'launcherPath: process.env.QWEN_CODE_LAUNCHER_PATH '
+                             "}));\\n',\n"
+                             '      );\n'
+                             "      writeFileSync(launcherPath, '#!/bin/sh\\n');\n"
+                             '      chmodSync(launcherPath, 0o755);\n'},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-8',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': '    }\n'
+                       '  });\n'
+                       '\n'
+                       "  it('ignores malformed relaunch args in the npm bin wrapper', "
+                       '() => {\n'
+                       '    const output = execFileSync(\n'
+                       '      process.execPath,\n'
+                       "      ['../../scripts/cli-entry.js', '--version'],\n"
+                       '      {\n'
+                       "        encoding: 'utf8',\n"
+                       '        env: { ...process.env, QWEN_CODE_RELAUNCH_ARGS: '
+                       "'not-json' },\n"
+                       '      },\n'
+                       '    );\n'
+                       '\n'
+                       '    expect(output.trim()).toMatch(/^\\d+\\.\\d+\\.\\d+/);\n'
+                       '  });\n'
+                       '\n'
+                       "  it('prints CLI_VERSION from the npm bin wrapper version "
+                       "shortcut', () => {\n"
+                       '    const output = execFileSync(\n'
+                       '      process.execPath,\n'
+                       "      ['../../scripts/cli-entry.js', '--version'],\n"
+                       '      {\n'
+                       "        encoding: 'utf8',\n"
+                       "        env: { ...process.env, CLI_VERSION: '7.7.7-test' },\n"
+                       '      },\n'
+                       '    );\n'
+                       '\n'
+                       "    expect(output).toBe('7.7.7-test\\n');\n"
+                       '  });\n'
+                       '\n'
+                       "  it('reads package.json from the npm bin wrapper version "
+                       "shortcut', () => {\n"
+                       '    const expectedVersion = JSON.parse(\n'
+                       "      readFileSync('../../package.json', 'utf8'),\n"
+                       '    ).version;\n'
+                       '    const env = { ...process.env };\n'
+                       "    delete env['CLI_VERSION'];\n"
+                       '\n'
+                       '    const output = execFileSync(\n'
+                       '      process.execPath,\n'
+                       "      ['../../scripts/cli-entry.js', '--version'],\n"
+                       '      {\n'
+                       "        encoding: 'utf8',\n"
+                       '        env,\n'
+                       '      },\n'
+                       '    );\n'
+                       '\n',
+             'after': '    }\n'
+                      '  });\n'
+                      '\n'
+                      "  it('ignores malformed relaunch args in the npm bin wrapper', "
+                      '() => {\n'
+                      '    const output = execFileSync(\n'
+                      '      process.execPath,\n'
+                      "      [CLI_ENTRY_SCRIPT, '--version'],\n"
+                      '      {\n'
+                      "        encoding: 'utf8',\n"
+                      '        env: { ...process.env, QWEN_CODE_RELAUNCH_ARGS: '
+                      "'not-json' },\n"
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      '    expect(output.trim()).toMatch(/^\\d+\\.\\d+\\.\\d+/);\n'
+                      '  });\n'
+                      '\n'
+                      "  it('prints CLI_VERSION from the npm bin wrapper version "
+                      "shortcut', () => {\n"
+                      '    const output = execFileSync(\n'
+                      '      process.execPath,\n'
+                      "      [CLI_ENTRY_SCRIPT, '--version'],\n"
+                      '      {\n'
+                      "        encoding: 'utf8',\n"
+                      "        env: { ...process.env, CLI_VERSION: '7.7.7-test' },\n"
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      "    expect(output).toBe('7.7.7-test\\n');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('reads package.json from the npm bin wrapper version "
+                      "shortcut', () => {\n"
+                      '    const expectedVersion = JSON.parse(\n'
+                      "      readFileSync(path.join(REPO_ROOT, 'package.json'), "
+                      "'utf8'),\n"
+                      '    ).version;\n'
+                      '    const env = { ...process.env };\n'
+                      "    delete env['CLI_VERSION'];\n"
+                      '\n'
+                      '    const output = execFileSync(\n'
+                      '      process.execPath,\n'
+                      "      [CLI_ENTRY_SCRIPT, '--version'],\n"
+                      '      {\n'
+                      "        encoding: 'utf8',\n"
+                      '        env,\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n',
+             'review_before': '    }\n'
+                              '  });\n'
+                              '\n'
+                              "  it('ignores malformed relaunch args in the npm bin "
+                              "wrapper', () => {\n"
+                              '    const output = execFileSync(\n'
+                              '      process.execPath,\n'
+                              "      ['../../scripts/cli-entry.js', '--version'],\n"
+                              '      {\n'
+                              "        encoding: 'utf8',\n"
+                              '        env: { ...process.env, QWEN_CODE_RELAUNCH_ARGS: '
+                              "'not-json' },\n"
+                              '      },\n'
+                              '    );\n'
+                              '\n'
+                              '    '
+                              'expect(output.trim()).toMatch(/^\\d+\\.\\d+\\.\\d+/);\n'
+                              '  });\n'
+                              '\n'
+                              "  it('prints CLI_VERSION from the npm bin wrapper "
+                              "version shortcut', () => {\n"
+                              '    const output = execFileSync(\n'
+                              '      process.execPath,\n'
+                              "      ['../../scripts/cli-entry.js', '--version'],\n"
+                              '      {\n'
+                              "        encoding: 'utf8',\n"
+                              '        env: { ...process.env, CLI_VERSION: '
+                              "'7.7.7-test' },\n"
+                              '      },\n'
+                              '    );\n'
+                              '\n'
+                              "    expect(output).toBe('7.7.7-test\\n');\n"
+                              '  });\n'
+                              '\n'
+                              "  it('reads package.json from the npm bin wrapper "
+                              "version shortcut', () => {\n"
+                              '    const expectedVersion = JSON.parse(\n'
+                              "      readFileSync('../../package.json', 'utf8'),\n"
+                              '    ).version;\n'
+                              '    const env = { ...process.env };\n'
+                              "    delete env['CLI_VERSION'];\n"
+                              '\n'
+                              '    const output = execFileSync(\n'
+                              '      process.execPath,\n'
+                              "      ['../../scripts/cli-entry.js', '--version'],\n"
+                              '      {\n'
+                              "        encoding: 'utf8',\n"
+                              '        env,\n'
+                              '      },\n'
+                              '    );\n'
+                              '\n',
+             'review_after': '    }\n'
+                             '  });\n'
+                             '\n'
+                             "  it('ignores malformed relaunch args in the npm bin "
+                             "wrapper', () => {\n"
+                             '    const output = execFileSync(\n'
+                             '      process.execPath,\n'
+                             "      [CLI_ENTRY_SCRIPT, '--version'],\n"
+                             '      {\n'
+                             "        encoding: 'utf8',\n"
+                             '        env: { ...process.env, QWEN_CODE_RELAUNCH_ARGS: '
+                             "'not-json' },\n"
+                             '      },\n'
+                             '    );\n'
+                             '\n'
+                             '    '
+                             'expect(output.trim()).toMatch(/^\\d+\\.\\d+\\.\\d+/);\n'
+                             '  });\n'
+                             '\n'
+                             "  it('prints CLI_VERSION from the npm bin wrapper "
+                             "version shortcut', () => {\n"
+                             '    const output = execFileSync(\n'
+                             '      process.execPath,\n'
+                             "      [CLI_ENTRY_SCRIPT, '--version'],\n"
+                             '      {\n'
+                             "        encoding: 'utf8',\n"
+                             "        env: { ...process.env, CLI_VERSION: '7.7.7-test' "
+                             '},\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'
+                             "    expect(output).toBe('7.7.7-test\\n');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('reads package.json from the npm bin wrapper "
+                             "version shortcut', () => {\n"
+                             '    const expectedVersion = JSON.parse(\n'
+                             "      readFileSync(path.join(REPO_ROOT, 'package.json'), "
+                             "'utf8'),\n"
+                             '    ).version;\n'
+                             '    const env = { ...process.env };\n'
+                             "    delete env['CLI_VERSION'];\n"
+                             '\n'
+                             '    const output = execFileSync(\n'
+                             '      process.execPath,\n'
+                             "      [CLI_ENTRY_SCRIPT, '--version'],\n"
+                             '      {\n'
+                             "        encoding: 'utf8',\n"
+                             '        env,\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-9',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                       "'qwen-managed-npm-'));\n"
+                       "    const entryDir = path.join(tempDir, 'bootstrap');\n"
+                       "    const entryPath = path.join(entryDir, 'cli-entry.mjs');\n"
+                       "    const qwenHome = path.join(tempDir, 'custom', 'qwen');\n"
+                       '    try {\n'
+                       '      mkdirSync(entryDir, { recursive: true });\n'
+                       "      copyFileSync('../../scripts/cli-entry.js', entryPath);\n"
+                       "      const bootstrapId = createHash('sha256')\n"
+                       '        .update(realpathSync(entryPath))\n'
+                       "        .digest('hex')\n"
+                       '        .slice(0, 16);\n'
+                       "      const launcherRoot = path.join(qwenHome, 'updates', "
+                       "'npm', bootstrapId);\n"
+                       '      const packageRoot = path.join(\n',
+             'after': '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                      "'qwen-managed-npm-'));\n"
+                      "    const entryDir = path.join(tempDir, 'bootstrap');\n"
+                      "    const entryPath = path.join(entryDir, 'cli-entry.mjs');\n"
+                      "    const qwenHome = path.join(tempDir, 'custom', 'qwen');\n"
+                      '    try {\n'
+                      '      mkdirSync(entryDir, { recursive: true });\n'
+                      '      copyFileSync(CLI_ENTRY_SCRIPT, entryPath);\n'
+                      "      const bootstrapId = createHash('sha256')\n"
+                      '        .update(realpathSync(entryPath))\n'
+                      "        .digest('hex')\n"
+                      '        .slice(0, 16);\n'
+                      "      const launcherRoot = path.join(qwenHome, 'updates', "
+                      "'npm', bootstrapId);\n"
+                      '      const packageRoot = path.join(\n',
+             'review_before': '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                              "'qwen-managed-npm-'));\n"
+                              "    const entryDir = path.join(tempDir, 'bootstrap');\n"
+                              '    const entryPath = path.join(entryDir, '
+                              "'cli-entry.mjs');\n"
+                              "    const qwenHome = path.join(tempDir, 'custom', "
+                              "'qwen');\n"
+                              '    try {\n'
+                              '      mkdirSync(entryDir, { recursive: true });\n'
+                              "      copyFileSync('../../scripts/cli-entry.js', "
+                              'entryPath);\n'
+                              "      const bootstrapId = createHash('sha256')\n"
+                              '        .update(realpathSync(entryPath))\n'
+                              "        .digest('hex')\n"
+                              '        .slice(0, 16);\n'
+                              '      const launcherRoot = path.join(qwenHome, '
+                              "'updates', 'npm', bootstrapId);\n"
+                              '      const packageRoot = path.join(\n',
+             'review_after': '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                             "'qwen-managed-npm-'));\n"
+                             "    const entryDir = path.join(tempDir, 'bootstrap');\n"
+                             '    const entryPath = path.join(entryDir, '
+                             "'cli-entry.mjs');\n"
+                             "    const qwenHome = path.join(tempDir, 'custom', "
+                             "'qwen');\n"
+                             '    try {\n'
+                             '      mkdirSync(entryDir, { recursive: true });\n'
+                             '      copyFileSync(CLI_ENTRY_SCRIPT, entryPath);\n'
+                             "      const bootstrapId = createHash('sha256')\n"
+                             '        .update(realpathSync(entryPath))\n'
+                             "        .digest('hex')\n"
+                             '        .slice(0, 16);\n'
+                             '      const launcherRoot = path.join(qwenHome, '
+                             "'updates', 'npm', bootstrapId);\n"
+                             '      const packageRoot = path.join(\n'},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-10',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': '\n'
+                       "  it('falls through to cli.js when wrapper package.json lookup "
+                       "fails', () => {\n"
+                       '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                       "'qwen-cli-entry-'));\n"
+                       "    const entryDir = path.join(tempDir, 'bin');\n"
+                       '    try {\n'
+                       '      mkdirSync(entryDir);\n'
+                       '      copyFileSync(\n'
+                       "        '../../scripts/cli-entry.js',\n"
+                       "        path.join(entryDir, 'cli-entry.mjs'),\n"
+                       '      );\n'
+                       '      writeFileSync(\n'
+                       "        path.join(entryDir, 'cli.js'),\n"
+                       '        "process.stdout.write(\'fallback-cli\\\\n\');\\n",\n'
+                       '      );\n'
+                       '      const env = { ...process.env };\n'
+                       "      delete env['CLI_VERSION'];\n",
+             'after': '\n'
+                      "  it('falls through to cli.js when wrapper package.json lookup "
+                      "fails', () => {\n"
+                      '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                      "'qwen-cli-entry-'));\n"
+                      "    const entryDir = path.join(tempDir, 'bin');\n"
+                      '    try {\n'
+                      '      mkdirSync(entryDir);\n'
+                      '      copyFileSync(CLI_ENTRY_SCRIPT, path.join(entryDir, '
+                      "'cli-entry.mjs'));\n"
+                      '      writeFileSync(\n'
+                      "        path.join(entryDir, 'cli.js'),\n"
+                      '        "process.stdout.write(\'fallback-cli\\\\n\');\\n",\n'
+                      '      );\n'
+                      '      const env = { ...process.env };\n'
+                      "      delete env['CLI_VERSION'];\n",
+             'review_before': '\n'
+                              "  it('falls through to cli.js when wrapper package.json "
+                              "lookup fails', () => {\n"
+                              '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                              "'qwen-cli-entry-'));\n"
+                              "    const entryDir = path.join(tempDir, 'bin');\n"
+                              '    try {\n'
+                              '      mkdirSync(entryDir);\n'
+                              '      copyFileSync(\n'
+                              "        '../../scripts/cli-entry.js',\n"
+                              "        path.join(entryDir, 'cli-entry.mjs'),\n"
+                              '      );\n'
+                              '      writeFileSync(\n'
+                              "        path.join(entryDir, 'cli.js'),\n"
+                              '        '
+                              '"process.stdout.write(\'fallback-cli\\\\n\');\\n",\n'
+                              '      );\n'
+                              '      const env = { ...process.env };\n'
+                              "      delete env['CLI_VERSION'];\n",
+             'review_after': '\n'
+                             "  it('falls through to cli.js when wrapper package.json "
+                             "lookup fails', () => {\n"
+                             '    const tempDir = mkdtempSync(path.join(tmpdir(), '
+                             "'qwen-cli-entry-'));\n"
+                             "    const entryDir = path.join(tempDir, 'bin');\n"
+                             '    try {\n'
+                             '      mkdirSync(entryDir);\n'
+                             '      copyFileSync(CLI_ENTRY_SCRIPT, path.join(entryDir, '
+                             "'cli-entry.mjs'));\n"
+                             '      writeFileSync(\n'
+                             "        path.join(entryDir, 'cli.js'),\n"
+                             '        '
+                             '"process.stdout.write(\'fallback-cli\\\\n\');\\n",\n'
+                             '      );\n'
+                             '      const env = { ...process.env };\n'
+                             "      delete env['CLI_VERSION'];\n"},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-11',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': '    } finally {\n'
+                       '      rmSync(tempDir, { recursive: true, force: true });\n'
+                       '    }\n'
+                       '  });\n'
+                       '\n'
+                       "  it('copies the npm bin wrapper into the package instead of "
+                       "duplicating it', () => {\n"
+                       '    const source = '
+                       "readFileSync('../../scripts/prepare-package.js', 'utf8');\n"
+                       '\n'
+                       '    expect(source).toContain(\n'
+                       '      "fs.copyFileSync(path.join(__dirname, \'cli-entry.js\'), '
+                       'cliEntryPath)",\n'
+                       '    );\n'
+                       "    expect(source).not.toContain('const cliEntryContent = "
+                       "`');\n"
+                       '  });\n'
+                       '\n'
+                       "  it('keeps bootstrap top-level help commands aligned with "
+                       "config registrations', () => {\n"
+                       "    const configSource = readFileSync('src/config/config.ts', "
+                       "'utf8');\n"
+                       '    const commandNameByIdentifier = new Map([\n'
+                       "      ['authCommand', 'auth'],\n"
+                       "      ['channelCommand', 'channel'],\n"
+                       "      ['extensionsCommand', 'extensions'],\n"
+                       "      ['hooksCommand', 'hooks'],\n"
+                       "      ['mcpCommand', 'mcp'],\n",
+             'after': '    } finally {\n'
+                      '      rmSync(tempDir, { recursive: true, force: true });\n'
+                      '    }\n'
+                      '  });\n'
+                      '\n'
+                      "  it('copies the npm bin wrapper into the package instead of "
+                      "duplicating it', () => {\n"
+                      '    const source = readFileSync(\n'
+                      "      path.join(REPO_ROOT, 'scripts', 'prepare-package.js'),\n"
+                      "      'utf8',\n"
+                      '    );\n'
+                      '\n'
+                      '    expect(source).toContain(\n'
+                      '      "fs.copyFileSync(path.join(__dirname, \'cli-entry.js\'), '
+                      'cliEntryPath)",\n'
+                      '    );\n'
+                      "    expect(source).not.toContain('const cliEntryContent = `');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('keeps bootstrap top-level help commands aligned with "
+                      "config registrations', () => {\n"
+                      '    const configSource = readFileSync(\n'
+                      "      path.join(CLI_SRC_DIR, 'config', 'config.ts'),\n"
+                      "      'utf8',\n"
+                      '    );\n'
+                      '    const commandNameByIdentifier = new Map([\n'
+                      "      ['authCommand', 'auth'],\n"
+                      "      ['channelCommand', 'channel'],\n"
+                      "      ['extensionsCommand', 'extensions'],\n"
+                      "      ['hooksCommand', 'hooks'],\n"
+                      "      ['mcpCommand', 'mcp'],\n",
+             'review_before': '    } finally {\n'
+                              '      rmSync(tempDir, { recursive: true, force: true '
+                              '});\n'
+                              '    }\n'
+                              '  });\n'
+                              '\n'
+                              "  it('copies the npm bin wrapper into the package "
+                              "instead of duplicating it', () => {\n"
+                              '    const source = '
+                              "readFileSync('../../scripts/prepare-package.js', "
+                              "'utf8');\n"
+                              '\n'
+                              '    expect(source).toContain(\n'
+                              '      "fs.copyFileSync(path.join(__dirname, '
+                              '\'cli-entry.js\'), cliEntryPath)",\n'
+                              '    );\n'
+                              "    expect(source).not.toContain('const cliEntryContent "
+                              "= `');\n"
+                              '  });\n'
+                              '\n'
+                              "  it('keeps bootstrap top-level help commands aligned "
+                              "with config registrations', () => {\n"
+                              '    const configSource = '
+                              "readFileSync('src/config/config.ts', 'utf8');\n"
+                              '    const commandNameByIdentifier = new Map([\n'
+                              "      ['authCommand', 'auth'],\n"
+                              "      ['channelCommand', 'channel'],\n"
+                              "      ['extensionsCommand', 'extensions'],\n"
+                              "      ['hooksCommand', 'hooks'],\n"
+                              "      ['mcpCommand', 'mcp'],\n",
+             'review_after': '    } finally {\n'
+                             '      rmSync(tempDir, { recursive: true, force: true '
+                             '});\n'
+                             '    }\n'
+                             '  });\n'
+                             '\n'
+                             "  it('copies the npm bin wrapper into the package "
+                             "instead of duplicating it', () => {\n"
+                             '    const source = readFileSync(\n'
+                             "      path.join(REPO_ROOT, 'scripts', "
+                             "'prepare-package.js'),\n"
+                             "      'utf8',\n"
+                             '    );\n'
+                             '\n'
+                             '    expect(source).toContain(\n'
+                             '      "fs.copyFileSync(path.join(__dirname, '
+                             '\'cli-entry.js\'), cliEntryPath)",\n'
+                             '    );\n'
+                             "    expect(source).not.toContain('const cliEntryContent "
+                             "= `');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('keeps bootstrap top-level help commands aligned "
+                             "with config registrations', () => {\n"
+                             '    const configSource = readFileSync(\n'
+                             "      path.join(CLI_SRC_DIR, 'config', 'config.ts'),\n"
+                             "      'utf8',\n"
+                             '    );\n'
+                             '    const commandNameByIdentifier = new Map([\n'
+                             "      ['authCommand', 'auth'],\n"
+                             "      ['channelCommand', 'channel'],\n"
+                             "      ['extensionsCommand', 'extensions'],\n"
+                             "      ['hooksCommand', 'hooks'],\n"
+                             "      ['mcpCommand', 'mcp'],\n"},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-12',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': '      expect(commandName, `missing mapping for '
+                       '${identifier}`).toBeDefined();\n'
+                       '      expect(bootstrapCommands).toContain(commandName);\n'
+                       '    }\n'
+                       '  });\n'
+                       '\n'
+                       "  it('keeps bootstrap MCP help commands aligned with MCP "
+                       "registrations', () => {\n"
+                       "    const mcpSource = readFileSync('src/commands/mcp.ts', "
+                       "'utf8');\n"
+                       '    const commandNameByIdentifier = new Map([\n'
+                       "      ['addCommand', 'add'],\n"
+                       "      ['removeCommand', 'remove'],\n"
+                       "      ['listCommand', 'list'],\n"
+                       "      ['reconnectCommand', 'reconnect'],\n"
+                       "      ['approveCommand', 'approve'],\n",
+             'after': '      expect(commandName, `missing mapping for '
+                      '${identifier}`).toBeDefined();\n'
+                      '      expect(bootstrapCommands).toContain(commandName);\n'
+                      '    }\n'
+                      '  });\n'
+                      '\n'
+                      "  it('keeps bootstrap MCP help commands aligned with MCP "
+                      "registrations', () => {\n"
+                      '    const mcpSource = readFileSync(\n'
+                      "      path.join(CLI_SRC_DIR, 'commands', 'mcp.ts'),\n"
+                      "      'utf8',\n"
+                      '    );\n'
+                      '    const commandNameByIdentifier = new Map([\n'
+                      "      ['addCommand', 'add'],\n"
+                      "      ['removeCommand', 'remove'],\n"
+                      "      ['listCommand', 'list'],\n"
+                      "      ['reconnectCommand', 'reconnect'],\n"
+                      "      ['approveCommand', 'approve'],\n",
+             'review_before': '      expect(commandName, `missing mapping for '
+                              '${identifier}`).toBeDefined();\n'
+                              '      '
+                              'expect(bootstrapCommands).toContain(commandName);\n'
+                              '    }\n'
+                              '  });\n'
+                              '\n'
+                              "  it('keeps bootstrap MCP help commands aligned with "
+                              "MCP registrations', () => {\n"
+                              '    const mcpSource = '
+                              "readFileSync('src/commands/mcp.ts', 'utf8');\n"
+                              '    const commandNameByIdentifier = new Map([\n'
+                              "      ['addCommand', 'add'],\n"
+                              "      ['removeCommand', 'remove'],\n"
+                              "      ['listCommand', 'list'],\n"
+                              "      ['reconnectCommand', 'reconnect'],\n"
+                              "      ['approveCommand', 'approve'],\n",
+             'review_after': '      expect(commandName, `missing mapping for '
+                             '${identifier}`).toBeDefined();\n'
+                             '      expect(bootstrapCommands).toContain(commandName);\n'
+                             '    }\n'
+                             '  });\n'
+                             '\n'
+                             "  it('keeps bootstrap MCP help commands aligned with MCP "
+                             "registrations', () => {\n"
+                             '    const mcpSource = readFileSync(\n'
+                             "      path.join(CLI_SRC_DIR, 'commands', 'mcp.ts'),\n"
+                             "      'utf8',\n"
+                             '    );\n'
+                             '    const commandNameByIdentifier = new Map([\n'
+                             "      ['addCommand', 'add'],\n"
+                             "      ['removeCommand', 'remove'],\n"
+                             "      ['listCommand', 'list'],\n"
+                             "      ['reconnectCommand', 'reconnect'],\n"
+                             "      ['approveCommand', 'approve'],\n"},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-13',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': "      handleCriticalError(new FatalError('fatal color', 42)),\n"
+                       "    ).rejects.toThrow('process.exit:42');\n"
+                       '\n'
+                       "    expect(stderr.join('')).toContain('\\x1b[31mfatal "
+                       "color\\x1b[0m');\n"
+                       '  });\n'
+                       '\n'
+                       "  it('exits AlreadyReportedError without printing another "
+                       "error', async () => {\n"
+                       '    await expect(\n'
+                       "      handleCriticalError(new AlreadyReportedError('already "
+                       "printed', 7)),\n"
+                       "    ).rejects.toThrow('process.exit:7');\n"
+                       '\n'
+                       "    expect(stderr.join('')).toBe('');\n"
+                       '  });\n'
+                       '\n'
+                       "  it('prints unexpected errors with the generic critical "
+                       "header', async () => {\n"
+                       '    await expect(\n'
+                       "      handleCriticalError(new Error('generic boom')),\n"
+                       "    ).rejects.toThrow('process.exit:1');\n"
+                       '\n'
+                       "    const output = stderr.join('');\n",
+             'after': "      handleCriticalError(new FatalError('fatal color', 42)),\n"
+                      "    ).rejects.toThrow('process.exit:42');\n"
+                      '\n'
+                      "    expect(stderr.join('')).toContain('\\x1b[31mfatal "
+                      "color\\x1b[0m');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('prints unexpected errors with the generic critical "
+                      "header', async () => {\n"
+                      '    await expect(\n'
+                      "      handleCriticalError(new Error('generic boom')),\n"
+                      "    ).rejects.toThrow('process.exit:1');\n"
+                      '\n'
+                      "    const output = stderr.join('');\n",
+             'review_before': "      handleCriticalError(new FatalError('fatal color', "
+                              '42)),\n'
+                              "    ).rejects.toThrow('process.exit:42');\n"
+                              '\n'
+                              "    expect(stderr.join('')).toContain('\\x1b[31mfatal "
+                              "color\\x1b[0m');\n"
+                              '  });\n'
+                              '\n'
+                              "  it('exits AlreadyReportedError without printing "
+                              "another error', async () => {\n"
+                              '    await expect(\n'
+                              '      handleCriticalError(new '
+                              "AlreadyReportedError('already printed', 7)),\n"
+                              "    ).rejects.toThrow('process.exit:7');\n"
+                              '\n'
+                              "    expect(stderr.join('')).toBe('');\n"
+                              '  });\n'
+                              '\n'
+                              "  it('prints unexpected errors with the generic "
+                              "critical header', async () => {\n"
+                              '    await expect(\n'
+                              "      handleCriticalError(new Error('generic boom')),\n"
+                              "    ).rejects.toThrow('process.exit:1');\n"
+                              '\n'
+                              "    const output = stderr.join('');\n",
+             'review_after': "      handleCriticalError(new FatalError('fatal color', "
+                             '42)),\n'
+                             "    ).rejects.toThrow('process.exit:42');\n"
+                             '\n'
+                             "    expect(stderr.join('')).toContain('\\x1b[31mfatal "
+                             "color\\x1b[0m');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('prints unexpected errors with the generic critical "
+                             "header', async () => {\n"
+                             '    await expect(\n'
+                             "      handleCriticalError(new Error('generic boom')),\n"
+                             "    ).rejects.toThrow('process.exit:1');\n"
+                             '\n'
+                             "    const output = stderr.join('');\n"},
+            {'name': 'packages/cli/src/cli.test.ts:landmark-14',
+             'path': 'packages/cli/src/cli.test.ts',
+             'before': "    expect(output).toContain('run failed');\n"
+                       "    expect(output).toContain('Error handler failed:');\n"
+                       "    expect(output).toContain('handler failed');\n"
+                       '  });\n'
+                       '\n'
+                       "  it('wires stampCliEntryEnv into the entry point', () => {\n"
+                       "    const source = readFileSync('src/cli.ts', 'utf8');\n"
+                       '    const entryPoint = source.slice(\n'
+                       "      source.indexOf('export async function "
+                       "runCliEntryPoint'),\n"
+                       '    );\n'
+                       "    expect(entryPoint).toContain('stampCliEntryEnv()');\n"
+                       '    // "First thing in runCliEntryPoint" is the property the '
+                       'doc relies on: the\n'
+                       '    // stamp must land before the CLI runs, not merely '
+                       'somewhere in the body —\n',
+             'after': "    expect(output).toContain('run failed');\n"
+                      "    expect(output).toContain('Error handler failed:');\n"
+                      "    expect(output).toContain('handler failed');\n"
+                      '  });\n'
+                      '\n'
+                      "  it('wires stampCliEntryEnv into the entry point', () => {\n"
+                      '    const source = readFileSync(path.join(CLI_SRC_DIR, '
+                      "'cli.ts'), 'utf8');\n"
+                      '    const entryPoint = source.slice(\n'
+                      "      source.indexOf('export async function "
+                      "runCliEntryPoint'),\n"
+                      '    );\n'
+                      "    expect(entryPoint).toContain('stampCliEntryEnv()');\n"
+                      '    // "First thing in runCliEntryPoint" is the property the '
+                      'doc relies on: the\n'
+                      '    // stamp must land before the CLI runs, not merely '
+                      'somewhere in the body —\n',
+             'review_before': "    expect(output).toContain('run failed');\n"
+                              "    expect(output).toContain('Error handler failed:');\n"
+                              "    expect(output).toContain('handler failed');\n"
+                              '  });\n'
+                              '\n'
+                              "  it('wires stampCliEntryEnv into the entry point', () "
+                              '=> {\n'
+                              "    const source = readFileSync('src/cli.ts', 'utf8');\n"
+                              '    const entryPoint = source.slice(\n'
+                              "      source.indexOf('export async function "
+                              "runCliEntryPoint'),\n"
+                              '    );\n'
+                              '    '
+                              "expect(entryPoint).toContain('stampCliEntryEnv()');\n"
+                              '    // "First thing in runCliEntryPoint" is the '
+                              'property the doc relies on: the\n'
+                              '    // stamp must land before the CLI runs, not merely '
+                              'somewhere in the body —\n',
+             'review_after': "    expect(output).toContain('run failed');\n"
+                             "    expect(output).toContain('Error handler failed:');\n"
+                             "    expect(output).toContain('handler failed');\n"
+                             '  });\n'
+                             '\n'
+                             "  it('wires stampCliEntryEnv into the entry point', () "
+                             '=> {\n'
+                             '    const source = readFileSync(path.join(CLI_SRC_DIR, '
+                             "'cli.ts'), 'utf8');\n"
+                             '    const entryPoint = source.slice(\n'
+                             "      source.indexOf('export async function "
+                             "runCliEntryPoint'),\n"
+                             '    );\n'
+                             "    expect(entryPoint).toContain('stampCliEntryEnv()');\n"
+                             '    // "First thing in runCliEntryPoint" is the property '
+                             'the doc relies on: the\n'
+                             '    // stamp must land before the CLI runs, not merely '
+                             'somewhere in the body —\n'},
+            {'name': 'packages/cli/src/cli.ts:landmark-1',
+             'path': 'packages/cli/src/cli.ts',
+             'before': "  const { main } = await import('./gemini.js');\n"
+                       "  acpStartupProfiler?.markAcpStartup('geminiImportEnd');\n"
+                       '  await main();\n'
+                       '}\n'
+                       '\n'
+                       'export async function handleCriticalError(error: unknown): '
+                       'Promise<void> {\n'
+                       '  const [{ FatalError }, { AlreadyReportedError }] = await '
+                       'Promise.all([\n'
+                       "    import('./utils/deferred-core-runtime.js'),\n"
+                       "    import('./utils/errors.js'),\n"
+                       '  ]);\n'
+                       '\n'
+                       '  if (error instanceof FatalError) {\n'
+                       '    let errorMessage = error.message;\n'
+                       "    if (!process.env['NO_COLOR']) {\n"
+                       '      errorMessage = `\\x1b[31m${errorMessage}\\x1b[0m`;\n'
+                       '    }\n'
+                       '    writeStderrLine(errorMessage);\n'
+                       '    process.exit(error.exitCode);\n'
+                       '  }\n'
+                       '  if (error instanceof AlreadyReportedError) {\n'
+                       '    process.exit(error.exitCode);\n'
+                       '  }\n'
+                       "  writeStderrLine('An unexpected critical error occurred:');\n"
+                       '  if (error instanceof Error) {\n'
+                       '    writeStderrLine(error.stack ?? error.message);\n'
+                       '  } else {\n'
+                       '    writeStderrLine(String(error));\n'
+                       '  }\n',
+             'after': "  const { main } = await import('./gemini.js');\n"
+                      "  acpStartupProfiler?.markAcpStartup('geminiImportEnd');\n"
+                      '  await main();\n'
+                      '}\n'
+                      '\n'
+                      'export async function handleCriticalError(error: unknown): '
+                      'Promise<void> {\n'
+                      '  const { FatalError } = await '
+                      "import('./utils/deferred-core-runtime.js');\n"
+                      '\n'
+                      '  if (error instanceof FatalError) {\n'
+                      '    let errorMessage = error.message;\n'
+                      "    if (!process.env['NO_COLOR']) {\n"
+                      '      errorMessage = `\\x1b[31m${errorMessage}\\x1b[0m`;\n'
+                      '    }\n'
+                      '    writeStderrLine(errorMessage);\n'
+                      '    process.exit(error.exitCode);\n'
+                      '  }\n'
+                      "  writeStderrLine('An unexpected critical error occurred:');\n"
+                      '  if (error instanceof Error) {\n'
+                      '    writeStderrLine(error.stack ?? error.message);\n'
+                      '  } else {\n'
+                      '    writeStderrLine(String(error));\n'
+                      '  }\n',
+             'review_before': "  const { main } = await import('./gemini.js');\n"
+                              '  '
+                              "acpStartupProfiler?.markAcpStartup('geminiImportEnd');\n"
+                              '  await main();\n'
+                              '}\n'
+                              '\n'
+                              'export async function handleCriticalError(error: '
+                              'unknown): Promise<void> {\n'
+                              '  const [{ FatalError }, { AlreadyReportedError }] = '
+                              'await Promise.all([\n'
+                              "    import('./utils/deferred-core-runtime.js'),\n"
+                              "    import('./utils/errors.js'),\n"
+                              '  ]);\n'
+                              '\n'
+                              '  if (error instanceof FatalError) {\n'
+                              '    let errorMessage = error.message;\n'
+                              "    if (!process.env['NO_COLOR']) {\n"
+                              '      errorMessage = '
+                              '`\\x1b[31m${errorMessage}\\x1b[0m`;\n'
+                              '    }\n'
+                              '    writeStderrLine(errorMessage);\n'
+                              '    process.exit(error.exitCode);\n'
+                              '  }\n'
+                              '  if (error instanceof AlreadyReportedError) {\n'
+                              '    process.exit(error.exitCode);\n'
+                              '  }\n'
+                              "  writeStderrLine('An unexpected critical error "
+                              "occurred:');\n"
+                              '  if (error instanceof Error) {\n'
+                              '    writeStderrLine(error.stack ?? error.message);\n'
+                              '  } else {\n'
+                              '    writeStderrLine(String(error));\n'
+                              '  }\n',
+             'review_after': "  const { main } = await import('./gemini.js');\n"
+                             '  '
+                             "acpStartupProfiler?.markAcpStartup('geminiImportEnd');\n"
+                             '  await main();\n'
+                             '}\n'
+                             '\n'
+                             'export async function handleCriticalError(error: '
+                             'unknown): Promise<void> {\n'
+                             '  const { FatalError } = await '
+                             "import('./utils/deferred-core-runtime.js');\n"
+                             '\n'
+                             '  if (error instanceof FatalError) {\n'
+                             '    let errorMessage = error.message;\n'
+                             "    if (!process.env['NO_COLOR']) {\n"
+                             '      errorMessage = '
+                             '`\\x1b[31m${errorMessage}\\x1b[0m`;\n'
+                             '    }\n'
+                             '    writeStderrLine(errorMessage);\n'
+                             '    process.exit(error.exitCode);\n'
+                             '  }\n'
+                             "  writeStderrLine('An unexpected critical error "
+                             "occurred:');\n"
+                             '  if (error instanceof Error) {\n'
+                             '    writeStderrLine(error.stack ?? error.message);\n'
+                             '  } else {\n'
+                             '    writeStderrLine(String(error));\n'
+                             '  }\n'},
+            {'name': 'packages/cli/src/config/auth.test.ts:landmark-1',
              'path': 'packages/cli/src/config/auth.test.ts',
              'before': '  }),\n'
                        '}));\n'
@@ -3918,7 +5448,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "        'error_incomplete_generation',\n"
                       '      ],\n'
                       "      [AgentTerminateMode.CANCELLED, 'error_cancelled'],\n"
-                      "      [AgentTerminateMode.SHUTDOWN, 'error_shutdown'],\n"
                       '      [AgentTerminateMode.MAX_TOOL_CALLS, '
                       "'error_max_tool_calls'],\n"
                       "      [AgentTerminateMode.ERROR, 'error_during_execution'],\n"
@@ -4089,7 +5618,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      ],\n'
                              '      [AgentTerminateMode.CANCELLED, '
                              "'error_cancelled'],\n"
-                             "      [AgentTerminateMode.SHUTDOWN, 'error_shutdown'],\n"
                              '      [AgentTerminateMode.MAX_TOOL_CALLS, '
                              "'error_max_tool_calls'],\n"
                              '      [AgentTerminateMode.ERROR, '
@@ -7778,11 +9306,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'cut-off prefix\n'
                       '   * rather than an answer. `error_cancelled` is an abort '
                       'signal from\n'
-                      '   * outside, and `error_shutdown` is the owner ending the '
-                      'scope. Each is a\n'
-                      '   * counterpart of `success`, which asserts the model wrote '
-                      'its final\n'
-                      '   * message to the end.\n'
+                      '   * outside. Each is a counterpart of `success`, which asserts '
+                      'the model\n'
+                      '   * wrote its final message to the end.\n'
+                      '   *\n'
+                      '   * A state earns a name here when it names an authority other '
+                      'than the run\n'
+                      '   * itself that ended the run, or a bound the caller set and '
+                      'can raise.\n'
+                      '   * Everything the run did to itself is '
+                      '`error_during_execution`,\n'
+                      '   * distinguished by `error.message`.\n'
                       '   */\n'
                       '  subtype:\n'
                       "    | 'error_during_execution'\n"
@@ -7791,8 +9325,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    | 'error_max_tool_calls'\n"
                       "    | 'error_loop_detected'\n"
                       "    | 'error_incomplete_generation'\n"
-                      "    | 'error_cancelled'\n"
-                      "    | 'error_shutdown';\n"
+                      "    | 'error_cancelled';\n"
                       '  uuid: string;\n'
                       '  session_id: string;\n'
                       '  /** See {@link CLIResultMessageSuccess.parent_tool_use_id}. '
@@ -7849,11 +9382,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'a cut-off prefix\n'
                              '   * rather than an answer. `error_cancelled` is an '
                              'abort signal from\n'
-                             '   * outside, and `error_shutdown` is the owner ending '
-                             'the scope. Each is a\n'
-                             '   * counterpart of `success`, which asserts the model '
-                             'wrote its final\n'
-                             '   * message to the end.\n'
+                             '   * outside. Each is a counterpart of `success`, which '
+                             'asserts the model\n'
+                             '   * wrote its final message to the end.\n'
+                             '   *\n'
+                             '   * A state earns a name here when it names an '
+                             'authority other than the run\n'
+                             '   * itself that ended the run, or a bound the caller '
+                             'set and can raise.\n'
+                             '   * Everything the run did to itself is '
+                             '`error_during_execution`,\n'
+                             '   * distinguished by `error.message`.\n'
                              '   */\n'
                              '  subtype:\n'
                              "    | 'error_during_execution'\n"
@@ -7862,8 +9401,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    | 'error_max_tool_calls'\n"
                              "    | 'error_loop_detected'\n"
                              "    | 'error_incomplete_generation'\n"
-                             "    | 'error_cancelled'\n"
-                             "    | 'error_shutdown';\n"
+                             "    | 'error_cancelled';\n"
                              '  uuid: string;\n'
                              '  session_id: string;\n'
                              '  /** See {@link '
@@ -7981,11 +9519,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    subtype: 'error_cancelled',\n"
                       '    isError: true,\n'
                       '    exitCode: 130,\n'
-                      '  },\n'
-                      '  [AgentTerminateMode.SHUTDOWN]: {\n'
-                      "    subtype: 'error_shutdown',\n"
-                      '    isError: true,\n'
-                      '    exitCode: 1,\n'
                       '  },\n'
                       '} as const satisfies Record<AgentTerminateMode, '
                       'TerminalResult>;\n'
@@ -8137,11 +9670,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    subtype: 'error_cancelled',\n"
                              '    isError: true,\n'
                              '    exitCode: 130,\n'
-                             '  },\n'
-                             '  [AgentTerminateMode.SHUTDOWN]: {\n'
-                             "    subtype: 'error_shutdown',\n"
-                             '    isError: true,\n'
-                             '    exitCode: 1,\n'
                              '  },\n'
                              '} as const satisfies Record<AgentTerminateMode, '
                              'TerminalResult>;\n'
@@ -8885,7 +10413,39 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-11',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
-             'before': '      )\n'
+             'before': '    expect(finishTurn).toHaveBeenCalledOnce();\n'
+                       '    expect(flush.mock.invocationCallOrder[0]).toBeLessThan(\n'
+                       '      finishTurn.mock.invocationCallOrder[0]!,\n'
+                       '    );\n'
+                       '  });\n'
+                       '\n'
+                       "  it('does not charge runtime Goal segments to the generic "
+                       "session turn cap', async () => {\n"
+                       '    setupMetricsMock();\n'
+                       '    mockGetCommands.mockReturnValue([goalCommand]);\n'
+                       "    await prepareGoalState('paused');\n"
+                       '    vi.spyOn(goalRuntime, '
+                       "'finishTurn').mockResolvedValue(undefined);\n"
+                       '    '
+                       'vi.mocked(mockConfig.getMaxSessionTurns).mockReturnValue(0);\n'
+                       '    mockCoreExecuteToolCall.mockResolvedValue({\n'
+                       "      responseParts: [{ text: 'tool response' }],\n"
+                       '    });\n'
+                       '    mockGeminiClient.sendMessageStream\n'
+                       '      .mockReturnValueOnce(\n'
+                       '        createStreamFromEvents([\n'
+                       '          {\n'
+                       '            type: GeminiEventType.ToolCallRequest,\n'
+                       '            value: {\n'
+                       "              callId: 'goal-unlimited-turns-tool',\n"
+                       "              name: 'testTool',\n"
+                       '              args: {},\n'
+                       '              isClientInitiated: false,\n'
+                       "              prompt_id: 'goal-unlimited-turns',\n"
+                       '            },\n'
+                       '          },\n'
+                       '        ]),\n'
+                       '      )\n'
                        '      .mockReturnValueOnce(\n'
                        '        createStreamFromEvents([\n'
                        '          {\n'
@@ -8897,49 +10457,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '          },\n'
                        '        ]),\n'
                        '      );\n'
-                       '\n',
-             'after': '      )\n'
-                      '      .mockReturnValueOnce(\n'
-                      '        createStreamFromEvents([\n'
-                      '          {\n'
-                      '            type: GeminiEventType.Finished,\n'
-                      '            value: {\n'
-                      '              reason: FinishReason.STOP,\n'
-                      '              usageMetadata: { totalTokenCount: 0 },\n'
-                      '            },\n'
-                      '          },\n'
-                      '        ]),\n'
-                      '      );\n'
-                      '\n',
-             'review_before': '      )\n'
-                              '      .mockReturnValueOnce(\n'
-                              '        createStreamFromEvents([\n'
-                              '          {\n'
-                              '            type: GeminiEventType.Finished,\n'
-                              '            value: {\n'
-                              '              reason: undefined,\n'
-                              '              usageMetadata: { totalTokenCount: 0 },\n'
-                              '            },\n'
-                              '          },\n'
-                              '        ]),\n'
-                              '      );\n'
-                              '\n',
-             'review_after': '      )\n'
-                             '      .mockReturnValueOnce(\n'
-                             '        createStreamFromEvents([\n'
-                             '          {\n'
-                             '            type: GeminiEventType.Finished,\n'
-                             '            value: {\n'
-                             '              reason: FinishReason.STOP,\n'
-                             '              usageMetadata: { totalTokenCount: 0 },\n'
-                             '            },\n'
-                             '          },\n'
-                             '        ]),\n'
-                             '      );\n'
-                             '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-12',
-             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
-             'before': '    expect(mockCoreExecuteToolCall).toHaveBeenCalledOnce();\n'
+                       '\n'
+                       '    const exitCode = await runNonInteractive(\n'
+                       '      mockConfig,\n'
+                       '      mockSettings,\n'
+                       "      '/goal resume',\n"
+                       "      'goal-unlimited-turns',\n"
+                       '    );\n'
+                       '\n'
+                       '    expect(exitCode).toBe(0);\n'
+                       '    '
+                       'expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);\n'
+                       '    expect(mockCoreExecuteToolCall).toHaveBeenCalledOnce();\n'
                        '  });\n'
                        '\n'
                        "  it('still applies the generic turn cap to real user input "
@@ -8982,11 +10511,53 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        {\n'
                        '          type: GeminiEventType.ToolCallRequest,\n'
                        '          value: {\n',
-             'after': '    expect(mockCoreExecuteToolCall).toHaveBeenCalledOnce();\n'
+             'after': '    expect(finishTurn).toHaveBeenCalledOnce();\n'
+                      '    expect(flush.mock.invocationCallOrder[0]).toBeLessThan(\n'
+                      '      finishTurn.mock.invocationCallOrder[0]!,\n'
+                      '    );\n'
                       '  });\n'
                       '\n'
-                      "  it('still applies the generic turn cap to real user input "
-                      "during a Goal', async () => {\n"
+                      "  it('charges a runtime Goal continuation to the session turn "
+                      "budget', async () => {\n"
+                      '    setupMetricsMock();\n'
+                      '    mockGetCommands.mockReturnValue([goalCommand]);\n'
+                      "    await prepareGoalState('paused');\n"
+                      '    vi.spyOn(goalRuntime, '
+                      "'finishTurn').mockResolvedValue(undefined);\n"
+                      '    '
+                      'vi.mocked(mockConfig.getMaxSessionTurns).mockReturnValue(1);\n'
+                      '    mockCoreExecuteToolCall.mockResolvedValue({\n'
+                      "      responseParts: [{ text: 'tool response' }],\n"
+                      '    });\n'
+                      '    mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                      '      createStreamFromEvents([\n'
+                      '        {\n'
+                      '          type: GeminiEventType.ToolCallRequest,\n'
+                      '          value: {\n'
+                      "            callId: 'goal-budget-tool',\n"
+                      "            name: 'testTool',\n"
+                      '            args: {},\n'
+                      '            isClientInitiated: false,\n'
+                      "            prompt_id: 'goal-budget',\n"
+                      '          },\n'
+                      '        },\n'
+                      '      ]),\n'
+                      '    );\n'
+                      '\n'
+                      '    const exitCode = await runNonInteractive(\n'
+                      '      mockConfig,\n'
+                      '      mockSettings,\n'
+                      "      '/goal resume',\n"
+                      "      'goal-budget',\n"
+                      '    );\n'
+                      '\n'
+                      '    expect(exitCode).toBe(53);\n'
+                      '    '
+                      'expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);\n'
+                      '  });\n'
+                      '\n'
+                      "  it('pauses an active Goal when the session turn budget stops "
+                      "the run', async () => {\n"
                       '    setupMetricsMock();\n'
                       "    await prepareGoalState('active');\n"
                       '    '
@@ -9034,7 +10605,63 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        {\n'
                       '          type: GeminiEventType.ToolCallRequest,\n'
                       '          value: {\n',
-             'review_before': '    '
+             'review_before': '    expect(finishTurn).toHaveBeenCalledOnce();\n'
+                              '    '
+                              'expect(flush.mock.invocationCallOrder[0]).toBeLessThan(\n'
+                              '      finishTurn.mock.invocationCallOrder[0]!,\n'
+                              '    );\n'
+                              '  });\n'
+                              '\n'
+                              "  it('does not charge runtime Goal segments to the "
+                              "generic session turn cap', async () => {\n"
+                              '    setupMetricsMock();\n'
+                              '    mockGetCommands.mockReturnValue([goalCommand]);\n'
+                              "    await prepareGoalState('paused');\n"
+                              '    vi.spyOn(goalRuntime, '
+                              "'finishTurn').mockResolvedValue(undefined);\n"
+                              '    '
+                              'vi.mocked(mockConfig.getMaxSessionTurns).mockReturnValue(0);\n'
+                              '    mockCoreExecuteToolCall.mockResolvedValue({\n'
+                              "      responseParts: [{ text: 'tool response' }],\n"
+                              '    });\n'
+                              '    mockGeminiClient.sendMessageStream\n'
+                              '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          {\n'
+                              '            type: GeminiEventType.ToolCallRequest,\n'
+                              '            value: {\n'
+                              "              callId: 'goal-unlimited-turns-tool',\n"
+                              "              name: 'testTool',\n"
+                              '              args: {},\n'
+                              '              isClientInitiated: false,\n'
+                              "              prompt_id: 'goal-unlimited-turns',\n"
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      )\n'
+                              '      .mockReturnValueOnce(\n'
+                              '        createStreamFromEvents([\n'
+                              '          {\n'
+                              '            type: GeminiEventType.Finished,\n'
+                              '            value: {\n'
+                              '              reason: undefined,\n'
+                              '              usageMetadata: { totalTokenCount: 0 },\n'
+                              '            },\n'
+                              '          },\n'
+                              '        ]),\n'
+                              '      );\n'
+                              '\n'
+                              '    const exitCode = await runNonInteractive(\n'
+                              '      mockConfig,\n'
+                              '      mockSettings,\n'
+                              "      '/goal resume',\n"
+                              "      'goal-unlimited-turns',\n"
+                              '    );\n'
+                              '\n'
+                              '    expect(exitCode).toBe(0);\n'
+                              '    '
+                              'expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);\n'
+                              '    '
                               'expect(mockCoreExecuteToolCall).toHaveBeenCalledOnce();\n'
                               '  });\n'
                               '\n'
@@ -9081,12 +10708,55 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        {\n'
                               '          type: GeminiEventType.ToolCallRequest,\n'
                               '          value: {\n',
-             'review_after': '    '
-                             'expect(mockCoreExecuteToolCall).toHaveBeenCalledOnce();\n'
+             'review_after': '    expect(finishTurn).toHaveBeenCalledOnce();\n'
+                             '    '
+                             'expect(flush.mock.invocationCallOrder[0]).toBeLessThan(\n'
+                             '      finishTurn.mock.invocationCallOrder[0]!,\n'
+                             '    );\n'
                              '  });\n'
                              '\n'
-                             "  it('still applies the generic turn cap to real user "
-                             "input during a Goal', async () => {\n"
+                             "  it('charges a runtime Goal continuation to the session "
+                             "turn budget', async () => {\n"
+                             '    setupMetricsMock();\n'
+                             '    mockGetCommands.mockReturnValue([goalCommand]);\n'
+                             "    await prepareGoalState('paused');\n"
+                             '    vi.spyOn(goalRuntime, '
+                             "'finishTurn').mockResolvedValue(undefined);\n"
+                             '    '
+                             'vi.mocked(mockConfig.getMaxSessionTurns).mockReturnValue(1);\n'
+                             '    mockCoreExecuteToolCall.mockResolvedValue({\n'
+                             "      responseParts: [{ text: 'tool response' }],\n"
+                             '    });\n'
+                             '    '
+                             'mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
+                             '      createStreamFromEvents([\n'
+                             '        {\n'
+                             '          type: GeminiEventType.ToolCallRequest,\n'
+                             '          value: {\n'
+                             "            callId: 'goal-budget-tool',\n"
+                             "            name: 'testTool',\n"
+                             '            args: {},\n'
+                             '            isClientInitiated: false,\n'
+                             "            prompt_id: 'goal-budget',\n"
+                             '          },\n'
+                             '        },\n'
+                             '      ]),\n'
+                             '    );\n'
+                             '\n'
+                             '    const exitCode = await runNonInteractive(\n'
+                             '      mockConfig,\n'
+                             '      mockSettings,\n'
+                             "      '/goal resume',\n"
+                             "      'goal-budget',\n"
+                             '    );\n'
+                             '\n'
+                             '    expect(exitCode).toBe(53);\n'
+                             '    '
+                             'expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);\n'
+                             '  });\n'
+                             '\n'
+                             "  it('pauses an active Goal when the session turn budget "
+                             "stops the run', async () => {\n"
                              '    setupMetricsMock();\n'
                              "    await prepareGoalState('active');\n"
                              '    '
@@ -9137,7 +10807,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        {\n'
                              '          type: GeminiEventType.ToolCallRequest,\n'
                              '          value: {\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-13',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-12',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      ),\n'
                        '    );\n'
@@ -9207,7 +10877,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'goal-explicit-budget' }),\n"
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-14',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-13',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '          });\n'
                        '        }\n'
@@ -9334,7 +11004,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'budget-stream-abort' }),\n"
                              '    );\n'
                              '  });\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-15',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-14',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "    { inlineData: { mimeType: 'image/png', data: 'AAAA' } },\n"
                        '  ];\n'
@@ -9392,7 +11062,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '  async function mockHeadlessImageInput(): Promise<void> '
                              '{\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-16',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-15',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    setupMetricsMock();\n'
                        '    const events: ServerGeminiStreamEvent[] = [\n'
@@ -9459,7 +11129,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-17',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-16',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "          { command: 'echo safe' },\n"
                        '          approvalSignal,\n'
@@ -9513,7 +11183,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      },\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-18',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-17',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    });\n'
                        '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
@@ -9568,7 +11238,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      ]),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-19',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-18',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "      'Restored 2 background agents from the previous "
                        "session.',\n"
@@ -9635,7 +11305,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '    await runNonInteractive(\n'
                              '      mockConfig,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-20',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-19',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      ]),\n'
                        '    }));\n'
@@ -9702,7 +11372,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    await runNonInteractive(mockConfig, mockSettings, '
                              "'', 'prompt-c-notice', {\n"
                              '      continueInterrupted: true,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-21',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-20',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    const [request] = '
                        'mockGeminiClient.sendMessageStream.mock.calls[0]!;\n'
@@ -9767,7 +11437,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              "  it('does not let headless YOLO bypass explicit "
                              "teammate approval', async () => {\n"},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-22',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-21',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "              title: 'Permission rule requires confirmation',\n"
                        "              prompt: 'Allow this operation?',\n"
@@ -9841,7 +11511,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      },\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-23',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-22',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "              title: 'Permission rule requires confirmation',\n"
                        "              prompt: 'Allow this operation?',\n"
@@ -9915,7 +11585,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      },\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-24',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-23',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '          ]),\n'
                        '      }));\n'
@@ -9983,7 +11653,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      await runNonInteractive(mockConfig, mockSettings, '
                              "'', 'prompt-c1', {\n"
                              '        continueInterrupted: true,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-25',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-24',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '          ]),\n'
                        '      }));\n'
@@ -10051,7 +11721,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      await runNonInteractive(mockConfig, mockSettings, '
                              "'', 'prompt-c-plan', {\n"
                              '        continueInterrupted: true,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-26',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-25',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        ]),\n'
                        '      }));\n'
@@ -10119,7 +11789,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      await runNonInteractive(mockConfig, mockSettings, '
                              "'', 'prompt-c2', {\n"
                              '        continueInterrupted: true,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-27',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-26',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      );\n'
                        '      expect(request).toEqual([\n'
@@ -10183,7 +11853,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    it('adds plan mode reminders to a continued tool "
                              "result without moving function responses', async () => "
                              '{\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-28',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-27',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        ]),\n'
                        '      }));\n'
@@ -10247,7 +11917,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '      await runNonInteractive(\n'
                              '        mockConfig,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-29',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-28',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      );\n'
                        '      expect(request).toEqual([\n'
@@ -10309,7 +11979,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      ]);\n'
                              '    });\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-30',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-29',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "          Object.assign(new Error('EPIPE'), { code: 'EPIPE' "
                        '}),\n'
@@ -10371,7 +12041,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      },\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-31',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-30',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "      (call) => typeof call[0] === 'string',\n"
                        '    );\n'
@@ -10982,7 +12652,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    let recordingFailureListener:\n'
                              '      | ((event: { sessionId: string; error: Error }) => '
                              'void)\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-32',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-31',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    setupMetricsMock();\n'
                        '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
@@ -11048,7 +12718,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const finalize = vi.fn();\n'
                              '    const flush = vi.fn().mockResolvedValue(undefined);\n'
                              '    (\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-33',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-32',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    const firstCallEvents: ServerGeminiStreamEvent[] = '
@@ -11128,7 +12798,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-34',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-33',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "              name: 'skill_tool',\n"
                        '              args: {},\n'
@@ -11220,7 +12890,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-35',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-34',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "              name: 'screenshot_tool',\n"
                        '              args: {},\n'
@@ -11310,7 +12980,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-36',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-35',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      .mockReturnValueOnce(\n'
                        '        createStreamFromEvents([\n'
@@ -11368,7 +13038,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      )\n'
                              '      .mockReturnValueOnce(\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-37',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-36',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      .mockReturnValueOnce(\n'
                        '        createStreamFromEvents([\n'
@@ -11426,7 +13096,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-38',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-37',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        "  describe('parallel tool execution', () => {\n"
@@ -11489,7 +13159,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    function toolCallEvents(\n'
                              '      ids: string[],\n'
                              '      name: string,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-39',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-38',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      '
                        '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
@@ -11559,7 +13229,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-40',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-39',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      .mockReturnValueOnce(\n'
                        '        createStreamFromEvents([\n'
@@ -11621,7 +13291,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      )\n'
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents([duplicateToolCallEvent]))\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-41',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-40',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockGeminiClient.sendMessageStream\n'
                        '      '
@@ -11689,7 +13359,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-42',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-41',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      )\n'
                        '      .mockReturnValueOnce(\n'
@@ -11751,7 +13421,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-43',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-42',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      {\n'
                        '        type: GeminiEventType.Content,\n'
@@ -11821,7 +13491,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-44',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-43',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "      'prompt-id-3',\n"
                        '      { type: SendMessageType.ToolResult },\n'
@@ -11954,7 +13624,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    setupMetricsMock();\n'
                              '    const toolCallEvent: ServerGeminiStreamEvent = {\n'
                              '      type: GeminiEventType.ToolCallRequest,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-45',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-44',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      {\n'
                        '        type: GeminiEventType.Content,\n'
@@ -12024,7 +13694,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '.mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))\n'
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-46',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-45',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    '
                        'expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);\n'
@@ -12248,7 +13918,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    setupMetricsMock();\n'
                              '    // 1. Mock the imported atCommandProcessor\n'
                              '    const { handleAtCommand } = await import(\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-47',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-46',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    // Mock a simple stream response from the Gemini client\n'
@@ -12317,7 +13987,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-48',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-47',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    const { resolveForModel } = '
                        'configureHeadlessVisionModel({\n'
@@ -12491,7 +14161,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    );\n'
                              '    (mockConfig.getOutputFormat as '
                              'Mock).mockReturnValue(OutputFormat.JSON);\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-49',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-48',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    // First call returns only tool call, no content\n'
@@ -12607,7 +14277,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-50',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-49',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        "  it('should write JSON output with stats for empty response "
@@ -12682,7 +14352,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    );\n'
                              '    (mockConfig.getOutputFormat as '
                              'Mock).mockReturnValue(OutputFormat.JSON);\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-51',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-50',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "    const testError = new Error('Invalid input provided');\n"
                        '\n'
@@ -12881,7 +14551,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'Mock).mockReturnValue(OutputFormat.TEXT);\n'
                              '    setupMetricsMock();\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-52',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-51',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    };\n'
                        '\n'
@@ -13104,7 +14774,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const flush = vi.fn().mockResolvedValue(undefined);\n'
                              '    (\n'
                              '      mockConfig as unknown as {\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-53',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-52',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    };\n'
                        '\n'
@@ -13189,7 +14859,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const stderrOutput = processStderrSpy.mock.calls\n'
                              '      .map((call) => String(call[0]))\n'
                              "      .join('');\n"},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-54',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-53',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "    const fatalError = new FatalInputError('Invalid command "
                        "syntax provided');\n"
@@ -13396,7 +15066,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    setupMetricsMock();\n'
                              '    const mockCommand = {\n'
                              "      name: 'testcommand',\n"},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-55',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-54',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
                        '\n'
@@ -13463,7 +15133,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-56',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-55',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockGetCommands.mockReturnValue([]);\n'
                        '\n'
@@ -13530,7 +15200,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-57',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-56',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockGetCommands.mockReturnValue([mockCommand]);\n'
                        '\n'
@@ -13597,7 +15267,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-58',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-57',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    });\n'
                        '\n'
@@ -13664,7 +15334,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-59',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-58',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "      type: 'result',\n"
                        '      is_error: false,\n'
@@ -13734,7 +15404,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const writes: string[] = [];\n'
                              '    processStdoutSpy.mockImplementation((chunk: string | '
                              'Uint8Array) => {\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-60',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-59',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    const turnAbortController = new AbortController();\n'
                        '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
@@ -13900,7 +15570,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '{\n'
                              "      promptId: 'prompt-recoverable-interrupt',\n"
                              '    });\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-61',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-60',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
                        '      createStreamFromEvents([\n'
@@ -13959,7 +15629,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      ]),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-62',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-61',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockGeminiClient.sendMessageStream\n'
                        '      .mockReturnValueOnce(\n'
@@ -14073,7 +15743,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-63',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-62',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      .mockReturnValueOnce(\n'
                        '        createStreamFromEvents([\n'
@@ -14235,7 +15905,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-64',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-63',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    mockGeminiClient.sendMessageStream.mockReturnValue(\n'
@@ -14302,7 +15972,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '    const userEnvelope = {\n'
                              "      type: 'user',\n"},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-65',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-64',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockGeminiClient.sendMessageStream.mockReturnValueOnce(\n'
                        '      createStreamFromEvents([\n'
@@ -14362,7 +16032,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      ]),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-66',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-65',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '          eventCount: 2,\n'
                        '        },\n'
@@ -14472,7 +16142,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      )\n'
                              '      .mockReturnValueOnce(secondTurnStream());\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-67',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-66',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockGeminiClient.sendMessageStream\n'
                        '      .mockReturnValueOnce(\n'
@@ -14586,7 +16256,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-68',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-67',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    });\n'
                        '\n'
@@ -14653,7 +16323,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-69',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-68',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    const firstCallEvents: ServerGeminiStreamEvent[] = '
@@ -14733,7 +16403,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-70',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-69',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      {\n'
                        '        type: GeminiEventType.Content,\n'
@@ -14803,7 +16473,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-71',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-70',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    const events: ServerGeminiStreamEvent[] = [\n'
@@ -14870,7 +16540,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-72',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-71',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        type: GeminiEventType.Thought,\n'
                        "        value: { subject: 'Analysis', description: 'Processing "
@@ -14941,7 +16611,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-73',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-72',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    const firstCallEvents: ServerGeminiStreamEvent[] = '
@@ -15021,7 +16691,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-74',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-73',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        createStreamFromEvents([duplicateToolCall, '
                        'replayedToolCall]),\n'
@@ -15087,7 +16757,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-75',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-74',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        createStreamFromEvents([firstToolCall, '
                        'secondToolCall]),\n'
@@ -15153,7 +16823,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-76',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-75',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    });\n'
                        '\n'
@@ -15218,7 +16888,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-77',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-76',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockConfig.getCronScheduler = '
                        'vi.fn().mockReturnValue(scheduler);\n'
@@ -15290,7 +16960,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    await runNonInteractive(mockConfig, mockSettings, '
                              "'test', 'p-cron-wiring');\n"
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-78',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-77',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      });\n'
                        '\n'
@@ -15360,7 +17030,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        createStreamFromEvents(plainTextTurn),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-79',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-78',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "            (m as { type?: string }).type === 'result',\n"
                        '        );\n'
@@ -15447,7 +17117,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'structured_output(bad)]. The\n'
                              '      // pre-scan suppresses the side_effect_tool; '
                              'structured_output then\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-80',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-79',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        .mockReturnValueOnce(\n'
                        '          createStreamFromEvents([\n'
@@ -15509,7 +17179,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        )\n'
                              '        '
                              '.mockReturnValueOnce(createStreamFromEvents([drainStructuredCall]));\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-81',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-80',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      const sessionService = {\n'
                        '        getWorktreeSessionPath: '
@@ -15598,7 +17268,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        createStreamFromEvents(events),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-82',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-81',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      (mockConfig.getResumedSessionData as '
                        'Mock).mockReturnValue(undefined);\n'
@@ -15669,7 +17339,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        createStreamFromEvents(events),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-83',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-82',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      const sessionService = {\n'
                        '        getWorktreeSessionPath: '
@@ -15972,8 +17642,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "'./nonInteractiveCliCommands.js';\n"
                       'import { handleAtCommand } from '
                       "'./ui/hooks/atCommandProcessor.js';\n"
-                      'import { AlreadyReportedError, handleToolError } from '
-                      "'./utils/errors.js';\n"
+                      "import { handleToolError } from './utils/errors.js';\n"
                       "import { RunBudgetEnforcer } from './utils/runBudget.js';\n"
                       "import type { BudgetKind } from './utils/runBudget.js';\n"
                       'import {\n'
@@ -16054,8 +17723,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'./nonInteractiveCliCommands.js';\n"
                              'import { handleAtCommand } from '
                              "'./ui/hooks/atCommandProcessor.js';\n"
-                             'import { AlreadyReportedError, handleToolError } from '
-                             "'./utils/errors.js';\n"
+                             "import { handleToolError } from './utils/errors.js';\n"
                              'import { RunBudgetEnforcer } from '
                              "'./utils/runBudget.js';\n"
                              "import type { BudgetKind } from './utils/runBudget.js';\n"
@@ -16812,16 +18480,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    );\n'
                       '\n'
                       '    let turnCount = 0;\n'
-                      '    // Turns charged against the session turn budget. Every '
-                      'turn the run\n'
-                      '    // starts advances `turnCount`, which is what the terminal '
-                      'record reports;\n'
-                      '    // a runtime Goal continuation is the one kind of turn the '
-                      'generic session\n'
-                      '    // budget does not charge, so the two counts are the same '
-                      'number on every\n'
-                      '    // run that sets no Goal.\n'
-                      '    let budgetedTurnCount = 0;\n'
                       '    // Terminal reason of the generation this run is currently '
                       'standing on,\n'
                       '    // cleared at the head of every turn so a turn that reports '
@@ -16862,16 +18520,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    );\n'
                              '\n'
                              '    let turnCount = 0;\n'
-                             '    // Turns charged against the session turn budget. '
-                             'Every turn the run\n'
-                             '    // starts advances `turnCount`, which is what the '
-                             'terminal record reports;\n'
-                             '    // a runtime Goal continuation is the one kind of '
-                             'turn the generic session\n'
-                             '    // budget does not charge, so the two counts are the '
-                             'same number on every\n'
-                             '    // run that sets no Goal.\n'
-                             '    let budgetedTurnCount = 0;\n'
                              '    // Terminal reason of the generation this run is '
                              'currently standing on,\n'
                              '    // cleared at the head of every turn so a turn that '
@@ -16919,8 +18567,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '    let goalHostUnbind: (() => void) | undefined;\n'
                        '    const goalHost: GoalTurnHost = {\n'
                        '      startGoalTurn: async (input) => {\n'
-                       '        if (\n'
-                       '          queuedGoalTurns.some(\n',
+                       '        if (\n',
              'after': '        value: projectLegacyActiveGoal(snapshot),\n'
                       '      });\n'
                       '    };\n'
@@ -16929,23 +18576,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'runtime.subscribe(emitGoalSnapshot);\n'
                       '    };\n'
                       '    /**\n'
-                      '     * Charges the turn about to start against the session turn '
-                      'budget, and\n'
-                      '     * ends the run when the budget has nothing left to charge. '
-                      'The question\n'
-                      '     * is asked before the turn is counted, so a run stopped '
-                      'here reports\n'
-                      '     * exactly the budget it was given and has started no turn '
-                      'it could not\n'
-                      '     * finish.\n'
+                      '     * Admits the turn about to start, ending the run when the '
+                      'session turn\n'
+                      '     * budget has nothing left. Every turn the run starts is '
+                      'charged, so the\n'
+                      '     * budget and the `num_turns` the record reports are one '
+                      'number. The\n'
+                      '     * question is asked before the caller counts the turn, so '
+                      'a run stopped\n'
+                      '     * here reports exactly the budget it was given and has '
+                      'started no turn it\n'
+                      '     * could not finish.\n'
                       '     */\n'
-                      '    const admitBudgetedTurn = (isRuntimeGoalTurn: boolean): '
-                      'void => {\n'
-                      '      if (isRuntimeGoalTurn) return;\n'
-                      '\n'
+                      '    const admitBudgetedTurn = (): void => {\n'
                       '      const maxSessionTurns = config.getMaxSessionTurns();\n'
-                      '      if (sessionTurnBudgetReached(maxSessionTurns, '
-                      'budgetedTurnCount)) {\n'
+                      '      if (sessionTurnBudgetReached(maxSessionTurns, turnCount)) '
+                      '{\n'
                       '        throw new SessionEnded({\n'
                       '          terminateMode: AgentTerminateMode.MAX_TURNS,\n'
                       '          message: describeSessionTurnBudget(\n'
@@ -16955,13 +18601,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          ),\n'
                       '        });\n'
                       '      }\n'
-                      '      budgetedTurnCount++;\n'
                       '    };\n'
                       '    let goalHostUnbind: (() => void) | undefined;\n'
                       '    const goalHost: GoalTurnHost = {\n'
                       '      startGoalTurn: async (input) => {\n'
-                      '        if (\n'
-                      '          queuedGoalTurns.some(\n',
+                      '        if (\n',
              'review_before': '        value: projectLegacyActiveGoal(snapshot),\n'
                               '      });\n'
                               '    };\n'
@@ -16991,8 +18635,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '    let goalHostUnbind: (() => void) | undefined;\n'
                               '    const goalHost: GoalTurnHost = {\n'
                               '      startGoalTurn: async (input) => {\n'
-                              '        if (\n'
-                              '          queuedGoalTurns.some(\n',
+                              '        if (\n',
              'review_after': '        value: projectLegacyActiveGoal(snapshot),\n'
                              '      });\n'
                              '    };\n'
@@ -17002,24 +18645,23 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'runtime.subscribe(emitGoalSnapshot);\n'
                              '    };\n'
                              '    /**\n'
-                             '     * Charges the turn about to start against the '
-                             'session turn budget, and\n'
-                             '     * ends the run when the budget has nothing left to '
-                             'charge. The question\n'
-                             '     * is asked before the turn is counted, so a run '
-                             'stopped here reports\n'
-                             '     * exactly the budget it was given and has started '
-                             'no turn it could not\n'
-                             '     * finish.\n'
+                             '     * Admits the turn about to start, ending the run '
+                             'when the session turn\n'
+                             '     * budget has nothing left. Every turn the run '
+                             'starts is charged, so the\n'
+                             '     * budget and the `num_turns` the record reports are '
+                             'one number. The\n'
+                             '     * question is asked before the caller counts the '
+                             'turn, so a run stopped\n'
+                             '     * here reports exactly the budget it was given and '
+                             'has started no turn it\n'
+                             '     * could not finish.\n'
                              '     */\n'
-                             '    const admitBudgetedTurn = (isRuntimeGoalTurn: '
-                             'boolean): void => {\n'
-                             '      if (isRuntimeGoalTurn) return;\n'
-                             '\n'
+                             '    const admitBudgetedTurn = (): void => {\n'
                              '      const maxSessionTurns = '
                              'config.getMaxSessionTurns();\n'
                              '      if (sessionTurnBudgetReached(maxSessionTurns, '
-                             'budgetedTurnCount)) {\n'
+                             'turnCount)) {\n'
                              '        throw new SessionEnded({\n'
                              '          terminateMode: AgentTerminateMode.MAX_TURNS,\n'
                              '          message: describeSessionTurnBudget(\n'
@@ -17029,14 +18671,102 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ),\n'
                              '        });\n'
                              '      }\n'
-                             '      budgetedTurnCount++;\n'
                              '    };\n'
                              '    let goalHostUnbind: (() => void) | undefined;\n'
                              '    const goalHost: GoalTurnHost = {\n'
                              '      startGoalTurn: async (input) => {\n'
-                             '        if (\n'
-                             '          queuedGoalTurns.some(\n'},
+                             '        if (\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-10',
+             'path': 'packages/cli/src/nonInteractiveCli.ts',
+             'before': "        abortController.signal.removeEventListener('abort', "
+                       'pauseOnAbort);\n'
+                       '        await abortSettlement;\n'
+                       '      }\n'
+                       '    };\n'
+                       '\n'
+                       '    // Run-level budget enforcement for headless / unattended '
+                       'runs\n'
+                       '    // (issue #4103). Explicit per-request safety limits still '
+                       'apply to Goal\n'
+                       '    // turns; only the generic session turn limit excludes '
+                       'runtime Goal\n'
+                       '    // continuations. Tied to the same abortController as '
+                       'user-initiated\n'
+                       '    // SIGINT so the existing cancellation plumbing carries '
+                       'the abort;\n'
+                       '    // `routeAbort` below interprets the reason so the user '
+                       'sees\n'
+                       '    // "budget exceeded" instead of a generic "cancelled" '
+                       'envelope.\n'
+                       '    const budgetEnforcer = new RunBudgetEnforcer(\n'
+                       '      {\n'
+                       '        maxWallTimeSeconds: config.getMaxWallTimeSeconds(),\n',
+             'after': "        abortController.signal.removeEventListener('abort', "
+                      'pauseOnAbort);\n'
+                      '        await abortSettlement;\n'
+                      '      }\n'
+                      '    };\n'
+                      '\n'
+                      '    // Run-level budget enforcement for headless / unattended '
+                      'runs\n'
+                      '    // (issue #4103). Tied to the same abortController as '
+                      'user-initiated\n'
+                      '    // SIGINT so the existing cancellation plumbing carries the '
+                      'abort;\n'
+                      '    // `routeAbort` below interprets the reason so the user '
+                      'sees\n'
+                      '    // "budget exceeded" instead of a generic "cancelled" '
+                      'envelope.\n'
+                      '    const budgetEnforcer = new RunBudgetEnforcer(\n'
+                      '      {\n'
+                      '        maxWallTimeSeconds: config.getMaxWallTimeSeconds(),\n',
+             'review_before': '        '
+                              "abortController.signal.removeEventListener('abort', "
+                              'pauseOnAbort);\n'
+                              '        await abortSettlement;\n'
+                              '      }\n'
+                              '    };\n'
+                              '\n'
+                              '    // Run-level budget enforcement for headless / '
+                              'unattended runs\n'
+                              '    // (issue #4103). Explicit per-request safety '
+                              'limits still apply to Goal\n'
+                              '    // turns; only the generic session turn limit '
+                              'excludes runtime Goal\n'
+                              '    // continuations. Tied to the same abortController '
+                              'as user-initiated\n'
+                              '    // SIGINT so the existing cancellation plumbing '
+                              'carries the abort;\n'
+                              '    // `routeAbort` below interprets the reason so the '
+                              'user sees\n'
+                              '    // "budget exceeded" instead of a generic '
+                              '"cancelled" envelope.\n'
+                              '    const budgetEnforcer = new RunBudgetEnforcer(\n'
+                              '      {\n'
+                              '        maxWallTimeSeconds: '
+                              'config.getMaxWallTimeSeconds(),\n',
+             'review_after': '        '
+                             "abortController.signal.removeEventListener('abort', "
+                             'pauseOnAbort);\n'
+                             '        await abortSettlement;\n'
+                             '      }\n'
+                             '    };\n'
+                             '\n'
+                             '    // Run-level budget enforcement for headless / '
+                             'unattended runs\n'
+                             '    // (issue #4103). Tied to the same abortController '
+                             'as user-initiated\n'
+                             '    // SIGINT so the existing cancellation plumbing '
+                             'carries the abort;\n'
+                             '    // `routeAbort` below interprets the reason so the '
+                             'user sees\n'
+                             '    // "budget exceeded" instead of a generic '
+                             '"cancelled" envelope.\n'
+                             '    const budgetEnforcer = new RunBudgetEnforcer(\n'
+                             '      {\n'
+                             '        maxWallTimeSeconds: '
+                             'config.getMaxWallTimeSeconds(),\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-11',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '      },\n'
                        '      abortController,\n'
@@ -17242,7 +18972,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      displayText: string;\n'
                              '      modelText: string;\n'
                              '      sendMessageType: SendMessageType;\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-11',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-12',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '      oneShotMonitorsFinalized = true;\n'
                        '      captureMonitorTurnsInLocalQueue = false;\n'
@@ -17558,7 +19288,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "      if (err.code === 'EPIPE' && !pipeBroken) {\n"
                              '        pipeBroken = true;\n'
                              '        process.stdout.destroy();\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-12',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-13',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': "        debugLogger.info('[runNonInteractive] "
                        "continueInterrupted recovery', {\n"
@@ -17654,7 +19384,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'retry_user_parts') {\n"
                              '          continueSendType = SendMessageType.Retry;\n'
                              '        } else {\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-13',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-14',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '          }\n'
                        '        }\n'
@@ -17713,7 +19443,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            config,\n'
                              '            settings,\n'
                              '          );\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-14',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-15',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '\n'
                        '              const message = formatGoalState(\n'
@@ -17795,7 +19525,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                process.stdout.write(`${message}\\n`);\n'
                              '              }\n'
                              '              bindGoalHost();\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-15',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-16',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '              initialPartList = '
                        'buildGoalContinuationParts(activeGoalTurn);\n'
@@ -17953,7 +19683,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              const _exhaustive: never = '
                              'slashCommandResult;\n'
                              '              throw new FatalInputError(\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-16',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-17',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '        }\n'
                        '      }\n'
@@ -18015,7 +19745,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'recoveredAgentsNotice);\n'
                              '      }\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-17',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-18',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '            const permit = await claimUserGoalTurn(\n'
                        '              runtime,\n'
@@ -18073,7 +19803,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "                throw new Error('Goal turn admission "
                              "lost its active Goal');\n"
                              '              }\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-18',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-19',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '      // actually said instead of a static, context-free '
                        'message.\n'
@@ -18195,7 +19925,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'owner\n'
                              '        ) {\n'
                              '          let responseText: string | undefined;\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-19',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-20',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '              config,\n'
                        '              owner,\n'
@@ -18278,7 +20008,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'see every\n'
                              '        // `task_started` paired with its terminal '
                              'notification, without\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-20',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-21',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '        while (\n'
                        '          Date.now() < holdbackDeadline &&\n'
@@ -18481,7 +20211,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '~120 lines of\n'
                              '       * near-identical logic that filtered '
                              '`structured_output` to its\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-21',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-22',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '              // A tick that trips the budget (or an external '
                        'SIGINT) aborts\n'
@@ -18569,7 +20299,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              launched.push({ requestInfo, promise });\n'
                              '              // Track a never-rejecting settle marker '
                              'for the in-flight\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-22',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-23',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '              // call to completion before the tick that '
                        'trips, whereas here\n'
@@ -18654,7 +20384,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'behaviour.\n'
                              '            for (const requestInfo of batch.calls) {\n'
                              '              if (\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-23',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-24',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '                '
                        'finalizePlanModeEntrySiblingSkip(requestInfo);\n'
@@ -18723,7 +20453,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                sessionEnded = true;\n'
                              '                break;\n'
                              '              }\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-24',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-25',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '          // leading functionResponse parts stay paired with '
                        'their\n'
@@ -18750,7 +20480,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        hasUnsentToolResponse = false;\n'
                       '\n'
                       '        const goalTurn = activeGoalTurn;\n'
-                      "        admitBudgetedTurn(goalTurn?.origin === 'runtime');\n"
+                      '        admitBudgetedTurn();\n'
                       '        turnCount++;\n'
                       '\n'
                       '        let sendType: SendMessageType;\n'
@@ -18783,8 +20513,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        hasUnsentToolResponse = false;\n'
                              '\n'
                              '        const goalTurn = activeGoalTurn;\n'
-                             '        admitBudgetedTurn(goalTurn?.origin === '
-                             "'runtime');\n"
+                             '        admitBudgetedTurn();\n'
                              '        turnCount++;\n'
                              '\n'
                              '        let sendType: SendMessageType;\n'
@@ -18792,7 +20521,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          sendType =\n'
                              "            goalTurn.origin === 'runtime'\n"
                              '              ? SendMessageType.Goal\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-25',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-26',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '        selectActiveInteraction(\n'
                        '          currentPromptId,\n'
@@ -18849,7 +20578,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          abortController.signal,\n'
                              '          currentPromptId,\n'
                              '          {\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-26',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-27',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '        for await (const event of responseStream) {\n'
                        '          captureActiveInteractionOwner();\n'
@@ -18915,7 +20644,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        }\n'
                        '        captureActiveInteractionOwner();\n'
                        '\n'
-                       '        // Finalize assistant message\n',
+                       '        // Finalize assistant message\n'
+                       '        adapter.finalizeAssistantMessage();\n',
              'after': '        for await (const event of responseStream) {\n'
                       '          captureActiveInteractionOwner();\n'
                       '          if (abortController.signal.aborted) {\n'
@@ -19001,16 +20731,21 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'human-readable line\n'
                       '            // and the terminal record carries the same text as '
                       'an error;\n'
-                      '            // AlreadyReportedError marks the line as written '
-                      'so text mode,\n'
+                      '            // `reportedOnStderr` marks the line as written so '
+                      'text mode,\n'
                       '            // whose record is a stderr line, does not print it '
                       'twice.\n'
-                      '            throw new AlreadyReportedError(errorText);\n'
+                      '            throw new SessionEnded({\n'
+                      '              terminateMode: AgentTerminateMode.ERROR,\n'
+                      '              message: errorText,\n'
+                      '              reportedOnStderr: true,\n'
+                      '            });\n'
                       '          }\n'
                       '        }\n'
                       '        captureActiveInteractionOwner();\n'
                       '\n'
-                      '        // Finalize assistant message\n',
+                      '        // Finalize assistant message\n'
+                      '        adapter.finalizeAssistantMessage();\n',
              'review_before': '        for await (const event of responseStream) {\n'
                               '          captureActiveInteractionOwner();\n'
                               '          if (abortController.signal.aborted) {\n'
@@ -19079,7 +20814,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        }\n'
                               '        captureActiveInteractionOwner();\n'
                               '\n'
-                              '        // Finalize assistant message\n',
+                              '        // Finalize assistant message\n'
+                              '        adapter.finalizeAssistantMessage();\n',
              'review_after': '        for await (const event of responseStream) {\n'
                              '          captureActiveInteractionOwner();\n'
                              '          if (abortController.signal.aborted) {\n'
@@ -19173,17 +20909,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'human-readable line\n'
                              '            // and the terminal record carries the same '
                              'text as an error;\n'
-                             '            // AlreadyReportedError marks the line as '
+                             '            // `reportedOnStderr` marks the line as '
                              'written so text mode,\n'
                              '            // whose record is a stderr line, does not '
                              'print it twice.\n'
-                             '            throw new AlreadyReportedError(errorText);\n'
+                             '            throw new SessionEnded({\n'
+                             '              terminateMode: AgentTerminateMode.ERROR,\n'
+                             '              message: errorText,\n'
+                             '              reportedOnStderr: true,\n'
+                             '            });\n'
                              '          }\n'
                              '        }\n'
                              '        captureActiveInteractionOwner();\n'
                              '\n'
-                             '        // Finalize assistant message\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-27',
+                             '        // Finalize assistant message\n'
+                             '        adapter.finalizeAssistantMessage();\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-28',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '            return emitStructuredSuccess();\n'
                        '          }\n'
@@ -19241,7 +20982,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          }\n'
                              '          if (terminateTurn && activeGoalTurn) {\n'
                              '            geminiClient.addHistory({\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-28',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-29',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '          }\n'
                        '\n'
@@ -19311,7 +21052,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          // and gone IDLE between the last 500ms poll '
                              'and now —\n'
                              '          // without this, that message is lost.\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-29',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-30',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '              displayText: batch.map((i) => '
                        "i.displayText).join('; '),\n"
@@ -19352,7 +21093,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '              todoWorkChainId: batch[0]?.todoWorkChainId,\n'
                       '            };\n'
                       '\n'
-                      '            admitBudgetedTurn(false);\n'
+                      '            admitBudgetedTurn();\n'
                       '            turnCount++;\n'
                       '\n'
                       '            let itemMessages: Content[] = [\n'
@@ -19417,7 +21158,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'batch[0]?.todoWorkChainId,\n'
                              '            };\n'
                              '\n'
-                             '            admitBudgetedTurn(false);\n'
+                             '            admitBudgetedTurn();\n'
                              '            turnCount++;\n'
                              '\n'
                              '            let itemMessages: Content[] = [\n'
@@ -19441,7 +21182,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                itemMessages[0]?.parts || [],\n'
                              '                abortController.signal,\n'
                              '                itemPromptId,\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-30',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-31',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '\n'
                        '              for await (const event of itemStream) {\n'
@@ -19515,7 +21256,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '              }\n'
                        '              captureActiveInteractionOwner();\n'
                        '\n'
-                       '              adapter.finalizeAssistantMessage();\n',
+                       '              adapter.finalizeAssistantMessage();\n'
+                       '              totalApiDurationMs += Date.now() - '
+                       'itemApiStartTime;\n',
              'after': '\n'
                       '              for await (const event of itemStream) {\n'
                       '                captureActiveInteractionOwner();\n'
@@ -19580,12 +21323,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'loop above —\n'
                       '                  // every output format ends the run on an API '
                       'error.\n'
-                      '                  throw new AlreadyReportedError(errorText);\n'
+                      '                  throw new SessionEnded({\n'
+                      '                    terminateMode: AgentTerminateMode.ERROR,\n'
+                      '                    message: errorText,\n'
+                      '                    reportedOnStderr: true,\n'
+                      '                  });\n'
                       '                }\n'
                       '              }\n'
                       '              captureActiveInteractionOwner();\n'
                       '\n'
-                      '              adapter.finalizeAssistantMessage();\n',
+                      '              adapter.finalizeAssistantMessage();\n'
+                      '              totalApiDurationMs += Date.now() - '
+                      'itemApiStartTime;\n',
              'review_before': '\n'
                               '              for await (const event of itemStream) {\n'
                               '                captureActiveInteractionOwner();\n'
@@ -19664,7 +21413,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '              }\n'
                               '              captureActiveInteractionOwner();\n'
                               '\n'
-                              '              adapter.finalizeAssistantMessage();\n',
+                              '              adapter.finalizeAssistantMessage();\n'
+                              '              totalApiDurationMs += Date.now() - '
+                              'itemApiStartTime;\n',
              'review_after': '\n'
                              '              for await (const event of itemStream) {\n'
                              '                captureActiveInteractionOwner();\n'
@@ -19735,14 +21486,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'stream loop above —\n'
                              '                  // every output format ends the run on '
                              'an API error.\n'
-                             '                  throw new '
-                             'AlreadyReportedError(errorText);\n'
+                             '                  throw new SessionEnded({\n'
+                             '                    terminateMode: '
+                             'AgentTerminateMode.ERROR,\n'
+                             '                    message: errorText,\n'
+                             '                    reportedOnStderr: true,\n'
+                             '                  });\n'
                              '                }\n'
                              '              }\n'
                              '              captureActiveInteractionOwner();\n'
                              '\n'
-                             '              adapter.finalizeAssistantMessage();\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-31',
+                             '              adapter.finalizeAssistantMessage();\n'
+                             '              totalApiDurationMs += Date.now() - '
+                             'itemApiStartTime;\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-32',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '                  return;\n'
                        '                }\n'
@@ -19808,7 +21565,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                }\n'
                              "                itemMessages = [{ role: 'user', parts: "
                              'itemToolResponseParts }];\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-32',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-33',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '\n'
                        '              // Check immediately in case jobs were already '
@@ -19935,7 +21692,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'output is SDK-only.\n'
                              '            captureMonitorTurnsInLocalQueue = false;\n'
                              '            await drainLocalQueue();\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-33',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-34',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '            .consumePendingMemoryTaskPromises();\n'
                        '          if (memoryTaskPromises.length > 0) {\n'
@@ -20153,7 +21910,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'throwing) avoids\n'
                              '          // the outer catch re-emitting the result a '
                              'second time.\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-34',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-35',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': '                  plainTextPreview.length >= '
                        "PLAIN_TEXT_PREVIEW_LIMIT ? '+' : ''\n"
@@ -20407,17 +22164,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        terminateMode: AgentTerminateMode.ERROR,\n'
                       '        message: error instanceof Error ? error.message : '
                       'String(error),\n'
-                      '        reportedOnStderr: error instanceof '
-                      'AlreadyReportedError,\n'
-                      '        // A thrown FatalError or AlreadyReportedError '
-                      'classifies the failure\n'
-                      '        // in the exit-code taxonomy the CLI already publishes; '
-                      'the state is\n'
-                      '        // still the one state a run that threw ends in.\n'
-                      '        ...(error instanceof FatalError || error instanceof '
-                      'AlreadyReportedError\n'
-                      '          ? { exitCode: error.exitCode }\n'
-                      '          : {}),\n'
+                      '        // A thrown FatalError classifies the failure in the '
+                      'exit-code\n'
+                      '        // taxonomy the CLI already publishes; the state is '
+                      'still the one\n'
+                      '        // state a run that threw ends in.\n'
+                      '        ...(error instanceof FatalError ? { exitCode: '
+                      'error.exitCode } : {}),\n'
                       '      });\n'
                       '    } finally {\n'
                       '      await failClosedActiveGoalTurn(\n'
@@ -20685,18 +22438,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        terminateMode: AgentTerminateMode.ERROR,\n'
                              '        message: error instanceof Error ? error.message '
                              ': String(error),\n'
-                             '        reportedOnStderr: error instanceof '
-                             'AlreadyReportedError,\n'
-                             '        // A thrown FatalError or AlreadyReportedError '
-                             'classifies the failure\n'
-                             '        // in the exit-code taxonomy the CLI already '
-                             'publishes; the state is\n'
-                             '        // still the one state a run that threw ends '
-                             'in.\n'
-                             '        ...(error instanceof FatalError || error '
-                             'instanceof AlreadyReportedError\n'
-                             '          ? { exitCode: error.exitCode }\n'
-                             '          : {}),\n'
+                             '        // A thrown FatalError classifies the failure in '
+                             'the exit-code\n'
+                             '        // taxonomy the CLI already publishes; the state '
+                             'is still the one\n'
+                             '        // state a run that threw ends in.\n'
+                             '        ...(error instanceof FatalError ? { exitCode: '
+                             'error.exitCode } : {}),\n'
                              '      });\n'
                              '    } finally {\n'
                              '      await failClosedActiveGoalTurn(\n'
@@ -20705,7 +22453,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '      goalRuntimeUnsubscribe?.();\n'
                              '      goalRuntimeUnsubscribe = undefined;\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-35',
+            {'name': 'packages/cli/src/nonInteractiveCli.ts:landmark-36',
              'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before': "      process.removeListener('SIGINT', shutdownHandler);\n"
                        "      process.removeListener('SIGTERM', shutdownHandler);\n"
@@ -23163,35 +24911,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "const debugLogger = createDebugLogger('CLI_ERRORS');\n"
                       '\n'
                       '/**\n'
-                      ' * Marker thrown when a producer has already formatted the '
-                      'error message and\n'
-                      " * written it to stderr as the run's live human-readable line.\n"
-                      ' *\n'
-                      ' * The non-interactive runner uses this when an upstream API '
-                      'error event\n'
-                      ' * arrives mid-stream: it formats with parseAndFormatApiError, '
-                      'writes once, and\n'
-                      " * then throws. Under `--output-format text` the run's terminal "
-                      'record is\n'
-                      ' * itself a line on stderr, so the marker is what keeps that '
-                      'one ending from\n'
-                      ' * printing the same text twice. `exitCode` is the status the '
-                      'run leaves\n'
-                      ' * behind when the failure names one.\n'
-                      ' */\n'
-                      'export class AlreadyReportedError extends Error {\n'
-                      '  /** Exit code to surface — defaults to 1 for generic upstream '
-                      'failures. */\n'
-                      '  exitCode: number;\n'
-                      '\n'
-                      '  constructor(message: string, exitCode = 1) {\n'
-                      '    super(message);\n'
-                      "    this.name = 'AlreadyReportedError';\n"
-                      '    this.exitCode = exitCode;\n'
-                      '  }\n'
-                      '}\n'
-                      '\n'
-                      '/**\n'
                       ' * Handles tool execution errors specifically.\n'
                       ' * In JSON/STREAM_JSON mode, outputs error message to stderr '
                       'only and does not exit.\n'
@@ -23456,36 +25175,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "} from '@qwen-code/qwen-code-core';\n"
                              '\n'
                              "const debugLogger = createDebugLogger('CLI_ERRORS');\n"
-                             '\n'
-                             '/**\n'
-                             ' * Marker thrown when a producer has already formatted '
-                             'the error message and\n'
-                             " * written it to stderr as the run's live human-readable "
-                             'line.\n'
-                             ' *\n'
-                             ' * The non-interactive runner uses this when an upstream '
-                             'API error event\n'
-                             ' * arrives mid-stream: it formats with '
-                             'parseAndFormatApiError, writes once, and\n'
-                             " * then throws. Under `--output-format text` the run's "
-                             'terminal record is\n'
-                             ' * itself a line on stderr, so the marker is what keeps '
-                             'that one ending from\n'
-                             ' * printing the same text twice. `exitCode` is the '
-                             'status the run leaves\n'
-                             ' * behind when the failure names one.\n'
-                             ' */\n'
-                             'export class AlreadyReportedError extends Error {\n'
-                             '  /** Exit code to surface — defaults to 1 for generic '
-                             'upstream failures. */\n'
-                             '  exitCode: number;\n'
-                             '\n'
-                             '  constructor(message: string, exitCode = 1) {\n'
-                             '    super(message);\n'
-                             "    this.name = 'AlreadyReportedError';\n"
-                             '    this.exitCode = exitCode;\n'
-                             '  }\n'
-                             '}\n'
                              '\n'
                              '/**\n'
                              ' * Handles tool execution errors specifically.\n'
@@ -30795,6 +32484,126 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  setExternalMessageProvider(provider: () => '
                              'AgentExternalInput[]): void {\n'
                              '    this.externalMessageProvider = provider;\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-interactive.ts:landmark-1',
+             'path': 'packages/core/src/agents/runtime/agent-interactive.ts',
+             'before': '\n'
+                       '/**\n'
+                       ' * Map a non-GOAL terminate mode to a visible status message '
+                       'for the UI,\n'
+                       ' * or return null to suppress the message entirely.\n'
+                       ' *\n'
+                       ' * CANCELLED is suppressed here because cancelCurrentRound() '
+                       'already emits\n'
+                       ' * its own warning. SHUTDOWN is suppressed as a normal '
+                       'lifecycle end.\n'
+                       ' */\n'
+                       'function terminateModeMessage(\n'
+                       '  mode: AgentTerminateMode,\n'
+                       "): { text: string; level: 'info' | 'warning' | 'error' } | "
+                       'null {\n'
+                       '  switch (mode) {\n'
+                       '    case AgentTerminateMode.MAX_TURNS:\n',
+             'after': '\n'
+                      '/**\n'
+                      ' * Map a non-GOAL terminate mode to a visible status message '
+                      'for the UI,\n'
+                      ' * or return null to suppress the message entirely.\n'
+                      ' *\n'
+                      ' * CANCELLED is suppressed here because cancelCurrentRound() '
+                      'already emits\n'
+                      ' * its own warning.\n'
+                      ' */\n'
+                      'function terminateModeMessage(\n'
+                      '  mode: AgentTerminateMode,\n'
+                      "): { text: string; level: 'info' | 'warning' | 'error' } | null "
+                      '{\n'
+                      '  switch (mode) {\n'
+                      '    case AgentTerminateMode.MAX_TURNS:\n',
+             'review_before': '\n'
+                              '/**\n'
+                              ' * Map a non-GOAL terminate mode to a visible status '
+                              'message for the UI,\n'
+                              ' * or return null to suppress the message entirely.\n'
+                              ' *\n'
+                              ' * CANCELLED is suppressed here because '
+                              'cancelCurrentRound() already emits\n'
+                              ' * its own warning. SHUTDOWN is suppressed as a normal '
+                              'lifecycle end.\n'
+                              ' */\n'
+                              'function terminateModeMessage(\n'
+                              '  mode: AgentTerminateMode,\n'
+                              "): { text: string; level: 'info' | 'warning' | 'error' "
+                              '} | null {\n'
+                              '  switch (mode) {\n'
+                              '    case AgentTerminateMode.MAX_TURNS:\n',
+             'review_after': '\n'
+                             '/**\n'
+                             ' * Map a non-GOAL terminate mode to a visible status '
+                             'message for the UI,\n'
+                             ' * or return null to suppress the message entirely.\n'
+                             ' *\n'
+                             ' * CANCELLED is suppressed here because '
+                             'cancelCurrentRound() already emits\n'
+                             ' * its own warning.\n'
+                             ' */\n'
+                             'function terminateModeMessage(\n'
+                             '  mode: AgentTerminateMode,\n'
+                             "): { text: string; level: 'info' | 'warning' | 'error' } "
+                             '| null {\n'
+                             '  switch (mode) {\n'
+                             '    case AgentTerminateMode.MAX_TURNS:\n'},
+            {'name': 'packages/core/src/agents/runtime/agent-interactive.ts:landmark-2',
+             'path': 'packages/core/src/agents/runtime/agent-interactive.ts',
+             'before': '    case AgentTerminateMode.LOOP_DETECTED:\n'
+                       '      return {\n'
+                       "        text: 'Agent stopped: duplicate tool-call loop "
+                       "detected.',\n"
+                       "        level: 'error',\n"
+                       '      };\n'
+                       '    case AgentTerminateMode.CANCELLED:\n'
+                       '    case AgentTerminateMode.SHUTDOWN:\n'
+                       '      return null;\n'
+                       '    default:\n'
+                       '      return null;\n'
+                       '  }\n'
+                       '}\n',
+             'after': '    case AgentTerminateMode.LOOP_DETECTED:\n'
+                      '      return {\n'
+                      "        text: 'Agent stopped: duplicate tool-call loop "
+                      "detected.',\n"
+                      "        level: 'error',\n"
+                      '      };\n'
+                      '    case AgentTerminateMode.CANCELLED:\n'
+                      '      return null;\n'
+                      '    default:\n'
+                      '      return null;\n'
+                      '  }\n'
+                      '}\n',
+             'review_before': '    case AgentTerminateMode.LOOP_DETECTED:\n'
+                              '      return {\n'
+                              "        text: 'Agent stopped: duplicate tool-call loop "
+                              "detected.',\n"
+                              "        level: 'error',\n"
+                              '      };\n'
+                              '    case AgentTerminateMode.CANCELLED:\n'
+                              '    case AgentTerminateMode.SHUTDOWN:\n'
+                              '      return null;\n'
+                              '    default:\n'
+                              '      return null;\n'
+                              '  }\n'
+                              '}\n',
+             'review_after': '    case AgentTerminateMode.LOOP_DETECTED:\n'
+                             '      return {\n'
+                             "        text: 'Agent stopped: duplicate tool-call loop "
+                             "detected.',\n"
+                             "        level: 'error',\n"
+                             '      };\n'
+                             '    case AgentTerminateMode.CANCELLED:\n'
+                             '      return null;\n'
+                             '    default:\n'
+                             '      return null;\n'
+                             '  }\n'
+                             '}\n'},
             {'name': 'packages/core/src/agents/runtime/agent-types.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-types.ts',
              'before': '  /**\n'
@@ -30900,7 +32709,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'session ended). */\n'
                        "  SHUTDOWN = 'SHUTDOWN',\n"
                        '}\n'
-                       '\n',
+                       '\n'
+                       '// ─── Agent Status '
+                       '────────────────────────────────────────────\n'
+                       '\n'
+                       '/**\n'
+                       ' * Canonical lifecycle status for any agent (headless, '
+                       'interactive, arena).\n',
              'after': "  /** The agent's execution terminated because it exceeded the "
                       'maximum allowed working time. */\n'
                       "  TIMEOUT = 'TIMEOUT',\n"
@@ -30928,11 +32743,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "  /** The agent's execution was cancelled via an abort signal. "
                       '*/\n'
                       "  CANCELLED = 'CANCELLED',\n"
-                      '  /** The agent was gracefully shut down (e.g., arena/team '
-                      'session ended). */\n'
-                      "  SHUTDOWN = 'SHUTDOWN',\n"
                       '}\n'
-                      '\n',
+                      '\n'
+                      '// ─── Agent Status '
+                      '────────────────────────────────────────────\n'
+                      '\n'
+                      '/**\n'
+                      ' * Canonical lifecycle status for any agent (headless, '
+                      'interactive, arena).\n',
              'review_before': "  /** The agent's execution terminated because it "
                               'exceeded the maximum allowed working time. */\n'
                               "  TIMEOUT = 'TIMEOUT',\n"
@@ -30952,7 +32770,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'arena/team session ended). */\n'
                               "  SHUTDOWN = 'SHUTDOWN',\n"
                               '}\n'
-                              '\n',
+                              '\n'
+                              '// ─── Agent Status '
+                              '────────────────────────────────────────────\n'
+                              '\n'
+                              '/**\n'
+                              ' * Canonical lifecycle status for any agent (headless, '
+                              'interactive, arena).\n',
              'review_after': "  /** The agent's execution terminated because it "
                              'exceeded the maximum allowed working time. */\n'
                              "  TIMEOUT = 'TIMEOUT',\n"
@@ -30980,11 +32804,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "  /** The agent's execution was cancelled via an abort "
                              'signal. */\n'
                              "  CANCELLED = 'CANCELLED',\n"
-                             '  /** The agent was gracefully shut down (e.g., '
-                             'arena/team session ended). */\n'
-                             "  SHUTDOWN = 'SHUTDOWN',\n"
                              '}\n'
-                             '\n'},
+                             '\n'
+                             '// ─── Agent Status '
+                             '────────────────────────────────────────────\n'
+                             '\n'
+                             '/**\n'
+                             ' * Canonical lifecycle status for any agent (headless, '
+                             'interactive, arena).\n'},
             {'name': 'packages/core/src/agents/subagent-result.test.ts:landmark-1',
              'path': 'packages/core/src/agents/subagent-result.test.ts',
              'before': ' * Copyright 2026 Qwen\n'
@@ -35299,7 +37126,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'},
             {'name': 'packages/core/src/core/client.ts:landmark-3',
              'path': 'packages/core/src/core/client.ts',
-             'before': '        if (await '
+             'before': '        const checkpoint = '
+                       'this.lastHookMicrocompactionTimestamp;\n'
+                       '        if (await '
                        'this.microcompactHistoryBeforeSend(checkpoint)) {\n'
                        '          this.lastHookMicrocompactionTimestamp = Date.now();\n'
                        '        }\n'
@@ -35316,14 +37145,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        this.config\n'
                        '          .getChatRecordingService()\n'
                        '          ?.recordAttributionSnapshot(\n',
-             'after': '        if (await '
+             'after': '        const checkpoint = '
+                      'this.lastHookMicrocompactionTimestamp;\n'
+                      '        if (await '
                       'this.microcompactHistoryBeforeSend(checkpoint)) {\n'
                       '          this.lastHookMicrocompactionTimestamp = Date.now();\n'
                       '        }\n'
                       '      }\n'
                       '\n'
-                      '      if (messageType !== SendMessageType.Retry && '
-                      '!isGoalRuntimeTurn) {\n'
+                      '      if (messageType !== SendMessageType.Retry) {\n'
                       '        // The budget decides the turn before the turn is '
                       'charged to it, so a\n'
                       '        // run stopped here has started no turn it could not '
@@ -35355,7 +37185,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        this.config\n'
                       '          .getChatRecordingService()\n'
                       '          ?.recordAttributionSnapshot(\n',
-             'review_before': '        if (await '
+             'review_before': '        const checkpoint = '
+                              'this.lastHookMicrocompactionTimestamp;\n'
+                              '        if (await '
                               'this.microcompactHistoryBeforeSend(checkpoint)) {\n'
                               '          this.lastHookMicrocompactionTimestamp = '
                               'Date.now();\n'
@@ -35373,15 +37205,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        this.config\n'
                               '          .getChatRecordingService()\n'
                               '          ?.recordAttributionSnapshot(\n',
-             'review_after': '        if (await '
+             'review_after': '        const checkpoint = '
+                             'this.lastHookMicrocompactionTimestamp;\n'
+                             '        if (await '
                              'this.microcompactHistoryBeforeSend(checkpoint)) {\n'
                              '          this.lastHookMicrocompactionTimestamp = '
                              'Date.now();\n'
                              '        }\n'
                              '      }\n'
                              '\n'
-                             '      if (messageType !== SendMessageType.Retry && '
-                             '!isGoalRuntimeTurn) {\n'
+                             '      if (messageType !== SendMessageType.Retry) {\n'
                              '        // The budget decides the turn before the turn '
                              'is charged to it, so a\n'
                              '        // run stopped here has started no turn it could '
@@ -35538,7 +37371,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          return undefined;\n'
                       '        }\n'
                       '        if (\n'
-                      '          !isGoalRuntimeTurn &&\n'
                       '          sessionTurnBudgetReached(\n'
                       '            this.config.getMaxSessionTurns(),\n'
                       '            this.sessionTurnCount,\n'
@@ -35577,7 +37409,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          return undefined;\n'
                              '        }\n'
                              '        if (\n'
-                             '          !isGoalRuntimeTurn &&\n'
                              '          sessionTurnBudgetReached(\n'
                              '            this.config.getMaxSessionTurns(),\n'
                              '            this.sessionTurnCount,\n'
@@ -80818,6 +82649,112 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'},
             {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-6',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '        // mode came from inside the subagent itself).\n'
+                       '        const meta = lastEndMeta();\n'
+                       "        expect(meta.status).toBe('cancelled');\n"
+                       '        '
+                       "expect(meta.terminateReason).toBe('subagent_cancelled');\n"
+                       '      });\n'
+                       '\n'
+                       '      it(\'SHUTDOWN terminateMode → status="cancelled" + '
+                       'terminateReason="subagent_shutdown"\', async () => {\n'
+                       '        // SHUTDOWN is graceful arena/team-session-end, not '
+                       'failure.\n'
+                       '        // wenshao @ #4410 DeepSeek 3291876034.\n'
+                       '        '
+                       'vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                       '          AgentTerminateMode.SHUTDOWN,\n'
+                       '        );\n'
+                       '        await runForegroundOnce();\n'
+                       '        const meta = lastEndMeta();\n'
+                       "        expect(meta.status).toBe('cancelled');\n"
+                       '        '
+                       "expect(meta.terminateReason).toBe('subagent_shutdown');\n"
+                       '      });\n'
+                       '\n'
+                       "      it('ERROR terminateMode populates error + errorType for "
+                       "OTel exception attrs', async () => {\n"
+                       '        // Non-throwing failure paths '
+                       '(ERROR/MAX_TURNS/TIMEOUT) must\n'
+                       '        // populate error/errorType so endSubagentSpan sets '
+                       'the standard\n'
+                       "        // OTel exception attributes — generic 'subagent "
+                       "failed' was\n"
+                       '        // hiding the reason from dashboards. wenshao @ #4410 '
+                       'DeepSeek\n'
+                       '        // 3291876053.\n',
+             'after': '        // mode came from inside the subagent itself).\n'
+                      '        const meta = lastEndMeta();\n'
+                      "        expect(meta.status).toBe('cancelled');\n"
+                      '        '
+                      "expect(meta.terminateReason).toBe('subagent_cancelled');\n"
+                      '      });\n'
+                      '\n'
+                      "      it('ERROR terminateMode populates error + errorType for "
+                      "OTel exception attrs', async () => {\n"
+                      '        // Non-throwing failure paths (ERROR/MAX_TURNS/TIMEOUT) '
+                      'must\n'
+                      '        // populate error/errorType so endSubagentSpan sets the '
+                      'standard\n'
+                      "        // OTel exception attributes — generic 'subagent "
+                      "failed' was\n"
+                      '        // hiding the reason from dashboards. wenshao @ #4410 '
+                      'DeepSeek\n'
+                      '        // 3291876053.\n',
+             'review_before': '        // mode came from inside the subagent itself).\n'
+                              '        const meta = lastEndMeta();\n'
+                              "        expect(meta.status).toBe('cancelled');\n"
+                              '        '
+                              "expect(meta.terminateReason).toBe('subagent_cancelled');\n"
+                              '      });\n'
+                              '\n'
+                              '      it(\'SHUTDOWN terminateMode → status="cancelled" '
+                              '+ terminateReason="subagent_shutdown"\', async () => {\n'
+                              '        // SHUTDOWN is graceful arena/team-session-end, '
+                              'not failure.\n'
+                              '        // wenshao @ #4410 DeepSeek 3291876034.\n'
+                              '        '
+                              'vi.mocked(mockAgent.getTerminateMode).mockReturnValue(\n'
+                              '          AgentTerminateMode.SHUTDOWN,\n'
+                              '        );\n'
+                              '        await runForegroundOnce();\n'
+                              '        const meta = lastEndMeta();\n'
+                              "        expect(meta.status).toBe('cancelled');\n"
+                              '        '
+                              "expect(meta.terminateReason).toBe('subagent_shutdown');\n"
+                              '      });\n'
+                              '\n'
+                              "      it('ERROR terminateMode populates error + "
+                              "errorType for OTel exception attrs', async () => {\n"
+                              '        // Non-throwing failure paths '
+                              '(ERROR/MAX_TURNS/TIMEOUT) must\n'
+                              '        // populate error/errorType so endSubagentSpan '
+                              'sets the standard\n'
+                              '        // OTel exception attributes — generic '
+                              "'subagent failed' was\n"
+                              '        // hiding the reason from dashboards. wenshao @ '
+                              '#4410 DeepSeek\n'
+                              '        // 3291876053.\n',
+             'review_after': '        // mode came from inside the subagent itself).\n'
+                             '        const meta = lastEndMeta();\n'
+                             "        expect(meta.status).toBe('cancelled');\n"
+                             '        '
+                             "expect(meta.terminateReason).toBe('subagent_cancelled');\n"
+                             '      });\n'
+                             '\n'
+                             "      it('ERROR terminateMode populates error + "
+                             "errorType for OTel exception attrs', async () => {\n"
+                             '        // Non-throwing failure paths '
+                             '(ERROR/MAX_TURNS/TIMEOUT) must\n'
+                             '        // populate error/errorType so endSubagentSpan '
+                             'sets the standard\n'
+                             "        // OTel exception attributes — generic 'subagent "
+                             "failed' was\n"
+                             '        // hiding the reason from dashboards. wenshao @ '
+                             '#4410 DeepSeek\n'
+                             '        // 3291876053.\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-7',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '          totalDurationMs: 0,\n'
                        '          totalToolCalls: 0,\n'
                        '          successfulToolCalls: 0,\n'
@@ -80874,7 +82811,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        set: vi.fn(),\n'
                              '      } as unknown as ContextState;\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-7',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-8',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '    beforeEach(() => {\n'
                        '      mockAgent = {\n'
@@ -81056,7 +82993,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        set: vi.fn(),\n'
                              '      } as unknown as ContextState;\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-8',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-9',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '    beforeEach(() => {\n'
                        '      mockAgent = {\n'
@@ -81238,7 +83175,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        set: vi.fn(),\n'
                              '      } as unknown as ContextState;\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-9',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-10',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '          totalDurationMs: 100,\n'
                        '          totalToolCalls: 1,\n'
@@ -81304,7 +83241,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'emitDuringExecute(capturedInvocation.eventEmitter);\n'
                              '      });\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-10',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-11',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': "        (entry) => entry.callId === 'call-read-1',\n"
                        '      );\n'
@@ -81529,7 +83466,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '      const invocation = '
                              'createInvocationWithEventDrivenAgent((emitter) => {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-11',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '    beforeEach(() => {\n'
                        '      mockAgent = {\n'
@@ -82589,6 +84526,98 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      : params;\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
              'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '    return {\n'
+                       "      status: 'cancelled',\n"
+                       "      terminateReason: signalAborted ? 'signal_aborted' : "
+                       "'subagent_cancelled',\n"
+                       '      resultSummaryPresent,\n'
+                       '    };\n'
+                       '  }\n'
+                       '  // SHUTDOWN is a graceful arena/team-session-end, not a '
+                       'failure — group it\n'
+                       "  // with cancellations so dashboards don't count it against "
+                       'subagent error\n'
+                       '  // rate. Review wenshao @ #4410.\n'
+                       '  if (terminateMode === AgentTerminateMode.SHUTDOWN) {\n'
+                       '    return {\n'
+                       "      status: 'cancelled',\n"
+                       "      terminateReason: 'subagent_shutdown',\n"
+                       '      resultSummaryPresent,\n'
+                       '    };\n'
+                       '  }\n'
+                       '  if (terminateMode === AgentTerminateMode.GOAL) {\n'
+                       "    return { status: 'completed', resultSummaryPresent };\n"
+                       '  }\n'
+                       '  // Non-throwing failure paths (ERROR / MAX_TURNS / TIMEOUT) '
+                       '— populate\n'
+                       '  // `error`/`errorType` so endSubagentSpan sets standard OTel '
+                       'exception\n'
+                       "  // attributes instead of a generic `'subagent failed'` "
+                       'placeholder.\n',
+             'after': '    return {\n'
+                      "      status: 'cancelled',\n"
+                      "      terminateReason: signalAborted ? 'signal_aborted' : "
+                      "'subagent_cancelled',\n"
+                      '      resultSummaryPresent,\n'
+                      '    };\n'
+                      '  }\n'
+                      '  if (terminateMode === AgentTerminateMode.GOAL) {\n'
+                      "    return { status: 'completed', resultSummaryPresent };\n"
+                      '  }\n'
+                      '  // Non-throwing failure paths (ERROR / MAX_TURNS / TIMEOUT) — '
+                      'populate\n'
+                      '  // `error`/`errorType` so endSubagentSpan sets standard OTel '
+                      'exception\n'
+                      "  // attributes instead of a generic `'subagent failed'` "
+                      'placeholder.\n',
+             'review_before': '    return {\n'
+                              "      status: 'cancelled',\n"
+                              "      terminateReason: signalAborted ? 'signal_aborted' "
+                              ": 'subagent_cancelled',\n"
+                              '      resultSummaryPresent,\n'
+                              '    };\n'
+                              '  }\n'
+                              '  // SHUTDOWN is a graceful arena/team-session-end, not '
+                              'a failure — group it\n'
+                              "  // with cancellations so dashboards don't count it "
+                              'against subagent error\n'
+                              '  // rate. Review wenshao @ #4410.\n'
+                              '  if (terminateMode === AgentTerminateMode.SHUTDOWN) {\n'
+                              '    return {\n'
+                              "      status: 'cancelled',\n"
+                              "      terminateReason: 'subagent_shutdown',\n"
+                              '      resultSummaryPresent,\n'
+                              '    };\n'
+                              '  }\n'
+                              '  if (terminateMode === AgentTerminateMode.GOAL) {\n'
+                              "    return { status: 'completed', resultSummaryPresent "
+                              '};\n'
+                              '  }\n'
+                              '  // Non-throwing failure paths (ERROR / MAX_TURNS / '
+                              'TIMEOUT) — populate\n'
+                              '  // `error`/`errorType` so endSubagentSpan sets '
+                              'standard OTel exception\n'
+                              "  // attributes instead of a generic `'subagent "
+                              "failed'` placeholder.\n",
+             'review_after': '    return {\n'
+                             "      status: 'cancelled',\n"
+                             "      terminateReason: signalAborted ? 'signal_aborted' "
+                             ": 'subagent_cancelled',\n"
+                             '      resultSummaryPresent,\n'
+                             '    };\n'
+                             '  }\n'
+                             '  if (terminateMode === AgentTerminateMode.GOAL) {\n'
+                             "    return { status: 'completed', resultSummaryPresent "
+                             '};\n'
+                             '  }\n'
+                             '  // Non-throwing failure paths (ERROR / MAX_TURNS / '
+                             'TIMEOUT) — populate\n'
+                             '  // `error`/`errorType` so endSubagentSpan sets '
+                             'standard OTel exception\n'
+                             "  // attributes instead of a generic `'subagent failed'` "
+                             'placeholder.\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
+             'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '}\n'
                        '\n'
                        'class AgentToolInvocation extends '
@@ -82657,7 +84686,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    private readonly config: Config,\n'
                              '    private readonly subagentManager: SubagentManager,\n'
                              '    params: AgentParams,\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-11',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          },\n'
                        '          updateOutput,\n'
@@ -82853,7 +84882,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '    // Track real-time token consumption from subagent '
                              'API calls.\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-12',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '    }\n'
                        '\n'
@@ -82911,7 +84940,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '    return { subagent, initialMessages, taskPrompt, '
                              'toolConfig };\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-13',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      }\n'
                        '\n'
@@ -82992,7 +85021,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '      // Publish span outcome BEFORE side-effectful '
                              'UI/registry calls — if\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-14',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          resultSummaryPresent: Boolean(\n'
                        '            subagentRawText && subagentRawText.length > 0,\n'
@@ -83140,7 +85169,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      }\n'
                              '      return stopHookWarning;\n'
                              '    } catch (error) {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-15',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-16',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      debugLogger.error(\n'
                        '        `[AgentTool] Error inside subagent background task: '
@@ -83200,7 +85229,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '      return undefined;\n'
                              '    }\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-16',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-17',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      // `error` marks the call failed in the scheduler, so '
                        'tool-usage stats\n'
@@ -83308,7 +85337,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          this.params.subagent_type ?? '
                              'DEFAULT_BUILTIN_SUBAGENT_TYPE,\n'
                              '        taskDescription: this.params.description,\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-17',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-18',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '    let backgroundSlotReservationConsumed = false;\n'
                        '    // Concrete model ID the sub-agent will run with, resolved '
@@ -83382,7 +85411,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          '
                              '.releaseBackgroundSlot(backgroundSlotReservation);\n'
                              '        backgroundSlotReservation = undefined;\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-18',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-19',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': "      // BackgroundTaskRegistry's single session-level "
                        'notification callback\n'
@@ -83474,7 +85503,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '&&\n'
                              '                // A `name` passed without an active '
                              'team falls through to a regular\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-19',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-20',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      } else {\n'
                        '        const result = await '
@@ -83600,7 +85629,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          },\n'
                              '        );\n'
                              '        subagent = result.subagent;\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-20',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-21',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '            );\n'
                        '          }\n'
@@ -83652,7 +85681,188 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          );\n'
                              '          void agentConfig\n'
                              '            .getToolRegistry()\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-21',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-22',
+             'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '                );\n'
+                       '              }\n'
+                       '\n'
+                       '              // Report terminate mode: only GOAL counts as '
+                       'success. CANCELLED\n'
+                       "              // keeps the 'cancelled' status so the model "
+                       "sees task_stop's\n"
+                       '              // effect accurately (with any partial result '
+                       'attached). ERROR,\n'
+                       '              // MAX_TURNS, TIMEOUT, and SHUTDOWN are surfaced '
+                       'as failures so\n'
+                       "              // the parent model (and the UI) don't treat "
+                       'incomplete runs as\n'
+                       '              // completed.\n'
+                       '              //\n'
+                       '              const terminateMode = '
+                       'bgSubagent.getTerminateMode();\n'
+                       '              const subagentRawText = '
+                       'bgSubagent.getFinalText();\n'
+                       '              const hadWorktreeIsolation = worktreeIsolation '
+                       '!== null;\n'
+                       '              const recordTerminalOutcome = () =>\n'
+                       '                recordSpanOutcome(\n',
+             'after': '                );\n'
+                      '              }\n'
+                      '\n'
+                      '              // Report terminate mode: only GOAL counts as '
+                      'success. CANCELLED\n'
+                      "              // keeps the 'cancelled' status so the model sees "
+                      "task_stop's\n"
+                      '              // effect accurately (with any partial result '
+                      'attached). ERROR,\n'
+                      '              // MAX_TURNS and TIMEOUT are surfaced as failures '
+                      'so the parent\n'
+                      "              // model (and the UI) don't treat incomplete runs "
+                      'as completed.\n'
+                      '              //\n'
+                      '              const terminateMode = '
+                      'bgSubagent.getTerminateMode();\n'
+                      '              const subagentRawText = '
+                      'bgSubagent.getFinalText();\n'
+                      '              const hadWorktreeIsolation = worktreeIsolation '
+                      '!== null;\n'
+                      '              const recordTerminalOutcome = () =>\n'
+                      '                recordSpanOutcome(\n',
+             'review_before': '                );\n'
+                              '              }\n'
+                              '\n'
+                              '              // Report terminate mode: only GOAL '
+                              'counts as success. CANCELLED\n'
+                              "              // keeps the 'cancelled' status so the "
+                              "model sees task_stop's\n"
+                              '              // effect accurately (with any partial '
+                              'result attached). ERROR,\n'
+                              '              // MAX_TURNS, TIMEOUT, and SHUTDOWN are '
+                              'surfaced as failures so\n'
+                              "              // the parent model (and the UI) don't "
+                              'treat incomplete runs as\n'
+                              '              // completed.\n'
+                              '              //\n'
+                              '              const terminateMode = '
+                              'bgSubagent.getTerminateMode();\n'
+                              '              const subagentRawText = '
+                              'bgSubagent.getFinalText();\n'
+                              '              const hadWorktreeIsolation = '
+                              'worktreeIsolation !== null;\n'
+                              '              const recordTerminalOutcome = () =>\n'
+                              '                recordSpanOutcome(\n',
+             'review_after': '                );\n'
+                             '              }\n'
+                             '\n'
+                             '              // Report terminate mode: only GOAL counts '
+                             'as success. CANCELLED\n'
+                             "              // keeps the 'cancelled' status so the "
+                             "model sees task_stop's\n"
+                             '              // effect accurately (with any partial '
+                             'result attached). ERROR,\n'
+                             '              // MAX_TURNS and TIMEOUT are surfaced as '
+                             'failures so the parent\n'
+                             "              // model (and the UI) don't treat "
+                             'incomplete runs as completed.\n'
+                             '              //\n'
+                             '              const terminateMode = '
+                             'bgSubagent.getTerminateMode();\n'
+                             '              const subagentRawText = '
+                             'bgSubagent.getFinalText();\n'
+                             '              const hadWorktreeIsolation = '
+                             'worktreeIsolation !== null;\n'
+                             '              const recordTerminalOutcome = () =>\n'
+                             '                recordSpanOutcome(\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-23',
+             'path': 'packages/core/src/tools/agent/agent.ts',
+             'before': '                patchAgentMeta(metaPath, {\n'
+                       "                  status: 'completed',\n"
+                       '                  lastUpdatedAt: new Date().toISOString(),\n'
+                       '                  lastError: undefined,\n'
+                       '                });\n'
+                       '                registry.complete(hookOpts.agentId, finalText, '
+                       'completionStats);\n'
+                       '              } else if (\n'
+                       '                terminateMode === AgentTerminateMode.CANCELLED '
+                       '||\n'
+                       '                terminateMode === AgentTerminateMode.SHUTDOWN\n'
+                       '              ) {\n'
+                       '                // SHUTDOWN is grouped with CANCELLED in the '
+                       'span taxonomy\n'
+                       '                // (deriveSubagentOutcomeMetadata); align the '
+                       'registry side\n'
+                       "                // so dashboards don't see span=cancelled / "
+                       'registry=failed\n'
+                       '                // mismatch on graceful arena/team-session '
+                       'shutdown.\n'
+                       '                // wenshao @ #4410.\n'
+                       '                registry.finalizeCancelled(\n'
+                       '                  hookOpts.agentId,\n'
+                       '                  finalText,\n'
+                       '                  completionStats,\n'
+                       '                );\n'
+                       '                persistBackgroundCancellation(\n',
+             'after': '                patchAgentMeta(metaPath, {\n'
+                      "                  status: 'completed',\n"
+                      '                  lastUpdatedAt: new Date().toISOString(),\n'
+                      '                  lastError: undefined,\n'
+                      '                });\n'
+                      '                registry.complete(hookOpts.agentId, finalText, '
+                      'completionStats);\n'
+                      '              } else if (terminateMode === '
+                      'AgentTerminateMode.CANCELLED) {\n'
+                      '                registry.finalizeCancelled(\n'
+                      '                  hookOpts.agentId,\n'
+                      '                  finalText,\n'
+                      '                  completionStats,\n'
+                      '                );\n'
+                      '                persistBackgroundCancellation(\n',
+             'review_before': '                patchAgentMeta(metaPath, {\n'
+                              "                  status: 'completed',\n"
+                              '                  lastUpdatedAt: new '
+                              'Date().toISOString(),\n'
+                              '                  lastError: undefined,\n'
+                              '                });\n'
+                              '                registry.complete(hookOpts.agentId, '
+                              'finalText, completionStats);\n'
+                              '              } else if (\n'
+                              '                terminateMode === '
+                              'AgentTerminateMode.CANCELLED ||\n'
+                              '                terminateMode === '
+                              'AgentTerminateMode.SHUTDOWN\n'
+                              '              ) {\n'
+                              '                // SHUTDOWN is grouped with CANCELLED '
+                              'in the span taxonomy\n'
+                              '                // (deriveSubagentOutcomeMetadata); '
+                              'align the registry side\n'
+                              "                // so dashboards don't see "
+                              'span=cancelled / registry=failed\n'
+                              '                // mismatch on graceful '
+                              'arena/team-session shutdown.\n'
+                              '                // wenshao @ #4410.\n'
+                              '                registry.finalizeCancelled(\n'
+                              '                  hookOpts.agentId,\n'
+                              '                  finalText,\n'
+                              '                  completionStats,\n'
+                              '                );\n'
+                              '                persistBackgroundCancellation(\n',
+             'review_after': '                patchAgentMeta(metaPath, {\n'
+                             "                  status: 'completed',\n"
+                             '                  lastUpdatedAt: new '
+                             'Date().toISOString(),\n'
+                             '                  lastError: undefined,\n'
+                             '                });\n'
+                             '                registry.complete(hookOpts.agentId, '
+                             'finalText, completionStats);\n'
+                             '              } else if (terminateMode === '
+                             'AgentTerminateMode.CANCELLED) {\n'
+                             '                registry.finalizeCancelled(\n'
+                             '                  hookOpts.agentId,\n'
+                             '                  finalText,\n'
+                             '                  completionStats,\n'
+                             '                );\n'
+                             '                persistBackgroundCancellation(\n'},
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-24',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        fgAbortController.abort();\n'
                        '      } else {\n'
@@ -83870,7 +86080,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'in. Foreground entries\n'
                              '      // skip XML notification and headless-holdback '
                              '(see the registry for\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-22',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-25',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '          resumeCount: 0,\n'
                        '          // Persisted so resume restores the original nesting '
@@ -84060,7 +86270,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "execution failed.') + wtSuffix,\n"
                              '            returnDisplay: this.currentDisplay!,\n'
                              '          };\n'},
-            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-23',
+            {'name': 'packages/core/src/tools/agent/agent.ts:landmark-26',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      const errorDisplay: AgentResultDisplay = {\n'
                        '        ...this.currentDisplay!,\n'
@@ -123805,8 +126015,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    // 'error_during_execution' | 'error_timeout' | "
                       "'error_max_turns'\n"
                       "    // | 'error_max_tool_calls' | 'error_loop_detected'\n"
-                      "    // | 'error_incomplete_generation' | 'error_cancelled' | "
-                      "'error_shutdown'\n"
+                      "    // | 'error_incomplete_generation' | 'error_cancelled'\n"
                       '    private String subtype;\n'
                       '    /**\n'
                       '     * The UUID of the message.\n'
@@ -123838,7 +126047,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'error_max_turns'\n"
                              "    // | 'error_max_tool_calls' | 'error_loop_detected'\n"
                              "    // | 'error_incomplete_generation' | "
-                             "'error_cancelled' | 'error_shutdown'\n"
+                             "'error_cancelled'\n"
                              '    private String subtype;\n'
                              '    /**\n'
                              '     * The UUID of the message.\n'
@@ -123874,8 +126083,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    | 'error_max_tool_calls'\n"
                       "    | 'error_loop_detected'\n"
                       "    | 'error_incomplete_generation'\n"
-                      "    | 'error_cancelled'\n"
-                      "    | 'error_shutdown';\n"
+                      "    | 'error_cancelled';\n"
                       '  uuid: string;\n'
                       '  session_id: string;\n'
                       '  is_error: true;\n'
@@ -123909,8 +126117,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    | 'error_max_tool_calls'\n"
                              "    | 'error_loop_detected'\n"
                              "    | 'error_incomplete_generation'\n"
-                             "    | 'error_cancelled'\n"
-                             "    | 'error_shutdown';\n"
+                             "    | 'error_cancelled';\n"
                              '  uuid: string;\n'
                              '  session_id: string;\n'
                              '  is_error: true;\n'
@@ -123947,7 +126154,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        "error_loop_detected",\n'
                       '        "error_incomplete_generation",\n'
                       '        "error_cancelled",\n'
-                      '        "error_shutdown",\n'
                       '    ]\n'
                       '    uuid: str\n'
                       '    session_id: str\n'
@@ -123983,7 +126189,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        "error_loop_detected",\n'
                              '        "error_incomplete_generation",\n'
                              '        "error_cancelled",\n'
-                             '        "error_shutdown",\n'
                              '    ]\n'
                              '    uuid: str\n'
                              '    session_id: str\n'
@@ -124019,8 +126224,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "    | 'error_max_tool_calls'\n"
                       "    | 'error_loop_detected'\n"
                       "    | 'error_incomplete_generation'\n"
-                      "    | 'error_cancelled'\n"
-                      "    | 'error_shutdown';\n"
+                      "    | 'error_cancelled';\n"
                       '  uuid: string;\n'
                       '  session_id: string;\n'
                       '  is_error: true;\n'
@@ -124054,8 +126258,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    | 'error_max_tool_calls'\n"
                              "    | 'error_loop_detected'\n"
                              "    | 'error_incomplete_generation'\n"
-                             "    | 'error_cancelled'\n"
-                             "    | 'error_shutdown';\n"
+                             "    | 'error_cancelled';\n"
                              '  uuid: string;\n'
                              '  session_id: string;\n'
                              '  is_error: true;\n'
@@ -124345,26 +126548,28 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '// Do not edit this file manually.\n'
                              "export const GIT_COMMIT_INFO = '${gitCommitInfo}';\n"})},)
 
-FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2',
+FINAL_FILES = {'packages/cli/src/cli.test.ts': '31120aafcf051244bf4b18439877718a49c43a198693408a609c4fc0c45d3e71',
+ 'packages/cli/src/cli.ts': '2fae3b076048a11b87a71fc97fb6cd0fb9c955920a19fde90bffa2ce0fc7aa29',
+ 'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75ca8ff0a24c168df687e9f1220728ab4554adeb3d2',
  'packages/cli/src/config/auth.ts': '20b657054160e242265bb79ec2ba739abe8206a085720d3337443eb7f52eb2f9',
  'packages/cli/src/config/config.test.ts': '2ba225c1f41417a95189bbe05cb8ebedc85d192c0d5c1a098359a9c17c502259',
  'packages/cli/src/config/config.ts': 'c476125a2be618c868e8b38fdce4a77d53c882e8525ce33b20fb35947a38d7c0',
  'packages/cli/src/gemini.test.tsx': '2e547b0eb91c2e1746e3b966511cb286846cbc5495779056d0b1099776795166',
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',
- 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '1bc6c8a6c3d33f04a584f33945ceaec40aa25ce00fbf486f02e6fefec3be336e',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': 'c9cdb1093df8917fcd3b1f7a170dae36e4bc942797f08aa4c609114bac3e0e78',
  'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'f0007862fbfa42e925ca6f45ece60230577908927b110a242ab9ffd51e794a29',
  'packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts': '7695a5b1d2246a47ca2c11c6d4b2aaa1081e94661d98993b6caa45e15675fbca',
  'packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts': '2abf78f9b9c80cb619d1f2f437bd092d8f20816968f231b31558587a095b8be2',
  'packages/cli/src/nonInteractive/session.test.ts': 'a9262fd1058f275a05ee1892f35a2d4f918fb8601aeed6dad9d6d794639e3446',
  'packages/cli/src/nonInteractive/session.ts': '9c50443d208cea29438b5b67b06b50a9327a705291cfe3d0b6f07f7a905ee234',
- 'packages/cli/src/nonInteractive/types.ts': 'b3c6de1d02776fe22f042cf18fdd0c00a304603234bf89a3efba6c058d8f6a32',
- 'packages/cli/src/nonInteractiveCli.test.ts': 'e9fac30b676d9361c13a52d4d723d17acb594f67fae8c7da2e173707c167a930',
- 'packages/cli/src/nonInteractiveCli.ts': '99b495a37f313dffab29f2826361c7a4710d10535c9eb4d9ab1d002e591b0b76',
+ 'packages/cli/src/nonInteractive/types.ts': 'bcdd5db1ebd4720911b1f4a101d60ccdc5e8b36c1fa5226bc7fab045b4a1e8c4',
+ 'packages/cli/src/nonInteractiveCli.test.ts': '93d0423434b5894fb2210daaa49c17235d29e788cddcd38e1a262329ca25616d',
+ 'packages/cli/src/nonInteractiveCli.ts': '878088e40b2ad61ec9594cc1d6c68342b4d4ec11b344864e2959d42fe0e778d4',
  'packages/cli/src/serve/fs/workspace-file-system.test.ts': 'eafa762f3777e7245878351f1552a15d823692850e74c681de5d2efedc208948',
  'packages/cli/src/serve/fs/workspace-file-system.ts': '522cf90451cc0d069ca3c4c4df032f9599cf0e5747475d3a690e57084ade95bc',
  'packages/cli/src/ui/hooks/useGeminiStream.ts': 'bf4d27468ebd7549c34d4bb631ea7762c42e61462e3375c9c00bcf1f02a7e12e',
  'packages/cli/src/utils/errors.test.ts': '309ecd8f307d32532f4942ad22980db2374fd2661a78610851701e4870554584',
- 'packages/cli/src/utils/errors.ts': 'fe59b3121814d8ae29a4e7d4c862ac3056213474cedd00c9ae3a969bd10ff8c7',
+ 'packages/cli/src/utils/errors.ts': 'eb931fdd1b8d1137c465b8de35ae13b76eeb52ef1e9b769b805f244ae58812b5',
  'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'fec5551fbc322b637aa1f19681fd3b554c0a185ec0a4fe1ec94a2370fbb57206',
  'packages/cli/src/utils/nonInteractiveHelpers.ts': '8c675bf91b4b3d7ed72cf5430413500eb9e56cd636884118396c37e8b6a21c85',
  'packages/cli/src/validateNonInterActiveAuth.test.ts': '5058458dd9a66adba6d32dcea8744359cef7eab642622a697be69de912bd376d',
@@ -124376,7 +126581,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/agents/runtime/agent-events.ts': 'f8ddde1eb314785fbc47470dda432f2296b9d4d024cbe3c2241e12db69e99dcb',
  'packages/core/src/agents/runtime/agent-headless.test.ts': 'b9bb1b3221091d0d4b348d228c31d6ba098a5549cfec6aef195f98bd8a60ed4d',
  'packages/core/src/agents/runtime/agent-headless.ts': '24f953533bc130c33687e2cbe1b324dc0f49fb5a3f78860e30682193ac272cf5',
- 'packages/core/src/agents/runtime/agent-types.ts': '1e71e92bebe9b82a2db4c9645b484f354505cf4b603431edd81668abb3c9e1e4',
+ 'packages/core/src/agents/runtime/agent-interactive.ts': '68ecd4bb93b57778021f1cbfcf866060bc9ffc4f6dd875ee1e0ad20e72735986',
+ 'packages/core/src/agents/runtime/agent-types.ts': '8439101e8098fa07f4942fe28b9651cffe7d0c3b850c8c4585db262ecb44572e',
  'packages/core/src/agents/subagent-result.test.ts': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91',
  'packages/core/src/agents/subagent-result.ts': 'dc0a14c242f52a03c13423a0e0314517f2c270bdf48e2974d0e106db1c0c4379',
  'packages/core/src/config/config.test.ts': '7c131dabc240eab641e16f6bcf48fe92777c178d6eb920e4d46d496275e5f69a',
@@ -124387,7 +126593,7 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/core/baseLlmClient.test.ts': '643b5f7c90bbb9a63300c3ec02cffea86f4ecdbb65f06b1ec94eb18fda7e7674',
  'packages/core/src/core/baseLlmClient.ts': '14a959fbbeeffd507b9ebd2bb4d6b564d3a88feb4e46a406afcf2555fa791a9b',
  'packages/core/src/core/client.test.ts': '672a46838231a8799545260380cc65c10782779b2a344660342b1dd1d3b57c89',
- 'packages/core/src/core/client.ts': '908cb88e849298c3f5bd9d9678be3c268f053caaa4eca171dbcd6cdcf23ab534',
+ 'packages/core/src/core/client.ts': '4e7938239f783b08dd9b27a09a70b32e7df56ae58d25f6518e98afb68664290e',
  'packages/core/src/core/contentGenerator.ts': '27fa593f8dbf0e75106b2d4aa8f9d22801dcf016b112d56046542ed4fd3ff303',
  'packages/core/src/core/coreToolScheduler.test.ts': 'de21e1f4528091327c67e81ea7acd5a159b4cbd83189f09f3ddc5ed28b71943e',
  'packages/core/src/core/coreToolScheduler.ts': 'b29386e0ee8f5bb8aa0944af54e8f00ea77134bc263240c60a2477a91d98680e',
@@ -124429,8 +126635,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/subagents/builtin-agents.ts': '6ad87959e0c96cda63ae21a91201b3eed188519e95e4fbf253eabdf75920f3c7',
  'packages/core/src/test-utils/mock-tool.ts': '2d986e625264006e124e2762e70d3202cda49804f9645325dbf9c5481a3ef24d',
  'packages/core/src/tools/__snapshots__/shell.test.ts.snap': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41',
- 'packages/core/src/tools/agent/agent.test.ts': 'ff5f70a758e180e4b465ee568dffaa4b3ce9e8ae94781eb4d611f89c0eead510',
- 'packages/core/src/tools/agent/agent.ts': 'e1eb08b7e1b3ccd60f5437130a8b629ae36e526316196d11570d1b3e718f11cc',
+ 'packages/core/src/tools/agent/agent.test.ts': '2daecf5add00a1d3bd2e5b6bb0e2d3ae9307965c697792d5fcc6b32a412cb9a7',
+ 'packages/core/src/tools/agent/agent.ts': '7875d5b8eec18227b07530f15531cd28fa5adcd49dee4183a9dbb4ee85d63728',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',
@@ -124466,8 +126672,8 @@ FINAL_FILES = {'packages/cli/src/config/auth.test.ts': '7b635222b3d233be32e9b75c
  'packages/core/src/utils/sync-file-encoding.ts': '2df6912e5ee1d950b4c9e7dbabd7cd4667a5abf5a7d33b2fcb19a68ed4fc33b3',
  'packages/core/src/utils/toolCallResidue.test.ts': '87e1ad454f1a2ab05b3582623d8c3ddcca6bcd40ea92386d2b3d788c1e87254b',
  'packages/core/src/utils/toolCallResidue.ts': '45fd0561b4ca6f691f83c14b47bfe36bea7ffa692ff496c4ab430657b00c00fd',
- 'packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/message/SDKResultMessage.java': 'a5bcc1d06d343ab7264945f30a0858a10f47ea68df9a08de49f8aab96c06a571',
- 'packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/protocol.ts': '520803aac827005f02d623f183bca0b912919dd4032e148e19cc07b051c4e630',
- 'packages/sdk-python/src/qwen_code_sdk/protocol.py': '23f6277f27aa1925b4739901b6e873f9936d39e643fe4c71ad9c97fb1aeeaf81',
- 'packages/sdk-typescript/src/types/protocol.ts': '733d8406d373a2635d96b2332c8f0124451e1daf2f8a483f9e6045083416c788',
+ 'packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/message/SDKResultMessage.java': '610f1522d93e22a4345e8f48304981352699ef53ab2ddeae5c0331deea92e857',
+ 'packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/protocol.ts': '62b07c26e2685416228d7f46d8e0189cb83580240b4e98dd557d6962ab08a6d1',
+ 'packages/sdk-python/src/qwen_code_sdk/protocol.py': '0b53900eada1e73c0322249af8a902c40f55e20c217598bbc861b5871d872cb5',
+ 'packages/sdk-typescript/src/types/protocol.ts': '67e132804f2072c5600c40664a2a70a2677475ea0f4e46593658540b96e7f5f2',
  'scripts/generate-git-commit-info.js': '73ccd206f6e620dd0e47ee678fbcfcc58e10c2e724a7ca5ff57d13212e83ffac'}

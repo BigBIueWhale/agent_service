@@ -189,7 +189,7 @@ the turn fails before generation.
 
 A session is bounded by model turns, never by wall-clock time: the default
 budget is 400 turns (`limits.max_session_turns`), a submission may name any
-budget from 1 to the locked 800-turn ceiling
+budget from 1 to the locked 2,000-turn ceiling
 (`limits.max_session_turns_ceiling`) in its optional `max_session_turns` field,
 the chosen budget is enforced by the client itself, and `max_wall_time_seconds`
 is disabled everywhere. The budget counts the owning session's own turns, so a
@@ -213,8 +213,8 @@ repository-level fix needs roughly 80-190 turns to orient, build, diagnose,
 implement, and verify, so 400 admits a complete second attempt after a wrong
 hypothesis. A caller who knows a particular task is shaped differently can say
 so per session, but something must stay finite or a degenerate loop simply asks
-for a bigger number: the ceiling is exactly two default budgets, and a request
-for zero, a negative count, a non-integer, or more than 800 turns is an error
+for a bigger number: the ceiling is exactly five default budgets, and a request
+for zero, a negative count, a non-integer, or more than 2,000 turns is an error
 naming the value, never a silently clamped session that would end as an ordinary
 exit 53 and be graded as one. The effective budget is recorded in the session
 body and in the bundle's `control/turn-budget.json`, so a finished session can
@@ -280,9 +280,9 @@ second application must be byte-for-byte idempotent.
 is generated review evidence for humans; it is independently hashed and compared
 to the transformer's exact output, but is not a second patching path. Its current
 SHA-256 is
-`19455bb10d64c7d58b2ad406cb1c44b569534fb3e9d106f395e5668cfa84b37f`.
+`d1c86e91cb7d774a3fadebac51ff31a40f18da1725c8bf14822325c4c8315855`.
 The transformer's manifest SHA-256 is
-`c4056c78a64c0698d51d3c324c3c372f1a611d330e65c6f891373b5bd2177486`.
+`fbba75c5640fd7eb7085f3ce566b68213600f608ed4b2b7c29f647721f08b87a`.
 Both identities are locked, checked on the host, checked again inside the Docker
 build, and recorded as image labels.
 
@@ -463,22 +463,28 @@ chooses a convenient-looking “last result.”
 
 The envelope names which terminal state ended the run, and the service carries that
 name through to the caller as `agent_result_subtype`. `success` is the agent's
-assertion that the model wrote its final message to the end. Eight `error_*`
+assertion that the model wrote its final message to the end. Seven `error_*`
 spellings name the states that stopped a run instead, one name per state:
 `error_during_execution` when the run failed on its own terms, `error_timeout`,
 `error_max_turns` and `error_max_tool_calls` for the three caller-supplied bounds,
 `error_loop_detected` when the loop detector halted a run that had stopped making
 progress, `error_incomplete_generation` when the provider stopped the last
-generation from outside, `error_cancelled` for an abort from outside, and
-`error_shutdown` when the run's owner ended it. The same nine names are what a
-subagent's own scoped record carries, so a subagent that ran out of turns and one
-whose tool threw are distinguishable without reading English. The set is closed in
-both directions: an error envelope carrying `success`, or a success envelope
-carrying an error spelling, is refused rather than mapped onto a neighbour, and the
-client's build refuses to produce a name this list does not contain. A run that
-never produced a terminal record reports no state at all rather than a spelling
-nothing asserted. Nothing here judges whether the work was done, which is not
-decidable from a stream; it reports the shape of the ending, which is.
+generation from outside, and `error_cancelled` for an abort from outside. A state
+earns a name when it names an authority other than the run itself that ended the
+run, or a bound the caller set and can raise; everything the run did to itself is
+`error_during_execution`, told apart by the error message. Every one of the eight
+names is a state the client contains a statement to produce, which the patch
+asserts before it writes a byte. A subagent's own scoped record carries the error
+names from the same list, so a subagent that ran out of turns and one whose tool
+threw are distinguishable without reading English; a scope that finished reports
+its work rather than a terminal state, so `success` is the session's own. The set
+is closed in both directions on the session's record: an error envelope carrying
+`success`, or a success envelope carrying an error spelling, is refused rather
+than mapped onto a neighbour, and the client's build refuses to produce a name
+this list does not contain anywhere. A run that never produced a terminal record
+reports no state at all rather than a spelling nothing asserted. Nothing here
+judges whether the work was done, which is not decidable from a stream; it
+reports the shape of the ending, which is.
 
 The client reaches one of those states on every path out of a run, the session
 turn budget and a cancellation included, so a stream that stops without a terminal

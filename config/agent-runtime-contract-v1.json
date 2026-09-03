@@ -172,7 +172,7 @@
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "25bd4ab4f1ef94794a507f371ff2a36019d7d4ec23e5ff00906e0ace9bc6a336",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "wrapper_sha256": "51fe0901413a12b408f1f446c7d732046caf34d1dca440eba73dc63f1ca3ab36",
-    "agent_exec_source_sha256": "ab75e7ef2170fd11e7ba540fdc22b57615195907b8c4347f1e8c355377ca3b33"
+    "wrapper_sha256": "b32cd546debbecfdc04c427cf04e8612c4340c8b822270612ea366fc05ccda0e",
+    "agent_exec_source_sha256": "47be663991c5f5860966f43c441c72e65effcc23fb34420666486d67f71401bd"
   }
 }

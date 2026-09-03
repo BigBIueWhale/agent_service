@@ -155,7 +155,7 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && echo "executing $(wc -l < /tmp/qwen-test-files.txt) test files in full:" \
  && cat /tmp/qwen-test-files.txt \
  && xargs npx --no-install vitest run < /tmp/qwen-test-files.txt \
- && test "$(node scripts/cli-entry.js --version)" = '0.21.12' \
+ && test "$(node dist/cli.js --version)" = '0.21.12' \
  && rm -rf node_modules/.vite /tmp/node-compile-cache
 
 FROM ${RUST_IMAGE} AS agent-runtime-build
@@ -208,10 +208,9 @@ LABEL agent_service.profile="qwen38-agent-service-v3" \
 COPY --from=qwen-build /src/dist /opt/qwen-code/dist
 COPY --from=qwen-build /src/node_modules /opt/qwen-code/node_modules
 COPY --from=qwen-build /src/package.json /opt/qwen-code/package.json
-COPY --from=qwen-build /src/scripts/cli-entry.js /opt/qwen-code/scripts/cli-entry.js
 COPY --from=qwen-build /src/LICENSE /opt/qwen-code/LICENSE
 COPY --from=agent-runtime-build /build/target/release/agent_exec /opt/agent/agent_exec
-RUN test "$(node /opt/qwen-code/scripts/cli-entry.js --version)" = '0.21.12' \
+RUN test "$(node /opt/qwen-code/dist/cli.js --version)" = '0.21.12' \
  && test -n "${AGENT_EXEC_SOURCE_SHA256}" \
  && test "${AGENT_EXEC_SANDBOX}" = \
       'landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1' \
