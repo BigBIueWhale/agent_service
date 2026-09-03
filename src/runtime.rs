@@ -164,16 +164,20 @@ pub struct SessionBody {
     pub duration_wall_ms: u64,
     /// Exit code reported by `docker wait` for the agent container. The
     /// wrapper propagates Qwen Code's exit status after durably capturing
-    /// output, so this should equal `agent_exit_code` on an ordinary run.
+    /// output, so it is the agent's own status on an ordinary run.
     pub container_exit_code: i32,
-    /// Exit code reported by qwen-code itself, read from the
-    /// `output/qwen-exit-code` file the wrapper writes immediately before
-    /// the wrapper terminates. -1 if the file is missing or unparseable
-    /// (e.g. setup failed before the wrapper ran). Common values:
+    /// The same number as `container_exit_code`, read back from the
+    /// `output/qwen-exit-code` record this service writes from it before the
+    /// bundle is sealed, so a bundle carries the exit status without the
+    /// caller having to consult the session body. -1 if that record is
+    /// missing or unparseable. It is not an independent observation of the
+    /// agent's status and must not be read as corroborating evidence for
+    /// one. Common values:
     ///   0   normal completion
-    ///   53  hit `--max-session-turns` (qwen-code "Reached max session turns")
-    ///   137 SIGKILL'd by `docker stop` after a cancel
-    ///   other non-zero: qwen-code internal error; see events.jsonl
+    ///   53  the session turn budget stopped the run
+    ///   55  a wall-clock or tool-call budget stopped the run
+    ///   130 the run was cancelled
+    ///   other non-zero: an agent-side failure; see events.jsonl
     pub agent_exit_code: i32,
     /// True iff the run did not end cleanly: a terminal record reporting an
     /// error, an abnormal container or agent exit, a setup failure before
@@ -204,9 +208,12 @@ pub struct SessionBody {
     pub agent_api_duration_ms: Option<u64>,
     /// How the agent's own terminal record named the run's ending, verbatim:
     /// `success` when the model wrote its final message to the end, or the
-    /// `error_*` spelling of the state that stopped it instead — the turn
-    /// budget, a failure during execution, or a generation the provider cut
-    /// short. `None` exactly when no terminal result was parsed and there is
+    /// `error_*` spelling of the state that stopped it instead — a failure
+    /// during execution, one of the three caller-supplied bounds, a loop the
+    /// detector halted, a generation the provider cut short, a cancellation
+    /// from outside, or a shutdown by the run's owner. The complete set is
+    /// `result_parse::SUCCESS_SUBTYPE` and `result_parse::ERROR_SUBTYPES`.
+    /// `None` exactly when no terminal result was parsed and there is
     /// therefore nothing the agent asserted about its own ending.
     // `#[serde(default)]` admits a committed record that carries no terminal
     // state, and absent is its only honest reading of one: nothing here
@@ -4298,12 +4305,10 @@ mod tests {
         let json = serde_json::to_value(&unparsed).expect("serialize");
         assert!(json["agent_result_subtype"].is_null());
 
-        for subtype in [
-            "success",
-            "error_max_turns",
-            "error_during_execution",
-            "error_incomplete_generation",
-        ] {
+        for subtype in
+            std::iter::once(crate::result_parse::SUCCESS_SUBTYPE)
+                .chain(crate::result_parse::ERROR_SUBTYPES)
+        {
             let mut reported = body("s-55555555555555555555555555555555");
             reported.agent_result_subtype = Some(subtype.to_string());
             let json = serde_json::to_value(&reported).expect("serialize");

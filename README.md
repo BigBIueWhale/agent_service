@@ -203,8 +203,12 @@ restores it by DMA instead of re-prefilling it. Turns are the
 hardware-independent measure of agent progress, so the same trajectory is judged
 identically whatever the backend's generation speed; a wall-clock budget would
 instead score how fast this GPU happens to run. Reaching the budget is an
-ordinary terminal outcome — the client exits 53 and the work done up to that
-point stands — not an error. The budget is a degenerate-loop circuit breaker: a
+ordinary terminal outcome, not a fault: the client exits 53, reports
+`error_max_turns` with a turn count equal to the budget, and the work done up to
+that point stands. `is_error` is true because the run holds no final answer —
+the model never wrote one — and not because anything went wrong; a caller that
+wants to tell "your bound stopped it" from "the harness broke" reads
+`agent_result_subtype`. The budget is a degenerate-loop circuit breaker: a
 repository-level fix needs roughly 80-190 turns to orient, build, diagnose,
 implement, and verify, so 400 admits a complete second attempt after a wrong
 hypothesis. A caller who knows a particular task is shaped differently can say
@@ -459,16 +463,28 @@ chooses a convenient-looking “last result.”
 
 The envelope names which terminal state ended the run, and the service carries that
 name through to the caller as `agent_result_subtype`. `success` is the agent's
-assertion that the model wrote its final message to the end; `error_max_turns`,
-`error_during_execution`, and `error_incomplete_generation` each name a distinct way
-the run stopped instead — the turn budget, a failure during execution, and a
-generation the provider stopped from outside before the model finished writing it.
-The set is closed in both directions: an error envelope carrying `success`, or a
-success envelope carrying an error spelling, is refused rather than mapped onto a
-neighbour. A run that never produced a terminal record reports no state at all
-rather than a spelling nothing asserted. Nothing here judges whether the work was
-done, which is not decidable from a stream; it reports the shape of the ending,
-which is.
+assertion that the model wrote its final message to the end. Eight `error_*`
+spellings name the states that stopped a run instead, one name per state:
+`error_during_execution` when the run failed on its own terms, `error_timeout`,
+`error_max_turns` and `error_max_tool_calls` for the three caller-supplied bounds,
+`error_loop_detected` when the loop detector halted a run that had stopped making
+progress, `error_incomplete_generation` when the provider stopped the last
+generation from outside, `error_cancelled` for an abort from outside, and
+`error_shutdown` when the run's owner ended it. The same nine names are what a
+subagent's own scoped record carries, so a subagent that ran out of turns and one
+whose tool threw are distinguishable without reading English. The set is closed in
+both directions: an error envelope carrying `success`, or a success envelope
+carrying an error spelling, is refused rather than mapped onto a neighbour, and the
+client's build refuses to produce a name this list does not contain. A run that
+never produced a terminal record reports no state at all rather than a spelling
+nothing asserted. Nothing here judges whether the work was done, which is not
+decidable from a stream; it reports the shape of the ending, which is.
+
+The client reaches one of those states on every path out of a run, the session
+turn budget and a cancellation included, so a stream that stops without a terminal
+record is a stream this service lost rather than a run that ended quietly. The turn
+budget is asked before the turn it decides is counted, so a run it stops reports
+exactly the budget it was given as `num_turns` and has interrupted no turn.
 
 A turn's output request is sized to stop at the auto-compaction threshold, so the
 room a turn is given shrinks as the conversation grows while the room a turn needs

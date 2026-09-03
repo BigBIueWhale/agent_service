@@ -52,6 +52,27 @@ pub struct AgentResult {
     pub scopes: Vec<AgentScope>,
 }
 
+/// The terminal state a run ended in, spelled the way the agent's own record
+/// spells it. `SUCCESS_SUBTYPE` is the one name that asserts the model wrote
+/// its final message to the end; `ERROR_SUBTYPES` are the states that stopped
+/// a run instead, one name per state — a failure during execution, each of
+/// the three caller-supplied bounds, a loop the detector halted, a generation
+/// the provider cut short, a cancellation from outside, and a shutdown by the
+/// run's owner. The two lists are this service's whole terminal vocabulary:
+/// the parser admits nothing else, the public `agent_result_subtype` carries
+/// exactly what it admits, and the README names the same lists.
+pub const SUCCESS_SUBTYPE: &str = "success";
+pub const ERROR_SUBTYPES: [&str; 8] = [
+    "error_during_execution",
+    "error_timeout",
+    "error_max_turns",
+    "error_max_tool_calls",
+    "error_loop_detected",
+    "error_incomplete_generation",
+    "error_cancelled",
+    "error_shutdown",
+];
+
 /// One resolved subagent scope. Identification follows the Claude Code CLI
 /// convention: a scope is the id of the `tool_use` content block that spawned
 /// it, so consumers never need to know which tool performs delegation — and
@@ -345,13 +366,8 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
 
     let response = if is_error {
         // Each spelling is a distinct terminal state the agent can prove it
-        // reached: the turn budget ran out, execution failed, or the model's
-        // last generation was stopped from outside before it finished the
-        // message. Anything else is a record this parser cannot interpret.
-        if !matches!(
-            subtype,
-            "error_max_turns" | "error_during_execution" | "error_incomplete_generation"
-        ) {
+        // reached. Anything else is a record this parser cannot interpret.
+        if !ERROR_SUBTYPES.contains(&subtype) {
             return Err(ServiceError::AgentOutputMissing(format!(
                 "error result has unsupported subtype {subtype:?}"
             )));
@@ -369,7 +385,7 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
             })?
             .to_string()
     } else {
-        if subtype != "success" {
+        if subtype != SUCCESS_SUBTYPE {
             return Err(ServiceError::AgentOutputMissing(format!(
                 "successful result has unsupported subtype {subtype:?}"
             )));
@@ -910,13 +926,9 @@ mod tests {
         let success = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{},\"permission_denials\":[]}\n";
         let parsed =
             parse_text(&format!("{INIT}{MAIN_TURN}{success}")).expect("a completed run parses");
-        assert_eq!(parsed.subtype, "success");
+        assert_eq!(parsed.subtype, SUCCESS_SUBTYPE);
 
-        for subtype in [
-            "error_max_turns",
-            "error_during_execution",
-            "error_incomplete_generation",
-        ] {
+        for subtype in ERROR_SUBTYPES {
             let terminal = format!(
                 "{{\"type\":\"result\",\"subtype\":\"{subtype}\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":9,\"duration_api_ms\":8,\"num_turns\":1,\"usage\":{{}},\"permission_denials\":[],\"error\":{{\"message\":\"boom\"}}}}\n"
             );

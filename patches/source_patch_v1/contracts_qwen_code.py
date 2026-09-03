@@ -18,6 +18,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
+import re
+
 from .framework import PatchRefusedError, forbid_text, require_text
 
 State = Mapping[str, str]
@@ -1326,6 +1328,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
         state,
         adapter,
         "  protected buildSubagentErrorResult(\n"
+        "    terminateMode: SubagentStopState,\n"
         "    errorMessage: string,\n"
         "    numTurns: number,\n"
         "    parentToolUseId: string,\n"
@@ -1336,6 +1339,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
         state,
         adapter,
         "    const errorResult = this.buildSubagentErrorResult(\n"
+        "      terminateMode,\n"
         "      errorMessage,\n"
         "      numTurns,\n"
         "      parentToolUseId,\n"
@@ -1385,6 +1389,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
         state,
         helpers,
         "          adapter.emitSubagentErrorResult(\n"
+        "            stoppedSubagentState(taskDisplay.terminateMode),\n"
         "            errorMessage,\n"
         "            taskDisplay.turnsUsed ?? 0,\n"
         "            agentToolCallId,\n"
@@ -2896,8 +2901,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
         (
             "let lastGenerationFinishReason: GeminiFinishedEventValue['reason'];",
             "const incompleteGeneration = describeIncompleteGeneration(",
-            "subtype: 'error_incomplete_generation',",
-            "errorType: 'incomplete_generation',",
+            "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
         ),
         label=label,
     )
@@ -2913,10 +2917,9 @@ def _validate_incomplete_generation_after(state: State) -> None:
         cli_source,
         (
             "const incompleteGeneration = describeIncompleteGeneration(",
-            "subtype: 'error_incomplete_generation',",
-            "return 1;",
+            "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
             "if (config.getJsonSchema()) {",
-            "isError: false,",
+            "return finish({ terminateMode: AgentTerminateMode.GOAL });",
         ),
         label=label,
         location=cli,
@@ -2924,7 +2927,13 @@ def _validate_incomplete_generation_after(state: State) -> None:
     require_text(
         state,
         types,
-        "| 'error_incomplete_generation';",
+        "| 'error_incomplete_generation'",
+        label=label,
+    )
+    require_text(
+        state,
+        types,
+        "    subtype: 'error_incomplete_generation',",
         label=label,
     )
 
@@ -3002,6 +3011,303 @@ def _validate_incomplete_generation_after(state: State) -> None:
     # A fixture that leaves the terminal reason unstated would exercise the
     # incomplete branch by accident, so none may.
     forbid_text(state, cli_test, "reason: undefined", label=label)
+
+
+def _validate_terminal_state_before(state: State) -> None:
+    label = "terminal-state precondition"
+    types = "packages/cli/src/nonInteractive/types.ts"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    cli = "packages/cli/src/nonInteractiveCli.ts"
+    errors = "packages/cli/src/utils/errors.ts"
+    agent_types = "packages/core/src/agents/runtime/agent-types.ts"
+    client = "packages/core/src/core/client.ts"
+    helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
+
+    # The wire vocabulary is a hand-written list beside the record, with no
+    # table deciding which state carries which name.
+    require_text(
+        state,
+        types,
+        "subtype: 'error_max_turns' | 'error_during_execution';",
+        label=label,
+    )
+    forbid_text(state, types, "TERMINAL_RESULT_BY_STATE", label=label)
+
+    # A free-form subtype with a default is what lets a state be reported
+    # under a neighbouring state's name.
+    require_text(state, adapter, "readonly subtype?: string;", label=label)
+    require_text(state, adapter, "          'error_during_execution',", label=label)
+    require_text(state, adapter, "?? 'success',", label=label)
+    # Every subagent that stops is reported under one hard-coded name.
+    require_text(state, adapter, "subtype: 'error_during_execution',", label=label)
+
+    # Two terminal paths leave the process without emitting a record at all.
+    for helper in (
+        "export async function handleCancellationError(",
+        "export async function handleMaxTurnsExceededError(",
+        "export async function handleBudgetExceededError(",
+    ):
+        require_text(state, errors, helper, label=label)
+
+    # The turn budget is counted twice, checked by two spellings of one
+    # predicate, and charged to the turn before the turn is admitted.
+    require_text(state, cli, "let limitedTurnCount = 0;", label=label)
+    require_text(
+        state,
+        cli,
+        "if (maxSessionTurns >= 0 && limitedTurnCount > maxSessionTurns) {",
+        label=label,
+    )
+    require_text(
+        state,
+        client,
+        "this.config.getMaxSessionTurns() > 0 &&",
+        label=label,
+    )
+
+    # The subagent's own enumeration exists but is discarded before the wire.
+    require_text(state, agent_types, "export enum AgentTerminateMode {", label=label)
+    forbid_text(state, agent_types, "MAX_TOOL_CALLS", label=label)
+    forbid_text(state, helpers, "terminateMode", label=label)
+
+
+_TERMINAL_ENUM = re.compile(r"\n  ([A-Z_]+) = '([A-Z_]+)',")
+_DECLARED_SUCCESS = re.compile(
+    r"export interface CLIResultMessageSuccess \{\n  type: 'result';\n"
+    r"  subtype: '([a-z_]+)';"
+)
+_DECLARED_ERRORS = re.compile(
+    r"\n  subtype:\n((?:    \| '[a-z_]+'(?:;|\n))+)"
+)
+_PRODUCED = re.compile(
+    r"\n  \[AgentTerminateMode\.([A-Z_]+)\]: \{\n"
+    r"    subtype: '([a-z_]+)',\n"
+    r"    isError: (true|false),\n"
+    r"    exitCode: (\d+),\n"
+    r"  \},"
+)
+
+
+def _validate_terminal_state_after(state: State) -> None:
+    label = "terminal-state result"
+    types = "packages/cli/src/nonInteractive/types.ts"
+    types_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    cli = "packages/cli/src/nonInteractiveCli.ts"
+    cli_test = "packages/cli/src/nonInteractiveCli.test.ts"
+    errors = "packages/cli/src/utils/errors.ts"
+    agent_types = "packages/core/src/agents/runtime/agent-types.ts"
+    agent = "packages/core/src/tools/agent/agent.ts"
+    budget = "packages/core/src/config/session-turn-budget.ts"
+    budget_test = "packages/core/src/config/session-turn-budget.test.ts"
+    client = "packages/core/src/core/client.ts"
+    helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
+    helpers_test = "packages/cli/src/utils/nonInteractiveHelpers.test.ts"
+
+    # ── The closed set, asserted in both directions ──────────────────────
+    #
+    # A declared name with no producer is byte-identical, type-checks, parses
+    # and builds; nothing else in this pipeline can see it. The three sets
+    # below are read out of the post-patch source and required to be the same
+    # set: the states an agentic run can end in, the names the mapping
+    # produces for them, and the names the protocol declares.
+    enum_source = _source(state, agent_types, label=label)
+    enum_body = enum_source.split("export enum AgentTerminateMode {", 1)[1].split(
+        "\n}", 1
+    )[0]
+    states = _TERMINAL_ENUM.findall(enum_body)
+    _require(states, f"{label}: no terminal states declared in {agent_types}")
+    for name, value in states:
+        _require(
+            name == value,
+            f"{label}: {agent_types} state {name!r} does not spell itself {value!r}",
+        )
+    state_names = {name for name, _ in states}
+
+    types_source = _source(state, types, label=label)
+    success_match = _DECLARED_SUCCESS.search(types_source)
+    _require(
+        success_match is not None,
+        f"{label}: {types} declares no success subtype",
+    )
+    declared_success = {success_match.group(1)}
+    errors_match = _DECLARED_ERRORS.search(types_source)
+    _require(
+        errors_match is not None,
+        f"{label}: {types} declares no error subtype union",
+    )
+    declared_errors = set(re.findall(r"'([a-z_]+)'", errors_match.group(1)))
+    _require(
+        len(declared_errors) == errors_match.group(1).count("|"),
+        f"{label}: {types} declares a duplicate error subtype",
+    )
+
+    produced = _PRODUCED.findall(
+        types_source.split("export const TERMINAL_RESULT_BY_STATE = {", 1)[1].split(
+            "} as const satisfies Record<AgentTerminateMode, TerminalResult>;", 1
+        )[0]
+    )
+    _require(produced, f"{label}: {types} maps no state to a terminal record")
+    produced_states = {entry[0] for entry in produced}
+    _require(
+        produced_states == state_names,
+        f"{label}: the terminal-record table is not total over the states a run "
+        f"can end in; states without a record: {sorted(state_names - produced_states)!r}, "
+        f"records without a state: {sorted(produced_states - state_names)!r}",
+    )
+    produced_success = {name for _, name, is_error, _ in produced if is_error == "false"}
+    produced_errors = {name for _, name, is_error, _ in produced if is_error == "true"}
+    _require(
+        produced_success == declared_success,
+        f"{label}: the success name the table produces and the one {types} "
+        f"declares differ: produced {sorted(produced_success)!r}, "
+        f"declared {sorted(declared_success)!r}",
+    )
+    _require(
+        produced_errors == declared_errors,
+        f"{label}: the error names the table produces and the ones {types} "
+        f"declares differ; declared with no producer: "
+        f"{sorted(declared_errors - produced_errors)!r}, produced but not "
+        f"declared: {sorted(produced_errors - declared_errors)!r}",
+    )
+    for _, name, is_error, _ in produced:
+        _require(
+            name.startswith("error_") == (is_error == "true"),
+            f"{label}: {types} pairs the name {name!r} with isError {is_error}",
+        )
+
+    # The table is the only producer: no terminal name is written as a literal
+    # where a record is built, and no cast reintroduces one.
+    for path in (adapter, cli, helpers):
+        for name in sorted(declared_errors):
+            forbid_text(state, path, f"'{name}'", label=label)
+        forbid_text(state, path, "CLIResultMessageError['subtype']", label=label)
+        forbid_text(state, path, "CLIResultMessageSuccess['subtype']", label=label)
+    require_text(state, adapter, "TERMINAL_RESULT_BY_STATE[options.terminateMode]", label=label)
+    require_text(state, adapter, "TERMINAL_RESULT_BY_STATE[terminateMode]", label=label)
+    require_text(state, adapter, "subtype: terminal.subtype,", count=3, label=label)
+    forbid_text(state, adapter, "readonly subtype?: string;", label=label)
+    forbid_text(state, adapter, "readonly isError: boolean;", label=label)
+
+    # ── One emitter, and no terminal path that leaves without speaking ───
+    for helper in (
+        "handleCancellationError",
+        "handleMaxTurnsExceededError",
+        "handleBudgetExceededError",
+    ):
+        forbid_text(state, errors, helper, label=label)
+        forbid_text(state, cli, helper, label=label)
+    forbid_text(state, errors, "process.exit", label=label)
+    cli_source = _require_all(
+        state,
+        cli,
+        (
+            "interface SessionEnding {",
+            "class SessionEnded extends Error {",
+            "const finish = async (ending: SessionEnding): Promise<number> => {",
+            "const terminal = TERMINAL_RESULT_BY_STATE[ending.terminateMode];",
+            "const exitCode = ending.exitCode ?? terminal.exitCode;",
+        ),
+        label=label,
+    )
+    _require(
+        cli_source.count("await emitResult({") == 1,
+        f"{label}: {cli} emits a terminal record from somewhere other than its "
+        "single emitter",
+    )
+    _require(
+        cli_source.count("return finish({") + cli_source.count("return finish(error.ending)")
+        >= 10,
+        f"{label}: {cli} has fewer terminal paths returning a state than the "
+        "run has endings",
+    )
+
+    # ── The budget: one counter's question, asked before the turn ────────
+    _require_all(
+        state,
+        budget,
+        (
+            "export function validateMaxSessionTurns(",
+            "export function sessionTurnBudgetReached(",
+            "export function describeSessionTurnBudget(",
+            "return maxSessionTurns >= 1 && startedBudgetedTurns >= maxSessionTurns;",
+        ),
+        label=label,
+    )
+    require_text(state, cli, "sessionTurnBudgetReached(", label=label)
+    require_text(state, client, "sessionTurnBudgetReached(", count=2, label=label)
+    for path in (cli, client):
+        forbid_text(state, path, "getMaxSessionTurns() > 0", label=label)
+    forbid_text(state, cli, "limitedTurnCount", label=label)
+    _require_ordered(
+        cli_source,
+        (
+            "admitBudgetedTurn(goalTurn?.origin === 'runtime');\n        turnCount++;",
+            "admitBudgetedTurn(false);\n            turnCount++;",
+        ),
+        label=label,
+        location=cli,
+    )
+    # Core's own crossing of the same bound is read on the headless path
+    # rather than falling through the adapter's default case.
+    _require(
+        cli_source.count("if (event.type === GeminiEventType.MaxSessionTurns) {") == 2,
+        f"{label}: {cli} does not read the session-turn-budget event in both "
+        "of its reasoning loops",
+    )
+
+    # ── A subagent's state survives to its own record ────────────────────
+    require_text(state, "packages/core/src/tools/tools.ts", "terminateMode?: AgentTerminateMode;", label=label)
+    require_text(state, agent_types, "MAX_TOOL_CALLS = 'MAX_TOOL_CALLS',", label=label)
+    _require(
+        _source(state, agent, label=label).count("terminateMode:") >= 5,
+        f"{label}: {agent} publishes a terminal display that names no state",
+    )
+    _require_ordered(
+        _source(state, helpers, label=label),
+        (
+            "adapter.emitSubagentErrorResult(",
+            "stoppedSubagentState(taskDisplay.terminateMode),",
+        ),
+        label=label,
+        location=helpers,
+    )
+    require_text(state, types, "export function stoppedSubagentState(", label=label)
+    # A scope whose first observed update already reports it stopped still
+    # owes its scope a record.
+    forbid_text(state, helpers, "previousStatus !== undefined", label=label)
+
+    # ── Executed in the build ────────────────────────────────────────────
+    require_text(
+        state,
+        types_test,
+        "names a scope that stopped in %s as %s",
+        label=label,
+    )
+    require_text(
+        state,
+        cli_test,
+        "ends a run that reached the session turn budget as error_max_turns",
+        label=label,
+    )
+    require_text(
+        state,
+        cli_test,
+        "names each run budget on the record of the run it stopped",
+        label=label,
+    )
+    require_text(
+        state,
+        helpers_test,
+        "reports a scope whose first update already reports it stopped",
+        label=label,
+    )
+    require_text(
+        state,
+        budget_test,
+        "admits exactly as many budgeted turns as the budget names",
+        label=label,
+    )
 
 
 def _validate_compaction_rescue_before(state: State) -> None:
@@ -3748,6 +4054,48 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_incomplete_generation_before,
         validate_after=_validate_incomplete_generation_after,
+    ),
+    SemanticConcern(
+        name="terminal-state-is-a-value",
+        rationale=(
+            "How a run ended was a position in control flow rather than a "
+            "value: whichever return or process.exit happened to execute, "
+            "spread over the whole non-interactive runner, with two endings "
+            "-- the session turn budget and a cancellation -- leaving the "
+            "process without emitting a terminal record at all. A caller "
+            "then read a turn-exhausted run as invalid output, because the "
+            "only evidence it had was a stream that stopped. The subagent "
+            "scope had the opposite problem: it carried a proper eight-state "
+            "enumeration and collapsed all of it to one wire name, so a "
+            "subagent that ran out of turns and one whose tool threw were "
+            "the same record. The protocol declared a third model again, a "
+            "closed set of names of which one, `error_max_turns`, no code "
+            "path could produce. "
+            "The terminal state is now a value both scopes carry. One table "
+            "maps each state an agentic run can end in to the record that "
+            "reports it -- the wire name, whether that name is an error, and "
+            "the exit code -- and the table is total over the state set, so a "
+            "state added without a name is a compile error rather than a run "
+            "reported under a neighbour's name. The wire vocabulary is the "
+            "set of names that table produces, which is what makes timeout, "
+            "cancellation, loop detection, shutdown and both remaining "
+            "budgets producible instead of masquerading as a generic "
+            "execution failure. Every ending in the runner returns or raises "
+            "a state and one emitter writes the record, so a run cannot end "
+            "without saying how. The session turn budget is asked once, "
+            "before the turn it decides is counted, so a run stopped by it "
+            "reports exactly the budget it was given and has interrupted "
+            "nothing."
+        ),
+        removal_condition=(
+            "Remove only when upstream represents a run's terminal state as a "
+            "value that both the session and every subagent carry to one "
+            "emitter, with a total mapping from that state set to the "
+            "declared wire vocabulary, and no terminal path that ends the "
+            "process without emitting its record."
+        ),
+        validate_before=_validate_terminal_state_before,
+        validate_after=_validate_terminal_state_after,
     ),
     SemanticConcern(
         name="compaction-rescue-for-a-severed-turn",

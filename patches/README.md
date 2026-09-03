@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `8a5b2d9ef0ca36b4d0559a3f6835de2ea027ca3eea11a47ba87ee98a436dced4`
+- Review-diff SHA-256: `19455bb10d64c7d58b2ad406cb1c44b569534fb3e9d106f395e5668cfa84b37f`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `a13d633350e0d4b4c4c2630b317564972261d6d9934e5291976a2c59b7b82344`
+- Transformer-manifest SHA-256: `c4056c78a64c0698d51d3c324c3c372f1a611d330e65c6f891373b5bd2177486`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -141,6 +141,28 @@ provide as one fail-closed mode:
   and a turn that already produced a tool call are each left to be reported as
   `error_incomplete_generation` rather than hidden — the severed turn goes
   back where it was when no summary replaced the history it belonged to;
+- how a run ended as a value both scopes carry. A run can stop for nine
+  reasons and `AgentTerminateMode` names all nine; one table maps each of
+  them to the record that reports it — the wire name, whether that name is an
+  error, and the exit code — and the table is total over that state set, so a
+  state added without a name is a compile error rather than a run filed under
+  a neighbour's name. The declared vocabulary is the set of names the table
+  produces, which is what makes a timeout, a cancellation, a loop halt, a
+  shutdown, the turn budget and the tool-call budget each nameable; the
+  patch's own contract asserts the two sets are the same set, in both
+  directions, before a byte is written. Every ending in the non-interactive
+  runner returns or raises its state and one emitter writes the record, so a
+  run cannot end without saying how it ended. Upstream ends the process on the
+  turn budget and on a cancellation without emitting anything at all, and a
+  consumer that sees only a stream stopping reads a turn-exhausted run as
+  invalid output. A subagent carries its state to its own scoped record the
+  same way, so a subagent that ran out of turns and one whose tool threw are
+  different records, and a scope whose first observed update already reports
+  it stopped gets a record too. The session turn budget is one number checked
+  by one predicate, asked before the turn it decides is counted, so a run it
+  stops reports exactly the budget it was given and has interrupted nothing;
+  a budget of zero, under which no session can do any work, is refused at
+  configuration;
 - locked settings loading before initialization and during later auth validation:
   no workspace settings or `.env`, no ambient/project/CLI/session/injected MCP,
   and no include-directory override;

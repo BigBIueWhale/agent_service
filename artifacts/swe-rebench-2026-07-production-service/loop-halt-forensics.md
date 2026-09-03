@@ -178,11 +178,3 @@ detection) survives only in `bundle/output/events.jsonl`. The benchmark
 is a reporting-accuracy defect, incidence 3 across v1–v6, no pass/fail or retry
 impact.
 
-Correct fix (deferred: needs a service rebuild + release-lock bump + redeploy,
-which must not interrupt the running v6): treat a terminal with `is_error=true`
-and `subtype∈{error_during_execution,error_max_turns}` as valid when
-`num_turns − main_assistant_events ∈ {0,1}` (`==0` still required for
-`subtype=success`), keep `main_assistant_events ≤ num_turns` fail-closed against
-real stream loss, and surface the terminal's own `error.message` as the response
-instead of the num_turns text. Because the 3 bundles are durable, correct
-labels can be re-derived from stored evidence without rerunning the model.
