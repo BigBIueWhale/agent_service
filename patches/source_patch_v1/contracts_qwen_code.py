@@ -2832,7 +2832,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         service,
         (
             "const partition = partitionContextWindow(contextLimit);",
-            "compactionOutputBudget = partition.summaryReserve;",
+            "compactionOutputBudget = contextLimit - summaryRequestTokenCount;",
+            "if (compactionOutputBudget < partition.summaryReserve) {",
             "if (directiveTokens > partition.directiveReserve) {",
             "      if (effectiveTokens < partition.compactionTrigger) {",
             "    if (newTokenCount >= partition.compactionTrigger) {",
@@ -2840,11 +2841,16 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
     )
-    # The summary generation is issued at the reserve, never at a remainder
-    # computed from how full the request happens to be.
+    # The snapshot is issued at the room the window actually has, and that room
+    # is never less than the reserve: a turn is only issued while the
+    # conversation is below the trigger, so the largest this request can become
+    # is A + C + T + D, which is W - S. The floor is asserted in the service so
+    # a broken partition fails loudly, rather than clamped so it silently
+    # shrinks the snapshot -- a clamp is what hands a summary a few thousand
+    # tokens and truncates it.
     _require(
         "Math.min(" not in service_source.split("compactionOutputBudget =")[1][:400],
-        f"{label}: {service} sizes the summary from the room left rather than the reserve",
+        f"{label}: {service} clamps the summary instead of asserting its floor",
     )
     for absent in (
         "COMPACT_MAX_OUTPUT_TOKENS",
@@ -2951,7 +2957,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     require_text(
         state,
         prompts_test,
-        "states the writing contract: generous, dense, deduplicated by structure",
+        "states the writing contract: dense, deduplicated by structure",
         label=label,
     )
 

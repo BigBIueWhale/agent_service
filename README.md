@@ -33,7 +33,7 @@ The fixed stack is:
 | Corrected model SHA-256 | `5fd70b38b3708e47adc1e9e9ab90f5d688ec01177d0718fdd16678696fdb0988` |
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
-| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v18 profile |
+| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v19 profile |
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
 | Context | Native `262144` tokens |
@@ -66,7 +66,7 @@ The service independently requires `/model` to be the exact corrected directory 
 one read-only bind mount and requires the backend container's source revision,
 official revision, correction recipe, corrected model digest, and manifest digest
 labels. It also requires a read-only backend root running as `2000:0`, exact bounded
-`/tmp` and `/run` tmpfs contracts, exactly one labelled v18 vLLM cache volume at
+`/tmp` and `/run` tmpfs contracts, exactly one labelled v19 vLLM cache volume at
 `/home/vllm/.cache/vllm`, and no other mount. Every persistent JIT/cache path is
 rooted beneath that exact volume; runtime writes cannot mutate the container layer.
 The backend's own status performs the complete file-manifest verification.
@@ -192,6 +192,13 @@ turn's output and appending at most one turn's tool results, produces a history
 that — with the directive appended — a whole-history summary request still fits
 beside. Nothing is left to run time and nothing is a tuned constant: raising
 `max_model_len` re-derives all five with no code change.
+
+The snapshot is issued at the room the window actually has — the window less
+the summary request that was just counted — and the reserve is the floor that
+room can never fall below, which is exactly what the identity above proves. A
+request lighter than the worst case therefore buys the snapshot more room than
+the reserve rather than leaving it unused, and a request that would leave less
+than the reserve is refused instead of quietly shrinking the snapshot.
 
 Every main-turn context-boundary decision uses the real vLLM tokenizer on the
 fully rendered request. Before compaction and again before generation, Qwen Code
@@ -891,7 +898,7 @@ misleading 404. Shutdown has no arbitrary teardown deadline.
 ## Acceptance gates
 
 A release is not complete merely because the images build. Every required gate below
-passed against the current pinned agent release and the exact live v18 corrected
+passed against the current pinned agent release and the exact live v19 corrected
 backend; unchanged historical cache measurements are identified as such:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;

@@ -22072,7 +22072,7 @@ index fc0c21c..1fb6d04 100644
  import {
    DEFAULT_STREAM_IDLE_TIMEOUT_MS,
    DEFAULT_STREAM_MAX_LIFETIME_MS,
-@@ -1068,12 +1071,62 @@ describe('ContentGenerationPipeline', () => {
+@@ -1068,12 +1071,54 @@ describe('ContentGenerationPipeline', () => {
          .calls[0][0];
        expect(apiCall.enable_thinking).toBe(true);
        expect(apiCall.reasoning_effort).toBe('high');
@@ -22104,7 +22104,7 @@ index fc0c21c..1fb6d04 100644
 +      expect(apiCall.kv_scope).toBe('agent-7');
 +    });
 +
-+    it('omits the agent identity when the chat has none', async () => {
++    it('refuses to build a request when the chat has no agent identity', async () => {
 +      const request: GenerateContentParameters = {
 +        model: 'glm-5.2',
 +        contents: [{ parts: [{ text: 'hi' }], role: 'user' }],
@@ -22114,19 +22114,11 @@ index fc0c21c..1fb6d04 100644
 +      (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
 +        { role: 'user', content: 'hi' },
 +      ]);
-+      (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-+        new GenerateContentResponse(),
-+      );
-+      (mockClient.chat.completions.create as Mock).mockResolvedValue({
-+        id: 'r',
-+        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
-+      } as OpenAI.Chat.ChatCompletion);
 +
-+      await pipeline.execute(request, 'prompt-kv-scope-absent');
-+
-+      const apiCall = (mockClient.chat.completions.create as Mock).mock
-+        .calls[0][0];
-+      expect('kv_scope' in apiCall).toBe(false);
++      await expect(
++        pipeline.execute(request, 'prompt-kv-scope-absent'),
++      ).rejects.toThrow(/kv_scope is missing/);
++      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
 +    });
 +
      it('never ships the escape-hatch disable shape to a thinkingMandatory model end to end', async () => {
@@ -22359,7 +22351,7 @@ index a7aaf90..c482fdb 100644
    ): Promise<GenerateContentResponse> {
      return this.executeWithErrorHandling(
        request,
-@@ -998,12 +1109,20 @@ export class ContentGenerationPipeline {
+@@ -998,12 +1109,25 @@ export class ContentGenerationPipeline {
        } else if (fcMode === 'NONE') {
          (baseRequest as unknown as Record<string, unknown>)['tool_choice'] =
            'none';
@@ -22367,12 +22359,17 @@ index a7aaf90..c482fdb 100644
      }
  
 +    // The agent this request belongs to. The backend groups offloaded KV by
-+    // it, so a context is given up whole rather than shredded across agents.
++    // it, so a context is given up whole rather than shredded across agents,
++    // and it refuses to generate for a request that names no agent. A request
++    // that cannot name its own is malformed here, not at the server.
 +    const kvScope = (request.config as { kvScope?: string } | undefined)
 +      ?.kvScope;
-+    if (kvScope) {
-+      (baseRequest as unknown as Record<string, unknown>)['kv_scope'] = kvScope;
++    if (!kvScope) {
++      throw new Error(
++        'kv_scope is missing: every generation request names the agent that owns its KV cache.',
++      );
 +    }
++    (baseRequest as unknown as Record<string, unknown>)['kv_scope'] = kvScope;
 +
      // Let provider enhance the request (e.g., add metadata, cache control)
      let providerRequest = this.config.provider.buildRequest(
@@ -22380,7 +22377,7 @@ index a7aaf90..c482fdb 100644
        userPromptId,
      );
      if (
-@@ -1417,12 +1536,13 @@ export class ContentGenerationPipeline {
+@@ -1417,12 +1541,13 @@ export class ContentGenerationPipeline {
          : undefined;
  
      return {
@@ -22416,7 +22413,7 @@ diff --git a/packages/core/src/core/prompts.test.ts b/packages/core/src/core/pro
 index b91a8f4..83d6c72 100644
 --- a/packages/core/src/core/prompts.test.ts
 +++ b/packages/core/src/core/prompts.test.ts
-@@ -1018,41 +1018,65 @@ describe('New Applications workflow deferred to skill', () => {
+@@ -1018,41 +1018,64 @@ describe('New Applications workflow deferred to skill', () => {
      expect(prompt).toContain('new-app');
      expect(prompt).toContain('## New Applications');
    });
@@ -22460,13 +22457,12 @@ index b91a8f4..83d6c72 100644
    });
  
 -  it('instructs the model to wrap reasoning in an <analysis> block', () => {
-+  it('states the writing contract: generous, dense, deduplicated by structure', () => {
++  it('states the writing contract: dense, deduplicated by structure', () => {
      const prompt = getCompressionPrompt();
 -    expect(prompt).toContain('<analysis>');
 -    // Must signal that <analysis> is stripped (so the model knows it is a
 -    // drafting scratchpad, not part of the final summary).
 -    expect(prompt).toMatch(/<analysis>.*stripped|stripped.*<analysis>/is);
-+    expect(prompt).toContain('GENEROUS');
 +    expect(prompt).toContain('DENSE');
 +    expect(prompt).toContain('NO DUPLICATION');
 +    expect(prompt).toContain('exactly once');
@@ -22539,7 +22535,7 @@ index 72d1aa5..6de1739 100644
        getDefaultCoreIdentitySentence(interaction.role);
      basePrompt = `
  ${coreIdentity}
-@@ -540,68 +546,72 @@ Examples of the kind of risky actions that warrant user confirmation:
+@@ -540,68 +546,69 @@ Examples of the kind of risky actions that warrant user confirmation:
  When you encounter an obstacle, do not use destructive actions as a shortcut to simply make it go away. For instance, try to identify root causes and fix underlying issues rather than bypassing safety checks (e.g. --no-verify). If you discover unexpected state like unfamiliar files, branches, or configuration, investigate before deleting or overwriting, as it may represent the user's in-progress work. For example, typically resolve merge conflicts rather than discarding changes; similarly, if a lock file exists, investigate what process holds it rather than deleting it. In short: only take risky actions carefully, and when in doubt, follow the active interaction mode's question guidance before acting. Follow both the spirit and letter of these instructions - measure twice, cut once.`;
  }
  
@@ -22591,8 +22587,7 @@ index 72d1aa5..6de1739 100644
 -    <key_technical_concepts>
 -        <!-- List all important technical concepts, technologies, and frameworks discussed. -->
 -    </key_technical_concepts>
-+Three properties, all mandatory:
-+- GENEROUS: every fact the resuming agent needs is present. When unsure whether a fact matters, include it.
++Two properties, both mandatory:
 +- DENSE: facts, not narrative. Never recount the conversation ("then I read X, then I ran Y"); state what is now known or done.
 +- NO DUPLICATION: each fact appears exactly once, in the one section defined for it. The sections are disjoint; nothing is repeated for emphasis.
  
@@ -22604,11 +22599,9 @@ index 72d1aa5..6de1739 100644
 -    <errors_and_fixes>
 -        <!-- List every error encountered and how it was fixed. Include the verbatim error message when it was quoted to the agent. Pay special attention to specific user feedback on the error, especially if the user told you to do something differently. -->
 -    </errors_and_fixes>
-+Take the length the state genuinely needs. <in_progress>, <learnings>, and <next_step> carry what the resuming agent cannot rediscover cheaply; do not compress them to save room.
-+
 +<state_snapshot>
 +    <intent>
-+        <!-- The task: what was asked, by whom it is judged done, and every explicit constraint on how. Quote the user's exact phrasing where wording carries intent. Record each later user correction or redirect, in order — shifting intent is the one thing no file on disk records. Carry every earlier snapshot's intent through unabridged; this section only ever grows. Holds only what is WANTED; progress toward it lives elsewhere. -->
++        <!-- The task: what was asked, by whom it is judged done, and every explicit constraint on how. Quote the user's exact phrasing where wording carries intent. Record each later user correction or redirect, in order — shifting intent is the one thing no file on disk records. Holds only what is WANTED; progress toward it lives elsewhere. -->
 +    </intent>
  
 -    <problem_solving>
@@ -24155,7 +24148,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 index 59b9c51..8bc51e9 100644
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,795 @@
+@@ -1,4405 +1,793 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -24592,7 +24585,7 @@ index 59b9c51..8bc51e9 100644
 +      unknown
 +    >;
 +    expect({ ...generated, config: generatedConfig }).toEqual(counted);
-+    expect(maxOutputTokens).toBe(PARTITION.summaryReserve);
++    expect(maxOutputTokens).toBe(WINDOW - 195_000);
 +    expect(generated).toMatchObject({
 +      model: MODEL,
 +      stream: true,
@@ -25303,7 +25296,7 @@ index 59b9c51..8bc51e9 100644
 -    vi.mocked(mockChat.getHistory).mockReturnValue(history);
 -    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
 -    vi.mocked(tokenLimit).mockReturnValue(1000);
-+  it('issues the generation at the summary reserve, whatever the history costs', async () => {
++  it('issues the generation at the room the window has, never below the reserve', async () => {
 +    for (const requestTokens of [
 +      1_000 + DIRECTIVE_TOKENS,
 +      150_000,
@@ -25317,8 +25310,8 @@ index 59b9c51..8bc51e9 100644
 +        .calls[0]![0] as GenerateTextOptions;
 +      const budget = (generated.config as { maxOutputTokens?: number })
 +        .maxOutputTokens;
-+      expect(budget).toBe(PARTITION.summaryReserve);
-+      expect(requestTokens + budget!).toBeLessThanOrEqual(WINDOW);
++      expect(budget).toBe(WINDOW - requestTokens);
++      expect(budget).toBeGreaterThanOrEqual(PARTITION.summaryReserve);
 +    }
 +  });
  
@@ -25350,10 +25343,8 @@ index 59b9c51..8bc51e9 100644
 +      .calls[0]![0] as GenerateTextOptions;
 +    const budget = (generated.config as { maxOutputTokens?: number })
 +      .maxOutputTokens;
-+    expect(budget).toBe(PARTITION.summaryReserve);
-+    expect(worstHistory + DIRECTIVE_TOKENS + budget!).toBeLessThanOrEqual(
-+      WINDOW,
-+    );
++    expect(budget).toBe(WINDOW - (worstHistory + DIRECTIVE_TOKENS));
++    expect(budget).toBeGreaterThanOrEqual(PARTITION.summaryReserve);
 +  });
  
 -    const result = await service.compress(mockChat, {
@@ -25462,7 +25453,7 @@ index 59b9c51..8bc51e9 100644
 +    // that never generated, and the summary itself is discarded, so this is
 +    // the only surviving evidence of where the tokens went.
 +    expect(result.info.output).toEqual({
-+      maxOutputTokens: PARTITION.summaryReserve,
++      maxOutputTokens: WINDOW - 195_000,
 +      outputTokens: 19_900,
 +      thinkingTokens: 19_900,
 +      summaryChars: 0,
@@ -29697,7 +29688,7 @@ index 9a37b9b..4020c0f 100644
      // composePostCompactHistory below (summary + model ack + recent
      // file restores + recent image restore).
  
-@@ -517,611 +334,453 @@ export class ChatCompressionService {
+@@ -517,611 +334,465 @@ export class ChatCompressionService {
            // side-query prompt past a recoverable size.
            hookExtraInstructions = merged
              .trim()
@@ -30132,7 +30123,19 @@ index 9a37b9b..4020c0f 100644
 +          `The compaction directive renders to ${directiveTokens} tokens, past the ${partition.directiveReserve} the partition reserves for it.`,
 +        );
 +      }
-+      compactionOutputBudget = partition.summaryReserve;
++      // The snapshot is issued at the room the window actually has, not at a
++      // fixed share of it. The partition proves that room is never below the
++      // reserve: a turn is only issued while the conversation is below the
++      // trigger, so the largest request this can become is A + C + T + D,
++      // which is W - S, leaving exactly S. Every lighter request leaves more,
++      // and spending it is what keeps the snapshot from being truncated by the
++      // reasoning it shares an output stream with.
++      compactionOutputBudget = contextLimit - summaryRequestTokenCount;
++      if (compactionOutputBudget < partition.summaryReserve) {
++        throw new Error(
++          `The compaction request renders to ${summaryRequestTokenCount} tokens, leaving ${compactionOutputBudget} for the snapshot, below the ${partition.summaryReserve} tokens the partition guarantees it.`,
++        );
++      }
 +      summaryResult = await config.getBaseLlmClient().generateText({
 +        ...sideQueryOptions,
 +        config: {

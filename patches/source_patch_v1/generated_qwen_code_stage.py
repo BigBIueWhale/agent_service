@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'e7e67353c9d203a8d4749e9c63b3a7651c12f93967c1230d494001b9122478be',
+  'review_sha256': 'd50d8b001a39bfe3b4868b5f50b68643e1fe740c0cb09419bd4ab2f4ddd631ce',
   'files': ({'path': 'packages/cli/src/acp-integration/session/Session.test.ts',
              'before_sha256': '79540f9f6c9407085e0160a12aaf5bb30fa3d94d6fdb0fb017ac6083e2b5fafb',
              'after_sha256': '6b9a035a99a6ea4de2e5455da2a63ed7a1efe8f3c4a58b0629bc05d206c51f4e'},
@@ -259,22 +259,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts',
              'before_sha256': '45a51e9f9f3e0a87c903b960847d7e17faf768d129e2706f6df9c731e69e2f2b',
-             'after_sha256': 'ed00320575c8e2b90a1300734588c99d6115ee85f0318e1cd66bc814eb4bf944'},
+             'after_sha256': 'fd8502af2d60795f53b4d1b2c654e00da026340e91d706814ed073867299e31b'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts',
              'before_sha256': None,
              'after_sha256': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before_sha256': 'fd6061e56956d1072885a4a8e40be6ed148623d791a5586f3669bbf325c1d09c',
-             'after_sha256': '22db5d61da4f9e77007e38855f2cc656e670d261d017e24a41d04e795cab47a5'},
+             'after_sha256': '9bb837f65fae6ec9c81ab5a912952bdef4311ce1e7733abb0b3843b7678231cc'},
             {'path': 'packages/core/src/core/openaiContentGenerator/types.ts',
              'before_sha256': '0b827511f3ccefbc74aa7d14eaccf7502e1a2aaed846983b982ac9191827aa51',
              'after_sha256': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c'},
             {'path': 'packages/core/src/core/prompts.test.ts',
              'before_sha256': '228fffaa1c483415f9ded4bba43f88e6f0b6fc29bc5df334a06ed5507c5e9467',
-             'after_sha256': '415b3b6491fd759d6b8df89161576319c4fd7f6965d9b76f8e9a26bafa4a891c'},
+             'after_sha256': '9369efadaa67f10e218f1be71f3bd1620d67d8958dec94a28a9db300700175d0'},
             {'path': 'packages/core/src/core/prompts.ts',
              'before_sha256': '239516527b43809f5889d62ac28260abe6262de16b2225aff30a9e32d90b57e1',
-             'after_sha256': 'a5f6e96d5510edc97ce2e6109b74543281fcacefdb8c8ef463c710f0b2b395a9'},
+             'after_sha256': 'f1d1b4db7b943da44a180b3dadaa1dca598797b9e6941578a6ecf51b7a6cc3a5'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.test.ts',
              'before_sha256': None,
              'after_sha256': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851'},
@@ -325,10 +325,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779'},
             {'path': 'packages/core/src/services/chatCompressionService.test.ts',
              'before_sha256': 'dca73e970a07ea2c8e819976dc758b57426754e89be5ec230954fda06a2b03db',
-             'after_sha256': '6c98368f26b32ca181a81452dcaa99757a73de6bae7edf2e0dec1e4a76883cac'},
+             'after_sha256': '615f0d2e1ceb1d0be1d91670ed9ff243bbb3cde0c0716dce65f4b42d16ca995b'},
             {'path': 'packages/core/src/services/chatCompressionService.ts',
              'before_sha256': 'ce64d44a40510b3eb83c00345a7e6bb6caee0ffcb9f959fbe1a91a804b03899f',
-             'after_sha256': '98dfb49737ac44cc1060f0d373bf1e39b8c41097725c7d0c91ba3d04e908960d'},
+             'after_sha256': '9d4db0b67831e0259be484ed47fd7b5b00fe76d77198911af37dda4dc5e1b743'},
             {'path': 'packages/core/src/services/fileReadCache.integration.test.ts',
              'before_sha256': 'b9e0afd8d2a79c13f45d0108df2e4ce5980e303da4f315c83a389f9e58f294e8',
              'after_sha256': '25e9d63233752ccce3bba61bcb2d67ee585e76dad61422458230f1f18904dc2f'},
@@ -76038,8 +76038,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "      expect(apiCall.kv_scope).toBe('agent-7');\n"
                       '    });\n'
                       '\n'
-                      "    it('omits the agent identity when the chat has none', async "
-                      '() => {\n'
+                      "    it('refuses to build a request when the chat has no agent "
+                      "identity', async () => {\n"
                       '      const request: GenerateContentParameters = {\n'
                       "        model: 'glm-5.2',\n"
                       "        contents: [{ parts: [{ text: 'hi' }], role: 'user' }],\n"
@@ -76050,24 +76050,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'Mock).mockReturnValue([\n'
                       "        { role: 'user', content: 'hi' },\n"
                       '      ]);\n'
-                      '      (mockConverter.convertOpenAIResponseToGemini as '
-                      'Mock).mockReturnValue(\n'
-                      '        new GenerateContentResponse(),\n'
-                      '      );\n'
-                      '      (mockClient.chat.completions.create as '
-                      'Mock).mockResolvedValue({\n'
-                      "        id: 'r',\n"
-                      "        choices: [{ message: { content: 'ok' }, finish_reason: "
-                      "'stop' }],\n"
-                      '      } as OpenAI.Chat.ChatCompletion);\n'
                       '\n'
-                      '      await pipeline.execute(request, '
-                      "'prompt-kv-scope-absent');\n"
-                      '\n'
-                      '      const apiCall = (mockClient.chat.completions.create as '
-                      'Mock).mock\n'
-                      '        .calls[0][0];\n'
-                      "      expect('kv_scope' in apiCall).toBe(false);\n"
+                      '      await expect(\n'
+                      "        pipeline.execute(request, 'prompt-kv-scope-absent'),\n"
+                      '      ).rejects.toThrow(/kv_scope is missing/);\n'
+                      '      '
+                      'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
                       '    });\n'
                       '\n'
                       "    it('never ships the escape-hatch disable shape to a "
@@ -76138,8 +76126,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "      expect(apiCall.kv_scope).toBe('agent-7');\n"
                              '    });\n'
                              '\n'
-                             "    it('omits the agent identity when the chat has "
-                             "none', async () => {\n"
+                             "    it('refuses to build a request when the chat has no "
+                             "agent identity', async () => {\n"
                              '      const request: GenerateContentParameters = {\n'
                              "        model: 'glm-5.2',\n"
                              "        contents: [{ parts: [{ text: 'hi' }], role: "
@@ -76151,24 +76139,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'Mock).mockReturnValue([\n'
                              "        { role: 'user', content: 'hi' },\n"
                              '      ]);\n'
-                             '      (mockConverter.convertOpenAIResponseToGemini as '
-                             'Mock).mockReturnValue(\n'
-                             '        new GenerateContentResponse(),\n'
-                             '      );\n'
-                             '      (mockClient.chat.completions.create as '
-                             'Mock).mockResolvedValue({\n'
-                             "        id: 'r',\n"
-                             "        choices: [{ message: { content: 'ok' }, "
-                             "finish_reason: 'stop' }],\n"
-                             '      } as OpenAI.Chat.ChatCompletion);\n'
                              '\n'
-                             '      await pipeline.execute(request, '
-                             "'prompt-kv-scope-absent');\n"
-                             '\n'
-                             '      const apiCall = '
-                             '(mockClient.chat.completions.create as Mock).mock\n'
-                             '        .calls[0][0];\n'
-                             "      expect('kv_scope' in apiCall).toBe(false);\n"
+                             '      await expect(\n'
+                             '        pipeline.execute(request, '
+                             "'prompt-kv-scope-absent'),\n"
+                             '      ).rejects.toThrow(/kv_scope is missing/);\n'
+                             '      '
+                             'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
                              '    });\n'
                              '\n'
                              "    it('never ships the escape-hatch disable shape to a "
@@ -76787,14 +76764,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    // The agent this request belongs to. The backend groups '
                       'offloaded KV by\n'
                       '    // it, so a context is given up whole rather than shredded '
-                      'across agents.\n'
+                      'across agents,\n'
+                      '    // and it refuses to generate for a request that names no '
+                      'agent. A request\n'
+                      '    // that cannot name its own is malformed here, not at the '
+                      'server.\n'
                       '    const kvScope = (request.config as { kvScope?: string } | '
                       'undefined)\n'
                       '      ?.kvScope;\n'
-                      '    if (kvScope) {\n'
-                      '      (baseRequest as unknown as Record<string, '
-                      "unknown>)['kv_scope'] = kvScope;\n"
+                      '    if (!kvScope) {\n'
+                      '      throw new Error(\n'
+                      "        'kv_scope is missing: every generation request names "
+                      "the agent that owns its KV cache.',\n"
+                      '      );\n'
                       '    }\n'
+                      '    (baseRequest as unknown as Record<string, '
+                      "unknown>)['kv_scope'] = kvScope;\n"
                       '\n'
                       '    // Let provider enhance the request (e.g., add metadata, '
                       'cache control)\n'
@@ -76828,14 +76813,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // The agent this request belongs to. The backend '
                              'groups offloaded KV by\n'
                              '    // it, so a context is given up whole rather than '
-                             'shredded across agents.\n'
+                             'shredded across agents,\n'
+                             '    // and it refuses to generate for a request that '
+                             'names no agent. A request\n'
+                             '    // that cannot name its own is malformed here, not '
+                             'at the server.\n'
                              '    const kvScope = (request.config as { kvScope?: '
                              'string } | undefined)\n'
                              '      ?.kvScope;\n'
-                             '    if (kvScope) {\n'
-                             '      (baseRequest as unknown as Record<string, '
-                             "unknown>)['kv_scope'] = kvScope;\n"
+                             '    if (!kvScope) {\n'
+                             '      throw new Error(\n'
+                             "        'kv_scope is missing: every generation request "
+                             "names the agent that owns its KV cache.',\n"
+                             '      );\n'
                              '    }\n'
+                             '    (baseRequest as unknown as Record<string, '
+                             "unknown>)['kv_scope'] = kvScope;\n"
                              '\n'
                              '    // Let provider enhance the request (e.g., add '
                              'metadata, cache control)\n'
@@ -77067,10 +77060,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    }\n'
                       '  });\n'
                       '\n'
-                      "  it('states the writing contract: generous, dense, "
-                      "deduplicated by structure', () => {\n"
+                      "  it('states the writing contract: dense, deduplicated by "
+                      "structure', () => {\n"
                       '    const prompt = getCompressionPrompt();\n'
-                      "    expect(prompt).toContain('GENEROUS');\n"
                       "    expect(prompt).toContain('DENSE');\n"
                       "    expect(prompt).toContain('NO DUPLICATION');\n"
                       "    expect(prompt).toContain('exactly once');\n"
@@ -77205,10 +77197,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    }\n'
                              '  });\n'
                              '\n'
-                             "  it('states the writing contract: generous, dense, "
-                             "deduplicated by structure', () => {\n"
+                             "  it('states the writing contract: dense, deduplicated "
+                             "by structure', () => {\n"
                              '    const prompt = getCompressionPrompt();\n'
-                             "    expect(prompt).toContain('GENEROUS');\n"
                              "    expect(prompt).toContain('DENSE');\n"
                              "    expect(prompt).toContain('NO DUPLICATION');\n"
                              "    expect(prompt).toContain('exactly once');\n"
@@ -77618,9 +77609,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'Then write exactly one <state_snapshot> XML document in the '
                       'final channel, and nothing else.\n'
                       '\n'
-                      'Three properties, all mandatory:\n'
-                      '- GENEROUS: every fact the resuming agent needs is present. '
-                      'When unsure whether a fact matters, include it.\n'
+                      'Two properties, both mandatory:\n'
                       '- DENSE: facts, not narrative. Never recount the conversation '
                       '("then I read X, then I ran Y"); state what is now known or '
                       'done.\n'
@@ -77635,20 +77624,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'where exact wording carries intent, and content that was '
                       'deleted or overwritten.\n'
                       '\n'
-                      'Take the length the state genuinely needs. <in_progress>, '
-                      '<learnings>, and <next_step> carry what the resuming agent '
-                      'cannot rediscover cheaply; do not compress them to save room.\n'
-                      '\n'
                       '<state_snapshot>\n'
                       '    <intent>\n'
                       '        <!-- The task: what was asked, by whom it is judged '
                       "done, and every explicit constraint on how. Quote the user's "
                       'exact phrasing where wording carries intent. Record each later '
                       'user correction or redirect, in order — shifting intent is the '
-                      'one thing no file on disk records. Carry every earlier '
-                      "snapshot's intent through unabridged; this section only ever "
-                      'grows. Holds only what is WANTED; progress toward it lives '
-                      'elsewhere. -->\n'
+                      'one thing no file on disk records. Holds only what is WANTED; '
+                      'progress toward it lives elsewhere. -->\n'
                       '    </intent>\n'
                       '\n'
                       '    <environment>\n'
@@ -77933,10 +77916,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'Then write exactly one <state_snapshot> XML document in '
                              'the final channel, and nothing else.\n'
                              '\n'
-                             'Three properties, all mandatory:\n'
-                             '- GENEROUS: every fact the resuming agent needs is '
-                             'present. When unsure whether a fact matters, include '
-                             'it.\n'
+                             'Two properties, both mandatory:\n'
                              '- DENSE: facts, not narrative. Never recount the '
                              'conversation ("then I read X, then I ran Y"); state what '
                              'is now known or done.\n'
@@ -77951,11 +77931,6 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'output, user phrasing where exact wording carries '
                              'intent, and content that was deleted or overwritten.\n'
                              '\n'
-                             'Take the length the state genuinely needs. '
-                             '<in_progress>, <learnings>, and <next_step> carry what '
-                             'the resuming agent cannot rediscover cheaply; do not '
-                             'compress them to save room.\n'
-                             '\n'
                              '<state_snapshot>\n'
                              '    <intent>\n'
                              '        <!-- The task: what was asked, by whom it is '
@@ -77963,9 +77938,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "the user's exact phrasing where wording carries intent. "
                              'Record each later user correction or redirect, in order '
                              '— shifting intent is the one thing no file on disk '
-                             "records. Carry every earlier snapshot's intent through "
-                             'unabridged; this section only ever grows. Holds only '
-                             'what is WANTED; progress toward it lives elsewhere. -->\n'
+                             'records. Holds only what is WANTED; progress toward it '
+                             'lives elsewhere. -->\n'
                              '    </intent>\n'
                              '\n'
                              '    <environment>\n'
@@ -88360,7 +88334,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    >;\n'
                       '    expect({ ...generated, config: generatedConfig '
                       '}).toEqual(counted);\n'
-                      '    expect(maxOutputTokens).toBe(PARTITION.summaryReserve);\n'
+                      '    expect(maxOutputTokens).toBe(WINDOW - 195_000);\n'
                       '    expect(generated).toMatchObject({\n'
                       '      model: MODEL,\n'
                       '      stream: true,\n'
@@ -88632,8 +88606,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    expect(rejected.generateText).not.toHaveBeenCalled();\n'
                       '  });\n'
                       '\n'
-                      "  it('issues the generation at the summary reserve, whatever "
-                      "the history costs', async () => {\n"
+                      "  it('issues the generation at the room the window has, never "
+                      "below the reserve', async () => {\n"
                       '    for (const requestTokens of [\n'
                       '      1_000 + DIRECTIVE_TOKENS,\n'
                       '      150_000,\n'
@@ -88648,9 +88622,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      const budget = (generated.config as { maxOutputTokens?: '
                       'number })\n'
                       '        .maxOutputTokens;\n'
-                      '      expect(budget).toBe(PARTITION.summaryReserve);\n'
-                      '      expect(requestTokens + '
-                      'budget!).toBeLessThanOrEqual(WINDOW);\n'
+                      '      expect(budget).toBe(WINDOW - requestTokens);\n'
+                      '      '
+                      'expect(budget).toBeGreaterThanOrEqual(PARTITION.summaryReserve);\n'
                       '    }\n'
                       '  });\n'
                       '\n'
@@ -88676,11 +88650,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    const budget = (generated.config as { maxOutputTokens?: '
                       'number })\n'
                       '      .maxOutputTokens;\n'
-                      '    expect(budget).toBe(PARTITION.summaryReserve);\n'
-                      '    expect(worstHistory + DIRECTIVE_TOKENS + '
-                      'budget!).toBeLessThanOrEqual(\n'
-                      '      WINDOW,\n'
-                      '    );\n'
+                      '    expect(budget).toBe(WINDOW - (worstHistory + '
+                      'DIRECTIVE_TOKENS));\n'
+                      '    '
+                      'expect(budget).toBeGreaterThanOrEqual(PARTITION.summaryReserve);\n'
                       '  });\n'
                       '\n'
                       "  it('refuses when the directive outgrows the share reserved "
@@ -88761,7 +88734,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'discarded, so this is\n'
                       '    // the only surviving evidence of where the tokens went.\n'
                       '    expect(result.info.output).toEqual({\n'
-                      '      maxOutputTokens: PARTITION.summaryReserve,\n'
+                      '      maxOutputTokens: WINDOW - 195_000,\n'
                       '      outputTokens: 19_900,\n'
                       '      thinkingTokens: 19_900,\n'
                       '      summaryChars: 0,\n'
@@ -94776,8 +94749,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    >;\n'
                              '    expect({ ...generated, config: generatedConfig '
                              '}).toEqual(counted);\n'
-                             '    '
-                             'expect(maxOutputTokens).toBe(PARTITION.summaryReserve);\n'
+                             '    expect(maxOutputTokens).toBe(WINDOW - 195_000);\n'
                              '    expect(generated).toMatchObject({\n'
                              '      model: MODEL,\n'
                              '      stream: true,\n'
@@ -95069,8 +95041,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'expect(rejected.generateText).not.toHaveBeenCalled();\n'
                              '  });\n'
                              '\n'
-                             "  it('issues the generation at the summary reserve, "
-                             "whatever the history costs', async () => {\n"
+                             "  it('issues the generation at the room the window has, "
+                             "never below the reserve', async () => {\n"
                              '    for (const requestTokens of [\n'
                              '      1_000 + DIRECTIVE_TOKENS,\n'
                              '      150_000,\n'
@@ -95085,9 +95057,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const budget = (generated.config as { '
                              'maxOutputTokens?: number })\n'
                              '        .maxOutputTokens;\n'
-                             '      expect(budget).toBe(PARTITION.summaryReserve);\n'
-                             '      expect(requestTokens + '
-                             'budget!).toBeLessThanOrEqual(WINDOW);\n'
+                             '      expect(budget).toBe(WINDOW - requestTokens);\n'
+                             '      '
+                             'expect(budget).toBeGreaterThanOrEqual(PARTITION.summaryReserve);\n'
                              '    }\n'
                              '  });\n'
                              '\n'
@@ -95114,11 +95086,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const budget = (generated.config as { '
                              'maxOutputTokens?: number })\n'
                              '      .maxOutputTokens;\n'
-                             '    expect(budget).toBe(PARTITION.summaryReserve);\n'
-                             '    expect(worstHistory + DIRECTIVE_TOKENS + '
-                             'budget!).toBeLessThanOrEqual(\n'
-                             '      WINDOW,\n'
-                             '    );\n'
+                             '    expect(budget).toBe(WINDOW - (worstHistory + '
+                             'DIRECTIVE_TOKENS));\n'
+                             '    '
+                             'expect(budget).toBeGreaterThanOrEqual(PARTITION.summaryReserve);\n'
                              '  });\n'
                              '\n'
                              "  it('refuses when the directive outgrows the share "
@@ -95210,7 +95181,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // the only surviving evidence of where the tokens '
                              'went.\n'
                              '    expect(result.info.output).toEqual({\n'
-                             '      maxOutputTokens: PARTITION.summaryReserve,\n'
+                             '      maxOutputTokens: WINDOW - 195_000,\n'
                              '      outputTokens: 19_900,\n'
                              '      thinkingTokens: 19_900,\n'
                              '      summaryChars: 0,\n'
@@ -97976,7 +97947,30 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '${partition.directiveReserve} the partition reserves for it.`,\n'
                       '        );\n'
                       '      }\n'
-                      '      compactionOutputBudget = partition.summaryReserve;\n'
+                      '      // The snapshot is issued at the room the window actually '
+                      'has, not at a\n'
+                      '      // fixed share of it. The partition proves that room is '
+                      'never below the\n'
+                      '      // reserve: a turn is only issued while the conversation '
+                      'is below the\n'
+                      '      // trigger, so the largest request this can become is A + '
+                      'C + T + D,\n'
+                      '      // which is W - S, leaving exactly S. Every lighter '
+                      'request leaves more,\n'
+                      '      // and spending it is what keeps the snapshot from being '
+                      'truncated by the\n'
+                      '      // reasoning it shares an output stream with.\n'
+                      '      compactionOutputBudget = contextLimit - '
+                      'summaryRequestTokenCount;\n'
+                      '      if (compactionOutputBudget < partition.summaryReserve) {\n'
+                      '        throw new Error(\n'
+                      '          `The compaction request renders to '
+                      '${summaryRequestTokenCount} tokens, leaving '
+                      '${compactionOutputBudget} for the snapshot, below the '
+                      '${partition.summaryReserve} tokens the partition guarantees '
+                      'it.`,\n'
+                      '        );\n'
+                      '      }\n'
                       '      summaryResult = await '
                       'config.getBaseLlmClient().generateText({\n'
                       '        ...sideQueryOptions,\n'
@@ -99349,8 +99343,31 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'it.`,\n'
                              '        );\n'
                              '      }\n'
-                             '      compactionOutputBudget = '
-                             'partition.summaryReserve;\n'
+                             '      // The snapshot is issued at the room the window '
+                             'actually has, not at a\n'
+                             '      // fixed share of it. The partition proves that '
+                             'room is never below the\n'
+                             '      // reserve: a turn is only issued while the '
+                             'conversation is below the\n'
+                             '      // trigger, so the largest request this can become '
+                             'is A + C + T + D,\n'
+                             '      // which is W - S, leaving exactly S. Every '
+                             'lighter request leaves more,\n'
+                             '      // and spending it is what keeps the snapshot from '
+                             'being truncated by the\n'
+                             '      // reasoning it shares an output stream with.\n'
+                             '      compactionOutputBudget = contextLimit - '
+                             'summaryRequestTokenCount;\n'
+                             '      if (compactionOutputBudget < '
+                             'partition.summaryReserve) {\n'
+                             '        throw new Error(\n'
+                             '          `The compaction request renders to '
+                             '${summaryRequestTokenCount} tokens, leaving '
+                             '${compactionOutputBudget} for the snapshot, below the '
+                             '${partition.summaryReserve} tokens the partition '
+                             'guarantees it.`,\n'
+                             '        );\n'
+                             '      }\n'
                              '      summaryResult = await '
                              'config.getBaseLlmClient().generateText({\n'
                              '        ...sideQueryOptions,\n'
@@ -165983,12 +166000,12 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'bb73338e3cb074e243c5baf4c09159a638134210e0eabf816a90df3656e8da28',
  'packages/core/src/core/openaiContentGenerator/converter.ts': '28c729be63e9171b90b58c712c22808a9d529402ee1c5026436051059387ca51',
  'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1',
- 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': 'ed00320575c8e2b90a1300734588c99d6115ee85f0318e1cd66bc814eb4bf944',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': 'fd8502af2d60795f53b4d1b2c654e00da026340e91d706814ed073867299e31b',
  'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888',
- 'packages/core/src/core/openaiContentGenerator/pipeline.ts': '22db5d61da4f9e77007e38855f2cc656e670d261d017e24a41d04e795cab47a5',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.ts': '9bb837f65fae6ec9c81ab5a912952bdef4311ce1e7733abb0b3843b7678231cc',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
- 'packages/core/src/core/prompts.test.ts': '415b3b6491fd759d6b8df89161576319c4fd7f6965d9b76f8e9a26bafa4a891c',
- 'packages/core/src/core/prompts.ts': 'a5f6e96d5510edc97ce2e6109b74543281fcacefdb8c8ef463c710f0b2b395a9',
+ 'packages/core/src/core/prompts.test.ts': '9369efadaa67f10e218f1be71f3bd1620d67d8958dec94a28a9db300700175d0',
+ 'packages/core/src/core/prompts.ts': 'f1d1b4db7b943da44a180b3dadaa1dca598797b9e6941578a6ecf51b7a6cc3a5',
  'packages/core/src/core/qwen38-deployment-prompt.test.ts': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851',
  'packages/core/src/core/qwen38-deployment-prompt.ts': '0397a0cf6e4c71f9df3d0f04a2058c9703ae6b8507cd5cbcd9682603a993b24a',
  'packages/core/src/core/session-recovery.ts': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513',
@@ -166005,8 +166022,8 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/models/types.ts': '36aeae5b246fb84e527d3d767e0ac4dd90288e6969240c982ac7488848ae844b',
  'packages/core/src/permissions/permission-manager.test.ts': 'd7d463b3c4eebf766656f881f9cc1ecd4a3758b86af7d8e49bbbe84a45389f92',
  'packages/core/src/permissions/permission-manager.ts': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779',
- 'packages/core/src/services/chatCompressionService.test.ts': '6c98368f26b32ca181a81452dcaa99757a73de6bae7edf2e0dec1e4a76883cac',
- 'packages/core/src/services/chatCompressionService.ts': '98dfb49737ac44cc1060f0d373bf1e39b8c41097725c7d0c91ba3d04e908960d',
+ 'packages/core/src/services/chatCompressionService.test.ts': '615f0d2e1ceb1d0be1d91670ed9ff243bbb3cde0c0716dce65f4b42d16ca995b',
+ 'packages/core/src/services/chatCompressionService.ts': '9d4db0b67831e0259be484ed47fd7b5b00fe76d77198911af37dda4dc5e1b743',
  'packages/core/src/services/fileReadCache.integration.test.ts': '25e9d63233752ccce3bba61bcb2d67ee585e76dad61422458230f1f18904dc2f',
  'packages/core/src/services/image-payload-references.ts': 'd5174dea02e8ea7a4759eb9276d530ac69948901d7ceae907fe523319e7863a2',
  'packages/core/src/services/loopDetectionService.ts': '9e3b6457192b8bd6691ada479da2db67d10721778c3ad260e06409778217f99d',
