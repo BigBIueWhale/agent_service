@@ -275,7 +275,6 @@ def _validate_exact_tokens_before(state: State) -> None:
         ("export function clampOutputTokensToWindow(", "MIN_CLAMPED_OUTPUT_TOKENS"),
         label=label,
     )
-    forbid_text(state, limits, "clampExactOutputTokensToWindow", label=label)
     forbid_text(state, pipeline, "deriveVllmTokenizeUrl", label=label)
     _require_all(
         state,
@@ -293,26 +292,6 @@ def _validate_exact_tokens_after(state: State) -> None:
     content = "packages/core/src/core/contentGenerator.ts"
     compression = "packages/core/src/services/chatCompressionService.ts"
     base_client = "packages/core/src/core/baseLlmClient.ts"
-    limit_source = _require_all(
-        state,
-        limits,
-        (
-            "export function clampExactOutputTokensToWindow(",
-            "const room = contextWindowSize - exactPromptTokens;",
-            "if (room <= 0)",
-            "function compactionRoom(",
-            "compactionRoom(autoCompactionThreshold, exactPromptTokens),",
-        ),
-        label=label,
-    )
-    exact_start = limit_source.index("export function clampExactOutputTokensToWindow(")
-    exact_end = limit_source.index("\nexport function ", exact_start + 10)
-    exact_body = limit_source[exact_start:exact_end]
-    _require(
-        "MIN_CLAMPED_OUTPUT_TOKENS" not in exact_body
-        and "Math.max(" not in exact_body,
-        f"{label}: exact clamp pads or floors its window term",
-    )
     pipeline_source = _require_all(
         state,
         pipeline,
@@ -355,20 +334,27 @@ def _validate_exact_tokens_after(state: State) -> None:
         state,
         chat,
         (
-            "cgConfigForThresholds?.exactTokenCounting === 'vllm'",
-            "cannot count rendered requests",
-            "result.maxModelLen !== contextWindowForClamp",
+            "Exact rendered-request token counting is required",
+            "result.maxModelLen !== partition.window",
             "this.getRequestHistoryWithPendingForRoute(",
-            "promptTokensForClamp = exactTokenCounting",
-            "clampExactOutputTokensToWindow(",
-            "if (!exactTokenCounting && this.promptCountIsEstimateDerived())",
+            "promptTokensForClamp = await countExactRequestTokens(requestContents);",
         ),
         label=label,
     )
     _require(
-        chat_source.count("await countExactRequestTokens(") >= 3,
+        chat_source.count("await countExactRequestTokens(") >= 2,
         f"{label}: compaction and generation no longer share the exact renderer count",
     )
+    # There is one counter and no second way to size a request: the
+    # character estimator the clamp used is gone from the send path.
+    for absent in (
+        "estimatePromptTokens(",
+        "ESTIMATE_CLAMP_OVERHEAD_PAD",
+    ):
+        _require(
+            absent not in chat_source,
+            f"{label}: {chat} sizes a request from a character estimate via '{absent}'",
+        )
     _require_all(
         state,
         content,
@@ -386,7 +372,7 @@ def _validate_exact_tokens_after(state: State) -> None:
             "`${promptId}:auto-threshold`",
             "await chat.countRequestTokensForCandidateHistory(",
             "COMPRESSION_FAILED_TOKEN_COUNT_ERROR",
-            "COMPACT_MAX_OUTPUT_TOKENS = 49_152",
+            "partitionContextWindow(contextLimit)",
             "summaryResult.finishReason === FinishReason.MAX_TOKENS",
             "summaryResult.finishReason !== FinishReason.STOP",
             "newTokenCountIsEstimated: false",
@@ -922,8 +908,8 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "fails closed on malformed or mismatched responses",
         ),
         "packages/core/src/core/geminiChat.test.ts": (
-            "uses vLLM exact rendered-prompt counts with no heuristic pad or margin",
-            "fails closed when exact request token counting is unavailable",
+            "gives every turn the window share, whatever the prompt costs",
+            "refuses when the request cannot be counted at all",
             "resamples one invalid pre-content stream in strict tool-calling mode",
             "never resamples an invalid strict stream after visible output escaped",
             "does not synthesize an output continuation after MAX_TOKENS in strict mode",
@@ -935,7 +921,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "sends the ENTIRE history to one cache-preserving main-model request",
             "rejects unusable summary output",
             "summaryResult({ hadToolCall: true })",
-            "requires an exact shrinking candidate with the full output reserve of next-turn room",
+            "requires an exact shrinking candidate that leaves a turn issuable",
         ),
         "packages/core/src/core/baseLlmClient.test.ts": (
             "uses the authoritative tokenizer and forwards the identical rendered-request options",
@@ -1142,9 +1128,9 @@ def _validate_compaction_event_after(state: State) -> None:
         f"{label}: {chat} no longer reports the reactive overflow rescue",
     )
     _require(
-        chat_source.count("type: StreamEventType.COMPACTION,") == 3,
+        chat_source.count("type: StreamEventType.COMPACTION,") == 2,
         f"{label}: {chat} must report every compaction site — the pre-stream "
-        f"attempt, the reactive overflow rescue, and the severed-turn rescue",
+        f"attempt and the reactive overflow rescue",
     )
 
     # Subagent attribution: the agent event carries the record to the agent
@@ -2052,8 +2038,9 @@ def _validate_text_read_fidelity_after(state: State) -> None:
         files,
         (
             "        const rangeReachedEof =",
-            "            index === selectedLines.length - 1 && rangeReachedEof ? '' : '\\n';",
-            "          llmContent += line + terminator;",
+            "        const linesIncluded = selectedLines.length;",
+            "            index === selectedLines.length - 1 && rangeReachedEof",
+            "              : `${line}\\n`,",
             "                  offset: actualEndLine,",
         ),
         label=label,
@@ -2083,7 +2070,7 @@ def _validate_text_read_fidelity_after(state: State) -> None:
     require_text(
         state,
         files_test,
-        "[read-contract] refuses a line wider than one result instead of halving it",
+        "[read-contract] refuses a line wider than one page instead of halving it",
         label=label,
     )
     require_text(
@@ -2268,7 +2255,7 @@ def _validate_model_facing_failure_after(state: State) -> None:
         scheduler,
         (
             "export function mergeModelFacingFailureText(",
-            "        let modelFacingText = mergeModelFacingFailureText(\n"
+            "        const modelFacingText = mergeModelFacingFailureText(\n"
             "          toolResult.llmContent,\n"
             "          errorMessage,\n"
             "        );",
@@ -2289,7 +2276,7 @@ def _validate_model_facing_failure_after(state: State) -> None:
     _require_ordered(
         source,
         (
-            "let modelFacingText = mergeModelFacingFailureText(",
+            "const modelFacingText = mergeModelFacingFailureText(",
             "const error = new Error(errorMessage);",
             "          modelFacingText,",
         ),
@@ -2618,19 +2605,152 @@ def _validate_subagent_progress_after(state: State) -> None:
 
 
 def _validate_compaction_budget_before(state: State) -> None:
-    label = "compaction output-budget precondition"
+    label = "context-partition precondition"
+    limits = "packages/core/src/core/tokenLimits.ts"
     service = "packages/core/src/services/chatCompressionService.ts"
     prompts = "packages/core/src/core/prompts.ts"
-    # Upstream sizes compaction at claude-code's 20,000-token summary cap and
-    # writes the snapshot into nine overlapping sections.
+    # Upstream spends the window through a tuned ladder of independent
+    # constants and writes the snapshot into nine overlapping sections.
+    _require_all(
+        state,
+        service,
+        (
+            "export const COMPACT_MAX_OUTPUT_TOKENS = 20_000;",
+            "export const AUTOCOMPACT_BUFFER = 13_000;",
+            "export const WARN_BUFFER = 20_000;",
+            "export const HARD_BUFFER = 3_000;",
+            "export const DEFAULT_PCT = 0.85;",
+            "export function computeThresholds(",
+        ),
+        label=label,
+    )
+    forbid_text(state, limits, "partitionContextWindow", label=label)
+    # The trigger is a configured fraction of the window, tunable per session.
     require_text(
-        state, service, "export const COMPACT_MAX_OUTPUT_TOKENS = 20_000;", label=label
+        state,
+        "packages/core/src/config/config.ts",
+        "  getAutoCompactThreshold(): number | undefined {",
+        label=label,
     )
     require_text(state, prompts, "<all_user_messages>", label=label)
 
 
+# The window divides into this many shares, and these are the shares each
+# budget takes. They are read out of the post-patch source rather than
+# restated here, so the arithmetic below is a check on the tree and not a
+# copy of it.
+_PARTITION_SHARE_NAMES = (
+    ("WINDOW_SHARES", None),
+    ("SUMMARY_RESERVE_SHARES", "summaryReserve"),
+    ("TURN_OUTPUT_SHARES", "turnOutput"),
+    ("TOOL_RESULT_SHARES", "toolResult"),
+    ("DIRECTIVE_RESERVE_SHARES", "directiveReserve"),
+)
+
+# The served deployment, and the budgets its window must yield.
+_SERVED_WINDOW = 262_144
+_SERVED_PARTITION = {
+    "summaryReserve": 49_152,
+    "turnOutput": 32_768,
+    "toolResult": 16_384,
+    "directiveReserve": 2_048,
+    "compactionTrigger": 161_792,
+}
+
+
+def _read_partition_shares(source: str, *, label: str) -> dict[str, int]:
+    shares: dict[str, int] = {}
+    for name, _ in _PARTITION_SHARE_NAMES:
+        match = re.search(rf"^const {name} = (\d+);$", source, re.MULTILINE)
+        _require(
+            match is not None,
+            f"{label}: tokenLimits.ts does not declare {name} as an integer share",
+        )
+        shares[name] = int(match.group(1))
+    return shares
+
+
+def _partition(window: int, shares: dict[str, int]) -> dict[str, int]:
+    total = shares["WINDOW_SHARES"]
+    summary = (window * shares["SUMMARY_RESERVE_SHARES"]) // total
+    turn = (window * shares["TURN_OUTPUT_SHARES"]) // total
+    tool = (window * shares["TOOL_RESULT_SHARES"]) // total
+    directive = (window * shares["DIRECTIVE_RESERVE_SHARES"]) // total
+    return {
+        "summaryReserve": summary,
+        "turnOutput": turn,
+        "toolResult": tool,
+        "directiveReserve": directive,
+        "compactionTrigger": window - summary - turn - tool - directive,
+    }
+
+
+def _validate_context_partition(state: State, *, label: str) -> None:
+    """Every context budget is a share of the served window, and the shares
+    spend the window exactly.
+
+    This is the whole safety argument, checked here rather than at run time:
+    a turn issued below the compaction trigger, given the turn-output share,
+    appending at most the tool-result share, produces a history no larger
+    than the window less the summary reserve — the largest history a
+    whole-history summary request can still be issued for.
+    """
+
+    limits = "packages/core/src/core/tokenLimits.ts"
+    source = _source(state, limits, label=label)
+    shares = _read_partition_shares(source, label=label)
+    reserved = sum(
+        shares[name] for name, budget in _PARTITION_SHARE_NAMES if budget is not None
+    )
+    _require(
+        all(value > 0 for value in shares.values()),
+        f"{label}: every share must be a positive number of sixteenths",
+    )
+    _require(
+        reserved < shares["WINDOW_SHARES"],
+        f"{label}: the reserved shares leave no window for the compaction trigger",
+    )
+    for window in (
+        256,
+        4_096,
+        131_072,
+        200_000,
+        202_752,
+        _SERVED_WINDOW,
+        _SERVED_WINDOW + 1,
+        1_048_576,
+    ):
+        part = _partition(window, shares)
+        _require(
+            all(value > 0 for value in part.values()),
+            f"{label}: a {window}-token window yields a non-positive budget {part!r}",
+        )
+        _require(
+            sum(part.values()) == window,
+            f"{label}: the budgets do not spend a {window}-token window exactly",
+        )
+        _require(
+            part["compactionTrigger"]
+            + part["turnOutput"]
+            + part["toolResult"]
+            + part["directiveReserve"]
+            == window - part["summaryReserve"],
+            f"{label}: a turn at a {window}-token window can outgrow its own summary",
+        )
+    served = _partition(_SERVED_WINDOW, shares)
+    _require(
+        served == _SERVED_PARTITION,
+        f"{label}: the served {_SERVED_WINDOW}-token window yields {served!r}, "
+        f"not the reviewed {_SERVED_PARTITION!r}",
+    )
+
+
 def _validate_compaction_budget_after(state: State) -> None:
-    label = "compaction output-budget result"
+    label = "context-partition result"
+    limits = "packages/core/src/core/tokenLimits.ts"
+    limits_test = "packages/core/src/core/tokenLimits.test.ts"
+    chat = "packages/core/src/core/geminiChat.ts"
+    chat_test = "packages/core/src/core/geminiChat.test.ts"
     service = "packages/core/src/services/chatCompressionService.ts"
     service_test = "packages/core/src/services/chatCompressionService.test.ts"
     pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
@@ -2638,21 +2758,120 @@ def _validate_compaction_budget_after(state: State) -> None:
     prompts = "packages/core/src/core/prompts.ts"
     prompts_test = "packages/core/src/core/prompts.test.ts"
 
-    # One number sizes compaction: it is the request's output ceiling and the
-    # reserve the thresholds keep free, so input + output cannot exceed the
-    # window.
+    # The arithmetic itself, evaluated against the shares the tree declares.
+    _validate_context_partition(state, label=label)
+
+    # One derivation, in one place, with no tuned constant beside it.
+    limits_source = _require_all(
+        state,
+        limits,
+        (
+            "export interface ContextPartition {",
+            "export function partitionContextWindow(",
+            "export function turnOutputBudget(",
+            "      directiveReserve,",
+            "return Math.min(outputCeiling, partition.turnOutput);",
+        ),
+        label=label,
+    )
+    budget_start = limits_source.index("export function turnOutputBudget(")
+    budget_body = limits_source[budget_start:]
+    _require(
+        "prompt" not in budget_body.lower().split("}")[0],
+        f"{label}: a turn's output budget depends on the prompt again",
+    )
+    for absent in (
+        "MIN_CLAMPED_OUTPUT_TOKENS",
+        "outputClampMargin",
+        "compactionRoom",
+        "clampOutputTokensToWindow",
+        "clampExactOutputTokensToWindow",
+    ):
+        _require(
+            absent not in limits_source,
+            f"{label}: {limits} still carries the run-time budget term '{absent}'",
+        )
+
+    # A turn is issued below the compaction trigger or it is not issued.
+    _require_ordered(
+        _source(state, chat, label=label),
+        (
+            "promptTokensForClamp = await countExactRequestTokens(requestContents);",
+            "if (promptTokensForClamp >= partition.compactionTrigger) {",
+            "throw new Error(",
+            "maxOutputTokens: turnOutputBudget(outputCeiling, partition),",
+        ),
+        label=label,
+        location=chat,
+    )
+    for case in (
+        "refuses when the directive outgrows the share reserved for it",
+        "holds the request and the whole reserve inside the window at the largest history a turn can produce",
+    ):
+        require_text(state, service_test, case, label=label)
+    for case in (
+        "gives every turn the window share, whatever the prompt costs",
+        "issues no turn once the rendered prompt reaches the compaction trigger",
+        "refuses when the tokenizer reports another window",
+        "refuses when the provider declares no context window",
+    ):
+        require_text(state, chat_test, case, label=label)
+    for case in (
+        "spends the served window on five shares and nothing else",
+        "sums to the window exactly at every window size",
+        "leaves a turn issued below the trigger inside the summarizable size",
+        "re-derives every budget from a larger window with no code change",
+        "refuses a window it cannot partition",
+    ):
+        require_text(state, limits_test, case, label=label)
+
+    # The reserve covers the directive and the snapshot together, sized from
+    # the request that was counted rather than from a margin.
     service_source = _require_all(
         state,
         service,
         (
-            "export const COMPACT_MAX_OUTPUT_TOKENS = 49_152;",
-            "export const SUMMARY_RESERVE = COMPACT_MAX_OUTPUT_TOKENS;",
-            "export const COMPACTION_BUDGET_SAFETY_MARGIN = 1_024;",
-            "export function computeCompactionOutputBudget(",
+            "const partition = partitionContextWindow(contextLimit);",
+            "compactionOutputBudget = partition.summaryReserve;",
+            "if (directiveTokens > partition.directiveReserve) {",
+            "      if (effectiveTokens < partition.compactionTrigger) {",
+            "    if (newTokenCount >= partition.compactionTrigger) {",
             "          maxOutputTokens: compactionOutputBudget,",
         ),
         label=label,
     )
+    # The summary generation is issued at the reserve, never at a remainder
+    # computed from how full the request happens to be.
+    _require(
+        "Math.min(" not in service_source.split("compactionOutputBudget =")[1][:400],
+        f"{label}: {service} sizes the summary from the room left rather than the reserve",
+    )
+    for absent in (
+        "COMPACT_MAX_OUTPUT_TOKENS",
+        "SUMMARY_RESERVE",
+        "AUTOCOMPACT_BUFFER",
+        "WARN_BUFFER",
+        "HARD_BUFFER",
+        "DEFAULT_PCT",
+        "COMPACTION_BUDGET_SAFETY_MARGIN",
+        "computeCompactionOutputBudget",
+        "computeThresholds",
+        "effectiveWindow",
+    ):
+        _require(
+            absent not in service_source,
+            f"{label}: {service} still carries the tuned ladder term '{absent}'",
+        )
+    # A share of the window is not a setting: nothing reads a configured
+    # fraction to decide when compaction is due.
+    for path in (
+        "packages/core/src/config/config.ts",
+        "packages/cli/src/config/config.ts",
+        "packages/cli/src/config/settingsSchema.ts",
+    ):
+        for absent in ("autoCompactThreshold", "getAutoCompactThreshold"):
+            forbid_text(state, path, absent, label=label)
+
     # The compaction request is an ordinary one. Nothing splits the output
     # budget into phases, nothing shrinks or splits the input, and nothing
     # converges a failed attempt into a smaller retry.
@@ -3379,94 +3598,244 @@ def _validate_terminal_state_after(state: State) -> None:
         forbid_text(state, bootstrap_test, cwd_relative, label=label)
 
 
-def _validate_compaction_rescue_before(state: State) -> None:
-    label = "compaction-rescue precondition"
+# Every tool that spilled its own output to disk, or declared its own
+# character budget for the scheduler to spill it at, and every layer that
+# bounded a batch of results in characters.
+_CHARACTER_BOUND_SITES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "packages/core/src/utils/truncation.ts",
+        (
+            "truncateAndSaveToFile",
+            "truncateToolOutput",
+            "truncateLlmContent",
+            "TOOL_OUTPUT_TRUNCATED_PREFIX",
+            "COMBINED_PASS_TOLERANCE_FACTOR",
+            "TRUNCATION_FALLBACK_ENVELOPE_SLACK",
+        ),
+    ),
+    (
+        "packages/core/src/utils/tool-response-finalizer.ts",
+        (
+            "enforceFunctionResponseBudget",
+            "finalizeToolResponses",
+            "allocateTextBudget",
+            "fitText",
+        ),
+    ),
+    (
+        "packages/core/src/core/coreToolScheduler.ts",
+        (
+            "GATE_HEADROOM",
+            "GATE_EXEMPT_TOOLS",
+            "maybePersistLargeToolResult",
+            "applyBatchOutputBudget",
+            "truncateLlmContent",
+            "getTruncateToolOutputThreshold",
+        ),
+    ),
+    (
+        "packages/core/src/config/config.ts",
+        (
+            "DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD",
+            "DEFAULT_TOOL_OUTPUT_BATCH_BUDGET",
+            "getTruncateToolOutputThreshold",
+            "getToolOutputBatchBudget",
+        ),
+    ),
+    ("packages/cli/src/config/settingsSchema.ts", ("truncateToolOutputThreshold", "toolOutputBatchBudget")),
+    ("packages/cli/src/config/config.ts", ("truncateToolOutputThreshold", "toolOutputBatchBudget")),
+    (
+        "packages/core/src/utils/fileUtils.ts",
+        ("getTruncateToolOutputThreshold", "getRangeReadByteLimit"),
+    ),
+    ("packages/core/src/tools/tools.ts", ("maxOutputChars", "truncateKeep")),
+    ("packages/core/src/tools/shell.ts", ("maxOutputChars", "truncateToolOutput")),
+    ("packages/core/src/tools/mcp-tool.ts", ("maxOutputChars", "truncateToolOutput")),
+    ("packages/core/src/tools/grep.ts", ("maxOutputChars",)),
+    ("packages/core/src/tools/ripGrep.ts", ("maxOutputChars",)),
+    ("packages/core/src/tools/read-file.ts", ("maxOutputChars",)),
+    ("packages/core/src/tools/read-mcp-resource.ts", ("maxOutputChars",)),
+    ("packages/core/src/tools/enterPlanMode.ts", ("maxOutputChars",)),
+    ("packages/core/src/tools/web-search.ts", ("maxOutputChars",)),
+    ("packages/core/src/tools/agent/agent.ts", ("maxOutputChars", "truncateKeep")),
+    ("packages/core/src/test-utils/mock-tool.ts", ("maxOutputChars", "truncateKeep")),
+    ("packages/core/src/core/geminiChat.ts", ("enforceFunctionResponseBudget",)),
+    ("packages/core/src/agents/runtime/agent-core.ts", ("finalizeToolResponses",)),
+    ("packages/core/src/followup/speculation.ts", ("finalizeToolResponses",)),
+    ("packages/cli/src/nonInteractiveCli.ts", ("finalizeToolResponses",)),
+    ("packages/cli/src/ui/hooks/useGeminiStream.ts", ("finalizeToolResponses",)),
+    ("packages/cli/src/acp-integration/session/Session.ts", ("finalizeToolResponses",)),
+    ("packages/core/src/index.ts", ("finalizeToolResponses",)),
+)
+
+
+def _validate_tool_result_bound_before(state: State) -> None:
+    label = "tool-result-bound precondition"
     chat = "packages/core/src/core/geminiChat.ts"
-    chat_test = "packages/core/src/core/geminiChat.test.ts"
-    limits = "packages/core/src/core/tokenLimits.ts"
-    service = "packages/core/src/services/chatCompressionService.ts"
-    # Compaction is due when the prompt crosses the threshold, and only then.
-    # Whether the turn about to be issued has room to work is never asked.
-    require_text(state, service, "if (effectiveTokens < auto) {", label=label)
-    # The output floor names the regime below it as compaction's, and nothing
-    # in the send path ever hands that regime over.
-    require_text(
-        state, limits, "compaction/hard-rescue owns that regime", label=label
+    truncation = "packages/core/src/utils/truncation.ts"
+    finalizer = "packages/core/src/utils/tool-response-finalizer.ts"
+    scheduler = "packages/core/src/core/coreToolScheduler.ts"
+    config = "packages/core/src/config/config.ts"
+    files = "packages/core/src/utils/fileUtils.ts"
+    tools = "packages/core/src/tools/tools.ts"
+
+    # Upstream bounds a tool result in characters, in six places that neither
+    # agree with one another nor with any token the model will actually read.
+    _require_all(
+        state,
+        truncation,
+        (
+            "export async function truncateToolOutput(",
+            "export async function truncateLlmContent(",
+            "export const TOOL_OUTPUT_TRUNCATED_PREFIX =",
+            "export const COMBINED_PASS_TOLERANCE_FACTOR = 2;",
+        ),
+        label=label,
     )
-    forbid_text(state, chat, "compactionRescueAttempted", label=label)
-    forbid_text(state, chat_test, "compaction rescue", label=label)
-
-
-def _validate_compaction_rescue_after(state: State) -> None:
-    label = "compaction-rescue result"
-    chat = "packages/core/src/core/geminiChat.ts"
-    chat_test = "packages/core/src/core/geminiChat.test.ts"
-    limits = "packages/core/src/core/tokenLimits.ts"
-
-    # The regime the output floor names is now reachable from the send path.
+    _require_all(
+        state,
+        finalizer,
+        (
+            "export function enforceFunctionResponseBudget(",
+            "export async function finalizeToolResponses(",
+            "function allocateTextBudget(",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        scheduler,
+        ("const GATE_HEADROOM = 3000;", "private async applyBatchOutputBudget("),
+        label=label,
+    )
+    _require_all(
+        state,
+        config,
+        (
+            "export const DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD = 25_000;",
+            "export const DEFAULT_TOOL_OUTPUT_BATCH_BUDGET = 200_000;",
+        ),
+        label=label,
+    )
+    require_text(state, tools, "  get maxOutputChars(): number | undefined {", label=label)
     require_text(
         state,
-        limits,
-        "compaction and the hard-tier rescue own",
+        files,
+        "        const configCharLimit = config.getTruncateToolOutputThreshold();",
         label=label,
     )
-    require_text(
-        state, chat, "let compactionRescueAttempted = false;", count=1, label=label
-    )
-    require_text(
-        state, chat, "compactionRescueAttempted = true;", count=1, label=label
-    )
-    require_text(state, chat, "self.history.push(severedTurn);", count=1, label=label)
+    # Nothing measures what a batch costs the request it is about to join.
+    forbid_text(state, chat, "boundPendingToolResults", label=label)
+    forbid_text(state, truncation, "persistToolResult(", label=label)
+
+
+def _validate_tool_result_bound_after(state: State) -> None:
+    label = "tool-result-bound result"
+    chat = "packages/core/src/core/geminiChat.ts"
+    chat_test = "packages/core/src/core/geminiChat.test.ts"
+    truncation = "packages/core/src/utils/truncation.ts"
+    truncation_test = "packages/core/src/utils/truncation.test.ts"
+    finalizer = "packages/core/src/utils/tool-response-finalizer.ts"
+    finalizer_test = "packages/core/src/utils/tool-response-finalizer.test.ts"
+
+    # What a batch costs is the difference it makes to the request that will
+    # be sent, counted twice by the tokenizer that will count the send.
     chat_source = _source(state, chat, label=label)
-    # The rescue reads as one decision: a turn cut short below the ceiling and
-    # carrying no tool call is set aside, summarized, and only reissued when
-    # the summary bought room the severed turn did not have. Every clause is
-    # ordered because each one is what keeps the next safe.
     _require_ordered(
         chat_source,
         (
-            "!compactionRescueAttempted &&",
-            "lastFinishReason === FinishReason.MAX_TOKENS &&",
-            "!streamYieldedFunctionCall &&",
-            "effectiveInitialMaxOutputTokens < outputCeiling",
-            "compactionRescueAttempted = true;",
-            "self.history.pop()",
-            "summary = await self.tryCompress(",
-            "summary.compressionStatus === CompressionStatus.COMPRESSED",
-            "maxOutputTokens > effectiveInitialMaxOutputTokens",
-            "rescue = { contents, maxOutputTokens, info: summary };",
-            "type: StreamEventType.COMPACTION,",
-            "yield { type: StreamEventType.RETRY };",
-            "summary?.compressionStatus !== CompressionStatus.COMPRESSED &&",
-            "self.history.push(severedTurn);",
+            "private async boundPendingToolResults(",
+            "let requestTokens = await countExactRequestTokens(",
+            "const pending = pendingToolResults(userContent.parts ?? []);",
+            "if (pending.length === 0) {",
+            "const historyTokens = await countExactRequestTokens(",
+            "this.getRequestHistoryForRoute(undefined, supportedModalities),",
+            "for (const result of pending) {",
+            "if (requestTokens - historyTokens <= partition.toolResult) break;",
+            "parts: await referencePendingToolResult(",
+            "requestTokens = await countExactRequestTokens(",
+            "const toolResultTokens = requestTokens - historyTokens;",
+            "if (toolResultTokens > partition.toolResult) {",
+            "throw new Error(",
         ),
         label=label,
         location=chat,
     )
-    # An abort during the summary stays an abort rather than becoming a
-    # swallowed rescue failure.
+    # The bound runs before the compaction gate, and its count is the count
+    # the gate uses, so the batch is never counted twice for two purposes.
     _require_ordered(
         chat_source,
         (
-            "} catch (compactionError) {",
-            "isAbortError(compactionError)",
-            "throw compactionError;",
+            "const pendingBatch = await this.boundPendingToolResults(",
+            "userContent = pendingBatch.userContent;",
+            "const effectiveTokens = pendingBatch.requestTokens;",
+            "compressionInfo = await this.tryCompress(",
         ),
         label=label,
         location=chat,
     )
 
-    # Executed in the build. The first two are what make the rescue safe
-    # rather than merely useful: it cannot recur, and a summary that was
-    # refused or failed reports the severance instead of swallowing it.
+    # Displacement writes the result whole, largest first, and skips a result
+    # that already stands for a file.
+    _require_all(
+        state,
+        finalizer,
+        (
+            "export function pendingToolResults(parts: Part[]): PendingToolResult[] {",
+            "if (isPersistedToolResult(value)) continue;",
+            "return results.sort((a, b) => b.text.length - a.text.length);",
+            "export async function referencePendingToolResult(",
+            "const persisted = await persistToolResult(",
+            "        [result.field]: result.protectedPrefix",
+            "          ? `${result.protectedPrefix}${persisted.reference}`",
+            "          : persisted.reference,",
+        ),
+        label=label,
+    )
+    # A reference that named no file, or a file holding part of the result,
+    # would promise the model something it cannot read back.
+    _require_ordered(
+        _source(state, truncation, label=label),
+        (
+            "export async function persistToolResult(",
+            "config.trackToolResultBytes(byteSize);",
+            "const outputFile = await unusedResultPath(toolResultsDir, safeCallId);",
+            "} catch (error) {",
+            "config.trackToolResultBytes(-byteSize);",
+            "throw new Error(",
+        ),
+        label=label,
+        location=truncation,
+    )
+
+    # One bound on one quantity: every character bound this replaces is gone
+    # from the tree, including the per-tool budgets and the batch's
+    # character water-filling.
+    for path, symbols in _CHARACTER_BOUND_SITES:
+        for symbol in symbols:
+            forbid_text(state, path, symbol, label=label)
+
+    # Executed in the build.
     for case in (
-        "reissues a turn the compaction bound cut short, at the room a summary buys",
-        "does not reissue a second time when the reissued turn is cut short at the ceiling",
-        "reports the severance through %s",
-        "leaves a turn cut short at the ceiling alone",
-        "does not reissue a turn that already produced a tool call",
+        "sends a batch inside its share untouched",
+        "displaces the largest result to disk when the batch is over its share",
+        "displaces only as many results as the share requires",
+        "issues no turn when a batch of references is still over its share",
+        "takes no second count for a turn that appends no tool result",
     ):
         require_text(state, chat_test, case, label=label)
+    for case in (
+        "writes the result whole and returns a reference naming the file",
+        "refuses rather than dropping the result when the session disk budget is spent",
+        "refuses and releases the reserved bytes when the write fails",
+    ):
+        require_text(state, truncation_test, case, label=label)
+    for case in (
+        "orders by size so the first displacement buys the most room",
+        "skips a result that already stands for a file on disk",
+        "keeps a protected prefix inline in front of the reference",
+    ):
+        require_text(state, finalizer_test, case, label=label)
 
 
 CONCERNS: tuple[SemanticConcern, ...] = (
@@ -3668,9 +4037,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "contiguous slice of the file -- lines verbatim, each carrying "
             "its newline whenever the file continues past it -- so following "
             "the continuation call from offset 0 concatenates to the file. A "
-            "line wider than the result budget is the one thing this "
-            "interface cannot page, and it was the case that behaved worst: "
-            "the first budget-worth was returned with a marker appended and "
+            "line wider than one page is the one thing this interface "
+            "cannot page, and it was the case that behaved worst: "
+            "the first page-worth was returned with a marker appended and "
             "the continuation named the same offset again, so a caller "
             "following it re-read the identical result until the loop "
             "detector stopped the session. It is refused, naming the shell "
@@ -3975,32 +4344,91 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         validate_after=_validate_compaction_accounting_after,
     ),
     SemanticConcern(
-        name="compaction-output-budget",
+        name="context-window-partition",
         rationale=(
-            "Upstream sizes compaction at claude-code's 20,000-token summary "
-            "cap, which this deployment measured as too small. Across ten "
-            "accounted production compactions hidden reasoning alone ran to "
-            "11,720 tokens and snapshots were clipped at ~30,100 chars; one "
-            "136-turn session had three consecutive attempts discarded as "
-            "MAX_TOKENS and died refusing to send 252,945 tokens. The cap "
-            "is one number because it is two things at once: the request's "
-            "output ceiling and the reserve the thresholds keep free, so "
-            "input plus output cannot exceed max_model_len. The request is "
-            "otherwise ordinary - it declares no phase budgets, so the model "
-            "thinks to a natural stop and writes the snapshot under the "
-            "pinned provider ceilings, and the reasoning-end marker is never "
-            "forced. The snapshot schema gives every fact exactly one home, "
-            "because the previous nine sections gave one code snippet four "
-            "and duplication is what grew under budget pressure."
+            "Upstream spends the context window through a ladder of "
+            "independently tuned constants -- a summary cap, an "
+            "auto-compaction buffer, a warn buffer, a hard buffer, a "
+            "percentage, an output floor and a clamp margin -- and no "
+            "arithmetic relates them, so whether a turn can be issued, and "
+            "whether the conversation it produces can still be summarized, "
+            "are separate questions answered at run time by whichever "
+            "constant happened to bind. Production forensics found both "
+            "halves failing: a session died 1,830 tokens below the "
+            "compaction trigger because the clamp had shrunk a turn's "
+            "output to 4,000 tokens against a need that had never been "
+            "below 4,546, and a second died refusing to send 252,945 tokens "
+            "after three summaries were discarded at a cap sized for "
+            "claude-code's 20,000-token measurement rather than this "
+            "window's demand. The window is divided instead: three "
+            "sixteenths for the summary a compaction must be able to "
+            "produce, two for one turn's output, one for the tool result "
+            "that turn appends, and the remaining ten for the history a "
+            "turn may stand on. The four sum to the window exactly, so the "
+            "trigger plus a turn plus its tool result is the window less "
+            "the reserve -- the largest history a whole-history summary can "
+            "still be issued for -- and the property holds as arithmetic "
+            "between shares rather than as a budget maintained while the "
+            "session runs. Nothing is a constant: a window twice as large "
+            "yields budgets twice as large with no edit. The build "
+            "evaluates the identity from the shares the source declares, so "
+            "a share changed without the arithmetic still holding stops the "
+            "build rather than a session. The compaction request is "
+            "otherwise ordinary - it declares no phase budgets, so the "
+            "model thinks to a natural stop and writes the snapshot under "
+            "the pinned provider ceilings, and the reasoning-end marker is "
+            "never forced. The snapshot schema gives every fact exactly one "
+            "home, because the previous nine sections gave one code snippet "
+            "four and duplication is what grew under budget pressure."
         ),
         removal_condition=(
-            "Remove only when upstream sizes the compaction output ceiling "
-            "from measured demand on this window and reserves it from the "
-            "compaction trigger, so input plus output provably fits "
-            "max_model_len."
+            "Remove only when upstream derives every context budget from "
+            "the served window as shares that sum to it, so that a turn "
+            "cannot be issued at a size whose history its own summary "
+            "request could not carry."
         ),
         validate_before=_validate_compaction_budget_before,
         validate_after=_validate_compaction_budget_after,
+    ),
+    SemanticConcern(
+        name="tool-result-bound",
+        rationale=(
+            "A turn appends its tool results to the history, and how much "
+            "they cost is the one term the partition cannot know before the "
+            "turn is issued. Upstream bounds them in characters instead, "
+            "in six places that do not agree: a global 25,000-character "
+            "truncation threshold, nine per-tool budgets from 20,000 to "
+            "500,000, a persistence gate at the threshold plus a 3,000-"
+            "character headroom, a second pass at twice the budget once "
+            "hook metadata is appended, a 200,000-character per-batch "
+            "water-filling allocator, and read_file's own character result "
+            "cap. Characters are not what a request costs, the six bounds "
+            "compose into no stated total, and each one shortens a result "
+            "the model then cannot recover -- production forensics found a "
+            "read whose continuation notice was computed from a line the "
+            "character budget had cut, which silently skipped content. The "
+            "bound is one number now, it is the window share, and it is "
+            "measured rather than estimated: the request is counted with "
+            "the pending batch and without it, and the difference is what "
+            "the batch adds to the history. A batch over its share is not "
+            "shortened -- its largest result is written to disk whole and "
+            "replaced by a reference naming the file, and the batch is "
+            "counted again, so the agent reads back whatever it still "
+            "needs and nothing is lost. A result that cannot be written "
+            "stops the turn rather than being quietly dropped, and a batch "
+            "of references still over the share stops it too, because "
+            "there is nothing left to displace and sending it would carry "
+            "the history past the size the partition holds a summary's "
+            "room for."
+        ),
+        removal_condition=(
+            "Remove only when upstream bounds the tool results one turn "
+            "appends by a measured share of the served window, in one "
+            "place, degrading by reference to the whole result rather than "
+            "by shortening it."
+        ),
+        validate_before=_validate_tool_result_bound_before,
+        validate_after=_validate_tool_result_bound_after,
     ),
     SemanticConcern(
         name="session-time-anchor",
@@ -4179,51 +4607,6 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_terminal_state_before,
         validate_after=_validate_terminal_state_after,
-    ),
-    SemanticConcern(
-        name="compaction-rescue-for-a-severed-turn",
-        rationale=(
-            "A turn's output request is sized to stop at the auto-compaction "
-            "threshold, so the room it is given shrinks as the conversation "
-            "grows while the room a turn needs does not. Compaction is due "
-            "when the prompt crosses that threshold, never when the room a "
-            "turn is left with runs out, and those are different conditions: "
-            "between them lies a stretch where every generation is issued "
-            "under a budget the history, not the ceiling, has set. The output "
-            "floor already names that stretch as compaction's -- it asks for "
-            "at least 4,000 tokens `rather than max_tokens <= 0` because "
-            "`compaction and the hard-tier rescue own that regime` -- and "
-            "nothing in the send path ever hands it over. Production "
-            "forensics found a 66-turn session whose per-turn need grew from "
-            "5,215 tokens to 20,995 across one conversation while its budget "
-            "fell to 19,064; the two curves crossed once and the run ended "
-            "there. No fixed floor separates them, because a turn's need is "
-            "not knowable before it is issued: a floor set for the early "
-            "turns never fires and one set for the late turns compacts "
-            "through a stretch where the budget was three to five times what "
-            "was used. The provider's terminal reason settles it after the "
-            "fact instead. A generation that ends at MAX_TOKENS under a "
-            "budget the ceiling did not set is the conversation reporting "
-            "that it has outgrown the room a turn can be given, so the "
-            "severed turn is set aside before any summary is taken, the "
-            "history is summarized, and the same question is asked again "
-            "against the summary at the room it now buys. Nothing is resumed "
-            "and no cut-off text enters durable history. It happens at most "
-            "once per turn and only when the summary raises the budget, so a "
-            "generation cut short with the full ceiling behind it, a summary "
-            "that was refused or failed, and a turn that already produced a "
-            "tool call all leave the severance to be reported rather than "
-            "hidden."
-        ),
-        removal_condition=(
-            "Remove only when upstream sizes a turn's output request against "
-            "a threshold it also compacts on, so that no generation can be "
-            "issued under a budget the history has already exhausted, or "
-            "when it recovers such a generation without resuming a severed "
-            "prefix."
-        ),
-        validate_before=_validate_compaction_rescue_before,
-        validate_after=_validate_compaction_rescue_after,
     ),
 )
 

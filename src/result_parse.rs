@@ -884,11 +884,11 @@ mod tests {
         // defined semantic, not corruption, and refusing the capture over it
         // hid the real cause behind "agent_output_missing" and threw away the
         // run's real timings.
-        let error_result = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":19180714,\"duration_api_ms\":18037819,\"num_turns\":2,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"[API Error: Context is too large to send safely after automatic compression.]\"}}\n";
+        let error_result = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":19180714,\"duration_api_ms\":18037819,\"num_turns\":2,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"[API Error: Connection error.]\"}}\n";
         let text = format!("{INIT}{MAIN_TURN}{error_result}");
         let parsed = parse_text(&text).expect("an error result may leave its final turn unbilled");
         assert!(parsed.is_error);
-        assert!(parsed.response.contains("Context is too large"));
+        assert!(parsed.response.contains("Connection error"));
         assert_eq!(parsed.num_turns, 2);
         assert_eq!(parsed.billed_main_turns, 1);
         // The real timings survive; they were the whole point of parsing it.

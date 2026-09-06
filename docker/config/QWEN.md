@@ -96,9 +96,16 @@ fallback configuration.
 - There is no Qwen wall-clock cutoff. Use each shell call's explicit timeout
   carefully and keep long-running commands observable.
 - Context uses the real vLLM tokenizer. There is no character estimate, byte
-  division, padding margin, or token-count fallback. Auto-compaction is delayed
-  to the latest safe threshold supported by the client, and sequential
-  subagents are accounted exactly rather than estimated.
+  division, padding margin, or token-count fallback. The served window is spent
+  as fixed shares of itself -- a compaction's summary, one turn's output, the
+  tool result that turn appends, and the history a turn may stand on -- so a
+  turn is issued below the compaction trigger or it is not issued at all, and
+  sequential subagents are accounted exactly rather than estimated.
+- A turn's tool results are held inside their share of the window, measured on
+  the rendered request. A batch over that share is not shortened: its largest
+  result is written to a file whole and replaced by a reference naming the
+  path, which `read_file` returns in pages. Nothing is lost, so prefer one
+  narrow read or search over a broad one you will have to page back.
 
 ## Images and chronological history
 

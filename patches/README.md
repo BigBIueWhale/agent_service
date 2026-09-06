@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `d1c86e91cb7d774a3fadebac51ff31a40f18da1725c8bf14822325c4c8315855`
+- Review-diff SHA-256: `e7e67353c9d203a8d4749e9c63b3a7651c12f93967c1230d494001b9122478be`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `fbba75c5640fd7eb7085f3ce566b68213600f608ed4b2b7c29f647721f08b87a`
+- Transformer-manifest SHA-256: `40ba65fcbbba40569b8d9d807168fe5b1bcd9a5c30398419a0af45ab1f16330b`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -22,7 +22,7 @@ The semantic transformer adds the requirements that upstream 0.21.12 does not
 provide as one fail-closed mode:
 
 - exact rendered-request token counts from vLLM's real `/tokenize` endpoint;
-- an exact per-turn output budget: the smallest of the configured output ceiling, the context window less the rendered prompt, and the auto-compaction threshold less the rendered prompt, the window term carrying no heuristic margin, padding, or fallback estimate;
+- an exact per-turn output budget: the smaller of the configured output ceiling and the turn's share of the served window, carrying no heuristic margin, padding, or fallback estimate;
 - exact rendered-token automatic-compaction gating before generation, including
   the actual image expansion, template, and tool schemas;
 - strict native tool-call parsing and a successful-tool-call terminal invariant;
@@ -32,25 +32,38 @@ provide as one fail-closed mode:
   content, never after visible output or a potentially executable side effect;
 - exact, same-model compaction whose input and candidate output are both counted by
   vLLM and whose summary must end normally without tool calls;
-- a conversation that stays summarizable at every size it can reach. Two
-  bounds hold it there and they are the same arithmetic seen from each end.
-  A turn's output request stops at the auto-compaction threshold, so no
-  single turn can carry the history past the point where compaction falls
-  due; the buffer between that threshold and the effective window absorbs
-  the turn's tool result, whose size the tokenizer cannot know in advance.
-  The compaction request is then sized to the room the window actually
-  leaves beside it, counted by `/tokenize` on the request that will be sent,
-  so a summary request can be issued whatever the history costs. The ceiling
-  on that budget is 49,152, and it is one number because it is two things at
-  once: the request's `max_tokens` and the reserve the thresholds hold free,
-  which is what keeps the budget at its full value in every state the
-  thresholds admit. It costs working window — the automatic trigger sits at
-  199,992 rather than upstream's 229,144. The request is otherwise ordinary:
-  it declares no per-request phase budgets, so the model thinks to a natural
-  stop and writes the snapshot under the pinned `extra_body` ceilings exactly
-  as on any turn, and the reasoning-end marker is never forced. The snapshot
+- a conversation that stays summarizable at every size it can reach,
+  because the window is divided into shares that spend it exactly rather
+  than into constants that happen not to collide. Three sixteenths are the
+  summary reserve, two are one turn's output, one is the tool result that
+  turn appends, an eighth of a sixteenth is the message a compaction request
+  adds, and the remainder is the history a turn may stand on. The five sum
+  to the window, so the trigger plus a turn plus its tool result plus the
+  directive is the window less the reserve — the largest history a
+  whole-history summary request can still be issued for — and that identity
+  is checked at build time from the shares the source declares, at eight
+  window sizes including one twice the served window. At 262,144 the shares
+  are 49,152, 32,768, 16,384, 2,048, and a 161,792-token trigger; at
+  1,048,576 they are four times that, with no edit. The summary generation
+  is issued at the reserve rather than at whatever room a particular history
+  leaves, so its budget does not depend on how full the conversation was
+  when compaction fell due. The request is otherwise ordinary: it declares
+  no per-request phase budgets, so the model thinks to a natural stop and
+  writes the snapshot under the pinned `extra_body` ceilings exactly as on
+  any turn, and the reasoning-end marker is never forced. The snapshot
   schema gives every fact exactly one home, so nothing in it has two places
   to grow;
+- one bound on the tool results a turn appends, and it is measured rather
+  than estimated: the rendered request is counted with the pending batch and
+  without it, and the difference is what the batch costs. A batch over its
+  share is not shortened. Its largest result is written to disk whole and
+  replaced by a reference naming the file, the batch is counted again, and
+  that repeats while the batch is over the share and a result remains to
+  displace, so the agent reads back from those paths whatever it still
+  needs. A result that cannot be written stops the turn rather than being
+  quietly dropped, and a batch of references still over the share stops it
+  too: there is nothing left to displace, and sending it would carry the
+  history past the size the reserve holds room beside;
 - the agent's identity on every request. Each chat carries the agent it
   belongs to — the session id for the main line, the spawning tool-call id
   for a subagent, with no distinction between the two — and the send path
@@ -94,10 +107,10 @@ provide as one fail-closed mode:
   severs always lands in exactly that silence, and the session reported
   `subtype: success`, `is_error: false`, exit 0 — a cut-off prefix presented as
   a final answer, indistinguishable at the status level from a run that
-  answered. Forensics found a 66-turn session whose last turn was clamped to
-  the 19,064 tokens left below the auto-compaction threshold and returned
-  exactly that many: it announced a write, was cut off before emitting the
-  call, and was recorded as a success that had read 18 of 26 files and written
+  answered. Forensics found a 66-turn session whose last turn returned
+  exactly the number of tokens its output budget allowed: it announced a
+  write, was cut off before emitting the call, and was recorded as a success
+  that had read 18 of 26 files and written
   none of its deliverable. `describeIncompleteGeneration` in core is the one
   rule for it, and it decides nothing about the work: `STOP` is the only
   terminal reason that means the model wrote its message to the end, so
@@ -113,34 +126,6 @@ provide as one fail-closed mode:
   are standing on and clear it at each turn head and at a model fallback, so a
   turn that reports none is read as none rather than inheriting an earlier
   turn's;
-- a turn cut short by the room the conversation has left, reissued against a
-  summary. A turn's output request is sized to stop at the auto-compaction
-  threshold, so the room it is given shrinks as the conversation grows while
-  the room a turn needs does not; compaction is due when the prompt crosses
-  that threshold, never when the room a turn is left with runs out. Between
-  those two conditions lies a stretch where every generation is issued under a
-  budget the history, not the ceiling, has set. `MIN_CLAMPED_OUTPUT_TOKENS`
-  already names that stretch as compaction's — the clamp asks for at least
-  4,000 tokens `rather than max_tokens <= 0` because `compaction and the
-  hard-tier rescue own that regime` — and the send path never hands it over.
-  In the 66-turn session above, the per-turn need grew from 5,215 tokens to
-  20,995 across one conversation while the budget fell to 19,064: two curves
-  crossing once, and the run ended at the crossing. No fixed floor separates
-  them, because a turn's need is not knowable before it is issued — a floor
-  set for that session's early turns never fires, and one set for its late
-  turns compacts through a stretch where the budget was three to five times
-  what was used. The provider's terminal reason settles it after the fact
-  instead: a generation that ends at `MAX_TOKENS` under a budget the ceiling
-  did not set is the conversation reporting that it has outgrown the room a
-  turn can be given. The severed turn is set aside before any summary is
-  taken, so no cut-off text enters durable history; the history is summarized;
-  and the same question is asked again against the summary at the room it now
-  buys. Nothing is resumed and nothing is patched up. It happens at most once
-  per turn and only when the summary raises the budget, so a generation cut
-  short with the full ceiling behind it, a summary that was refused or failed,
-  and a turn that already produced a tool call are each left to be reported as
-  `error_incomplete_generation` rather than hidden — the severed turn goes
-  back where it was when no summary replaced the history it belonged to;
 - how a run ended as a value both scopes carry. A run can stop for eight
   reasons and `AgentTerminateMode` names all eight; one table maps each of
   them to the record that reports it — the wire name, whether that name is an
@@ -268,7 +253,7 @@ provide as one fail-closed mode:
   continue with 'offset' and 'limit'"; the notice said only `Showing lines
   1-2000 of 40000 total lines.` Naming the parameters is not explaining how
   to continue -- the reader still has to derive a 0-based resume line from a
-  1-based display range, and a line the character budget cut short makes that
+  1-based display range, and a line the page stopped inside makes that
   arithmetic wrong in a way that silently skips content. The resume point is
   computed where that is knowable, and the notice carries the actual next
   call: `To continue from where this read stopped, call read_file with
@@ -306,9 +291,9 @@ provide as one fail-closed mode:
   that terminates it whenever the file continues past it, so following the
   continuation call from the beginning concatenates to the file. Whole lines
   are the unit, and a line the range reader's byte budget stopped inside
-  belongs to the next page rather than to this one. A line wider than the
-  result budget is the one thing this interface cannot page, and it behaved
-  worst: its first budget-worth came back with a marker appended, and the
+  belongs to the next page rather than to this one. A line wider than one
+  page is the one thing this interface cannot page, and it behaved
+  worst: its first page-worth came back with a marker appended, and the
   continuation named the offset the read had just started at, so a caller
   following it re-read a byte-identical result until loop detection ended the
   session. It is refused, naming the shell command that reads that line in
@@ -515,7 +500,7 @@ provide as one fail-closed mode:
   is never persisted, and a side query's usage never reaches the billed event
   stream. Turning on debug logging would be a second mode and would pollute
   the captured stream, so the compaction event carries the accounting
-  instead: the budget the attempt ran under, the output tokens produced, how
+  instead: the reserve the attempt ran under, the output tokens produced, how
   many of them were reasoning, how much summary survived, and the provider's
   terminal reason. It is attached to every outcome reachable after the
   generation and left empty when the attempt was refused before it, so a
@@ -529,16 +514,12 @@ Verification performed in the pinned Node image:
   idempotence, new-file handling, source/output drift, intermediate-state refusal,
   review-diff drift, time-of-check/time-of-use mutation, and transactional rollback;
 - the complete patched TypeScript/CLI build passed;
-- the full build-derived suite passed: all 60 derived test files (5,450
-  tests: 5,447 passed and 3 environment-skips in the bare pinned image, the
-  20 git-dependent cases with git present as the production image provides
-  it) -- zero failures;
-- the same 20 environment-gated failures reproduce byte-identically on the
-  unmodified reviewed tree in the bare image, so they are properties of the
-  runner, not of any change;
+- the full build-derived suite passed: all 103 derived test files (7,651
+  tests: 7,647 passed and 4 environment-skips, with git present as the
+  production image provides it) -- zero failures;
 - a sealed runtime capture observed two `/tokenize` calls followed by one streaming `/v1/chat/completions` call;
 - the three requests carried identical messages, tools, and chat-template kwargs;
-- a synthetic exact prompt count of 12,345 produced `max_tokens: 249799` for the 262,144-token deployed context;
+- a synthetic exact prompt count of 12,345 produced `max_tokens: 32768` for the 262,144-token deployed context, the turn's share of it;
 - the captured chat request used only the ten approved tools and the foreground Agent schema had only `description`, `prompt`, `todo_id`, and `subagent_type` (`general-purpose` or `Explore`).
 
 The production Docker build repeats semantic transformation, review-diff identity,

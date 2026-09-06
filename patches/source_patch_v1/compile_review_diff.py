@@ -57,13 +57,18 @@ def emit_python(value: object) -> str:
 
 
 def line_offset(text: str, one_based_line: int) -> int:
+    """Byte offset of a review-diff line number in the text being patched.
+
+    The number is stated in the pre-image's coordinates while `text` is the
+    file as the review's earlier hunks have already left it, so the two agree
+    only until the first hunk that changes a line count. It is used solely to
+    choose between equal occurrences, so a number past the end of `text` means
+    "late in the file" and resolves to its end.
+    """
+
     if one_based_line < 1:
         raise PatchRefusedError(f"invalid one-based line {one_based_line}")
     lines = text.splitlines(keepends=True)
-    if one_based_line > len(lines) + 1:
-        raise PatchRefusedError(
-            f"line {one_based_line} exceeds source length {len(lines)}"
-        )
     return sum(len(line) for line in lines[: one_based_line - 1])
 
 

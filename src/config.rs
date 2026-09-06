@@ -74,9 +74,10 @@ pub const DEFAULT_MAX_SESSION_TURNS: u32 = 400;
 /// circuit breaker: something has to remain finite, or a degenerate loop simply
 /// asks for a bigger number. 2000 is five default budgets -- room for a task
 /// whose turn count is bounded by the corpus it must read rather than by the
-/// reasoning it must do, where the floor is arithmetic: a tool result is capped
-/// at 25,000 characters, so a multi-megabyte corpus costs hundreds of reads
-/// before a single one is wasted. It still cannot be mistaken for unbounded.
+/// reasoning it must do, where the floor is arithmetic: one turn appends at
+/// most a sixteenth of the served window in tool results, so a multi-megabyte
+/// corpus costs hundreds of reads before a single one is wasted. It still
+/// cannot be mistaken for unbounded.
 /// A request outside `1..=2000` is refused with the offending value;
 /// it is never clamped, because a silently shortened budget would look like an
 /// ordinary turn-exhausted exit 53 and be graded as one.

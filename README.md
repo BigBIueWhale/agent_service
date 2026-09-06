@@ -175,16 +175,37 @@ never leaves the opening prompt and nothing is shed. Thinking retention is not
 separable from tool-loop structure, which is why this deployment does not
 express it as a separable option.
 
-Every main-turn context-boundary decision that can trigger compaction or set the
-outbound generation limit uses the real vLLM tokenizer on the fully rendered
-request. Before compaction and again before generation, Qwen Code sends the exact
-messages, typed tool history, image parts, tool schemas, and template arguments to
-the backend `/tokenize` endpoint. `max_tokens` is then exactly
-`min(262144, 262144 - rendered_prompt_tokens, 199992 - rendered_prompt_tokens)`,
-the last term holding the turn inside the size its own summary request can carry.
-There is no character division, `target // 8`, image-token guess, padding margin,
-local tokenizer, or tokenizer fallback in the compaction trigger or outbound
-sizing. If the tokenizer is missing, malformed, or reports another model window,
+The served context window is divided into five shares that spend it exactly, and
+every context budget is one of them:
+
+| share | of the window | at 262,144 |
+| --- | --- | --- |
+| summary reserve | 48/256 | 49,152 |
+| one turn's output | 32/256 | 32,768 |
+| that turn's tool results | 16/256 | 16,384 |
+| the compaction directive | 2/256 | 2,048 |
+| the history a turn stands on | the remainder | 161,792 |
+
+The last four sum to the window less the summary reserve, which is the whole
+safety argument: a turn issued below the compaction trigger, given at most one
+turn's output and appending at most one turn's tool results, produces a history
+that — with the directive appended — a whole-history summary request still fits
+beside. Nothing is left to run time and nothing is a tuned constant: raising
+`max_model_len` re-derives all five with no code change.
+
+Every main-turn context-boundary decision uses the real vLLM tokenizer on the
+fully rendered request. Before compaction and again before generation, Qwen Code
+sends the exact messages, typed tool history, image parts, tool schemas, and
+template arguments to the backend `/tokenize` endpoint. A turn is issued below
+the compaction trigger or it is not issued at all, and it is issued with the
+smaller of the configured output ceiling and its window share. The tool results
+it appends are measured the same way — the rendered request counted with the
+pending batch and without it, the difference being what the batch costs — and a
+batch over its share is written to disk whole and replaced by references to the
+files rather than shortened. There is no character division, `target // 8`,
+image-token guess, padding margin, local tokenizer, or tokenizer fallback
+anywhere in the compaction trigger, the outbound sizing, or the tool-result
+bound. If the tokenizer is missing, malformed, or reports another model window,
 the turn fails before generation.
 
 A session is bounded by model turns, never by wall-clock time: the default
@@ -220,8 +241,9 @@ exit 53 and be graded as one. The effective budget is recorded in the session
 body and in the bundle's `control/turn-budget.json`, so a finished session can
 be read back to see the bound it actually ran under. Cumulative tool calls
 have no separate cutoff, and one model turn still has a 1,000-tool-call circuit
-breaker for degenerate output. Auto-compaction is
-delayed to the latest safe threshold supported by the pinned client. Subagents run
+breaker for degenerate output. Auto-compaction is due when the rendered request
+reaches the compaction trigger, the share of the window the history is allowed.
+Subagents run
 sequentially in the foreground and return concise findings to the same main thread;
 there are no background branches, teams, worktrees, alternate models, or nested
 subagents.
@@ -280,9 +302,9 @@ second application must be byte-for-byte idempotent.
 is generated review evidence for humans; it is independently hashed and compared
 to the transformer's exact output, but is not a second patching path. Its current
 SHA-256 is
-`d1c86e91cb7d774a3fadebac51ff31a40f18da1725c8bf14822325c4c8315855`.
+`e7e67353c9d203a8d4749e9c63b3a7651c12f93967c1230d494001b9122478be`.
 The transformer's manifest SHA-256 is
-`fbba75c5640fd7eb7085f3ce566b68213600f608ed4b2b7c29f647721f08b87a`.
+`40ba65fcbbba40569b8d9d807168fe5b1bcd9a5c30398419a0af45ab1f16330b`.
 Both identities are locked, checked on the host, checked again inside the Docker
 build, and recorded as image labels.
 
@@ -299,13 +321,18 @@ The local patch provides:
 
 - vLLM `/tokenize` calls over the same rendered messages, tools, and template kwargs
   as the subsequent completion request;
-- exact `max_tokens = min(configured ceiling, context window - rendered tokens,
-  auto-compaction threshold - rendered tokens)`;
-- a compaction request sized to the room the window leaves beside it, so a summary
-  request can be issued at any history size;
+- every context budget derived from the served window as a share of it, the five
+  shares summing to the window exactly;
+- exact `max_tokens = min(configured ceiling, the turn's window share)`, and no
+  turn issued at or above the compaction trigger;
+- a summary request issued at the full reserve, which the trigger holds free, so
+  it can be issued at any history size the trigger admits;
+- the tool results one turn appends bounded by their share, measured as the
+  difference the batch makes to the rendered request, and degraded by writing
+  each result to disk whole and referencing the file;
 - no character estimate, byte division, padding margin, token safety margin, or
   tokenizer fallback;
-- the same exact rendered-request count drives the automatic-compaction threshold,
+- the same exact rendered-request count drives the compaction trigger,
   including image tokens and tool schemas;
 - a universal strict native-tool allowlist covering built-in, dynamic, MCP, skill,
   and synthetic tools;
@@ -426,9 +453,9 @@ turn. The visible summary can preserve findings; the replaced turns' hidden
 thinking is not carried into it, because the turns themselves are gone.
 
 The limit is fifteen images in one rendered request, not fifteen over the lifetime
-of a session. Their visual expansion still counts inside the same native 262,144
-total-token window. No text context or output reservation was reduced to enable
-vision; the exact tokenizer simply reports the real remaining room on each turn.
+of a session. Their visual expansion counts inside the same native 262,144
+total-token window and against the same shares of it as text; the exact tokenizer
+reports what a rendered request costs, whatever it is made of.
 
 ## Tool-call and streaming correctness
 
@@ -492,17 +519,13 @@ record is a stream this service lost rather than a run that ended quietly. The t
 budget is asked before the turn it decides is counted, so a run it stops reports
 exactly the budget it was given as `num_turns` and has interrupted no turn.
 
-A turn's output request is sized to stop at the auto-compaction threshold, so the
-room a turn is given shrinks as the conversation grows while the room a turn needs
-does not. When a generation ends at the output cap under a budget the ceiling did
-not set, the client reads that as the conversation having outgrown the room a turn
-can be given: the severed turn is set aside before any summary is taken, the
-history is summarized, and the same turn is reissued against the summary at the
-room it now buys. This happens at most once per turn and only when the summary
-raises the budget. `error_incomplete_generation` therefore reaches a caller only
-when room was not the constraint — the ceiling was already the limit, the summary
-was refused or failed, or the turn had already produced a tool call — and the
-event stream carries the compaction record either way.
+Every turn is issued with the same output budget, the window's share, whatever
+the conversation has already cost: the trigger holds the history below the size
+at which a turn plus its tool results would outgrow the room the summary reserve
+keeps free, so the room a turn is given never depends on how full the
+conversation is. `error_incomplete_generation` therefore reaches a caller when
+the model's own generation was severed at that budget rather than when the
+history had eaten it.
 
 ## Prefix caching evidence
 

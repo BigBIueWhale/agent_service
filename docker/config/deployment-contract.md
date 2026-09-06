@@ -88,17 +88,26 @@
 - Before compaction and generation, the real vLLM tokenizer counts the exact
   rendered request, including tools, typed image history, and template arguments.
   There is no character/byte division, `target // 8`, padding estimate, safety
-  margin, local-tokenizer substitute, fabricated minimum output, or fallback.
+  margin, local-tokenizer substitute, or fallback.
+- The window is spent as five shares of itself: 48/256 held for a compaction's
+  summary, 32/256 for one turn's output, 16/256 for the tool result that turn
+  appends, 2/256 for the message a compaction request adds, and the remainder
+  for the history a turn may be issued against. The five sum to the window
+  exactly, so a turn issued below the compaction trigger produces a history a
+  whole-history summary request still fits beside. A batch of tool results over
+  its share is written to disk whole and replaced by references to the files.
 - Thinking is always enabled at `xhigh`; high/max aliases resolve to xhigh.
   Do not reconstruct or persist hidden reasoning outside model history.
 - Sampling is explicit: temperature 1.0, top-p 0.95, top-k 20, min-p 0.0,
   presence penalty 0.0, repetition penalty 1.0, parallel tool calls false.
 - Reasoning ceiling is 262,144 tokens and final-response ceiling is 131,072
-  tokens, each further bounded by physical context remaining. These ceilings are
-  not reservations and are not additive capacity.
-- Auto-compaction is delayed to the latest exactly-tokenized safe point and uses
-  the same model. It must terminate normally without tool calls; a failed compact
-  preserves the original history and is reported.
+  tokens, each further bounded by the turn's output share and by physical
+  context remaining. These ceilings are not reservations and are not additive
+  capacity.
+- Auto-compaction is due when the exactly-tokenized request reaches the
+  compaction trigger, and uses the same model. It must terminate normally
+  without tool calls; a failed compact preserves the original history and is
+  reported.
 
 ## Full-quality vision and document work
 

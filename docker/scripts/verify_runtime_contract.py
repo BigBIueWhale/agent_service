@@ -132,7 +132,18 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
         require_equal(f"settings {key}", settings[key], "")
     require_equal("settings chat recording", settings["general"]["chatRecording"], False)
     require_equal("settings sandbox", settings["tools"]["sandbox"], False)
-    require_equal("settings auto compact threshold", settings["context"]["autoCompactThreshold"], 1.0)
+    # Compaction is the only thing that rewrites history here, and the size
+    # it is due at is a share of the served window rather than a setting.
+    require_equal(
+        "settings context",
+        settings["context"],
+        {
+            "clearContextOnIdle": {
+                "toolResultsThresholdMinutes": -1,
+                "toolResultsTotalCharsThreshold": -1,
+            }
+        },
+    )
     require_false_map(
         "settings memory",
         settings["memory"],
@@ -177,7 +188,6 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
             "min_p": generation["min_p"],
             "presence_penalty": generation["presence_penalty"],
             "repetition_penalty": generation["repetition_penalty"],
-            "max_tokens": generation["thinking_token_budget"],
         },
     )
     require_equal(
@@ -240,6 +250,7 @@ def verify_prompts(
             f"Thinking is always enabled at `{generation['reasoning_effort']}`",
             f"Reasoning ceiling is {generation['thinking_token_budget']:,} tokens",
             f"final-response ceiling is {generation['final_response_token_budget']:,}",
+            "The window is spent as five shares of itself",
             f"at most {vision['max_source_pixels_per_image']:,} pixels",
             f"aspect ratio at most {vision['max_aspect_ratio']}:1",
             "Explore is investigative in purpose, not mechanically read-only.",
@@ -262,6 +273,7 @@ def verify_prompts(
         [
             "Explore is investigative in purpose, not mechanically read-only.",
             "There is no character estimate, byte division, padding margin, or token-count fallback.",
+            "A turn's tool results are held inside their share of the window",
             "PDF is handled with deliberate offline computation, not direct PDF transport.",
             "Journal failure makes the tool call fail; useful changes are not",
         ],
