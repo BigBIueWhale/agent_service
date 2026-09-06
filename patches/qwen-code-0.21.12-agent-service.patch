@@ -22072,7 +22072,7 @@ index fc0c21c..1fb6d04 100644
  import {
    DEFAULT_STREAM_IDLE_TIMEOUT_MS,
    DEFAULT_STREAM_MAX_LIFETIME_MS,
-@@ -1068,12 +1071,54 @@ describe('ContentGenerationPipeline', () => {
+@@ -1068,12 +1071,62 @@ describe('ContentGenerationPipeline', () => {
          .calls[0][0];
        expect(apiCall.enable_thinking).toBe(true);
        expect(apiCall.reasoning_effort).toBe('high');
@@ -22104,7 +22104,7 @@ index fc0c21c..1fb6d04 100644
 +      expect(apiCall.kv_scope).toBe('agent-7');
 +    });
 +
-+    it('refuses to build a request when the chat has no agent identity', async () => {
++    it('omits the agent identity when the chat has none', async () => {
 +      const request: GenerateContentParameters = {
 +        model: 'glm-5.2',
 +        contents: [{ parts: [{ text: 'hi' }], role: 'user' }],
@@ -22114,11 +22114,19 @@ index fc0c21c..1fb6d04 100644
 +      (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
 +        { role: 'user', content: 'hi' },
 +      ]);
++      (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
++        new GenerateContentResponse(),
++      );
++      (mockClient.chat.completions.create as Mock).mockResolvedValue({
++        id: 'r',
++        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
++      } as OpenAI.Chat.ChatCompletion);
 +
-+      await expect(
-+        pipeline.execute(request, 'prompt-kv-scope-absent'),
-+      ).rejects.toThrow(/kv_scope is missing/);
-+      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
++      await pipeline.execute(request, 'prompt-kv-scope-absent');
++
++      const apiCall = (mockClient.chat.completions.create as Mock).mock
++        .calls[0][0];
++      expect('kv_scope' in apiCall).toBe(false);
 +    });
 +
      it('never ships the escape-hatch disable shape to a thinkingMandatory model end to end', async () => {
@@ -22351,7 +22359,7 @@ index a7aaf90..c482fdb 100644
    ): Promise<GenerateContentResponse> {
      return this.executeWithErrorHandling(
        request,
-@@ -998,12 +1109,25 @@ export class ContentGenerationPipeline {
+@@ -998,12 +1109,20 @@ export class ContentGenerationPipeline {
        } else if (fcMode === 'NONE') {
          (baseRequest as unknown as Record<string, unknown>)['tool_choice'] =
            'none';
@@ -22359,17 +22367,12 @@ index a7aaf90..c482fdb 100644
      }
  
 +    // The agent this request belongs to. The backend groups offloaded KV by
-+    // it, so a context is given up whole rather than shredded across agents,
-+    // and it refuses to generate for a request that names no agent. A request
-+    // that cannot name its own is malformed here, not at the server.
++    // it, so a context is given up whole rather than shredded across agents.
 +    const kvScope = (request.config as { kvScope?: string } | undefined)
 +      ?.kvScope;
-+    if (!kvScope) {
-+      throw new Error(
-+        'kv_scope is missing: every generation request names the agent that owns its KV cache.',
-+      );
++    if (kvScope) {
++      (baseRequest as unknown as Record<string, unknown>)['kv_scope'] = kvScope;
 +    }
-+    (baseRequest as unknown as Record<string, unknown>)['kv_scope'] = kvScope;
 +
      // Let provider enhance the request (e.g., add metadata, cache control)
      let providerRequest = this.config.provider.buildRequest(
@@ -22377,7 +22380,7 @@ index a7aaf90..c482fdb 100644
        userPromptId,
      );
      if (
-@@ -1417,12 +1541,13 @@ export class ContentGenerationPipeline {
+@@ -1417,12 +1536,13 @@ export class ContentGenerationPipeline {
          : undefined;
  
      return {

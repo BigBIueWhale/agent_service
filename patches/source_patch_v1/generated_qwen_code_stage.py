@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'd50d8b001a39bfe3b4868b5f50b68643e1fe740c0cb09419bd4ab2f4ddd631ce',
+  'review_sha256': 'b0b2a7b9cc47f8d1ffc608157dc7863cc760d191e30ddbf4bce33e02e7350e7e',
   'files': ({'path': 'packages/cli/src/acp-integration/session/Session.test.ts',
              'before_sha256': '79540f9f6c9407085e0160a12aaf5bb30fa3d94d6fdb0fb017ac6083e2b5fafb',
              'after_sha256': '6b9a035a99a6ea4de2e5455da2a63ed7a1efe8f3c4a58b0629bc05d206c51f4e'},
@@ -259,13 +259,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts',
              'before_sha256': '45a51e9f9f3e0a87c903b960847d7e17faf768d129e2706f6df9c731e69e2f2b',
-             'after_sha256': 'fd8502af2d60795f53b4d1b2c654e00da026340e91d706814ed073867299e31b'},
+             'after_sha256': 'ed00320575c8e2b90a1300734588c99d6115ee85f0318e1cd66bc814eb4bf944'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts',
              'before_sha256': None,
              'after_sha256': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before_sha256': 'fd6061e56956d1072885a4a8e40be6ed148623d791a5586f3669bbf325c1d09c',
-             'after_sha256': '9bb837f65fae6ec9c81ab5a912952bdef4311ce1e7733abb0b3843b7678231cc'},
+             'after_sha256': '22db5d61da4f9e77007e38855f2cc656e670d261d017e24a41d04e795cab47a5'},
             {'path': 'packages/core/src/core/openaiContentGenerator/types.ts',
              'before_sha256': '0b827511f3ccefbc74aa7d14eaccf7502e1a2aaed846983b982ac9191827aa51',
              'after_sha256': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c'},
@@ -76038,8 +76038,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "      expect(apiCall.kv_scope).toBe('agent-7');\n"
                       '    });\n'
                       '\n'
-                      "    it('refuses to build a request when the chat has no agent "
-                      "identity', async () => {\n"
+                      "    it('omits the agent identity when the chat has none', async "
+                      '() => {\n'
                       '      const request: GenerateContentParameters = {\n'
                       "        model: 'glm-5.2',\n"
                       "        contents: [{ parts: [{ text: 'hi' }], role: 'user' }],\n"
@@ -76050,12 +76050,24 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'Mock).mockReturnValue([\n'
                       "        { role: 'user', content: 'hi' },\n"
                       '      ]);\n'
+                      '      (mockConverter.convertOpenAIResponseToGemini as '
+                      'Mock).mockReturnValue(\n'
+                      '        new GenerateContentResponse(),\n'
+                      '      );\n'
+                      '      (mockClient.chat.completions.create as '
+                      'Mock).mockResolvedValue({\n'
+                      "        id: 'r',\n"
+                      "        choices: [{ message: { content: 'ok' }, finish_reason: "
+                      "'stop' }],\n"
+                      '      } as OpenAI.Chat.ChatCompletion);\n'
                       '\n'
-                      '      await expect(\n'
-                      "        pipeline.execute(request, 'prompt-kv-scope-absent'),\n"
-                      '      ).rejects.toThrow(/kv_scope is missing/);\n'
-                      '      '
-                      'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
+                      '      await pipeline.execute(request, '
+                      "'prompt-kv-scope-absent');\n"
+                      '\n'
+                      '      const apiCall = (mockClient.chat.completions.create as '
+                      'Mock).mock\n'
+                      '        .calls[0][0];\n'
+                      "      expect('kv_scope' in apiCall).toBe(false);\n"
                       '    });\n'
                       '\n'
                       "    it('never ships the escape-hatch disable shape to a "
@@ -76126,8 +76138,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "      expect(apiCall.kv_scope).toBe('agent-7');\n"
                              '    });\n'
                              '\n'
-                             "    it('refuses to build a request when the chat has no "
-                             "agent identity', async () => {\n"
+                             "    it('omits the agent identity when the chat has "
+                             "none', async () => {\n"
                              '      const request: GenerateContentParameters = {\n'
                              "        model: 'glm-5.2',\n"
                              "        contents: [{ parts: [{ text: 'hi' }], role: "
@@ -76139,13 +76151,24 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'Mock).mockReturnValue([\n'
                              "        { role: 'user', content: 'hi' },\n"
                              '      ]);\n'
+                             '      (mockConverter.convertOpenAIResponseToGemini as '
+                             'Mock).mockReturnValue(\n'
+                             '        new GenerateContentResponse(),\n'
+                             '      );\n'
+                             '      (mockClient.chat.completions.create as '
+                             'Mock).mockResolvedValue({\n'
+                             "        id: 'r',\n"
+                             "        choices: [{ message: { content: 'ok' }, "
+                             "finish_reason: 'stop' }],\n"
+                             '      } as OpenAI.Chat.ChatCompletion);\n'
                              '\n'
-                             '      await expect(\n'
-                             '        pipeline.execute(request, '
-                             "'prompt-kv-scope-absent'),\n"
-                             '      ).rejects.toThrow(/kv_scope is missing/);\n'
-                             '      '
-                             'expect(mockClient.chat.completions.create).not.toHaveBeenCalled();\n'
+                             '      await pipeline.execute(request, '
+                             "'prompt-kv-scope-absent');\n"
+                             '\n'
+                             '      const apiCall = '
+                             '(mockClient.chat.completions.create as Mock).mock\n'
+                             '        .calls[0][0];\n'
+                             "      expect('kv_scope' in apiCall).toBe(false);\n"
                              '    });\n'
                              '\n'
                              "    it('never ships the escape-hatch disable shape to a "
@@ -76764,22 +76787,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    // The agent this request belongs to. The backend groups '
                       'offloaded KV by\n'
                       '    // it, so a context is given up whole rather than shredded '
-                      'across agents,\n'
-                      '    // and it refuses to generate for a request that names no '
-                      'agent. A request\n'
-                      '    // that cannot name its own is malformed here, not at the '
-                      'server.\n'
+                      'across agents.\n'
                       '    const kvScope = (request.config as { kvScope?: string } | '
                       'undefined)\n'
                       '      ?.kvScope;\n'
-                      '    if (!kvScope) {\n'
-                      '      throw new Error(\n'
-                      "        'kv_scope is missing: every generation request names "
-                      "the agent that owns its KV cache.',\n"
-                      '      );\n'
-                      '    }\n'
-                      '    (baseRequest as unknown as Record<string, '
+                      '    if (kvScope) {\n'
+                      '      (baseRequest as unknown as Record<string, '
                       "unknown>)['kv_scope'] = kvScope;\n"
+                      '    }\n'
                       '\n'
                       '    // Let provider enhance the request (e.g., add metadata, '
                       'cache control)\n'
@@ -76813,22 +76828,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // The agent this request belongs to. The backend '
                              'groups offloaded KV by\n'
                              '    // it, so a context is given up whole rather than '
-                             'shredded across agents,\n'
-                             '    // and it refuses to generate for a request that '
-                             'names no agent. A request\n'
-                             '    // that cannot name its own is malformed here, not '
-                             'at the server.\n'
+                             'shredded across agents.\n'
                              '    const kvScope = (request.config as { kvScope?: '
                              'string } | undefined)\n'
                              '      ?.kvScope;\n'
-                             '    if (!kvScope) {\n'
-                             '      throw new Error(\n'
-                             "        'kv_scope is missing: every generation request "
-                             "names the agent that owns its KV cache.',\n"
-                             '      );\n'
-                             '    }\n'
-                             '    (baseRequest as unknown as Record<string, '
+                             '    if (kvScope) {\n'
+                             '      (baseRequest as unknown as Record<string, '
                              "unknown>)['kv_scope'] = kvScope;\n"
+                             '    }\n'
                              '\n'
                              '    // Let provider enhance the request (e.g., add '
                              'metadata, cache control)\n'
@@ -166000,9 +166007,9 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'bb73338e3cb074e243c5baf4c09159a638134210e0eabf816a90df3656e8da28',
  'packages/core/src/core/openaiContentGenerator/converter.ts': '28c729be63e9171b90b58c712c22808a9d529402ee1c5026436051059387ca51',
  'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1',
- 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': 'fd8502af2d60795f53b4d1b2c654e00da026340e91d706814ed073867299e31b',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': 'ed00320575c8e2b90a1300734588c99d6115ee85f0318e1cd66bc814eb4bf944',
  'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888',
- 'packages/core/src/core/openaiContentGenerator/pipeline.ts': '9bb837f65fae6ec9c81ab5a912952bdef4311ce1e7733abb0b3843b7678231cc',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.ts': '22db5d61da4f9e77007e38855f2cc656e670d261d017e24a41d04e795cab47a5',
  'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
  'packages/core/src/core/prompts.test.ts': '9369efadaa67f10e218f1be71f3bd1620d67d8958dec94a28a9db300700175d0',
  'packages/core/src/core/prompts.ts': 'f1d1b4db7b943da44a180b3dadaa1dca598797b9e6941578a6ecf51b7a6cc3a5',
