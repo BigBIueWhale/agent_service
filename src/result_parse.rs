@@ -47,6 +47,11 @@ pub struct AgentResult {
     /// both started and finished. Equal to `num_turns` on a run that ended
     /// normally, one less when an error ended the run inside a turn.
     pub billed_main_turns: u64,
+    /// Generated tokens the backend billed to those turns, summed, and the
+    /// part of them it counted as reasoning. Both are read from the served
+    /// usage every billed turn must carry; nothing here is estimated.
+    pub main_output_tokens: u64,
+    pub main_reasoning_tokens: u64,
     /// Every subagent scope the stream resolved, in order of first
     /// appearance. Empty exactly when the run delegated nothing.
     pub scopes: Vec<AgentScope>,
@@ -85,11 +90,17 @@ pub struct AgentScope {
     /// never used as a correlation key: resolution is by id alone.
     pub tool_name: String,
     /// Assistant events in this scope carrying billed usage, counted by this
-    /// parser. Usage rides the main session's model stream, so a subagent
-    /// scope's assistant events carry none and this is zero for every
-    /// subagent; the count a subagent reports for itself is
+    /// parser: one per model round the subagent completed, since the client
+    /// publishes every round's text, reasoning and served usage under the
+    /// scope's tool-call id. The count a subagent reports for itself is
     /// `reported_num_turns`.
     pub billed_turns: u64,
+    /// Generated tokens the backend billed to those rounds, summed, and the
+    /// part of them it counted as reasoning, exactly as for the main scope.
+    #[serde(default)]
+    pub output_tokens: u64,
+    #[serde(default)]
+    pub reasoning_tokens: u64,
     /// What the scope's own terminal record reported, verbatim. All four are
     /// `None` exactly when the scope never emitted a terminal record (the
     /// subagent was still running, or was torn down, when the session ended);
@@ -119,6 +130,8 @@ struct RecordedToolUse {
 struct ScopeState {
     tool_use_id: Option<String>,
     billed_turns: u64,
+    output_tokens: u64,
+    reasoning_tokens: u64,
     /// The scope's terminal `result` record and its line. At most one may
     /// exist: a scope that has reported is finished, and any later event in
     /// it is post-terminal output.
@@ -170,6 +183,8 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
     let mut scope_states = vec![ScopeState {
         tool_use_id: None,
         billed_turns: 0,
+        output_tokens: 0,
+        reasoning_tokens: 0,
         terminal: None,
     }];
     let mut scope_rows: HashMap<String, usize> = HashMap::new();
@@ -259,6 +274,8 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
                     scope_states.push(ScopeState {
                         tool_use_id: Some(id.to_string()),
                         billed_turns: 0,
+                        output_tokens: 0,
+                        reasoning_tokens: 0,
                         terminal: None,
                     });
                     row
@@ -277,15 +294,26 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         }
         if event_type == "assistant" {
             record_tool_uses(object, physical_line, scope, &mut tool_uses)?;
-            if has_billed_usage(object) {
-                let billed = &mut scope_states[row].billed_turns;
-                *billed = billed.checked_add(1).ok_or_else(|| {
+            if let Some(usage) = billed_usage(object, physical_line, scope)? {
+                let state = &mut scope_states[row];
+                let overflow = || {
                     ServiceError::AgentOutputMissing(format!(
-                        "events.jsonl billed turn count overflowed in {}",
+                        "events.jsonl billed accounting overflowed in {}",
                         scope_display(scope)
                     ))
-                })?;
+                };
+                state.billed_turns = state.billed_turns.checked_add(1).ok_or_else(overflow)?;
+                state.output_tokens = state
+                    .output_tokens
+                    .checked_add(usage.output_tokens)
+                    .ok_or_else(overflow)?;
+                state.reasoning_tokens = state
+                    .reasoning_tokens
+                    .checked_add(usage.reasoning_output_tokens)
+                    .ok_or_else(overflow)?;
             }
+        } else if event_type == "system" && event_count > 1 {
+            validate_compaction_event(object, physical_line, scope)?;
         } else if event_type == "result" {
             // A subagent's own terminal record is scoped to its spawning tool
             // call and is not the end of the session. Only the main session's
@@ -306,6 +334,8 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         .next()
         .expect("the main scope row is created before the first event is read");
     let billed_main_turns = main.billed_turns;
+    let main_output_tokens = main.output_tokens;
+    let main_reasoning_tokens = main.reasoning_tokens;
     let (terminal_line, result) = main.terminal.ok_or_else(|| {
         ServiceError::AgentOutputMissing(format!(
             "events.jsonl has {event_count} event(s) but no main-session terminal result"
@@ -409,8 +439,155 @@ pub fn parse_events_jsonl(path: &Path) -> ServiceResult<AgentResult> {
         api_duration_ms,
         num_turns,
         billed_main_turns,
+        main_output_tokens,
+        main_reasoning_tokens,
         scopes,
     })
+}
+
+/// The usage a billed assistant event carries: what the backend served for
+/// the generation and the client copied onto the wire, field for field.
+#[derive(Debug, Clone, Copy)]
+struct BilledUsage {
+    output_tokens: u64,
+    reasoning_output_tokens: u64,
+}
+
+/// Read a billed assistant event's usage, or `None` for an unbilled fragment.
+///
+/// Billed is decided by `has_billed_usage`, the one definition the live
+/// reader shares. A billed usage must then carry every count the backend
+/// serves — the generated tokens, the part of them counted as reasoning, and
+/// the prompt tokens read back from the prefix cache — as non-negative
+/// integers, with reasoning no larger than the output it is part of. A count
+/// the stream omitted is not read as zero: the client fails a request whose
+/// usage arrived without these, so an event without them is a stream this
+/// parser does not recognise, and it is refused rather than tallied.
+fn billed_usage(
+    object: &serde_json::Map<String, serde_json::Value>,
+    line: usize,
+    scope: Option<&str>,
+) -> ServiceResult<Option<BilledUsage>> {
+    if !has_billed_usage(object) {
+        return Ok(None);
+    }
+    let usage = object
+        .get("message")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|message| message.get("usage"))
+        .and_then(serde_json::Value::as_object)
+        .expect("has_billed_usage reads input_tokens out of message.usage");
+    let count = |key: &str| -> ServiceResult<u64> {
+        usage
+            .get(key)
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| {
+                ServiceError::AgentOutputMissing(format!(
+                    "events.jsonl line {line} bills a turn in {} whose usage lacks non-negative integer {key}",
+                    scope_display(scope)
+                ))
+            })
+    };
+    let input_tokens = count("input_tokens")?;
+    let output_tokens = count("output_tokens")?;
+    let reasoning_output_tokens = count("reasoning_output_tokens")?;
+    let cache_read_input_tokens = count("cache_read_input_tokens")?;
+    if reasoning_output_tokens > output_tokens {
+        return Err(ServiceError::AgentOutputMissing(format!(
+            "events.jsonl line {line} bills {reasoning_output_tokens} reasoning tokens against only {output_tokens} output tokens in {}",
+            scope_display(scope)
+        )));
+    }
+    if cache_read_input_tokens > input_tokens {
+        return Err(ServiceError::AgentOutputMissing(format!(
+            "events.jsonl line {line} reads {cache_read_input_tokens} cached prompt tokens against only {input_tokens} input tokens in {}",
+            scope_display(scope)
+        )));
+    }
+    Ok(Some(BilledUsage {
+        output_tokens,
+        reasoning_output_tokens,
+    }))
+}
+
+/// A `compaction` system event carries the record of one compaction attempt
+/// on the emitting scope's chat. The record is validated in full: a refused
+/// attempt carries `output: null`, and any attempt that generated carries the
+/// budget it ran under, the tokens it produced, the part of them spent on
+/// reasoning, that reasoning verbatim, the summary length and the provider's
+/// terminal reason. Other system subtypes carry nothing this parser reads.
+fn validate_compaction_event(
+    object: &serde_json::Map<String, serde_json::Value>,
+    line: usize,
+    scope: Option<&str>,
+) -> ServiceResult<()> {
+    if object.get("subtype").and_then(serde_json::Value::as_str) != Some("compaction") {
+        return Ok(());
+    }
+    let refuse = |what: &str| {
+        ServiceError::AgentOutputMissing(format!(
+            "events.jsonl line {line} carries a compaction record in {} {what}",
+            scope_display(scope)
+        ))
+    };
+    let record = object
+        .get("data")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| refuse("without an object data field"))?;
+    let count =
+        |holder: &serde_json::Map<String, serde_json::Value>, key: &str| -> ServiceResult<u64> {
+            holder
+                .get(key)
+                .and_then(serde_json::Value::as_u64)
+                .ok_or_else(|| refuse(&format!("whose {key} is not a non-negative integer")))
+        };
+    let string_or_null =
+        |holder: &serde_json::Map<String, serde_json::Value>, key: &str| -> ServiceResult<()> {
+            match holder.get(key) {
+                Some(value) if value.is_null() || value.is_string() => Ok(()),
+                _ => Err(refuse(&format!("whose {key} is neither a string nor null"))),
+            }
+        };
+    if !record
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|s| !s.is_empty())
+    {
+        return Err(refuse("without a non-empty status"));
+    }
+    if !record
+        .get("succeeded")
+        .is_some_and(serde_json::Value::is_boolean)
+    {
+        return Err(refuse("without a boolean succeeded"));
+    }
+    count(record, "originalTokenCount")?;
+    count(record, "newTokenCount")?;
+    string_or_null(record, "triggerReason")?;
+    let output = match record.get("output") {
+        Some(value) if value.is_null() => return Ok(()),
+        Some(value) => value
+            .as_object()
+            .ok_or_else(|| refuse("whose output is neither an object nor null"))?,
+        None => return Err(refuse("without an output field")),
+    };
+    let max_output_tokens = count(output, "maxOutputTokens")?;
+    let output_tokens = count(output, "outputTokens")?;
+    let thinking_tokens = count(output, "thinkingTokens")?;
+    if thinking_tokens > output_tokens || output_tokens > max_output_tokens {
+        return Err(refuse(&format!(
+            "whose accounting does not nest: {thinking_tokens} reasoning of {output_tokens} output within a {max_output_tokens} budget"
+        )));
+    }
+    if !output
+        .get("reasoning")
+        .is_some_and(serde_json::Value::is_string)
+    {
+        return Err(refuse("whose output lacks the reasoning string"));
+    }
+    count(output, "summaryChars")?;
+    string_or_null(output, "finishReason")?;
+    Ok(())
 }
 
 pub(crate) fn read_bounded_record<R: BufRead>(
@@ -665,6 +842,8 @@ fn finish_subagent_scope(
             tool_use_id,
             tool_name,
             billed_turns: state.billed_turns,
+            output_tokens: state.output_tokens,
+            reasoning_tokens: state.reasoning_tokens,
             reported_num_turns: None,
             is_error: None,
             subtype: None,
@@ -720,6 +899,8 @@ fn finish_subagent_scope(
         tool_use_id,
         tool_name,
         billed_turns: state.billed_turns,
+        output_tokens: state.output_tokens,
+        reasoning_tokens: state.reasoning_tokens,
         reported_num_turns: Some(num_turns),
         is_error: Some(is_error),
         subtype: Some(subtype),
@@ -806,8 +987,8 @@ mod tests {
     // turn is deliberately billed so that only the scope rule can exclude it
     // from the main-turn count, and the subagent scope resolves only because
     // the main turn issued the tool_use id its events name.
-    const MAIN_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"chatcmpl-tool-9d45d85b\",\"name\":\"agent\",\"input\":{}}],\"usage\":{\"input_tokens\":42}}}\n";
-    const SUBAGENT_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"message\":{\"usage\":{\"input_tokens\":11}}}\n";
+    const MAIN_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"chatcmpl-tool-9d45d85b\",\"name\":\"agent\",\"input\":{}}],\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
+    const SUBAGENT_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"message\":{\"usage\":{\"input_tokens\":11,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
     const SUBAGENT_RESULT: &str = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"is_error\":true,\"duration_ms\":0,\"duration_api_ms\":0,\"num_turns\":3,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"MAX_TURNS\"}}\n";
     const MAIN_RESULT: &str = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{},\"permission_denials\":[]}\n";
 
@@ -837,7 +1018,7 @@ mod tests {
     #[test]
     fn accepts_one_terminal_success() {
         let text = format!(
-            "{INIT}{{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{{\"usage\":{{\"input_tokens\":42}}}}}}\n{{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u3\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{{}},\"permission_denials\":[]}}\n"
+            "{INIT}{{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{{\"usage\":{{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}}}}\n{{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u3\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{{}},\"permission_denials\":[]}}\n"
         );
         let parsed = parse_text(&text).expect("strict valid stream parses");
         assert_eq!(parsed.response, "ok");
@@ -1064,9 +1245,9 @@ mod tests {
         // That is the point: Claude Code's convention correlates scopes by
         // tool_use id, never by tool name, so the scope must resolve and the
         // name must come back as recorded evidence, not as a filter.
-        let spawn = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-77\",\"name\":\"workspace_janitor\",\"input\":{}}],\"usage\":{\"input_tokens\":9}}}\n";
-        let sub_turn_one = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-77\",\"message\":{\"usage\":{\"input_tokens\":5}}}\n";
-        let sub_turn_two = "{\"type\":\"assistant\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-77\",\"message\":{\"usage\":{\"input_tokens\":6}}}\n";
+        let spawn = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-77\",\"name\":\"workspace_janitor\",\"input\":{}}],\"usage\":{\"input_tokens\":9,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
+        let sub_turn_one = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-77\",\"message\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
+        let sub_turn_two = "{\"type\":\"assistant\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-77\",\"message\":{\"usage\":{\"input_tokens\":6,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
         let sub_result = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-77\",\"is_error\":false,\"duration_ms\":4,\"duration_api_ms\":3,\"num_turns\":5,\"result\":\"sub done\",\"usage\":{},\"permission_denials\":[]}\n";
         let text = format!("{INIT}{spawn}{sub_turn_one}{sub_turn_two}{sub_result}{MAIN_RESULT}");
         let parsed = parse_text(&text).expect("an id-resolved scope parses");
@@ -1086,10 +1267,10 @@ mod tests {
 
     #[test]
     fn accounts_two_subagent_scopes_separately() {
-        let spawn = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-a\",\"name\":\"agent\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"call-b\",\"name\":\"background_probe\",\"input\":{}}],\"usage\":{\"input_tokens\":42}}}\n";
-        let a_turn = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-a\",\"message\":{\"usage\":{\"input_tokens\":3}}}\n";
-        let b_turn_one = "{\"type\":\"assistant\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-b\",\"message\":{\"usage\":{\"input_tokens\":4}}}\n";
-        let b_turn_two = "{\"type\":\"assistant\",\"uuid\":\"u5\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-b\",\"message\":{\"usage\":{\"input_tokens\":5}}}\n";
+        let spawn = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-a\",\"name\":\"agent\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"call-b\",\"name\":\"background_probe\",\"input\":{}}],\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
+        let a_turn = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-a\",\"message\":{\"usage\":{\"input_tokens\":3,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
+        let b_turn_one = "{\"type\":\"assistant\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-b\",\"message\":{\"usage\":{\"input_tokens\":4,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
+        let b_turn_two = "{\"type\":\"assistant\",\"uuid\":\"u5\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-b\",\"message\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
         let a_result = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u6\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-a\",\"is_error\":true,\"duration_ms\":1,\"duration_api_ms\":1,\"num_turns\":1,\"usage\":{},\"permission_denials\":[],\"error\":{\"message\":\"boom-a\"}}\n";
         let text = format!("{INIT}{spawn}{a_turn}{b_turn_one}{b_turn_two}{a_result}{MAIN_RESULT}");
         let parsed = parse_text(&text).expect("independent scopes account independently");
@@ -1157,7 +1338,7 @@ mod tests {
         // Correlation is by id; a re-issued id would make every later scope
         // reference ambiguous, so the second issuance is refused outright
         // instead of letting first-wins or last-wins pick a scope silently.
-        let spawn_twice = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-dup\",\"name\":\"agent\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"call-dup\",\"name\":\"agent\",\"input\":{}}],\"usage\":{\"input_tokens\":7}}}\n";
+        let spawn_twice = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-dup\",\"name\":\"agent\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"call-dup\",\"name\":\"agent\",\"input\":{}}],\"usage\":{\"input_tokens\":7,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}\n";
         let text = format!("{INIT}{spawn_twice}{MAIN_RESULT}");
         let error =
             parse_text(&text).expect_err("a duplicated tool_use id is ambiguity, not reuse");
@@ -1205,6 +1386,123 @@ mod tests {
         let error = parse_text(&complete_looking_but_torn)
             .expect_err("a terminal JSON object without its record delimiter is torn evidence");
         assert!(error.to_string().contains("not newline-terminated"));
+    }
+
+    #[test]
+    fn accounts_served_output_and_reasoning_per_scope() {
+        // Every billed turn carries the backend's own split of its output
+        // into reasoning and the rest; the parser sums it per scope, and a
+        // subagent's rounds are billed to the subagent, never to the session.
+        let main_turn = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"chatcmpl-tool-9d45d85b\",\"name\":\"agent\",\"input\":{}}],\"usage\":{\"input_tokens\":18204,\"output_tokens\":96,\"reasoning_output_tokens\":71,\"cache_read_input_tokens\":18176}}}\n";
+        let sub_thinking = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"message\":{\"content\":[{\"type\":\"thinking\",\"thinking\":\"read the manifest first\"}],\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n";
+        let sub_round_one = "{\"type\":\"assistant\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"message\":{\"content\":[],\"usage\":{\"input_tokens\":900,\"output_tokens\":40,\"reasoning_output_tokens\":33,\"cache_read_input_tokens\":896}}}\n";
+        let sub_round_two = "{\"type\":\"assistant\",\"uuid\":\"u5\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"three services\"}],\"usage\":{\"input_tokens\":1200,\"output_tokens\":25,\"reasoning_output_tokens\":0,\"cache_read_input_tokens\":1200}}}\n";
+        let main_final = "{\"type\":\"assistant\",\"uuid\":\"u6\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}],\"usage\":{\"input_tokens\":18400,\"output_tokens\":10,\"reasoning_output_tokens\":4,\"cache_read_input_tokens\":18300}}}\n";
+        let main_result = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u7\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":2,\"result\":\"ok\",\"usage\":{},\"permission_denials\":[]}\n";
+        let text = format!(
+            "{INIT}{main_turn}{sub_thinking}{sub_round_one}{sub_round_two}{main_final}{main_result}"
+        );
+        let parsed = parse_text(&text).expect("served splits parse");
+        assert_eq!(parsed.billed_main_turns, 2);
+        assert_eq!(parsed.main_output_tokens, 106);
+        assert_eq!(parsed.main_reasoning_tokens, 75);
+        let scope = &parsed.scopes[0];
+        // The zero-usage thinking fragment is not a round; the two billed
+        // rounds are, and their split is the backend's.
+        assert_eq!(scope.billed_turns, 2);
+        assert_eq!(scope.output_tokens, 65);
+        assert_eq!(scope.reasoning_tokens, 33);
+    }
+
+    #[test]
+    fn refuses_a_billed_turn_without_a_served_reasoning_count() {
+        // A count the stream omitted is not read as zero: the client refuses
+        // a usage without it, so its absence marks a stream this service
+        // does not recognise.
+        let unsplit = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"cache_read_input_tokens\":0}}}\n";
+        let error = parse_text(&format!("{INIT}{unsplit}{MAIN_RESULT}"))
+            .expect_err("a billed turn without its reasoning split is refused");
+        assert!(
+            error
+                .to_string()
+                .contains("lacks non-negative integer reasoning_output_tokens"),
+            "{error}"
+        );
+        let uncached = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6}}}\n";
+        let error = parse_text(&format!("{INIT}{uncached}{MAIN_RESULT}"))
+            .expect_err("a billed turn without its cached-prompt count is refused");
+        assert!(
+            error
+                .to_string()
+                .contains("lacks non-negative integer cache_read_input_tokens"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn refuses_a_split_that_does_not_nest() {
+        let inverted = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":10,\"cache_read_input_tokens\":0}}}\n";
+        let error = parse_text(&format!("{INIT}{inverted}{MAIN_RESULT}"))
+            .expect_err("reasoning larger than the output it is part of is refused");
+        assert!(
+            error
+                .to_string()
+                .contains("bills 10 reasoning tokens against only 9 output tokens"),
+            "{error}"
+        );
+        let overcached = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":43}}}\n";
+        let error = parse_text(&format!("{INIT}{overcached}{MAIN_RESULT}"))
+            .expect_err("more cached prompt tokens than prompt tokens is refused");
+        assert!(
+            error
+                .to_string()
+                .contains("reads 43 cached prompt tokens against only 42 input tokens"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn accepts_a_compaction_record_carrying_its_reasoning() {
+        let compaction = "{\"type\":\"system\",\"subtype\":\"compaction\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"data\":{\"status\":\"COMPRESSION_FAILED_OUTPUT_TRUNCATED\",\"succeeded\":false,\"originalTokenCount\":233926,\"newTokenCount\":233926,\"triggerReason\":\"token_limit\",\"output\":{\"maxOutputTokens\":49152,\"outputTokens\":49152,\"thinkingTokens\":49152,\"reasoning\":\"Let me list every file the user touched...\",\"summaryChars\":0,\"finishReason\":\"MAX_TOKENS\"}}}\n";
+        let refused = "{\"type\":\"system\",\"subtype\":\"compaction\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"data\":{\"status\":\"COMPRESSION_FAILED_PROTOCOL_ERROR\",\"succeeded\":false,\"originalTokenCount\":233926,\"newTokenCount\":233926,\"triggerReason\":null,\"output\":null}}\n";
+        let text = format!(
+            "{INIT}{compaction}{refused}{{\"type\":\"assistant\",\"uuid\":\"u5\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{{\"usage\":{{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0}}}}}}\n{MAIN_RESULT}"
+        );
+        parse_text(&text).expect("complete compaction records are accepted");
+    }
+
+    #[test]
+    fn refuses_a_compaction_record_that_hides_its_reasoning() {
+        // An attempt that generated must say what it generated: a record
+        // without the reasoning string, or whose counts do not nest, is not
+        // the record this client writes.
+        for (name, output, expected) in [
+            (
+                "no reasoning",
+                "{\"maxOutputTokens\":49152,\"outputTokens\":100,\"thinkingTokens\":90,\"summaryChars\":0,\"finishReason\":\"STOP\"}",
+                "lacks the reasoning string",
+            ),
+            (
+                "inverted counts",
+                "{\"maxOutputTokens\":49152,\"outputTokens\":90,\"thinkingTokens\":100,\"reasoning\":\"x\",\"summaryChars\":0,\"finishReason\":\"STOP\"}",
+                "does not nest",
+            ),
+            ("not an object", "7", "neither an object nor null"),
+        ] {
+            let compaction = format!(
+                "{{\"type\":\"system\",\"subtype\":\"compaction\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"data\":{{\"status\":\"COMPRESSED\",\"succeeded\":true,\"originalTokenCount\":10,\"newTokenCount\":5,\"triggerReason\":null,\"output\":{output}}}}}\n"
+            );
+            let error = parse_text(&format!("{INIT}{compaction}{MAIN_RESULT}"))
+                .expect_err(name);
+            assert!(error.to_string().contains(expected), "{name}: {error}");
+        }
+        let no_output = "{\"type\":\"system\",\"subtype\":\"compaction\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"data\":{\"status\":\"COMPRESSED\",\"succeeded\":true,\"originalTokenCount\":10,\"newTokenCount\":5,\"triggerReason\":null}}\n";
+        let error = parse_text(&format!("{INIT}{no_output}{MAIN_RESULT}"))
+            .expect_err("a record without an output field is refused");
+        assert!(
+            error.to_string().contains("without an output field"),
+            "{error}"
+        );
     }
 
     #[test]

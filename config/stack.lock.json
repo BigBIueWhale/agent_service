@@ -41,8 +41,8 @@
     "image_tag": "qwen38-docker-broker:1.1.0",
     "image_id": "sha256:4b9acb678ff96abeb0d5b2dab5010f6dcf3254a61b7ae9cdd44850864905a15b",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
-    "policy_sha256": "b38c5b21a6765276c8f4e4aab47862e79991d1a348845b02520296c7fb4a737e",
-    "source_sha256": "a2e05b8346e863a82c6f90a4b8ec18f9568f20f7017eb0f20e1b357d1ee62107",
+    "policy_sha256": "b8750b25210f3e9b3fc4f23b3dce121e6fdc2c811d60c2e5799ec35688ab1654",
+    "source_sha256": "dbeea2b27005a453d56098aa53317870800a0c7692aa7bac032af1e07945a702",
     "memory": "64m",
     "memory_swap": "64m",
     "pids_limit": 64
@@ -108,24 +108,24 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "b0b2a7b9cc47f8d1ffc608157dc7863cc760d191e30ddbf4bce33e02e7350e7e",
-      "source_patch_manifest_sha256": "805de60cb64f1b2d08d22c729f17a8866f200a001c67cb543c8213bbc50307be"
+      "patch_sha256": "a0ccc567ade8556ca03254296ff909f5e333fe8e35ec6b8eb183f7610cda8414",
+      "source_patch_manifest_sha256": "c68f256ed23ac54b3e94bfa72e4574cc1dd95cbdaee5fc47e78e5f61ca476fea"
     }
   },
   "backend": {
     "project_dir": "/home/user/Desktop/Qwen_best_model_ever",
     "container_name": "qwen38-agent-native",
     "project_label": "Qwen_best_model_ever",
-    "profile_label": "socket-isolated-nonroot-vision-k8v4-agent-v19",
-    "image_tag": "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v19",
-    "image_id": "sha256:9ca17cb2404beac5936a079b581133c5a8e18e8f9a7e7b9179058a0c92f4fb50",
+    "profile_label": "socket-isolated-nonroot-vision-k8v4-agent-v20",
+    "image_tag": "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v20",
+    "image_id": "sha256:37017d4e5ec1c56bdb69d280992d62d405ec0bb0731a087d0ee8bbd96144af5c",
     "user": "2000:0",
     "rootfs_read_only": true,
     "tmpfs": {
       "/run": "rw,nosuid,nodev,noexec,size=64m,uid=2000,gid=0,mode=0700",
       "/tmp": "rw,nosuid,nodev,exec,size=2g,mode=1777"
     },
-    "cache_volume": "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v19",
+    "cache_volume": "qwen38-vllm-cache-socket-isolated-nonroot-vision-agent-v20",
     "cache_mount": "/home/vllm/.cache/vllm",
     "cache_owner_mode": "2000:0:770",
     "endpoint": "http://127.0.0.1:8000",
@@ -244,6 +244,7 @@
       "--enable-auto-tool-choice",
       "--tool-call-parser",
       "qwen3_coder",
+      "--enable-prompt-tokens-details",
       "--default-chat-template-kwargs",
       "{\"enable_thinking\":true,\"reasoning_effort\":\"xhigh\",\"add_vision_id\":false}",
       "--limit-mm-per-prompt",

@@ -3012,7 +3012,7 @@ def _validate_compaction_accounting_after(state: State) -> None:
         service,
         (
             "    const outputAccounting: CompactionOutputAccounting = {",
-            "      thinkingTokens: summaryResult.usage?.thoughtsTokenCount ?? 0,",
+            "      thinkingTokens: summaryUsage.thoughtsTokenCount,",
             "      summaryChars: processedSummary.length,",
         ),
         label=label,
@@ -3844,6 +3844,279 @@ def _validate_tool_result_bound_after(state: State) -> None:
         require_text(state, finalizer_test, case, label=label)
 
 
+def _validate_served_accounting_before(state: State) -> None:
+    label = "served-accounting precondition"
+    converter = "packages/core/src/core/openaiContentGenerator/converter.ts"
+    chat = "packages/core/src/core/geminiChat.ts"
+    estimation = "packages/core/src/services/tokenEstimation.ts"
+    resume = "packages/core/src/services/session-resume-token-counts.ts"
+    parts = "packages/core/src/utils/partUtils.ts"
+    base = "packages/core/src/core/baseLlmClient.ts"
+    turn = "packages/core/src/core/turn.ts"
+    tools = "packages/core/src/tools/tools.ts"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
+    wire = "packages/cli/src/nonInteractive/types.ts"
+
+    # Upstream approximates what the backend serves: a reasoning count from
+    # the reasoning text, clamped to the completion count, and a cached-prompt
+    # count of zero whenever none was reported.
+    _require_all(
+        state,
+        converter,
+        (
+            "estimateTextTokens(reasoningText ?? '')",
+            "TOKEN_ESTIMATE_UNITS_PER_TOKEN",
+            "reasoning_tokens absent; estimated",
+            "extendedUsage.cached_tokens ??\n      0;",
+        ),
+        label=label,
+    )
+    # The previous-response output counter and the arithmetic behind it.
+    require_text(state, chat, "private lastOutputTokenCount = 0;", label=label)
+    require_text(
+        state,
+        estimation,
+        "export function getUsageOutputTokenCountForPromptEstimate(",
+        label=label,
+    )
+    require_text(
+        state,
+        resume,
+        "getUsageOutputTokenCountForPromptEstimate(usage)",
+        label=label,
+    )
+    # Nothing reads a side query's reasoning, a subagent's rounds, or the
+    # reasoning share of a turn.
+    forbid_text(state, converter, "readServedUsageDetails", label=label)
+    forbid_text(state, parts, "getResponseThoughtText", label=label)
+    forbid_text(state, base, "requireServedUsage", label=label)
+    forbid_text(state, turn, "reasoning: string;", label=label)
+    forbid_text(state, tools, "SubagentRoundRecord", label=label)
+    forbid_text(state, adapter, "emitSubagentRound", label=label)
+    forbid_text(state, helpers, "emittedRoundCounts", label=label)
+    forbid_text(state, wire, "reasoning_output_tokens", label=label)
+
+
+def _validate_served_accounting_after(state: State) -> None:
+    label = "served-accounting result"
+    converter = "packages/core/src/core/openaiContentGenerator/converter.ts"
+    converter_test = "packages/core/src/core/openaiContentGenerator/converter.test.ts"
+    types = "packages/core/src/core/openaiContentGenerator/types.ts"
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    chat = "packages/core/src/core/geminiChat.ts"
+    estimation = "packages/core/src/services/tokenEstimation.ts"
+    estimation_test = "packages/core/src/services/tokenEstimation.test.ts"
+    resume = "packages/core/src/services/session-resume-token-counts.ts"
+    client = "packages/core/src/core/client.ts"
+    parts = "packages/core/src/utils/partUtils.ts"
+    parts_test = "packages/core/src/utils/partUtils.test.ts"
+    base = "packages/core/src/core/baseLlmClient.ts"
+    base_test = "packages/core/src/core/baseLlmClient.test.ts"
+    turn = "packages/core/src/core/turn.ts"
+    compression = "packages/core/src/services/chatCompressionService.ts"
+    compression_test = "packages/core/src/services/chatCompressionService.test.ts"
+    tools = "packages/core/src/tools/tools.ts"
+    agent = "packages/core/src/tools/agent/agent.ts"
+    agent_test = "packages/core/src/tools/agent/agent.test.ts"
+    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
+    adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
+    helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
+    helpers_test = "packages/cli/src/utils/nonInteractiveHelpers.test.ts"
+    wire = "packages/cli/src/nonInteractive/types.ts"
+
+    # Both detail counts are read from the served usage and only from it; in
+    # exact mode a usage without either fails the request.
+    _require_ordered(
+        _source(state, converter, label=label),
+        (
+            "function readServedUsageDetails(",
+            "if (requestContext.exactTokenCounting) {",
+            "requires usage.completion_tokens_details.reasoning_tokens",
+            "requires usage.prompt_tokens_details.cached_tokens",
+        ),
+        label=label,
+        location=converter,
+    )
+    for needle in (
+        "estimateTextTokens",
+        "TOKEN_ESTIMATE_UNITS_PER_TOKEN",
+        "emittedTokenUnits",
+        "reasoning_tokens absent",
+        "cached_tokens ??\n      0;",
+    ):
+        forbid_text(state, converter, needle, label=label)
+    require_text(state, types, "exactTokenCounting?: boolean;", label=label)
+    require_text(
+        state,
+        pipeline,
+        "exactTokenCounting:\n        this.contentGeneratorConfig.exactTokenCounting === 'vllm',",
+        label=label,
+    )
+    # The retired estimator and its counter are gone, not disabled.
+    for path, symbols in (
+        (
+            chat,
+            (
+                "lastOutputTokenCount",
+                "getUsageOutputTokenCountForPromptEstimate",
+                "seedResumeTokenCounts",
+            ),
+        ),
+        (
+            estimation,
+            (
+                "getUsageOutputTokenCountForPromptEstimate",
+                "estimatePromptTokens",
+                "lastOutputTokenCount",
+            ),
+        ),
+        (resume, ("outputTokenCount",)),
+        (client, ("seedResumeTokenCounts",)),
+    ):
+        for symbol in symbols:
+            forbid_text(state, path, symbol, label=label)
+    require_text(
+        state,
+        client,
+        "chat.setLastPromptTokenCount(\n          counts.promptTokenCount,\n          counts.isEstimated,\n        );",
+        label=label,
+    )
+
+    # A side query's reasoning is kept beside the text that drops it, and in
+    # exact mode the query requires the served usage.
+    require_text(
+        state, parts, "export function getResponseThoughtText(", label=label
+    )
+    _require_ordered(
+        _source(state, base, label=label),
+        (
+            "export function requireServedUsage(",
+            "thoughtText += getResponseThoughtText(chunk) ?? '';",
+            "thoughtText: getResponseThoughtText(result) ?? '',",
+            "if (contentGeneratorConfig.exactTokenCounting === 'vllm') {\n        requireServedUsage(result.usage, 'generateText');",
+        ),
+        label=label,
+        location=base,
+    )
+    _require_ordered(
+        _source(state, turn, label=label),
+        (
+            "export interface CompactionOutputAccounting {",
+            "thinkingTokens: number;",
+            "reasoning: string;",
+            "summaryChars: number;",
+        ),
+        label=label,
+        location=turn,
+    )
+    _require_ordered(
+        _source(state, compression, label=label),
+        (
+            "summaryUsage = requireServedUsage(summaryResult.usage, 'chat-compression');",
+            "thinkingTokens: summaryUsage.thoughtsTokenCount,",
+            "reasoning: summaryResult.thoughtText,",
+        ),
+        label=label,
+        location=compression,
+    )
+    forbid_text(state, compression, "summaryResult.usage?.", label=label)
+
+    # Every completed subagent round reaches the parent stream with its
+    # reasoning, its text and its served usage, before the calls it made.
+    require_text(
+        state, tools, "export interface SubagentRoundRecord {", label=label
+    )
+    require_text(state, tools, "rounds?: SubagentRoundRecord[];", label=label)
+    _require_ordered(
+        _source(state, agent, label=label),
+        (
+            "this.eventEmitter.on(AgentEventType.ROUND_TEXT, (...args: unknown[]) => {",
+            "reasoning: event.thoughtText,",
+            "usageMetadata: event.usageMetadata ?? null,",
+            "this.updateDisplay({ rounds: [...this.currentRounds] }, updateOutput);",
+        ),
+        label=label,
+        location=agent,
+    )
+    _require_ordered(
+        _source(state, adapter, label=label),
+        (
+            "emitSubagentRound?(",
+            "usage.reasoning_output_tokens = metadata.thoughtsTokenCount;",
+            "emitSubagentRound(round: SubagentRoundRecord, parentToolUseId: string): void {",
+            "state.usage = this.createUsage(round.usageMetadata);",
+        ),
+        label=label,
+        location=adapter,
+    )
+    require_text(
+        state,
+        helpers,
+        "adapter.emitSubagentRound(round, agentToolCallId);",
+        label=label,
+    )
+    require_text(
+        state,
+        helpers,
+        "reasoning_output_tokens: totalReasoningTokens,",
+        label=label,
+    )
+    require_text(state, wire, "reasoning_output_tokens?: number;", label=label)
+
+    # Executed in the build.
+    for path, cases in (
+        (
+            converter_test,
+            (
+                "leaves streaming reasoning and cached counts absent when the provider served none",
+                "[served-usage] refuses a non-streaming usage without served %s tokens under exactTokenCounting=vllm",
+                "[served-usage] refuses a streaming usage without served %s tokens under exactTokenCounting=vllm",
+            ),
+        ),
+        (
+            compression_test,
+            (
+                "[compaction-event] fails closed when the summary generation served no usage",
+            ),
+        ),
+        (
+            base_test,
+            (
+                "[served-usage] refuses a side query without served usage under exactTokenCounting=vllm",
+            ),
+        ),
+        (parts_test, ("keeps exactly the thought parts getResponseText drops",)),
+        (
+            estimation_test,
+            (
+                "estimates held content only: no output or reasoning count is derived here",
+            ),
+        ),
+        (
+            helpers_test,
+            (
+                "[subagent-rounds] emits each completed subagent round exactly once, ahead of the tool calls it produced",
+            ),
+        ),
+        (
+            agent_test,
+            (
+                "[subagent-rounds] publishes every completed round on the display, oldest first, with its served usage",
+            ),
+        ),
+        (
+            adapter_test,
+            (
+                "[subagent-rounds] emits the reasoning, the text and the served usage of a round under the agent tool call",
+                "[subagent-rounds] still emits a message for a round that produced nothing visible, so its billed usage is not lost",
+            ),
+        ),
+    ):
+        for case in cases:
+            require_text(state, path, case, label=label)
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="locked-config-and-literal-cli",
@@ -4613,6 +4886,38 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_terminal_state_before,
         validate_after=_validate_terminal_state_after,
+    ),
+    SemanticConcern(
+        name="served-accounting",
+        rationale=(
+            "Every count the client reports about a generation is the count "
+            "the backend served for it. The pinned backend counts reasoning "
+            "tokens at its parser engine's own token-id split and reports the "
+            "prompt tokens it read back from its prefix cache; upstream "
+            "instead estimated reasoning from the reasoning text at a fixed "
+            "characters-per-token ratio clamped to the completion count, "
+            "reported a cached count of zero when none was served, and kept a "
+            "previous-response output counter for a prompt estimator this "
+            "build has already retired. Under `exactTokenCounting` a usage "
+            "without either served count fails the request; nowhere does a "
+            "count get approximated from text. The reasoning the session was "
+            "blind to is captured where it is spent and never fed back: a "
+            "compaction attempt's record carries the reasoning it emitted "
+            "beside its counts, and every completed subagent round is "
+            "published on the agent tool's display and written under the "
+            "spawning tool-call id with its reasoning, its text and its "
+            "served usage, so a subagent's turns are billed to the subagent in "
+            "the captured stream instead of arriving as zero-usage tool calls."
+        ),
+        removal_condition=(
+            "Remove only when upstream reports reasoning and cached-prompt "
+            "counts solely as the provider served them, refusing rather than "
+            "estimating when they are absent, and writes a side query's "
+            "reasoning and every subagent round's reasoning, text and usage "
+            "into the headless stream under the owning scope."
+        ),
+        validate_before=_validate_served_accounting_before,
+        validate_after=_validate_served_accounting_after,
     ),
 )
 

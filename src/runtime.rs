@@ -221,6 +221,18 @@ pub struct SessionBody {
     // of the persisted schema, not a runtime behavior fallback.
     #[serde(default)]
     pub agent_result_subtype: Option<String>,
+    /// Generated tokens the backend billed to the session's own turns, summed
+    /// from the served usage every billed turn carries, and the part of them
+    /// the backend counted as reasoning. Zero on a session whose stream was
+    /// never strictly parsed, for the same reason `subagent_scopes` is empty.
+    // Terminal records committed before the served split was carried cannot
+    // supply it, and zero is their only migration value: nothing was summed.
+    // This is an explicit persisted-data schema migration, not a runtime
+    // behavior fallback.
+    #[serde(default)]
+    pub main_output_tokens: u64,
+    #[serde(default)]
+    pub main_reasoning_tokens: u64,
     /// Per-subagent accounting from the strict terminal parse, in order of
     /// first appearance in the stream. Each row is one scope: the id-resolved
     /// `tool_use` call that spawned it, the turns the stream billed to it,
@@ -1808,6 +1820,8 @@ fn running_body(
         agent_duration_ms: None,
         agent_api_duration_ms: None,
         agent_result_subtype: None,
+        main_output_tokens: 0,
+        main_reasoning_tokens: 0,
         subagent_scopes: Vec::new(),
         subagent_scope_count: 0,
         subagent_error_count: 0,
@@ -4238,6 +4252,8 @@ mod tests {
             agent_duration_ms: Some(1),
             agent_api_duration_ms: Some(1),
             agent_result_subtype: Some("success".to_string()),
+            main_output_tokens: 0,
+            main_reasoning_tokens: 0,
             subagent_scopes: Vec::new(),
             subagent_scope_count: 0,
             subagent_error_count: 0,
@@ -4305,9 +4321,8 @@ mod tests {
         let json = serde_json::to_value(&unparsed).expect("serialize");
         assert!(json["agent_result_subtype"].is_null());
 
-        for subtype in
-            std::iter::once(crate::result_parse::SUCCESS_SUBTYPE)
-                .chain(crate::result_parse::ERROR_SUBTYPES)
+        for subtype in std::iter::once(crate::result_parse::SUCCESS_SUBTYPE)
+            .chain(crate::result_parse::ERROR_SUBTYPES)
         {
             let mut reported = body("s-55555555555555555555555555555555");
             reported.agent_result_subtype = Some(subtype.to_string());

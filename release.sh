@@ -183,11 +183,10 @@ seal() {
     # Build inputs moved, so this is a new implementation of the stack. Commit
     # them first: the release lock has to name a commit that already contains
     # them, and build.sh requires that commit to be an ancestor of HEAD.
-    if ! git -C "${PROJECT_DIR}" diff --quiet ||
+      if ! git -C "${PROJECT_DIR}" diff --quiet ||
       ! git -C "${PROJECT_DIR}" diff --cached --quiet; then
       git -C "${PROJECT_DIR}" add -A
-      git -C "${PROJECT_DIR}" commit -q -m "${subject}" \
-        -m "Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+      commit_sealed "${subject}"
       printf '  inputs commit: %s\n' "$(git -C "${PROJECT_DIR}" log --oneline -1)"
     fi
     commit="$(git -C "${PROJECT_DIR}" rev-parse HEAD)"
@@ -206,10 +205,27 @@ seal() {
   if ! git -C "${PROJECT_DIR}" diff --quiet ||
     ! git -C "${PROJECT_DIR}" diff --cached --quiet; then
     git -C "${PROJECT_DIR}" add -A
-    git -C "${PROJECT_DIR}" commit -q -m "${subject}" \
-      -m "Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+    commit_sealed "${subject}"
     printf '  commit: %s\n' "$(git -C "${PROJECT_DIR}" log --oneline -1)"
   fi
+}
+
+# Commit the staged seal. Every commit this loop makes ends with the same
+# trailers the operator's own commits carry: the authorship trailer, then
+# whatever the checkout's git configuration lists under the multi-valued key
+# `qwen38.commitTrailer` (a session link, for one). The trailers live in the
+# checkout's local git configuration, not here, so the script names no
+# session and no session is ever recorded by a script that outlives it.
+commit_sealed() {
+  local subject="$1" trailer
+  local -a trailer_args=(
+    --trailer "Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+  )
+  while IFS= read -r trailer; do
+    [[ -n "${trailer}" ]] || continue
+    trailer_args+=(--trailer "${trailer}")
+  done < <(git -C "${PROJECT_DIR}" config --get-all qwen38.commitTrailer || true)
+  git -C "${PROJECT_DIR}" commit -q -m "${subject}" "${trailer_args[@]}"
 }
 
 # Bundle the five component images into the pinned offline archive and adopt

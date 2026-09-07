@@ -33,7 +33,7 @@ The fixed stack is:
 | Corrected model SHA-256 | `5fd70b38b3708e47adc1e9e9ab90f5d688ec01177d0718fdd16678696fdb0988` |
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
-| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v19 profile |
+| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v20 profile |
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
 | Context | Native `262144` tokens |
@@ -66,7 +66,7 @@ The service independently requires `/model` to be the exact corrected directory 
 one read-only bind mount and requires the backend container's source revision,
 official revision, correction recipe, corrected model digest, and manifest digest
 labels. It also requires a read-only backend root running as `2000:0`, exact bounded
-`/tmp` and `/run` tmpfs contracts, exactly one labelled v19 vLLM cache volume at
+`/tmp` and `/run` tmpfs contracts, exactly one labelled v20 vLLM cache volume at
 `/home/vllm/.cache/vllm`, and no other mount. Every persistent JIT/cache path is
 rooted beneath that exact volume; runtime writes cannot mutate the container layer.
 The backend's own status performs the complete file-manifest verification.
@@ -495,6 +495,22 @@ that is neither null nor an agent tool-call id, malformed lines, missing fields,
 empty successful result, and a missing main-session result are hard errors. It never
 chooses a convenient-looking “last result.”
 
+Every billed turn carries the usage the backend served for it, copied field for
+field: the prompt tokens, the generated tokens, the part of them the backend's
+reasoning parser counted as reasoning (`reasoning_output_tokens`), and the prompt
+tokens it read back from its prefix cache. The client computes none of these — a
+generation that arrives without them fails that request — so a billed event
+lacking one, or one whose reasoning exceeds its output, is a stream this service
+does not recognise and is refused rather than tallied. The parser sums the served
+output and reasoning per scope (`main_output_tokens`, `main_reasoning_tokens`,
+and `output_tokens`/`reasoning_tokens` on every subagent scope). A subagent's own
+generations reach the stream too: each completed round is written under the
+scope's tool-call id as its reasoning, its text and its served usage, so a
+subagent's turns are billed to the subagent rather than absent, and a compaction
+record (`system`/`compaction`) carries the reasoning the attempt emitted beside
+its counts, validated in full. All of it is evidence for the reader; nothing in
+it is ever handed back to a model.
+
 The envelope names which terminal state ended the run, and the service carries that
 name through to the caller as `agent_result_subtype`. `success` is the agent's
 assertion that the model wrote its final message to the end. Seven `error_*`
@@ -898,7 +914,7 @@ misleading 404. Shutdown has no arbitrary teardown deadline.
 ## Acceptance gates
 
 A release is not complete merely because the images build. Every required gate below
-passed against the current pinned agent release and the exact live v19 corrected
+passed against the current pinned agent release and the exact live v20 corrected
 backend; unchanged historical cache measurements are identified as such:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;

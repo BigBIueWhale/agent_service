@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `b0b2a7b9cc47f8d1ffc608157dc7863cc760d191e30ddbf4bce33e02e7350e7e`
+- Review-diff SHA-256: `a0ccc567ade8556ca03254296ff909f5e333fe8e35ec6b8eb183f7610cda8414`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `805de60cb64f1b2d08d22c729f17a8866f200a001c67cb543c8213bbc50307be`
+- Transformer-manifest SHA-256: `c68f256ed23ac54b3e94bfa72e4574cc1dd95cbdaee5fc47e78e5f61ca476fea`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -22,6 +22,29 @@ The semantic transformer adds the requirements that upstream 0.21.12 does not
 provide as one fail-closed mode:
 
 - exact rendered-request token counts from vLLM's real `/tokenize` endpoint;
+- served token accounting only. Every usage the backend serves carries
+  `completion_tokens_details.reasoning_tokens`, taken from its parser
+  engine's own token-id split, and `prompt_tokens_details.cached_tokens`,
+  the prompt tokens its scheduler reused; the client copies both, and under
+  `exactTokenCounting` a response missing either fails the request rather
+  than being approximated. Upstream's character estimate of reasoning
+  tokens, its clamp of that estimate to the completion count, the cached
+  count it invented as zero, and the previous-response output counter that
+  fed the retired prompt estimator (lastOutputTokenCount and the
+  candidates-plus-thoughts arithmetic behind it) are gone from the tree;
+- the reasoning the session was blind to, captured where it is spent and
+  never fed back. A compaction attempt's record carries the reasoning it
+  emitted verbatim beside its counts, read through `getResponseThoughtText`
+  next to the summary that drops it, and the side query itself requires the
+  backend's served usage under `exactTokenCounting`. Every completed
+  subagent round is published on the agent tool's display (`rounds`, as
+  append-only as `compactions`) with its text, its reasoning and its served
+  usage, and the headless adapter writes each one under the spawning
+  tool-call id — a thinking block, a text block, and the round's usage on
+  the last of them — through `emitSubagentRound`, so a subagent's turns are
+  billed to the subagent in the captured stream instead of arriving as
+  zero-usage tool calls. The wire usage names the reasoning share as
+  `reasoning_output_tokens`, on every turn and on the session total;
 - an exact per-turn output budget: the smaller of the configured output ceiling and the turn's share of the served window, carrying no heuristic margin, padding, or fallback estimate;
 - exact rendered-token automatic-compaction gating before generation, including
   the actual image expansion, template, and tool schemas;
@@ -501,12 +524,12 @@ provide as one fail-closed mode:
   stream. Turning on debug logging would be a second mode and would pollute
   the captured stream, so the compaction event carries the accounting
   instead: the reserve the attempt ran under, the output tokens produced, how
-  many of them were reasoning, how much summary survived, and the provider's
-  terminal reason. It is attached to every outcome reachable after the
-  generation and left empty when the attempt was refused before it, so a
-  budget consumed entirely by reasoning stays distinguishable from a request
-  that never ran (three more `[compaction-event]` tests execute this in the
-  build).
+  many of them were reasoning, that reasoning itself, how much summary
+  survived, and the provider's terminal reason. It is attached to every
+  outcome reachable after the generation and left empty when the attempt was
+  refused before it, so a budget consumed entirely by reasoning stays
+  distinguishable from a request that never ran, and can be read rather than
+  only counted (four `[compaction-event]` tests execute this in the build).
 
 Verification performed in the pinned Node image:
 

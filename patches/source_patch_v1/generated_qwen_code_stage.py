@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'b0b2a7b9cc47f8d1ffc608157dc7863cc760d191e30ddbf4bce33e02e7350e7e',
+  'review_sha256': 'a0ccc567ade8556ca03254296ff909f5e333fe8e35ec6b8eb183f7610cda8414',
   'files': ({'path': 'packages/cli/src/acp-integration/session/Session.test.ts',
              'before_sha256': '79540f9f6c9407085e0160a12aaf5bb30fa3d94d6fdb0fb017ac6083e2b5fafb',
              'after_sha256': '6b9a035a99a6ea4de2e5455da2a63ed7a1efe8f3c4a58b0629bc05d206c51f4e'},
@@ -64,10 +64,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before_sha256': '17e660b5b946d5647814af611bc5b6aaf43c597e7b329e4926d90b8bf7fa72e8',
-             'after_sha256': 'c9cdb1093df8917fcd3b1f7a170dae36e4bc942797f08aa4c609114bac3e0e78'},
+             'after_sha256': '26083158263eda9ba1d2d5e5e9423dfd2d1d7d7a738b83060e31672c6ef92a05'},
             {'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before_sha256': 'd389950daa67e5b2578ed5da8e340e417d7f696486c81ed78f3aca735e22c0bd',
-             'after_sha256': 'f0007862fbfa42e925ca6f45ece60230577908927b110a242ab9ffd51e794a29'},
+             'after_sha256': '839e69e4d622a06cd9b908ba74ed7ba38f245c28bf3a9e4e7872b6fb33a5264f'},
             {'path': 'packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts',
              'before_sha256': 'db60a3e3cf109f16737e409de4ea75ff35210a6079078ba0fc5a94ec70e397c2',
              'after_sha256': '7695a5b1d2246a47ca2c11c6d4b2aaa1081e94661d98993b6caa45e15675fbca'},
@@ -82,10 +82,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '9c50443d208cea29438b5b67b06b50a9327a705291cfe3d0b6f07f7a905ee234'},
             {'path': 'packages/cli/src/nonInteractive/types.ts',
              'before_sha256': '6ad4da59e11d6a84d2b9bd03376b834d1737edfc7a8dc9af1e90783ccab2acdf',
-             'after_sha256': 'bcdd5db1ebd4720911b1f4a101d60ccdc5e8b36c1fa5226bc7fab045b4a1e8c4'},
+             'after_sha256': '97cade7339bef7d4b0f148ca649fc36d86452cd58c5cb96f991eff20119f8a0e'},
             {'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before_sha256': 'b2974af70f9b5f4beadaa1e9d632e95ff6eac1ee3aab8c3b366db8ce64d73afc',
-             'after_sha256': '72ed51786cf8f8fe7b39ff6605f89c59e18fabfb1716f64c2e9e2db429feef46'},
+             'after_sha256': '20fc3434b0e11ee36b4ba10a8d4703dbee3b82b4d2e34820e0cbcbd749d8a84e'},
             {'path': 'packages/cli/src/nonInteractiveCli.ts',
              'before_sha256': '8d9eb9804e3f8a8dac4ca1db0f3daa909454ac07c75044b65e98c4ffd3b0d4c2',
              'after_sha256': '821e4c4f076e443c33eb96196bc794012de3b71668a6391b9d00c43977f93dee'},
@@ -106,7 +106,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '488d15f59afc8ddcf25fdd008d6ca723385a58147c1dea51f673b0aa4b0fc9e9'},
             {'path': 'packages/cli/src/ui/commands/contextCommand.ts',
              'before_sha256': '9a95980131c9dea7c03b8f1e3a9f20bff4c4da7c135b99c337b56b9b4d8c2115',
-             'after_sha256': '266cf936ad98024285a9417002bb969eb8217157e73d23e671db3ad9c09ad5f7'},
+             'after_sha256': 'd8bf91bbaba56641effd71de23115fedd3a8a0bfcf0f9e54dad1504c9efa8f17'},
             {'path': 'packages/cli/src/ui/commands/doctorCommand.test.ts',
              'before_sha256': '70297273883e4d4ccd0cff5a9742dd8804c1e21a72e7f87bf036bc101faeb7c4',
              'after_sha256': '5605f0fe40734369db9b5c16f386c4f428e6231aa0a91f3eb513aac14898b749'},
@@ -151,10 +151,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'eb931fdd1b8d1137c465b8de35ae13b76eeb52ef1e9b769b805f244ae58812b5'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before_sha256': 'd59f5e8a9a9efc2f10770df56e1ea201ec38400b9b1dd00ef317ce2f8e5a1448',
-             'after_sha256': 'fec5551fbc322b637aa1f19681fd3b554c0a185ec0a4fe1ec94a2370fbb57206'},
+             'after_sha256': 'a9dfcb1b4f260182dd28fdde1e73c9a7dbe332bfdf13d3ace8faf5e32ed33915'},
             {'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
              'before_sha256': 'e1a5371ec1215d1cc23eb87ce43d82bf62270b1e38b75110dbea4bf77c925a5d',
-             'after_sha256': '8c675bf91b4b3d7ed72cf5430413500eb9e56cd636884118396c37e8b6a21c85'},
+             'after_sha256': 'e98519e315140da3bc2a480f2ebe52f8aaa65d835cac407a5610dedf907dff64'},
             {'path': 'packages/cli/src/validateNonInterActiveAuth.test.ts',
              'before_sha256': 'a69ceb766f507566e078d5b44b557ae4c3fc9b1ee8eaa30ea901482d00ee90e1',
              'after_sha256': '5058458dd9a66adba6d32dcea8744359cef7eab642622a697be69de912bd376d'},
@@ -211,16 +211,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '94a898beb84a3fb8530c40daed07853476cee93bfc9f1958741cf7a9060fd446'},
             {'path': 'packages/core/src/core/baseLlmClient.test.ts',
              'before_sha256': 'a415bd5a4cc091acc2ac5cffd347f364871ae623fa6f277bc6478011ed71faab',
-             'after_sha256': '643b5f7c90bbb9a63300c3ec02cffea86f4ecdbb65f06b1ec94eb18fda7e7674'},
+             'after_sha256': '05de69f6f0d256b793b46e82a0daf4bb20679df4a6e92677333ca33a647ffcb3'},
             {'path': 'packages/core/src/core/baseLlmClient.ts',
              'before_sha256': '5f4dc1d1d88c9d062f59d9adb25b174ed5b12cf0e8ac64f8356a4b279927776b',
-             'after_sha256': '14a959fbbeeffd507b9ebd2bb4d6b564d3a88feb4e46a406afcf2555fa791a9b'},
+             'after_sha256': '78cb37c11f8af12fe297636a7b1d7f805db508f9476ea04f360fd8b0ca51a81e'},
             {'path': 'packages/core/src/core/client.test.ts',
              'before_sha256': '00f0f1c4ff0e705ab43235fc9368609e63b441df4e2bc81cd3ce63e4cb9771e4',
-             'after_sha256': '672a46838231a8799545260380cc65c10782779b2a344660342b1dd1d3b57c89'},
+             'after_sha256': 'c857b1fd8905a43116e5f55a64a86e0a3f8354e286c920ca1902313d2d14f709'},
             {'path': 'packages/core/src/core/client.ts',
              'before_sha256': 'b15faf13bc894ab9d9a60853bcadffdfd197a39779d05ecdef401b6f4d360c19',
-             'after_sha256': '4e7938239f783b08dd9b27a09a70b32e7df56ae58d25f6518e98afb68664290e'},
+             'after_sha256': '25b3be3e7282d1f0233b99fbc847ba2b9129eb1e7da6ef1fff46fa73a397fb98'},
             {'path': 'packages/core/src/core/contentGenerator.ts',
              'before_sha256': '7bbdb216d8bbde513ce99d4f1160746942b6fc3c388ef222c1d47cc324a15247',
              'after_sha256': '27fa593f8dbf0e75106b2d4aa8f9d22801dcf016b112d56046542ed4fd3ff303'},
@@ -232,10 +232,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'd81d0bb12a83d984095da5c1d01646fb59107d9f2b445d6ce3dfb9ae77718d6d'},
             {'path': 'packages/core/src/core/geminiChat.test.ts',
              'before_sha256': 'c3ec701c78d99698ad538c188e08d10b78b266c372b850907def72f9badb8830',
-             'after_sha256': '877bea890789b99a3e40ba27beb6d778d45d23e3bf9a68029066714c9aa52c36'},
+             'after_sha256': '1e342ec598707a31ebde4e0163d17db37e55ae200fccd2faf43dff1c761f03bc'},
             {'path': 'packages/core/src/core/geminiChat.ts',
              'before_sha256': '384de52c73dc5c387d3147713046713d34de0b6724b12feb00574508a4d7cc6c',
-             'after_sha256': 'd04b90255952d0da741fb5433ebd9a18c586e31c2a186709256cfeacd96d5391'},
+             'after_sha256': '9057c865e415255579ea58e734f6b0c1a98a41ef8a0aad4f16d5a2c7e1d4eca0'},
             {'path': 'packages/core/src/core/genai-compat.test.ts',
              'before_sha256': 'b454f3c146c1be79cbc43aadceda5010756ada9f80a5ec33186c9826feaccf76',
              'after_sha256': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50'},
@@ -250,10 +250,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '0d3644f3c77c8aeddd4a668b601f9d3a91881d82119fe7a476c9704abedd6cb3'},
             {'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
              'before_sha256': '0297088a5fb7ce2eaf6fb7d556f488ace146995a0267eede844761437701a926',
-             'after_sha256': 'bb73338e3cb074e243c5baf4c09159a638134210e0eabf816a90df3656e8da28'},
+             'after_sha256': 'c8a3db9f165ef582c6748c8d35b87578b83098f7a01d49b4892d6ae3c1ec2703'},
             {'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
              'before_sha256': 'ca7c3d7e4c30a3f1b219ea4981a9e1b175a54617b780fc9cc28e0af53e65d638',
-             'after_sha256': '28c729be63e9171b90b58c712c22808a9d529402ee1c5026436051059387ca51'},
+             'after_sha256': '440293b8c114d3e299b6757c8c26d7db218a76469c6581d754d10bf8259ba755'},
             {'path': 'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts',
              'before_sha256': '0f90249e95cc6f5142faf7f2f69436054b5424c8dceb4c515286f6dd5f13d5b3',
              'after_sha256': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1'},
@@ -265,10 +265,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888'},
             {'path': 'packages/core/src/core/openaiContentGenerator/pipeline.ts',
              'before_sha256': 'fd6061e56956d1072885a4a8e40be6ed148623d791a5586f3669bbf325c1d09c',
-             'after_sha256': '22db5d61da4f9e77007e38855f2cc656e670d261d017e24a41d04e795cab47a5'},
+             'after_sha256': '18e0556fb63f0356ad0f260d6ec2faaddcd1e419f6abfcabb0d0bd0071432ae0'},
             {'path': 'packages/core/src/core/openaiContentGenerator/types.ts',
              'before_sha256': '0b827511f3ccefbc74aa7d14eaccf7502e1a2aaed846983b982ac9191827aa51',
-             'after_sha256': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c'},
+             'after_sha256': '02c4194cb8bdde408946099179dc9e1d168d284eae67b9e7892a607cea7f7222'},
             {'path': 'packages/core/src/core/prompts.test.ts',
              'before_sha256': '228fffaa1c483415f9ded4bba43f88e6f0b6fc29bc5df334a06ed5507c5e9467',
              'after_sha256': '9369efadaa67f10e218f1be71f3bd1620d67d8958dec94a28a9db300700175d0'},
@@ -298,7 +298,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '5de15292c793f4227c500e3680a621ce492a7bb11fb88375a1ee6deb42d313c9'},
             {'path': 'packages/core/src/core/turn.ts',
              'before_sha256': 'f1be47023cae4b9e3a4fd9fd756c28bf36724f772bd9759e8ecd72e73cdea6b7',
-             'after_sha256': 'abd9a22ce49842e1e70f06778edbbc9491a74bf265fc9c09bcd8128aeb0b3320'},
+             'after_sha256': '3cfaed5ff7fc6f4836ec7916564450f9b47642efd1ec6327990ef3e9f7d0f714'},
             {'path': 'packages/core/src/followup/speculation.test.ts',
              'before_sha256': 'c570eb9c7b6056fd58adb00fe3bea48a4c2c2476838012a7b3b3e9ad91f2f6f2',
              'after_sha256': '37f44fb1afc78c0de72e2378eb7c714b68ee53abc523307e744e20e647351764'},
@@ -325,10 +325,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779'},
             {'path': 'packages/core/src/services/chatCompressionService.test.ts',
              'before_sha256': 'dca73e970a07ea2c8e819976dc758b57426754e89be5ec230954fda06a2b03db',
-             'after_sha256': '615f0d2e1ceb1d0be1d91670ed9ff243bbb3cde0c0716dce65f4b42d16ca995b'},
+             'after_sha256': '6863b0c73b3b6ce4f769e2d08b0e02a95f68d6478a4a3a21d04279dfeb86abbe'},
             {'path': 'packages/core/src/services/chatCompressionService.ts',
              'before_sha256': 'ce64d44a40510b3eb83c00345a7e6bb6caee0ffcb9f959fbe1a91a804b03899f',
-             'after_sha256': '9d4db0b67831e0259be484ed47fd7b5b00fe76d77198911af37dda4dc5e1b743'},
+             'after_sha256': 'd4443b0c282aeda5e2d7946462e2043dc0983df180879af0295a9cc7b41155c4'},
             {'path': 'packages/core/src/services/fileReadCache.integration.test.ts',
              'before_sha256': 'b9e0afd8d2a79c13f45d0108df2e4ce5980e303da4f315c83a389f9e58f294e8',
              'after_sha256': '25e9d63233752ccce3bba61bcb2d67ee585e76dad61422458230f1f18904dc2f'},
@@ -338,6 +338,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/services/loopDetectionService.ts',
              'before_sha256': 'fa854927e7b6c9998ae2ee147942a2732671855dbeddb6d9a0d7c9a25c063d16',
              'after_sha256': '9e3b6457192b8bd6691ada479da2db67d10721778c3ad260e06409778217f99d'},
+            {'path': 'packages/core/src/services/session-resume-token-counts.ts',
+             'before_sha256': 'ec51d2ee4c0e20863291b6fbda0c5f87e4ee5e6480d725cc50be1f6e819c065d',
+             'after_sha256': 'f91d8d1e7adfcddac73b78f7183ab9c54c0865d21a147b321139d2188f7e4772'},
+            {'path': 'packages/core/src/services/sessionService.test.ts',
+             'before_sha256': 'b316f8b2687fb617152d98043eccd50fba0714b15a385ea04eeefa020b8cc2a2',
+             'after_sha256': '6c73f3ed44f63702848c7ad04289a194224750204a85a60cde02a52cd86589ee'},
+            {'path': 'packages/core/src/services/tokenEstimation.test.ts',
+             'before_sha256': '5a865b07992c16fb3f03e81fd5056369e805e9d80a8dcf5f8f3470e393f66e30',
+             'after_sha256': '7408d80498e114be34ae5cc6c23f387c5025589b73a0c3d93cc5d379bee01947'},
+            {'path': 'packages/core/src/services/tokenEstimation.ts',
+             'before_sha256': 'fab26f1f4c1c6ab3a4332cb8fadc74e4a28d808bad2fe787610b93b42a258e35',
+             'after_sha256': '26be30dd1890ac46edcace82fbf28d159b1dea7a10448378cdb3ecba86094343'},
             {'path': 'packages/core/src/services/visionBridge/vision-bridge-service.test.ts',
              'before_sha256': 'a549dadb1e4607c80e03d89f4f151ce946a974821a5c5c23ffd1a18b4a0671c0',
              'after_sha256': '35135d73b65c44e88135024f40720ad178d861e90ca3dd64db0ab40633aaabe6'},
@@ -379,10 +391,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
-             'after_sha256': '2daecf5add00a1d3bd2e5b6bb0e2d3ae9307965c697792d5fcc6b32a412cb9a7'},
+             'after_sha256': '0453def3b4f48864aa9162b9292161cb79c928b7eb8a11dac643f8e36c0908ec'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': '54d1458d21e2ef230fcc279410408f2915a66d212fd8fd6a9ae8c3c1d13dce52'},
+             'after_sha256': '2b692878e32c7b18969ead1e1951e1618d7a87d95590b43053d04903b86b3a80'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -454,7 +466,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'ccb96335fb9cb3cc59028d097822da6e5b0ab3db6bb2008a6c63ce19a72b9e20'},
             {'path': 'packages/core/src/tools/tools.ts',
              'before_sha256': 'e04d871a71b7d432ab4de1918f701e6cf5f3caa3f6b95f97a55a331054e3d554',
-             'after_sha256': 'c0613a7e809a25a9bd0c5b9a1f4310f064625f2e3e47fea2e1c1ec4ab4c0118d'},
+             'after_sha256': '49119385266ad1e12563b63dc92f12049812a92881d7e65bbff8279456d6786f'},
             {'path': 'packages/core/src/tools/web-fetch.test.ts',
              'before_sha256': 'c44f673902e701587a26f841e510cefff6532b92c69e99f8406a305d49b7e24a',
              'after_sha256': 'e97c6eb5800e66cd65538cf493e8ec7fb923a083fe2e7ed77c633a1c4bf46f2e'},
@@ -485,6 +497,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/utils/image-view.ts',
              'before_sha256': '6dccf9a0ce9e12a24943308841a1b6b5ffd7899e4a41b3a8a0b30a1515276b46',
              'after_sha256': '82383711baeb81895042e6fd865f2f509ca29756ff22b02378dc89c0b2c5e9ea'},
+            {'path': 'packages/core/src/utils/partUtils.test.ts',
+             'before_sha256': '968e61df6fb80c27eb5f28beff5b8ddcac29d883ffe4d200cc86d62c2f0bd234',
+             'after_sha256': 'be834e85600cbf918d1c2665d7fe60ce7b4fc9a497bf7f84cfe5e20e8230fdb3'},
+            {'path': 'packages/core/src/utils/partUtils.ts',
+             'before_sha256': '2474e195154572755d769219984ae2ba3c36b4c9dcdf501e573de79f5facc98c',
+             'after_sha256': 'c506740c97972254e387eaec4e15dcaaaf5e7d3d4bb7b025890ae402bece25f6'},
             {'path': 'packages/core/src/utils/pathReader.test.ts',
              'before_sha256': '2f33cf95bc14dd8646aa3f0963b39fcfd2d9a3b9f6f9338c474cca58d94175b2',
              'after_sha256': '93a8b06ac3075d08d5d401db446e3a65c24202a650ca7d536bb0cbe6d50026ea'},
@@ -518,6 +536,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
             {'path': 'packages/core/src/utils/shellContextEnv.ts',
              'before_sha256': 'a3f5daf8fd65fc75886b912b9a1fb204ddf37e0494ea8e25c460d1e4945cc25a',
              'after_sha256': 'f06dd2a712457c9a5cc77a68cb3749c846af46405835dff530d9f1e7e86c6871'},
+            {'path': 'packages/core/src/utils/sideQuery.test.ts',
+             'before_sha256': '71b390837482689694b58f16feb20fc0af0388d03b8adeda02027be50ddf2d2e',
+             'after_sha256': '684ff4599679708e35af371af166992367b027e948e7d9d0fa9719b1b3c4c57d'},
+            {'path': 'packages/core/src/utils/sideQuery.ts',
+             'before_sha256': '04225a58d4b464ecb3181f73e748474ab90d7f6abb61ca081bb4cc8294f7b518',
+             'after_sha256': '3afdd58e560d6527d6780e6342a44bec0fa97f662915233b7fd82d77b63819ae'},
             {'path': 'packages/core/src/utils/sync-file-encoding.test.ts',
              'before_sha256': 'a8c9c19df1a442ec95aa98c40e6efd79cc144cb67fba07b607711d40a8923b85',
              'after_sha256': '57a8af0871531dd07230bf08842fc2ab25d64551ded9adf05f374ba332d1f225'},
@@ -7086,6 +7110,342 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "vi.fn().mockReturnValue('test-session-id'),\n"},
             {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-3',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before': '\n'
+                       "    it('should extract usage from metadata', () => {\n"
+                       '      const metadata: GenerateContentResponseUsageMetadata = '
+                       '{\n'
+                       '        promptTokenCount: 100,\n'
+                       '        candidatesTokenCount: 50,\n'
+                       '        cachedContentTokenCount: 10,\n'
+                       '        totalTokenCount: 160,\n'
+                       '      };\n'
+                       '\n'
+                       '      const usage = adapter.exposeCreateUsage(metadata);\n'
+                       '\n'
+                       '      expect(usage).toEqual({\n'
+                       '        input_tokens: 100,\n'
+                       '        output_tokens: 50,\n'
+                       '        cache_read_input_tokens: 10,\n'
+                       '        total_tokens: 160,\n'
+                       '      });\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should handle partial metadata', () => {\n"
+                       '      const metadata: GenerateContentResponseUsageMetadata = '
+                       '{\n',
+             'after': '\n'
+                      "    it('should extract usage from metadata', () => {\n"
+                      '      const metadata: GenerateContentResponseUsageMetadata = {\n'
+                      '        promptTokenCount: 100,\n'
+                      '        candidatesTokenCount: 50,\n'
+                      '        cachedContentTokenCount: 10,\n'
+                      '        thoughtsTokenCount: 30,\n'
+                      '        totalTokenCount: 160,\n'
+                      '      };\n'
+                      '\n'
+                      '      const usage = adapter.exposeCreateUsage(metadata);\n'
+                      '\n'
+                      '      expect(usage).toEqual({\n'
+                      '        input_tokens: 100,\n'
+                      '        output_tokens: 50,\n'
+                      '        cache_read_input_tokens: 10,\n'
+                      '        reasoning_output_tokens: 30,\n'
+                      '        total_tokens: 160,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('should handle partial metadata', () => {\n"
+                      '      const metadata: GenerateContentResponseUsageMetadata = '
+                      '{\n',
+             'review_before': '\n'
+                              "    it('should extract usage from metadata', () => {\n"
+                              '      const metadata: '
+                              'GenerateContentResponseUsageMetadata = {\n'
+                              '        promptTokenCount: 100,\n'
+                              '        candidatesTokenCount: 50,\n'
+                              '        cachedContentTokenCount: 10,\n'
+                              '        totalTokenCount: 160,\n'
+                              '      };\n'
+                              '\n'
+                              '      const usage = '
+                              'adapter.exposeCreateUsage(metadata);\n'
+                              '\n'
+                              '      expect(usage).toEqual({\n'
+                              '        input_tokens: 100,\n'
+                              '        output_tokens: 50,\n'
+                              '        cache_read_input_tokens: 10,\n'
+                              '        total_tokens: 160,\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should handle partial metadata', () => {\n"
+                              '      const metadata: '
+                              'GenerateContentResponseUsageMetadata = {\n',
+             'review_after': '\n'
+                             "    it('should extract usage from metadata', () => {\n"
+                             '      const metadata: '
+                             'GenerateContentResponseUsageMetadata = {\n'
+                             '        promptTokenCount: 100,\n'
+                             '        candidatesTokenCount: 50,\n'
+                             '        cachedContentTokenCount: 10,\n'
+                             '        thoughtsTokenCount: 30,\n'
+                             '        totalTokenCount: 160,\n'
+                             '      };\n'
+                             '\n'
+                             '      const usage = '
+                             'adapter.exposeCreateUsage(metadata);\n'
+                             '\n'
+                             '      expect(usage).toEqual({\n'
+                             '        input_tokens: 100,\n'
+                             '        output_tokens: 50,\n'
+                             '        cache_read_input_tokens: 10,\n'
+                             '        reasoning_output_tokens: 30,\n'
+                             '        total_tokens: 160,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('should handle partial metadata', () => {\n"
+                             '      const metadata: '
+                             'GenerateContentResponseUsageMetadata = {\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-4',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
+             'before': '        input_tokens: 100,\n'
+                       '        output_tokens: 0,\n'
+                       '      });\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n'
+                       "  describe('buildMessage', () => {\n"
+                       '    beforeEach(() => {\n'
+                       '      adapter.startAssistantMessage();\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should throw error if message not started', () => {\n",
+             'after': '        input_tokens: 100,\n'
+                      '        output_tokens: 0,\n'
+                      '      });\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('emitSubagentRound', () => {\n"
+                      '    const servedUsage: GenerateContentResponseUsageMetadata = '
+                      '{\n'
+                      '      promptTokenCount: 18_204,\n'
+                      '      candidatesTokenCount: 96,\n'
+                      '      thoughtsTokenCount: 71,\n'
+                      '      cachedContentTokenCount: 18_176,\n'
+                      '      totalTokenCount: 18_300,\n'
+                      '    };\n'
+                      '\n'
+                      "    it('[subagent-rounds] emits the reasoning, the text and the "
+                      "served usage of a round under the agent tool call', () => {\n"
+                      '      adapter.emitSubagentRound(\n'
+                      '        {\n'
+                      '          round: 1,\n'
+                      "          text: 'The manifest lists three services.',\n"
+                      "          reasoning: 'I should read the manifest first.',\n"
+                      '          usageMetadata: servedUsage,\n'
+                      '        },\n'
+                      "        'parent-tool-id',\n"
+                      '      );\n'
+                      '\n'
+                      '      const messages = adapter.emittedMessages as '
+                      'CLIAssistantMessage[];\n'
+                      '      expect(messages).toHaveLength(2);\n'
+                      '      expect(messages.map((message) => '
+                      'message.parent_tool_use_id)).toEqual([\n'
+                      "        'parent-tool-id',\n"
+                      "        'parent-tool-id',\n"
+                      '      ]);\n'
+                      '      expect(messages[0].message.content).toEqual([\n'
+                      '        {\n'
+                      "          type: 'thinking',\n"
+                      "          thinking: 'I should read the manifest first.',\n"
+                      '          signature: undefined,\n'
+                      '        },\n'
+                      '      ]);\n'
+                      '      // The usage rides the last message of the round, exactly '
+                      'once.\n'
+                      '      expect(messages[0].message.usage).toEqual({\n'
+                      '        input_tokens: 0,\n'
+                      '        output_tokens: 0,\n'
+                      '      });\n'
+                      '      expect(messages[1].message.content).toEqual([\n'
+                      "        { type: 'text', text: 'The manifest lists three "
+                      "services.' },\n"
+                      '      ]);\n'
+                      '      expect(messages[1].message.usage).toEqual({\n'
+                      '        input_tokens: 18_204,\n'
+                      '        output_tokens: 96,\n'
+                      '        cache_read_input_tokens: 18_176,\n'
+                      '        reasoning_output_tokens: 71,\n'
+                      '        total_tokens: 18_300,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[subagent-rounds] still emits a message for a round "
+                      'that produced nothing visible, so its billed usage is not '
+                      "lost', () => {\n"
+                      '      adapter.emitSubagentRound(\n'
+                      "        { round: 3, text: '', reasoning: '', usageMetadata: "
+                      'servedUsage },\n'
+                      "        'parent-tool-id',\n"
+                      '      );\n'
+                      '\n'
+                      '      const messages = adapter.emittedMessages as '
+                      'CLIAssistantMessage[];\n'
+                      '      expect(messages).toHaveLength(1);\n'
+                      '      expect(messages[0].message.content).toEqual([]);\n'
+                      '      '
+                      'expect(messages[0].message.usage.input_tokens).toBe(18_204);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[subagent-rounds] carries no count for a round whose "
+                      "stream served no usage', () => {\n"
+                      '      adapter.emitSubagentRound(\n'
+                      "        { round: 2, text: 'done', reasoning: '', usageMetadata: "
+                      'null },\n'
+                      "        'parent-tool-id',\n"
+                      '      );\n'
+                      '\n'
+                      '      const messages = adapter.emittedMessages as '
+                      'CLIAssistantMessage[];\n'
+                      '      expect(messages).toHaveLength(1);\n'
+                      '      expect(messages[0].message.usage).toEqual({\n'
+                      '        input_tokens: 0,\n'
+                      '        output_tokens: 0,\n'
+                      '      });\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('buildMessage', () => {\n"
+                      '    beforeEach(() => {\n'
+                      '      adapter.startAssistantMessage();\n'
+                      '    });\n'
+                      '\n'
+                      "    it('should throw error if message not started', () => {\n",
+             'review_before': '        input_tokens: 100,\n'
+                              '        output_tokens: 0,\n'
+                              '      });\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n'
+                              "  describe('buildMessage', () => {\n"
+                              '    beforeEach(() => {\n'
+                              '      adapter.startAssistantMessage();\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should throw error if message not started', () "
+                              '=> {\n',
+             'review_after': '        input_tokens: 100,\n'
+                             '        output_tokens: 0,\n'
+                             '      });\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('emitSubagentRound', () => {\n"
+                             '    const servedUsage: '
+                             'GenerateContentResponseUsageMetadata = {\n'
+                             '      promptTokenCount: 18_204,\n'
+                             '      candidatesTokenCount: 96,\n'
+                             '      thoughtsTokenCount: 71,\n'
+                             '      cachedContentTokenCount: 18_176,\n'
+                             '      totalTokenCount: 18_300,\n'
+                             '    };\n'
+                             '\n'
+                             "    it('[subagent-rounds] emits the reasoning, the text "
+                             'and the served usage of a round under the agent tool '
+                             "call', () => {\n"
+                             '      adapter.emitSubagentRound(\n'
+                             '        {\n'
+                             '          round: 1,\n'
+                             "          text: 'The manifest lists three services.',\n"
+                             "          reasoning: 'I should read the manifest "
+                             "first.',\n"
+                             '          usageMetadata: servedUsage,\n'
+                             '        },\n'
+                             "        'parent-tool-id',\n"
+                             '      );\n'
+                             '\n'
+                             '      const messages = adapter.emittedMessages as '
+                             'CLIAssistantMessage[];\n'
+                             '      expect(messages).toHaveLength(2);\n'
+                             '      expect(messages.map((message) => '
+                             'message.parent_tool_use_id)).toEqual([\n'
+                             "        'parent-tool-id',\n"
+                             "        'parent-tool-id',\n"
+                             '      ]);\n'
+                             '      expect(messages[0].message.content).toEqual([\n'
+                             '        {\n'
+                             "          type: 'thinking',\n"
+                             "          thinking: 'I should read the manifest "
+                             "first.',\n"
+                             '          signature: undefined,\n'
+                             '        },\n'
+                             '      ]);\n'
+                             '      // The usage rides the last message of the round, '
+                             'exactly once.\n'
+                             '      expect(messages[0].message.usage).toEqual({\n'
+                             '        input_tokens: 0,\n'
+                             '        output_tokens: 0,\n'
+                             '      });\n'
+                             '      expect(messages[1].message.content).toEqual([\n'
+                             "        { type: 'text', text: 'The manifest lists three "
+                             "services.' },\n"
+                             '      ]);\n'
+                             '      expect(messages[1].message.usage).toEqual({\n'
+                             '        input_tokens: 18_204,\n'
+                             '        output_tokens: 96,\n'
+                             '        cache_read_input_tokens: 18_176,\n'
+                             '        reasoning_output_tokens: 71,\n'
+                             '        total_tokens: 18_300,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[subagent-rounds] still emits a message for a "
+                             'round that produced nothing visible, so its billed usage '
+                             "is not lost', () => {\n"
+                             '      adapter.emitSubagentRound(\n'
+                             "        { round: 3, text: '', reasoning: '', "
+                             'usageMetadata: servedUsage },\n'
+                             "        'parent-tool-id',\n"
+                             '      );\n'
+                             '\n'
+                             '      const messages = adapter.emittedMessages as '
+                             'CLIAssistantMessage[];\n'
+                             '      expect(messages).toHaveLength(1);\n'
+                             '      expect(messages[0].message.content).toEqual([]);\n'
+                             '      '
+                             'expect(messages[0].message.usage.input_tokens).toBe(18_204);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[subagent-rounds] carries no count for a round "
+                             "whose stream served no usage', () => {\n"
+                             '      adapter.emitSubagentRound(\n'
+                             "        { round: 2, text: 'done', reasoning: '', "
+                             'usageMetadata: null },\n'
+                             "        'parent-tool-id',\n"
+                             '      );\n'
+                             '\n'
+                             '      const messages = adapter.emittedMessages as '
+                             'CLIAssistantMessage[];\n'
+                             '      expect(messages).toHaveLength(1);\n'
+                             '      expect(messages[0].message.usage).toEqual({\n'
+                             '        input_tokens: 0,\n'
+                             '        output_tokens: 0,\n'
+                             '      });\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('buildMessage', () => {\n"
+                             '    beforeEach(() => {\n'
+                             '      adapter.startAssistantMessage();\n'
+                             '    });\n'
+                             '\n'
+                             "    it('should throw error if message not started', () "
+                             '=> {\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-5',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': "      const state = adapter['mainAgentMessageState'];\n"
                        '      expect(state.blocks[0]).toMatchObject({\n'
                        "        type: 'text',\n"
@@ -7154,6 +7514,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            maxOutputTokens: 49152,\n'
                       '            outputTokens: 49152,\n'
                       '            thinkingTokens: 49152,\n'
+                      "            reasoning: 'Let me first list every file the user "
+                      "touched...',\n"
                       '            summaryChars: 0,\n'
                       "            finishReason: 'MAX_TOKENS',\n"
                       '          },\n'
@@ -7175,6 +7537,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          output: {\n'
                       '            maxOutputTokens: 49152,\n'
                       '            thinkingTokens: 49152,\n'
+                      "            reasoning: 'Let me first list every file the user "
+                      "touched...',\n"
                       '            summaryChars: 0,\n'
                       "            finishReason: 'MAX_TOKENS',\n"
                       '          },\n'
@@ -7286,6 +7650,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            maxOutputTokens: 49152,\n'
                              '            outputTokens: 49152,\n'
                              '            thinkingTokens: 49152,\n'
+                             "            reasoning: 'Let me first list every file the "
+                             "user touched...',\n"
                              '            summaryChars: 0,\n'
                              "            finishReason: 'MAX_TOKENS',\n"
                              '          },\n'
@@ -7308,6 +7674,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          output: {\n'
                              '            maxOutputTokens: 49152,\n'
                              '            thinkingTokens: 49152,\n'
+                             "            reasoning: 'Let me first list every file the "
+                             "user touched...',\n"
                              '            summaryChars: 0,\n'
                              "            finishReason: 'MAX_TOKENS',\n"
                              '          },\n'
@@ -7352,7 +7720,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    beforeEach(() => {\n'
                              '      adapter.startAssistantMessage();\n'
                              '    });\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-4',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-6',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '\n'
                        '      const message = adapter.emittedMessages[0];\n'
@@ -7454,7 +7822,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "any message)', () => {\n"
                              '      const request: ToolCallRequestInfo = {\n'
                              "        callId: 'tool-call-1',\n"},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-5',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-7',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '      // Update lastAssistantMessage manually since test '
                        "adapter doesn't do it automatically\n"
@@ -7516,7 +7884,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '      const result = '
                              'adapter.exposeBuildResultMessage(options);\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-6',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-8',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '        expect(result.num_turns).toBe(1);\n'
                        '      }\n'
@@ -7570,7 +7938,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        numTurns: 1,\n'
                              '      };\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-7',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-9',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': "        expect(result.error?.message).toBe('Test error');\n"
                        '      }\n'
@@ -7630,7 +7998,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        numTurns: 1,\n'
                              '      };\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-8',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-10',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '      const usage = {\n'
                        '        input_tokens: 100,\n'
@@ -7684,7 +8052,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        numTurns: 1,\n'
                              '      };\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-9',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-11',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '        files: {\n'
                        '          totalLinesAdded: 10,\n'
@@ -7738,7 +8106,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        numTurns: 1,\n'
                              '      };\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-10',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-12',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '      }\n'
                        '    });\n'
@@ -7800,7 +8168,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '      const result = '
                              'adapter.exposeBuildResultMessage(options);\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-11',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-13',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '      }\n'
                        '    });\n'
@@ -7858,7 +8226,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        structuredResult: payload,\n'
                              '      };\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-12',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-14',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '        ).toEqual(payload);\n'
                        '      }\n'
@@ -7920,7 +8288,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '      const result = '
                              'adapter.exposeBuildResultMessage(options);\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-13',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-15',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '      // schema (`{}`). The previous `!== undefined` guard '
                        'collapsed\n'
@@ -7994,7 +8362,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        structuredResult: undefined,\n'
                              '      };\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-14',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-16',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '\n'
                        "  describe('emitSubagentErrorResult', () => {\n"
@@ -8071,7 +8439,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '=== true,\n'
                              '      );\n'
                              '      expect(errorResult).toBeDefined();\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-15',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-17',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': "    it('should finalize pending assistant message before "
                        "emitting error', () => {\n"
@@ -8153,7 +8521,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '      expect(assistantMessage).toBeDefined();\n'
                              '    });\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-16',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-18',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '    });\n'
                        '  });\n'
@@ -8496,7 +8864,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "    it('should return session ID from config', () => {\n"
                              '      '
                              "expect(adapter.getSessionId()).toBe('test-session-id');\n"},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-17',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-19',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '\n'
                        '        const result = toolResultContent(response);\n'
@@ -8630,7 +8998,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "            type: 'vision_bridge_notice' as const,\n"
                              "            summary: 'Transcribed PDF pages 20-23; "
                              "remaining pages 24-25',\n"},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-18',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts:landmark-20',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts',
              'before': '          error: undefined,\n'
                        '          errorType: undefined,\n'
@@ -8705,7 +9073,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '  ToolCallResponseInfo,\n'
                        '  SessionMetrics,\n'
                        '  ServerGeminiStreamEvent,\n'
-                       '  AgentResultDisplay,\n',
+                       '  AgentResultDisplay,\n'
+                       '  McpToolProgressData,\n'
+                       '  ShellProgressData,\n'
+                       "} from '@qwen-code/qwen-code-core';\n"
+                       'import {\n'
+                       '  formatVisionBridgeNoticeDisplay,\n'
+                       '  GeminiEventType,\n',
              'after': ' * Copyright 2025 Qwen Team\n'
                       ' * SPDX-License-Identifier: Apache-2.0\n'
                       ' */\n'
@@ -8718,7 +9092,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  ToolCallResponseInfo,\n'
                       '  SessionMetrics,\n'
                       '  ServerGeminiStreamEvent,\n'
-                      '  AgentResultDisplay,\n',
+                      '  AgentResultDisplay,\n'
+                      '  SubagentRoundRecord,\n'
+                      '  McpToolProgressData,\n'
+                      '  ShellProgressData,\n'
+                      "} from '@qwen-code/qwen-code-core';\n"
+                      'import {\n'
+                      '  formatVisionBridgeNoticeDisplay,\n'
+                      '  GeminiEventType,\n',
              'review_before': ' * Copyright 2025 Qwen Team\n'
                               ' * SPDX-License-Identifier: Apache-2.0\n'
                               ' */\n'
@@ -8730,7 +9111,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  ToolCallResponseInfo,\n'
                               '  SessionMetrics,\n'
                               '  ServerGeminiStreamEvent,\n'
-                              '  AgentResultDisplay,\n',
+                              '  AgentResultDisplay,\n'
+                              '  McpToolProgressData,\n'
+                              '  ShellProgressData,\n'
+                              "} from '@qwen-code/qwen-code-core';\n"
+                              'import {\n'
+                              '  formatVisionBridgeNoticeDisplay,\n'
+                              '  GeminiEventType,\n',
              'review_after': ' * Copyright 2025 Qwen Team\n'
                              ' * SPDX-License-Identifier: Apache-2.0\n'
                              ' */\n'
@@ -8743,7 +9130,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  ToolCallResponseInfo,\n'
                              '  SessionMetrics,\n'
                              '  ServerGeminiStreamEvent,\n'
-                             '  AgentResultDisplay,\n'},
+                             '  AgentResultDisplay,\n'
+                             '  SubagentRoundRecord,\n'
+                             '  McpToolProgressData,\n'
+                             '  ShellProgressData,\n'
+                             "} from '@qwen-code/qwen-code-core';\n"
+                             'import {\n'
+                             '  formatVisionBridgeNoticeDisplay,\n'
+                             '  GeminiEventType,\n'},
             {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-2',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '  ControlMessage,\n'
@@ -9011,7 +9405,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '   * @param request - Tool call request info\n'},
             {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-5',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
-             'before': '    parentToolUseId: string,\n'
+             'before': '    toolCall: '
+                       "NonNullable<AgentResultDisplay['toolCalls']>[number],\n"
+                       '    parentToolUseId: string,\n'
                        '  ): void;\n'
                        '  finalizeSubagentAssistantMessage?(\n'
                        '    parentToolUseId: string,\n'
@@ -9023,11 +9419,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '  ): void;\n'
                        '\n'
                        '  getSessionId(): string;\n',
-             'after': '    parentToolUseId: string,\n'
+             'after': '    toolCall: '
+                      "NonNullable<AgentResultDisplay['toolCalls']>[number],\n"
+                      '    parentToolUseId: string,\n'
                       '  ): void;\n'
                       '  finalizeSubagentAssistantMessage?(\n'
                       '    parentToolUseId: string,\n'
                       '  ): CLIAssistantMessage;\n'
+                      '  emitSubagentRound?(\n'
+                      '    round: SubagentRoundRecord,\n'
+                      '    parentToolUseId: string,\n'
+                      '  ): void;\n'
                       '  emitSubagentErrorResult?(\n'
                       '    terminateMode: SubagentStopState,\n'
                       '    errorMessage: string,\n'
@@ -9036,7 +9438,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  ): void;\n'
                       '\n'
                       '  getSessionId(): string;\n',
-             'review_before': '    parentToolUseId: string,\n'
+             'review_before': '    toolCall: '
+                              "NonNullable<AgentResultDisplay['toolCalls']>[number],\n"
+                              '    parentToolUseId: string,\n'
                               '  ): void;\n'
                               '  finalizeSubagentAssistantMessage?(\n'
                               '    parentToolUseId: string,\n'
@@ -9048,11 +9452,17 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  ): void;\n'
                               '\n'
                               '  getSessionId(): string;\n',
-             'review_after': '    parentToolUseId: string,\n'
+             'review_after': '    toolCall: '
+                             "NonNullable<AgentResultDisplay['toolCalls']>[number],\n"
+                             '    parentToolUseId: string,\n'
                              '  ): void;\n'
                              '  finalizeSubagentAssistantMessage?(\n'
                              '    parentToolUseId: string,\n'
                              '  ): CLIAssistantMessage;\n'
+                             '  emitSubagentRound?(\n'
+                             '    round: SubagentRoundRecord,\n'
+                             '    parentToolUseId: string,\n'
+                             '  ): void;\n'
                              '  emitSubagentErrorResult?(\n'
                              '    terminateMode: SubagentStopState,\n'
                              '    errorMessage: string,\n'
@@ -9062,6 +9472,78 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '  getSessionId(): string;\n'},
             {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-6',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': "    if (typeof metadata.candidatesTokenCount === 'number') {\n"
+                       '      usage.output_tokens = metadata.candidatesTokenCount;\n'
+                       '    }\n'
+                       "    if (typeof metadata.cachedContentTokenCount === 'number') "
+                       '{\n'
+                       '      usage.cache_read_input_tokens = '
+                       'metadata.cachedContentTokenCount;\n'
+                       '    }\n'
+                       "    if (typeof metadata.totalTokenCount === 'number') {\n"
+                       '      usage.total_tokens = metadata.totalTokenCount;\n'
+                       '    }\n'
+                       '\n'
+                       '    return usage;\n'
+                       '  }\n',
+             'after': "    if (typeof metadata.candidatesTokenCount === 'number') {\n"
+                      '      usage.output_tokens = metadata.candidatesTokenCount;\n'
+                      '    }\n'
+                      "    if (typeof metadata.cachedContentTokenCount === 'number') "
+                      '{\n'
+                      '      usage.cache_read_input_tokens = '
+                      'metadata.cachedContentTokenCount;\n'
+                      '    }\n'
+                      "    if (typeof metadata.thoughtsTokenCount === 'number') {\n"
+                      '      usage.reasoning_output_tokens = '
+                      'metadata.thoughtsTokenCount;\n'
+                      '    }\n'
+                      "    if (typeof metadata.totalTokenCount === 'number') {\n"
+                      '      usage.total_tokens = metadata.totalTokenCount;\n'
+                      '    }\n'
+                      '\n'
+                      '    return usage;\n'
+                      '  }\n',
+             'review_before': '    if (typeof metadata.candidatesTokenCount === '
+                              "'number') {\n"
+                              '      usage.output_tokens = '
+                              'metadata.candidatesTokenCount;\n'
+                              '    }\n'
+                              '    if (typeof metadata.cachedContentTokenCount === '
+                              "'number') {\n"
+                              '      usage.cache_read_input_tokens = '
+                              'metadata.cachedContentTokenCount;\n'
+                              '    }\n'
+                              "    if (typeof metadata.totalTokenCount === 'number') "
+                              '{\n'
+                              '      usage.total_tokens = metadata.totalTokenCount;\n'
+                              '    }\n'
+                              '\n'
+                              '    return usage;\n'
+                              '  }\n',
+             'review_after': '    if (typeof metadata.candidatesTokenCount === '
+                             "'number') {\n"
+                             '      usage.output_tokens = '
+                             'metadata.candidatesTokenCount;\n'
+                             '    }\n'
+                             '    if (typeof metadata.cachedContentTokenCount === '
+                             "'number') {\n"
+                             '      usage.cache_read_input_tokens = '
+                             'metadata.cachedContentTokenCount;\n'
+                             '    }\n'
+                             "    if (typeof metadata.thoughtsTokenCount === 'number') "
+                             '{\n'
+                             '      usage.reasoning_output_tokens = '
+                             'metadata.thoughtsTokenCount;\n'
+                             '    }\n'
+                             "    if (typeof metadata.totalTokenCount === 'number') {\n"
+                             '      usage.total_tokens = metadata.totalTokenCount;\n'
+                             '    }\n'
+                             '\n'
+                             '    return usage;\n'
+                             '  }\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-7',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '          fromModel: event.fromModel,\n'
                        '          toModel: event.toModel,\n'
@@ -9147,7 +9629,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  }\n'
                              '\n'
                              '  // ========== Subagent APIs ==========\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-7',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-8',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '  }\n'
                        '\n'
@@ -9290,7 +9772,154 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '   * Processes a subagent tool call.\n'
                              '   * This is a shared implementation used by both '
                              'streaming and non-streaming adapters.\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-8',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-9',
+             'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
+             'before': '\n'
+                       '    // Finalize tool_use message immediately\n'
+                       '    this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                       '    this.startSubagentAssistantMessage(parentToolUseId);\n'
+                       '  }\n'
+                       '\n'
+                       '  /**\n'
+                       '   * Processes a tool use block for subagent.\n'
+                       '   * This method is called by processSubagentToolCall to '
+                       'handle tool use block creation,\n'
+                       '   * input setting, and closure. Subclasses can override this '
+                       'to customize behavior.\n'
+                       '   *\n'
+                       '   * @param state - Message state\n',
+             'after': '\n'
+                      '    // Finalize tool_use message immediately\n'
+                      '    this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                      '    this.startSubagentAssistantMessage(parentToolUseId);\n'
+                      '  }\n'
+                      '\n'
+                      '  /**\n'
+                      '   * Emits one completed subagent model round as the assistant '
+                      'messages it\n'
+                      '   * produced: its reasoning as a thinking block, its visible '
+                      'text as a text\n'
+                      '   * block, and the usage the backend served for the round on '
+                      'the last of\n'
+                      '   * them. A round that produced neither still emits one '
+                      'message carrying its\n'
+                      '   * usage, so a billed round is never absent from the stream. '
+                      'Each round\n'
+                      '   * closes its own messages, exactly as a tool call does.\n'
+                      '   *\n'
+                      "   * @param round - The round's text, reasoning and served "
+                      'usage\n'
+                      '   * @param parentToolUseId - Parent tool use ID\n'
+                      '   */\n'
+                      '  emitSubagentRound(round: SubagentRoundRecord, '
+                      'parentToolUseId: string): void {\n'
+                      '    const state = this.getMessageState(parentToolUseId);\n'
+                      '    if (state.messageStarted && !state.finalized) {\n'
+                      '      this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                      '    }\n'
+                      '    this.startAssistantMessageInternal(state);\n'
+                      '\n'
+                      '    if (round.reasoning.length > 0) {\n'
+                      '      this.appendThinking(state, undefined, round.reasoning, '
+                      'parentToolUseId);\n'
+                      '    }\n'
+                      '    if (round.text.length > 0) {\n'
+                      '      this.appendText(state, round.text, parentToolUseId);\n'
+                      '    }\n'
+                      '    this.ensureMessageStarted(state, parentToolUseId);\n'
+                      '    state.usage = this.createUsage(round.usageMetadata);\n'
+                      '\n'
+                      '    this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                      '    this.startSubagentAssistantMessage(parentToolUseId);\n'
+                      '  }\n'
+                      '\n'
+                      '  /**\n'
+                      '   * Processes a tool use block for subagent.\n'
+                      '   * This method is called by processSubagentToolCall to handle '
+                      'tool use block creation,\n'
+                      '   * input setting, and closure. Subclasses can override this '
+                      'to customize behavior.\n'
+                      '   *\n'
+                      '   * @param state - Message state\n',
+             'review_before': '\n'
+                              '    // Finalize tool_use message immediately\n'
+                              '    '
+                              'this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                              '    '
+                              'this.startSubagentAssistantMessage(parentToolUseId);\n'
+                              '  }\n'
+                              '\n'
+                              '  /**\n'
+                              '   * Processes a tool use block for subagent.\n'
+                              '   * This method is called by processSubagentToolCall '
+                              'to handle tool use block creation,\n'
+                              '   * input setting, and closure. Subclasses can '
+                              'override this to customize behavior.\n'
+                              '   *\n'
+                              '   * @param state - Message state\n',
+             'review_after': '\n'
+                             '    // Finalize tool_use message immediately\n'
+                             '    '
+                             'this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                             '    '
+                             'this.startSubagentAssistantMessage(parentToolUseId);\n'
+                             '  }\n'
+                             '\n'
+                             '  /**\n'
+                             '   * Emits one completed subagent model round as the '
+                             'assistant messages it\n'
+                             '   * produced: its reasoning as a thinking block, its '
+                             'visible text as a text\n'
+                             '   * block, and the usage the backend served for the '
+                             'round on the last of\n'
+                             '   * them. A round that produced neither still emits one '
+                             'message carrying its\n'
+                             '   * usage, so a billed round is never absent from the '
+                             'stream. Each round\n'
+                             '   * closes its own messages, exactly as a tool call '
+                             'does.\n'
+                             '   *\n'
+                             "   * @param round - The round's text, reasoning and "
+                             'served usage\n'
+                             '   * @param parentToolUseId - Parent tool use ID\n'
+                             '   */\n'
+                             '  emitSubagentRound(round: SubagentRoundRecord, '
+                             'parentToolUseId: string): void {\n'
+                             '    const state = '
+                             'this.getMessageState(parentToolUseId);\n'
+                             '    if (state.messageStarted && !state.finalized) {\n'
+                             '      '
+                             'this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                             '    }\n'
+                             '    this.startAssistantMessageInternal(state);\n'
+                             '\n'
+                             '    if (round.reasoning.length > 0) {\n'
+                             '      this.appendThinking(state, undefined, '
+                             'round.reasoning, parentToolUseId);\n'
+                             '    }\n'
+                             '    if (round.text.length > 0) {\n'
+                             '      this.appendText(state, round.text, '
+                             'parentToolUseId);\n'
+                             '    }\n'
+                             '    this.ensureMessageStarted(state, parentToolUseId);\n'
+                             '    state.usage = '
+                             'this.createUsage(round.usageMetadata);\n'
+                             '\n'
+                             '    '
+                             'this.finalizeSubagentAssistantMessage(parentToolUseId);\n'
+                             '    '
+                             'this.startSubagentAssistantMessage(parentToolUseId);\n'
+                             '  }\n'
+                             '\n'
+                             '  /**\n'
+                             '   * Processes a tool use block for subagent.\n'
+                             '   * This method is called by processSubagentToolCall to '
+                             'handle tool use block creation,\n'
+                             '   * input setting, and closure. Subclasses can override '
+                             'this to customize behavior.\n'
+                             '   *\n'
+                             '   * @param state - Message state\n'},
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-10',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '  }\n'
                        '\n'
@@ -9395,7 +10024,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  }\n'
                              '\n'
                              '  /**\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-9',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-11',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '      (lastAssistantMessage\n'
                        '        ? '
@@ -9499,7 +10128,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        usage,\n'
                              '        permission_denials: '
                              '[...this.permissionDenials],\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-10',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-12',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '        : resultText;\n'
                        '      const success: CLIResultMessageSuccess & {\n'
@@ -9567,7 +10196,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        num_turns: options.numTurns,\n'
                              '        result: finalResult,\n'
                              '        usage,\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-11',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-13',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '\n'
                        '  /**\n'
@@ -9744,7 +10373,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      num_turns: numTurns,\n'
                              '      usage,\n'
                              '      permission_denials: [],\n'},
-            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-12',
+            {'name': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts:landmark-14',
              'path': 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts',
              'before': '  if (responsePartsError) {\n'
                        '    return responsePartsError;\n'
@@ -11968,6 +12597,70 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  ShellProgressData,\n'},
             {'name': 'packages/cli/src/nonInteractive/types.ts:landmark-2',
              'path': 'packages/cli/src/nonInteractive/types.ts',
+             'before': ' */\n'
+                       'export interface Usage {\n'
+                       '  input_tokens: number;\n'
+                       '  output_tokens: number;\n'
+                       '  cache_creation_input_tokens?: number;\n'
+                       '  cache_read_input_tokens?: number;\n'
+                       '  total_tokens?: number;\n'
+                       '}\n'
+                       '\n'
+                       'export interface ExtendedUsage extends Usage {\n'
+                       '  server_tool_use?: {\n'
+                       '    web_search_requests: number;\n',
+             'after': ' */\n'
+                      'export interface Usage {\n'
+                      '  input_tokens: number;\n'
+                      '  output_tokens: number;\n'
+                      '  cache_creation_input_tokens?: number;\n'
+                      '  cache_read_input_tokens?: number;\n'
+                      '  /**\n'
+                      '   * Of `output_tokens`, the generated tokens the backend '
+                      'counted as\n'
+                      '   * reasoning. Present exactly when the backend served the '
+                      'count.\n'
+                      '   */\n'
+                      '  reasoning_output_tokens?: number;\n'
+                      '  total_tokens?: number;\n'
+                      '}\n'
+                      '\n'
+                      'export interface ExtendedUsage extends Usage {\n'
+                      '  server_tool_use?: {\n'
+                      '    web_search_requests: number;\n',
+             'review_before': ' */\n'
+                              'export interface Usage {\n'
+                              '  input_tokens: number;\n'
+                              '  output_tokens: number;\n'
+                              '  cache_creation_input_tokens?: number;\n'
+                              '  cache_read_input_tokens?: number;\n'
+                              '  total_tokens?: number;\n'
+                              '}\n'
+                              '\n'
+                              'export interface ExtendedUsage extends Usage {\n'
+                              '  server_tool_use?: {\n'
+                              '    web_search_requests: number;\n',
+             'review_after': ' */\n'
+                             'export interface Usage {\n'
+                             '  input_tokens: number;\n'
+                             '  output_tokens: number;\n'
+                             '  cache_creation_input_tokens?: number;\n'
+                             '  cache_read_input_tokens?: number;\n'
+                             '  /**\n'
+                             '   * Of `output_tokens`, the generated tokens the '
+                             'backend counted as\n'
+                             '   * reasoning. Present exactly when the backend served '
+                             'the count.\n'
+                             '   */\n'
+                             '  reasoning_output_tokens?: number;\n'
+                             '  total_tokens?: number;\n'
+                             '}\n'
+                             '\n'
+                             'export interface ExtendedUsage extends Usage {\n'
+                             '  server_tool_use?: {\n'
+                             '    web_search_requests: number;\n'},
+            {'name': 'packages/cli/src/nonInteractive/types.ts:landmark-3',
+             'path': 'packages/cli/src/nonInteractive/types.ts',
              'before': '\n'
                        'export interface CLIResultMessageSuccess {\n'
                        "  type: 'result';\n"
@@ -12036,7 +12729,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  num_turns: number;\n'
                              '  result: string;\n'
                              '  usage: ExtendedUsage;\n'},
-            {'name': 'packages/cli/src/nonInteractive/types.ts:landmark-3',
+            {'name': 'packages/cli/src/nonInteractive/types.ts:landmark-4',
              'path': 'packages/cli/src/nonInteractive/types.ts',
              'before': '  permission_denials: CLIPermissionDenial[];\n'
                        '  [key: string]: unknown;\n'
@@ -12187,7 +12880,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  num_turns: number;\n'
                              '  usage: ExtendedUsage;\n'
                              '  modelUsage?: Record<string, ModelUsage>;\n'},
-            {'name': 'packages/cli/src/nonInteractive/types.ts:landmark-4',
+            {'name': 'packages/cli/src/nonInteractive/types.ts:landmark-5',
              'path': 'packages/cli/src/nonInteractive/types.ts',
              'before': '  };\n'
                        '  [key: string]: unknown;\n'
@@ -19250,6 +19943,62 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'},
             {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-68',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
+             'before': '    const resultEnvelope = envelopes.at(-1);\n'
+                       "    expect(resultEnvelope?.type).toBe('result');\n"
+                       '    '
+                       'expect(resultEnvelope?.duration_api_ms).toBeGreaterThan(0);\n'
+                       '    expect(resultEnvelope?.usage).toEqual({\n'
+                       '      input_tokens: 11,\n'
+                       '      output_tokens: 5,\n'
+                       '      total_tokens: 16,\n'
+                       '      cache_read_input_tokens: 3,\n'
+                       '    });\n'
+                       '\n'
+                       '    nowSpy.mockRestore();\n'
+                       '  });\n',
+             'after': '    const resultEnvelope = envelopes.at(-1);\n'
+                      "    expect(resultEnvelope?.type).toBe('result');\n"
+                      '    '
+                      'expect(resultEnvelope?.duration_api_ms).toBeGreaterThan(0);\n'
+                      '    expect(resultEnvelope?.usage).toEqual({\n'
+                      '      input_tokens: 11,\n'
+                      '      output_tokens: 5,\n'
+                      '      reasoning_output_tokens: 0,\n'
+                      '      total_tokens: 16,\n'
+                      '      cache_read_input_tokens: 3,\n'
+                      '    });\n'
+                      '\n'
+                      '    nowSpy.mockRestore();\n'
+                      '  });\n',
+             'review_before': '    const resultEnvelope = envelopes.at(-1);\n'
+                              "    expect(resultEnvelope?.type).toBe('result');\n"
+                              '    '
+                              'expect(resultEnvelope?.duration_api_ms).toBeGreaterThan(0);\n'
+                              '    expect(resultEnvelope?.usage).toEqual({\n'
+                              '      input_tokens: 11,\n'
+                              '      output_tokens: 5,\n'
+                              '      total_tokens: 16,\n'
+                              '      cache_read_input_tokens: 3,\n'
+                              '    });\n'
+                              '\n'
+                              '    nowSpy.mockRestore();\n'
+                              '  });\n',
+             'review_after': '    const resultEnvelope = envelopes.at(-1);\n'
+                             "    expect(resultEnvelope?.type).toBe('result');\n"
+                             '    '
+                             'expect(resultEnvelope?.duration_api_ms).toBeGreaterThan(0);\n'
+                             '    expect(resultEnvelope?.usage).toEqual({\n'
+                             '      input_tokens: 11,\n'
+                             '      output_tokens: 5,\n'
+                             '      reasoning_output_tokens: 0,\n'
+                             '      total_tokens: 16,\n'
+                             '      cache_read_input_tokens: 3,\n'
+                             '    });\n'
+                             '\n'
+                             '    nowSpy.mockRestore();\n'
+                             '  });\n'},
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-69',
+             'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    });\n'
                        '\n'
                        '    const events: ServerGeminiStreamEvent[] = [\n'
@@ -19315,7 +20064,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-69',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-70',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    const firstCallEvents: ServerGeminiStreamEvent[] = '
@@ -19395,7 +20144,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-70',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-71',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      {\n'
                        '        type: GeminiEventType.Content,\n'
@@ -19465,7 +20214,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(finalResponse));\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-71',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-72',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    const events: ServerGeminiStreamEvent[] = [\n'
@@ -19532,7 +20281,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-72',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-73',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        type: GeminiEventType.Thought,\n'
                        "        value: { subject: 'Analysis', description: 'Processing "
@@ -19603,7 +20352,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-73',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-74',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '\n'
                        '    const firstCallEvents: ServerGeminiStreamEvent[] = '
@@ -19683,7 +20432,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '.mockReturnValueOnce(createStreamFromEvents(firstCallEvents))\n'
                              '      '
                              '.mockReturnValueOnce(createStreamFromEvents(secondCallEvents));\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-74',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-75',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        createStreamFromEvents([duplicateToolCall, '
                        'replayedToolCall]),\n'
@@ -19749,7 +20498,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-75',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-76',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        createStreamFromEvents([firstToolCall, '
                        'secondToolCall]),\n'
@@ -19815,7 +20564,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        ]),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-76',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-77',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    });\n'
                        '\n'
@@ -19880,7 +20629,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      createStreamFromEvents(events),\n'
                              '    );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-77',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-78',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '    mockConfig.getCronScheduler = '
                        'vi.fn().mockReturnValue(scheduler);\n'
@@ -19952,7 +20701,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    await runNonInteractive(mockConfig, mockSettings, '
                              "'test', 'p-cron-wiring');\n"
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-78',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-79',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      });\n'
                        '\n'
@@ -20022,7 +20771,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        createStreamFromEvents(plainTextTurn),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-79',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-80',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': "            (m as { type?: string }).type === 'result',\n"
                        '        );\n'
@@ -20109,7 +20858,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'structured_output(bad)]. The\n'
                              '      // pre-scan suppresses the side_effect_tool; '
                              'structured_output then\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-80',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-81',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '        .mockReturnValueOnce(\n'
                        '          createStreamFromEvents([\n'
@@ -20171,7 +20920,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        )\n'
                              '        '
                              '.mockReturnValueOnce(createStreamFromEvents([drainStructuredCall]));\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-81',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-82',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      const sessionService = {\n'
                        '        getWorktreeSessionPath: '
@@ -20260,7 +21009,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        createStreamFromEvents(events),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-82',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-83',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      (mockConfig.getResumedSessionData as '
                        'Mock).mockReturnValue(undefined);\n'
@@ -20331,7 +21080,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        createStreamFromEvents(events),\n'
                              '      );\n'
                              '\n'},
-            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-83',
+            {'name': 'packages/cli/src/nonInteractiveCli.test.ts:landmark-84',
              'path': 'packages/cli/src/nonInteractiveCli.test.ts',
              'before': '      const sessionService = {\n'
                        '        getWorktreeSessionPath: '
@@ -27955,6 +28704,119 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    loadedBodiesTokens;\n'},
             {'name': 'packages/cli/src/ui/commands/contextCommand.ts:landmark-3',
              'path': 'packages/cli/src/ui/commands/contextCommand.ts',
+             'before': "  // dominated by system prompt / skills / MCP tools doesn't "
+                       'silently show\n'
+                       '  // "safe". (R2.2)\n'
+                       '  //\n'
+                       '  // SCOPE GAP (R5.1): `rawOverhead` excludes `messagesTokens` '
+                       '— the actual\n'
+                       '  // chat history. A `--continue` restore with 100K of '
+                       'historical messages\n'
+                       '  // (but small overhead) will still display "safe" here, even '
+                       'though the\n'
+                       '  // cheap-gate inside chatCompressionService will trigger '
+                       'compression on\n'
+                       '  // the very next send (it uses '
+                       '`estimatePromptTokens(history, ...)` which\n'
+                       '  // walks the real history). This is a UI/runtime divergence '
+                       '— for a\n'
+                       '  // single render — that resolves the moment any send '
+                       'happens.\n'
+                       '  //\n'
+                       '  // TODO: plumb the chat history into collectContextData and '
+                       'use\n'
+                       '  // estimatePromptTokens(history, undefined, 0, 0, '
+                       'imageTokenEstimate) here\n'
+                       '  // for same-source-of-truth as the cheap-gate. Defer because '
+                       'Config\n'
+                       "  // doesn't expose the active chat instance today.\n"
+                       '  const tierTokens = hasTokenCount ? apiTotalTokens : '
+                       'rawOverhead;\n'
+                       '\n'
+                       '  const breakdown: ContextCategoryBreakdown = {\n'
+                       '    systemPrompt: displaySystemPrompt,\n'
+                       '    builtinTools: displayBuiltinTools,\n'
+                       '    mcpTools: displayMcpTools,\n',
+             'after': "  // dominated by system prompt / skills / MCP tools doesn't "
+                      'silently show\n'
+                      '  // "safe". (R2.2)\n'
+                      '  //\n'
+                      '  // SCOPE GAP (R5.1): `rawOverhead` excludes `messagesTokens` '
+                      '— the actual\n'
+                      '  // chat history. A `--continue` restore with 100K of '
+                      'historical messages\n'
+                      '  // (but small overhead) will still display "safe" here, even '
+                      'though the\n'
+                      '  // exact rendered-request count taken before the very next '
+                      'send will\n'
+                      '  // trigger compression. This is a UI/runtime divergence — for '
+                      'a single\n'
+                      '  // render — that resolves the moment any send happens.\n'
+                      '  const tierTokens = hasTokenCount ? apiTotalTokens : '
+                      'rawOverhead;\n'
+                      '\n'
+                      '  const breakdown: ContextCategoryBreakdown = {\n'
+                      '    systemPrompt: displaySystemPrompt,\n'
+                      '    builtinTools: displayBuiltinTools,\n'
+                      '    mcpTools: displayMcpTools,\n',
+             'review_before': '  // dominated by system prompt / skills / MCP tools '
+                              "doesn't silently show\n"
+                              '  // "safe". (R2.2)\n'
+                              '  //\n'
+                              '  // SCOPE GAP (R5.1): `rawOverhead` excludes '
+                              '`messagesTokens` — the actual\n'
+                              '  // chat history. A `--continue` restore with 100K of '
+                              'historical messages\n'
+                              '  // (but small overhead) will still display "safe" '
+                              'here, even though the\n'
+                              '  // cheap-gate inside chatCompressionService will '
+                              'trigger compression on\n'
+                              '  // the very next send (it uses '
+                              '`estimatePromptTokens(history, ...)` which\n'
+                              '  // walks the real history). This is a UI/runtime '
+                              'divergence — for a\n'
+                              '  // single render — that resolves the moment any send '
+                              'happens.\n'
+                              '  //\n'
+                              '  // TODO: plumb the chat history into '
+                              'collectContextData and use\n'
+                              '  // estimatePromptTokens(history, undefined, 0, 0, '
+                              'imageTokenEstimate) here\n'
+                              '  // for same-source-of-truth as the cheap-gate. Defer '
+                              'because Config\n'
+                              "  // doesn't expose the active chat instance today.\n"
+                              '  const tierTokens = hasTokenCount ? apiTotalTokens : '
+                              'rawOverhead;\n'
+                              '\n'
+                              '  const breakdown: ContextCategoryBreakdown = {\n'
+                              '    systemPrompt: displaySystemPrompt,\n'
+                              '    builtinTools: displayBuiltinTools,\n'
+                              '    mcpTools: displayMcpTools,\n',
+             'review_after': '  // dominated by system prompt / skills / MCP tools '
+                             "doesn't silently show\n"
+                             '  // "safe". (R2.2)\n'
+                             '  //\n'
+                             '  // SCOPE GAP (R5.1): `rawOverhead` excludes '
+                             '`messagesTokens` — the actual\n'
+                             '  // chat history. A `--continue` restore with 100K of '
+                             'historical messages\n'
+                             '  // (but small overhead) will still display "safe" '
+                             'here, even though the\n'
+                             '  // exact rendered-request count taken before the very '
+                             'next send will\n'
+                             '  // trigger compression. This is a UI/runtime '
+                             'divergence — for a single\n'
+                             '  // render — that resolves the moment any send '
+                             'happens.\n'
+                             '  const tierTokens = hasTokenCount ? apiTotalTokens : '
+                             'rawOverhead;\n'
+                             '\n'
+                             '  const breakdown: ContextCategoryBreakdown = {\n'
+                             '    systemPrompt: displaySystemPrompt,\n'
+                             '    builtinTools: displayBuiltinTools,\n'
+                             '    mcpTools: displayMcpTools,\n'},
+            {'name': 'packages/cli/src/ui/commands/contextCommand.ts:landmark-4',
+             'path': 'packages/cli/src/ui/commands/contextCommand.ts',
              'before': '      );\n'
                        "      lines.push('');\n"
                        '    }\n'
@@ -34947,6 +35809,218 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "mode: string = 'acp') => {\n"},
             {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-3',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
+             'before': '    };\n'
+                       '    const result = computeUsageFromMetrics(metrics);\n'
+                       '    expect(result).toEqual({\n'
+                       '      input_tokens: 100,\n'
+                       '      output_tokens: 100,\n'
+                       '      cache_read_input_tokens: 20,\n'
+                       '      total_tokens: 150,\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n'
+                       "  it('should aggregate usage across multiple models', () => {\n"
+                       '    const metrics: SessionMetrics = {\n',
+             'after': '    };\n'
+                      '    const result = computeUsageFromMetrics(metrics);\n'
+                      '    expect(result).toEqual({\n'
+                      '      input_tokens: 100,\n'
+                      '      output_tokens: 100,\n'
+                      '      cache_read_input_tokens: 20,\n'
+                      '      reasoning_output_tokens: 0,\n'
+                      '      total_tokens: 150,\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  it('should aggregate usage across multiple models', () => {\n"
+                      '    const metrics: SessionMetrics = {\n',
+             'review_before': '    };\n'
+                              '    const result = computeUsageFromMetrics(metrics);\n'
+                              '    expect(result).toEqual({\n'
+                              '      input_tokens: 100,\n'
+                              '      output_tokens: 100,\n'
+                              '      cache_read_input_tokens: 20,\n'
+                              '      total_tokens: 150,\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n'
+                              "  it('should aggregate usage across multiple models', "
+                              '() => {\n'
+                              '    const metrics: SessionMetrics = {\n',
+             'review_after': '    };\n'
+                             '    const result = computeUsageFromMetrics(metrics);\n'
+                             '    expect(result).toEqual({\n'
+                             '      input_tokens: 100,\n'
+                             '      output_tokens: 100,\n'
+                             '      cache_read_input_tokens: 20,\n'
+                             '      reasoning_output_tokens: 0,\n'
+                             '      total_tokens: 150,\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  it('should aggregate usage across multiple models', () "
+                             '=> {\n'
+                             '    const metrics: SessionMetrics = {\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-4',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
+             'before': '    };\n'
+                       '    const result = computeUsageFromMetrics(metrics);\n'
+                       '    expect(result).toEqual({\n'
+                       '      input_tokens: 100,\n'
+                       '      output_tokens: 225,\n'
+                       '      cache_read_input_tokens: 20,\n'
+                       '      total_tokens: 350,\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n'
+                       "  it('should not include total_tokens when it is 0', () => {\n"
+                       '    const metrics: SessionMetrics = {\n',
+             'after': '    };\n'
+                      '    const result = computeUsageFromMetrics(metrics);\n'
+                      '    expect(result).toEqual({\n'
+                      '      input_tokens: 100,\n'
+                      '      output_tokens: 225,\n'
+                      '      cache_read_input_tokens: 20,\n'
+                      '      reasoning_output_tokens: 0,\n'
+                      '      total_tokens: 350,\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  it('should not include total_tokens when it is 0', () => {\n"
+                      '    const metrics: SessionMetrics = {\n',
+             'review_before': '    };\n'
+                              '    const result = computeUsageFromMetrics(metrics);\n'
+                              '    expect(result).toEqual({\n'
+                              '      input_tokens: 100,\n'
+                              '      output_tokens: 225,\n'
+                              '      cache_read_input_tokens: 20,\n'
+                              '      total_tokens: 350,\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n'
+                              "  it('should not include total_tokens when it is 0', () "
+                              '=> {\n'
+                              '    const metrics: SessionMetrics = {\n',
+             'review_after': '    };\n'
+                             '    const result = computeUsageFromMetrics(metrics);\n'
+                             '    expect(result).toEqual({\n'
+                             '      input_tokens: 100,\n'
+                             '      output_tokens: 225,\n'
+                             '      cache_read_input_tokens: 20,\n'
+                             '      reasoning_output_tokens: 0,\n'
+                             '      total_tokens: 350,\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  it('should not include total_tokens when it is 0', () "
+                             '=> {\n'
+                             '    const metrics: SessionMetrics = {\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-5',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
+             'before': '    const result = computeUsageFromMetrics(metrics);\n'
+                       "    expect(result).not.toHaveProperty('total_tokens');\n"
+                       '    expect(result).toEqual({\n'
+                       '      input_tokens: 100,\n'
+                       '      output_tokens: 100,\n'
+                       '      cache_read_input_tokens: 20,\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n'
+                       "  it('should handle empty models', () => {\n"
+                       '    const metrics: SessionMetrics = {\n'
+                       '      models: {},\n',
+             'after': '    const result = computeUsageFromMetrics(metrics);\n'
+                      "    expect(result).not.toHaveProperty('total_tokens');\n"
+                      '    expect(result).toEqual({\n'
+                      '      input_tokens: 100,\n'
+                      '      output_tokens: 100,\n'
+                      '      cache_read_input_tokens: 20,\n'
+                      '      reasoning_output_tokens: 0,\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  it('should handle empty models', () => {\n"
+                      '    const metrics: SessionMetrics = {\n'
+                      '      models: {},\n',
+             'review_before': '    const result = computeUsageFromMetrics(metrics);\n'
+                              "    expect(result).not.toHaveProperty('total_tokens');\n"
+                              '    expect(result).toEqual({\n'
+                              '      input_tokens: 100,\n'
+                              '      output_tokens: 100,\n'
+                              '      cache_read_input_tokens: 20,\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n'
+                              "  it('should handle empty models', () => {\n"
+                              '    const metrics: SessionMetrics = {\n'
+                              '      models: {},\n',
+             'review_after': '    const result = computeUsageFromMetrics(metrics);\n'
+                             "    expect(result).not.toHaveProperty('total_tokens');\n"
+                             '    expect(result).toEqual({\n'
+                             '      input_tokens: 100,\n'
+                             '      output_tokens: 100,\n'
+                             '      cache_read_input_tokens: 20,\n'
+                             '      reasoning_output_tokens: 0,\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  it('should handle empty models', () => {\n"
+                             '    const metrics: SessionMetrics = {\n'
+                             '      models: {},\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-6',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
+             'before': '    };\n'
+                       '    const result = computeUsageFromMetrics(metrics);\n'
+                       '    expect(result).toEqual({\n'
+                       '      input_tokens: 100,\n'
+                       '      output_tokens: 0,\n'
+                       '      cache_read_input_tokens: 20,\n'
+                       '    });\n'
+                       '  });\n'
+                       '});\n'
+                       '\n'
+                       "describe('buildSystemMessage', () => {\n"
+                       '  let mockConfig: Config;\n',
+             'after': '    };\n'
+                      '    const result = computeUsageFromMetrics(metrics);\n'
+                      '    expect(result).toEqual({\n'
+                      '      input_tokens: 100,\n'
+                      '      output_tokens: 0,\n'
+                      '      cache_read_input_tokens: 20,\n'
+                      '      reasoning_output_tokens: 0,\n'
+                      '    });\n'
+                      '  });\n'
+                      '});\n'
+                      '\n'
+                      "describe('buildSystemMessage', () => {\n"
+                      '  let mockConfig: Config;\n',
+             'review_before': '    };\n'
+                              '    const result = computeUsageFromMetrics(metrics);\n'
+                              '    expect(result).toEqual({\n'
+                              '      input_tokens: 100,\n'
+                              '      output_tokens: 0,\n'
+                              '      cache_read_input_tokens: 20,\n'
+                              '    });\n'
+                              '  });\n'
+                              '});\n'
+                              '\n'
+                              "describe('buildSystemMessage', () => {\n"
+                              '  let mockConfig: Config;\n',
+             'review_after': '    };\n'
+                             '    const result = computeUsageFromMetrics(metrics);\n'
+                             '    expect(result).toEqual({\n'
+                             '      input_tokens: 100,\n'
+                             '      output_tokens: 0,\n'
+                             '      cache_read_input_tokens: 20,\n'
+                             '      reasoning_output_tokens: 0,\n'
+                             '    });\n'
+                             '  });\n'
+                             '});\n'
+                             '\n'
+                             "describe('buildSystemMessage', () => {\n"
+                             '  let mockConfig: Config;\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-7',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before': "        'mcp-server-2': {},\n"
                        '      }),\n'
                        "      getTargetDir: vi.fn().mockReturnValue('/test/dir'),\n"
@@ -35071,9 +36145,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const result = await buildSystemMessage(\n'
                              '      mockConfig,\n'
                              "      'test-session-id',\n"},
-            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-4',
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-8',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
-             'before': '\n'
+             'before': '      getOutputFormat: '
+                       'vi.fn().mockReturnValue(OutputFormat.JSON),\n'
+                       '    } as unknown as Config;\n'
+                       '\n'
                        '    mockAdapter = {\n'
                        '      processSubagentToolCall: vi.fn(),\n'
                        '      emitSubagentErrorResult: vi.fn(),\n'
@@ -35086,10 +36163,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '() => {\n'
                        '    const { handler } = createAgentToolProgressHandler(\n'
                        '      mockConfig,\n',
-             'after': '\n'
+             'after': '      getOutputFormat: '
+                      'vi.fn().mockReturnValue(OutputFormat.JSON),\n'
+                      '    } as unknown as Config;\n'
+                      '\n'
                       '    mockAdapter = {\n'
                       '      processSubagentToolCall: vi.fn(),\n'
                       '      emitSubagentErrorResult: vi.fn(),\n'
+                      '      emitSubagentRound: vi.fn(),\n'
                       '      emitToolResult: vi.fn(),\n'
                       '      emitUserMessage: vi.fn(),\n'
                       '      emitSystemMessage: vi.fn(),\n'
@@ -35100,7 +36181,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '=> {\n'
                       '    const { handler } = createAgentToolProgressHandler(\n'
                       '      mockConfig,\n',
-             'review_before': '\n'
+             'review_before': '      getOutputFormat: '
+                              'vi.fn().mockReturnValue(OutputFormat.JSON),\n'
+                              '    } as unknown as Config;\n'
+                              '\n'
                               '    mockAdapter = {\n'
                               '      processSubagentToolCall: vi.fn(),\n'
                               '      emitSubagentErrorResult: vi.fn(),\n'
@@ -35114,10 +36198,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '    const { handler } = '
                               'createAgentToolProgressHandler(\n'
                               '      mockConfig,\n',
-             'review_after': '\n'
+             'review_after': '      getOutputFormat: '
+                             'vi.fn().mockReturnValue(OutputFormat.JSON),\n'
+                             '    } as unknown as Config;\n'
+                             '\n'
                              '    mockAdapter = {\n'
                              '      processSubagentToolCall: vi.fn(),\n'
                              '      emitSubagentErrorResult: vi.fn(),\n'
+                             '      emitSubagentRound: vi.fn(),\n'
                              '      emitToolResult: vi.fn(),\n'
                              '      emitUserMessage: vi.fn(),\n'
                              '      emitSystemMessage: vi.fn(),\n'
@@ -35128,7 +36216,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "calls', () => {\n"
                              '    const { handler } = createAgentToolProgressHandler(\n'
                              '      mockConfig,\n'},
-            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-5',
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-9',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before': '    const failedDisplay: AgentResultDisplay = {\n'
                        "      type: 'task_execution',\n"
@@ -35347,7 +36435,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "      'parent-tool-id',\n"
                              '      mockAdapter,\n'
                              '    );\n'},
-            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-6',
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-10',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before': '    const cancelledDisplay: AgentResultDisplay = {\n'
                        "      type: 'task_execution',\n"
@@ -35581,7 +36669,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "      'parent-tool-id',\n"
                              '      mockAdapter,\n'
                              '    );\n'},
-            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-7',
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts:landmark-11',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.test.ts',
              'before': "    handler('task-call-id', taskDisplay);\n"
                        '\n'
@@ -35668,6 +36756,99 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      secondCompaction,\n'
                       "      'parent-tool-id',\n"
                       '    );\n'
+                      '  });\n'
+                      '\n'
+                      "  it('[subagent-rounds] emits each completed subagent round "
+                      "exactly once, ahead of the tool calls it produced', () => {\n"
+                      '    const { handler } = createAgentToolProgressHandler(\n'
+                      '      mockConfig,\n'
+                      "      'parent-tool-id',\n"
+                      '      mockAdapter,\n'
+                      '    );\n'
+                      '\n'
+                      '    const firstRound = {\n'
+                      '      round: 1,\n'
+                      "      text: '',\n"
+                      "      reasoning: 'I should read the manifest before editing "
+                      "anything.',\n"
+                      '      usageMetadata: {\n'
+                      '        promptTokenCount: 18_204,\n'
+                      '        candidatesTokenCount: 96,\n'
+                      '        thoughtsTokenCount: 71,\n'
+                      '        cachedContentTokenCount: 18_176,\n'
+                      '        totalTokenCount: 18_300,\n'
+                      '      },\n'
+                      '    };\n'
+                      '    const secondRound = {\n'
+                      '      round: 2,\n'
+                      "      text: 'The manifest lists three services.',\n"
+                      "      reasoning: '',\n"
+                      '      usageMetadata: null,\n'
+                      '    };\n'
+                      '    const toolCall = {\n'
+                      "      callId: 'call-1',\n"
+                      "      name: 'read_file',\n"
+                      "      status: 'executing' as const,\n"
+                      "      args: { path: 'manifest.json' },\n"
+                      '    };\n'
+                      '\n'
+                      '    const baseDisplay: AgentResultDisplay = {\n'
+                      "      type: 'task_execution',\n"
+                      "      subagentName: 'Explore',\n"
+                      "      taskDescription: 'Survey the repository',\n"
+                      "      taskPrompt: 'Survey the repository',\n"
+                      "      status: 'running',\n"
+                      '      toolCalls: [],\n'
+                      '    };\n'
+                      '\n'
+                      '    const order: string[] = [];\n'
+                      '    '
+                      'vi.mocked(mockAdapter.emitSubagentRound!).mockImplementation(() '
+                      '=> {\n'
+                      "      order.push('round');\n"
+                      '    });\n'
+                      '    '
+                      'vi.mocked(mockAdapter.processSubagentToolCall!).mockImplementation(() '
+                      '=> {\n'
+                      "      order.push('tool_use');\n"
+                      '    });\n'
+                      '\n'
+                      "    handler('task-call-id', {\n"
+                      '      ...baseDisplay,\n'
+                      '      rounds: [firstRound],\n'
+                      '      toolCalls: [toolCall],\n'
+                      '    });\n'
+                      '    // The same round replayed in the next snapshot is not '
+                      'emitted twice.\n'
+                      "    handler('task-call-id', {\n"
+                      '      ...baseDisplay,\n'
+                      '      rounds: [firstRound],\n'
+                      '      toolCalls: [toolCall],\n'
+                      '    });\n'
+                      "    handler('task-call-id', {\n"
+                      '      ...baseDisplay,\n'
+                      '      rounds: [firstRound, secondRound],\n'
+                      '      toolCalls: [toolCall],\n'
+                      '    });\n'
+                      '\n'
+                      '    '
+                      'expect(mockAdapter.emitSubagentRound).toHaveBeenCalledTimes(2);\n'
+                      '    '
+                      'expect(mockAdapter.emitSubagentRound).toHaveBeenNthCalledWith(\n'
+                      '      1,\n'
+                      '      firstRound,\n'
+                      "      'parent-tool-id',\n"
+                      '    );\n'
+                      '    '
+                      'expect(mockAdapter.emitSubagentRound).toHaveBeenNthCalledWith(\n'
+                      '      2,\n'
+                      '      secondRound,\n'
+                      "      'parent-tool-id',\n"
+                      '    );\n'
+                      '    // The round is the generation; the tool call is its '
+                      'consequence, and\n'
+                      '    // the next round follows both.\n'
+                      "    expect(order).toEqual(['round', 'tool_use', 'round']);\n"
                       '  });\n'
                       '\n'
                       "  it('should work with adapter that does not support subagent "
@@ -35765,6 +36946,101 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      secondCompaction,\n'
                              "      'parent-tool-id',\n"
                              '    );\n'
+                             '  });\n'
+                             '\n'
+                             "  it('[subagent-rounds] emits each completed subagent "
+                             'round exactly once, ahead of the tool calls it '
+                             "produced', () => {\n"
+                             '    const { handler } = createAgentToolProgressHandler(\n'
+                             '      mockConfig,\n'
+                             "      'parent-tool-id',\n"
+                             '      mockAdapter,\n'
+                             '    );\n'
+                             '\n'
+                             '    const firstRound = {\n'
+                             '      round: 1,\n'
+                             "      text: '',\n"
+                             "      reasoning: 'I should read the manifest before "
+                             "editing anything.',\n"
+                             '      usageMetadata: {\n'
+                             '        promptTokenCount: 18_204,\n'
+                             '        candidatesTokenCount: 96,\n'
+                             '        thoughtsTokenCount: 71,\n'
+                             '        cachedContentTokenCount: 18_176,\n'
+                             '        totalTokenCount: 18_300,\n'
+                             '      },\n'
+                             '    };\n'
+                             '    const secondRound = {\n'
+                             '      round: 2,\n'
+                             "      text: 'The manifest lists three services.',\n"
+                             "      reasoning: '',\n"
+                             '      usageMetadata: null,\n'
+                             '    };\n'
+                             '    const toolCall = {\n'
+                             "      callId: 'call-1',\n"
+                             "      name: 'read_file',\n"
+                             "      status: 'executing' as const,\n"
+                             "      args: { path: 'manifest.json' },\n"
+                             '    };\n'
+                             '\n'
+                             '    const baseDisplay: AgentResultDisplay = {\n'
+                             "      type: 'task_execution',\n"
+                             "      subagentName: 'Explore',\n"
+                             "      taskDescription: 'Survey the repository',\n"
+                             "      taskPrompt: 'Survey the repository',\n"
+                             "      status: 'running',\n"
+                             '      toolCalls: [],\n'
+                             '    };\n'
+                             '\n'
+                             '    const order: string[] = [];\n'
+                             '    '
+                             'vi.mocked(mockAdapter.emitSubagentRound!).mockImplementation(() '
+                             '=> {\n'
+                             "      order.push('round');\n"
+                             '    });\n'
+                             '    '
+                             'vi.mocked(mockAdapter.processSubagentToolCall!).mockImplementation(() '
+                             '=> {\n'
+                             "      order.push('tool_use');\n"
+                             '    });\n'
+                             '\n'
+                             "    handler('task-call-id', {\n"
+                             '      ...baseDisplay,\n'
+                             '      rounds: [firstRound],\n'
+                             '      toolCalls: [toolCall],\n'
+                             '    });\n'
+                             '    // The same round replayed in the next snapshot is '
+                             'not emitted twice.\n'
+                             "    handler('task-call-id', {\n"
+                             '      ...baseDisplay,\n'
+                             '      rounds: [firstRound],\n'
+                             '      toolCalls: [toolCall],\n'
+                             '    });\n'
+                             "    handler('task-call-id', {\n"
+                             '      ...baseDisplay,\n'
+                             '      rounds: [firstRound, secondRound],\n'
+                             '      toolCalls: [toolCall],\n'
+                             '    });\n'
+                             '\n'
+                             '    '
+                             'expect(mockAdapter.emitSubagentRound).toHaveBeenCalledTimes(2);\n'
+                             '    '
+                             'expect(mockAdapter.emitSubagentRound).toHaveBeenNthCalledWith(\n'
+                             '      1,\n'
+                             '      firstRound,\n'
+                             "      'parent-tool-id',\n"
+                             '    );\n'
+                             '    '
+                             'expect(mockAdapter.emitSubagentRound).toHaveBeenNthCalledWith(\n'
+                             '      2,\n'
+                             '      secondRound,\n'
+                             "      'parent-tool-id',\n"
+                             '    );\n'
+                             '    // The round is the generation; the tool call is its '
+                             'consequence, and\n'
+                             '    // the next round follows both.\n'
+                             "    expect(order).toEqual(['round', 'tool_use', "
+                             "'round']);\n"
                              '  });\n'
                              '\n'
                              "  it('should work with adapter that does not support "
@@ -35924,6 +37200,87 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' */\n'},
             {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-3',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
+             'before': '    0,\n'
+                       '  );\n'
+                       '  const totalTokens = Object.values(models).reduce(\n'
+                       '    (acc, model) => acc + model.tokens.total,\n'
+                       '    0,\n'
+                       '  );\n'
+                       '\n'
+                       '  const usage: Usage = {\n'
+                       '    input_tokens: stats.totalPromptTokens,\n'
+                       '    output_tokens: totalOutputTokens,\n'
+                       '    cache_read_input_tokens: stats.totalCachedTokens,\n'
+                       '  };\n'
+                       '\n'
+                       "  // Only include total_tokens if it's greater than 0\n"
+                       '  if (totalTokens > 0) {\n'
+                       '    usage.total_tokens = totalTokens;\n'
+                       '  }\n',
+             'after': '    0,\n'
+                      '  );\n'
+                      '  const totalTokens = Object.values(models).reduce(\n'
+                      '    (acc, model) => acc + model.tokens.total,\n'
+                      '    0,\n'
+                      '  );\n'
+                      '  const totalReasoningTokens = Object.values(models).reduce(\n'
+                      '    (acc, model) => acc + model.tokens.thoughts,\n'
+                      '    0,\n'
+                      '  );\n'
+                      '\n'
+                      '  const usage: Usage = {\n'
+                      '    input_tokens: stats.totalPromptTokens,\n'
+                      '    output_tokens: totalOutputTokens,\n'
+                      '    cache_read_input_tokens: stats.totalCachedTokens,\n'
+                      '    reasoning_output_tokens: totalReasoningTokens,\n'
+                      '  };\n'
+                      '\n'
+                      "  // Only include total_tokens if it's greater than 0\n"
+                      '  if (totalTokens > 0) {\n'
+                      '    usage.total_tokens = totalTokens;\n'
+                      '  }\n',
+             'review_before': '    0,\n'
+                              '  );\n'
+                              '  const totalTokens = Object.values(models).reduce(\n'
+                              '    (acc, model) => acc + model.tokens.total,\n'
+                              '    0,\n'
+                              '  );\n'
+                              '\n'
+                              '  const usage: Usage = {\n'
+                              '    input_tokens: stats.totalPromptTokens,\n'
+                              '    output_tokens: totalOutputTokens,\n'
+                              '    cache_read_input_tokens: stats.totalCachedTokens,\n'
+                              '  };\n'
+                              '\n'
+                              "  // Only include total_tokens if it's greater than 0\n"
+                              '  if (totalTokens > 0) {\n'
+                              '    usage.total_tokens = totalTokens;\n'
+                              '  }\n',
+             'review_after': '    0,\n'
+                             '  );\n'
+                             '  const totalTokens = Object.values(models).reduce(\n'
+                             '    (acc, model) => acc + model.tokens.total,\n'
+                             '    0,\n'
+                             '  );\n'
+                             '  const totalReasoningTokens = '
+                             'Object.values(models).reduce(\n'
+                             '    (acc, model) => acc + model.tokens.thoughts,\n'
+                             '    0,\n'
+                             '  );\n'
+                             '\n'
+                             '  const usage: Usage = {\n'
+                             '    input_tokens: stats.totalPromptTokens,\n'
+                             '    output_tokens: totalOutputTokens,\n'
+                             '    cache_read_input_tokens: stats.totalCachedTokens,\n'
+                             '    reasoning_output_tokens: totalReasoningTokens,\n'
+                             '  };\n'
+                             '\n'
+                             "  // Only include total_tokens if it's greater than 0\n"
+                             '  if (totalTokens > 0) {\n'
+                             '    usage.total_tokens = totalTokens;\n'
+                             '  }\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-4',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
              'before': '    ? Object.keys(mcpServers).map((name) => ({\n'
                        '        name,\n'
                        '        status: getMCPServerStatus(name),\n'
@@ -36042,7 +37399,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '  const systemMessage: CLISystemMessage = {\n'
                              "    type: 'system',\n"},
-            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-4',
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-5',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
              'before': '  // Track previous AgentResultDisplay states per tool call to '
                        'detect changes\n'
@@ -36076,6 +37433,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'is the exact\n'
                       '  // boundary between what has been reported and what has not.\n'
                       '  const emittedCompactionCounts = new Map<string, number>();\n'
+                      "  // The same boundary for the display's append-only `rounds`.\n"
+                      '  const emittedRoundCounts = new Map<string, number>();\n'
                       '\n'
                       '  /**\n'
                       '   * Builds a ToolCallRequestInfo object from a tool call.\n'
@@ -36117,6 +37476,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'has not.\n'
                              '  const emittedCompactionCounts = new Map<string, '
                              'number>();\n'
+                             "  // The same boundary for the display's append-only "
+                             '`rounds`.\n'
+                             '  const emittedRoundCounts = new Map<string, number>();\n'
                              '\n'
                              '  /**\n'
                              '   * Builds a ToolCallRequestInfo object from a tool '
@@ -36124,7 +37486,108 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '   *\n'
                              '   * @param toolCall - The tool call information\n'
                              '   * @returns ToolCallRequestInfo object\n'},
-            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-5',
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-6',
+             'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
+             'before': '        !adapter.emitSubagentErrorResult\n'
+                       '      ) {\n'
+                       '        previousTaskStates.set(callId, taskDisplay);\n'
+                       '        return;\n'
+                       '      }\n'
+                       '\n'
+                       '      if (taskDisplay.toolCalls) {\n'
+                       '        if (!previous || !previous.toolCalls) {\n'
+                       '          // First time seeing tool calls - process all '
+                       'initial ones\n'
+                       '          for (const toolCall of taskDisplay.toolCalls) {\n'
+                       '            processToolCall(toolCall);\n'
+                       '          }\n',
+             'after': '        !adapter.emitSubagentErrorResult\n'
+                      '      ) {\n'
+                      '        previousTaskStates.set(callId, taskDisplay);\n'
+                      '        return;\n'
+                      '      }\n'
+                      '\n'
+                      '      // Emit each model round this subagent completed since '
+                      'the last update,\n'
+                      '      // before the tool calls it produced: the display '
+                      'publishes a round the\n'
+                      '      // moment its stream ends, ahead of the calls it '
+                      'requested, and the\n'
+                      '      // parent stream keeps that order.\n'
+                      '      if (\n'
+                      '        adapter.emitSubagentRound &&\n'
+                      '        taskDisplay.rounds &&\n'
+                      '        taskDisplay.rounds.length > 0\n'
+                      '      ) {\n'
+                      '        const alreadyEmitted = emittedRoundCounts.get(callId) '
+                      '?? 0;\n'
+                      '        for (const round of '
+                      'taskDisplay.rounds.slice(alreadyEmitted)) {\n'
+                      '          adapter.emitSubagentRound(round, agentToolCallId);\n'
+                      '        }\n'
+                      '        emittedRoundCounts.set(callId, '
+                      'taskDisplay.rounds.length);\n'
+                      '      }\n'
+                      '\n'
+                      '      if (taskDisplay.toolCalls) {\n'
+                      '        if (!previous || !previous.toolCalls) {\n'
+                      '          // First time seeing tool calls - process all initial '
+                      'ones\n'
+                      '          for (const toolCall of taskDisplay.toolCalls) {\n'
+                      '            processToolCall(toolCall);\n'
+                      '          }\n',
+             'review_before': '        !adapter.emitSubagentErrorResult\n'
+                              '      ) {\n'
+                              '        previousTaskStates.set(callId, taskDisplay);\n'
+                              '        return;\n'
+                              '      }\n'
+                              '\n'
+                              '      if (taskDisplay.toolCalls) {\n'
+                              '        if (!previous || !previous.toolCalls) {\n'
+                              '          // First time seeing tool calls - process all '
+                              'initial ones\n'
+                              '          for (const toolCall of taskDisplay.toolCalls) '
+                              '{\n'
+                              '            processToolCall(toolCall);\n'
+                              '          }\n',
+             'review_after': '        !adapter.emitSubagentErrorResult\n'
+                             '      ) {\n'
+                             '        previousTaskStates.set(callId, taskDisplay);\n'
+                             '        return;\n'
+                             '      }\n'
+                             '\n'
+                             '      // Emit each model round this subagent completed '
+                             'since the last update,\n'
+                             '      // before the tool calls it produced: the display '
+                             'publishes a round the\n'
+                             '      // moment its stream ends, ahead of the calls it '
+                             'requested, and the\n'
+                             '      // parent stream keeps that order.\n'
+                             '      if (\n'
+                             '        adapter.emitSubagentRound &&\n'
+                             '        taskDisplay.rounds &&\n'
+                             '        taskDisplay.rounds.length > 0\n'
+                             '      ) {\n'
+                             '        const alreadyEmitted = '
+                             'emittedRoundCounts.get(callId) ?? 0;\n'
+                             '        for (const round of '
+                             'taskDisplay.rounds.slice(alreadyEmitted)) {\n'
+                             '          adapter.emitSubagentRound(round, '
+                             'agentToolCallId);\n'
+                             '        }\n'
+                             '        emittedRoundCounts.set(callId, '
+                             'taskDisplay.rounds.length);\n'
+                             '      }\n'
+                             '\n'
+                             '      if (taskDisplay.toolCalls) {\n'
+                             '        if (!previous || !previous.toolCalls) {\n'
+                             '          // First time seeing tool calls - process all '
+                             'initial ones\n'
+                             '          for (const toolCall of taskDisplay.toolCalls) '
+                             '{\n'
+                             '            processToolCall(toolCall);\n'
+                             '          }\n'},
+            {'name': 'packages/cli/src/utils/nonInteractiveHelpers.ts:landmark-7',
              'path': 'packages/cli/src/utils/nonInteractiveHelpers.ts',
              'before': '            );\n'
                        '            processToolCall(toolCall, previousCall);\n'
@@ -47027,7 +48490,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          ],\n'},
             {'name': 'packages/core/src/core/baseLlmClient.test.ts:landmark-4',
              'path': 'packages/core/src/core/baseLlmClient.test.ts',
-             'before': '\n'
+             'before': '        abortSignal: abortController.signal,\n'
+                       "        promptId: 'p',\n"
+                       '        stream: true,\n'
+                       '      });\n'
+                       '\n'
                        "      expect(result.text).toBe('answer');\n"
                        '      expect(result.usage).toBeUndefined();\n'
                        '    });\n'
@@ -47045,9 +48512,71 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '}],\n'
                        "        model: 'test-model',\n"
                        '        abortSignal: abortController.signal,\n',
-             'after': '\n'
+             'after': '        abortSignal: abortController.signal,\n'
+                      "        promptId: 'p',\n"
+                      '        stream: true,\n'
+                      '      });\n'
+                      '\n'
                       "      expect(result.text).toBe('answer');\n"
+                      '      // The reasoning is dropped from the text and kept whole '
+                      'beside it.\n'
+                      "      expect(result.thoughtText).toBe('reasoning');\n"
                       '      expect(result.usage).toBeUndefined();\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[served-usage] refuses a side query without served "
+                      "usage under exactTokenCounting=vllm', async () => {\n"
+                      '      mockConfig.getContentGeneratorConfig.mockReturnValue({\n'
+                      "        model: 'test-model',\n"
+                      '        authType: AuthType.USE_OPENAI,\n'
+                      "        exactTokenCounting: 'vllm',\n"
+                      '      });\n'
+                      '      mockGenerateContentStream.mockImplementation(async () =>\n'
+                      "        mockTextStream(['answer'], undefined),\n"
+                      '      );\n'
+                      '      vi.mocked(getFunctionCalls).mockReturnValue(undefined);\n'
+                      '\n'
+                      '      await expect(\n'
+                      '        client.generateText({\n'
+                      "          contents: [{ role: 'user', parts: [{ text: 'hi' }] "
+                      '}],\n'
+                      "          model: 'test-model',\n"
+                      '          abortSignal: abortController.signal,\n'
+                      "          promptId: 'p',\n"
+                      '          stream: true,\n'
+                      '        }),\n'
+                      "      ).rejects.toThrow('requires served "
+                      "usage.promptTokenCount');\n"
+                      '    });\n'
+                      '\n'
+                      "    it('[served-usage] returns the served usage whole under "
+                      "exactTokenCounting=vllm', async () => {\n"
+                      '      mockConfig.getContentGeneratorConfig.mockReturnValue({\n'
+                      "        model: 'test-model',\n"
+                      '        authType: AuthType.USE_OPENAI,\n'
+                      "        exactTokenCounting: 'vllm',\n"
+                      '      });\n'
+                      '      const usage = {\n'
+                      '        promptTokenCount: 11,\n'
+                      '        candidatesTokenCount: 7,\n'
+                      '        thoughtsTokenCount: 4,\n'
+                      '        cachedContentTokenCount: 8,\n'
+                      '        totalTokenCount: 18,\n'
+                      '      };\n'
+                      '      mockGenerateContentStream.mockImplementation(async () =>\n'
+                      "        mockTextStream(['answer'], usage),\n"
+                      '      );\n'
+                      '      vi.mocked(getFunctionCalls).mockReturnValue(undefined);\n'
+                      '\n'
+                      '      const result = await client.generateText({\n'
+                      "        contents: [{ role: 'user', parts: [{ text: 'hi' }] }],\n"
+                      "        model: 'test-model',\n"
+                      '        abortSignal: abortController.signal,\n'
+                      "        promptId: 'p',\n"
+                      '        stream: true,\n'
+                      '      });\n'
+                      '\n'
+                      '      expect(result.usage).toEqual(usage);\n'
                       '    });\n'
                       '\n'
                       "    it('does not stream when stream is omitted (non-streaming "
@@ -47063,7 +48592,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "        contents: [{ role: 'user', parts: [{ text: 'hi' }] }],\n"
                       "        model: 'test-model',\n"
                       '        abortSignal: abortController.signal,\n',
-             'review_before': '\n'
+             'review_before': '        abortSignal: abortController.signal,\n'
+                              "        promptId: 'p',\n"
+                              '        stream: true,\n'
+                              '      });\n'
+                              '\n'
                               "      expect(result.text).toBe('answer');\n"
                               '      expect(result.usage).toBeUndefined();\n'
                               '    });\n'
@@ -47081,9 +48614,79 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '}] }],\n'
                               "        model: 'test-model',\n"
                               '        abortSignal: abortController.signal,\n',
-             'review_after': '\n'
+             'review_after': '        abortSignal: abortController.signal,\n'
+                             "        promptId: 'p',\n"
+                             '        stream: true,\n'
+                             '      });\n'
+                             '\n'
                              "      expect(result.text).toBe('answer');\n"
+                             '      // The reasoning is dropped from the text and kept '
+                             'whole beside it.\n'
+                             "      expect(result.thoughtText).toBe('reasoning');\n"
                              '      expect(result.usage).toBeUndefined();\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[served-usage] refuses a side query without "
+                             "served usage under exactTokenCounting=vllm', async () => "
+                             '{\n'
+                             '      '
+                             'mockConfig.getContentGeneratorConfig.mockReturnValue({\n'
+                             "        model: 'test-model',\n"
+                             '        authType: AuthType.USE_OPENAI,\n'
+                             "        exactTokenCounting: 'vllm',\n"
+                             '      });\n'
+                             '      mockGenerateContentStream.mockImplementation(async '
+                             '() =>\n'
+                             "        mockTextStream(['answer'], undefined),\n"
+                             '      );\n'
+                             '      '
+                             'vi.mocked(getFunctionCalls).mockReturnValue(undefined);\n'
+                             '\n'
+                             '      await expect(\n'
+                             '        client.generateText({\n'
+                             "          contents: [{ role: 'user', parts: [{ text: "
+                             "'hi' }] }],\n"
+                             "          model: 'test-model',\n"
+                             '          abortSignal: abortController.signal,\n'
+                             "          promptId: 'p',\n"
+                             '          stream: true,\n'
+                             '        }),\n'
+                             "      ).rejects.toThrow('requires served "
+                             "usage.promptTokenCount');\n"
+                             '    });\n'
+                             '\n'
+                             "    it('[served-usage] returns the served usage whole "
+                             "under exactTokenCounting=vllm', async () => {\n"
+                             '      '
+                             'mockConfig.getContentGeneratorConfig.mockReturnValue({\n'
+                             "        model: 'test-model',\n"
+                             '        authType: AuthType.USE_OPENAI,\n'
+                             "        exactTokenCounting: 'vllm',\n"
+                             '      });\n'
+                             '      const usage = {\n'
+                             '        promptTokenCount: 11,\n'
+                             '        candidatesTokenCount: 7,\n'
+                             '        thoughtsTokenCount: 4,\n'
+                             '        cachedContentTokenCount: 8,\n'
+                             '        totalTokenCount: 18,\n'
+                             '      };\n'
+                             '      mockGenerateContentStream.mockImplementation(async '
+                             '() =>\n'
+                             "        mockTextStream(['answer'], usage),\n"
+                             '      );\n'
+                             '      '
+                             'vi.mocked(getFunctionCalls).mockReturnValue(undefined);\n'
+                             '\n'
+                             '      const result = await client.generateText({\n'
+                             "        contents: [{ role: 'user', parts: [{ text: 'hi' "
+                             '}] }],\n'
+                             "        model: 'test-model',\n"
+                             '        abortSignal: abortController.signal,\n'
+                             "        promptId: 'p',\n"
+                             '        stream: true,\n'
+                             '      });\n'
+                             '\n'
+                             '      expect(result.usage).toEqual(usage);\n'
                              '    });\n'
                              '\n'
                              "    it('does not stream when stream is omitted "
@@ -47479,7 +49082,93 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'import {\n'},
             {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-2',
              'path': 'packages/core/src/core/baseLlmClient.ts',
-             'before': ' */\n'
+             'before': "import { getErrorMessage } from '../utils/errors.js';\n"
+                       'import { retryWithBackoff, isUnattendedMode } from '
+                       "'../utils/retry.js';\n"
+                       'import { subagentNameContext } from '
+                       "'../utils/subagentNameContext.js';\n"
+                       "import { ApiRetryEvent } from '../telemetry/types.js';\n"
+                       "import { logApiRetry } from '../telemetry/loggers.js';\n"
+                       'import { getFunctionCalls } from '
+                       "'../utils/generateContentResponseUtilities.js';\n"
+                       "import { getResponseText } from '../utils/partUtils.js';\n"
+                       "import { createDebugLogger } from '../utils/debugLogger.js';\n"
+                       'import type { RuntimeContentGeneratorView } from '
+                       "'../agents/runtime/agent-context.js';\n"
+                       'import { slimCompactionInput } from '
+                       "'../services/compactionInputSlimming.js';\n"
+                       '\n'
+                       'const DEFAULT_MAX_ATTEMPTS = 7;\n'
+                       '\n',
+             'after': "import { getErrorMessage } from '../utils/errors.js';\n"
+                      'import { retryWithBackoff, isUnattendedMode } from '
+                      "'../utils/retry.js';\n"
+                      'import { subagentNameContext } from '
+                      "'../utils/subagentNameContext.js';\n"
+                      "import { ApiRetryEvent } from '../telemetry/types.js';\n"
+                      "import { logApiRetry } from '../telemetry/loggers.js';\n"
+                      'import { getFunctionCalls } from '
+                      "'../utils/generateContentResponseUtilities.js';\n"
+                      'import {\n'
+                      '  getResponseText,\n'
+                      '  getResponseThoughtText,\n'
+                      "} from '../utils/partUtils.js';\n"
+                      "import { createDebugLogger } from '../utils/debugLogger.js';\n"
+                      'import type { RuntimeContentGeneratorView } from '
+                      "'../agents/runtime/agent-context.js';\n"
+                      'import { slimCompactionInput } from '
+                      "'../services/compactionInputSlimming.js';\n"
+                      '\n'
+                      'const DEFAULT_MAX_ATTEMPTS = 7;\n'
+                      '\n',
+             'review_before': "import { getErrorMessage } from '../utils/errors.js';\n"
+                              'import { retryWithBackoff, isUnattendedMode } from '
+                              "'../utils/retry.js';\n"
+                              'import { subagentNameContext } from '
+                              "'../utils/subagentNameContext.js';\n"
+                              "import { ApiRetryEvent } from '../telemetry/types.js';\n"
+                              "import { logApiRetry } from '../telemetry/loggers.js';\n"
+                              'import { getFunctionCalls } from '
+                              "'../utils/generateContentResponseUtilities.js';\n"
+                              'import { getResponseText } from '
+                              "'../utils/partUtils.js';\n"
+                              'import { createDebugLogger } from '
+                              "'../utils/debugLogger.js';\n"
+                              'import type { RuntimeContentGeneratorView } from '
+                              "'../agents/runtime/agent-context.js';\n"
+                              'import { slimCompactionInput } from '
+                              "'../services/compactionInputSlimming.js';\n"
+                              '\n'
+                              'const DEFAULT_MAX_ATTEMPTS = 7;\n'
+                              '\n',
+             'review_after': "import { getErrorMessage } from '../utils/errors.js';\n"
+                             'import { retryWithBackoff, isUnattendedMode } from '
+                             "'../utils/retry.js';\n"
+                             'import { subagentNameContext } from '
+                             "'../utils/subagentNameContext.js';\n"
+                             "import { ApiRetryEvent } from '../telemetry/types.js';\n"
+                             "import { logApiRetry } from '../telemetry/loggers.js';\n"
+                             'import { getFunctionCalls } from '
+                             "'../utils/generateContentResponseUtilities.js';\n"
+                             'import {\n'
+                             '  getResponseText,\n'
+                             '  getResponseThoughtText,\n'
+                             "} from '../utils/partUtils.js';\n"
+                             'import { createDebugLogger } from '
+                             "'../utils/debugLogger.js';\n"
+                             'import type { RuntimeContentGeneratorView } from '
+                             "'../agents/runtime/agent-context.js';\n"
+                             'import { slimCompactionInput } from '
+                             "'../services/compactionInputSlimming.js';\n"
+                             '\n'
+                             'const DEFAULT_MAX_ATTEMPTS = 7;\n'
+                             '\n'},
+            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-3',
+             'path': 'packages/core/src/core/baseLlmClient.ts',
+             'before': '\n'
+                       '/**\n'
+                       ' * Result of a generateText call.\n'
+                       ' */\n'
                        'export interface GenerateTextResult {\n'
                        '  text: string;\n'
                        '  usage: GenerateContentResponseUsageMetadata | undefined;\n'
@@ -47495,9 +49184,19 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'calling the\n'
                        ' * registered tool. Strips a leading ```json / ``` fence, then '
                        'takes the\n',
-             'after': ' */\n'
+             'after': '\n'
+                      '/**\n'
+                      ' * Result of a generateText call.\n'
+                      ' */\n'
                       'export interface GenerateTextResult {\n'
                       '  text: string;\n'
+                      '  /**\n'
+                      '   * The reasoning the model emitted before its text, verbatim, '
+                      'so what a\n'
+                      '   * side query thought is observable. Never fed back to a '
+                      'model.\n'
+                      '   */\n'
+                      '  thoughtText: string;\n'
                       '  usage: GenerateContentResponseUsageMetadata | undefined;\n'
                       '  /** Whether the response contained a function call. No call '
                       'is executed here. */\n'
@@ -47508,13 +49207,61 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '}\n'
                       '\n'
                       '/**\n'
+                      ' * Usage the pinned backend serves on every generation it '
+                      'completes: the four\n'
+                      ' * counts that together say what a request cost and where its '
+                      'output went.\n'
+                      ' */\n'
+                      'export type ServedUsage = GenerateContentResponseUsageMetadata '
+                      '& {\n'
+                      '  promptTokenCount: number;\n'
+                      '  candidatesTokenCount: number;\n'
+                      '  thoughtsTokenCount: number;\n'
+                      '  cachedContentTokenCount: number;\n'
+                      '};\n'
+                      '\n'
+                      'const SERVED_USAGE_FIELDS = [\n'
+                      "  'promptTokenCount',\n"
+                      "  'candidatesTokenCount',\n"
+                      "  'thoughtsTokenCount',\n"
+                      "  'cachedContentTokenCount',\n"
+                      '] as const;\n'
+                      '\n'
+                      '/**\n'
+                      " * Under `exactTokenCounting: 'vllm'` a generation that arrived "
+                      'without its\n'
+                      ' * served usage did not complete in a way this client can '
+                      'account for, and no\n'
+                      ' * count is invented in its place.\n'
+                      ' */\n'
+                      'export function requireServedUsage(\n'
+                      '  usage: GenerateContentResponseUsageMetadata | undefined,\n'
+                      '  site: string,\n'
+                      '): ServedUsage {\n'
+                      '  for (const field of SERVED_USAGE_FIELDS) {\n'
+                      '    const value = usage?.[field];\n'
+                      "    if (typeof value !== 'number' || !Number.isInteger(value) "
+                      '|| value < 0) {\n'
+                      '      throw new Error(\n'
+                      '        `${site}: exactTokenCounting=vllm requires served '
+                      'usage.${field}; received ${JSON.stringify(usage)}`,\n'
+                      '      );\n'
+                      '    }\n'
+                      '  }\n'
+                      '  return usage as ServedUsage;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
                       " * Best-effort JSON-object extraction from a model's text "
                       'response. Used as a\n'
                       ' * fallback when the model emits plain-text JSON instead of '
                       'calling the\n'
                       ' * registered tool. Strips a leading ```json / ``` fence, then '
                       'takes the\n',
-             'review_before': ' */\n'
+             'review_before': '\n'
+                              '/**\n'
+                              ' * Result of a generateText call.\n'
+                              ' */\n'
                               'export interface GenerateTextResult {\n'
                               '  text: string;\n'
                               '  usage: GenerateContentResponseUsageMetadata | '
@@ -47531,9 +49278,19 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'instead of calling the\n'
                               ' * registered tool. Strips a leading ```json / ``` '
                               'fence, then takes the\n',
-             'review_after': ' */\n'
+             'review_after': '\n'
+                             '/**\n'
+                             ' * Result of a generateText call.\n'
+                             ' */\n'
                              'export interface GenerateTextResult {\n'
                              '  text: string;\n'
+                             '  /**\n'
+                             '   * The reasoning the model emitted before its text, '
+                             'verbatim, so what a\n'
+                             '   * side query thought is observable. Never fed back to '
+                             'a model.\n'
+                             '   */\n'
+                             '  thoughtText: string;\n'
                              '  usage: GenerateContentResponseUsageMetadata | '
                              'undefined;\n'
                              '  /** Whether the response contained a function call. No '
@@ -47545,13 +49302,60 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '}\n'
                              '\n'
                              '/**\n'
+                             ' * Usage the pinned backend serves on every generation '
+                             'it completes: the four\n'
+                             ' * counts that together say what a request cost and '
+                             'where its output went.\n'
+                             ' */\n'
+                             'export type ServedUsage = '
+                             'GenerateContentResponseUsageMetadata & {\n'
+                             '  promptTokenCount: number;\n'
+                             '  candidatesTokenCount: number;\n'
+                             '  thoughtsTokenCount: number;\n'
+                             '  cachedContentTokenCount: number;\n'
+                             '};\n'
+                             '\n'
+                             'const SERVED_USAGE_FIELDS = [\n'
+                             "  'promptTokenCount',\n"
+                             "  'candidatesTokenCount',\n"
+                             "  'thoughtsTokenCount',\n"
+                             "  'cachedContentTokenCount',\n"
+                             '] as const;\n'
+                             '\n'
+                             '/**\n'
+                             " * Under `exactTokenCounting: 'vllm'` a generation that "
+                             'arrived without its\n'
+                             ' * served usage did not complete in a way this client '
+                             'can account for, and no\n'
+                             ' * count is invented in its place.\n'
+                             ' */\n'
+                             'export function requireServedUsage(\n'
+                             '  usage: GenerateContentResponseUsageMetadata | '
+                             'undefined,\n'
+                             '  site: string,\n'
+                             '): ServedUsage {\n'
+                             '  for (const field of SERVED_USAGE_FIELDS) {\n'
+                             '    const value = usage?.[field];\n'
+                             "    if (typeof value !== 'number' || "
+                             '!Number.isInteger(value) || value < 0) {\n'
+                             '      throw new Error(\n'
+                             '        `${site}: exactTokenCounting=vllm requires '
+                             'served usage.${field}; received '
+                             '${JSON.stringify(usage)}`,\n'
+                             '      );\n'
+                             '    }\n'
+                             '  }\n'
+                             '  return usage as ServedUsage;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
                              " * Best-effort JSON-object extraction from a model's "
                              'text response. Used as a\n'
                              ' * fallback when the model emits plain-text JSON instead '
                              'of calling the\n'
                              ' * registered tool. Strips a leading ```json / ``` '
                              'fence, then takes the\n'},
-            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-3',
+            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-4',
              'path': 'packages/core/src/core/baseLlmClient.ts',
              'before': '        `Failed to generate JSON content${promptId ? ` '
                        "(${promptId})` : ''}: ${getErrorMessage(error)}`,\n"
@@ -47727,9 +49531,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`systemInstruction` is sent\n'
                              '   * through verbatim — no `getCustomSystemPrompt` '
                              'wrapping (which would append\n'},
-            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-4',
+            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-5',
              'path': 'packages/core/src/core/baseLlmClient.ts',
-             'before': '            // Chunks are deltas, not cumulative snapshots, so '
+             'before': '        ? async () => {\n'
+                       '            const responseStream = await '
+                       'contentGenerator.generateContentStream(\n'
+                       '              request,\n'
+                       "              promptId ?? '',\n"
+                       '            );\n'
+                       '            // Chunks are deltas, not cumulative snapshots, so '
                        'concatenate.\n'
                        '            // getResponseText already drops thought parts; '
                        'usageMetadata rides\n'
@@ -47766,19 +49576,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '      const result = await retryWithBackoff(apiCall, {\n'
                        '        maxAttempts: maxAttempts ?? DEFAULT_MAX_ATTEMPTS,\n'
                        '        authType: retryAuthType,\n',
-             'after': '            // Chunks are deltas, not cumulative snapshots, so '
+             'after': '        ? async () => {\n'
+                      '            const responseStream = await '
+                      'contentGenerator.generateContentStream(\n'
+                      '              request,\n'
+                      "              promptId ?? '',\n"
+                      '            );\n'
+                      '            // Chunks are deltas, not cumulative snapshots, so '
                       'concatenate.\n'
-                      '            // getResponseText already drops thought parts; '
-                      'usageMetadata rides\n'
-                      '            // the final chunk (last one wins), matching the '
-                      'non-streaming read.\n'
+                      '            // getResponseText drops thought parts and '
+                      'getResponseThoughtText\n'
+                      '            // keeps only them; usageMetadata rides the final '
+                      'chunk (last one\n'
+                      '            // wins), matching the non-streaming read.\n'
                       "            let text = '';\n"
+                      "            let thoughtText = '';\n"
                       '            let usage: GenerateContentResponseUsageMetadata | '
                       'undefined;\n'
                       '            let hadToolCall = false;\n'
                       '            let finishReason: string | undefined;\n'
                       '            for await (const chunk of responseStream) {\n'
                       "              text += getResponseText(chunk) ?? '';\n"
+                      '              thoughtText += getResponseThoughtText(chunk) ?? '
+                      "'';\n"
                       '              hadToolCall ||= (getFunctionCalls(chunk)?.length '
                       '?? 0) > 0;\n'
                       '              if (chunk.usageMetadata) {\n'
@@ -47789,7 +49609,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '              if (chunkFinishReason) finishReason = '
                       'chunkFinishReason;\n'
                       '            }\n'
-                      '            return { text, usage, hadToolCall, finishReason };\n'
+                      '            return { text, thoughtText, usage, hadToolCall, '
+                      'finishReason };\n'
                       '          }\n'
                       '        : async () => {\n'
                       '            const result = await '
@@ -47799,6 +49620,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            );\n'
                       '            return {\n'
                       "              text: getResponseText(result) ?? '',\n"
+                      '              thoughtText: getResponseThoughtText(result) ?? '
+                      "'',\n"
                       '              usage: result.usageMetadata,\n'
                       '              hadToolCall: (getFunctionCalls(result)?.length ?? '
                       '0) > 0,\n'
@@ -47810,7 +49633,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      const result = await retryWithBackoff(apiCall, {\n'
                       '        maxAttempts: maxAttempts ?? DEFAULT_MAX_ATTEMPTS,\n'
                       '        authType: retryAuthType,\n',
-             'review_before': '            // Chunks are deltas, not cumulative '
+             'review_before': '        ? async () => {\n'
+                              '            const responseStream = await '
+                              'contentGenerator.generateContentStream(\n'
+                              '              request,\n'
+                              "              promptId ?? '',\n"
+                              '            );\n'
+                              '            // Chunks are deltas, not cumulative '
                               'snapshots, so concatenate.\n'
                               '            // getResponseText already drops thought '
                               'parts; usageMetadata rides\n'
@@ -47849,19 +49678,29 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        maxAttempts: maxAttempts ?? '
                               'DEFAULT_MAX_ATTEMPTS,\n'
                               '        authType: retryAuthType,\n',
-             'review_after': '            // Chunks are deltas, not cumulative '
+             'review_after': '        ? async () => {\n'
+                             '            const responseStream = await '
+                             'contentGenerator.generateContentStream(\n'
+                             '              request,\n'
+                             "              promptId ?? '',\n"
+                             '            );\n'
+                             '            // Chunks are deltas, not cumulative '
                              'snapshots, so concatenate.\n'
-                             '            // getResponseText already drops thought '
-                             'parts; usageMetadata rides\n'
-                             '            // the final chunk (last one wins), matching '
-                             'the non-streaming read.\n'
+                             '            // getResponseText drops thought parts and '
+                             'getResponseThoughtText\n'
+                             '            // keeps only them; usageMetadata rides the '
+                             'final chunk (last one\n'
+                             '            // wins), matching the non-streaming read.\n'
                              "            let text = '';\n"
+                             "            let thoughtText = '';\n"
                              '            let usage: '
                              'GenerateContentResponseUsageMetadata | undefined;\n'
                              '            let hadToolCall = false;\n'
                              '            let finishReason: string | undefined;\n'
                              '            for await (const chunk of responseStream) {\n'
                              "              text += getResponseText(chunk) ?? '';\n"
+                             '              thoughtText += '
+                             "getResponseThoughtText(chunk) ?? '';\n"
                              '              hadToolCall ||= '
                              '(getFunctionCalls(chunk)?.length ?? 0) > 0;\n'
                              '              if (chunk.usageMetadata) {\n'
@@ -47872,8 +49711,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              if (chunkFinishReason) finishReason = '
                              'chunkFinishReason;\n'
                              '            }\n'
-                             '            return { text, usage, hadToolCall, '
-                             'finishReason };\n'
+                             '            return { text, thoughtText, usage, '
+                             'hadToolCall, finishReason };\n'
                              '          }\n'
                              '        : async () => {\n'
                              '            const result = await '
@@ -47883,6 +49722,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            );\n'
                              '            return {\n'
                              "              text: getResponseText(result) ?? '',\n"
+                             '              thoughtText: '
+                             "getResponseThoughtText(result) ?? '',\n"
                              '              usage: result.usageMetadata,\n'
                              '              hadToolCall: '
                              '(getFunctionCalls(result)?.length ?? 0) > 0,\n'
@@ -47895,9 +49736,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        maxAttempts: maxAttempts ?? '
                              'DEFAULT_MAX_ATTEMPTS,\n'
                              '        authType: retryAuthType,\n'},
-            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-5',
+            {'name': 'packages/core/src/core/baseLlmClient.ts:landmark-6',
              'path': 'packages/core/src/core/baseLlmClient.ts',
-             'before': '      });\n'
+             'before': '              subagentName: subagentNameContext.getStore(),\n'
+                       '            }),\n'
+                       '          );\n'
+                       '        },\n'
+                       '      });\n'
                        '\n'
                        '      return {\n'
                        '        text: result.text.trim(),\n'
@@ -47909,10 +49754,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        throw error;\n'
                        '      }\n'
                        '\n',
-             'after': '      });\n'
+             'after': '              subagentName: subagentNameContext.getStore(),\n'
+                      '            }),\n'
+                      '          );\n'
+                      '        },\n'
+                      '      });\n'
+                      '\n'
+                      "      if (contentGeneratorConfig.exactTokenCounting === 'vllm') "
+                      '{\n'
+                      "        requireServedUsage(result.usage, 'generateText');\n"
+                      '      }\n'
                       '\n'
                       '      return {\n'
                       '        text: result.text.trim(),\n'
+                      '        thoughtText: result.thoughtText,\n'
                       '        usage: result.usage,\n'
                       '        hadToolCall: result.hadToolCall,\n'
                       '        finishReason: result.finishReason,\n'
@@ -47922,7 +49777,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        throw error;\n'
                       '      }\n'
                       '\n',
-             'review_before': '      });\n'
+             'review_before': '              subagentName: '
+                              'subagentNameContext.getStore(),\n'
+                              '            }),\n'
+                              '          );\n'
+                              '        },\n'
+                              '      });\n'
                               '\n'
                               '      return {\n'
                               '        text: result.text.trim(),\n'
@@ -47934,10 +49794,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        throw error;\n'
                               '      }\n'
                               '\n',
-             'review_after': '      });\n'
+             'review_after': '              subagentName: '
+                             'subagentNameContext.getStore(),\n'
+                             '            }),\n'
+                             '          );\n'
+                             '        },\n'
+                             '      });\n'
+                             '\n'
+                             '      if (contentGeneratorConfig.exactTokenCounting === '
+                             "'vllm') {\n"
+                             '        requireServedUsage(result.usage, '
+                             "'generateText');\n"
+                             '      }\n'
                              '\n'
                              '      return {\n'
                              '        text: result.text.trim(),\n'
+                             '        thoughtText: result.thoughtText,\n'
                              '        usage: result.usage,\n'
                              '        hadToolCall: result.hadToolCall,\n'
                              '        finishReason: result.finishReason,\n'
@@ -47948,6 +49820,438 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      }\n'
                              '\n'},
             {'name': 'packages/core/src/core/client.test.ts:landmark-1',
+             'path': 'packages/core/src/core/client.test.ts',
+             'before': '    vi.restoreAllMocks();\n'
+                       '    __resetActiveGoalStoreForTests();\n'
+                       '  });\n'
+                       '\n'
+                       "  describe('initialize', () => {\n"
+                       "    it('initializes from the selective runtime projection "
+                       "without the full transcript', async () => {\n"
+                       '      const seedResumeTokenCountsSpy = vi.spyOn(\n'
+                       '        GeminiChat.prototype,\n'
+                       "        'seedResumeTokenCounts',\n"
+                       '      );\n'
+                       '      const apiHistory = [\n'
+                       "        { role: 'user' as const, parts: [{ text: 'projected "
+                       "history' }] },\n"
+                       '      ];\n'
+                       "      const uiEvent = { type: 'projected-event' };\n"
+                       '      '
+                       'vi.mocked(mockConfig.getSessionRestoreRuntime).mockReturnValue({\n'
+                       '        apiHistory,\n'
+                       '        resumeTokenCounts: {\n'
+                       '          promptTokenCount: 321,\n'
+                       '          outputTokenCount: 45,\n'
+                       '          isEstimated: false,\n'
+                       '        },\n'
+                       '        uiTelemetryEvents: [uiEvent],\n'
+                       '        recording: {\n'
+                       "          lastCompletedUuid: 'record-1',\n"
+                       '          turnParentUuids: [],\n',
+             'after': '    vi.restoreAllMocks();\n'
+                      '    __resetActiveGoalStoreForTests();\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('initialize', () => {\n"
+                      "    it('initializes from the selective runtime projection "
+                      "without the full transcript', async () => {\n"
+                      '      const setLastPromptTokenCountSpy = vi.spyOn(\n'
+                      '        GeminiChat.prototype,\n'
+                      "        'setLastPromptTokenCount',\n"
+                      '      );\n'
+                      '      const apiHistory = [\n'
+                      "        { role: 'user' as const, parts: [{ text: 'projected "
+                      "history' }] },\n"
+                      '      ];\n'
+                      "      const uiEvent = { type: 'projected-event' };\n"
+                      '      '
+                      'vi.mocked(mockConfig.getSessionRestoreRuntime).mockReturnValue({\n'
+                      '        apiHistory,\n'
+                      '        resumeTokenCounts: {\n'
+                      '          promptTokenCount: 321,\n'
+                      '          isEstimated: false,\n'
+                      '        },\n'
+                      '        uiTelemetryEvents: [uiEvent],\n'
+                      '        recording: {\n'
+                      "          lastCompletedUuid: 'record-1',\n"
+                      '          turnParentUuids: [],\n',
+             'review_before': '    vi.restoreAllMocks();\n'
+                              '    __resetActiveGoalStoreForTests();\n'
+                              '  });\n'
+                              '\n'
+                              "  describe('initialize', () => {\n"
+                              "    it('initializes from the selective runtime "
+                              "projection without the full transcript', async () => {\n"
+                              '      const seedResumeTokenCountsSpy = vi.spyOn(\n'
+                              '        GeminiChat.prototype,\n'
+                              "        'seedResumeTokenCounts',\n"
+                              '      );\n'
+                              '      const apiHistory = [\n'
+                              "        { role: 'user' as const, parts: [{ text: "
+                              "'projected history' }] },\n"
+                              '      ];\n'
+                              "      const uiEvent = { type: 'projected-event' };\n"
+                              '      '
+                              'vi.mocked(mockConfig.getSessionRestoreRuntime).mockReturnValue({\n'
+                              '        apiHistory,\n'
+                              '        resumeTokenCounts: {\n'
+                              '          promptTokenCount: 321,\n'
+                              '          outputTokenCount: 45,\n'
+                              '          isEstimated: false,\n'
+                              '        },\n'
+                              '        uiTelemetryEvents: [uiEvent],\n'
+                              '        recording: {\n'
+                              "          lastCompletedUuid: 'record-1',\n"
+                              '          turnParentUuids: [],\n',
+             'review_after': '    vi.restoreAllMocks();\n'
+                             '    __resetActiveGoalStoreForTests();\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('initialize', () => {\n"
+                             "    it('initializes from the selective runtime "
+                             "projection without the full transcript', async () => {\n"
+                             '      const setLastPromptTokenCountSpy = vi.spyOn(\n'
+                             '        GeminiChat.prototype,\n'
+                             "        'setLastPromptTokenCount',\n"
+                             '      );\n'
+                             '      const apiHistory = [\n'
+                             "        { role: 'user' as const, parts: [{ text: "
+                             "'projected history' }] },\n"
+                             '      ];\n'
+                             "      const uiEvent = { type: 'projected-event' };\n"
+                             '      '
+                             'vi.mocked(mockConfig.getSessionRestoreRuntime).mockReturnValue({\n'
+                             '        apiHistory,\n'
+                             '        resumeTokenCounts: {\n'
+                             '          promptTokenCount: 321,\n'
+                             '          isEstimated: false,\n'
+                             '        },\n'
+                             '        uiTelemetryEvents: [uiEvent],\n'
+                             '        recording: {\n'
+                             "          lastCompletedUuid: 'record-1',\n"
+                             '          turnParentUuids: [],\n'},
+            {'name': 'packages/core/src/core/client.test.ts:landmark-2',
+             'path': 'packages/core/src/core/client.test.ts',
+             'before': "        'test-session-id',\n"
+                       '      );\n'
+                       '      '
+                       'expect(uiTelemetryService.addEvent).toHaveBeenCalledWith(\n'
+                       '        uiEvent,\n'
+                       "        'test-session-id',\n"
+                       '      );\n'
+                       '      '
+                       'expect(seedResumeTokenCountsSpy).toHaveBeenCalledWith(321, 45, '
+                       'false);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('seeds resumed chat with replayed prompt token count', "
+                       'async () => {\n'
+                       '      '
+                       'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                       '        conversation: {\n'
+                       "          sessionId: 'resumed-session-id',\n",
+             'after': "        'test-session-id',\n"
+                      '      );\n'
+                      '      '
+                      'expect(uiTelemetryService.addEvent).toHaveBeenCalledWith(\n'
+                      '        uiEvent,\n'
+                      "        'test-session-id',\n"
+                      '      );\n'
+                      '      '
+                      'expect(setLastPromptTokenCountSpy).toHaveBeenCalledWith(321, '
+                      'false);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('seeds resumed chat with replayed prompt token count', "
+                      'async () => {\n'
+                      '      '
+                      'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                      '        conversation: {\n'
+                      "          sessionId: 'resumed-session-id',\n",
+             'review_before': "        'test-session-id',\n"
+                              '      );\n'
+                              '      '
+                              'expect(uiTelemetryService.addEvent).toHaveBeenCalledWith(\n'
+                              '        uiEvent,\n'
+                              "        'test-session-id',\n"
+                              '      );\n'
+                              '      '
+                              'expect(seedResumeTokenCountsSpy).toHaveBeenCalledWith(321, '
+                              '45, false);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('seeds resumed chat with replayed prompt token "
+                              "count', async () => {\n"
+                              '      '
+                              'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                              '        conversation: {\n'
+                              "          sessionId: 'resumed-session-id',\n",
+             'review_after': "        'test-session-id',\n"
+                             '      );\n'
+                             '      '
+                             'expect(uiTelemetryService.addEvent).toHaveBeenCalledWith(\n'
+                             '        uiEvent,\n'
+                             "        'test-session-id',\n"
+                             '      );\n'
+                             '      '
+                             'expect(setLastPromptTokenCountSpy).toHaveBeenCalledWith(321, '
+                             'false);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('seeds resumed chat with replayed prompt token "
+                             "count', async () => {\n"
+                             '      '
+                             'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                             '        conversation: {\n'
+                             "          sessionId: 'resumed-session-id',\n"},
+            {'name': 'packages/core/src/core/client.test.ts:landmark-3',
+             'path': 'packages/core/src/core/client.test.ts',
+             'before': '      await resumedClient.initialize();\n'
+                       '\n'
+                       '      '
+                       'expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(123_456);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('seeds resumed chat with previous response output token "
+                       "count', async () => {\n"
+                       '      const seedResumeTokenCountsSpy = vi.spyOn(\n'
+                       '        GeminiChat.prototype,\n'
+                       "        'seedResumeTokenCounts',\n"
+                       '      );\n'
+                       '      '
+                       'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                       '        conversation: {\n'
+                       "          sessionId: 'resumed-session-id',\n"
+                       "          projectHash: 'project-hash',\n"
+                       '          startTime: new Date(0).toISOString(),\n',
+             'after': '      await resumedClient.initialize();\n'
+                      '\n'
+                      '      '
+                      'expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(123_456);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('seeds resumed chat with previous response output token "
+                      "count', async () => {\n"
+                      '      const setLastPromptTokenCountSpy = vi.spyOn(\n'
+                      '        GeminiChat.prototype,\n'
+                      "        'setLastPromptTokenCount',\n"
+                      '      );\n'
+                      '      '
+                      'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                      '        conversation: {\n'
+                      "          sessionId: 'resumed-session-id',\n"
+                      "          projectHash: 'project-hash',\n"
+                      '          startTime: new Date(0).toISOString(),\n',
+             'review_before': '      await resumedClient.initialize();\n'
+                              '\n'
+                              '      '
+                              'expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(123_456);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('seeds resumed chat with previous response "
+                              "output token count', async () => {\n"
+                              '      const seedResumeTokenCountsSpy = vi.spyOn(\n'
+                              '        GeminiChat.prototype,\n'
+                              "        'seedResumeTokenCounts',\n"
+                              '      );\n'
+                              '      '
+                              'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                              '        conversation: {\n'
+                              "          sessionId: 'resumed-session-id',\n"
+                              "          projectHash: 'project-hash',\n"
+                              '          startTime: new Date(0).toISOString(),\n',
+             'review_after': '      await resumedClient.initialize();\n'
+                             '\n'
+                             '      '
+                             'expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(123_456);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('seeds resumed chat with previous response output "
+                             "token count', async () => {\n"
+                             '      const setLastPromptTokenCountSpy = vi.spyOn(\n'
+                             '        GeminiChat.prototype,\n'
+                             "        'setLastPromptTokenCount',\n"
+                             '      );\n'
+                             '      '
+                             'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                             '        conversation: {\n'
+                             "          sessionId: 'resumed-session-id',\n"
+                             "          projectHash: 'project-hash',\n"
+                             '          startTime: new Date(0).toISOString(),\n'},
+            {'name': 'packages/core/src/core/client.test.ts:landmark-4',
+             'path': 'packages/core/src/core/client.test.ts',
+             'before': '      });\n'
+                       '\n'
+                       '      const resumedClient = new GeminiClient(mockConfig);\n'
+                       '      await resumedClient.initialize();\n'
+                       '\n'
+                       '      '
+                       'expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(200);\n'
+                       '      '
+                       'expect(seedResumeTokenCountsSpy).toHaveBeenCalledWith(200, 80, '
+                       'false);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('restores estimated provenance from a compression "
+                       "checkpoint', async () => {\n"
+                       '      const seedResumeTokenCountsSpy = vi.spyOn(\n'
+                       '        GeminiChat.prototype,\n'
+                       "        'seedResumeTokenCounts',\n"
+                       '      );\n'
+                       '      '
+                       'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                       '        conversation: {\n'
+                       "          sessionId: 'resumed-session-id',\n"
+                       "          projectHash: 'project-hash',\n"
+                       '          startTime: new Date(0).toISOString(),\n',
+             'after': '      });\n'
+                      '\n'
+                      '      const resumedClient = new GeminiClient(mockConfig);\n'
+                      '      await resumedClient.initialize();\n'
+                      '\n'
+                      '      '
+                      'expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(200);\n'
+                      '      '
+                      'expect(setLastPromptTokenCountSpy).toHaveBeenCalledWith(200, '
+                      'false);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('restores estimated provenance from a compression "
+                      "checkpoint', async () => {\n"
+                      '      const setLastPromptTokenCountSpy = vi.spyOn(\n'
+                      '        GeminiChat.prototype,\n'
+                      "        'setLastPromptTokenCount',\n"
+                      '      );\n'
+                      '      '
+                      'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                      '        conversation: {\n'
+                      "          sessionId: 'resumed-session-id',\n"
+                      "          projectHash: 'project-hash',\n"
+                      '          startTime: new Date(0).toISOString(),\n',
+             'review_before': '      });\n'
+                              '\n'
+                              '      const resumedClient = new '
+                              'GeminiClient(mockConfig);\n'
+                              '      await resumedClient.initialize();\n'
+                              '\n'
+                              '      '
+                              'expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(200);\n'
+                              '      '
+                              'expect(seedResumeTokenCountsSpy).toHaveBeenCalledWith(200, '
+                              '80, false);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('restores estimated provenance from a "
+                              "compression checkpoint', async () => {\n"
+                              '      const seedResumeTokenCountsSpy = vi.spyOn(\n'
+                              '        GeminiChat.prototype,\n'
+                              "        'seedResumeTokenCounts',\n"
+                              '      );\n'
+                              '      '
+                              'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                              '        conversation: {\n'
+                              "          sessionId: 'resumed-session-id',\n"
+                              "          projectHash: 'project-hash',\n"
+                              '          startTime: new Date(0).toISOString(),\n',
+             'review_after': '      });\n'
+                             '\n'
+                             '      const resumedClient = new '
+                             'GeminiClient(mockConfig);\n'
+                             '      await resumedClient.initialize();\n'
+                             '\n'
+                             '      '
+                             'expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(200);\n'
+                             '      '
+                             'expect(setLastPromptTokenCountSpy).toHaveBeenCalledWith(200, '
+                             'false);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('restores estimated provenance from a compression "
+                             "checkpoint', async () => {\n"
+                             '      const setLastPromptTokenCountSpy = vi.spyOn(\n'
+                             '        GeminiChat.prototype,\n'
+                             "        'setLastPromptTokenCount',\n"
+                             '      );\n'
+                             '      '
+                             'vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({\n'
+                             '        conversation: {\n'
+                             "          sessionId: 'resumed-session-id',\n"
+                             "          projectHash: 'project-hash',\n"
+                             '          startTime: new Date(0).toISOString(),\n'},
+            {'name': 'packages/core/src/core/client.test.ts:landmark-5',
+             'path': 'packages/core/src/core/client.test.ts',
+             'before': '        lastCompletedUuid: null,\n'
+                       '      });\n'
+                       '\n'
+                       '      const resumedClient = new GeminiClient(mockConfig);\n'
+                       '      await resumedClient.initialize();\n'
+                       '\n'
+                       '      '
+                       'expect(seedResumeTokenCountsSpy).toHaveBeenCalledWith(200, 0, '
+                       'true);\n'
+                       '      '
+                       'expect(resumedClient.getChat().isLastPromptTokenCountEstimated()).toBe(\n'
+                       '        true,\n'
+                       '      );\n'
+                       '    });\n'
+                       '\n'
+                       "    it('seeds recently completed tools from resumed history', "
+                       'async () => {\n',
+             'after': '        lastCompletedUuid: null,\n'
+                      '      });\n'
+                      '\n'
+                      '      const resumedClient = new GeminiClient(mockConfig);\n'
+                      '      await resumedClient.initialize();\n'
+                      '\n'
+                      '      '
+                      'expect(setLastPromptTokenCountSpy).toHaveBeenCalledWith(200, '
+                      'true);\n'
+                      '      '
+                      'expect(resumedClient.getChat().isLastPromptTokenCountEstimated()).toBe(\n'
+                      '        true,\n'
+                      '      );\n'
+                      '    });\n'
+                      '\n'
+                      "    it('seeds recently completed tools from resumed history', "
+                      'async () => {\n',
+             'review_before': '        lastCompletedUuid: null,\n'
+                              '      });\n'
+                              '\n'
+                              '      const resumedClient = new '
+                              'GeminiClient(mockConfig);\n'
+                              '      await resumedClient.initialize();\n'
+                              '\n'
+                              '      '
+                              'expect(seedResumeTokenCountsSpy).toHaveBeenCalledWith(200, '
+                              '0, true);\n'
+                              '      '
+                              'expect(resumedClient.getChat().isLastPromptTokenCountEstimated()).toBe(\n'
+                              '        true,\n'
+                              '      );\n'
+                              '    });\n'
+                              '\n'
+                              "    it('seeds recently completed tools from resumed "
+                              "history', async () => {\n",
+             'review_after': '        lastCompletedUuid: null,\n'
+                             '      });\n'
+                             '\n'
+                             '      const resumedClient = new '
+                             'GeminiClient(mockConfig);\n'
+                             '      await resumedClient.initialize();\n'
+                             '\n'
+                             '      '
+                             'expect(setLastPromptTokenCountSpy).toHaveBeenCalledWith(200, '
+                             'true);\n'
+                             '      '
+                             'expect(resumedClient.getChat().isLastPromptTokenCountEstimated()).toBe(\n'
+                             '        true,\n'
+                             '      );\n'
+                             '    });\n'
+                             '\n'
+                             "    it('seeds recently completed tools from resumed "
+                             "history', async () => {\n"},
+            {'name': 'packages/core/src/core/client.test.ts:landmark-6',
              'path': 'packages/core/src/core/client.test.ts',
              'before': '    });\n'
                        '  });\n'
@@ -48097,6 +50401,138 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  microcompactHistory,\n'},
             {'name': 'packages/core/src/core/client.ts:landmark-2',
              'path': 'packages/core/src/core/client.ts',
+             'before': '        sessionStartSource ?? SessionStartSource.Resume,\n'
+                       '      );\n'
+                       '      const chat = this.getChat();\n'
+                       '      if (restoreRuntime.resumeTokenCounts) {\n'
+                       '        const counts = restoreRuntime.resumeTokenCounts;\n'
+                       '        '
+                       'uiTelemetryService.setLastPromptTokenCount(counts.promptTokenCount);\n'
+                       '        chat.seedResumeTokenCounts(\n'
+                       '          counts.promptTokenCount,\n'
+                       '          counts.outputTokenCount,\n'
+                       '          counts.isEstimated,\n'
+                       '        );\n'
+                       '      } else {\n'
+                       '        chat.setLastPromptTokenCount(\n'
+                       '          uiTelemetryService.getLastPromptTokenCount(),\n'
+                       '        );\n',
+             'after': '        sessionStartSource ?? SessionStartSource.Resume,\n'
+                      '      );\n'
+                      '      const chat = this.getChat();\n'
+                      '      if (restoreRuntime.resumeTokenCounts) {\n'
+                      '        const counts = restoreRuntime.resumeTokenCounts;\n'
+                      '        '
+                      'uiTelemetryService.setLastPromptTokenCount(counts.promptTokenCount);\n'
+                      '        chat.setLastPromptTokenCount(\n'
+                      '          counts.promptTokenCount,\n'
+                      '          counts.isEstimated,\n'
+                      '        );\n'
+                      '      } else {\n'
+                      '        chat.setLastPromptTokenCount(\n'
+                      '          uiTelemetryService.getLastPromptTokenCount(),\n'
+                      '        );\n',
+             'review_before': '        sessionStartSource ?? '
+                              'SessionStartSource.Resume,\n'
+                              '      );\n'
+                              '      const chat = this.getChat();\n'
+                              '      if (restoreRuntime.resumeTokenCounts) {\n'
+                              '        const counts = '
+                              'restoreRuntime.resumeTokenCounts;\n'
+                              '        '
+                              'uiTelemetryService.setLastPromptTokenCount(counts.promptTokenCount);\n'
+                              '        chat.seedResumeTokenCounts(\n'
+                              '          counts.promptTokenCount,\n'
+                              '          counts.outputTokenCount,\n'
+                              '          counts.isEstimated,\n'
+                              '        );\n'
+                              '      } else {\n'
+                              '        chat.setLastPromptTokenCount(\n'
+                              '          '
+                              'uiTelemetryService.getLastPromptTokenCount(),\n'
+                              '        );\n',
+             'review_after': '        sessionStartSource ?? '
+                             'SessionStartSource.Resume,\n'
+                             '      );\n'
+                             '      const chat = this.getChat();\n'
+                             '      if (restoreRuntime.resumeTokenCounts) {\n'
+                             '        const counts = '
+                             'restoreRuntime.resumeTokenCounts;\n'
+                             '        '
+                             'uiTelemetryService.setLastPromptTokenCount(counts.promptTokenCount);\n'
+                             '        chat.setLastPromptTokenCount(\n'
+                             '          counts.promptTokenCount,\n'
+                             '          counts.isEstimated,\n'
+                             '        );\n'
+                             '      } else {\n'
+                             '        chat.setLastPromptTokenCount(\n'
+                             '          uiTelemetryService.getLastPromptTokenCount(),\n'
+                             '        );\n'},
+            {'name': 'packages/core/src/core/client.ts:landmark-3',
+             'path': 'packages/core/src/core/client.ts',
+             'before': '      await this.startChat(\n'
+                       '        resumedHistory,\n'
+                       '        sessionStartSource ?? SessionStartSource.Resume,\n'
+                       '      );\n'
+                       '      const chat = this.getChat();\n'
+                       '      if (resumeTokenCounts) {\n'
+                       '        chat.seedResumeTokenCounts(\n'
+                       '          resumeTokenCounts.promptTokenCount,\n'
+                       '          resumeTokenCounts.outputTokenCount,\n'
+                       '          resumeTokenCounts.isEstimated,\n'
+                       '        );\n'
+                       '      } else {\n'
+                       '        chat.setLastPromptTokenCount(\n'
+                       '          uiTelemetryService.getLastPromptTokenCount(),\n'
+                       '        );\n',
+             'after': '      await this.startChat(\n'
+                      '        resumedHistory,\n'
+                      '        sessionStartSource ?? SessionStartSource.Resume,\n'
+                      '      );\n'
+                      '      const chat = this.getChat();\n'
+                      '      if (resumeTokenCounts) {\n'
+                      '        chat.setLastPromptTokenCount(\n'
+                      '          resumeTokenCounts.promptTokenCount,\n'
+                      '          resumeTokenCounts.isEstimated,\n'
+                      '        );\n'
+                      '      } else {\n'
+                      '        chat.setLastPromptTokenCount(\n'
+                      '          uiTelemetryService.getLastPromptTokenCount(),\n'
+                      '        );\n',
+             'review_before': '      await this.startChat(\n'
+                              '        resumedHistory,\n'
+                              '        sessionStartSource ?? '
+                              'SessionStartSource.Resume,\n'
+                              '      );\n'
+                              '      const chat = this.getChat();\n'
+                              '      if (resumeTokenCounts) {\n'
+                              '        chat.seedResumeTokenCounts(\n'
+                              '          resumeTokenCounts.promptTokenCount,\n'
+                              '          resumeTokenCounts.outputTokenCount,\n'
+                              '          resumeTokenCounts.isEstimated,\n'
+                              '        );\n'
+                              '      } else {\n'
+                              '        chat.setLastPromptTokenCount(\n'
+                              '          '
+                              'uiTelemetryService.getLastPromptTokenCount(),\n'
+                              '        );\n',
+             'review_after': '      await this.startChat(\n'
+                             '        resumedHistory,\n'
+                             '        sessionStartSource ?? '
+                             'SessionStartSource.Resume,\n'
+                             '      );\n'
+                             '      const chat = this.getChat();\n'
+                             '      if (resumeTokenCounts) {\n'
+                             '        chat.setLastPromptTokenCount(\n'
+                             '          resumeTokenCounts.promptTokenCount,\n'
+                             '          resumeTokenCounts.isEstimated,\n'
+                             '        );\n'
+                             '      } else {\n'
+                             '        chat.setLastPromptTokenCount(\n'
+                             '          uiTelemetryService.getLastPromptTokenCount(),\n'
+                             '        );\n'},
+            {'name': 'packages/core/src/core/client.ts:landmark-4',
+             'path': 'packages/core/src/core/client.ts',
              'before': "        'gemini_chat_construct',\n"
                        '        () =>\n'
                        '          new GeminiChat(\n'
@@ -48147,7 +50583,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            uiTelemetryService,\n'
                              '          ),\n'
                              '      );\n'},
-            {'name': 'packages/core/src/core/client.ts:landmark-3',
+            {'name': 'packages/core/src/core/client.ts:landmark-5',
              'path': 'packages/core/src/core/client.ts',
              'before': '        const checkpoint = '
                        'this.lastHookMicrocompactionTimestamp;\n'
@@ -48271,7 +50707,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        this.config\n'
                              '          .getChatRecordingService()\n'
                              '          ?.recordAttributionSnapshot(\n'},
-            {'name': 'packages/core/src/core/client.ts:landmark-4',
+            {'name': 'packages/core/src/core/client.ts:landmark-6',
              'path': 'packages/core/src/core/client.ts',
              'before': '              debugLogger.error(`FileHistory: recordSnapshot '
                        'failed: ${e}`);\n'
@@ -48366,7 +50802,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const boundedTurns =\n'
                              '        messageType === SendMessageType.Goal\n'
                              '          ? MAX_TURNS\n'},
-            {'name': 'packages/core/src/core/client.ts:landmark-5',
+            {'name': 'packages/core/src/core/client.ts:landmark-7',
              'path': 'packages/core/src/core/client.ts',
              'before': '          !signal ||\n'
                        '          signal.aborted ||\n'
@@ -67189,6 +69625,74 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "      await chat.tryCompress('p1', true);\n"},
             {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-45',
              'path': 'packages/core/src/core/geminiChat.test.ts',
+             'before': '        ],\n'
+                       '        {\n'
+                       '          recordChatCompression,\n'
+                       '        } as unknown as ConstructorParameters<typeof '
+                       'GeminiChat>[3],\n'
+                       '        uiTelemetryService,\n'
+                       '      );\n'
+                       '      recordingChat.seedResumeTokenCounts(1000, 0, false);\n'
+                       '\n'
+                       '      const result = recordingChat.compressFast();\n'
+                       '\n'
+                       '      '
+                       'expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);\n'
+                       '      expect(result.info.newTokenCount).toBeGreaterThan(0);\n'
+                       '      expect(result.info.newTokenCount).toBeLessThan(1000);\n',
+             'after': '        ],\n'
+                      '        {\n'
+                      '          recordChatCompression,\n'
+                      '        } as unknown as ConstructorParameters<typeof '
+                      'GeminiChat>[3],\n'
+                      '        uiTelemetryService,\n'
+                      '      );\n'
+                      '      recordingChat.setLastPromptTokenCount(1000, false);\n'
+                      '\n'
+                      '      const result = recordingChat.compressFast();\n'
+                      '\n'
+                      '      '
+                      'expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);\n'
+                      '      expect(result.info.newTokenCount).toBeGreaterThan(0);\n'
+                      '      expect(result.info.newTokenCount).toBeLessThan(1000);\n',
+             'review_before': '        ],\n'
+                              '        {\n'
+                              '          recordChatCompression,\n'
+                              '        } as unknown as ConstructorParameters<typeof '
+                              'GeminiChat>[3],\n'
+                              '        uiTelemetryService,\n'
+                              '      );\n'
+                              '      recordingChat.seedResumeTokenCounts(1000, 0, '
+                              'false);\n'
+                              '\n'
+                              '      const result = recordingChat.compressFast();\n'
+                              '\n'
+                              '      '
+                              'expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);\n'
+                              '      '
+                              'expect(result.info.newTokenCount).toBeGreaterThan(0);\n'
+                              '      '
+                              'expect(result.info.newTokenCount).toBeLessThan(1000);\n',
+             'review_after': '        ],\n'
+                             '        {\n'
+                             '          recordChatCompression,\n'
+                             '        } as unknown as ConstructorParameters<typeof '
+                             'GeminiChat>[3],\n'
+                             '        uiTelemetryService,\n'
+                             '      );\n'
+                             '      recordingChat.setLastPromptTokenCount(1000, '
+                             'false);\n'
+                             '\n'
+                             '      const result = recordingChat.compressFast();\n'
+                             '\n'
+                             '      '
+                             'expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);\n'
+                             '      '
+                             'expect(result.info.newTokenCount).toBeGreaterThan(0);\n'
+                             '      '
+                             'expect(result.info.newTokenCount).toBeLessThan(1000);\n'},
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-46',
+             'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '          info: expect.objectContaining({ '
                        'newTokenCountIsEstimated: true }),\n'
                        '        }),\n'
@@ -67595,7 +70099,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      finishReason?: string,\n'
                              '    ): GenerateContentResponse {\n'
                              '      return {\n'},
-            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-46',
+            {'name': 'packages/core/src/core/geminiChat.test.ts:landmark-47',
              'path': 'packages/core/src/core/geminiChat.test.ts',
              'before': '            ...(finishReason ? { finishReason } : {}),\n'
                        '          },\n'
@@ -67872,7 +70376,24 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'import {\n'
                        '  microcompactHistory,\n'
                        '  type MicrocompactMeta,\n'
-                       "} from '../services/microcompaction/microcompact.js';\n",
+                       "} from '../services/microcompaction/microcompact.js';\n"
+                       'import {\n'
+                       '  ContentRetryEvent,\n'
+                       '  ContentRetryFailureEvent,\n'
+                       '  ApiRetryEvent,\n'
+                       '  makeChatCompressionEvent,\n'
+                       "} from '../telemetry/types.js';\n"
+                       'import type { UiTelemetryService } from '
+                       "'../telemetry/uiTelemetry.js';\n"
+                       'import { type ChatCompressionInfo, CompressionStatus } from '
+                       "'./turn.js';\n"
+                       'import { getContextLengthExceededInfo } from '
+                       "'../utils/contextLengthError.js';\n"
+                       'import {\n'
+                       '  getStartupContextLength,\n'
+                       '  isSystemReminderContent,\n'
+                       "} from '../utils/environmentContext.js';\n"
+                       "import type { SessionStartSource } from '../hooks/types.js';\n",
              'after': "} from '../utils/rateLimit.js';\n"
                       'import {\n'
                       '  classifyRetryError,\n'
@@ -67932,14 +70453,33 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  referencedImagePayloads,\n'
                       '  replaceImagePayloadsInPlace,\n'
                       "} from '../services/image-payload-references.js';\n"
-                      'import {\n'
-                      '  estimateContentTokens,\n'
-                      '  getUsageOutputTokenCountForPromptEstimate,\n'
-                      "} from '../services/tokenEstimation.js';\n"
+                      'import { estimateContentTokens } from '
+                      "'../services/tokenEstimation.js';\n"
                       'import {\n'
                       '  microcompactHistory,\n'
                       '  type MicrocompactMeta,\n'
-                      "} from '../services/microcompaction/microcompact.js';\n",
+                      "} from '../services/microcompaction/microcompact.js';\n"
+                      'import {\n'
+                      '  ContentRetryEvent,\n'
+                      '  ContentRetryFailureEvent,\n'
+                      '  ApiRetryEvent,\n'
+                      '  makeChatCompressionEvent,\n'
+                      "} from '../telemetry/types.js';\n"
+                      'import type { UiTelemetryService } from '
+                      "'../telemetry/uiTelemetry.js';\n"
+                      'import {\n'
+                      '  type ChatCompressionInfo,\n'
+                      '  type CompactionRecord,\n'
+                      '  CompressionStatus,\n'
+                      '  toCompactionRecord,\n'
+                      "} from './turn.js';\n"
+                      'import { getContextLengthExceededInfo } from '
+                      "'../utils/contextLengthError.js';\n"
+                      'import {\n'
+                      '  getStartupContextLength,\n'
+                      '  isSystemReminderContent,\n'
+                      "} from '../utils/environmentContext.js';\n"
+                      "import type { SessionStartSource } from '../hooks/types.js';\n",
              'review_before': "} from '../utils/rateLimit.js';\n"
                               'import {\n'
                               '  classifyRetryError,\n'
@@ -68003,7 +70543,25 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'import {\n'
                               '  microcompactHistory,\n'
                               '  type MicrocompactMeta,\n'
-                              "} from '../services/microcompaction/microcompact.js';\n",
+                              "} from '../services/microcompaction/microcompact.js';\n"
+                              'import {\n'
+                              '  ContentRetryEvent,\n'
+                              '  ContentRetryFailureEvent,\n'
+                              '  ApiRetryEvent,\n'
+                              '  makeChatCompressionEvent,\n'
+                              "} from '../telemetry/types.js';\n"
+                              'import type { UiTelemetryService } from '
+                              "'../telemetry/uiTelemetry.js';\n"
+                              'import { type ChatCompressionInfo, CompressionStatus } '
+                              "from './turn.js';\n"
+                              'import { getContextLengthExceededInfo } from '
+                              "'../utils/contextLengthError.js';\n"
+                              'import {\n'
+                              '  getStartupContextLength,\n'
+                              '  isSystemReminderContent,\n'
+                              "} from '../utils/environmentContext.js';\n"
+                              'import type { SessionStartSource } from '
+                              "'../hooks/types.js';\n",
              'review_after': "} from '../utils/rateLimit.js';\n"
                              'import {\n'
                              '  classifyRetryError,\n'
@@ -68065,70 +70623,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  referencedImagePayloads,\n'
                              '  replaceImagePayloadsInPlace,\n'
                              "} from '../services/image-payload-references.js';\n"
-                             'import {\n'
-                             '  estimateContentTokens,\n'
-                             '  getUsageOutputTokenCountForPromptEstimate,\n'
-                             "} from '../services/tokenEstimation.js';\n"
+                             'import { estimateContentTokens } from '
+                             "'../services/tokenEstimation.js';\n"
                              'import {\n'
                              '  microcompactHistory,\n'
                              '  type MicrocompactMeta,\n'
-                             "} from '../services/microcompaction/microcompact.js';\n"},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-3',
-             'path': 'packages/core/src/core/geminiChat.ts',
-             'before': '  ContentRetryEvent,\n'
-                       '  ContentRetryFailureEvent,\n'
-                       '  ApiRetryEvent,\n'
-                       '  makeChatCompressionEvent,\n'
-                       "} from '../telemetry/types.js';\n"
-                       'import type { UiTelemetryService } from '
-                       "'../telemetry/uiTelemetry.js';\n"
-                       'import { type ChatCompressionInfo, CompressionStatus } from '
-                       "'./turn.js';\n"
-                       'import { getContextLengthExceededInfo } from '
-                       "'../utils/contextLengthError.js';\n"
-                       'import {\n'
-                       '  getStartupContextLength,\n'
-                       '  isSystemReminderContent,\n'
-                       "} from '../utils/environmentContext.js';\n"
-                       "import type { SessionStartSource } from '../hooks/types.js';\n",
-             'after': '  ContentRetryEvent,\n'
-                      '  ContentRetryFailureEvent,\n'
-                      '  ApiRetryEvent,\n'
-                      '  makeChatCompressionEvent,\n'
-                      "} from '../telemetry/types.js';\n"
-                      'import type { UiTelemetryService } from '
-                      "'../telemetry/uiTelemetry.js';\n"
-                      'import {\n'
-                      '  type ChatCompressionInfo,\n'
-                      '  type CompactionRecord,\n'
-                      '  CompressionStatus,\n'
-                      '  toCompactionRecord,\n'
-                      "} from './turn.js';\n"
-                      'import { getContextLengthExceededInfo } from '
-                      "'../utils/contextLengthError.js';\n"
-                      'import {\n'
-                      '  getStartupContextLength,\n'
-                      '  isSystemReminderContent,\n'
-                      "} from '../utils/environmentContext.js';\n"
-                      "import type { SessionStartSource } from '../hooks/types.js';\n",
-             'review_before': '  ContentRetryEvent,\n'
-                              '  ContentRetryFailureEvent,\n'
-                              '  ApiRetryEvent,\n'
-                              '  makeChatCompressionEvent,\n'
-                              "} from '../telemetry/types.js';\n"
-                              'import type { UiTelemetryService } from '
-                              "'../telemetry/uiTelemetry.js';\n"
-                              'import { type ChatCompressionInfo, CompressionStatus } '
-                              "from './turn.js';\n"
-                              'import { getContextLengthExceededInfo } from '
-                              "'../utils/contextLengthError.js';\n"
-                              'import {\n'
-                              '  getStartupContextLength,\n'
-                              '  isSystemReminderContent,\n'
-                              "} from '../utils/environmentContext.js';\n"
-                              'import type { SessionStartSource } from '
-                              "'../hooks/types.js';\n",
-             'review_after': '  ContentRetryEvent,\n'
+                             "} from '../services/microcompaction/microcompact.js';\n"
+                             'import {\n'
+                             '  ContentRetryEvent,\n'
                              '  ContentRetryFailureEvent,\n'
                              '  ApiRetryEvent,\n'
                              '  makeChatCompressionEvent,\n'
@@ -68149,7 +70651,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "} from '../utils/environmentContext.js';\n"
                              'import type { SessionStartSource } from '
                              "'../hooks/types.js';\n"},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-4',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-3',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': 'import {\n'
                        '  getToolCallPreparations,\n'
@@ -68217,7 +70719,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '// Gemini can emit this filler after tool results; '
                              'filtering and validation\n'
                              '// must stay in sync.\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-5',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-4',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      ...part.functionCall,\n'
                        '      args: { ...STRUCTURED_OUTPUT_REDACTED_ARGS },\n'
@@ -68387,7 +70889,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'non-finite or negative\n'
                              ' * token counts on `usageMetadata`. This function '
                              'coerces the four fields that\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-6',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-5',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': "  RETRY = 'retry',\n"
                        '  /** Emitted once at the start of the stream when an '
@@ -68482,7 +70984,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '   * notification about the model switch. */\n'
                              "  MODEL_FALLBACK = 'model_fallback',\n"
                              '}\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-7',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-6',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '       *  buffer so the continuation appends to it. */\n'
                        '      isContinuation?: boolean;\n'
@@ -68614,7 +71116,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'recomputing — avoids a second\n'
                              '   * `getHistory(true)` clone per send and prevents '
                              'provider-reported overflow\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-8',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-7',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': 'const INVALID_STREAM_RETRY_CONFIG = {\n'
                        '  transientMaxRetries: 4,\n'
@@ -68694,7 +71196,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'socket-level cut that already\n'
                              '   * delivered output (issue #7832). This is a different '
                              'mechanism from the\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-9',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-8',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '   * once by the same gateway idle timeout, so this is sized '
                        'like\n'
@@ -68818,7 +71320,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'off.\n'
                              ' */\n'
                              'const MAX_OUTPUT_RECOVERY_ATTEMPTS = 3;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-10',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-9',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': ' * in for a real tool result that never made it back into '
                        'history (e.g. the\n'
@@ -68908,9 +71410,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' * '
                              '============================================================================\n'
                              ' *\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-11',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-10',
              'path': 'packages/core/src/core/geminiChat.ts',
-             'before': '   * previous response is appended to local history after '
+             'before': "   * (which intentionally don't write to the global telemetry "
+                       'singleton) can\n'
+                       '   * still make compaction decisions based on their *own* '
+                       'context size.\n'
+                       '   */\n'
+                       '  private lastPromptTokenCount = 0;\n'
+                       '  private lastPromptTokenCountIsEstimated = false;\n'
+                       '\n'
+                       '  /**\n'
+                       '   * Per-chat output-token count from the previous model '
+                       'response. The\n'
+                       '   * previous response is appended to local history after '
                        '`promptTokenCount`\n'
                        '   * was reported, so steady-state prompt estimates add this '
                        'value to avoid\n'
@@ -68981,14 +71494,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'and the\n'
                        '   * wedge they prevent.\n'
                        '   */\n',
-             'after': '   * previous response is appended to local history after '
-                      '`promptTokenCount`\n'
-                      '   * was reported, so steady-state prompt estimates add this '
-                      'value to avoid\n'
-                      '   * under-counting the next request near the hard compaction '
-                      'threshold.\n'
+             'after': "   * (which intentionally don't write to the global telemetry "
+                      'singleton) can\n'
+                      '   * still make compaction decisions based on their *own* '
+                      'context size.\n'
                       '   */\n'
-                      '  private lastOutputTokenCount = 0;\n'
+                      '  private lastPromptTokenCount = 0;\n'
+                      '  private lastPromptTokenCountIsEstimated = false;\n'
                       '\n'
                       '  /**\n'
                       '   * Partial-push markers — index of the in-memory '
@@ -68999,7 +71511,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'and the\n'
                       '   * wedge they prevent.\n'
                       '   */\n',
-             'review_before': '   * previous response is appended to local history '
+             'review_before': "   * (which intentionally don't write to the global "
+                              'telemetry singleton) can\n'
+                              '   * still make compaction decisions based on their '
+                              '*own* context size.\n'
+                              '   */\n'
+                              '  private lastPromptTokenCount = 0;\n'
+                              '  private lastPromptTokenCountIsEstimated = false;\n'
+                              '\n'
+                              '  /**\n'
+                              '   * Per-chat output-token count from the previous '
+                              'model response. The\n'
+                              '   * previous response is appended to local history '
                               'after `promptTokenCount`\n'
                               '   * was reported, so steady-state prompt estimates add '
                               'this value to avoid\n'
@@ -69071,14 +71594,13 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'lifecycle and the\n'
                               '   * wedge they prevent.\n'
                               '   */\n',
-             'review_after': '   * previous response is appended to local history '
-                             'after `promptTokenCount`\n'
-                             '   * was reported, so steady-state prompt estimates add '
-                             'this value to avoid\n'
-                             '   * under-counting the next request near the hard '
-                             'compaction threshold.\n'
+             'review_after': "   * (which intentionally don't write to the global "
+                             'telemetry singleton) can\n'
+                             '   * still make compaction decisions based on their '
+                             '*own* context size.\n'
                              '   */\n'
-                             '  private lastOutputTokenCount = 0;\n'
+                             '  private lastPromptTokenCount = 0;\n'
+                             '  private lastPromptTokenCountIsEstimated = false;\n'
                              '\n'
                              '  /**\n'
                              '   * Partial-push markers — index of the in-memory '
@@ -69089,7 +71611,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'lifecycle and the\n'
                              '   * wedge they prevent.\n'
                              '   */\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-12',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-11',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '   * @param telemetryService - Optional UI telemetry service. '
                        'When provided,\n'
@@ -69165,9 +71687,24 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  ) {\n'
                              '    validateHistory(history);\n'
                              '    this.redactApprovedPlansFromLoadedHistory();\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-13',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-12',
              'path': 'packages/core/src/core/geminiChat.ts',
-             'before': '   * whole chat history. This is an internal hot path: long '
+             'before': '   * of whether the global telemetry is updated.\n'
+                       '   */\n'
+                       '  getLastPromptTokenCount(): number {\n'
+                       '    return this.lastPromptTokenCount;\n'
+                       '  }\n'
+                       '\n'
+                       '  /** Previous model-response tokens used by the next prompt '
+                       'estimate. */\n'
+                       '  getLastOutputTokenCount(): number {\n'
+                       '    return this.lastOutputTokenCount;\n'
+                       '  }\n'
+                       '\n'
+                       '  /**\n'
+                       '   * Builds request contents for the content generator without '
+                       'deep-cloning the\n'
+                       '   * whole chat history. This is an internal hot path: long '
                        'sessions can make a\n'
                        '   * full `structuredClone` larger than the remaining V8 heap '
                        'headroom.\n'
@@ -69212,7 +71749,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        } else {\n'
                        "          requestHistory.push({ role: 'user', parts: "
                        'reattachParts });\n',
-             'after': '   * whole chat history. This is an internal hot path: long '
+             'after': '   * of whether the global telemetry is updated.\n'
+                      '   */\n'
+                      '  getLastPromptTokenCount(): number {\n'
+                      '    return this.lastPromptTokenCount;\n'
+                      '  }\n'
+                      '\n'
+                      '  /**\n'
+                      '   * Builds request contents for the content generator without '
+                      'deep-cloning the\n'
+                      '   * whole chat history. This is an internal hot path: long '
                       'sessions can make a\n'
                       '   * full `structuredClone` larger than the remaining V8 heap '
                       'headroom.\n'
@@ -69274,7 +71820,22 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        } else {\n'
                       "          requestHistory.push({ role: 'user', parts: "
                       'reattachParts });\n',
-             'review_before': '   * whole chat history. This is an internal hot path: '
+             'review_before': '   * of whether the global telemetry is updated.\n'
+                              '   */\n'
+                              '  getLastPromptTokenCount(): number {\n'
+                              '    return this.lastPromptTokenCount;\n'
+                              '  }\n'
+                              '\n'
+                              '  /** Previous model-response tokens used by the next '
+                              'prompt estimate. */\n'
+                              '  getLastOutputTokenCount(): number {\n'
+                              '    return this.lastOutputTokenCount;\n'
+                              '  }\n'
+                              '\n'
+                              '  /**\n'
+                              '   * Builds request contents for the content generator '
+                              'without deep-cloning the\n'
+                              '   * whole chat history. This is an internal hot path: '
                               'long sessions can make a\n'
                               '   * full `structuredClone` larger than the remaining '
                               'V8 heap headroom.\n'
@@ -69319,7 +71880,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        } else {\n'
                               "          requestHistory.push({ role: 'user', parts: "
                               'reattachParts });\n',
-             'review_after': '   * whole chat history. This is an internal hot path: '
+             'review_after': '   * of whether the global telemetry is updated.\n'
+                             '   */\n'
+                             '  getLastPromptTokenCount(): number {\n'
+                             '    return this.lastPromptTokenCount;\n'
+                             '  }\n'
+                             '\n'
+                             '  /**\n'
+                             '   * Builds request contents for the content generator '
+                             'without deep-cloning the\n'
+                             '   * whole chat history. This is an internal hot path: '
                              'long sessions can make a\n'
                              '   * full `structuredClone` larger than the remaining V8 '
                              'heap headroom.\n'
@@ -69381,7 +71951,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        } else {\n'
                              "          requestHistory.push({ role: 'user', parts: "
                              'reattachParts });\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-14',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-13',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      }\n'
                        '      return requestHistory;\n'
@@ -69409,7 +71979,65 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '   * can 400 from oversized history. Callers pass the parent '
                        "chat's\n"
                        '   * `getLastPromptTokenCount()` here. This also clears any '
-                       'remembered\n',
+                       'remembered\n'
+                       '   * previous-response output token count because the seeded '
+                       'prompt count\n'
+                       '   * comes from a different chat instance and should not '
+                       "inherit this chat's\n"
+                       '   * last response size.\n'
+                       '   */\n'
+                       '  setLastPromptTokenCount(count: number, isEstimated = false): '
+                       'void {\n'
+                       '    this.lastPromptTokenCount = count;\n'
+                       '    this.lastPromptTokenCountIsEstimated = isEstimated;\n'
+                       '    this.lastOutputTokenCount = 0;\n'
+                       '  }\n'
+                       '\n'
+                       '  isLastPromptTokenCountEstimated(): boolean {\n'
+                       '    return this.lastPromptTokenCountIsEstimated;\n'
+                       '  }\n'
+                       '\n'
+                       '  private promptCountIsEstimateDerived(): boolean {\n'
+                       '    return (\n'
+                       '      this.lastPromptTokenCount === 0 || '
+                       'this.lastPromptTokenCountIsEstimated\n'
+                       '    );\n'
+                       '  }\n'
+                       '\n'
+                       '  /**\n'
+                       '   * Seed the restored prompt and previous-response output '
+                       'token counts in one\n'
+                       '   * step. Resume restores chat history plus both counters and '
+                       'their provenance\n'
+                       '   * from the same checkpoint, so callers must avoid the '
+                       'normal\n'
+                       '   * setLastPromptTokenCount() clearing behavior.\n'
+                       '   */\n'
+                       '  seedResumeTokenCounts(\n'
+                       '    promptTokenCount: number,\n'
+                       '    outputTokenCount: number,\n'
+                       '    isEstimated = false,\n'
+                       '  ): void {\n'
+                       '    this.lastPromptTokenCount = '
+                       'Number.isFinite(promptTokenCount)\n'
+                       '      ? Math.max(0, promptTokenCount)\n'
+                       '      : 0;\n'
+                       '    this.lastPromptTokenCountIsEstimated = isEstimated;\n'
+                       '    this.lastOutputTokenCount = '
+                       'Number.isFinite(outputTokenCount)\n'
+                       '      ? Math.max(0, outputTokenCount)\n'
+                       '      : 0;\n'
+                       '  }\n'
+                       '\n'
+                       '  /**\n'
+                       "   * Attempt to compress this chat's history.\n"
+                       '   *\n'
+                       '   * Returns the compression info regardless of outcome. On a '
+                       'successful\n'
+                       '   * compaction (`COMPRESSED`), this method has already '
+                       "mutated the chat's\n"
+                       '   * history, recorded the event to `chatRecordingService` (if '
+                       'wired and\n',
              'after': '      }\n'
                       '      return requestHistory;\n'
                       '    }\n'
@@ -69610,8 +72238,37 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'first API call\n'
                       '   * can 400 from oversized history. Callers pass the parent '
                       "chat's\n"
-                      '   * `getLastPromptTokenCount()` here. This also clears any '
-                      'remembered\n',
+                      '   * `getLastPromptTokenCount()` here. A resumed session seeds '
+                      'the count and\n'
+                      '   * the provenance its checkpoint recorded through the same '
+                      'call.\n'
+                      '   */\n'
+                      '  setLastPromptTokenCount(count: number, isEstimated = false): '
+                      'void {\n'
+                      '    this.lastPromptTokenCount = count;\n'
+                      '    this.lastPromptTokenCountIsEstimated = isEstimated;\n'
+                      '  }\n'
+                      '\n'
+                      '  isLastPromptTokenCountEstimated(): boolean {\n'
+                      '    return this.lastPromptTokenCountIsEstimated;\n'
+                      '  }\n'
+                      '\n'
+                      '  private promptCountIsEstimateDerived(): boolean {\n'
+                      '    return (\n'
+                      '      this.lastPromptTokenCount === 0 || '
+                      'this.lastPromptTokenCountIsEstimated\n'
+                      '    );\n'
+                      '  }\n'
+                      '\n'
+                      '  /**\n'
+                      "   * Attempt to compress this chat's history.\n"
+                      '   *\n'
+                      '   * Returns the compression info regardless of outcome. On a '
+                      'successful\n'
+                      '   * compaction (`COMPRESSED`), this method has already mutated '
+                      "the chat's\n"
+                      '   * history, recorded the event to `chatRecordingService` (if '
+                      'wired and\n',
              'review_before': '      }\n'
                               '      return requestHistory;\n'
                               '    }\n'
@@ -69638,7 +72295,67 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '   * can 400 from oversized history. Callers pass the '
                               "parent chat's\n"
                               '   * `getLastPromptTokenCount()` here. This also clears '
-                              'any remembered\n',
+                              'any remembered\n'
+                              '   * previous-response output token count because the '
+                              'seeded prompt count\n'
+                              '   * comes from a different chat instance and should '
+                              "not inherit this chat's\n"
+                              '   * last response size.\n'
+                              '   */\n'
+                              '  setLastPromptTokenCount(count: number, isEstimated = '
+                              'false): void {\n'
+                              '    this.lastPromptTokenCount = count;\n'
+                              '    this.lastPromptTokenCountIsEstimated = '
+                              'isEstimated;\n'
+                              '    this.lastOutputTokenCount = 0;\n'
+                              '  }\n'
+                              '\n'
+                              '  isLastPromptTokenCountEstimated(): boolean {\n'
+                              '    return this.lastPromptTokenCountIsEstimated;\n'
+                              '  }\n'
+                              '\n'
+                              '  private promptCountIsEstimateDerived(): boolean {\n'
+                              '    return (\n'
+                              '      this.lastPromptTokenCount === 0 || '
+                              'this.lastPromptTokenCountIsEstimated\n'
+                              '    );\n'
+                              '  }\n'
+                              '\n'
+                              '  /**\n'
+                              '   * Seed the restored prompt and previous-response '
+                              'output token counts in one\n'
+                              '   * step. Resume restores chat history plus both '
+                              'counters and their provenance\n'
+                              '   * from the same checkpoint, so callers must avoid '
+                              'the normal\n'
+                              '   * setLastPromptTokenCount() clearing behavior.\n'
+                              '   */\n'
+                              '  seedResumeTokenCounts(\n'
+                              '    promptTokenCount: number,\n'
+                              '    outputTokenCount: number,\n'
+                              '    isEstimated = false,\n'
+                              '  ): void {\n'
+                              '    this.lastPromptTokenCount = '
+                              'Number.isFinite(promptTokenCount)\n'
+                              '      ? Math.max(0, promptTokenCount)\n'
+                              '      : 0;\n'
+                              '    this.lastPromptTokenCountIsEstimated = '
+                              'isEstimated;\n'
+                              '    this.lastOutputTokenCount = '
+                              'Number.isFinite(outputTokenCount)\n'
+                              '      ? Math.max(0, outputTokenCount)\n'
+                              '      : 0;\n'
+                              '  }\n'
+                              '\n'
+                              '  /**\n'
+                              "   * Attempt to compress this chat's history.\n"
+                              '   *\n'
+                              '   * Returns the compression info regardless of '
+                              'outcome. On a successful\n'
+                              '   * compaction (`COMPRESSED`), this method has already '
+                              "mutated the chat's\n"
+                              '   * history, recorded the event to '
+                              '`chatRecordingService` (if wired and\n',
              'review_after': '      }\n'
                              '      return requestHistory;\n'
                              '    }\n'
@@ -69844,9 +72561,38 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'so the first API call\n'
                              '   * can 400 from oversized history. Callers pass the '
                              "parent chat's\n"
-                             '   * `getLastPromptTokenCount()` here. This also clears '
-                             'any remembered\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-15',
+                             '   * `getLastPromptTokenCount()` here. A resumed session '
+                             'seeds the count and\n'
+                             '   * the provenance its checkpoint recorded through the '
+                             'same call.\n'
+                             '   */\n'
+                             '  setLastPromptTokenCount(count: number, isEstimated = '
+                             'false): void {\n'
+                             '    this.lastPromptTokenCount = count;\n'
+                             '    this.lastPromptTokenCountIsEstimated = isEstimated;\n'
+                             '  }\n'
+                             '\n'
+                             '  isLastPromptTokenCountEstimated(): boolean {\n'
+                             '    return this.lastPromptTokenCountIsEstimated;\n'
+                             '  }\n'
+                             '\n'
+                             '  private promptCountIsEstimateDerived(): boolean {\n'
+                             '    return (\n'
+                             '      this.lastPromptTokenCount === 0 || '
+                             'this.lastPromptTokenCountIsEstimated\n'
+                             '    );\n'
+                             '  }\n'
+                             '\n'
+                             '  /**\n'
+                             "   * Attempt to compress this chat's history.\n"
+                             '   *\n'
+                             '   * Returns the compression info regardless of outcome. '
+                             'On a successful\n'
+                             '   * compaction (`COMPRESSED`), this method has already '
+                             "mutated the chat's\n"
+                             '   * history, recorded the event to '
+                             '`chatRecordingService` (if wired and\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-14',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    );\n'
                        '    const service = new ChatCompressionService();\n'
@@ -69912,7 +72658,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      trigger: options?.trigger,\n'
                              '      customInstructions: '
                              'options?.customInstructions,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-16',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-15',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      this.config.getFileReadCache().clear();\n'
                        '      this.setLastPromptTokenCount(\n'
@@ -70018,7 +72764,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  }\n'
                              '\n'
                              '  /**\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-17',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-16',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      }),\n'
                        '    );\n'
@@ -70076,7 +72822,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  setSystemInstruction(sysInstr: string) {\n'
                              '    this.generationConfig.systemInstruction = '
                              'sysInstr;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-18',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-17',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      model = exactRoute.model;\n'
                        '    }\n'
@@ -70169,7 +72915,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'Promise<void>((resolve) => {\n'
                              '      streamDoneResolver = resolve;\n'
                              '    });\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-19',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-18',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '    // stash gets the same per-send reset for the same reason: '
                        'a\n'
@@ -70494,7 +73240,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`finally` (which\n'
                              '      // resolves it) has not run yet. Any setup error '
                              'before returning the\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-20',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-19',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      // at `await this.sendPromise`.\n'
                        '      // Build the user content BEFORE compression so the '
@@ -71147,7 +73893,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          manualPlanExitNoticeVersion = notice.version;\n'
                              '          manualPlanExitNoticeText = '
                              'getManualPlanExitSystemReminder(\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-21',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-20',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      }\n'
                        '      requestContents = this.getRequestHistoryForRoute(\n'
@@ -71410,7 +74156,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        this.history.pop();\n'
                              '        // The push above was rolled back, so undo its '
                              'count too.\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-22',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-21',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      }\n'
                        '      if (manualPlanExitNoticeVersion !== undefined) {\n'
@@ -71632,7 +74378,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          yield {\n'
                              '            type: StreamEventType.COMPRESSED,\n'
                              '            info: compressionInfo,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-23',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-22',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '        let streamYieldedAnyChunk = false;\n'
                        '\n'
@@ -71694,7 +74440,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              retryErrorCodes: '
                              'exactRoute.retryErrorCodes,\n'
                              '            }\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-24',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-23',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '            cgConfig?.samplingParams?.max_tokens !== null) ||\n'
                        '          parsedEnvMaxTokens !== undefined;\n'
@@ -71773,7 +74519,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '        let lastFinishReason: string | undefined;\n'
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-25',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-24',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              // second discards output the caller is '
                        'watching. The\n'
@@ -71851,7 +74597,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                '
                              'TRANSPORT_STREAM_RETRY_CONFIG.initialDelayMs *\n'
                              '                transportStreamRetryCount;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-26',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-25',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': "            // check), and the scheduler's repair path already "
                        'covers it.\n'
@@ -71931,7 +74677,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '`transportContinuationText` accumulates\n'
                              '              // and is never reset while continuing. '
                              "Each attempt's own text\n"},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-27',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-26',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '            if (contextOverflow.isExceeded) {\n'
                        '              if (!exactRoute && '
@@ -71998,7 +74744,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                  const reactiveInfo = await '
                              'self.tryCompress(\n'
                              '                    prompt_id,\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-28',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-27',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '                      precomputedEffectiveTokens: '
                        'reactiveOriginalTokenCount,\n'
@@ -72096,7 +74842,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'setHistory has already\n'
                              '                    // cleared the marker. Kept for '
                              'uniformity with the\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-29',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-28',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '                  }\n'
                        '\n'
@@ -72224,7 +74970,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '                    isAbortError(compressionError)\n'
                              '                  ) {\n'
                              '                    throw compressionError;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-30',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-29',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              break;\n'
                        '            }\n'
@@ -72377,7 +75123,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "              if (error.type === 'PROTOCOL_TAG_LEAK') {\n"
                              '                protocolTagLeakRetryCount = '
                              'nextInvalidStreamRetryCount;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-31',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-30',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              }\n'
                        '              return;\n'
@@ -72450,7 +75196,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "                error.type === 'PROTOCOL_TAG_LEAK'\n"
                              '                  ? protocolTagLeakRetryCount\n'
                              '                  : transientRetryCount;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-32',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-31',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '              await delay(delayMs, '
                        'attemptState.params.config?.abortSignal)\n'
@@ -72508,7 +75254,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          !hasUserMaxTokensOverride\n'
                              '        ) {\n'
                              '          maxTokensEscalated = true;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-33',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-32',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '            // Signal UI/turn to clear pending (incomplete) '
                        'tool calls.\n'
@@ -72779,7 +75525,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              for await (const event of '
                              'streamWithInvalidStreamRetries(\n'
                              '                () => {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-34',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-33',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          // - Do NOT trigger fallback when persistent mode is '
                        'active\n'
@@ -72859,7 +75605,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            !isUnattendedMode() &&\n'
                              '            !streamYieldedAnyChunk\n'
                              '          ) {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-35',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-34',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '          contents: requestContents,\n'
                        '          config: { ...this.generationConfig, ...params.config '
@@ -72985,7 +75731,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'return false;\n'
                              '        }\n'
                              '\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-36',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-35',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '\n'
                        '  setTools(tools: Tool[]): void {\n'
@@ -73055,7 +75801,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'with cyclic schemas\n'
                              '    // and include a recommendation to remove '
                              'potentially problematic tools.\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-37',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-36',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '  private async *processStreamResponse(\n'
                        '    model: string,\n'
@@ -73130,7 +75876,176 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'string>();\n'
                              '    let usageMetadata: '
                              'GenerateContentResponseUsageMetadata | undefined;\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-37',
+             'path': 'packages/core/src/core/geminiChat.ts',
+             'before': '          // so the compaction gate arithmetic stays '
+                       'well-defined; see\n'
+                       '          // `coerceUsageCount` for the failure modes this '
+                       'guards against.\n'
+                       '          const hasUsablePromptTokenCount =\n'
+                       "            typeof usageMetadata.promptTokenCount === 'number' "
+                       '&&\n'
+                       '            Number.isFinite(usageMetadata.promptTokenCount) '
+                       '&&\n'
+                       '            usageMetadata.promptTokenCount >= 0;\n'
+                       '          const hasUsableTotalTokenCount =\n'
+                       "            typeof usageMetadata.totalTokenCount === 'number' "
+                       '&&\n'
+                       '            Number.isFinite(usageMetadata.totalTokenCount) &&\n'
+                       '            usageMetadata.totalTokenCount >= 0;\n'
+                       '          const promptTokenCount = coerceUsageCount(\n'
+                       '            usageMetadata.promptTokenCount,\n'
+                       "            'promptTokenCount',\n"
+                       '          );\n'
+                       '          const totalTokenCount = coerceUsageCount(\n'
+                       '            usageMetadata.totalTokenCount,\n',
+             'after': '          // so the compaction gate arithmetic stays '
+                      'well-defined; see\n'
+                      '          // `coerceUsageCount` for the failure modes this '
+                      'guards against.\n'
+                      '          const hasUsablePromptTokenCount =\n'
+                      "            typeof usageMetadata.promptTokenCount === 'number' "
+                      '&&\n'
+                      '            Number.isFinite(usageMetadata.promptTokenCount) &&\n'
+                      '            usageMetadata.promptTokenCount >= 0;\n'
+                      '          const promptTokenCount = coerceUsageCount(\n'
+                      '            usageMetadata.promptTokenCount,\n'
+                      "            'promptTokenCount',\n"
+                      '          );\n'
+                      '          const totalTokenCount = coerceUsageCount(\n'
+                      '            usageMetadata.totalTokenCount,\n',
+             'review_before': '          // so the compaction gate arithmetic stays '
+                              'well-defined; see\n'
+                              '          // `coerceUsageCount` for the failure modes '
+                              'this guards against.\n'
+                              '          const hasUsablePromptTokenCount =\n'
+                              '            typeof usageMetadata.promptTokenCount === '
+                              "'number' &&\n"
+                              '            '
+                              'Number.isFinite(usageMetadata.promptTokenCount) &&\n'
+                              '            usageMetadata.promptTokenCount >= 0;\n'
+                              '          const hasUsableTotalTokenCount =\n'
+                              '            typeof usageMetadata.totalTokenCount === '
+                              "'number' &&\n"
+                              '            '
+                              'Number.isFinite(usageMetadata.totalTokenCount) &&\n'
+                              '            usageMetadata.totalTokenCount >= 0;\n'
+                              '          const promptTokenCount = coerceUsageCount(\n'
+                              '            usageMetadata.promptTokenCount,\n'
+                              "            'promptTokenCount',\n"
+                              '          );\n'
+                              '          const totalTokenCount = coerceUsageCount(\n'
+                              '            usageMetadata.totalTokenCount,\n',
+             'review_after': '          // so the compaction gate arithmetic stays '
+                             'well-defined; see\n'
+                             '          // `coerceUsageCount` for the failure modes '
+                             'this guards against.\n'
+                             '          const hasUsablePromptTokenCount =\n'
+                             '            typeof usageMetadata.promptTokenCount === '
+                             "'number' &&\n"
+                             '            '
+                             'Number.isFinite(usageMetadata.promptTokenCount) &&\n'
+                             '            usageMetadata.promptTokenCount >= 0;\n'
+                             '          const promptTokenCount = coerceUsageCount(\n'
+                             '            usageMetadata.promptTokenCount,\n'
+                             "            'promptTokenCount',\n"
+                             '          );\n'
+                             '          const totalTokenCount = coerceUsageCount(\n'
+                             '            usageMetadata.totalTokenCount,\n'},
             {'name': 'packages/core/src/core/geminiChat.ts:landmark-38',
+             'path': 'packages/core/src/core/geminiChat.ts',
+             'before': '            : totalTokenCount;\n'
+                       '          if (lastPromptTokenCount) {\n'
+                       '            // Always update the per-chat counter so this chat '
+                       '(including\n'
+                       '            // subagents) can make its own compaction '
+                       'decisions.\n'
+                       '            this.lastPromptTokenCount = lastPromptTokenCount;\n'
+                       '            this.lastPromptTokenCountIsEstimated = false;\n'
+                       '            this.lastOutputTokenCount = '
+                       'hasUsablePromptTokenCount\n'
+                       '              ? getUsageOutputTokenCountForPromptEstimate({\n'
+                       '                  promptTokenCount,\n'
+                       '                  ...(hasUsableTotalTokenCount ? { '
+                       'totalTokenCount } : {}),\n'
+                       '                  candidatesTokenCount,\n'
+                       '                  thoughtsTokenCount,\n'
+                       '                })\n'
+                       '              : 0;\n'
+                       '            // Mirror to the global telemetry only when wired '
+                       '— subagents\n'
+                       '            // pass `telemetryService=undefined` to keep their '
+                       'context usage\n'
+                       "            // out of the main session's UI counters.\n"
+                       '            this.telemetryService?.setLastPromptTokenCount(\n'
+                       '              lastPromptTokenCount,\n'
+                       '            );\n',
+             'after': '            : totalTokenCount;\n'
+                      '          if (lastPromptTokenCount) {\n'
+                      '            // Always update the per-chat counter so this chat '
+                      '(including\n'
+                      '            // subagents) can make its own compaction '
+                      'decisions.\n'
+                      '            this.lastPromptTokenCount = lastPromptTokenCount;\n'
+                      '            this.lastPromptTokenCountIsEstimated = false;\n'
+                      '            // Mirror to the global telemetry only when wired — '
+                      'subagents\n'
+                      '            // pass `telemetryService=undefined` to keep their '
+                      'context usage\n'
+                      "            // out of the main session's UI counters.\n"
+                      '            this.telemetryService?.setLastPromptTokenCount(\n'
+                      '              lastPromptTokenCount,\n'
+                      '            );\n',
+             'review_before': '            : totalTokenCount;\n'
+                              '          if (lastPromptTokenCount) {\n'
+                              '            // Always update the per-chat counter so '
+                              'this chat (including\n'
+                              '            // subagents) can make its own compaction '
+                              'decisions.\n'
+                              '            this.lastPromptTokenCount = '
+                              'lastPromptTokenCount;\n'
+                              '            this.lastPromptTokenCountIsEstimated = '
+                              'false;\n'
+                              '            this.lastOutputTokenCount = '
+                              'hasUsablePromptTokenCount\n'
+                              '              ? '
+                              'getUsageOutputTokenCountForPromptEstimate({\n'
+                              '                  promptTokenCount,\n'
+                              '                  ...(hasUsableTotalTokenCount ? { '
+                              'totalTokenCount } : {}),\n'
+                              '                  candidatesTokenCount,\n'
+                              '                  thoughtsTokenCount,\n'
+                              '                })\n'
+                              '              : 0;\n'
+                              '            // Mirror to the global telemetry only when '
+                              'wired — subagents\n'
+                              '            // pass `telemetryService=undefined` to '
+                              'keep their context usage\n'
+                              "            // out of the main session's UI counters.\n"
+                              '            '
+                              'this.telemetryService?.setLastPromptTokenCount(\n'
+                              '              lastPromptTokenCount,\n'
+                              '            );\n',
+             'review_after': '            : totalTokenCount;\n'
+                             '          if (lastPromptTokenCount) {\n'
+                             '            // Always update the per-chat counter so '
+                             'this chat (including\n'
+                             '            // subagents) can make its own compaction '
+                             'decisions.\n'
+                             '            this.lastPromptTokenCount = '
+                             'lastPromptTokenCount;\n'
+                             '            this.lastPromptTokenCountIsEstimated = '
+                             'false;\n'
+                             '            // Mirror to the global telemetry only when '
+                             'wired — subagents\n'
+                             '            // pass `telemetryService=undefined` to keep '
+                             'their context usage\n'
+                             "            // out of the main session's UI counters.\n"
+                             '            '
+                             'this.telemetryService?.setLastPromptTokenCount(\n'
+                             '              lastPromptTokenCount,\n'
+                             '            );\n'},
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-39',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '\n'
                        '    // XML tool call fallback: some models (e.g. '
@@ -73198,7 +76113,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      contentText &&\n'
                              '      containsXmlToolCalls(contentText)\n'
                              '    ) {\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-39',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-40',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      contentText = consolidatedHistoryParts\n'
                        '        .filter((part) => part.text)\n'
@@ -73371,7 +76286,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      const contextWindowSize =\n'
                              '        '
                              'this.config.getContentGeneratorConfig()?.contextWindowSize;\n'},
-            {'name': 'packages/core/src/core/geminiChat.ts:landmark-40',
+            {'name': 'packages/core/src/core/geminiChat.ts:landmark-41',
              'path': 'packages/core/src/core/geminiChat.ts',
              'before': '      this.history.splice(len - 2, 2);\n'
                        '    }\n'
@@ -74734,6 +77649,1143 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          created: 123,\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-6',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
+             'before': '      ).toBe(false);\n'
+                       '      expect(\n'
+                       '        '
+                       'getGenAiUsageProvenance(zero.usageMetadata)?.cachedInputTokensReported,\n'
+                       '      ).toBe(true);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('estimates missing reasoning tokens from non-streaming "
+                       "content', () => {\n"
+                       '      const response = '
+                       'converter.convertOpenAIResponseToGemini(\n'
+                       '        {\n'
+                       "          object: 'chat.completion',\n"
+                       "          id: 'chatcmpl-reasoning-usage',\n"
+                       '          created: 123,\n'
+                       "          model: 'test-model',\n",
+             'after': '      ).toBe(false);\n'
+                      '      expect(\n'
+                      '        '
+                      'getGenAiUsageProvenance(zero.usageMetadata)?.cachedInputTokensReported,\n'
+                      '      ).toBe(true);\n'
+                      '    });\n'
+                      '\n'
+                      "    it('leaves reasoning and cached counts absent when the "
+                      "provider served none', () => {\n"
+                      '      const response = '
+                      'converter.convertOpenAIResponseToGemini(\n'
+                      '        {\n'
+                      "          object: 'chat.completion',\n"
+                      "          id: 'chatcmpl-reasoning-usage',\n"
+                      '          created: 123,\n'
+                      "          model: 'test-model',\n",
+             'review_before': '      ).toBe(false);\n'
+                              '      expect(\n'
+                              '        '
+                              'getGenAiUsageProvenance(zero.usageMetadata)?.cachedInputTokensReported,\n'
+                              '      ).toBe(true);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('estimates missing reasoning tokens from "
+                              "non-streaming content', () => {\n"
+                              '      const response = '
+                              'converter.convertOpenAIResponseToGemini(\n'
+                              '        {\n'
+                              "          object: 'chat.completion',\n"
+                              "          id: 'chatcmpl-reasoning-usage',\n"
+                              '          created: 123,\n'
+                              "          model: 'test-model',\n",
+             'review_after': '      ).toBe(false);\n'
+                             '      expect(\n'
+                             '        '
+                             'getGenAiUsageProvenance(zero.usageMetadata)?.cachedInputTokensReported,\n'
+                             '      ).toBe(true);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('leaves reasoning and cached counts absent when "
+                             "the provider served none', () => {\n"
+                             '      const response = '
+                             'converter.convertOpenAIResponseToGemini(\n'
+                             '        {\n'
+                             "          object: 'chat.completion',\n"
+                             "          id: 'chatcmpl-reasoning-usage',\n"
+                             '          created: 123,\n'
+                             "          model: 'test-model',\n"},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-7',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
+             'before': '          ],\n'
+                       '          usage: { prompt_tokens: 1, completion_tokens: 10, '
+                       'total_tokens: 11 },\n'
+                       '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                       '        requestContext,\n'
+                       '      );\n'
+                       '\n'
+                       '      '
+                       'expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('estimates missing reasoning tokens from non-streaming "
+                       "reasoning field', () => {\n"
+                       '      const response = '
+                       'converter.convertOpenAIResponseToGemini(\n'
+                       '        {\n'
+                       "          object: 'chat.completion',\n"
+                       "          id: 'chatcmpl-reasoning-field-usage',\n"
+                       '          created: 123,\n'
+                       "          model: 'test-model',\n"
+                       '          choices: [\n'
+                       '            {\n'
+                       '              index: 0,\n'
+                       '              message: {\n'
+                       "                role: 'assistant',\n"
+                       "                content: 'answer',\n"
+                       "                reasoning: '先仔细想',\n"
+                       '              },\n'
+                       "              finish_reason: 'stop',\n"
+                       '              logprobs: null,\n'
+                       '            },\n'
+                       '          ],\n'
+                       '          usage: { prompt_tokens: 1, completion_tokens: 10, '
+                       'total_tokens: 11 },\n'
+                       '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                       '        requestContext,\n'
+                       '      );\n'
+                       '\n'
+                       '      '
+                       'expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('clamps estimated non-streaming reasoning tokens to "
+                       "completion tokens', () => {\n"
+                       '      const response = '
+                       'converter.convertOpenAIResponseToGemini(\n'
+                       '        {\n'
+                       "          object: 'chat.completion',\n"
+                       "          id: 'chatcmpl-reasoning-clamped-usage',\n"
+                       '          created: 123,\n'
+                       "          model: 'test-model',\n"
+                       '          choices: [\n'
+                       '            {\n'
+                       '              index: 0,\n'
+                       '              message: {\n'
+                       "                role: 'assistant',\n"
+                       "                content: 'answer',\n"
+                       "                reasoning_content: '想'.repeat(10),\n"
+                       '              },\n'
+                       "              finish_reason: 'stop',\n"
+                       '              logprobs: null,\n'
+                       '            },\n'
+                       '          ],\n'
+                       '          usage: { prompt_tokens: 1, completion_tokens: 3, '
+                       'total_tokens: 4 },\n'
+                       '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                       '        requestContext,\n'
+                       '      );\n'
+                       '\n'
+                       '      '
+                       'expect(response.usageMetadata?.thoughtsTokenCount).toBe(3);\n'
+                       '    });\n'
+                       '\n'
+                       '    it.each([0, 42])(\n'
+                       "      'preserves provider reasoning tokens for non-streaming "
+                       "content: %s',\n"
+                       '      (reasoningTokens) => {\n'
+                       '        const response = '
+                       'converter.convertOpenAIResponseToGemini(\n'
+                       '          {\n',
+             'after': '          ],\n'
+                      '          usage: { prompt_tokens: 1, completion_tokens: 10, '
+                      'total_tokens: 11 },\n'
+                      '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                      '        requestContext,\n'
+                      '      );\n'
+                      '\n'
+                      '      // Nothing is derived from the reasoning text: a count '
+                      'the provider did\n'
+                      '      // not serve is absent, never approximated.\n'
+                      '      expect(response.usageMetadata).toEqual({\n'
+                      '        promptTokenCount: 1,\n'
+                      '        candidatesTokenCount: 10,\n'
+                      '        totalTokenCount: 11,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[served-usage] reports exactly the served non-streaming "
+                      "counts under exactTokenCounting=vllm', () => {\n"
+                      '      const response = '
+                      'converter.convertOpenAIResponseToGemini(\n'
+                      '        {\n'
+                      "          object: 'chat.completion',\n"
+                      "          id: 'chatcmpl-served-usage',\n"
+                      '          created: 123,\n'
+                      "          model: 'test-model',\n"
+                      '          choices: [\n'
+                      '            {\n'
+                      '              index: 0,\n'
+                      '              message: {\n'
+                      "                role: 'assistant',\n"
+                      "                content: 'answer',\n"
+                      "                reasoning_content: '先仔细想',\n"
+                      '              },\n'
+                      "              finish_reason: 'stop',\n"
+                      '              logprobs: null,\n'
+                      '            },\n'
+                      '          ],\n'
+                      '          usage: {\n'
+                      '            prompt_tokens: 7,\n'
+                      '            completion_tokens: 10,\n'
+                      '            total_tokens: 17,\n'
+                      '            prompt_tokens_details: { cached_tokens: 3 },\n'
+                      '            completion_tokens_details: { reasoning_tokens: 6 '
+                      '},\n'
+                      '          },\n'
+                      '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                      '        { ...requestContext, exactTokenCounting: true },\n'
+                      '      );\n'
+                      '\n'
+                      '      expect(response.usageMetadata).toEqual({\n'
+                      '        promptTokenCount: 7,\n'
+                      '        candidatesTokenCount: 10,\n'
+                      '        totalTokenCount: 17,\n'
+                      '        cachedContentTokenCount: 3,\n'
+                      '        thoughtsTokenCount: 6,\n'
+                      '      });\n'
+                      '      '
+                      'expect(getGenAiUsageProvenance(response.usageMetadata)).toMatchObject({\n'
+                      '        cachedInputTokensReported: true,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      '    it.each([\n'
+                      '      [\n'
+                      "        'reasoning',\n"
+                      '        { prompt_tokens_details: { cached_tokens: 0 } },\n'
+                      "        'requires "
+                      "usage.completion_tokens_details.reasoning_tokens',\n"
+                      '      ],\n'
+                      '      [\n'
+                      "        'cached',\n"
+                      '        { completion_tokens_details: { reasoning_tokens: 4 } '
+                      '},\n'
+                      "        'requires usage.prompt_tokens_details.cached_tokens',\n"
+                      '      ],\n'
+                      '      [\n'
+                      "        'integer reasoning',\n"
+                      '        {\n'
+                      '          prompt_tokens_details: { cached_tokens: 0 },\n'
+                      '          completion_tokens_details: { reasoning_tokens: 4.5 '
+                      '},\n'
+                      '        },\n'
+                      "        'requires "
+                      "usage.completion_tokens_details.reasoning_tokens',\n"
+                      '      ],\n'
+                      '    ])(\n'
+                      "      '[served-usage] refuses a non-streaming usage without "
+                      "served %s tokens under exactTokenCounting=vllm',\n"
+                      '      (_name, details, message) => {\n'
+                      '        expect(() =>\n'
+                      '          converter.convertOpenAIResponseToGemini(\n'
+                      '            {\n'
+                      "              object: 'chat.completion',\n"
+                      "              id: 'chatcmpl-unserved-usage',\n"
+                      '              created: 123,\n'
+                      "              model: 'test-model',\n"
+                      '              choices: [\n'
+                      '                {\n'
+                      '                  index: 0,\n'
+                      '                  message: {\n'
+                      "                    role: 'assistant',\n"
+                      "                    content: 'answer',\n"
+                      "                    reasoning_content: '先仔细想',\n"
+                      '                  },\n'
+                      "                  finish_reason: 'stop',\n"
+                      '                  logprobs: null,\n'
+                      '                },\n'
+                      '              ],\n'
+                      '              usage: {\n'
+                      '                prompt_tokens: 1,\n'
+                      '                completion_tokens: 10,\n'
+                      '                total_tokens: 11,\n'
+                      '                ...details,\n'
+                      '              },\n'
+                      '            } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                      '            { ...requestContext, exactTokenCounting: true },\n'
+                      '          ),\n'
+                      '        ).toThrow(message);\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      '    it.each([0, 42])(\n'
+                      "      'preserves provider reasoning tokens for non-streaming "
+                      "content: %s',\n"
+                      '      (reasoningTokens) => {\n'
+                      '        const response = '
+                      'converter.convertOpenAIResponseToGemini(\n'
+                      '          {\n',
+             'review_before': '          ],\n'
+                              '          usage: { prompt_tokens: 1, completion_tokens: '
+                              '10, total_tokens: 11 },\n'
+                              '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                              '        requestContext,\n'
+                              '      );\n'
+                              '\n'
+                              '      '
+                              'expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('estimates missing reasoning tokens from "
+                              "non-streaming reasoning field', () => {\n"
+                              '      const response = '
+                              'converter.convertOpenAIResponseToGemini(\n'
+                              '        {\n'
+                              "          object: 'chat.completion',\n"
+                              "          id: 'chatcmpl-reasoning-field-usage',\n"
+                              '          created: 123,\n'
+                              "          model: 'test-model',\n"
+                              '          choices: [\n'
+                              '            {\n'
+                              '              index: 0,\n'
+                              '              message: {\n'
+                              "                role: 'assistant',\n"
+                              "                content: 'answer',\n"
+                              "                reasoning: '先仔细想',\n"
+                              '              },\n'
+                              "              finish_reason: 'stop',\n"
+                              '              logprobs: null,\n'
+                              '            },\n'
+                              '          ],\n'
+                              '          usage: { prompt_tokens: 1, completion_tokens: '
+                              '10, total_tokens: 11 },\n'
+                              '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                              '        requestContext,\n'
+                              '      );\n'
+                              '\n'
+                              '      '
+                              'expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('clamps estimated non-streaming reasoning tokens "
+                              "to completion tokens', () => {\n"
+                              '      const response = '
+                              'converter.convertOpenAIResponseToGemini(\n'
+                              '        {\n'
+                              "          object: 'chat.completion',\n"
+                              "          id: 'chatcmpl-reasoning-clamped-usage',\n"
+                              '          created: 123,\n'
+                              "          model: 'test-model',\n"
+                              '          choices: [\n'
+                              '            {\n'
+                              '              index: 0,\n'
+                              '              message: {\n'
+                              "                role: 'assistant',\n"
+                              "                content: 'answer',\n"
+                              "                reasoning_content: '想'.repeat(10),\n"
+                              '              },\n'
+                              "              finish_reason: 'stop',\n"
+                              '              logprobs: null,\n'
+                              '            },\n'
+                              '          ],\n'
+                              '          usage: { prompt_tokens: 1, completion_tokens: '
+                              '3, total_tokens: 4 },\n'
+                              '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                              '        requestContext,\n'
+                              '      );\n'
+                              '\n'
+                              '      '
+                              'expect(response.usageMetadata?.thoughtsTokenCount).toBe(3);\n'
+                              '    });\n'
+                              '\n'
+                              '    it.each([0, 42])(\n'
+                              "      'preserves provider reasoning tokens for "
+                              "non-streaming content: %s',\n"
+                              '      (reasoningTokens) => {\n'
+                              '        const response = '
+                              'converter.convertOpenAIResponseToGemini(\n'
+                              '          {\n',
+             'review_after': '          ],\n'
+                             '          usage: { prompt_tokens: 1, completion_tokens: '
+                             '10, total_tokens: 11 },\n'
+                             '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                             '        requestContext,\n'
+                             '      );\n'
+                             '\n'
+                             '      // Nothing is derived from the reasoning text: a '
+                             'count the provider did\n'
+                             '      // not serve is absent, never approximated.\n'
+                             '      expect(response.usageMetadata).toEqual({\n'
+                             '        promptTokenCount: 1,\n'
+                             '        candidatesTokenCount: 10,\n'
+                             '        totalTokenCount: 11,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[served-usage] reports exactly the served "
+                             "non-streaming counts under exactTokenCounting=vllm', () "
+                             '=> {\n'
+                             '      const response = '
+                             'converter.convertOpenAIResponseToGemini(\n'
+                             '        {\n'
+                             "          object: 'chat.completion',\n"
+                             "          id: 'chatcmpl-served-usage',\n"
+                             '          created: 123,\n'
+                             "          model: 'test-model',\n"
+                             '          choices: [\n'
+                             '            {\n'
+                             '              index: 0,\n'
+                             '              message: {\n'
+                             "                role: 'assistant',\n"
+                             "                content: 'answer',\n"
+                             "                reasoning_content: '先仔细想',\n"
+                             '              },\n'
+                             "              finish_reason: 'stop',\n"
+                             '              logprobs: null,\n'
+                             '            },\n'
+                             '          ],\n'
+                             '          usage: {\n'
+                             '            prompt_tokens: 7,\n'
+                             '            completion_tokens: 10,\n'
+                             '            total_tokens: 17,\n'
+                             '            prompt_tokens_details: { cached_tokens: 3 '
+                             '},\n'
+                             '            completion_tokens_details: { '
+                             'reasoning_tokens: 6 },\n'
+                             '          },\n'
+                             '        } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                             '        { ...requestContext, exactTokenCounting: true '
+                             '},\n'
+                             '      );\n'
+                             '\n'
+                             '      expect(response.usageMetadata).toEqual({\n'
+                             '        promptTokenCount: 7,\n'
+                             '        candidatesTokenCount: 10,\n'
+                             '        totalTokenCount: 17,\n'
+                             '        cachedContentTokenCount: 3,\n'
+                             '        thoughtsTokenCount: 6,\n'
+                             '      });\n'
+                             '      '
+                             'expect(getGenAiUsageProvenance(response.usageMetadata)).toMatchObject({\n'
+                             '        cachedInputTokensReported: true,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             '    it.each([\n'
+                             '      [\n'
+                             "        'reasoning',\n"
+                             '        { prompt_tokens_details: { cached_tokens: 0 } '
+                             '},\n'
+                             "        'requires "
+                             "usage.completion_tokens_details.reasoning_tokens',\n"
+                             '      ],\n'
+                             '      [\n'
+                             "        'cached',\n"
+                             '        { completion_tokens_details: { reasoning_tokens: '
+                             '4 } },\n'
+                             "        'requires "
+                             "usage.prompt_tokens_details.cached_tokens',\n"
+                             '      ],\n'
+                             '      [\n'
+                             "        'integer reasoning',\n"
+                             '        {\n'
+                             '          prompt_tokens_details: { cached_tokens: 0 },\n'
+                             '          completion_tokens_details: { reasoning_tokens: '
+                             '4.5 },\n'
+                             '        },\n'
+                             "        'requires "
+                             "usage.completion_tokens_details.reasoning_tokens',\n"
+                             '      ],\n'
+                             '    ])(\n'
+                             "      '[served-usage] refuses a non-streaming usage "
+                             'without served %s tokens under '
+                             "exactTokenCounting=vllm',\n"
+                             '      (_name, details, message) => {\n'
+                             '        expect(() =>\n'
+                             '          converter.convertOpenAIResponseToGemini(\n'
+                             '            {\n'
+                             "              object: 'chat.completion',\n"
+                             "              id: 'chatcmpl-unserved-usage',\n"
+                             '              created: 123,\n'
+                             "              model: 'test-model',\n"
+                             '              choices: [\n'
+                             '                {\n'
+                             '                  index: 0,\n'
+                             '                  message: {\n'
+                             "                    role: 'assistant',\n"
+                             "                    content: 'answer',\n"
+                             "                    reasoning_content: '先仔细想',\n"
+                             '                  },\n'
+                             "                  finish_reason: 'stop',\n"
+                             '                  logprobs: null,\n'
+                             '                },\n'
+                             '              ],\n'
+                             '              usage: {\n'
+                             '                prompt_tokens: 1,\n'
+                             '                completion_tokens: 10,\n'
+                             '                total_tokens: 11,\n'
+                             '                ...details,\n'
+                             '              },\n'
+                             '            } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                             '            { ...requestContext, exactTokenCounting: '
+                             'true },\n'
+                             '          ),\n'
+                             '        ).toThrow(message);\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'
+                             '    it.each([0, 42])(\n'
+                             "      'preserves provider reasoning tokens for "
+                             "non-streaming content: %s',\n"
+                             '      (reasoningTokens) => {\n'
+                             '        const response = '
+                             'converter.convertOpenAIResponseToGemini(\n'
+                             '          {\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-8',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
+             'before': '        '
+                       'expect(response.usageMetadata?.thoughtsTokenCount).toBe(\n'
+                       '          reasoningTokens,\n'
+                       '        );\n'
+                       '      },\n'
+                       '    );\n'
+                       '\n'
+                       "    it('estimates reasoning tokens past the streaming "
+                       "detection window', () => {\n"
+                       '      const context = withStreamParser();\n'
+                       '      const reasoningChunk = (id: string, reasoning_content: '
+                       'string) =>\n'
+                       '        ({\n'
+                       "          object: 'chat.completion.chunk',\n"
+                       '          id,\n'
+                       '          created: 123,\n',
+             'after': '        '
+                      'expect(response.usageMetadata?.thoughtsTokenCount).toBe(\n'
+                      '          reasoningTokens,\n'
+                      '        );\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      "    it('leaves streaming reasoning and cached counts absent "
+                      "when the provider served none', () => {\n"
+                      '      const context = withStreamParser();\n'
+                      '      const reasoningChunk = (id: string, reasoning_content: '
+                      'string) =>\n'
+                      '        ({\n'
+                      "          object: 'chat.completion.chunk',\n"
+                      '          id,\n'
+                      '          created: 123,\n',
+             'review_before': '        '
+                              'expect(response.usageMetadata?.thoughtsTokenCount).toBe(\n'
+                              '          reasoningTokens,\n'
+                              '        );\n'
+                              '      },\n'
+                              '    );\n'
+                              '\n'
+                              "    it('estimates reasoning tokens past the streaming "
+                              "detection window', () => {\n"
+                              '      const context = withStreamParser();\n'
+                              '      const reasoningChunk = (id: string, '
+                              'reasoning_content: string) =>\n'
+                              '        ({\n'
+                              "          object: 'chat.completion.chunk',\n"
+                              '          id,\n'
+                              '          created: 123,\n',
+             'review_after': '        '
+                             'expect(response.usageMetadata?.thoughtsTokenCount).toBe(\n'
+                             '          reasoningTokens,\n'
+                             '        );\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'
+                             "    it('leaves streaming reasoning and cached counts "
+                             "absent when the provider served none', () => {\n"
+                             '      const context = withStreamParser();\n'
+                             '      const reasoningChunk = (id: string, '
+                             'reasoning_content: string) =>\n'
+                             '        ({\n'
+                             "          object: 'chat.completion.chunk',\n"
+                             '          id,\n'
+                             '          created: 123,\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-9',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
+             'before': '              finish_reason: null,\n'
+                       '              logprobs: null,\n'
+                       '            },\n'
+                       '          ],\n'
+                       '        }) as unknown as OpenAI.Chat.ChatCompletionChunk;\n'
+                       '\n'
+                       '      converter.convertOpenAIChunkToGemini(\n'
+                       "        reasoningChunk('chunk-reasoning-1', "
+                       "'想'.repeat(1024)),\n"
+                       '        context,\n'
+                       '      );\n'
+                       '      converter.convertOpenAIChunkToGemini(\n'
+                       "        reasoningChunk('chunk-reasoning-2', '想'),\n",
+             'after': '              finish_reason: null,\n'
+                      '              logprobs: null,\n'
+                      '            },\n'
+                      '          ],\n'
+                      '        }) as unknown as OpenAI.Chat.ChatCompletionChunk;\n'
+                      '\n'
+                      '      // Enough reasoning text that any text-derived count '
+                      'would be large.\n'
+                      '      converter.convertOpenAIChunkToGemini(\n'
+                      "        reasoningChunk('chunk-reasoning-1', '想'.repeat(1024)),\n"
+                      '        context,\n'
+                      '      );\n'
+                      '      converter.convertOpenAIChunkToGemini(\n'
+                      "        reasoningChunk('chunk-reasoning-2', '想'),\n",
+             'review_before': '              finish_reason: null,\n'
+                              '              logprobs: null,\n'
+                              '            },\n'
+                              '          ],\n'
+                              '        }) as unknown as '
+                              'OpenAI.Chat.ChatCompletionChunk;\n'
+                              '\n'
+                              '      converter.convertOpenAIChunkToGemini(\n'
+                              "        reasoningChunk('chunk-reasoning-1', "
+                              "'想'.repeat(1024)),\n"
+                              '        context,\n'
+                              '      );\n'
+                              '      converter.convertOpenAIChunkToGemini(\n'
+                              "        reasoningChunk('chunk-reasoning-2', '想'),\n",
+             'review_after': '              finish_reason: null,\n'
+                             '              logprobs: null,\n'
+                             '            },\n'
+                             '          ],\n'
+                             '        }) as unknown as '
+                             'OpenAI.Chat.ChatCompletionChunk;\n'
+                             '\n'
+                             '      // Enough reasoning text that any text-derived '
+                             'count would be large.\n'
+                             '      converter.convertOpenAIChunkToGemini(\n'
+                             "        reasoningChunk('chunk-reasoning-1', "
+                             "'想'.repeat(1024)),\n"
+                             '        context,\n'
+                             '      );\n'
+                             '      converter.convertOpenAIChunkToGemini(\n'
+                             "        reasoningChunk('chunk-reasoning-2', '想'),\n"},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-10',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
+             'before': '            total_tokens: 1201,\n'
+                       '          },\n'
+                       '        } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                       '        context,\n'
+                       '      );\n'
+                       '\n'
+                       '      '
+                       'expect(response.usageMetadata?.thoughtsTokenCount).toBe(1128);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('estimates reasoning tokens for short streaming "
+                       "content', () => {\n"
+                       '      const context = withStreamParser();\n'
+                       '      const reasoningChunk = (id: string, reasoning_content: '
+                       'string) =>\n'
+                       '        ({\n'
+                       "          object: 'chat.completion.chunk',\n"
+                       '          id,\n'
+                       '          created: 123,\n'
+                       "          model: 'test-model',\n"
+                       '          choices: [\n'
+                       '            {\n'
+                       '              index: 0,\n'
+                       '              delta: { reasoning_content },\n'
+                       '              finish_reason: null,\n'
+                       '              logprobs: null,\n'
+                       '            },\n'
+                       '          ],\n'
+                       '        }) as unknown as OpenAI.Chat.ChatCompletionChunk;\n'
+                       '\n'
+                       '      converter.convertOpenAIChunkToGemini(\n'
+                       "        reasoningChunk('chunk-short-reasoning-1', '先'),\n"
+                       '        context,\n'
+                       '      );\n'
+                       '      converter.convertOpenAIChunkToGemini(\n'
+                       "        reasoningChunk('chunk-short-reasoning-2', '仔细想'),\n"
+                       '        context,\n'
+                       '      );\n'
+                       '      const response = converter.convertOpenAIChunkToGemini(\n'
+                       '        {\n'
+                       "          object: 'chat.completion.chunk',\n"
+                       "          id: 'chunk-short-reasoning-usage',\n"
+                       '          created: 123,\n'
+                       "          model: 'test-model',\n"
+                       '          choices: [],\n'
+                       '          usage: { prompt_tokens: 1, completion_tokens: 10, '
+                       'total_tokens: 11 },\n'
+                       '        } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                       '        context,\n'
+                       '      );\n'
+                       '\n'
+                       '      '
+                       'expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('estimates normalized cumulative reasoning without a "
+                       "completion count', () => {\n"
+                       '      const context = withStreamParser();\n'
+                       "      for (const reasoning_content of ['先仔细想', '先仔细想再检查']) {\n"
+                       '        converter.convertOpenAIChunkToGemini(\n'
+                       '          {\n'
+                       "            object: 'chat.completion.chunk',\n"
+                       "            id: 'chunk-cumulative-reasoning',\n"
+                       '            created: 123,\n'
+                       "            model: 'test-model',\n"
+                       '            choices: [\n'
+                       '              {\n'
+                       '                index: 0,\n'
+                       '                delta: { reasoning_content },\n'
+                       '                finish_reason: null,\n'
+                       '                logprobs: null,\n'
+                       '              },\n'
+                       '            ],\n'
+                       '          } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                       '          context,\n'
+                       '        );\n'
+                       '      }\n'
+                       '      const response = converter.convertOpenAIChunkToGemini(\n'
+                       '        {\n'
+                       "          object: 'chat.completion.chunk',\n"
+                       "          id: 'chunk-cumulative-reasoning-usage',\n"
+                       '          created: 123,\n'
+                       "          model: 'test-model',\n"
+                       '          choices: [],\n'
+                       '          usage: { prompt_tokens: 1, completion_tokens: 0, '
+                       'total_tokens: 1 },\n'
+                       '        } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                       '        context,\n'
+                       '      );\n'
+                       '\n'
+                       '      '
+                       'expect(response.usageMetadata?.thoughtsTokenCount).toBe(8);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('clamps estimated streaming reasoning tokens to "
+                       "completion tokens', () => {\n"
+                       '      const context = withStreamParser();\n'
+                       '      converter.convertOpenAIChunkToGemini(\n'
+                       '        {\n'
+                       "          object: 'chat.completion.chunk',\n"
+                       "          id: 'chunk-clamped-reasoning',\n"
+                       '          created: 123,\n'
+                       "          model: 'test-model',\n"
+                       '          choices: [\n'
+                       '            {\n'
+                       '              index: 0,\n'
+                       "              delta: { reasoning_content: '想'.repeat(10) },\n"
+                       '              finish_reason: null,\n'
+                       '              logprobs: null,\n'
+                       '            },\n'
+                       '          ],\n'
+                       '        } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                       '        context,\n'
+                       '      );\n'
+                       '      const response = converter.convertOpenAIChunkToGemini(\n'
+                       '        {\n'
+                       "          object: 'chat.completion.chunk',\n"
+                       "          id: 'chunk-clamped-reasoning-usage',\n"
+                       '          created: 123,\n'
+                       "          model: 'test-model',\n"
+                       '          choices: [],\n'
+                       '          usage: { prompt_tokens: 1, completion_tokens: 3, '
+                       'total_tokens: 4 },\n'
+                       '        } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                       '        context,\n'
+                       '      );\n'
+                       '\n'
+                       '      '
+                       'expect(response.usageMetadata?.thoughtsTokenCount).toBe(3);\n'
+                       '    });\n'
+                       '\n'
+                       '    it.each([0, 42])(\n'
+                       "      'preserves provider reasoning tokens for streaming "
+                       "content: %s',\n"
+                       '      (reasoningTokens) => {\n'
+                       '        const context = withStreamParser();\n'
+                       '        converter.convertOpenAIChunkToGemini(\n'
+                       '          {\n',
+             'after': '            total_tokens: 1201,\n'
+                      '          },\n'
+                      '        } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                      '        context,\n'
+                      '      );\n'
+                      '\n'
+                      '      expect(response.usageMetadata).toEqual({\n'
+                      '        promptTokenCount: 1,\n'
+                      '        candidatesTokenCount: 1200,\n'
+                      '        totalTokenCount: 1201,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('[served-usage] reports exactly the served streaming "
+                      "counts under exactTokenCounting=vllm', () => {\n"
+                      '      const context = { ...withStreamParser(), '
+                      'exactTokenCounting: true };\n'
+                      '      converter.convertOpenAIChunkToGemini(\n'
+                      '        {\n'
+                      "          object: 'chat.completion.chunk',\n"
+                      "          id: 'chunk-served-reasoning',\n"
+                      '          created: 123,\n'
+                      "          model: 'test-model',\n"
+                      '          choices: [\n'
+                      '            {\n'
+                      '              index: 0,\n'
+                      "              delta: { reasoning_content: '先仔细想' },\n"
+                      '              finish_reason: null,\n'
+                      '              logprobs: null,\n'
+                      '            },\n'
+                      '          ],\n'
+                      '        } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                      '        context,\n'
+                      '      );\n'
+                      '      const response = converter.convertOpenAIChunkToGemini(\n'
+                      '        {\n'
+                      "          object: 'chat.completion.chunk',\n"
+                      "          id: 'chunk-served-usage',\n"
+                      '          created: 123,\n'
+                      "          model: 'test-model',\n"
+                      '          choices: [],\n'
+                      '          usage: {\n'
+                      '            prompt_tokens: 7,\n'
+                      '            completion_tokens: 10,\n'
+                      '            total_tokens: 17,\n'
+                      '            prompt_tokens_details: { cached_tokens: 3 },\n'
+                      '            completion_tokens_details: { reasoning_tokens: 6 '
+                      '},\n'
+                      '          },\n'
+                      '        } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                      '        context,\n'
+                      '      );\n'
+                      '\n'
+                      '      expect(response.usageMetadata).toEqual({\n'
+                      '        promptTokenCount: 7,\n'
+                      '        candidatesTokenCount: 10,\n'
+                      '        totalTokenCount: 17,\n'
+                      '        cachedContentTokenCount: 3,\n'
+                      '        thoughtsTokenCount: 6,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      '    it.each([\n'
+                      '      [\n'
+                      "        'reasoning',\n"
+                      '        { prompt_tokens_details: { cached_tokens: 0 } },\n'
+                      "        'requires "
+                      "usage.completion_tokens_details.reasoning_tokens',\n"
+                      '      ],\n'
+                      '      [\n'
+                      "        'cached',\n"
+                      '        { completion_tokens_details: { reasoning_tokens: 4 } '
+                      '},\n'
+                      "        'requires usage.prompt_tokens_details.cached_tokens',\n"
+                      '      ],\n'
+                      '    ])(\n'
+                      "      '[served-usage] refuses a streaming usage without served "
+                      "%s tokens under exactTokenCounting=vllm',\n"
+                      '      (_name, details, message) => {\n'
+                      '        const context = { ...withStreamParser(), '
+                      'exactTokenCounting: true };\n'
+                      '        expect(() =>\n'
+                      '          converter.convertOpenAIChunkToGemini(\n'
+                      '            {\n'
+                      "              object: 'chat.completion.chunk',\n"
+                      "              id: 'chunk-unserved-usage',\n"
+                      '              created: 123,\n'
+                      "              model: 'test-model',\n"
+                      '              choices: [],\n'
+                      '              usage: {\n'
+                      '                prompt_tokens: 1,\n'
+                      '                completion_tokens: 10,\n'
+                      '                total_tokens: 11,\n'
+                      '                ...details,\n'
+                      '              },\n'
+                      '            } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
+                      '            context,\n'
+                      '          ),\n'
+                      '        ).toThrow(message);\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      '    it.each([0, 42])(\n'
+                      "      'preserves provider reasoning tokens for streaming "
+                      "content: %s',\n"
+                      '      (reasoningTokens) => {\n'
+                      '        const context = withStreamParser();\n'
+                      '        converter.convertOpenAIChunkToGemini(\n'
+                      '          {\n',
+             'review_before': '            total_tokens: 1201,\n'
+                              '          },\n'
+                              '        } as unknown as '
+                              'OpenAI.Chat.ChatCompletionChunk,\n'
+                              '        context,\n'
+                              '      );\n'
+                              '\n'
+                              '      '
+                              'expect(response.usageMetadata?.thoughtsTokenCount).toBe(1128);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('estimates reasoning tokens for short streaming "
+                              "content', () => {\n"
+                              '      const context = withStreamParser();\n'
+                              '      const reasoningChunk = (id: string, '
+                              'reasoning_content: string) =>\n'
+                              '        ({\n'
+                              "          object: 'chat.completion.chunk',\n"
+                              '          id,\n'
+                              '          created: 123,\n'
+                              "          model: 'test-model',\n"
+                              '          choices: [\n'
+                              '            {\n'
+                              '              index: 0,\n'
+                              '              delta: { reasoning_content },\n'
+                              '              finish_reason: null,\n'
+                              '              logprobs: null,\n'
+                              '            },\n'
+                              '          ],\n'
+                              '        }) as unknown as '
+                              'OpenAI.Chat.ChatCompletionChunk;\n'
+                              '\n'
+                              '      converter.convertOpenAIChunkToGemini(\n'
+                              "        reasoningChunk('chunk-short-reasoning-1', "
+                              "'先'),\n"
+                              '        context,\n'
+                              '      );\n'
+                              '      converter.convertOpenAIChunkToGemini(\n'
+                              "        reasoningChunk('chunk-short-reasoning-2', "
+                              "'仔细想'),\n"
+                              '        context,\n'
+                              '      );\n'
+                              '      const response = '
+                              'converter.convertOpenAIChunkToGemini(\n'
+                              '        {\n'
+                              "          object: 'chat.completion.chunk',\n"
+                              "          id: 'chunk-short-reasoning-usage',\n"
+                              '          created: 123,\n'
+                              "          model: 'test-model',\n"
+                              '          choices: [],\n'
+                              '          usage: { prompt_tokens: 1, completion_tokens: '
+                              '10, total_tokens: 11 },\n'
+                              '        } as unknown as '
+                              'OpenAI.Chat.ChatCompletionChunk,\n'
+                              '        context,\n'
+                              '      );\n'
+                              '\n'
+                              '      '
+                              'expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('estimates normalized cumulative reasoning "
+                              "without a completion count', () => {\n"
+                              '      const context = withStreamParser();\n'
+                              "      for (const reasoning_content of ['先仔细想', "
+                              "'先仔细想再检查']) {\n"
+                              '        converter.convertOpenAIChunkToGemini(\n'
+                              '          {\n'
+                              "            object: 'chat.completion.chunk',\n"
+                              "            id: 'chunk-cumulative-reasoning',\n"
+                              '            created: 123,\n'
+                              "            model: 'test-model',\n"
+                              '            choices: [\n'
+                              '              {\n'
+                              '                index: 0,\n'
+                              '                delta: { reasoning_content },\n'
+                              '                finish_reason: null,\n'
+                              '                logprobs: null,\n'
+                              '              },\n'
+                              '            ],\n'
+                              '          } as unknown as '
+                              'OpenAI.Chat.ChatCompletionChunk,\n'
+                              '          context,\n'
+                              '        );\n'
+                              '      }\n'
+                              '      const response = '
+                              'converter.convertOpenAIChunkToGemini(\n'
+                              '        {\n'
+                              "          object: 'chat.completion.chunk',\n"
+                              "          id: 'chunk-cumulative-reasoning-usage',\n"
+                              '          created: 123,\n'
+                              "          model: 'test-model',\n"
+                              '          choices: [],\n'
+                              '          usage: { prompt_tokens: 1, completion_tokens: '
+                              '0, total_tokens: 1 },\n'
+                              '        } as unknown as '
+                              'OpenAI.Chat.ChatCompletionChunk,\n'
+                              '        context,\n'
+                              '      );\n'
+                              '\n'
+                              '      '
+                              'expect(response.usageMetadata?.thoughtsTokenCount).toBe(8);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('clamps estimated streaming reasoning tokens to "
+                              "completion tokens', () => {\n"
+                              '      const context = withStreamParser();\n'
+                              '      converter.convertOpenAIChunkToGemini(\n'
+                              '        {\n'
+                              "          object: 'chat.completion.chunk',\n"
+                              "          id: 'chunk-clamped-reasoning',\n"
+                              '          created: 123,\n'
+                              "          model: 'test-model',\n"
+                              '          choices: [\n'
+                              '            {\n'
+                              '              index: 0,\n'
+                              '              delta: { reasoning_content: '
+                              "'想'.repeat(10) },\n"
+                              '              finish_reason: null,\n'
+                              '              logprobs: null,\n'
+                              '            },\n'
+                              '          ],\n'
+                              '        } as unknown as '
+                              'OpenAI.Chat.ChatCompletionChunk,\n'
+                              '        context,\n'
+                              '      );\n'
+                              '      const response = '
+                              'converter.convertOpenAIChunkToGemini(\n'
+                              '        {\n'
+                              "          object: 'chat.completion.chunk',\n"
+                              "          id: 'chunk-clamped-reasoning-usage',\n"
+                              '          created: 123,\n'
+                              "          model: 'test-model',\n"
+                              '          choices: [],\n'
+                              '          usage: { prompt_tokens: 1, completion_tokens: '
+                              '3, total_tokens: 4 },\n'
+                              '        } as unknown as '
+                              'OpenAI.Chat.ChatCompletionChunk,\n'
+                              '        context,\n'
+                              '      );\n'
+                              '\n'
+                              '      '
+                              'expect(response.usageMetadata?.thoughtsTokenCount).toBe(3);\n'
+                              '    });\n'
+                              '\n'
+                              '    it.each([0, 42])(\n'
+                              "      'preserves provider reasoning tokens for "
+                              "streaming content: %s',\n"
+                              '      (reasoningTokens) => {\n'
+                              '        const context = withStreamParser();\n'
+                              '        converter.convertOpenAIChunkToGemini(\n'
+                              '          {\n',
+             'review_after': '            total_tokens: 1201,\n'
+                             '          },\n'
+                             '        } as unknown as '
+                             'OpenAI.Chat.ChatCompletionChunk,\n'
+                             '        context,\n'
+                             '      );\n'
+                             '\n'
+                             '      expect(response.usageMetadata).toEqual({\n'
+                             '        promptTokenCount: 1,\n'
+                             '        candidatesTokenCount: 1200,\n'
+                             '        totalTokenCount: 1201,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[served-usage] reports exactly the served "
+                             "streaming counts under exactTokenCounting=vllm', () => "
+                             '{\n'
+                             '      const context = { ...withStreamParser(), '
+                             'exactTokenCounting: true };\n'
+                             '      converter.convertOpenAIChunkToGemini(\n'
+                             '        {\n'
+                             "          object: 'chat.completion.chunk',\n"
+                             "          id: 'chunk-served-reasoning',\n"
+                             '          created: 123,\n'
+                             "          model: 'test-model',\n"
+                             '          choices: [\n'
+                             '            {\n'
+                             '              index: 0,\n'
+                             "              delta: { reasoning_content: '先仔细想' },\n"
+                             '              finish_reason: null,\n'
+                             '              logprobs: null,\n'
+                             '            },\n'
+                             '          ],\n'
+                             '        } as unknown as '
+                             'OpenAI.Chat.ChatCompletionChunk,\n'
+                             '        context,\n'
+                             '      );\n'
+                             '      const response = '
+                             'converter.convertOpenAIChunkToGemini(\n'
+                             '        {\n'
+                             "          object: 'chat.completion.chunk',\n"
+                             "          id: 'chunk-served-usage',\n"
+                             '          created: 123,\n'
+                             "          model: 'test-model',\n"
+                             '          choices: [],\n'
+                             '          usage: {\n'
+                             '            prompt_tokens: 7,\n'
+                             '            completion_tokens: 10,\n'
+                             '            total_tokens: 17,\n'
+                             '            prompt_tokens_details: { cached_tokens: 3 '
+                             '},\n'
+                             '            completion_tokens_details: { '
+                             'reasoning_tokens: 6 },\n'
+                             '          },\n'
+                             '        } as unknown as '
+                             'OpenAI.Chat.ChatCompletionChunk,\n'
+                             '        context,\n'
+                             '      );\n'
+                             '\n'
+                             '      expect(response.usageMetadata).toEqual({\n'
+                             '        promptTokenCount: 7,\n'
+                             '        candidatesTokenCount: 10,\n'
+                             '        totalTokenCount: 17,\n'
+                             '        cachedContentTokenCount: 3,\n'
+                             '        thoughtsTokenCount: 6,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             '    it.each([\n'
+                             '      [\n'
+                             "        'reasoning',\n"
+                             '        { prompt_tokens_details: { cached_tokens: 0 } '
+                             '},\n'
+                             "        'requires "
+                             "usage.completion_tokens_details.reasoning_tokens',\n"
+                             '      ],\n'
+                             '      [\n'
+                             "        'cached',\n"
+                             '        { completion_tokens_details: { reasoning_tokens: '
+                             '4 } },\n'
+                             "        'requires "
+                             "usage.prompt_tokens_details.cached_tokens',\n"
+                             '      ],\n'
+                             '    ])(\n'
+                             "      '[served-usage] refuses a streaming usage without "
+                             "served %s tokens under exactTokenCounting=vllm',\n"
+                             '      (_name, details, message) => {\n'
+                             '        const context = { ...withStreamParser(), '
+                             'exactTokenCounting: true };\n'
+                             '        expect(() =>\n'
+                             '          converter.convertOpenAIChunkToGemini(\n'
+                             '            {\n'
+                             "              object: 'chat.completion.chunk',\n"
+                             "              id: 'chunk-unserved-usage',\n"
+                             '              created: 123,\n'
+                             "              model: 'test-model',\n"
+                             '              choices: [],\n'
+                             '              usage: {\n'
+                             '                prompt_tokens: 1,\n'
+                             '                completion_tokens: 10,\n'
+                             '                total_tokens: 11,\n'
+                             '                ...details,\n'
+                             '              },\n'
+                             '            } as unknown as '
+                             'OpenAI.Chat.ChatCompletionChunk,\n'
+                             '            context,\n'
+                             '          ),\n'
+                             '        ).toThrow(message);\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'
+                             '    it.each([0, 42])(\n'
+                             "      'preserves provider reasoning tokens for streaming "
+                             "content: %s',\n"
+                             '      (reasoningTokens) => {\n'
+                             '        const context = withStreamParser();\n'
+                             '        converter.convertOpenAIChunkToGemini(\n'
+                             '          {\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-11',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
              'before': '  let converter: typeof OpenAIContentConverter;\n'
                        '\n'
                        '  beforeEach(() => {\n'
@@ -74816,7 +78868,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  /**\n'
                              '   * Helper: feed streaming chunks then a final chunk '
                              'with finish_reason,\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-7',
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-12',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
              'before': '      index: number;\n'
                        '      id?: string;\n'
@@ -74887,7 +78939,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      conv.convertOpenAIChunkToGemini(\n'
                              '        {\n'
                              "          object: 'chat.completion.chunk',\n"},
-            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-8',
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-13',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
              'before': "    expect(fnCall?.functionCall?.name).toBe('write_file');\n"
                        '    expect(fnCall?.functionCall?.args).toEqual({\n'
@@ -75086,7 +79138,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const ctx = createStreamingRequestContext();\n'
                              '\n'
                              '    // Chunk 1: start of JSON with tool metadata\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-9',
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-14',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
              'before': '    expect(parts).toHaveLength(1);\n'
                        "    expect(parts[0].type).toBe('text');\n"
@@ -75219,6 +79271,263 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      {\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-1',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
+             'before': "} from '@google/genai';\n"
+                       'import { GenerateContentResponse, FinishReason } from '
+                       "'@google/genai';\n"
+                       "import type OpenAI from 'openai';\n"
+                       "import { safeJsonParse } from '../../utils/safeJsonParse.js';\n"
+                       'import { createDebugLogger } from '
+                       "'../../utils/debugLogger.js';\n"
+                       'import { createOpenAIReasoningThoughtPart } from '
+                       "'../../utils/thoughtUtils.js';\n"
+                       'import {\n'
+                       '  estimateTextTokens,\n'
+                       '  estimateTextTokenUnits,\n'
+                       '  TOKEN_ESTIMATE_UNITS_PER_TOKEN,\n'
+                       "} from '../../utils/request-tokenizer/textTokenizer.js';\n"
+                       'import type { RequestContext, StreamingTextDeltaState } from '
+                       "'./types.js';\n"
+                       'import { parseTaggedThinkingText } from '
+                       "'./taggedThinkingParser.js';\n"
+                       'import {\n'
+                       '  convertSchema,\n'
+                       '  relaxSchemaForFunctionCalling,\n'
+                       '  type SchemaComplianceMode,\n',
+             'after': "} from '@google/genai';\n"
+                      'import { GenerateContentResponse, FinishReason } from '
+                      "'@google/genai';\n"
+                      "import type OpenAI from 'openai';\n"
+                      "import { safeJsonParse } from '../../utils/safeJsonParse.js';\n"
+                      'import { createDebugLogger } from '
+                      "'../../utils/debugLogger.js';\n"
+                      'import { createOpenAIReasoningThoughtPart } from '
+                      "'../../utils/thoughtUtils.js';\n"
+                      'import type { RequestContext, StreamingTextDeltaState } from '
+                      "'./types.js';\n"
+                      'import { parseTaggedThinkingText } from '
+                      "'./taggedThinkingParser.js';\n"
+                      'import {\n'
+                      '  convertSchema,\n'
+                      '  relaxSchemaForFunctionCalling,\n'
+                      '  type SchemaComplianceMode,\n',
+             'review_before': "} from '@google/genai';\n"
+                              'import { GenerateContentResponse, FinishReason } from '
+                              "'@google/genai';\n"
+                              "import type OpenAI from 'openai';\n"
+                              'import { safeJsonParse } from '
+                              "'../../utils/safeJsonParse.js';\n"
+                              'import { createDebugLogger } from '
+                              "'../../utils/debugLogger.js';\n"
+                              'import { createOpenAIReasoningThoughtPart } from '
+                              "'../../utils/thoughtUtils.js';\n"
+                              'import {\n'
+                              '  estimateTextTokens,\n'
+                              '  estimateTextTokenUnits,\n'
+                              '  TOKEN_ESTIMATE_UNITS_PER_TOKEN,\n'
+                              '} from '
+                              "'../../utils/request-tokenizer/textTokenizer.js';\n"
+                              'import type { RequestContext, StreamingTextDeltaState } '
+                              "from './types.js';\n"
+                              'import { parseTaggedThinkingText } from '
+                              "'./taggedThinkingParser.js';\n"
+                              'import {\n'
+                              '  convertSchema,\n'
+                              '  relaxSchemaForFunctionCalling,\n'
+                              '  type SchemaComplianceMode,\n',
+             'review_after': "} from '@google/genai';\n"
+                             'import { GenerateContentResponse, FinishReason } from '
+                             "'@google/genai';\n"
+                             "import type OpenAI from 'openai';\n"
+                             'import { safeJsonParse } from '
+                             "'../../utils/safeJsonParse.js';\n"
+                             'import { createDebugLogger } from '
+                             "'../../utils/debugLogger.js';\n"
+                             'import { createOpenAIReasoningThoughtPart } from '
+                             "'../../utils/thoughtUtils.js';\n"
+                             'import type { RequestContext, StreamingTextDeltaState } '
+                             "from './types.js';\n"
+                             'import { parseTaggedThinkingText } from '
+                             "'./taggedThinkingParser.js';\n"
+                             'import {\n'
+                             '  convertSchema,\n'
+                             '  relaxSchemaForFunctionCalling,\n'
+                             '  type SchemaComplianceMode,\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-2',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
+             'before': ' * Some models return cached_tokens at the top level instead '
+                       'of in prompt_tokens_details\n'
+                       ' */\n'
+                       'interface ExtendedCompletionUsage extends '
+                       'OpenAI.CompletionUsage {\n'
+                       '  cached_tokens?: number;\n'
+                       '}\n'
+                       '\n'
+                       'export interface ExtendedChatCompletionAssistantMessageParam\n'
+                       '  extends OpenAI.Chat.ChatCompletionAssistantMessageParam {\n'
+                       '  reasoning_content?: string | null;\n'
+                       '}\n'
+                       '\n'
+                       'type ExtendedChatCompletionMessageParam =\n',
+             'after': ' * Some models return cached_tokens at the top level instead of '
+                      'in prompt_tokens_details\n'
+                      ' */\n'
+                      'interface ExtendedCompletionUsage extends '
+                      'OpenAI.CompletionUsage {\n'
+                      '  cached_tokens?: number;\n'
+                      '}\n'
+                      '\n'
+                      'function isServedCount(value: unknown): value is number {\n'
+                      "  return typeof value === 'number' && Number.isInteger(value) "
+                      '&& value >= 0;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * The served usage detail counts: the prompt tokens the '
+                      'backend reused from\n'
+                      ' * its prefix cache and the generated tokens it spent on '
+                      'reasoning. Both are\n'
+                      ' * read from the response and only from the response. Under\n'
+                      " * `exactTokenCounting: 'vllm'` the pinned backend serves both "
+                      'on every usage\n'
+                      ' * it emits, so a usage without either is a protocol failure '
+                      'and the request\n'
+                      ' * fails closed; elsewhere a count a provider did not serve is '
+                      'left absent\n'
+                      ' * rather than approximated from the text.\n'
+                      ' */\n'
+                      'function readServedUsageDetails(\n'
+                      '  usage: OpenAI.CompletionUsage,\n'
+                      '  requestContext: RequestContext,\n'
+                      '  site: string,\n'
+                      '): { cachedTokens?: number; reasoningTokens?: number } {\n'
+                      '  const extendedUsage = usage as ExtendedCompletionUsage;\n'
+                      '  const cachedTokens =\n'
+                      '    usage.prompt_tokens_details?.cached_tokens ?? '
+                      'extendedUsage.cached_tokens;\n'
+                      '  const reasoningTokens = '
+                      'usage.completion_tokens_details?.reasoning_tokens;\n'
+                      '  if (requestContext.exactTokenCounting) {\n'
+                      '    if (!isServedCount(reasoningTokens)) {\n'
+                      '      throw new Error(\n'
+                      '        `${site}: exactTokenCounting=vllm requires '
+                      'usage.completion_tokens_details.reasoning_tokens on every '
+                      'served usage; received ${JSON.stringify(usage)}`,\n'
+                      '      );\n'
+                      '    }\n'
+                      '    if (!isServedCount(cachedTokens)) {\n'
+                      '      throw new Error(\n'
+                      '        `${site}: exactTokenCounting=vllm requires '
+                      'usage.prompt_tokens_details.cached_tokens on every served '
+                      'usage; received ${JSON.stringify(usage)}`,\n'
+                      '      );\n'
+                      '    }\n'
+                      '  }\n'
+                      '  return {\n'
+                      "    ...(typeof cachedTokens === 'number' ? { cachedTokens } : "
+                      '{}),\n'
+                      "    ...(typeof reasoningTokens === 'number' ? { reasoningTokens "
+                      '} : {}),\n'
+                      '  };\n'
+                      '}\n'
+                      '\n'
+                      'export interface ExtendedChatCompletionAssistantMessageParam\n'
+                      '  extends OpenAI.Chat.ChatCompletionAssistantMessageParam {\n'
+                      '  reasoning_content?: string | null;\n'
+                      '}\n'
+                      '\n'
+                      'type ExtendedChatCompletionMessageParam =\n',
+             'review_before': ' * Some models return cached_tokens at the top level '
+                              'instead of in prompt_tokens_details\n'
+                              ' */\n'
+                              'interface ExtendedCompletionUsage extends '
+                              'OpenAI.CompletionUsage {\n'
+                              '  cached_tokens?: number;\n'
+                              '}\n'
+                              '\n'
+                              'export interface '
+                              'ExtendedChatCompletionAssistantMessageParam\n'
+                              '  extends '
+                              'OpenAI.Chat.ChatCompletionAssistantMessageParam {\n'
+                              '  reasoning_content?: string | null;\n'
+                              '}\n'
+                              '\n'
+                              'type ExtendedChatCompletionMessageParam =\n',
+             'review_after': ' * Some models return cached_tokens at the top level '
+                             'instead of in prompt_tokens_details\n'
+                             ' */\n'
+                             'interface ExtendedCompletionUsage extends '
+                             'OpenAI.CompletionUsage {\n'
+                             '  cached_tokens?: number;\n'
+                             '}\n'
+                             '\n'
+                             'function isServedCount(value: unknown): value is number '
+                             '{\n'
+                             "  return typeof value === 'number' && "
+                             'Number.isInteger(value) && value >= 0;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * The served usage detail counts: the prompt tokens the '
+                             'backend reused from\n'
+                             ' * its prefix cache and the generated tokens it spent on '
+                             'reasoning. Both are\n'
+                             ' * read from the response and only from the response. '
+                             'Under\n'
+                             " * `exactTokenCounting: 'vllm'` the pinned backend "
+                             'serves both on every usage\n'
+                             ' * it emits, so a usage without either is a protocol '
+                             'failure and the request\n'
+                             ' * fails closed; elsewhere a count a provider did not '
+                             'serve is left absent\n'
+                             ' * rather than approximated from the text.\n'
+                             ' */\n'
+                             'function readServedUsageDetails(\n'
+                             '  usage: OpenAI.CompletionUsage,\n'
+                             '  requestContext: RequestContext,\n'
+                             '  site: string,\n'
+                             '): { cachedTokens?: number; reasoningTokens?: number } '
+                             '{\n'
+                             '  const extendedUsage = usage as '
+                             'ExtendedCompletionUsage;\n'
+                             '  const cachedTokens =\n'
+                             '    usage.prompt_tokens_details?.cached_tokens ?? '
+                             'extendedUsage.cached_tokens;\n'
+                             '  const reasoningTokens = '
+                             'usage.completion_tokens_details?.reasoning_tokens;\n'
+                             '  if (requestContext.exactTokenCounting) {\n'
+                             '    if (!isServedCount(reasoningTokens)) {\n'
+                             '      throw new Error(\n'
+                             '        `${site}: exactTokenCounting=vllm requires '
+                             'usage.completion_tokens_details.reasoning_tokens on '
+                             'every served usage; received ${JSON.stringify(usage)}`,\n'
+                             '      );\n'
+                             '    }\n'
+                             '    if (!isServedCount(cachedTokens)) {\n'
+                             '      throw new Error(\n'
+                             '        `${site}: exactTokenCounting=vllm requires '
+                             'usage.prompt_tokens_details.cached_tokens on every '
+                             'served usage; received ${JSON.stringify(usage)}`,\n'
+                             '      );\n'
+                             '    }\n'
+                             '  }\n'
+                             '  return {\n'
+                             "    ...(typeof cachedTokens === 'number' ? { "
+                             'cachedTokens } : {}),\n'
+                             "    ...(typeof reasoningTokens === 'number' ? { "
+                             'reasoningTokens } : {}),\n'
+                             '  };\n'
+                             '}\n'
+                             '\n'
+                             'export interface '
+                             'ExtendedChatCompletionAssistantMessageParam\n'
+                             '  extends '
+                             'OpenAI.Chat.ChatCompletionAssistantMessageParam {\n'
+                             '  reasoning_content?: string | null;\n'
+                             '}\n'
+                             '\n'
+                             'type ExtendedChatCompletionMessageParam =\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-3',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
              'before': '        return unsupportedModalityPlaceholder(\n'
                        "          'image',\n"
                        '          displayName,\n'
@@ -75283,7 +79592,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        image_url: { url: dataUrl },\n'
                              '      };\n'
                              '    }\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-2',
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-4',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
              'before': '        return unsupportedModalityPlaceholder(\n'
                        "          'image',\n"
@@ -75355,7 +79664,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "        return unsupportedModalityPlaceholder('pdf', "
                              'filename, requestContext);\n'
                              '      }\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-3',
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-5',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
              'before': '      '
                        'parts.push(createOpenAIReasoningThoughtPart(reasoningText));\n'
@@ -75549,7 +79858,287 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            functionCall: {\n'
                              '              id: toolCall.id,\n'
                              '              name: toolCall.function.name,\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-4',
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-6',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
+             'before': '  if (openaiResponse.usage) {\n'
+                       '    const usage = openaiResponse.usage;\n'
+                       '\n'
+                       '    const promptTokens = usage.prompt_tokens || 0;\n'
+                       '    const completionTokens = usage.completion_tokens || 0;\n'
+                       '    const totalTokens = usage.total_tokens || 0;\n'
+                       '    // Support both formats: '
+                       'prompt_tokens_details.cached_tokens (OpenAI standard)\n'
+                       '    // and cached_tokens (some models return it at top level)\n'
+                       '    const extendedUsage = usage as ExtendedCompletionUsage;\n'
+                       '    const cachedTokens =\n'
+                       '      usage.prompt_tokens_details?.cached_tokens ??\n'
+                       '      extendedUsage.cached_tokens ??\n'
+                       '      0;\n'
+                       '    const cachedInputTokensReported =\n'
+                       '      typeof usage.prompt_tokens_details?.cached_tokens === '
+                       "'number' ||\n"
+                       "      typeof extendedUsage.cached_tokens === 'number';\n"
+                       '    const providerReasoningTokens =\n'
+                       '      usage.completion_tokens_details?.reasoning_tokens;\n'
+                       '    let thinkingTokens = providerReasoningTokens;\n'
+                       '    if (thinkingTokens == null) {\n'
+                       '      const estimatedThinkingTokens = '
+                       "estimateTextTokens(reasoningText ?? '');\n"
+                       '      thinkingTokens =\n'
+                       '        completionTokens > 0\n'
+                       '          ? Math.min(estimatedThinkingTokens, '
+                       'completionTokens)\n'
+                       '          : estimatedThinkingTokens;\n'
+                       '      if (thinkingTokens > 0) {\n'
+                       '        debugLogger.debug(\n'
+                       '          `convertOpenAIResponseToGemini: reasoning_tokens '
+                       'absent; estimated ${thinkingTokens} from text`,\n'
+                       '        );\n'
+                       '      }\n'
+                       '    }\n'
+                       '\n'
+                       '    const hasTokenBreakdown =\n'
+                       '      totalTokens === 0 || promptTokens !== 0 || '
+                       'completionTokens !== 0;\n'
+                       '\n'
+                       '    response.usageMetadata = {\n'
+                       '      ...(hasTokenBreakdown\n'
+                       '        ? {\n'
+                       '            promptTokenCount: promptTokens,\n'
+                       '            candidatesTokenCount: completionTokens,\n'
+                       '          }\n'
+                       '        : {}),\n'
+                       '      totalTokenCount: totalTokens,\n'
+                       '      cachedContentTokenCount: cachedTokens,\n'
+                       '      thoughtsTokenCount: thinkingTokens,\n'
+                       '    };\n'
+                       '    setGenAiUsageProvenance(response.usageMetadata, {\n'
+                       '      cachedInputTokensReported,\n'
+                       '    });\n'
+                       '  }\n'
+                       '\n'
+                       '  return response;\n'
+                       '}\n'
+                       '\n',
+             'after': '  if (openaiResponse.usage) {\n'
+                      '    const usage = openaiResponse.usage;\n'
+                      '\n'
+                      '    const promptTokens = usage.prompt_tokens || 0;\n'
+                      '    const completionTokens = usage.completion_tokens || 0;\n'
+                      '    const totalTokens = usage.total_tokens || 0;\n'
+                      '    const served = readServedUsageDetails(\n'
+                      '      usage,\n'
+                      '      requestContext,\n'
+                      "      'convertOpenAIResponseToGemini',\n"
+                      '    );\n'
+                      '\n'
+                      '    const hasTokenBreakdown =\n'
+                      '      totalTokens === 0 || promptTokens !== 0 || '
+                      'completionTokens !== 0;\n'
+                      '\n'
+                      '    response.usageMetadata = {\n'
+                      '      ...(hasTokenBreakdown\n'
+                      '        ? {\n'
+                      '            promptTokenCount: promptTokens,\n'
+                      '            candidatesTokenCount: completionTokens,\n'
+                      '          }\n'
+                      '        : {}),\n'
+                      '      totalTokenCount: totalTokens,\n'
+                      '      ...(served.cachedTokens !== undefined\n'
+                      '        ? { cachedContentTokenCount: served.cachedTokens }\n'
+                      '        : {}),\n'
+                      '      ...(served.reasoningTokens !== undefined\n'
+                      '        ? { thoughtsTokenCount: served.reasoningTokens }\n'
+                      '        : {}),\n'
+                      '    };\n'
+                      '    setGenAiUsageProvenance(response.usageMetadata, {\n'
+                      '      cachedInputTokensReported: served.cachedTokens !== '
+                      'undefined,\n'
+                      '    });\n'
+                      '  }\n'
+                      '\n'
+                      '  return response;\n'
+                      '}\n'
+                      '\n',
+             'review_before': '  if (openaiResponse.usage) {\n'
+                              '    const usage = openaiResponse.usage;\n'
+                              '\n'
+                              '    const promptTokens = usage.prompt_tokens || 0;\n'
+                              '    const completionTokens = usage.completion_tokens || '
+                              '0;\n'
+                              '    const totalTokens = usage.total_tokens || 0;\n'
+                              '    // Support both formats: '
+                              'prompt_tokens_details.cached_tokens (OpenAI standard)\n'
+                              '    // and cached_tokens (some models return it at top '
+                              'level)\n'
+                              '    const extendedUsage = usage as '
+                              'ExtendedCompletionUsage;\n'
+                              '    const cachedTokens =\n'
+                              '      usage.prompt_tokens_details?.cached_tokens ??\n'
+                              '      extendedUsage.cached_tokens ??\n'
+                              '      0;\n'
+                              '    const cachedInputTokensReported =\n'
+                              '      typeof usage.prompt_tokens_details?.cached_tokens '
+                              "=== 'number' ||\n"
+                              "      typeof extendedUsage.cached_tokens === 'number';\n"
+                              '    const providerReasoningTokens =\n'
+                              '      '
+                              'usage.completion_tokens_details?.reasoning_tokens;\n'
+                              '    let thinkingTokens = providerReasoningTokens;\n'
+                              '    if (thinkingTokens == null) {\n'
+                              '      const estimatedThinkingTokens = '
+                              "estimateTextTokens(reasoningText ?? '');\n"
+                              '      thinkingTokens =\n'
+                              '        completionTokens > 0\n'
+                              '          ? Math.min(estimatedThinkingTokens, '
+                              'completionTokens)\n'
+                              '          : estimatedThinkingTokens;\n'
+                              '      if (thinkingTokens > 0) {\n'
+                              '        debugLogger.debug(\n'
+                              '          `convertOpenAIResponseToGemini: '
+                              'reasoning_tokens absent; estimated ${thinkingTokens} '
+                              'from text`,\n'
+                              '        );\n'
+                              '      }\n'
+                              '    }\n'
+                              '\n'
+                              '    const hasTokenBreakdown =\n'
+                              '      totalTokens === 0 || promptTokens !== 0 || '
+                              'completionTokens !== 0;\n'
+                              '\n'
+                              '    response.usageMetadata = {\n'
+                              '      ...(hasTokenBreakdown\n'
+                              '        ? {\n'
+                              '            promptTokenCount: promptTokens,\n'
+                              '            candidatesTokenCount: completionTokens,\n'
+                              '          }\n'
+                              '        : {}),\n'
+                              '      totalTokenCount: totalTokens,\n'
+                              '      cachedContentTokenCount: cachedTokens,\n'
+                              '      thoughtsTokenCount: thinkingTokens,\n'
+                              '    };\n'
+                              '    setGenAiUsageProvenance(response.usageMetadata, {\n'
+                              '      cachedInputTokensReported,\n'
+                              '    });\n'
+                              '  }\n'
+                              '\n'
+                              '  return response;\n'
+                              '}\n'
+                              '\n',
+             'review_after': '  if (openaiResponse.usage) {\n'
+                             '    const usage = openaiResponse.usage;\n'
+                             '\n'
+                             '    const promptTokens = usage.prompt_tokens || 0;\n'
+                             '    const completionTokens = usage.completion_tokens || '
+                             '0;\n'
+                             '    const totalTokens = usage.total_tokens || 0;\n'
+                             '    const served = readServedUsageDetails(\n'
+                             '      usage,\n'
+                             '      requestContext,\n'
+                             "      'convertOpenAIResponseToGemini',\n"
+                             '    );\n'
+                             '\n'
+                             '    const hasTokenBreakdown =\n'
+                             '      totalTokens === 0 || promptTokens !== 0 || '
+                             'completionTokens !== 0;\n'
+                             '\n'
+                             '    response.usageMetadata = {\n'
+                             '      ...(hasTokenBreakdown\n'
+                             '        ? {\n'
+                             '            promptTokenCount: promptTokens,\n'
+                             '            candidatesTokenCount: completionTokens,\n'
+                             '          }\n'
+                             '        : {}),\n'
+                             '      totalTokenCount: totalTokens,\n'
+                             '      ...(served.cachedTokens !== undefined\n'
+                             '        ? { cachedContentTokenCount: served.cachedTokens '
+                             '}\n'
+                             '        : {}),\n'
+                             '      ...(served.reasoningTokens !== undefined\n'
+                             '        ? { thoughtsTokenCount: served.reasoningTokens '
+                             '}\n'
+                             '        : {}),\n'
+                             '    };\n'
+                             '    setGenAiUsageProvenance(response.usageMetadata, {\n'
+                             '      cachedInputTokensReported: served.cachedTokens !== '
+                             'undefined,\n'
+                             '    });\n'
+                             '  }\n'
+                             '\n'
+                             '  return response;\n'
+                             '}\n'
+                             '\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-7',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
+             'before': '      });\n'
+                       '      const normalizedReasoningText = '
+                       'normalizeStreamingTextDelta(\n'
+                       '        reasoningText,\n'
+                       '        reasoningDeltaState,\n'
+                       '      );\n'
+                       '      if (normalizedReasoningText) {\n'
+                       '        reasoningDeltaState.emittedTokenUnits =\n'
+                       '          (reasoningDeltaState.emittedTokenUnits ?? 0) +\n'
+                       '          estimateTextTokenUnits(normalizedReasoningText);\n'
+                       '        requestContext.hasStructuredReasoningContent = true;\n'
+                       '        if '
+                       '(THINKING_TAG_PATTERN.test(normalizedReasoningText)) {\n'
+                       '          requestContext.hasThinkingTagInReasoning = true;\n'
+                       '        }\n'
+                       '      }\n'
+                       '      if (\n',
+             'after': '      });\n'
+                      '      const normalizedReasoningText = '
+                      'normalizeStreamingTextDelta(\n'
+                      '        reasoningText,\n'
+                      '        reasoningDeltaState,\n'
+                      '      );\n'
+                      '      if (normalizedReasoningText) {\n'
+                      '        requestContext.hasStructuredReasoningContent = true;\n'
+                      '        if (THINKING_TAG_PATTERN.test(normalizedReasoningText)) '
+                      '{\n'
+                      '          requestContext.hasThinkingTagInReasoning = true;\n'
+                      '        }\n'
+                      '      }\n'
+                      '      if (\n',
+             'review_before': '      });\n'
+                              '      const normalizedReasoningText = '
+                              'normalizeStreamingTextDelta(\n'
+                              '        reasoningText,\n'
+                              '        reasoningDeltaState,\n'
+                              '      );\n'
+                              '      if (normalizedReasoningText) {\n'
+                              '        reasoningDeltaState.emittedTokenUnits =\n'
+                              '          (reasoningDeltaState.emittedTokenUnits ?? 0) '
+                              '+\n'
+                              '          '
+                              'estimateTextTokenUnits(normalizedReasoningText);\n'
+                              '        requestContext.hasStructuredReasoningContent = '
+                              'true;\n'
+                              '        if '
+                              '(THINKING_TAG_PATTERN.test(normalizedReasoningText)) {\n'
+                              '          requestContext.hasThinkingTagInReasoning = '
+                              'true;\n'
+                              '        }\n'
+                              '      }\n'
+                              '      if (\n',
+             'review_after': '      });\n'
+                             '      const normalizedReasoningText = '
+                             'normalizeStreamingTextDelta(\n'
+                             '        reasoningText,\n'
+                             '        reasoningDeltaState,\n'
+                             '      );\n'
+                             '      if (normalizedReasoningText) {\n'
+                             '        requestContext.hasStructuredReasoningContent = '
+                             'true;\n'
+                             '        if '
+                             '(THINKING_TAG_PATTERN.test(normalizedReasoningText)) {\n'
+                             '          requestContext.hasThinkingTagInReasoning = '
+                             'true;\n'
+                             '        }\n'
+                             '      }\n'
+                             '      if (\n'},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-8',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
              'before': '    }\n'
                        '    if (leakedThinkingTag) {\n'
@@ -75686,7 +80275,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      if (\n'
                              '        requestContext.hasThinkingTagInReasoning === '
                              'true ||\n'},
-            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-5',
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-9',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
              'before': '        toolCallCount: completedToolCalls.length,\n'
                        '      };\n'
@@ -75790,6 +80379,220 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      throw new InvalidStreamError(\n'
                              "        'Model response contained a malformed tool "
                              "call.',\n"},
+            {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-10',
+             'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
+             'before': '  if (chunk.usage) {\n'
+                       '    const usage = chunk.usage;\n'
+                       '\n'
+                       '    const promptTokens = usage.prompt_tokens || 0;\n'
+                       '    const completionTokens = usage.completion_tokens || 0;\n'
+                       '    const totalTokens = usage.total_tokens || 0;\n'
+                       '    const providerReasoningTokens =\n'
+                       '      usage.completion_tokens_details?.reasoning_tokens;\n'
+                       '    const estimatedThinkingTokens = Math.ceil(\n'
+                       '      (requestContext.reasoningDeltaState?.emittedTokenUnits '
+                       '?? 0) /\n'
+                       '        TOKEN_ESTIMATE_UNITS_PER_TOKEN,\n'
+                       '    );\n'
+                       '    const thinkingTokens =\n'
+                       '      providerReasoningTokens ??\n'
+                       '      (completionTokens > 0\n'
+                       '        ? Math.min(estimatedThinkingTokens, completionTokens)\n'
+                       '        : estimatedThinkingTokens);\n'
+                       '    if (providerReasoningTokens == null && '
+                       'estimatedThinkingTokens > 0) {\n'
+                       '      debugLogger.debug(\n'
+                       '        `convertOpenAIChunkToGemini: reasoning_tokens absent; '
+                       'estimated ${thinkingTokens} from streamed text`,\n'
+                       '      );\n'
+                       '    }\n'
+                       '    // Support both formats: '
+                       'prompt_tokens_details.cached_tokens (OpenAI standard)\n'
+                       '    // and cached_tokens (some models return it at top level)\n'
+                       '    const extendedUsage = usage as ExtendedCompletionUsage;\n'
+                       '    const cachedTokens =\n'
+                       '      usage.prompt_tokens_details?.cached_tokens ??\n'
+                       '      extendedUsage.cached_tokens ??\n'
+                       '      0;\n'
+                       '    const cachedInputTokensReported =\n'
+                       '      typeof usage.prompt_tokens_details?.cached_tokens === '
+                       "'number' ||\n"
+                       "      typeof extendedUsage.cached_tokens === 'number';\n"
+                       '\n'
+                       '    const hasTokenBreakdown =\n'
+                       '      totalTokens === 0 || promptTokens !== 0 || '
+                       'completionTokens !== 0;\n'
+                       '\n'
+                       '    response.usageMetadata = {\n'
+                       '      ...(hasTokenBreakdown\n'
+                       '        ? {\n'
+                       '            promptTokenCount: promptTokens,\n'
+                       '            candidatesTokenCount: completionTokens,\n'
+                       '          }\n'
+                       '        : {}),\n'
+                       '      thoughtsTokenCount: thinkingTokens,\n'
+                       '      totalTokenCount: totalTokens,\n'
+                       '      cachedContentTokenCount: cachedTokens,\n'
+                       '    };\n'
+                       '    setGenAiUsageProvenance(response.usageMetadata, {\n'
+                       '      cachedInputTokensReported,\n'
+                       '    });\n'
+                       '  }\n'
+                       '\n'
+                       '  if (preparations.length > 0) {\n'
+                       '    setToolCallPreparations(response, preparations);\n'
+                       '  }\n',
+             'after': '  if (chunk.usage) {\n'
+                      '    const usage = chunk.usage;\n'
+                      '\n'
+                      '    const promptTokens = usage.prompt_tokens || 0;\n'
+                      '    const completionTokens = usage.completion_tokens || 0;\n'
+                      '    const totalTokens = usage.total_tokens || 0;\n'
+                      '    const served = readServedUsageDetails(\n'
+                      '      usage,\n'
+                      '      requestContext,\n'
+                      "      'convertOpenAIChunkToGemini',\n"
+                      '    );\n'
+                      '\n'
+                      '    const hasTokenBreakdown =\n'
+                      '      totalTokens === 0 || promptTokens !== 0 || '
+                      'completionTokens !== 0;\n'
+                      '\n'
+                      '    response.usageMetadata = {\n'
+                      '      ...(hasTokenBreakdown\n'
+                      '        ? {\n'
+                      '            promptTokenCount: promptTokens,\n'
+                      '            candidatesTokenCount: completionTokens,\n'
+                      '          }\n'
+                      '        : {}),\n'
+                      '      totalTokenCount: totalTokens,\n'
+                      '      ...(served.cachedTokens !== undefined\n'
+                      '        ? { cachedContentTokenCount: served.cachedTokens }\n'
+                      '        : {}),\n'
+                      '      ...(served.reasoningTokens !== undefined\n'
+                      '        ? { thoughtsTokenCount: served.reasoningTokens }\n'
+                      '        : {}),\n'
+                      '    };\n'
+                      '    setGenAiUsageProvenance(response.usageMetadata, {\n'
+                      '      cachedInputTokensReported: served.cachedTokens !== '
+                      'undefined,\n'
+                      '    });\n'
+                      '  }\n'
+                      '\n'
+                      '  if (preparations.length > 0) {\n'
+                      '    setToolCallPreparations(response, preparations);\n'
+                      '  }\n',
+             'review_before': '  if (chunk.usage) {\n'
+                              '    const usage = chunk.usage;\n'
+                              '\n'
+                              '    const promptTokens = usage.prompt_tokens || 0;\n'
+                              '    const completionTokens = usage.completion_tokens || '
+                              '0;\n'
+                              '    const totalTokens = usage.total_tokens || 0;\n'
+                              '    const providerReasoningTokens =\n'
+                              '      '
+                              'usage.completion_tokens_details?.reasoning_tokens;\n'
+                              '    const estimatedThinkingTokens = Math.ceil(\n'
+                              '      '
+                              '(requestContext.reasoningDeltaState?.emittedTokenUnits '
+                              '?? 0) /\n'
+                              '        TOKEN_ESTIMATE_UNITS_PER_TOKEN,\n'
+                              '    );\n'
+                              '    const thinkingTokens =\n'
+                              '      providerReasoningTokens ??\n'
+                              '      (completionTokens > 0\n'
+                              '        ? Math.min(estimatedThinkingTokens, '
+                              'completionTokens)\n'
+                              '        : estimatedThinkingTokens);\n'
+                              '    if (providerReasoningTokens == null && '
+                              'estimatedThinkingTokens > 0) {\n'
+                              '      debugLogger.debug(\n'
+                              '        `convertOpenAIChunkToGemini: reasoning_tokens '
+                              'absent; estimated ${thinkingTokens} from streamed '
+                              'text`,\n'
+                              '      );\n'
+                              '    }\n'
+                              '    // Support both formats: '
+                              'prompt_tokens_details.cached_tokens (OpenAI standard)\n'
+                              '    // and cached_tokens (some models return it at top '
+                              'level)\n'
+                              '    const extendedUsage = usage as '
+                              'ExtendedCompletionUsage;\n'
+                              '    const cachedTokens =\n'
+                              '      usage.prompt_tokens_details?.cached_tokens ??\n'
+                              '      extendedUsage.cached_tokens ??\n'
+                              '      0;\n'
+                              '    const cachedInputTokensReported =\n'
+                              '      typeof usage.prompt_tokens_details?.cached_tokens '
+                              "=== 'number' ||\n"
+                              "      typeof extendedUsage.cached_tokens === 'number';\n"
+                              '\n'
+                              '    const hasTokenBreakdown =\n'
+                              '      totalTokens === 0 || promptTokens !== 0 || '
+                              'completionTokens !== 0;\n'
+                              '\n'
+                              '    response.usageMetadata = {\n'
+                              '      ...(hasTokenBreakdown\n'
+                              '        ? {\n'
+                              '            promptTokenCount: promptTokens,\n'
+                              '            candidatesTokenCount: completionTokens,\n'
+                              '          }\n'
+                              '        : {}),\n'
+                              '      thoughtsTokenCount: thinkingTokens,\n'
+                              '      totalTokenCount: totalTokens,\n'
+                              '      cachedContentTokenCount: cachedTokens,\n'
+                              '    };\n'
+                              '    setGenAiUsageProvenance(response.usageMetadata, {\n'
+                              '      cachedInputTokensReported,\n'
+                              '    });\n'
+                              '  }\n'
+                              '\n'
+                              '  if (preparations.length > 0) {\n'
+                              '    setToolCallPreparations(response, preparations);\n'
+                              '  }\n',
+             'review_after': '  if (chunk.usage) {\n'
+                             '    const usage = chunk.usage;\n'
+                             '\n'
+                             '    const promptTokens = usage.prompt_tokens || 0;\n'
+                             '    const completionTokens = usage.completion_tokens || '
+                             '0;\n'
+                             '    const totalTokens = usage.total_tokens || 0;\n'
+                             '    const served = readServedUsageDetails(\n'
+                             '      usage,\n'
+                             '      requestContext,\n'
+                             "      'convertOpenAIChunkToGemini',\n"
+                             '    );\n'
+                             '\n'
+                             '    const hasTokenBreakdown =\n'
+                             '      totalTokens === 0 || promptTokens !== 0 || '
+                             'completionTokens !== 0;\n'
+                             '\n'
+                             '    response.usageMetadata = {\n'
+                             '      ...(hasTokenBreakdown\n'
+                             '        ? {\n'
+                             '            promptTokenCount: promptTokens,\n'
+                             '            candidatesTokenCount: completionTokens,\n'
+                             '          }\n'
+                             '        : {}),\n'
+                             '      totalTokenCount: totalTokens,\n'
+                             '      ...(served.cachedTokens !== undefined\n'
+                             '        ? { cachedContentTokenCount: served.cachedTokens '
+                             '}\n'
+                             '        : {}),\n'
+                             '      ...(served.reasoningTokens !== undefined\n'
+                             '        ? { thoughtsTokenCount: served.reasoningTokens '
+                             '}\n'
+                             '        : {}),\n'
+                             '    };\n'
+                             '    setGenAiUsageProvenance(response.usageMetadata, {\n'
+                             '      cachedInputTokensReported: served.cachedTokens !== '
+                             'undefined,\n'
+                             '    });\n'
+                             '  }\n'
+                             '\n'
+                             '  if (preparations.length > 0) {\n'
+                             '    setToolCallPreparations(response, preparations);\n'
+                             '  }\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts:landmark-1',
              'path': 'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts',
              'before': 'import type { ContentGenerator } from '
@@ -76872,6 +81675,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      startTime: Date.now(),\n'
                       '      strictToolCalling: '
                       'this.contentGeneratorConfig.strictToolCalling === true,\n'
+                      '      exactTokenCounting:\n'
+                      '        this.contentGeneratorConfig.exactTokenCounting === '
+                      "'vllm',\n"
                       '      splitToolMedia:\n'
                       '        providerOverrides.splitToolMedia ??\n'
                       '        this.contentGeneratorConfig.splitToolMedia ??\n'
@@ -76906,6 +81712,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      startTime: Date.now(),\n'
                              '      strictToolCalling: '
                              'this.contentGeneratorConfig.strictToolCalling === true,\n'
+                             '      exactTokenCounting:\n'
+                             '        this.contentGeneratorConfig.exactTokenCounting '
+                             "=== 'vllm',\n"
                              '      splitToolMedia:\n'
                              '        providerOverrides.splitToolMedia ??\n'
                              '        this.contentGeneratorConfig.splitToolMedia ??\n'
@@ -76917,7 +81726,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'dropped or rejected by\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/types.ts:landmark-1',
              'path': 'packages/core/src/core/openaiContentGenerator/types.ts',
-             'before': '}\n'
+             'before': '   * the correct suffix when an incremental-then-cumulative '
+                       'hybrid stream\n'
+                       '   * transitions into cumulative mode after the cap (otherwise '
+                       'the suffix would\n'
+                       '   * re-include bytes between the cap and the true emitted '
+                       'length, producing\n'
+                       '   * visible duplication).\n'
+                       '   */\n'
+                       '  emittedLength: number;\n'
+                       '  /** Integer token-estimate units accumulated from normalized '
+                       'emitted text. */\n'
+                       '  emittedTokenUnits?: number;\n'
+                       '  cumulativeMode: boolean;\n'
+                       '}\n'
                        '\n'
                        'export interface RequestContext {\n'
                        '  model: string;\n'
@@ -76931,13 +81753,33 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '  // user message for strict OpenAI-compat servers. See '
                        'ContentGeneratorConfig\n'
                        '  // for details.\n',
-             'after': '}\n'
+             'after': '   * the correct suffix when an incremental-then-cumulative '
+                      'hybrid stream\n'
+                      '   * transitions into cumulative mode after the cap (otherwise '
+                      'the suffix would\n'
+                      '   * re-include bytes between the cap and the true emitted '
+                      'length, producing\n'
+                      '   * visible duplication).\n'
+                      '   */\n'
+                      '  emittedLength: number;\n'
+                      '  cumulativeMode: boolean;\n'
+                      '}\n'
                       '\n'
                       'export interface RequestContext {\n'
                       '  model: string;\n'
                       '  modalities: InputModalities;\n'
                       '  startTime: number;\n'
                       '  strictToolCalling?: boolean;\n'
+                      '  /**\n'
+                      '   * True when the active model is configured with '
+                      "`exactTokenCounting: 'vllm'`.\n"
+                      '   * Every usage the backend then serves carries\n'
+                      '   * `completion_tokens_details.reasoning_tokens` and\n'
+                      '   * `prompt_tokens_details.cached_tokens`, so a usage without '
+                      'either is a\n'
+                      '   * protocol failure rather than a value to approximate.\n'
+                      '   */\n'
+                      '  exactTokenCounting?: boolean;\n'
                       '  toolCallParser?: StreamingToolCallParser;\n'
                       '  responseParsingOptions?: OpenAIResponseParsingOptions;\n'
                       '  taggedThinkingParser?: TaggedThinkingParser;\n'
@@ -76946,7 +81788,20 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  // user message for strict OpenAI-compat servers. See '
                       'ContentGeneratorConfig\n'
                       '  // for details.\n',
-             'review_before': '}\n'
+             'review_before': '   * the correct suffix when an '
+                              'incremental-then-cumulative hybrid stream\n'
+                              '   * transitions into cumulative mode after the cap '
+                              '(otherwise the suffix would\n'
+                              '   * re-include bytes between the cap and the true '
+                              'emitted length, producing\n'
+                              '   * visible duplication).\n'
+                              '   */\n'
+                              '  emittedLength: number;\n'
+                              '  /** Integer token-estimate units accumulated from '
+                              'normalized emitted text. */\n'
+                              '  emittedTokenUnits?: number;\n'
+                              '  cumulativeMode: boolean;\n'
+                              '}\n'
                               '\n'
                               'export interface RequestContext {\n'
                               '  model: string;\n'
@@ -76961,13 +81816,34 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  // user message for strict OpenAI-compat servers. See '
                               'ContentGeneratorConfig\n'
                               '  // for details.\n',
-             'review_after': '}\n'
+             'review_after': '   * the correct suffix when an '
+                             'incremental-then-cumulative hybrid stream\n'
+                             '   * transitions into cumulative mode after the cap '
+                             '(otherwise the suffix would\n'
+                             '   * re-include bytes between the cap and the true '
+                             'emitted length, producing\n'
+                             '   * visible duplication).\n'
+                             '   */\n'
+                             '  emittedLength: number;\n'
+                             '  cumulativeMode: boolean;\n'
+                             '}\n'
                              '\n'
                              'export interface RequestContext {\n'
                              '  model: string;\n'
                              '  modalities: InputModalities;\n'
                              '  startTime: number;\n'
                              '  strictToolCalling?: boolean;\n'
+                             '  /**\n'
+                             '   * True when the active model is configured with '
+                             "`exactTokenCounting: 'vllm'`.\n"
+                             '   * Every usage the backend then serves carries\n'
+                             '   * `completion_tokens_details.reasoning_tokens` and\n'
+                             '   * `prompt_tokens_details.cached_tokens`, so a usage '
+                             'without either is a\n'
+                             '   * protocol failure rather than a value to '
+                             'approximate.\n'
+                             '   */\n'
+                             '  exactTokenCounting?: boolean;\n'
                              '  toolCallParser?: StreamingToolCallParser;\n'
                              '  responseParsingOptions?: '
                              'OpenAIResponseParsingOptions;\n'
@@ -80577,6 +85453,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '*/\n'
                       '  thinkingTokens: number;\n'
                       '  /**\n'
+                      '   * The reasoning the attempt emitted, verbatim, so a budget '
+                      'spent on\n'
+                      '   * thinking can be read rather than only counted. It is never '
+                      'fed back to\n'
+                      '   * the model.\n'
+                      '   */\n'
+                      '  reasoning: string;\n'
+                      '  /**\n'
                       '   * Characters of usable summary the attempt yielded. Zero '
                       'alongside a large\n'
                       '   * `thinkingTokens` is the exact signature of reasoning '
@@ -80822,6 +85706,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  /** Of those, the ones spent in the hidden reasoning '
                              'channel. */\n'
                              '  thinkingTokens: number;\n'
+                             '  /**\n'
+                             '   * The reasoning the attempt emitted, verbatim, so a '
+                             'budget spent on\n'
+                             '   * thinking can be read rather than only counted. It '
+                             'is never fed back to\n'
+                             '   * the model.\n'
+                             '   */\n'
+                             '  reasoning: string;\n'
                              '  /**\n'
                              '   * Characters of usable summary the attempt yielded. '
                              'Zero alongside a large\n'
@@ -88058,11 +92950,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '): GenerateTextResult {\n'
                       '  return {\n'
                       '    text: snapshot(),\n'
+                      "    thoughtText: '',\n"
                       '    finishReason: FinishReason.STOP,\n'
                       '    hadToolCall: false,\n'
                       '    usage: {\n'
                       '      promptTokenCount: 220_000,\n'
                       '      candidatesTokenCount: 2_000,\n'
+                      '      thoughtsTokenCount: 0,\n'
+                      '      cachedContentTokenCount: 0,\n'
                       '      totalTokenCount: 222_000,\n'
                       '    },\n'
                       '    ...overrides,\n'
@@ -88718,11 +93613,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    harness.generateText.mockResolvedValueOnce(\n'
                       '      summaryResult({\n'
                       "        text: '',\n"
+                      "        thoughtText: 'Let me first list every file the user "
+                      "touched...',\n"
                       '        finishReason: FinishReason.MAX_TOKENS,\n'
                       '        usage: {\n'
                       '          promptTokenCount: 233_926,\n'
                       '          candidatesTokenCount: 19_900,\n'
                       '          thoughtsTokenCount: 19_900,\n'
+                      '          cachedContentTokenCount: 233_926,\n'
                       '          totalTokenCount: 253_826,\n'
                       '        },\n'
                       '      }),\n'
@@ -88744,9 +93642,32 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      maxOutputTokens: WINDOW - 195_000,\n'
                       '      outputTokens: 19_900,\n'
                       '      thinkingTokens: 19_900,\n'
+                      "      reasoning: 'Let me first list every file the user "
+                      "touched...',\n"
                       '      summaryChars: 0,\n'
                       '      finishReason: FinishReason.MAX_TOKENS,\n'
                       '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  it('[compaction-event] fails closed when the summary "
+                      "generation served no usage', async () => {\n"
+                      '    const harness = makeHarness();\n'
+                      '    harness.generateText.mockResolvedValueOnce(\n'
+                      '      summaryResult({ usage: undefined }),\n'
+                      '    );\n'
+                      '\n'
+                      '    const result = await compress(harness);\n'
+                      '\n'
+                      '    // A generation without served usage cannot be accounted '
+                      'for, and no\n'
+                      '    // count is invented in its place: the attempt is refused '
+                      'as a protocol\n'
+                      '    // failure and the history is preserved.\n'
+                      '    expect(result.newHistory).toBeNull();\n'
+                      '    expect(result.info.compressionStatus).toBe(\n'
+                      '      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                      '    );\n'
+                      '    expect(result.info.output).toBeUndefined();\n'
                       '  });\n'
                       '\n'
                       "  it('[compaction-event] leaves the accounting null when no "
@@ -94461,11 +99382,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '): GenerateTextResult {\n'
                              '  return {\n'
                              '    text: snapshot(),\n'
+                             "    thoughtText: '',\n"
                              '    finishReason: FinishReason.STOP,\n'
                              '    hadToolCall: false,\n'
                              '    usage: {\n'
                              '      promptTokenCount: 220_000,\n'
                              '      candidatesTokenCount: 2_000,\n'
+                             '      thoughtsTokenCount: 0,\n'
+                             '      cachedContentTokenCount: 0,\n'
                              '      totalTokenCount: 222_000,\n'
                              '    },\n'
                              '    ...overrides,\n'
@@ -95163,11 +100087,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    harness.generateText.mockResolvedValueOnce(\n'
                              '      summaryResult({\n'
                              "        text: '',\n"
+                             "        thoughtText: 'Let me first list every file the "
+                             "user touched...',\n"
                              '        finishReason: FinishReason.MAX_TOKENS,\n'
                              '        usage: {\n'
                              '          promptTokenCount: 233_926,\n'
                              '          candidatesTokenCount: 19_900,\n'
                              '          thoughtsTokenCount: 19_900,\n'
+                             '          cachedContentTokenCount: 233_926,\n'
                              '          totalTokenCount: 253_826,\n'
                              '        },\n'
                              '      }),\n'
@@ -95191,9 +100118,33 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      maxOutputTokens: WINDOW - 195_000,\n'
                              '      outputTokens: 19_900,\n'
                              '      thinkingTokens: 19_900,\n'
+                             "      reasoning: 'Let me first list every file the user "
+                             "touched...',\n"
                              '      summaryChars: 0,\n'
                              '      finishReason: FinishReason.MAX_TOKENS,\n'
                              '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  it('[compaction-event] fails closed when the summary "
+                             "generation served no usage', async () => {\n"
+                             '    const harness = makeHarness();\n'
+                             '    harness.generateText.mockResolvedValueOnce(\n'
+                             '      summaryResult({ usage: undefined }),\n'
+                             '    );\n'
+                             '\n'
+                             '    const result = await compress(harness);\n'
+                             '\n'
+                             '    // A generation without served usage cannot be '
+                             'accounted for, and no\n'
+                             '    // count is invented in its place: the attempt is '
+                             'refused as a protocol\n'
+                             '    // failure and the history is preserved.\n'
+                             '    expect(result.newHistory).toBeNull();\n'
+                             '    expect(result.info.compressionStatus).toBe(\n'
+                             '      '
+                             'CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,\n'
+                             '    );\n'
+                             '    expect(result.info.output).toBeUndefined();\n'
                              '  });\n'
                              '\n'
                              "  it('[compaction-event] leaves the accounting null when "
@@ -95386,7 +100337,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '});\n'},
             {'name': 'packages/core/src/services/chatCompressionService.ts:landmark-1',
              'path': 'packages/core/src/services/chatCompressionService.ts',
-             'before': '\n'
+             'before': ' * SPDX-License-Identifier: Apache-2.0\n'
+                       ' */\n'
+                       '\n'
                        'import type { Content, GenerateContentConfig } from '
                        "'@google/genai';\n"
                        "import type { Config } from '../config/config.js';\n"
@@ -95549,13 +100502,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'in\n'
                        ' * compressCommand.ts for exactly this reason — the side-query '
                        'has no\n',
-             'after': '\n'
+             'after': ' * SPDX-License-Identifier: Apache-2.0\n'
+                      ' */\n'
+                      '\n'
                       'import type { Content, GenerateContentConfig } from '
                       "'@google/genai';\n"
                       "import type { Config } from '../config/config.js';\n"
                       "import { ApprovalMode } from '../config/config.js';\n"
-                      'import type { GenerateTextResult } from '
-                      "'../core/baseLlmClient.js';\n"
+                      'import {\n'
+                      '  requireServedUsage,\n'
+                      '  type GenerateTextResult,\n'
+                      '  type ServedUsage,\n'
+                      "} from '../core/baseLlmClient.js';\n"
                       "import { AuthType } from '../core/contentGenerator.js';\n"
                       'import {\n'
                       '  FinishReason,\n'
@@ -95606,7 +100564,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'in\n'
                       ' * compressCommand.ts for exactly this reason — the side-query '
                       'has no\n',
-             'review_before': '\n'
+             'review_before': ' * SPDX-License-Identifier: Apache-2.0\n'
+                              ' */\n'
+                              '\n'
                               'import type { Content, GenerateContentConfig } from '
                               "'@google/genai';\n"
                               "import type { Config } from '../config/config.js';\n"
@@ -95776,13 +100736,18 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '(2000) in\n'
                               ' * compressCommand.ts for exactly this reason — the '
                               'side-query has no\n',
-             'review_after': '\n'
+             'review_after': ' * SPDX-License-Identifier: Apache-2.0\n'
+                             ' */\n'
+                             '\n'
                              'import type { Content, GenerateContentConfig } from '
                              "'@google/genai';\n"
                              "import type { Config } from '../config/config.js';\n"
                              "import { ApprovalMode } from '../config/config.js';\n"
-                             'import type { GenerateTextResult } from '
-                             "'../core/baseLlmClient.js';\n"
+                             'import {\n'
+                             '  requireServedUsage,\n'
+                             '  type GenerateTextResult,\n'
+                             '  type ServedUsage,\n'
+                             "} from '../core/baseLlmClient.js';\n"
                              "import { AuthType } from '../core/contentGenerator.js';\n"
                              'import {\n'
                              '  FinishReason,\n'
@@ -97898,6 +102863,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    let summaryRequestTokenCount: number;\n'
                       '    let compactionOutputBudget: number;\n'
                       '    let summaryResult: GenerateTextResult;\n'
+                      '    let summaryUsage: ServedUsage;\n'
                       '    try {\n'
                       '      const originalCount = await '
                       'chat.countRequestTokensForCandidateHistory(\n'
@@ -97986,6 +102952,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          maxOutputTokens: compactionOutputBudget,\n'
                       '        },\n'
                       '      });\n'
+                      '      summaryUsage = requireServedUsage(summaryResult.usage, '
+                      "'chat-compression');\n"
                       '    } catch (error) {\n'
                       '      if (abortSignal.aborted) throw error;\n'
                       '      config\n'
@@ -98010,23 +102978,26 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    const summary = summaryResult.text;\n'
                       '    const processedSummary = stripAnalysisBlock(summary ?? '
                       "'');\n"
-                      '    const compressionOutputTokenCount =\n'
-                      '      summaryResult.usage?.candidatesTokenCount;\n'
+                      '    const compressionOutputTokenCount = '
+                      'summaryUsage.candidatesTokenCount;\n'
                       '    // Every outcome from here on carries the same accounting, '
                       'because the\n'
                       '    // only way to tell these failures apart afterwards is '
                       'where the fixed\n'
-                      '    // maintenance budget went. `getResponseText` drops thought '
-                      'parts, so a\n'
+                      '    // maintenance budget went. The summary text drops the '
+                      'reasoning, so a\n'
                       '    // run whose reasoning consumed the whole ceiling and '
                       'emitted no summary\n'
                       '    // is otherwise indistinguishable from one that never '
-                      'generated.\n'
+                      'generated; the\n'
+                      '    // reasoning itself rides along, so that spend can be read '
+                      'and not only\n'
+                      '    // counted.\n'
                       '    const outputAccounting: CompactionOutputAccounting = {\n'
                       '      maxOutputTokens: compactionOutputBudget,\n'
-                      '      outputTokens: compressionOutputTokenCount ?? 0,\n'
-                      '      thinkingTokens: summaryResult.usage?.thoughtsTokenCount '
-                      '?? 0,\n'
+                      '      outputTokens: compressionOutputTokenCount,\n'
+                      '      thinkingTokens: summaryUsage.thoughtsTokenCount,\n'
+                      '      reasoning: summaryResult.thoughtText,\n'
                       '      summaryChars: processedSummary.length,\n'
                       '      finishReason: summaryResult.finishReason ?? null,\n'
                       '    };\n'
@@ -99289,6 +104260,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    let summaryRequestTokenCount: number;\n'
                              '    let compactionOutputBudget: number;\n'
                              '    let summaryResult: GenerateTextResult;\n'
+                             '    let summaryUsage: ServedUsage;\n'
                              '    try {\n'
                              '      const originalCount = await '
                              'chat.countRequestTokensForCandidateHistory(\n'
@@ -99383,6 +104355,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          maxOutputTokens: compactionOutputBudget,\n'
                              '        },\n'
                              '      });\n'
+                             '      summaryUsage = '
+                             'requireServedUsage(summaryResult.usage, '
+                             "'chat-compression');\n"
                              '    } catch (error) {\n'
                              '      if (abortSignal.aborted) throw error;\n'
                              '      config\n'
@@ -99407,24 +104382,27 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const summary = summaryResult.text;\n'
                              '    const processedSummary = stripAnalysisBlock(summary '
                              "?? '');\n"
-                             '    const compressionOutputTokenCount =\n'
-                             '      summaryResult.usage?.candidatesTokenCount;\n'
+                             '    const compressionOutputTokenCount = '
+                             'summaryUsage.candidatesTokenCount;\n'
                              '    // Every outcome from here on carries the same '
                              'accounting, because the\n'
                              '    // only way to tell these failures apart afterwards '
                              'is where the fixed\n'
-                             '    // maintenance budget went. `getResponseText` drops '
-                             'thought parts, so a\n'
+                             '    // maintenance budget went. The summary text drops '
+                             'the reasoning, so a\n'
                              '    // run whose reasoning consumed the whole ceiling '
                              'and emitted no summary\n'
                              '    // is otherwise indistinguishable from one that '
-                             'never generated.\n'
+                             'never generated; the\n'
+                             '    // reasoning itself rides along, so that spend can '
+                             'be read and not only\n'
+                             '    // counted.\n'
                              '    const outputAccounting: CompactionOutputAccounting = '
                              '{\n'
                              '      maxOutputTokens: compactionOutputBudget,\n'
-                             '      outputTokens: compressionOutputTokenCount ?? 0,\n'
-                             '      thinkingTokens: '
-                             'summaryResult.usage?.thoughtsTokenCount ?? 0,\n'
+                             '      outputTokens: compressionOutputTokenCount,\n'
+                             '      thinkingTokens: summaryUsage.thoughtsTokenCount,\n'
+                             '      reasoning: summaryResult.thoughtText,\n'
                              '      summaryChars: processedSummary.length,\n'
                              '      finishReason: summaryResult.finishReason ?? null,\n'
                              '    };\n'
@@ -100553,6 +105531,1466 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              ' */\n'
                              'export class LoopDetectionService {\n'
                              '  private readonly config: Config;\n'},
+            {'name': 'packages/core/src/services/session-resume-token-counts.ts:landmark-1',
+             'path': 'packages/core/src/services/session-resume-token-counts.ts',
+             'before': ' */\n'
+                       '\n'
+                       'import type {\n'
+                       '  ChatCompressionRecordPayload,\n'
+                       '  ChatRecord,\n'
+                       "} from './chatRecordingService.js';\n"
+                       'import { getUsageOutputTokenCountForPromptEstimate } from '
+                       "'./tokenEstimation.js';\n"
+                       '\n'
+                       'export interface ResumeTokenCounts {\n'
+                       '  promptTokenCount: number;\n'
+                       '  outputTokenCount: number;\n'
+                       '  isEstimated: boolean;\n'
+                       '}\n'
+                       '\n'
+                       'export class ResumeTokenCountsAccumulator {\n'
+                       '  private value: ResumeTokenCounts | undefined;\n'
+                       '\n',
+             'after': ' */\n'
+                      '\n'
+                      'import type {\n'
+                      '  ChatCompressionRecordPayload,\n'
+                      '  ChatRecord,\n'
+                      "} from './chatRecordingService.js';\n"
+                      '\n'
+                      'export interface ResumeTokenCounts {\n'
+                      '  promptTokenCount: number;\n'
+                      '  isEstimated: boolean;\n'
+                      '}\n'
+                      '\n'
+                      'export class ResumeTokenCountsAccumulator {\n'
+                      '  private value: ResumeTokenCounts | undefined;\n'
+                      '\n',
+             'review_before': ' */\n'
+                              '\n'
+                              'import type {\n'
+                              '  ChatCompressionRecordPayload,\n'
+                              '  ChatRecord,\n'
+                              "} from './chatRecordingService.js';\n"
+                              'import { getUsageOutputTokenCountForPromptEstimate } '
+                              "from './tokenEstimation.js';\n"
+                              '\n'
+                              'export interface ResumeTokenCounts {\n'
+                              '  promptTokenCount: number;\n'
+                              '  outputTokenCount: number;\n'
+                              '  isEstimated: boolean;\n'
+                              '}\n'
+                              '\n'
+                              'export class ResumeTokenCountsAccumulator {\n'
+                              '  private value: ResumeTokenCounts | undefined;\n'
+                              '\n',
+             'review_after': ' */\n'
+                             '\n'
+                             'import type {\n'
+                             '  ChatCompressionRecordPayload,\n'
+                             '  ChatRecord,\n'
+                             "} from './chatRecordingService.js';\n"
+                             '\n'
+                             'export interface ResumeTokenCounts {\n'
+                             '  promptTokenCount: number;\n'
+                             '  isEstimated: boolean;\n'
+                             '}\n'
+                             '\n'
+                             'export class ResumeTokenCountsAccumulator {\n'
+                             '  private value: ResumeTokenCounts | undefined;\n'
+                             '\n'},
+            {'name': 'packages/core/src/services/session-resume-token-counts.ts:landmark-2',
+             'path': 'packages/core/src/services/session-resume-token-counts.ts',
+             'before': "    if (record.type === 'assistant') {\n"
+                       '      const usage = record.usageMetadata;\n'
+                       '      const candidate = usage?.promptTokenCount ?? '
+                       'usage?.totalTokenCount;\n'
+                       '      if (candidate) {\n'
+                       '        this.value = {\n'
+                       '          promptTokenCount: candidate,\n'
+                       '          outputTokenCount: '
+                       'getUsageOutputTokenCountForPromptEstimate(usage),\n'
+                       '          isEstimated: false,\n'
+                       '        };\n'
+                       '      }\n'
+                       '      return;\n'
+                       '    }\n'
+                       '\n',
+             'after': "    if (record.type === 'assistant') {\n"
+                      '      const usage = record.usageMetadata;\n'
+                      '      const candidate = usage?.promptTokenCount ?? '
+                      'usage?.totalTokenCount;\n'
+                      '      if (candidate) {\n'
+                      '        this.value = {\n'
+                      '          promptTokenCount: candidate,\n'
+                      '          isEstimated: false,\n'
+                      '        };\n'
+                      '      }\n'
+                      '      return;\n'
+                      '    }\n'
+                      '\n',
+             'review_before': "    if (record.type === 'assistant') {\n"
+                              '      const usage = record.usageMetadata;\n'
+                              '      const candidate = usage?.promptTokenCount ?? '
+                              'usage?.totalTokenCount;\n'
+                              '      if (candidate) {\n'
+                              '        this.value = {\n'
+                              '          promptTokenCount: candidate,\n'
+                              '          outputTokenCount: '
+                              'getUsageOutputTokenCountForPromptEstimate(usage),\n'
+                              '          isEstimated: false,\n'
+                              '        };\n'
+                              '      }\n'
+                              '      return;\n'
+                              '    }\n'
+                              '\n',
+             'review_after': "    if (record.type === 'assistant') {\n"
+                             '      const usage = record.usageMetadata;\n'
+                             '      const candidate = usage?.promptTokenCount ?? '
+                             'usage?.totalTokenCount;\n'
+                             '      if (candidate) {\n'
+                             '        this.value = {\n'
+                             '          promptTokenCount: candidate,\n'
+                             '          isEstimated: false,\n'
+                             '        };\n'
+                             '      }\n'
+                             '      return;\n'
+                             '    }\n'
+                             '\n'},
+            {'name': 'packages/core/src/services/session-resume-token-counts.ts:landmark-3',
+             'path': 'packages/core/src/services/session-resume-token-counts.ts',
+             'before': '      const payload = record.systemPayload as\n'
+                       '        | ChatCompressionRecordPayload\n'
+                       '        | undefined;\n'
+                       '      if (payload?.info) {\n'
+                       '        this.value = {\n'
+                       '          promptTokenCount: payload.info.newTokenCount,\n'
+                       '          outputTokenCount: 0,\n'
+                       '          isEstimated: payload.info.newTokenCountIsEstimated '
+                       '?? true,\n'
+                       '        };\n'
+                       '      }\n'
+                       '    }\n'
+                       '  }\n'
+                       '\n',
+             'after': '      const payload = record.systemPayload as\n'
+                      '        | ChatCompressionRecordPayload\n'
+                      '        | undefined;\n'
+                      '      if (payload?.info) {\n'
+                      '        this.value = {\n'
+                      '          promptTokenCount: payload.info.newTokenCount,\n'
+                      '          isEstimated: payload.info.newTokenCountIsEstimated ?? '
+                      'true,\n'
+                      '        };\n'
+                      '      }\n'
+                      '    }\n'
+                      '  }\n'
+                      '\n',
+             'review_before': '      const payload = record.systemPayload as\n'
+                              '        | ChatCompressionRecordPayload\n'
+                              '        | undefined;\n'
+                              '      if (payload?.info) {\n'
+                              '        this.value = {\n'
+                              '          promptTokenCount: '
+                              'payload.info.newTokenCount,\n'
+                              '          outputTokenCount: 0,\n'
+                              '          isEstimated: '
+                              'payload.info.newTokenCountIsEstimated ?? true,\n'
+                              '        };\n'
+                              '      }\n'
+                              '    }\n'
+                              '  }\n'
+                              '\n',
+             'review_after': '      const payload = record.systemPayload as\n'
+                             '        | ChatCompressionRecordPayload\n'
+                             '        | undefined;\n'
+                             '      if (payload?.info) {\n'
+                             '        this.value = {\n'
+                             '          promptTokenCount: payload.info.newTokenCount,\n'
+                             '          isEstimated: '
+                             'payload.info.newTokenCountIsEstimated ?? true,\n'
+                             '        };\n'
+                             '      }\n'
+                             '    }\n'
+                             '  }\n'
+                             '\n'},
+            {'name': 'packages/core/src/services/sessionService.test.ts:landmark-1',
+             'path': 'packages/core/src/services/sessionService.test.ts',
+             'before': '        ),\n'
+                       '      ).toBe(450);\n'
+                       '      expect(\n'
+                       '        '
+                       'getResumeTokenCounts(makeConversation([compressionRecord, '
+                       'assistant])),\n'
+                       '      ).toEqual({\n'
+                       '        promptTokenCount: 450,\n'
+                       '        outputTokenCount: 0,\n'
+                       '        isEstimated: false,\n'
+                       '      });\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should prefer promptTokenCount over totalTokenCount "
+                       "when both are present', () => {\n"
+                       '      const assistant: ChatRecord = {\n',
+             'after': '        ),\n'
+                      '      ).toBe(450);\n'
+                      '      expect(\n'
+                      '        '
+                      'getResumeTokenCounts(makeConversation([compressionRecord, '
+                      'assistant])),\n'
+                      '      ).toEqual({\n'
+                      '        promptTokenCount: 450,\n'
+                      '        isEstimated: false,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('should prefer promptTokenCount over totalTokenCount "
+                      "when both are present', () => {\n"
+                      '      const assistant: ChatRecord = {\n',
+             'review_before': '        ),\n'
+                              '      ).toBe(450);\n'
+                              '      expect(\n'
+                              '        '
+                              'getResumeTokenCounts(makeConversation([compressionRecord, '
+                              'assistant])),\n'
+                              '      ).toEqual({\n'
+                              '        promptTokenCount: 450,\n'
+                              '        outputTokenCount: 0,\n'
+                              '        isEstimated: false,\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should prefer promptTokenCount over "
+                              "totalTokenCount when both are present', () => {\n"
+                              '      const assistant: ChatRecord = {\n',
+             'review_after': '        ),\n'
+                             '      ).toBe(450);\n'
+                             '      expect(\n'
+                             '        '
+                             'getResumeTokenCounts(makeConversation([compressionRecord, '
+                             'assistant])),\n'
+                             '      ).toEqual({\n'
+                             '        promptTokenCount: 450,\n'
+                             '        isEstimated: false,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('should prefer promptTokenCount over "
+                             "totalTokenCount when both are present', () => {\n"
+                             '      const assistant: ChatRecord = {\n'},
+            {'name': 'packages/core/src/services/sessionService.test.ts:landmark-2',
+             'path': 'packages/core/src/services/sessionService.test.ts',
+             'before': '        ),\n'
+                       '      ).toBe(200);\n'
+                       '      expect(\n'
+                       '        '
+                       'getResumeTokenCounts(makeConversation([compressionRecord, '
+                       'assistant])),\n'
+                       '      ).toEqual({\n'
+                       '        promptTokenCount: 200,\n'
+                       '        outputTokenCount: 250,\n'
+                       '        isEstimated: false,\n'
+                       '      });\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should restore disjoint candidate and thought output "
+                       "tokens when total is unavailable', () => {\n"
+                       '      const assistant: ChatRecord = {\n'
+                       '        ...baseRecord,\n'
+                       "        uuid: 'a1',\n"
+                       "        parentUuid: 'comp',\n"
+                       "        type: 'assistant',\n"
+                       '        usageMetadata: {\n'
+                       '          promptTokenCount: 200,\n'
+                       '          candidatesTokenCount: 40,\n'
+                       '          thoughtsTokenCount: 60,\n'
+                       '        },\n'
+                       '      };\n'
+                       '      expect(\n'
+                       '        '
+                       'getResumeTokenCounts(makeConversation([compressionRecord, '
+                       'assistant])),\n'
+                       '      ).toEqual({\n'
+                       '        promptTokenCount: 200,\n'
+                       '        outputTokenCount: 100,\n'
+                       '        isEstimated: false,\n'
+                       '      });\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should fall back to compression when latest assistant "
+                       "has zero usage', () => {\n"
+                       '      const assistant: ChatRecord = {\n',
+             'after': '        ),\n'
+                      '      ).toBe(200);\n'
+                      '      expect(\n'
+                      '        '
+                      'getResumeTokenCounts(makeConversation([compressionRecord, '
+                      'assistant])),\n'
+                      '      ).toEqual({\n'
+                      '        promptTokenCount: 200,\n'
+                      '        isEstimated: false,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('should fall back to compression when latest assistant "
+                      "has zero usage', () => {\n"
+                      '      const assistant: ChatRecord = {\n',
+             'review_before': '        ),\n'
+                              '      ).toBe(200);\n'
+                              '      expect(\n'
+                              '        '
+                              'getResumeTokenCounts(makeConversation([compressionRecord, '
+                              'assistant])),\n'
+                              '      ).toEqual({\n'
+                              '        promptTokenCount: 200,\n'
+                              '        outputTokenCount: 250,\n'
+                              '        isEstimated: false,\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should restore disjoint candidate and thought "
+                              "output tokens when total is unavailable', () => {\n"
+                              '      const assistant: ChatRecord = {\n'
+                              '        ...baseRecord,\n'
+                              "        uuid: 'a1',\n"
+                              "        parentUuid: 'comp',\n"
+                              "        type: 'assistant',\n"
+                              '        usageMetadata: {\n'
+                              '          promptTokenCount: 200,\n'
+                              '          candidatesTokenCount: 40,\n'
+                              '          thoughtsTokenCount: 60,\n'
+                              '        },\n'
+                              '      };\n'
+                              '      expect(\n'
+                              '        '
+                              'getResumeTokenCounts(makeConversation([compressionRecord, '
+                              'assistant])),\n'
+                              '      ).toEqual({\n'
+                              '        promptTokenCount: 200,\n'
+                              '        outputTokenCount: 100,\n'
+                              '        isEstimated: false,\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should fall back to compression when latest "
+                              "assistant has zero usage', () => {\n"
+                              '      const assistant: ChatRecord = {\n',
+             'review_after': '        ),\n'
+                             '      ).toBe(200);\n'
+                             '      expect(\n'
+                             '        '
+                             'getResumeTokenCounts(makeConversation([compressionRecord, '
+                             'assistant])),\n'
+                             '      ).toEqual({\n'
+                             '        promptTokenCount: 200,\n'
+                             '        isEstimated: false,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('should fall back to compression when latest "
+                             "assistant has zero usage', () => {\n"
+                             '      const assistant: ChatRecord = {\n'},
+            {'name': 'packages/core/src/services/sessionService.test.ts:landmark-3',
+             'path': 'packages/core/src/services/sessionService.test.ts',
+             'before': '        ),\n'
+                       '      ).toBe(300);\n'
+                       '      expect(\n'
+                       '        '
+                       'getResumeTokenCounts(makeConversation([compressionRecord, '
+                       'assistant])),\n'
+                       '      ).toEqual({\n'
+                       '        promptTokenCount: 300,\n'
+                       '        outputTokenCount: 0,\n'
+                       '        isEstimated: true,\n'
+                       '      });\n'
+                       '    });\n'
+                       '\n'
+                       "    it('conservatively treats legacy compression checkpoints "
+                       "as estimated', () => {\n"
+                       '      const legacyCompressionRecord: ChatRecord = {\n',
+             'after': '        ),\n'
+                      '      ).toBe(300);\n'
+                      '      expect(\n'
+                      '        '
+                      'getResumeTokenCounts(makeConversation([compressionRecord, '
+                      'assistant])),\n'
+                      '      ).toEqual({\n'
+                      '        promptTokenCount: 300,\n'
+                      '        isEstimated: true,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('conservatively treats legacy compression checkpoints as "
+                      "estimated', () => {\n"
+                      '      const legacyCompressionRecord: ChatRecord = {\n',
+             'review_before': '        ),\n'
+                              '      ).toBe(300);\n'
+                              '      expect(\n'
+                              '        '
+                              'getResumeTokenCounts(makeConversation([compressionRecord, '
+                              'assistant])),\n'
+                              '      ).toEqual({\n'
+                              '        promptTokenCount: 300,\n'
+                              '        outputTokenCount: 0,\n'
+                              '        isEstimated: true,\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('conservatively treats legacy compression "
+                              "checkpoints as estimated', () => {\n"
+                              '      const legacyCompressionRecord: ChatRecord = {\n',
+             'review_after': '        ),\n'
+                             '      ).toBe(300);\n'
+                             '      expect(\n'
+                             '        '
+                             'getResumeTokenCounts(makeConversation([compressionRecord, '
+                             'assistant])),\n'
+                             '      ).toEqual({\n'
+                             '        promptTokenCount: 300,\n'
+                             '        isEstimated: true,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('conservatively treats legacy compression "
+                             "checkpoints as estimated', () => {\n"
+                             '      const legacyCompressionRecord: ChatRecord = {\n'},
+            {'name': 'packages/core/src/services/sessionService.test.ts:landmark-4',
+             'path': 'packages/core/src/services/sessionService.test.ts',
+             'before': '      };\n'
+                       '\n'
+                       '      expect(\n'
+                       '        '
+                       'getResumeTokenCounts(makeConversation([legacyCompressionRecord])),\n'
+                       '      ).toEqual({\n'
+                       '        promptTokenCount: 300,\n'
+                       '        outputTokenCount: 0,\n'
+                       '        isEstimated: true,\n'
+                       '      });\n'
+                       '    });\n'
+                       '\n'
+                       "    it('restores an explicit authoritative "
+                       "compression-checkpoint provenance', () => {\n"
+                       '      const authoritativeCompressionRecord: ChatRecord = {\n',
+             'after': '      };\n'
+                      '\n'
+                      '      expect(\n'
+                      '        '
+                      'getResumeTokenCounts(makeConversation([legacyCompressionRecord])),\n'
+                      '      ).toEqual({\n'
+                      '        promptTokenCount: 300,\n'
+                      '        isEstimated: true,\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('restores an explicit authoritative "
+                      "compression-checkpoint provenance', () => {\n"
+                      '      const authoritativeCompressionRecord: ChatRecord = {\n',
+             'review_before': '      };\n'
+                              '\n'
+                              '      expect(\n'
+                              '        '
+                              'getResumeTokenCounts(makeConversation([legacyCompressionRecord])),\n'
+                              '      ).toEqual({\n'
+                              '        promptTokenCount: 300,\n'
+                              '        outputTokenCount: 0,\n'
+                              '        isEstimated: true,\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('restores an explicit authoritative "
+                              "compression-checkpoint provenance', () => {\n"
+                              '      const authoritativeCompressionRecord: ChatRecord '
+                              '= {\n',
+             'review_after': '      };\n'
+                             '\n'
+                             '      expect(\n'
+                             '        '
+                             'getResumeTokenCounts(makeConversation([legacyCompressionRecord])),\n'
+                             '      ).toEqual({\n'
+                             '        promptTokenCount: 300,\n'
+                             '        isEstimated: true,\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('restores an explicit authoritative "
+                             "compression-checkpoint provenance', () => {\n"
+                             '      const authoritativeCompressionRecord: ChatRecord = '
+                             '{\n'},
+            {'name': 'packages/core/src/services/sessionService.test.ts:landmark-5',
+             'path': 'packages/core/src/services/sessionService.test.ts',
+             'before': '      expect(\n'
+                       '        getResumeTokenCounts(\n'
+                       '          makeConversation([authoritativeCompressionRecord]),\n'
+                       '        ),\n'
+                       '      ).toEqual({\n'
+                       '        promptTokenCount: 300,\n'
+                       '        outputTokenCount: 0,\n'
+                       '        isEstimated: false,\n'
+                       '      });\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n'
+                       "  describe('buildApiHistoryFromConversation', () => {\n",
+             'after': '      expect(\n'
+                      '        getResumeTokenCounts(\n'
+                      '          makeConversation([authoritativeCompressionRecord]),\n'
+                      '        ),\n'
+                      '      ).toEqual({\n'
+                      '        promptTokenCount: 300,\n'
+                      '        isEstimated: false,\n'
+                      '      });\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('buildApiHistoryFromConversation', () => {\n",
+             'review_before': '      expect(\n'
+                              '        getResumeTokenCounts(\n'
+                              '          '
+                              'makeConversation([authoritativeCompressionRecord]),\n'
+                              '        ),\n'
+                              '      ).toEqual({\n'
+                              '        promptTokenCount: 300,\n'
+                              '        outputTokenCount: 0,\n'
+                              '        isEstimated: false,\n'
+                              '      });\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n'
+                              "  describe('buildApiHistoryFromConversation', () => {\n",
+             'review_after': '      expect(\n'
+                             '        getResumeTokenCounts(\n'
+                             '          '
+                             'makeConversation([authoritativeCompressionRecord]),\n'
+                             '        ),\n'
+                             '      ).toEqual({\n'
+                             '        promptTokenCount: 300,\n'
+                             '        isEstimated: false,\n'
+                             '      });\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('buildApiHistoryFromConversation', () => {\n"},
+            {'name': 'packages/core/src/services/tokenEstimation.test.ts:landmark-1',
+             'path': 'packages/core/src/services/tokenEstimation.test.ts',
+             'before': ' * Copyright 2025 Google LLC\n'
+                       ' * SPDX-License-Identifier: Apache-2.0\n'
+                       ' */\n'
+                       '\n'
+                       "import { describe, it, expect } from 'vitest';\n"
+                       "import type { Content } from '@google/genai';\n"
+                       'import {\n'
+                       '  estimateContentTokens,\n'
+                       '  estimatePromptTokens,\n'
+                       '  getUsageOutputTokenCountForPromptEstimate,\n'
+                       "} from './tokenEstimation.js';\n"
+                       '\n'
+                       'const textContent = (text: string): Content => ({\n'
+                       "  role: 'user',\n"
+                       '  parts: [{ text }],\n'
+                       '});\n'
+                       '\n',
+             'after': ' * Copyright 2025 Google LLC\n'
+                      ' * SPDX-License-Identifier: Apache-2.0\n'
+                      ' */\n'
+                      '\n'
+                      "import { describe, it, expect } from 'vitest';\n"
+                      "import type { Content } from '@google/genai';\n"
+                      "import { estimateContentTokens } from './tokenEstimation.js';\n"
+                      '\n'
+                      'const textContent = (text: string): Content => ({\n'
+                      "  role: 'user',\n"
+                      '  parts: [{ text }],\n'
+                      '});\n'
+                      '\n',
+             'review_before': ' * Copyright 2025 Google LLC\n'
+                              ' * SPDX-License-Identifier: Apache-2.0\n'
+                              ' */\n'
+                              '\n'
+                              "import { describe, it, expect } from 'vitest';\n"
+                              "import type { Content } from '@google/genai';\n"
+                              'import {\n'
+                              '  estimateContentTokens,\n'
+                              '  estimatePromptTokens,\n'
+                              '  getUsageOutputTokenCountForPromptEstimate,\n'
+                              "} from './tokenEstimation.js';\n"
+                              '\n'
+                              'const textContent = (text: string): Content => ({\n'
+                              "  role: 'user',\n"
+                              '  parts: [{ text }],\n'
+                              '});\n'
+                              '\n',
+             'review_after': ' * Copyright 2025 Google LLC\n'
+                             ' * SPDX-License-Identifier: Apache-2.0\n'
+                             ' */\n'
+                             '\n'
+                             "import { describe, it, expect } from 'vitest';\n"
+                             "import type { Content } from '@google/genai';\n"
+                             'import { estimateContentTokens } from '
+                             "'./tokenEstimation.js';\n"
+                             '\n'
+                             'const textContent = (text: string): Content => ({\n'
+                             "  role: 'user',\n"
+                             '  parts: [{ text }],\n'
+                             '});\n'
+                             '\n'},
+            {'name': 'packages/core/src/services/tokenEstimation.test.ts:landmark-2',
+             'path': 'packages/core/src/services/tokenEstimation.test.ts',
+             'before': '    };\n'
+                       '    const result = estimateContentTokens([c]);\n'
+                       '    expect(result).toBeGreaterThan(0);\n'
+                       '  });\n'
+                       '});\n'
+                       '\n'
+                       "describe('estimatePromptTokens', () => {\n"
+                       '  const history: Content[] = [\n'
+                       "    textContent('older message a'),\n"
+                       "    textContent('older message b'),\n"
+                       '  ];\n'
+                       "  const user = textContent('current user message');\n"
+                       '\n'
+                       "  it('uses lastPromptTokenCount + user-message estimate when "
+                       "count > 0', () => {\n"
+                       '    const userEst = estimateContentTokens([user]);\n'
+                       '    expect(estimatePromptTokens(history, user, '
+                       '5000)).toBe(5000 + userEst);\n'
+                       '  });\n'
+                       '\n'
+                       "  it('includes the previous turn candidate tokens in the "
+                       "steady-state estimate', () => {\n"
+                       '    const userEst = estimateContentTokens([user]);\n'
+                       '    expect(estimatePromptTokens(history, user, 5000, '
+                       '1200)).toBe(\n'
+                       '      5000 + 1200 + userEst,\n'
+                       '    );\n'
+                       '  });\n'
+                       '\n'
+                       "  it('keeps custom image-token estimates as the fifth "
+                       "argument', () => {\n"
+                       '    const imageUser: Content = {\n'
+                       "      role: 'user',\n"
+                       "      parts: [{ inlineData: { mimeType: 'image/png', data: "
+                       "'xxx' } }],\n"
+                       '    };\n'
+                       '\n'
+                       '    expect(estimatePromptTokens(history, imageUser, 5000, '
+                       '1200, 1600)).toBe(\n'
+                       '      5000 + 1200 + 1600,\n'
+                       '    );\n'
+                       '  });\n'
+                       '\n'
+                       "  it('falls back to full estimate when lastPromptTokenCount is "
+                       "0', () => {\n"
+                       '    const fullEst = estimateContentTokens([...history, '
+                       'user]);\n'
+                       '    expect(estimatePromptTokens(history, user, '
+                       '0)).toBe(fullEst);\n'
+                       '  });\n'
+                       '\n'
+                       "  describe('conservative mode (window-clamp callers)', () => "
+                       '{\n'
+                       "    it('defaults to non-conservative (identical to the 5-arg "
+                       "call) when omitted', () => {\n"
+                       '      const userEst = estimateContentTokens([user]);\n'
+                       '      expect(estimatePromptTokens(history, user, 5000, '
+                       '1200)).toBe(\n'
+                       '        estimatePromptTokens(history, user, 5000, 1200, '
+                       'undefined, false),\n'
+                       '      );\n'
+                       '      expect(\n'
+                       '        estimatePromptTokens(history, user, 5000, 1200, '
+                       'undefined, false),\n'
+                       '      ).toBe(5000 + 1200 + userEst);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('inflates only the new-content term by 1.5x (ceil), not "
+                       "the API-authoritative running total', () => {\n"
+                       '      const userEst = estimateContentTokens([user]);\n'
+                       '      const conservativeEst = Math.ceil(userEst * 1.5);\n'
+                       '      expect(\n'
+                       '        estimatePromptTokens(history, user, 5000, 1200, '
+                       'undefined, true),\n'
+                       '      ).toBe(5000 + 1200 + conservativeEst);\n'
+                       '    });\n'
+                       '\n'
+                       "    it('reproduces the real-world 2026-07-28 window-overflow "
+                       'scenario: a large CJK-heavy tool result under-counted by '
+                       "char/4 without conservative mode, corrected with it', () => {\n"
+                       '      // Mirrors the KAT-Coder-V2.5-Dev / Nex-N2-mini real '
+                       'failures: several\n'
+                       '      // parallel read_file results returning CJK-dense design '
+                       'docs pushed\n'
+                       '      // the true prompt to ~35,619 tokens while char/4 (which '
+                       'does not\n'
+                       '      // account for CJK density) estimated a smaller figure '
+                       'from\n'
+                       "      // lastPromptTokenCount + this turn's new content alone, "
+                       'causing\n'
+                       '      // maxOutputTokens to be clamped too loosely and\n'
+                       '      // `prompt + max_tokens` to exceed the window by ~1 '
+                       'token in\n'
+                       '      // production (see '
+                       'Research/Discovery_QwenCode-MainTurnOutputClamp-\n'
+                       '      // SeparateBug_20260728.md in the ArgoStack repo).\n'
+                       '      const cjkToolResult: Content = {\n'
+                       "        role: 'user',\n"
+                       '        parts: [\n'
+                       '          {\n'
+                       '            functionResponse: {\n'
+                       "              name: 'read_file',\n"
+                       '              // A realistic stand-in for a CJK-dense design '
+                       'doc chunk.\n'
+                       "              response: { output: '设计文档章节内容。'.repeat(2000) },\n"
+                       '            },\n'
+                       '          },\n'
+                       '        ],\n'
+                       '      };\n'
+                       '      const lastPromptTokenCount = 25_000;\n'
+                       '      const nonConservative = estimatePromptTokens(\n'
+                       '        [],\n'
+                       '        cjkToolResult,\n'
+                       '        lastPromptTokenCount,\n'
+                       '        0,\n'
+                       '      );\n'
+                       '      const conservative = estimatePromptTokens(\n'
+                       '        [],\n'
+                       '        cjkToolResult,\n'
+                       '        lastPromptTokenCount,\n'
+                       '        0,\n'
+                       '        undefined,\n'
+                       '        true,\n'
+                       '      );\n'
+                       '      // Conservative mode must produce a strictly larger '
+                       '(safer, smaller\n'
+                       '      // effective output budget) estimate for the same '
+                       'inputs.\n'
+                       '      expect(conservative).toBeGreaterThan(nonConservative);\n'
+                       '      expect(conservative).toBe(\n'
+                       '        lastPromptTokenCount +\n'
+                       '          Math.ceil(estimateContentTokens([cjkToolResult]) * '
+                       '1.5),\n'
+                       '      );\n'
+                       '    });\n'
+                       '  });\n'
+                       '});\n'
+                       '\n'
+                       "describe('getUsageOutputTokenCountForPromptEstimate', () => {\n"
+                       "  it('uses totalTokenCount when available to avoid "
+                       "candidate/thought overlap ambiguity', () => {\n"
+                       '    expect(\n'
+                       '      getUsageOutputTokenCountForPromptEstimate({\n'
+                       '        promptTokenCount: 100,\n'
+                       '        totalTokenCount: 180,\n'
+                       '        candidatesTokenCount: 70,\n'
+                       '        thoughtsTokenCount: 50,\n'
+                       '      }),\n'
+                       '    ).toBe(80);\n'
+                       '  });\n'
+                       '\n'
+                       "  it('does not double-count thoughts that appear included in "
+                       "candidates', () => {\n"
+                       '    expect(\n'
+                       '      getUsageOutputTokenCountForPromptEstimate({\n'
+                       '        promptTokenCount: 100,\n'
+                       '        candidatesTokenCount: 150,\n'
+                       '        thoughtsTokenCount: 120,\n'
+                       '      }),\n'
+                       '    ).toBe(150);\n'
+                       '  });\n'
+                       '\n'
+                       "  it('adds thoughts when they exceed candidates and are likely "
+                       "disjoint', () => {\n"
+                       '    expect(\n'
+                       '      getUsageOutputTokenCountForPromptEstimate({\n'
+                       '        promptTokenCount: 100,\n'
+                       '        candidatesTokenCount: 50,\n'
+                       '        thoughtsTokenCount: 120,\n'
+                       '      }),\n'
+                       '    ).toBe(170);\n'
+                       '  });\n'
+                       '\n'
+                       "  it('adds equal candidate and thought counts because equality "
+                       "does not prove overlap', () => {\n"
+                       '    expect(\n'
+                       '      getUsageOutputTokenCountForPromptEstimate({\n'
+                       '        promptTokenCount: 100,\n'
+                       '        candidatesTokenCount: 80,\n'
+                       '        thoughtsTokenCount: 80,\n'
+                       '      }),\n'
+                       '    ).toBe(160);\n'
+                       '  });\n'
+                       '\n'
+                       "  it('clamps negative disjoint output token counts to zero', "
+                       '() => {\n'
+                       '    expect(\n'
+                       '      getUsageOutputTokenCountForPromptEstimate({\n'
+                       '        promptTokenCount: 100,\n'
+                       '        candidatesTokenCount: -10,\n'
+                       '        thoughtsTokenCount: -5,\n'
+                       '      }),\n'
+                       '    ).toBe(0);\n'
+                       '  });\n'
+                       '});\n',
+             'after': '    };\n'
+                      '    const result = estimateContentTokens([c]);\n'
+                      '    expect(result).toBeGreaterThan(0);\n'
+                      '  });\n'
+                      '});\n'
+                      '\n'
+                      "describe('module surface', () => {\n"
+                      "  it('estimates held content only: no output or reasoning count "
+                      "is derived here', async () => {\n"
+                      "    const surface = await import('./tokenEstimation.js');\n"
+                      '    expect(Object.keys(surface).sort()).toEqual([\n'
+                      "      'CHARS_PER_TOKEN',\n"
+                      "      'estimateContentTokens',\n"
+                      '    ]);\n'
+                      '  });\n'
+                      '});\n',
+             'review_before': '    };\n'
+                              '    const result = estimateContentTokens([c]);\n'
+                              '    expect(result).toBeGreaterThan(0);\n'
+                              '  });\n'
+                              '});\n'
+                              '\n'
+                              "describe('estimatePromptTokens', () => {\n"
+                              '  const history: Content[] = [\n'
+                              "    textContent('older message a'),\n"
+                              "    textContent('older message b'),\n"
+                              '  ];\n'
+                              "  const user = textContent('current user message');\n"
+                              '\n'
+                              "  it('uses lastPromptTokenCount + user-message estimate "
+                              "when count > 0', () => {\n"
+                              '    const userEst = estimateContentTokens([user]);\n'
+                              '    expect(estimatePromptTokens(history, user, '
+                              '5000)).toBe(5000 + userEst);\n'
+                              '  });\n'
+                              '\n'
+                              "  it('includes the previous turn candidate tokens in "
+                              "the steady-state estimate', () => {\n"
+                              '    const userEst = estimateContentTokens([user]);\n'
+                              '    expect(estimatePromptTokens(history, user, 5000, '
+                              '1200)).toBe(\n'
+                              '      5000 + 1200 + userEst,\n'
+                              '    );\n'
+                              '  });\n'
+                              '\n'
+                              "  it('keeps custom image-token estimates as the fifth "
+                              "argument', () => {\n"
+                              '    const imageUser: Content = {\n'
+                              "      role: 'user',\n"
+                              "      parts: [{ inlineData: { mimeType: 'image/png', "
+                              "data: 'xxx' } }],\n"
+                              '    };\n'
+                              '\n'
+                              '    expect(estimatePromptTokens(history, imageUser, '
+                              '5000, 1200, 1600)).toBe(\n'
+                              '      5000 + 1200 + 1600,\n'
+                              '    );\n'
+                              '  });\n'
+                              '\n'
+                              "  it('falls back to full estimate when "
+                              "lastPromptTokenCount is 0', () => {\n"
+                              '    const fullEst = estimateContentTokens([...history, '
+                              'user]);\n'
+                              '    expect(estimatePromptTokens(history, user, '
+                              '0)).toBe(fullEst);\n'
+                              '  });\n'
+                              '\n'
+                              "  describe('conservative mode (window-clamp callers)', "
+                              '() => {\n'
+                              "    it('defaults to non-conservative (identical to the "
+                              "5-arg call) when omitted', () => {\n"
+                              '      const userEst = estimateContentTokens([user]);\n'
+                              '      expect(estimatePromptTokens(history, user, 5000, '
+                              '1200)).toBe(\n'
+                              '        estimatePromptTokens(history, user, 5000, 1200, '
+                              'undefined, false),\n'
+                              '      );\n'
+                              '      expect(\n'
+                              '        estimatePromptTokens(history, user, 5000, 1200, '
+                              'undefined, false),\n'
+                              '      ).toBe(5000 + 1200 + userEst);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('inflates only the new-content term by 1.5x "
+                              "(ceil), not the API-authoritative running total', () => "
+                              '{\n'
+                              '      const userEst = estimateContentTokens([user]);\n'
+                              '      const conservativeEst = Math.ceil(userEst * '
+                              '1.5);\n'
+                              '      expect(\n'
+                              '        estimatePromptTokens(history, user, 5000, 1200, '
+                              'undefined, true),\n'
+                              '      ).toBe(5000 + 1200 + conservativeEst);\n'
+                              '    });\n'
+                              '\n'
+                              "    it('reproduces the real-world 2026-07-28 "
+                              'window-overflow scenario: a large CJK-heavy tool result '
+                              'under-counted by char/4 without conservative mode, '
+                              "corrected with it', () => {\n"
+                              '      // Mirrors the KAT-Coder-V2.5-Dev / Nex-N2-mini '
+                              'real failures: several\n'
+                              '      // parallel read_file results returning CJK-dense '
+                              'design docs pushed\n'
+                              '      // the true prompt to ~35,619 tokens while char/4 '
+                              '(which does not\n'
+                              '      // account for CJK density) estimated a smaller '
+                              'figure from\n'
+                              "      // lastPromptTokenCount + this turn's new content "
+                              'alone, causing\n'
+                              '      // maxOutputTokens to be clamped too loosely and\n'
+                              '      // `prompt + max_tokens` to exceed the window by '
+                              '~1 token in\n'
+                              '      // production (see '
+                              'Research/Discovery_QwenCode-MainTurnOutputClamp-\n'
+                              '      // SeparateBug_20260728.md in the ArgoStack '
+                              'repo).\n'
+                              '      const cjkToolResult: Content = {\n'
+                              "        role: 'user',\n"
+                              '        parts: [\n'
+                              '          {\n'
+                              '            functionResponse: {\n'
+                              "              name: 'read_file',\n"
+                              '              // A realistic stand-in for a CJK-dense '
+                              'design doc chunk.\n'
+                              '              response: { output: '
+                              "'设计文档章节内容。'.repeat(2000) },\n"
+                              '            },\n'
+                              '          },\n'
+                              '        ],\n'
+                              '      };\n'
+                              '      const lastPromptTokenCount = 25_000;\n'
+                              '      const nonConservative = estimatePromptTokens(\n'
+                              '        [],\n'
+                              '        cjkToolResult,\n'
+                              '        lastPromptTokenCount,\n'
+                              '        0,\n'
+                              '      );\n'
+                              '      const conservative = estimatePromptTokens(\n'
+                              '        [],\n'
+                              '        cjkToolResult,\n'
+                              '        lastPromptTokenCount,\n'
+                              '        0,\n'
+                              '        undefined,\n'
+                              '        true,\n'
+                              '      );\n'
+                              '      // Conservative mode must produce a strictly '
+                              'larger (safer, smaller\n'
+                              '      // effective output budget) estimate for the same '
+                              'inputs.\n'
+                              '      '
+                              'expect(conservative).toBeGreaterThan(nonConservative);\n'
+                              '      expect(conservative).toBe(\n'
+                              '        lastPromptTokenCount +\n'
+                              '          '
+                              'Math.ceil(estimateContentTokens([cjkToolResult]) * '
+                              '1.5),\n'
+                              '      );\n'
+                              '    });\n'
+                              '  });\n'
+                              '});\n'
+                              '\n'
+                              "describe('getUsageOutputTokenCountForPromptEstimate', "
+                              '() => {\n'
+                              "  it('uses totalTokenCount when available to avoid "
+                              "candidate/thought overlap ambiguity', () => {\n"
+                              '    expect(\n'
+                              '      getUsageOutputTokenCountForPromptEstimate({\n'
+                              '        promptTokenCount: 100,\n'
+                              '        totalTokenCount: 180,\n'
+                              '        candidatesTokenCount: 70,\n'
+                              '        thoughtsTokenCount: 50,\n'
+                              '      }),\n'
+                              '    ).toBe(80);\n'
+                              '  });\n'
+                              '\n'
+                              "  it('does not double-count thoughts that appear "
+                              "included in candidates', () => {\n"
+                              '    expect(\n'
+                              '      getUsageOutputTokenCountForPromptEstimate({\n'
+                              '        promptTokenCount: 100,\n'
+                              '        candidatesTokenCount: 150,\n'
+                              '        thoughtsTokenCount: 120,\n'
+                              '      }),\n'
+                              '    ).toBe(150);\n'
+                              '  });\n'
+                              '\n'
+                              "  it('adds thoughts when they exceed candidates and are "
+                              "likely disjoint', () => {\n"
+                              '    expect(\n'
+                              '      getUsageOutputTokenCountForPromptEstimate({\n'
+                              '        promptTokenCount: 100,\n'
+                              '        candidatesTokenCount: 50,\n'
+                              '        thoughtsTokenCount: 120,\n'
+                              '      }),\n'
+                              '    ).toBe(170);\n'
+                              '  });\n'
+                              '\n'
+                              "  it('adds equal candidate and thought counts because "
+                              "equality does not prove overlap', () => {\n"
+                              '    expect(\n'
+                              '      getUsageOutputTokenCountForPromptEstimate({\n'
+                              '        promptTokenCount: 100,\n'
+                              '        candidatesTokenCount: 80,\n'
+                              '        thoughtsTokenCount: 80,\n'
+                              '      }),\n'
+                              '    ).toBe(160);\n'
+                              '  });\n'
+                              '\n'
+                              "  it('clamps negative disjoint output token counts to "
+                              "zero', () => {\n"
+                              '    expect(\n'
+                              '      getUsageOutputTokenCountForPromptEstimate({\n'
+                              '        promptTokenCount: 100,\n'
+                              '        candidatesTokenCount: -10,\n'
+                              '        thoughtsTokenCount: -5,\n'
+                              '      }),\n'
+                              '    ).toBe(0);\n'
+                              '  });\n'
+                              '});\n',
+             'review_after': '    };\n'
+                             '    const result = estimateContentTokens([c]);\n'
+                             '    expect(result).toBeGreaterThan(0);\n'
+                             '  });\n'
+                             '});\n'
+                             '\n'
+                             "describe('module surface', () => {\n"
+                             "  it('estimates held content only: no output or "
+                             "reasoning count is derived here', async () => {\n"
+                             '    const surface = await '
+                             "import('./tokenEstimation.js');\n"
+                             '    expect(Object.keys(surface).sort()).toEqual([\n'
+                             "      'CHARS_PER_TOKEN',\n"
+                             "      'estimateContentTokens',\n"
+                             '    ]);\n'
+                             '  });\n'
+                             '});\n'},
+            {'name': 'packages/core/src/services/tokenEstimation.ts:landmark-1',
+             'path': 'packages/core/src/services/tokenEstimation.ts',
+             'before': '/**\n'
+                       ' * @license\n'
+                       ' * Copyright 2025 Google LLC\n'
+                       ' * SPDX-License-Identifier: Apache-2.0\n'
+                       ' */\n'
+                       '\n'
+                       'import type {\n'
+                       '  Content,\n'
+                       '  GenerateContentResponseUsageMetadata,\n'
+                       "} from '@google/genai';\n"
+                       'import {\n'
+                       '  DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                       '  TOKEN_TO_CHAR_RATIO,\n'
+                       '  estimateContentChars,\n'
+                       "} from './compactionInputSlimming.js';\n"
+                       '\n',
+             'after': '/**\n'
+                      ' * @license\n'
+                      ' * Copyright 2025 Google LLC\n'
+                      ' * SPDX-License-Identifier: Apache-2.0\n'
+                      ' */\n'
+                      '\n'
+                      "import type { Content } from '@google/genai';\n"
+                      'import {\n'
+                      '  DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                      '  TOKEN_TO_CHAR_RATIO,\n'
+                      '  estimateContentChars,\n'
+                      "} from './compactionInputSlimming.js';\n"
+                      '\n',
+             'review_before': '/**\n'
+                              ' * @license\n'
+                              ' * Copyright 2025 Google LLC\n'
+                              ' * SPDX-License-Identifier: Apache-2.0\n'
+                              ' */\n'
+                              '\n'
+                              'import type {\n'
+                              '  Content,\n'
+                              '  GenerateContentResponseUsageMetadata,\n'
+                              "} from '@google/genai';\n"
+                              'import {\n'
+                              '  DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                              '  TOKEN_TO_CHAR_RATIO,\n'
+                              '  estimateContentChars,\n'
+                              "} from './compactionInputSlimming.js';\n"
+                              '\n',
+             'review_after': '/**\n'
+                             ' * @license\n'
+                             ' * Copyright 2025 Google LLC\n'
+                             ' * SPDX-License-Identifier: Apache-2.0\n'
+                             ' */\n'
+                             '\n'
+                             "import type { Content } from '@google/genai';\n"
+                             'import {\n'
+                             '  DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                             '  TOKEN_TO_CHAR_RATIO,\n'
+                             '  estimateContentChars,\n'
+                             "} from './compactionInputSlimming.js';\n"
+                             '\n'},
+            {'name': 'packages/core/src/services/tokenEstimation.ts:landmark-2',
+             'path': 'packages/core/src/services/tokenEstimation.ts',
+             'before': '/**\n'
+                       ' * Estimate the token count of a list of Content objects via '
+                       'char/4.\n'
+                       ' *\n'
+                       ' * Reuses `estimateContentChars` so that inlineData / '
+                       'functionCall /\n'
+                       ' * functionResponse get the same treatment they receive when '
+                       'computing\n'
+                       ' * compression size estimates — keeping the two estimators in '
+                       'sync prevents\n'
+                       ' * the auto-compaction trigger and the compressor from '
+                       'disagreeing on size.\n'
+                       ' *\n'
+                       ' * Intended for the pre-send threshold gate only. char/4 is a '
+                       'conservative\n'
+                       ' * lower bound (real tokenizers vary ±30%); using it to '
+                       'TRIGGER compaction\n'
+                       ' * earlier is safe (false-positive), using it to SKIP '
+                       'compaction is not.\n'
+                       ' */\n'
+                       'export function estimateContentTokens(\n'
+                       '  contents: Content[],\n'
+                       '  imageTokenEstimate: number = DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                       '): number {\n'
+                       '  let totalChars = 0;\n'
+                       '  for (const content of contents) {\n'
+                       '    totalChars += estimateContentChars(content, '
+                       'imageTokenEstimate);\n'
+                       '  }\n'
+                       '  return Math.ceil(totalChars / CHARS_PER_TOKEN);\n'
+                       '}\n'
+                       '\n'
+                       '/**\n'
+                       ' * Compute an effective prompt-token count for the '
+                       'auto-compaction gate.\n'
+                       ' *\n'
+                       " * `lastPromptTokenCount` (from the previous turn's usage "
+                       'metadata) lacks\n'
+                       ' * three things: the current user message, the previous model '
+                       'response that\n'
+                       ' * was appended to local history after that prompt count was '
+                       'reported, and\n'
+                       ' * any initial value on the very first send. This helper '
+                       'closes those gaps via\n'
+                       ' * local estimation plus `lastOutputTokenCount` when '
+                       'available.\n'
+                       ' *\n'
+                       ' * WARNING: like estimateContentTokens, this is a conservative '
+                       'lower\n'
+                       ' * bound. Use it to TRIGGER earlier, never to SKIP — the '
+                       'fallback path\n'
+                       ' * (lastPromptTokenCount === 0) returns a pure estimate with '
+                       'no API-\n'
+                       ' * authoritative anchor.\n'
+                       ' */\n'
+                       '/**\n'
+                       ' * Multiplier applied to the char/4 estimate of NEWLY-added '
+                       'content when\n'
+                       ' * `conservative` is set. char/4 is documented (see file '
+                       'header) as varying\n'
+                       ' * ±30% against real tokenizers, but that band was measured '
+                       'against mixed\n'
+                       ' * English-heavy content; two independent real production '
+                       'failures\n'
+                       " * (chatCompressionService's 400-overflow root cause doc and a "
+                       'main-turn\n'
+                       ' * `prompt + max_tokens > window` overflow, both 2026-07-28) '
+                       'traced back to\n'
+                       ' * char/4 under-counting CJK-dense tool output (design docs, '
+                       'large file\n'
+                       ' * reads) by 39-54% — beyond the documented band. 1.5x covers '
+                       'both observed\n'
+                       ' * cases with headroom without materially eating into the '
+                       'output budget for\n'
+                       ' * ordinary (non-CJK-heavy) content, since it only scales the '
+                       'incremental\n'
+                       ' * new-content term, not the API-authoritative running total.\n'
+                       ' */\n'
+                       'export const CONSERVATIVE_NEW_CONTENT_SAFETY_FACTOR = 1.5;\n'
+                       '\n'
+                       'export function estimatePromptTokens(\n'
+                       '  history: Content[],\n'
+                       '  userMessage: Content,\n'
+                       '  lastPromptTokenCount: number,\n'
+                       '  lastOutputTokenCount: number = 0,\n'
+                       '  imageTokenEstimate: number = DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                       '  conservative: boolean = false,\n'
+                       '): number {\n'
+                       '  if (lastPromptTokenCount > 0) {\n'
+                       '    const newContentTokens = estimateContentTokens(\n'
+                       '      [userMessage],\n'
+                       '      imageTokenEstimate,\n'
+                       '    );\n'
+                       '    return (\n'
+                       '      lastPromptTokenCount +\n'
+                       '      lastOutputTokenCount +\n'
+                       '      (conservative\n'
+                       '        ? Math.ceil(newContentTokens * '
+                       'CONSERVATIVE_NEW_CONTENT_SAFETY_FACTOR)\n'
+                       '        : newContentTokens)\n'
+                       '    );\n'
+                       '  }\n'
+                       '  // First-send fallback (no API data yet): estimate from '
+                       '`history + userMessage`\n'
+                       '  // only. This MISSES the system prompt (~8-15K), tool '
+                       'definitions (~5K),\n'
+                       '  // skill content, and cache headers — typically ~15-20K of '
+                       'under-estimate.\n'
+                       '  // The reactive overflow handler is the safety net if the '
+                       'hard-tier rescue\n'
+                       '  // misses for that reason. See review #4168 R3.3.\n'
+                       '  return estimateContentTokens([...history, userMessage], '
+                       'imageTokenEstimate);\n'
+                       '}\n'
+                       '\n'
+                       'export function getUsageOutputTokenCountForPromptEstimate(\n'
+                       '  usage: GenerateContentResponseUsageMetadata | undefined,\n'
+                       '): number {\n'
+                       '  if (usage?.promptTokenCount === undefined) {\n'
+                       '    return 0;\n'
+                       '  }\n'
+                       '  if (usage.totalTokenCount !== undefined) {\n'
+                       '    return Math.max(0, usage.totalTokenCount - '
+                       'usage.promptTokenCount);\n'
+                       '  }\n'
+                       '  const candidates = Math.max(0, usage.candidatesTokenCount ?? '
+                       '0);\n'
+                       '  const thoughts = Math.max(0, usage.thoughtsTokenCount ?? '
+                       '0);\n'
+                       '  // Some OpenAI-compatible providers include reasoning tokens '
+                       'inside\n'
+                       '  // candidatesTokenCount when totalTokenCount is unavailable. '
+                       'If candidates\n'
+                       '  // strictly dominates thoughts, treat thoughts as '
+                       'potentially overlapping;\n'
+                       '  // otherwise add the larger reasoning-only count so '
+                       'long-thinking responses\n'
+                       '  // still advance the steady-state prompt estimate.\n'
+                       '  return candidates > thoughts ? candidates : candidates + '
+                       'thoughts;\n'
+                       '}\n',
+             'after': '/**\n'
+                      ' * Estimate the token count of a list of Content objects via '
+                      'char/4.\n'
+                      ' *\n'
+                      ' * Reuses `estimateContentChars` so that inlineData / '
+                      'functionCall /\n'
+                      ' * functionResponse get the same treatment they receive when '
+                      'computing\n'
+                      ' * compression size estimates — keeping the two estimators in '
+                      'sync prevents\n'
+                      ' * the two from disagreeing on size.\n'
+                      ' *\n'
+                      ' * A heuristic for content this client holds, never for what a '
+                      'generation\n'
+                      ' * produced: the fast compaction paths that drop content '
+                      'without a summary\n'
+                      ' * generation carry its result forward as an estimated count, '
+                      'session\n'
+                      ' * references size their attachments with it, and the pre-send '
+                      'gate never\n'
+                      ' * reads it — that gate counts the rendered request on the '
+                      "backend's\n"
+                      ' * tokenizer, and every output and reasoning count is the one '
+                      'the backend\n'
+                      ' * served.\n'
+                      ' */\n'
+                      'export function estimateContentTokens(\n'
+                      '  contents: Content[],\n'
+                      '  imageTokenEstimate: number = DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                      '): number {\n'
+                      '  let totalChars = 0;\n'
+                      '  for (const content of contents) {\n'
+                      '    totalChars += estimateContentChars(content, '
+                      'imageTokenEstimate);\n'
+                      '  }\n'
+                      '  return Math.ceil(totalChars / CHARS_PER_TOKEN);\n'
+                      '}\n',
+             'review_before': '/**\n'
+                              ' * Estimate the token count of a list of Content '
+                              'objects via char/4.\n'
+                              ' *\n'
+                              ' * Reuses `estimateContentChars` so that inlineData / '
+                              'functionCall /\n'
+                              ' * functionResponse get the same treatment they receive '
+                              'when computing\n'
+                              ' * compression size estimates — keeping the two '
+                              'estimators in sync prevents\n'
+                              ' * the auto-compaction trigger and the compressor from '
+                              'disagreeing on size.\n'
+                              ' *\n'
+                              ' * Intended for the pre-send threshold gate only. '
+                              'char/4 is a conservative\n'
+                              ' * lower bound (real tokenizers vary ±30%); using it to '
+                              'TRIGGER compaction\n'
+                              ' * earlier is safe (false-positive), using it to SKIP '
+                              'compaction is not.\n'
+                              ' */\n'
+                              'export function estimateContentTokens(\n'
+                              '  contents: Content[],\n'
+                              '  imageTokenEstimate: number = '
+                              'DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                              '): number {\n'
+                              '  let totalChars = 0;\n'
+                              '  for (const content of contents) {\n'
+                              '    totalChars += estimateContentChars(content, '
+                              'imageTokenEstimate);\n'
+                              '  }\n'
+                              '  return Math.ceil(totalChars / CHARS_PER_TOKEN);\n'
+                              '}\n'
+                              '\n'
+                              '/**\n'
+                              ' * Compute an effective prompt-token count for the '
+                              'auto-compaction gate.\n'
+                              ' *\n'
+                              " * `lastPromptTokenCount` (from the previous turn's "
+                              'usage metadata) lacks\n'
+                              ' * three things: the current user message, the previous '
+                              'model response that\n'
+                              ' * was appended to local history after that prompt '
+                              'count was reported, and\n'
+                              ' * any initial value on the very first send. This '
+                              'helper closes those gaps via\n'
+                              ' * local estimation plus `lastOutputTokenCount` when '
+                              'available.\n'
+                              ' *\n'
+                              ' * WARNING: like estimateContentTokens, this is a '
+                              'conservative lower\n'
+                              ' * bound. Use it to TRIGGER earlier, never to SKIP — '
+                              'the fallback path\n'
+                              ' * (lastPromptTokenCount === 0) returns a pure estimate '
+                              'with no API-\n'
+                              ' * authoritative anchor.\n'
+                              ' */\n'
+                              '/**\n'
+                              ' * Multiplier applied to the char/4 estimate of '
+                              'NEWLY-added content when\n'
+                              ' * `conservative` is set. char/4 is documented (see '
+                              'file header) as varying\n'
+                              ' * ±30% against real tokenizers, but that band was '
+                              'measured against mixed\n'
+                              ' * English-heavy content; two independent real '
+                              'production failures\n'
+                              " * (chatCompressionService's 400-overflow root cause "
+                              'doc and a main-turn\n'
+                              ' * `prompt + max_tokens > window` overflow, both '
+                              '2026-07-28) traced back to\n'
+                              ' * char/4 under-counting CJK-dense tool output (design '
+                              'docs, large file\n'
+                              ' * reads) by 39-54% — beyond the documented band. 1.5x '
+                              'covers both observed\n'
+                              ' * cases with headroom without materially eating into '
+                              'the output budget for\n'
+                              ' * ordinary (non-CJK-heavy) content, since it only '
+                              'scales the incremental\n'
+                              ' * new-content term, not the API-authoritative running '
+                              'total.\n'
+                              ' */\n'
+                              'export const CONSERVATIVE_NEW_CONTENT_SAFETY_FACTOR = '
+                              '1.5;\n'
+                              '\n'
+                              'export function estimatePromptTokens(\n'
+                              '  history: Content[],\n'
+                              '  userMessage: Content,\n'
+                              '  lastPromptTokenCount: number,\n'
+                              '  lastOutputTokenCount: number = 0,\n'
+                              '  imageTokenEstimate: number = '
+                              'DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                              '  conservative: boolean = false,\n'
+                              '): number {\n'
+                              '  if (lastPromptTokenCount > 0) {\n'
+                              '    const newContentTokens = estimateContentTokens(\n'
+                              '      [userMessage],\n'
+                              '      imageTokenEstimate,\n'
+                              '    );\n'
+                              '    return (\n'
+                              '      lastPromptTokenCount +\n'
+                              '      lastOutputTokenCount +\n'
+                              '      (conservative\n'
+                              '        ? Math.ceil(newContentTokens * '
+                              'CONSERVATIVE_NEW_CONTENT_SAFETY_FACTOR)\n'
+                              '        : newContentTokens)\n'
+                              '    );\n'
+                              '  }\n'
+                              '  // First-send fallback (no API data yet): estimate '
+                              'from `history + userMessage`\n'
+                              '  // only. This MISSES the system prompt (~8-15K), tool '
+                              'definitions (~5K),\n'
+                              '  // skill content, and cache headers — typically '
+                              '~15-20K of under-estimate.\n'
+                              '  // The reactive overflow handler is the safety net if '
+                              'the hard-tier rescue\n'
+                              '  // misses for that reason. See review #4168 R3.3.\n'
+                              '  return estimateContentTokens([...history, '
+                              'userMessage], imageTokenEstimate);\n'
+                              '}\n'
+                              '\n'
+                              'export function '
+                              'getUsageOutputTokenCountForPromptEstimate(\n'
+                              '  usage: GenerateContentResponseUsageMetadata | '
+                              'undefined,\n'
+                              '): number {\n'
+                              '  if (usage?.promptTokenCount === undefined) {\n'
+                              '    return 0;\n'
+                              '  }\n'
+                              '  if (usage.totalTokenCount !== undefined) {\n'
+                              '    return Math.max(0, usage.totalTokenCount - '
+                              'usage.promptTokenCount);\n'
+                              '  }\n'
+                              '  const candidates = Math.max(0, '
+                              'usage.candidatesTokenCount ?? 0);\n'
+                              '  const thoughts = Math.max(0, usage.thoughtsTokenCount '
+                              '?? 0);\n'
+                              '  // Some OpenAI-compatible providers include reasoning '
+                              'tokens inside\n'
+                              '  // candidatesTokenCount when totalTokenCount is '
+                              'unavailable. If candidates\n'
+                              '  // strictly dominates thoughts, treat thoughts as '
+                              'potentially overlapping;\n'
+                              '  // otherwise add the larger reasoning-only count so '
+                              'long-thinking responses\n'
+                              '  // still advance the steady-state prompt estimate.\n'
+                              '  return candidates > thoughts ? candidates : '
+                              'candidates + thoughts;\n'
+                              '}\n',
+             'review_after': '/**\n'
+                             ' * Estimate the token count of a list of Content objects '
+                             'via char/4.\n'
+                             ' *\n'
+                             ' * Reuses `estimateContentChars` so that inlineData / '
+                             'functionCall /\n'
+                             ' * functionResponse get the same treatment they receive '
+                             'when computing\n'
+                             ' * compression size estimates — keeping the two '
+                             'estimators in sync prevents\n'
+                             ' * the two from disagreeing on size.\n'
+                             ' *\n'
+                             ' * A heuristic for content this client holds, never for '
+                             'what a generation\n'
+                             ' * produced: the fast compaction paths that drop content '
+                             'without a summary\n'
+                             ' * generation carry its result forward as an estimated '
+                             'count, session\n'
+                             ' * references size their attachments with it, and the '
+                             'pre-send gate never\n'
+                             ' * reads it — that gate counts the rendered request on '
+                             "the backend's\n"
+                             ' * tokenizer, and every output and reasoning count is '
+                             'the one the backend\n'
+                             ' * served.\n'
+                             ' */\n'
+                             'export function estimateContentTokens(\n'
+                             '  contents: Content[],\n'
+                             '  imageTokenEstimate: number = '
+                             'DEFAULT_IMAGE_TOKEN_ESTIMATE,\n'
+                             '): number {\n'
+                             '  let totalChars = 0;\n'
+                             '  for (const content of contents) {\n'
+                             '    totalChars += estimateContentChars(content, '
+                             'imageTokenEstimate);\n'
+                             '  }\n'
+                             '  return Math.ceil(totalChars / CHARS_PER_TOKEN);\n'
+                             '}\n'},
             {'name': 'packages/core/src/services/visionBridge/vision-bridge-service.test.ts:landmark-1',
              'path': 'packages/core/src/services/visionBridge/vision-bridge-service.test.ts',
              'before': '      signal: signal(),\n'
@@ -104587,6 +111025,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "import { LoopType } from '../../telemetry/types.js';\n"
                       'import type {\n'
                       '  AgentCompactionEvent,\n'
+                      '  AgentRoundTextEvent,\n'
                       '  AgentToolCallEvent,\n'
                       '  AgentToolResultEvent,\n'
                       '  AgentApprovalRequestEvent,\n'
@@ -104620,6 +111059,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "import { LoopType } from '../../telemetry/types.js';\n"
                              'import type {\n'
                              '  AgentCompactionEvent,\n'
+                             '  AgentRoundTextEvent,\n'
                              '  AgentToolCallEvent,\n'
                              '  AgentToolResultEvent,\n'
                              '  AgentApprovalRequestEvent,\n'
@@ -106094,6 +112534,73 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      expect(toolCall?.responseParts).toBe(responseParts);\n'
                       '    });\n'
                       '\n'
+                      "    it('[subagent-rounds] publishes every completed round on "
+                      "the display, oldest first, with its served usage', async () => "
+                      '{\n'
+                      '      vi.mocked(config.isInteractive).mockReturnValue(false);\n'
+                      '      const snapshots: AgentResultDisplay[] = [];\n'
+                      '      const servedUsage = {\n'
+                      '        promptTokenCount: 18_204,\n'
+                      '        candidatesTokenCount: 96,\n'
+                      '        thoughtsTokenCount: 71,\n'
+                      '        cachedContentTokenCount: 18_176,\n'
+                      '        totalTokenCount: 18_300,\n'
+                      '      };\n'
+                      '\n'
+                      '      const invocation = '
+                      'createInvocationWithEventDrivenAgent((emitter) => {\n'
+                      '        emitter.emit(AgentEventType.ROUND_TEXT, {\n'
+                      "          subagentId: 'sub-1',\n"
+                      '          round: 1,\n'
+                      "          text: '',\n"
+                      "          thoughtText: 'I should read the manifest first.',\n"
+                      '          usageMetadata: servedUsage,\n'
+                      '          timestamp: Date.now(),\n'
+                      '        } satisfies AgentRoundTextEvent);\n'
+                      '\n'
+                      '        emitter.emit(AgentEventType.ROUND_TEXT, {\n'
+                      "          subagentId: 'sub-1',\n"
+                      '          round: 2,\n'
+                      "          text: 'The manifest lists three services.',\n"
+                      "          thoughtText: '',\n"
+                      '          timestamp: Date.now(),\n'
+                      '        } satisfies AgentRoundTextEvent);\n'
+                      '      });\n'
+                      '\n'
+                      '      await invocation.execute(undefined, (output) => {\n'
+                      '        snapshots.push(output as AgentResultDisplay);\n'
+                      '      });\n'
+                      '\n'
+                      '      const withBoth = snapshots.filter(\n'
+                      '        (snapshot) => (snapshot.rounds?.length ?? 0) === 2,\n'
+                      '      );\n'
+                      '      expect(withBoth.length).toBeGreaterThan(0);\n'
+                      '      // Append-only and in order: the reasoning and the served '
+                      'usage ride\n'
+                      '      // the round they belong to, and a round without usage '
+                      'says so rather\n'
+                      '      // than carrying a count invented for it.\n'
+                      '      expect(withBoth.at(-1)?.rounds).toEqual([\n'
+                      '        {\n'
+                      '          round: 1,\n'
+                      "          text: '',\n"
+                      "          reasoning: 'I should read the manifest first.',\n"
+                      '          usageMetadata: servedUsage,\n'
+                      '        },\n'
+                      '        {\n'
+                      '          round: 2,\n'
+                      "          text: 'The manifest lists three services.',\n"
+                      "          reasoning: '',\n"
+                      '          usageMetadata: null,\n'
+                      '        },\n'
+                      '      ]);\n'
+                      '      const firstSnapshotWithRound = snapshots.find(\n'
+                      '        (snapshot) => (snapshot.rounds?.length ?? 0) === 1,\n'
+                      '      );\n'
+                      '      '
+                      'expect(firstSnapshotWithRound?.rounds?.[0]?.round).toBe(1);\n'
+                      '    });\n'
+                      '\n'
                       "    it('[compaction-event] accumulates every subagent "
                       "compaction attempt on the display, oldest first', async () => "
                       '{\n'
@@ -106204,6 +112711,78 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '});\n'
                              '      '
                              'expect(toolCall?.responseParts).toBe(responseParts);\n'
+                             '    });\n'
+                             '\n'
+                             "    it('[subagent-rounds] publishes every completed "
+                             'round on the display, oldest first, with its served '
+                             "usage', async () => {\n"
+                             '      '
+                             'vi.mocked(config.isInteractive).mockReturnValue(false);\n'
+                             '      const snapshots: AgentResultDisplay[] = [];\n'
+                             '      const servedUsage = {\n'
+                             '        promptTokenCount: 18_204,\n'
+                             '        candidatesTokenCount: 96,\n'
+                             '        thoughtsTokenCount: 71,\n'
+                             '        cachedContentTokenCount: 18_176,\n'
+                             '        totalTokenCount: 18_300,\n'
+                             '      };\n'
+                             '\n'
+                             '      const invocation = '
+                             'createInvocationWithEventDrivenAgent((emitter) => {\n'
+                             '        emitter.emit(AgentEventType.ROUND_TEXT, {\n'
+                             "          subagentId: 'sub-1',\n"
+                             '          round: 1,\n'
+                             "          text: '',\n"
+                             "          thoughtText: 'I should read the manifest "
+                             "first.',\n"
+                             '          usageMetadata: servedUsage,\n'
+                             '          timestamp: Date.now(),\n'
+                             '        } satisfies AgentRoundTextEvent);\n'
+                             '\n'
+                             '        emitter.emit(AgentEventType.ROUND_TEXT, {\n'
+                             "          subagentId: 'sub-1',\n"
+                             '          round: 2,\n'
+                             "          text: 'The manifest lists three services.',\n"
+                             "          thoughtText: '',\n"
+                             '          timestamp: Date.now(),\n'
+                             '        } satisfies AgentRoundTextEvent);\n'
+                             '      });\n'
+                             '\n'
+                             '      await invocation.execute(undefined, (output) => {\n'
+                             '        snapshots.push(output as AgentResultDisplay);\n'
+                             '      });\n'
+                             '\n'
+                             '      const withBoth = snapshots.filter(\n'
+                             '        (snapshot) => (snapshot.rounds?.length ?? 0) === '
+                             '2,\n'
+                             '      );\n'
+                             '      expect(withBoth.length).toBeGreaterThan(0);\n'
+                             '      // Append-only and in order: the reasoning and the '
+                             'served usage ride\n'
+                             '      // the round they belong to, and a round without '
+                             'usage says so rather\n'
+                             '      // than carrying a count invented for it.\n'
+                             '      expect(withBoth.at(-1)?.rounds).toEqual([\n'
+                             '        {\n'
+                             '          round: 1,\n'
+                             "          text: '',\n"
+                             "          reasoning: 'I should read the manifest "
+                             "first.',\n"
+                             '          usageMetadata: servedUsage,\n'
+                             '        },\n'
+                             '        {\n'
+                             '          round: 2,\n'
+                             "          text: 'The manifest lists three services.',\n"
+                             "          reasoning: '',\n"
+                             '          usageMetadata: null,\n'
+                             '        },\n'
+                             '      ]);\n'
+                             '      const firstSnapshotWithRound = snapshots.find(\n'
+                             '        (snapshot) => (snapshot.rounds?.length ?? 0) === '
+                             '1,\n'
+                             '      );\n'
+                             '      '
+                             'expect(firstSnapshotWithRound?.rounds?.[0]?.round).toBe(1);\n'
                              '    });\n'
                              '\n'
                              "    it('[compaction-event] accumulates every subagent "
@@ -106466,6 +113045,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "} from '../../agents/runtime/agent-events.js';\n"
                       'import type {\n'
                       '  AgentCompactionEvent,\n'
+                      '  AgentRoundTextEvent,\n'
                       '  AgentToolCallEvent,\n'
                       '  AgentToolResultEvent,\n'
                       '  AgentFinishEvent,\n'
@@ -106491,6 +113071,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "} from '../../agents/runtime/agent-events.js';\n"
                              'import type {\n'
                              '  AgentCompactionEvent,\n'
+                             '  AgentRoundTextEvent,\n'
                              '  AgentToolCallEvent,\n'
                              '  AgentToolResultEvent,\n'
                              '  AgentFinishEvent,\n'
@@ -107549,6 +114130,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  private readonly currentCompactions: NonNullable<\n'
                       "    AgentResultDisplay['compactions']\n"
                       '  > = [];\n'
+                      '  private readonly currentRounds: '
+                      "NonNullable<AgentResultDisplay['rounds']> =\n"
+                      '    [];\n'
                       '  private callId?: string;\n'
                       '\n'
                       '  constructor(\n'
@@ -107584,6 +114168,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  private readonly currentCompactions: NonNullable<\n'
                              "    AgentResultDisplay['compactions']\n"
                              '  > = [];\n'
+                             '  private readonly currentRounds: '
+                             "NonNullable<AgentResultDisplay['rounds']> =\n"
+                             '    [];\n'
                              '  private callId?: string;\n'
                              '\n'
                              '  constructor(\n'
@@ -107629,6 +114216,26 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '          updateOutput,\n'
                       '        );\n'
                       '      }\n'
+                      '    });\n'
+                      '\n'
+                      "    // A round's text, reasoning and served usage are published "
+                      'the moment\n'
+                      "    // the round's stream ends, before the tool calls it "
+                      'requested run, so a\n'
+                      '    // consumer sees the generation ahead of its consequences. '
+                      'Append-only\n'
+                      '    // like `compactions`.\n'
+                      '    this.eventEmitter.on(AgentEventType.ROUND_TEXT, (...args: '
+                      'unknown[]) => {\n'
+                      '      const event = args[0] as AgentRoundTextEvent;\n'
+                      '      this.currentRounds.push({\n'
+                      '        round: event.round,\n'
+                      '        text: event.text,\n'
+                      '        reasoning: event.thoughtText,\n'
+                      '        usageMetadata: event.usageMetadata ?? null,\n'
+                      '      });\n'
+                      '      this.updateDisplay({ rounds: [...this.currentRounds] }, '
+                      'updateOutput);\n'
                       '    });\n'
                       '\n'
                       '    // Compactions are append-only: each event adds one entry '
@@ -107725,6 +114332,26 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          updateOutput,\n'
                              '        );\n'
                              '      }\n'
+                             '    });\n'
+                             '\n'
+                             "    // A round's text, reasoning and served usage are "
+                             'published the moment\n'
+                             "    // the round's stream ends, before the tool calls it "
+                             'requested run, so a\n'
+                             '    // consumer sees the generation ahead of its '
+                             'consequences. Append-only\n'
+                             '    // like `compactions`.\n'
+                             '    this.eventEmitter.on(AgentEventType.ROUND_TEXT, '
+                             '(...args: unknown[]) => {\n'
+                             '      const event = args[0] as AgentRoundTextEvent;\n'
+                             '      this.currentRounds.push({\n'
+                             '        round: event.round,\n'
+                             '        text: event.text,\n'
+                             '        reasoning: event.thoughtText,\n'
+                             '        usageMetadata: event.usageMetadata ?? null,\n'
+                             '      });\n'
+                             '      this.updateDisplay({ rounds: '
+                             '[...this.currentRounds] }, updateOutput);\n'
                              '    });\n'
                              '\n'
                              '    // Compactions are append-only: each event adds one '
@@ -126533,8 +133160,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '\n'
                       'import type { AgentTerminateMode } from '
                       "'../agents/runtime/agent-types.js';\n"
-                      'import type { FunctionDeclaration, Part, PartListUnion } from '
-                      "'@google/genai';\n"
+                      'import type {\n'
+                      '  FunctionDeclaration,\n'
+                      '  GenerateContentResponseUsageMetadata,\n'
+                      '  Part,\n'
+                      '  PartListUnion,\n'
+                      "} from '@google/genai';\n"
                       "import { ToolErrorType } from './tool-error.js';\n"
                       'import type { ShellExecutionConfig } from '
                       "'../services/shellExecutionService.js';\n"
@@ -126588,8 +133219,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              'import type { AgentTerminateMode } from '
                              "'../agents/runtime/agent-types.js';\n"
-                             'import type { FunctionDeclaration, Part, PartListUnion } '
-                             "from '@google/genai';\n"
+                             'import type {\n'
+                             '  FunctionDeclaration,\n'
+                             '  GenerateContentResponseUsageMetadata,\n'
+                             '  Part,\n'
+                             '  PartListUnion,\n'
+                             "} from '@google/genai';\n"
                              "import { ToolErrorType } from './tool-error.js';\n"
                              'import type { ShellExecutionConfig } from '
                              "'../services/shellExecutionService.js';\n"
@@ -127158,7 +133793,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    return this.validateToolParamValues(params);\n'},
             {'name': 'packages/core/src/tools/tools.ts:landmark-5',
              'path': 'packages/core/src/tools/tools.ts',
-             'before': "  type: 'task_execution';\n"
+             'before': '    return false;\n'
+                       '  }\n'
+                       '\n'
+                       '  return traverse(schema, new Set<string>(), new '
+                       'Set<string>());\n'
+                       '}\n'
+                       '\n'
+                       'export interface AgentResultDisplay {\n'
+                       "  type: 'task_execution';\n"
                        '  subagentName: string;\n'
                        '  subagentColor?: string;\n'
                        '  taskDescription: string;\n'
@@ -127184,7 +133827,44 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        "'failed';\n"
                        '    error?: string;\n'
                        '    args?: Record<string, unknown>;\n',
-             'after': "  type: 'task_execution';\n"
+             'after': '    return false;\n'
+                      '  }\n'
+                      '\n'
+                      '  return traverse(schema, new Set<string>(), new '
+                      'Set<string>());\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * One completed model round of a subagent: what it reasoned, '
+                      'what it said,\n'
+                      ' * and the usage the backend served for it. Published on the '
+                      'display so a\n'
+                      " * consumer of the parent stream sees the subagent's own "
+                      'generations, which\n'
+                      ' * otherwise reach it only as the tool calls they produced. '
+                      'Observation only:\n'
+                      ' * nothing recorded here is ever fed back to a model.\n'
+                      ' */\n'
+                      'export interface SubagentRoundRecord {\n'
+                      "  /** The subagent's own round counter, starting at 1. */\n"
+                      '  round: number;\n'
+                      '  /** Visible text the round produced, verbatim; empty on a '
+                      'tool-only round. */\n'
+                      '  text: string;\n'
+                      "  /** The round's reasoning, verbatim; empty when the model "
+                      'emitted none. */\n'
+                      '  reasoning: string;\n'
+                      '  /**\n'
+                      '   * The usage the backend served for the round, or null when '
+                      "the round's\n"
+                      "   * stream carried none. Never a count invented on the round's "
+                      'behalf.\n'
+                      '   */\n'
+                      '  usageMetadata: GenerateContentResponseUsageMetadata | null;\n'
+                      '}\n'
+                      '\n'
+                      'export interface AgentResultDisplay {\n'
+                      "  type: 'task_execution';\n"
                       '  subagentName: string;\n'
                       '  subagentColor?: string;\n'
                       '  taskDescription: string;\n'
@@ -127238,6 +133918,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '   */\n'
                       '  compactions?: CompactionRecord[];\n'
                       '\n'
+                      '  /**\n'
+                      '   * Append-only log of the model rounds this subagent has '
+                      'completed, oldest\n'
+                      '   * first, under the same never-rewritten discipline as '
+                      '`compactions`.\n'
+                      '   */\n'
+                      '  rounds?: SubagentRoundRecord[];\n'
+                      '\n'
                       '  toolCalls?: Array<{\n'
                       '    callId: string;\n'
                       '    name: string;\n'
@@ -127245,7 +133933,15 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "'failed';\n"
                       '    error?: string;\n'
                       '    args?: Record<string, unknown>;\n',
-             'review_before': "  type: 'task_execution';\n"
+             'review_before': '    return false;\n'
+                              '  }\n'
+                              '\n'
+                              '  return traverse(schema, new Set<string>(), new '
+                              'Set<string>());\n'
+                              '}\n'
+                              '\n'
+                              'export interface AgentResultDisplay {\n'
+                              "  type: 'task_execution';\n"
                               '  subagentName: string;\n'
                               '  subagentColor?: string;\n'
                               '  taskDescription: string;\n'
@@ -127272,7 +133968,46 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               "'success' | 'failed';\n"
                               '    error?: string;\n'
                               '    args?: Record<string, unknown>;\n',
-             'review_after': "  type: 'task_execution';\n"
+             'review_after': '    return false;\n'
+                             '  }\n'
+                             '\n'
+                             '  return traverse(schema, new Set<string>(), new '
+                             'Set<string>());\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * One completed model round of a subagent: what it '
+                             'reasoned, what it said,\n'
+                             ' * and the usage the backend served for it. Published on '
+                             'the display so a\n'
+                             " * consumer of the parent stream sees the subagent's own "
+                             'generations, which\n'
+                             ' * otherwise reach it only as the tool calls they '
+                             'produced. Observation only:\n'
+                             ' * nothing recorded here is ever fed back to a model.\n'
+                             ' */\n'
+                             'export interface SubagentRoundRecord {\n'
+                             "  /** The subagent's own round counter, starting at 1. "
+                             '*/\n'
+                             '  round: number;\n'
+                             '  /** Visible text the round produced, verbatim; empty '
+                             'on a tool-only round. */\n'
+                             '  text: string;\n'
+                             "  /** The round's reasoning, verbatim; empty when the "
+                             'model emitted none. */\n'
+                             '  reasoning: string;\n'
+                             '  /**\n'
+                             '   * The usage the backend served for the round, or null '
+                             "when the round's\n"
+                             '   * stream carried none. Never a count invented on the '
+                             "round's behalf.\n"
+                             '   */\n'
+                             '  usageMetadata: GenerateContentResponseUsageMetadata | '
+                             'null;\n'
+                             '}\n'
+                             '\n'
+                             'export interface AgentResultDisplay {\n'
+                             "  type: 'task_execution';\n"
                              '  subagentName: string;\n'
                              '  subagentColor?: string;\n'
                              '  taskDescription: string;\n'
@@ -127327,6 +134062,14 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '   * for tool_use/tool_result.\n'
                              '   */\n'
                              '  compactions?: CompactionRecord[];\n'
+                             '\n'
+                             '  /**\n'
+                             '   * Append-only log of the model rounds this subagent '
+                             'has completed, oldest\n'
+                             '   * first, under the same never-rewritten discipline as '
+                             '`compactions`.\n'
+                             '   */\n'
+                             '  rounds?: SubagentRoundRecord[];\n'
                              '\n'
                              '  toolCalls?: Array<{\n'
                              '    callId: string;\n'
@@ -140930,6 +147673,274 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  filePath: string,\n'
                              '  region: NormalizedRegion,\n'
                              '  signal: AbortSignal,\n'},
+            {'name': 'packages/core/src/utils/partUtils.test.ts:landmark-1',
+             'path': 'packages/core/src/utils/partUtils.test.ts',
+             'before': ' */\n'
+                       '\n'
+                       "import { describe, it, expect } from 'vitest';\n"
+                       'import {\n'
+                       '  partToString,\n'
+                       '  getResponseText,\n'
+                       '  flatMapTextParts,\n'
+                       '  appendToLastTextPart,\n'
+                       '  prependToFirstTextPart,\n'
+                       "} from './partUtils.js';\n"
+                       'import { createOpenAIReasoningThoughtPart } from '
+                       "'./thoughtUtils.js';\n"
+                       'import type { GenerateContentResponse, Part, PartUnion } from '
+                       "'@google/genai';\n",
+             'after': ' */\n'
+                      '\n'
+                      "import { describe, it, expect } from 'vitest';\n"
+                      'import {\n'
+                      '  partToString,\n'
+                      '  getResponseText,\n'
+                      '  getResponseThoughtText,\n'
+                      '  flatMapTextParts,\n'
+                      '  appendToLastTextPart,\n'
+                      '  prependToFirstTextPart,\n'
+                      "} from './partUtils.js';\n"
+                      'import { createOpenAIReasoningThoughtPart } from '
+                      "'./thoughtUtils.js';\n"
+                      'import type { GenerateContentResponse, Part, PartUnion } from '
+                      "'@google/genai';\n",
+             'review_before': ' */\n'
+                              '\n'
+                              "import { describe, it, expect } from 'vitest';\n"
+                              'import {\n'
+                              '  partToString,\n'
+                              '  getResponseText,\n'
+                              '  flatMapTextParts,\n'
+                              '  appendToLastTextPart,\n'
+                              '  prependToFirstTextPart,\n'
+                              "} from './partUtils.js';\n"
+                              'import { createOpenAIReasoningThoughtPart } from '
+                              "'./thoughtUtils.js';\n"
+                              'import type { GenerateContentResponse, Part, PartUnion '
+                              "} from '@google/genai';\n",
+             'review_after': ' */\n'
+                             '\n'
+                             "import { describe, it, expect } from 'vitest';\n"
+                             'import {\n'
+                             '  partToString,\n'
+                             '  getResponseText,\n'
+                             '  getResponseThoughtText,\n'
+                             '  flatMapTextParts,\n'
+                             '  appendToLastTextPart,\n'
+                             '  prependToFirstTextPart,\n'
+                             "} from './partUtils.js';\n"
+                             'import { createOpenAIReasoningThoughtPart } from '
+                             "'./thoughtUtils.js';\n"
+                             'import type { GenerateContentResponse, Part, PartUnion } '
+                             "from '@google/genai';\n"},
+            {'name': 'packages/core/src/utils/partUtils.test.ts:landmark-2',
+             'path': 'packages/core/src/utils/partUtils.test.ts',
+             'before': '      expect(partToString(parts as Part, '
+                       'verboseOptions)).toBe(\n'
+                       "        'start middle[Function Call: func1] end<audio/mp3>',\n"
+                       '      );\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n'
+                       "  describe('getResponseText', () => {\n"
+                       "    it('should return null when no candidates exist', () => {\n"
+                       '      const response = mockResponse(undefined);\n'
+                       '      expect(getResponseText(response)).toBeNull();\n'
+                       '    });\n'
+                       '\n',
+             'after': '      expect(partToString(parts as Part, '
+                      'verboseOptions)).toBe(\n'
+                      "        'start middle[Function Call: func1] end<audio/mp3>',\n"
+                      '      );\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('getResponseThoughtText', () => {\n"
+                      "    it('returns null when no candidates exist', () => {\n"
+                      '      '
+                      'expect(getResponseThoughtText(mockResponse(undefined))).toBeNull();\n'
+                      '    });\n'
+                      '\n'
+                      "    it('returns null when the candidate has no parts', () => {\n"
+                      '      '
+                      'expect(getResponseThoughtText(mockResponse([]))).toBeNull();\n'
+                      '    });\n'
+                      '\n'
+                      "    it('keeps exactly the thought parts getResponseText drops', "
+                      '() => {\n'
+                      '      const result = mockResponse([\n'
+                      "        { text: 'first ', thought: true } as { text: string },\n"
+                      "        { text: 'answer' },\n"
+                      "        { text: 'second', thought: true } as { text: string },\n"
+                      '      ]);\n'
+                      "      expect(getResponseThoughtText(result)).toBe('first "
+                      "second');\n"
+                      "      expect(getResponseText(result)).toBe('answer');\n"
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('getResponseText', () => {\n"
+                      "    it('should return null when no candidates exist', () => {\n"
+                      '      const response = mockResponse(undefined);\n'
+                      '      expect(getResponseText(response)).toBeNull();\n'
+                      '    });\n'
+                      '\n',
+             'review_before': '      expect(partToString(parts as Part, '
+                              'verboseOptions)).toBe(\n'
+                              "        'start middle[Function Call: func1] "
+                              "end<audio/mp3>',\n"
+                              '      );\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n'
+                              "  describe('getResponseText', () => {\n"
+                              "    it('should return null when no candidates exist', "
+                              '() => {\n'
+                              '      const response = mockResponse(undefined);\n'
+                              '      expect(getResponseText(response)).toBeNull();\n'
+                              '    });\n'
+                              '\n',
+             'review_after': '      expect(partToString(parts as Part, '
+                             'verboseOptions)).toBe(\n'
+                             "        'start middle[Function Call: func1] "
+                             "end<audio/mp3>',\n"
+                             '      );\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('getResponseThoughtText', () => {\n"
+                             "    it('returns null when no candidates exist', () => {\n"
+                             '      '
+                             'expect(getResponseThoughtText(mockResponse(undefined))).toBeNull();\n'
+                             '    });\n'
+                             '\n'
+                             "    it('returns null when the candidate has no parts', "
+                             '() => {\n'
+                             '      '
+                             'expect(getResponseThoughtText(mockResponse([]))).toBeNull();\n'
+                             '    });\n'
+                             '\n'
+                             "    it('keeps exactly the thought parts getResponseText "
+                             "drops', () => {\n"
+                             '      const result = mockResponse([\n'
+                             "        { text: 'first ', thought: true } as { text: "
+                             'string },\n'
+                             "        { text: 'answer' },\n"
+                             "        { text: 'second', thought: true } as { text: "
+                             'string },\n'
+                             '      ]);\n'
+                             "      expect(getResponseThoughtText(result)).toBe('first "
+                             "second');\n"
+                             "      expect(getResponseText(result)).toBe('answer');\n"
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('getResponseText', () => {\n"
+                             "    it('should return null when no candidates exist', () "
+                             '=> {\n'
+                             '      const response = mockResponse(undefined);\n'
+                             '      expect(getResponseText(response)).toBeNull();\n'
+                             '    });\n'
+                             '\n'},
+            {'name': 'packages/core/src/utils/partUtils.ts:landmark-1',
+             'path': 'packages/core/src/utils/partUtils.ts',
+             'before': "        .join('');\n"
+                       '    }\n'
+                       '  }\n'
+                       '  return null;\n'
+                       '}\n'
+                       '\n'
+                       '/**\n'
+                       ' * Asynchronously maps over a PartListUnion, applying a '
+                       'transformation function\n'
+                       ' * to the text content of each text-based part.\n'
+                       ' *\n'
+                       ' * @param parts The PartListUnion to process.\n'
+                       ' * @param transform A function that takes a string of text and '
+                       'returns a Promise\n',
+             'after': "        .join('');\n"
+                      '    }\n'
+                      '  }\n'
+                      '  return null;\n'
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * The reasoning the first candidate emitted, concatenated: '
+                      'exactly the parts\n'
+                      ' * `getResponseText` drops. For observation only; this text is '
+                      'never handed\n'
+                      ' * back to a model.\n'
+                      ' */\n'
+                      'export function getResponseThoughtText(\n'
+                      '  response: GenerateContentResponse,\n'
+                      '): string | null {\n'
+                      '  const parts = response.candidates?.[0]?.content?.parts;\n'
+                      '  if (!parts || parts.length === 0) {\n'
+                      '    return null;\n'
+                      '  }\n'
+                      '  return parts\n'
+                      '    .filter((part) => part.text && part.thought)\n'
+                      '    .map((part) => part.text)\n'
+                      "    .join('');\n"
+                      '}\n'
+                      '\n'
+                      '/**\n'
+                      ' * Asynchronously maps over a PartListUnion, applying a '
+                      'transformation function\n'
+                      ' * to the text content of each text-based part.\n'
+                      ' *\n'
+                      ' * @param parts The PartListUnion to process.\n'
+                      ' * @param transform A function that takes a string of text and '
+                      'returns a Promise\n',
+             'review_before': "        .join('');\n"
+                              '    }\n'
+                              '  }\n'
+                              '  return null;\n'
+                              '}\n'
+                              '\n'
+                              '/**\n'
+                              ' * Asynchronously maps over a PartListUnion, applying a '
+                              'transformation function\n'
+                              ' * to the text content of each text-based part.\n'
+                              ' *\n'
+                              ' * @param parts The PartListUnion to process.\n'
+                              ' * @param transform A function that takes a string of '
+                              'text and returns a Promise\n',
+             'review_after': "        .join('');\n"
+                             '    }\n'
+                             '  }\n'
+                             '  return null;\n'
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * The reasoning the first candidate emitted, '
+                             'concatenated: exactly the parts\n'
+                             ' * `getResponseText` drops. For observation only; this '
+                             'text is never handed\n'
+                             ' * back to a model.\n'
+                             ' */\n'
+                             'export function getResponseThoughtText(\n'
+                             '  response: GenerateContentResponse,\n'
+                             '): string | null {\n'
+                             '  const parts = '
+                             'response.candidates?.[0]?.content?.parts;\n'
+                             '  if (!parts || parts.length === 0) {\n'
+                             '    return null;\n'
+                             '  }\n'
+                             '  return parts\n'
+                             '    .filter((part) => part.text && part.thought)\n'
+                             '    .map((part) => part.text)\n'
+                             "    .join('');\n"
+                             '}\n'
+                             '\n'
+                             '/**\n'
+                             ' * Asynchronously maps over a PartListUnion, applying a '
+                             'transformation function\n'
+                             ' * to the text content of each text-based part.\n'
+                             ' *\n'
+                             ' * @param parts The PartListUnion to process.\n'
+                             ' * @param transform A function that takes a string of '
+                             'text and returns a Promise\n'},
             {'name': 'packages/core/src/utils/pathReader.test.ts:landmark-1',
              'path': 'packages/core/src/utils/pathReader.test.ts',
              'before': '    getFileService: () => mockFileService,\n'
@@ -155847,6 +162858,194 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    const ctx = getTraceContext();\n'
                              "    env['TRACEPARENT'] = ctx ? formatTraceparent(ctx) : "
                              "'';\n"},
+            {'name': 'packages/core/src/utils/sideQuery.test.ts:landmark-1',
+             'path': 'packages/core/src/utils/sideQuery.test.ts',
+             'before': '  });\n'
+                       '\n'
+                       "  describe('text mode (no schema)', () => {\n"
+                       '    function mockTextResult(text: string, withUsage = true) {\n'
+                       '      '
+                       'vi.mocked(mockBaseLlmClient.generateText).mockResolvedValue({\n'
+                       '        text,\n'
+                       '        usage: withUsage\n'
+                       '          ? {\n'
+                       '              promptTokenCount: 10,\n'
+                       '              candidatesTokenCount: 5,\n'
+                       '              totalTokenCount: 15,\n'
+                       '            }\n',
+             'after': '  });\n'
+                      '\n'
+                      "  describe('text mode (no schema)', () => {\n"
+                      '    function mockTextResult(text: string, withUsage = true) {\n'
+                      '      '
+                      'vi.mocked(mockBaseLlmClient.generateText).mockResolvedValue({\n'
+                      '        text,\n'
+                      "        thoughtText: '',\n"
+                      '        usage: withUsage\n'
+                      '          ? {\n'
+                      '              promptTokenCount: 10,\n'
+                      '              candidatesTokenCount: 5,\n'
+                      '              totalTokenCount: 15,\n'
+                      '            }\n',
+             'review_before': '  });\n'
+                              '\n'
+                              "  describe('text mode (no schema)', () => {\n"
+                              '    function mockTextResult(text: string, withUsage = '
+                              'true) {\n'
+                              '      '
+                              'vi.mocked(mockBaseLlmClient.generateText).mockResolvedValue({\n'
+                              '        text,\n'
+                              '        usage: withUsage\n'
+                              '          ? {\n'
+                              '              promptTokenCount: 10,\n'
+                              '              candidatesTokenCount: 5,\n'
+                              '              totalTokenCount: 15,\n'
+                              '            }\n',
+             'review_after': '  });\n'
+                             '\n'
+                             "  describe('text mode (no schema)', () => {\n"
+                             '    function mockTextResult(text: string, withUsage = '
+                             'true) {\n'
+                             '      '
+                             'vi.mocked(mockBaseLlmClient.generateText).mockResolvedValue({\n'
+                             '        text,\n'
+                             "        thoughtText: '',\n"
+                             '        usage: withUsage\n'
+                             '          ? {\n'
+                             '              promptTokenCount: 10,\n'
+                             '              candidatesTokenCount: 5,\n'
+                             '              totalTokenCount: 15,\n'
+                             '            }\n'},
+            {'name': 'packages/core/src/utils/sideQuery.test.ts:landmark-2',
+             'path': 'packages/core/src/utils/sideQuery.test.ts',
+             'before': "        systemInstruction: 'You are a recap generator.',\n"
+                       '        abortSignal: abortController.signal,\n'
+                       '      });\n'
+                       '\n'
+                       '      expect(result).toEqual({\n'
+                       "        text: 'hello world',\n"
+                       '        usage: expect.objectContaining({ totalTokenCount: 15 '
+                       '}),\n'
+                       '      });\n'
+                       '      '
+                       'expect(mockBaseLlmClient.generateText).toHaveBeenCalledWith(\n'
+                       '        expect.objectContaining({\n'
+                       "          contents: [{ role: 'user', parts: [{ text: 'recap "
+                       "please' }] }],\n"
+                       "          model: 'main-model',\n",
+             'after': "        systemInstruction: 'You are a recap generator.',\n"
+                      '        abortSignal: abortController.signal,\n'
+                      '      });\n'
+                      '\n'
+                      '      expect(result).toEqual({\n'
+                      "        text: 'hello world',\n"
+                      "        thoughtText: '',\n"
+                      '        usage: expect.objectContaining({ totalTokenCount: 15 '
+                      '}),\n'
+                      '      });\n'
+                      '      '
+                      'expect(mockBaseLlmClient.generateText).toHaveBeenCalledWith(\n'
+                      '        expect.objectContaining({\n'
+                      "          contents: [{ role: 'user', parts: [{ text: 'recap "
+                      "please' }] }],\n"
+                      "          model: 'main-model',\n",
+             'review_before': "        systemInstruction: 'You are a recap "
+                              "generator.',\n"
+                              '        abortSignal: abortController.signal,\n'
+                              '      });\n'
+                              '\n'
+                              '      expect(result).toEqual({\n'
+                              "        text: 'hello world',\n"
+                              '        usage: expect.objectContaining({ '
+                              'totalTokenCount: 15 }),\n'
+                              '      });\n'
+                              '      '
+                              'expect(mockBaseLlmClient.generateText).toHaveBeenCalledWith(\n'
+                              '        expect.objectContaining({\n'
+                              "          contents: [{ role: 'user', parts: [{ text: "
+                              "'recap please' }] }],\n"
+                              "          model: 'main-model',\n",
+             'review_after': "        systemInstruction: 'You are a recap "
+                             "generator.',\n"
+                             '        abortSignal: abortController.signal,\n'
+                             '      });\n'
+                             '\n'
+                             '      expect(result).toEqual({\n'
+                             "        text: 'hello world',\n"
+                             "        thoughtText: '',\n"
+                             '        usage: expect.objectContaining({ '
+                             'totalTokenCount: 15 }),\n'
+                             '      });\n'
+                             '      '
+                             'expect(mockBaseLlmClient.generateText).toHaveBeenCalledWith(\n'
+                             '        expect.objectContaining({\n'
+                             "          contents: [{ role: 'user', parts: [{ text: "
+                             "'recap please' }] }],\n"
+                             "          model: 'main-model',\n"},
+            {'name': 'packages/core/src/utils/sideQuery.ts:landmark-1',
+             'path': 'packages/core/src/utils/sideQuery.ts',
+             'before': '   */\n'
+                       '  failClosed?: boolean;\n'
+                       '}\n'
+                       '\n'
+                       'export interface SideQueryTextResult {\n'
+                       '  text: string;\n'
+                       '  usage: GenerateContentResponseUsageMetadata | undefined;\n'
+                       '}\n'
+                       '\n'
+                       'export type SideQueryOptions<TResponse> = '
+                       'SideQueryJsonOptions<TResponse>;\n'
+                       '\n'
+                       'function buildDefaultPromptId(purpose?: string): string {\n',
+             'after': '   */\n'
+                      '  failClosed?: boolean;\n'
+                      '}\n'
+                      '\n'
+                      'export interface SideQueryTextResult {\n'
+                      '  text: string;\n'
+                      '  /** The reasoning the query emitted, verbatim; observation '
+                      'only. */\n'
+                      '  thoughtText: string;\n'
+                      '  usage: GenerateContentResponseUsageMetadata | undefined;\n'
+                      '}\n'
+                      '\n'
+                      'export type SideQueryOptions<TResponse> = '
+                      'SideQueryJsonOptions<TResponse>;\n'
+                      '\n'
+                      'function buildDefaultPromptId(purpose?: string): string {\n',
+             'review_before': '   */\n'
+                              '  failClosed?: boolean;\n'
+                              '}\n'
+                              '\n'
+                              'export interface SideQueryTextResult {\n'
+                              '  text: string;\n'
+                              '  usage: GenerateContentResponseUsageMetadata | '
+                              'undefined;\n'
+                              '}\n'
+                              '\n'
+                              'export type SideQueryOptions<TResponse> = '
+                              'SideQueryJsonOptions<TResponse>;\n'
+                              '\n'
+                              'function buildDefaultPromptId(purpose?: string): string '
+                              '{\n',
+             'review_after': '   */\n'
+                             '  failClosed?: boolean;\n'
+                             '}\n'
+                             '\n'
+                             'export interface SideQueryTextResult {\n'
+                             '  text: string;\n'
+                             '  /** The reasoning the query emitted, verbatim; '
+                             'observation only. */\n'
+                             '  thoughtText: string;\n'
+                             '  usage: GenerateContentResponseUsageMetadata | '
+                             'undefined;\n'
+                             '}\n'
+                             '\n'
+                             'export type SideQueryOptions<TResponse> = '
+                             'SideQueryJsonOptions<TResponse>;\n'
+                             '\n'
+                             'function buildDefaultPromptId(purpose?: string): string '
+                             '{\n'},
             {'name': 'packages/core/src/utils/sync-file-encoding.test.ts:landmark-1',
              'path': 'packages/core/src/utils/sync-file-encoding.test.ts',
              'before': ' * Copyright 2026 Qwen Team\n'
@@ -165942,21 +173141,21 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/cli/src/config/settingsSchema.ts': '6e5ac57f6df6528e1c37b87c2bfd8b281020bf079141d6b432ea3ceee221fd61',
  'packages/cli/src/gemini.test.tsx': '2e547b0eb91c2e1746e3b966511cb286846cbc5495779056d0b1099776795166',
  'packages/cli/src/gemini.tsx': 'c6f36050527f3d3fc42bcb1984f8414d145a6ca3a519625f723dad3b640be286',
- 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': 'c9cdb1093df8917fcd3b1f7a170dae36e4bc942797f08aa4c609114bac3e0e78',
- 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': 'f0007862fbfa42e925ca6f45ece60230577908927b110a242ab9ffd51e794a29',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts': '26083158263eda9ba1d2d5e5e9423dfd2d1d7d7a738b83060e31672c6ef92a05',
+ 'packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts': '839e69e4d622a06cd9b908ba74ed7ba38f245c28bf3a9e4e7872b6fb33a5264f',
  'packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts': '7695a5b1d2246a47ca2c11c6d4b2aaa1081e94661d98993b6caa45e15675fbca',
  'packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts': '2abf78f9b9c80cb619d1f2f437bd092d8f20816968f231b31558587a095b8be2',
  'packages/cli/src/nonInteractive/session.test.ts': 'a9262fd1058f275a05ee1892f35a2d4f918fb8601aeed6dad9d6d794639e3446',
  'packages/cli/src/nonInteractive/session.ts': '9c50443d208cea29438b5b67b06b50a9327a705291cfe3d0b6f07f7a905ee234',
- 'packages/cli/src/nonInteractive/types.ts': 'bcdd5db1ebd4720911b1f4a101d60ccdc5e8b36c1fa5226bc7fab045b4a1e8c4',
- 'packages/cli/src/nonInteractiveCli.test.ts': '72ed51786cf8f8fe7b39ff6605f89c59e18fabfb1716f64c2e9e2db429feef46',
+ 'packages/cli/src/nonInteractive/types.ts': '97cade7339bef7d4b0f148ca649fc36d86452cd58c5cb96f991eff20119f8a0e',
+ 'packages/cli/src/nonInteractiveCli.test.ts': '20fc3434b0e11ee36b4ba10a8d4703dbee3b82b4d2e34820e0cbcbd749d8a84e',
  'packages/cli/src/nonInteractiveCli.ts': '821e4c4f076e443c33eb96196bc794012de3b71668a6391b9d00c43977f93dee',
  'packages/cli/src/serve/fs/workspace-file-system.test.ts': 'eafa762f3777e7245878351f1552a15d823692850e74c681de5d2efedc208948',
  'packages/cli/src/serve/fs/workspace-file-system.ts': '522cf90451cc0d069ca3c4c4df032f9599cf0e5747475d3a690e57084ade95bc',
  'packages/cli/src/services/tips/tipRegistry.test.ts': '776ca7e48ef297950d8ff16b1c5aa44b8e0cc292140e7cb67caf4d7bc7befdb2',
  'packages/cli/src/services/tips/tipRegistry.ts': '7fba1bdb876863988a902c8e0ee39ae2d1b4637540a9678b462aaf79dd611672',
  'packages/cli/src/ui/commands/contextCommand.test.ts': '488d15f59afc8ddcf25fdd008d6ca723385a58147c1dea51f673b0aa4b0fc9e9',
- 'packages/cli/src/ui/commands/contextCommand.ts': '266cf936ad98024285a9417002bb969eb8217157e73d23e671db3ad9c09ad5f7',
+ 'packages/cli/src/ui/commands/contextCommand.ts': 'd8bf91bbaba56641effd71de23115fedd3a8a0bfcf0f9e54dad1504c9efa8f17',
  'packages/cli/src/ui/commands/doctorCommand.test.ts': '5605f0fe40734369db9b5c16f386c4f428e6231aa0a91f3eb513aac14898b749',
  'packages/cli/src/ui/commands/doctorCommand.ts': '35d783334e6b5026b7b84909e650431c59b095d047e01a18a65008153a42d958',
  'packages/cli/src/ui/components/SettingsDialog.test.tsx': '028210723e43f04dabd3e0b6f2d29702f9bb602987d56c8e6e99300fdf49fb9c',
@@ -165971,8 +173170,8 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/cli/src/ui/types.ts': '74d13359bda1396627d808211f481321aa3854a6703d7d91687926304128fa37',
  'packages/cli/src/utils/errors.test.ts': '309ecd8f307d32532f4942ad22980db2374fd2661a78610851701e4870554584',
  'packages/cli/src/utils/errors.ts': 'eb931fdd1b8d1137c465b8de35ae13b76eeb52ef1e9b769b805f244ae58812b5',
- 'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'fec5551fbc322b637aa1f19681fd3b554c0a185ec0a4fe1ec94a2370fbb57206',
- 'packages/cli/src/utils/nonInteractiveHelpers.ts': '8c675bf91b4b3d7ed72cf5430413500eb9e56cd636884118396c37e8b6a21c85',
+ 'packages/cli/src/utils/nonInteractiveHelpers.test.ts': 'a9dfcb1b4f260182dd28fdde1e73c9a7dbe332bfdf13d3ace8faf5e32ed33915',
+ 'packages/cli/src/utils/nonInteractiveHelpers.ts': 'e98519e315140da3bc2a480f2ebe52f8aaa65d835cac407a5610dedf907dff64',
  'packages/cli/src/validateNonInterActiveAuth.test.ts': '5058458dd9a66adba6d32dcea8744359cef7eab642622a697be69de912bd376d',
  'packages/cli/src/validateNonInterActiveAuth.ts': '84a095733892efc0e36d862293bcf52044d3c409f2c453341707522e4ee6a7a7',
  'packages/core/src/agents/runtime/agent-context.test.ts': '8439628120b1fd7c8d0a4db066e30d0f6e9dbafb63ee3354a1bce074c0f8be4a',
@@ -165991,26 +173190,26 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/config/qwen38-agent-service-contract.test.ts': '1bea1f3fecc42a4e1ece933d9b7e88e9cf32f0d7386928c9260b91b611bb19ad',
  'packages/core/src/config/session-turn-budget.test.ts': '5a673516aca9cb4d3b910f8a7d12978678496db670ffa906601a153290055458',
  'packages/core/src/config/session-turn-budget.ts': '94a898beb84a3fb8530c40daed07853476cee93bfc9f1958741cf7a9060fd446',
- 'packages/core/src/core/baseLlmClient.test.ts': '643b5f7c90bbb9a63300c3ec02cffea86f4ecdbb65f06b1ec94eb18fda7e7674',
- 'packages/core/src/core/baseLlmClient.ts': '14a959fbbeeffd507b9ebd2bb4d6b564d3a88feb4e46a406afcf2555fa791a9b',
- 'packages/core/src/core/client.test.ts': '672a46838231a8799545260380cc65c10782779b2a344660342b1dd1d3b57c89',
- 'packages/core/src/core/client.ts': '4e7938239f783b08dd9b27a09a70b32e7df56ae58d25f6518e98afb68664290e',
+ 'packages/core/src/core/baseLlmClient.test.ts': '05de69f6f0d256b793b46e82a0daf4bb20679df4a6e92677333ca33a647ffcb3',
+ 'packages/core/src/core/baseLlmClient.ts': '78cb37c11f8af12fe297636a7b1d7f805db508f9476ea04f360fd8b0ca51a81e',
+ 'packages/core/src/core/client.test.ts': 'c857b1fd8905a43116e5f55a64a86e0a3f8354e286c920ca1902313d2d14f709',
+ 'packages/core/src/core/client.ts': '25b3be3e7282d1f0233b99fbc847ba2b9129eb1e7da6ef1fff46fa73a397fb98',
  'packages/core/src/core/contentGenerator.ts': '27fa593f8dbf0e75106b2d4aa8f9d22801dcf016b112d56046542ed4fd3ff303',
  'packages/core/src/core/coreToolScheduler.test.ts': '585dbbc75f41ea9bfc0c20a4a2cfb3a52716b6e56e9870a53ad2f4629b22bed3',
  'packages/core/src/core/coreToolScheduler.ts': 'd81d0bb12a83d984095da5c1d01646fb59107d9f2b445d6ce3dfb9ae77718d6d',
- 'packages/core/src/core/geminiChat.test.ts': '877bea890789b99a3e40ba27beb6d778d45d23e3bf9a68029066714c9aa52c36',
- 'packages/core/src/core/geminiChat.ts': 'd04b90255952d0da741fb5433ebd9a18c586e31c2a186709256cfeacd96d5391',
+ 'packages/core/src/core/geminiChat.test.ts': '1e342ec598707a31ebde4e0163d17db37e55ae200fccd2faf43dff1c761f03bc',
+ 'packages/core/src/core/geminiChat.ts': '9057c865e415255579ea58e734f6b0c1a98a41ef8a0aad4f16d5a2c7e1d4eca0',
  'packages/core/src/core/genai-compat.test.ts': '0a761e4110d3b06b6933646eb1aeaffe864d7c871a62c6e0ada13d6f0eb84b50',
  'packages/core/src/core/genai-compat.ts': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81',
  'packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts': '39cb515dfc3afb39edfe8dbabd3956351dd4b7b71e82f2fd77e4f6dc2b8ce695',
  'packages/core/src/core/nonInteractiveToolExecutor.test.ts': '0d3644f3c77c8aeddd4a668b601f9d3a91881d82119fe7a476c9704abedd6cb3',
- 'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'bb73338e3cb074e243c5baf4c09159a638134210e0eabf816a90df3656e8da28',
- 'packages/core/src/core/openaiContentGenerator/converter.ts': '28c729be63e9171b90b58c712c22808a9d529402ee1c5026436051059387ca51',
+ 'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'c8a3db9f165ef582c6748c8d35b87578b83098f7a01d49b4892d6ae3c1ec2703',
+ 'packages/core/src/core/openaiContentGenerator/converter.ts': '440293b8c114d3e299b6757c8c26d7db218a76469c6581d754d10bf8259ba755',
  'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1',
  'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': 'ed00320575c8e2b90a1300734588c99d6115ee85f0318e1cd66bc814eb4bf944',
  'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888',
- 'packages/core/src/core/openaiContentGenerator/pipeline.ts': '22db5d61da4f9e77007e38855f2cc656e670d261d017e24a41d04e795cab47a5',
- 'packages/core/src/core/openaiContentGenerator/types.ts': '3f882cb27bd6325c14dbc534a0367abb80b47f3b885482fb66838bedf265ec1c',
+ 'packages/core/src/core/openaiContentGenerator/pipeline.ts': '18e0556fb63f0356ad0f260d6ec2faaddcd1e419f6abfcabb0d0bd0071432ae0',
+ 'packages/core/src/core/openaiContentGenerator/types.ts': '02c4194cb8bdde408946099179dc9e1d168d284eae67b9e7892a607cea7f7222',
  'packages/core/src/core/prompts.test.ts': '9369efadaa67f10e218f1be71f3bd1620d67d8958dec94a28a9db300700175d0',
  'packages/core/src/core/prompts.ts': 'f1d1b4db7b943da44a180b3dadaa1dca598797b9e6941578a6ecf51b7a6cc3a5',
  'packages/core/src/core/qwen38-deployment-prompt.test.ts': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851',
@@ -166020,7 +173219,7 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/core/tokenLimits.ts': '877e242772bf49c79d893c8e9542fe6dea42f7216996273b5c980a107064a9ca',
  'packages/core/src/core/toolOutcome.ts': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9',
  'packages/core/src/core/turn.test.ts': '5de15292c793f4227c500e3680a621ce492a7bb11fb88375a1ee6deb42d313c9',
- 'packages/core/src/core/turn.ts': 'abd9a22ce49842e1e70f06778edbbc9491a74bf265fc9c09bcd8128aeb0b3320',
+ 'packages/core/src/core/turn.ts': '3cfaed5ff7fc6f4836ec7916564450f9b47642efd1ec6327990ef3e9f7d0f714',
  'packages/core/src/followup/speculation.test.ts': '37f44fb1afc78c0de72e2378eb7c714b68ee53abc523307e744e20e647351764',
  'packages/core/src/followup/speculation.ts': '9a2c00e37fdd722f6451067c3a54b8472d08de2b1f38e462484689200db2c5ba',
  'packages/core/src/index.ts': 'cc4711791123bfbb8a9a226a265ee497e5aea1edf7347fa9d6684f4f9ab558b7',
@@ -166029,11 +173228,15 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/models/types.ts': '36aeae5b246fb84e527d3d767e0ac4dd90288e6969240c982ac7488848ae844b',
  'packages/core/src/permissions/permission-manager.test.ts': 'd7d463b3c4eebf766656f881f9cc1ecd4a3758b86af7d8e49bbbe84a45389f92',
  'packages/core/src/permissions/permission-manager.ts': 'ce101d3494ffbdf1bc4e4b88195fb3672841a46cbb822349bfaa95d56c531779',
- 'packages/core/src/services/chatCompressionService.test.ts': '615f0d2e1ceb1d0be1d91670ed9ff243bbb3cde0c0716dce65f4b42d16ca995b',
- 'packages/core/src/services/chatCompressionService.ts': '9d4db0b67831e0259be484ed47fd7b5b00fe76d77198911af37dda4dc5e1b743',
+ 'packages/core/src/services/chatCompressionService.test.ts': '6863b0c73b3b6ce4f769e2d08b0e02a95f68d6478a4a3a21d04279dfeb86abbe',
+ 'packages/core/src/services/chatCompressionService.ts': 'd4443b0c282aeda5e2d7946462e2043dc0983df180879af0295a9cc7b41155c4',
  'packages/core/src/services/fileReadCache.integration.test.ts': '25e9d63233752ccce3bba61bcb2d67ee585e76dad61422458230f1f18904dc2f',
  'packages/core/src/services/image-payload-references.ts': 'd5174dea02e8ea7a4759eb9276d530ac69948901d7ceae907fe523319e7863a2',
  'packages/core/src/services/loopDetectionService.ts': '9e3b6457192b8bd6691ada479da2db67d10721778c3ad260e06409778217f99d',
+ 'packages/core/src/services/session-resume-token-counts.ts': 'f91d8d1e7adfcddac73b78f7183ab9c54c0865d21a147b321139d2188f7e4772',
+ 'packages/core/src/services/sessionService.test.ts': '6c73f3ed44f63702848c7ad04289a194224750204a85a60cde02a52cd86589ee',
+ 'packages/core/src/services/tokenEstimation.test.ts': '7408d80498e114be34ae5cc6c23f387c5025589b73a0c3d93cc5d379bee01947',
+ 'packages/core/src/services/tokenEstimation.ts': '26be30dd1890ac46edcace82fbf28d159b1dea7a10448378cdb3ecba86094343',
  'packages/core/src/services/visionBridge/vision-bridge-service.test.ts': '35135d73b65c44e88135024f40720ad178d861e90ca3dd64db0ab40633aaabe6',
  'packages/core/src/services/visionBridge/vision-bridge-service.ts': '42cb9a783943cd0246c3f674cf16807dcd8d396ed1a00c52b6c1aea7ee830972',
  'packages/core/src/subagents/builtin-agents.test.ts': '428abe2fc13f7071c72da49b098cd4b95f75e123a1244818d176786dd3249d95',
@@ -166047,8 +173250,8 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/telemetry/types.ts': '79d3bdbe141757c3842b03e2a564aa7ccb496d11c1cb85be03a3e4002c71207f',
  'packages/core/src/test-utils/mock-tool.ts': 'fff01320a9d99802e5891deab4b76d86d2fea09bbfa8b90388546c8069f8904e',
  'packages/core/src/tools/__snapshots__/shell.test.ts.snap': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41',
- 'packages/core/src/tools/agent/agent.test.ts': '2daecf5add00a1d3bd2e5b6bb0e2d3ae9307965c697792d5fcc6b32a412cb9a7',
- 'packages/core/src/tools/agent/agent.ts': '54d1458d21e2ef230fcc279410408f2915a66d212fd8fd6a9ae8c3c1d13dce52',
+ 'packages/core/src/tools/agent/agent.test.ts': '0453def3b4f48864aa9162b9292161cb79c928b7eb8a11dac643f8e36c0908ec',
+ 'packages/core/src/tools/agent/agent.ts': '2b692878e32c7b18969ead1e1951e1618d7a87d95590b43053d04903b86b3a80',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',
@@ -166072,7 +173275,7 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/tools/shell.test.ts': 'a73077b64a4a772f47e2c5b22e63e6937383e8bf3ba5c1f9025d1f43da8f4ec8',
  'packages/core/src/tools/shell.ts': 'ef9920fa22c53797fb1fb41ae94d62dbb0ac332552a35971b088aa45a019dea9',
  'packages/core/src/tools/todoWrite.ts': 'ccb96335fb9cb3cc59028d097822da6e5b0ab3db6bb2008a6c63ce19a72b9e20',
- 'packages/core/src/tools/tools.ts': 'c0613a7e809a25a9bd0c5b9a1f4310f064625f2e3e47fea2e1c1ec4ab4c0118d',
+ 'packages/core/src/tools/tools.ts': '49119385266ad1e12563b63dc92f12049812a92881d7e65bbff8279456d6786f',
  'packages/core/src/tools/web-fetch.test.ts': 'e97c6eb5800e66cd65538cf493e8ec7fb923a083fe2e7ed77c633a1c4bf46f2e',
  'packages/core/src/tools/web-fetch.ts': '73323a41757e2e5b217b2f6f3e7eb1401be1980ec066e05ae41231036eddf331',
  'packages/core/src/tools/web-search.ts': 'a189e71e6277b4d6453c64d2f8b734d44299b0a8f2e54f492d8ac8432d49fce4',
@@ -166083,6 +173286,8 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/utils/generateContentResponseUtilities.ts': '8dd4cceb2984d7b76c629fe2b06ffab29f9b34691f1d11eef5924839c1095992',
  'packages/core/src/utils/image-view.test.ts': 'a3977568360517c0370f753dfb8049937476948fc9fd6559704356338e3a8c1d',
  'packages/core/src/utils/image-view.ts': '82383711baeb81895042e6fd865f2f509ca29756ff22b02378dc89c0b2c5e9ea',
+ 'packages/core/src/utils/partUtils.test.ts': 'be834e85600cbf918d1c2665d7fe60ce7b4fc9a497bf7f84cfe5e20e8230fdb3',
+ 'packages/core/src/utils/partUtils.ts': 'c506740c97972254e387eaec4e15dcaaaf5e7d3d4bb7b025890ae402bece25f6',
  'packages/core/src/utils/pathReader.test.ts': '93a8b06ac3075d08d5d401db446e3a65c24202a650ca7d536bb0cbe6d50026ea',
  'packages/core/src/utils/pdf.test.ts': '067d3a0bd38b30448a8844ad3b9b4602e562cf6a4fa02f7ff7dbb83b8f88477e',
  'packages/core/src/utils/pdf.ts': '5ed63159e8c22c8f87548aaad6cea010a3f787dbcb664f5ffd1b994c1b160937',
@@ -166094,6 +173299,8 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/utils/schemaValidator.ts': '8ff14f84d35833e5256ba2aef2347d08e51948a0b1ff26472e26f5e1839dd0e5',
  'packages/core/src/utils/shellContextEnv.test.ts': 'bd658f00ce587c0e42043ca76269e353bd4da76f68c3e00bc82d2527366c31cf',
  'packages/core/src/utils/shellContextEnv.ts': 'f06dd2a712457c9a5cc77a68cb3749c846af46405835dff530d9f1e7e86c6871',
+ 'packages/core/src/utils/sideQuery.test.ts': '684ff4599679708e35af371af166992367b027e948e7d9d0fa9719b1b3c4c57d',
+ 'packages/core/src/utils/sideQuery.ts': '3afdd58e560d6527d6780e6342a44bec0fa97f662915233b7fd82d77b63819ae',
  'packages/core/src/utils/sync-file-encoding.test.ts': '57a8af0871531dd07230bf08842fc2ab25d64551ded9adf05f374ba332d1f225',
  'packages/core/src/utils/sync-file-encoding.ts': '2df6912e5ee1d950b4c9e7dbabd7cd4667a5abf5a7d33b2fcb19a68ed4fc33b3',
  'packages/core/src/utils/tool-response-finalizer.integration.test.ts': '0048c6cff684d5a40a20988ad55801e501aba644f85f4078b088de3724e95576',

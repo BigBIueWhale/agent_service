@@ -3178,6 +3178,8 @@ mod tests {
             agent_duration_ms: None,
             agent_api_duration_ms: None,
             agent_result_subtype: None,
+            main_output_tokens: 0,
+            main_reasoning_tokens: 0,
             subagent_scopes: Vec::new(),
             subagent_scope_count: 0,
             subagent_error_count: 0,
@@ -3669,9 +3671,13 @@ mod tests {
         object.remove("subagent_scopes");
         object.remove("subagent_scope_count");
         object.remove("subagent_error_count");
+        object.remove("main_output_tokens");
+        object.remove("main_reasoning_tokens");
         let migrated: SessionBody = serde_json::from_value(value).expect("decode historical body");
         assert!(migrated.subagent_scopes.is_empty());
         assert_eq!(migrated.subagent_scope_count, 0);
         assert_eq!(migrated.subagent_error_count, 0);
+        assert_eq!(migrated.main_output_tokens, 0);
+        assert_eq!(migrated.main_reasoning_tokens, 0);
     }
 }

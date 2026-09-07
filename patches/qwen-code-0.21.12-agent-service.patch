@@ -1643,7 +1643,7 @@ index 72409fd..aced76c 100644
        const restartExtensionWatcher = () =>
          extensionFileWatcher.restartWatching();
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-index e687181..896b4cb 100644
+index e687181..23ff3d1 100644
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 @@ -4,23 +4,25 @@
@@ -1699,7 +1699,121 @@ index e687181..896b4cb 100644
  function createMockConfig(): Config {
    return {
      getSessionId: vi.fn().mockReturnValue('test-session-id'),
-@@ -895,12 +907,110 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -243,21 +255,23 @@ describe('BaseJsonOutputAdapter', () => {
+ 
+     it('should extract usage from metadata', () => {
+       const metadata: GenerateContentResponseUsageMetadata = {
+         promptTokenCount: 100,
+         candidatesTokenCount: 50,
+         cachedContentTokenCount: 10,
++        thoughtsTokenCount: 30,
+         totalTokenCount: 160,
+       };
+ 
+       const usage = adapter.exposeCreateUsage(metadata);
+ 
+       expect(usage).toEqual({
+         input_tokens: 100,
+         output_tokens: 50,
+         cache_read_input_tokens: 10,
++        reasoning_output_tokens: 30,
+         total_tokens: 160,
+       });
+     });
+ 
+     it('should handle partial metadata', () => {
+       const metadata: GenerateContentResponseUsageMetadata = {
+@@ -271,12 +285,89 @@ describe('BaseJsonOutputAdapter', () => {
+         input_tokens: 100,
+         output_tokens: 0,
+       });
+     });
+   });
+ 
++  describe('emitSubagentRound', () => {
++    const servedUsage: GenerateContentResponseUsageMetadata = {
++      promptTokenCount: 18_204,
++      candidatesTokenCount: 96,
++      thoughtsTokenCount: 71,
++      cachedContentTokenCount: 18_176,
++      totalTokenCount: 18_300,
++    };
++
++    it('[subagent-rounds] emits the reasoning, the text and the served usage of a round under the agent tool call', () => {
++      adapter.emitSubagentRound(
++        {
++          round: 1,
++          text: 'The manifest lists three services.',
++          reasoning: 'I should read the manifest first.',
++          usageMetadata: servedUsage,
++        },
++        'parent-tool-id',
++      );
++
++      const messages = adapter.emittedMessages as CLIAssistantMessage[];
++      expect(messages).toHaveLength(2);
++      expect(messages.map((message) => message.parent_tool_use_id)).toEqual([
++        'parent-tool-id',
++        'parent-tool-id',
++      ]);
++      expect(messages[0].message.content).toEqual([
++        {
++          type: 'thinking',
++          thinking: 'I should read the manifest first.',
++          signature: undefined,
++        },
++      ]);
++      // The usage rides the last message of the round, exactly once.
++      expect(messages[0].message.usage).toEqual({
++        input_tokens: 0,
++        output_tokens: 0,
++      });
++      expect(messages[1].message.content).toEqual([
++        { type: 'text', text: 'The manifest lists three services.' },
++      ]);
++      expect(messages[1].message.usage).toEqual({
++        input_tokens: 18_204,
++        output_tokens: 96,
++        cache_read_input_tokens: 18_176,
++        reasoning_output_tokens: 71,
++        total_tokens: 18_300,
++      });
++    });
++
++    it('[subagent-rounds] still emits a message for a round that produced nothing visible, so its billed usage is not lost', () => {
++      adapter.emitSubagentRound(
++        { round: 3, text: '', reasoning: '', usageMetadata: servedUsage },
++        'parent-tool-id',
++      );
++
++      const messages = adapter.emittedMessages as CLIAssistantMessage[];
++      expect(messages).toHaveLength(1);
++      expect(messages[0].message.content).toEqual([]);
++      expect(messages[0].message.usage.input_tokens).toBe(18_204);
++    });
++
++    it('[subagent-rounds] carries no count for a round whose stream served no usage', () => {
++      adapter.emitSubagentRound(
++        { round: 2, text: 'done', reasoning: '', usageMetadata: null },
++        'parent-tool-id',
++      );
++
++      const messages = adapter.emittedMessages as CLIAssistantMessage[];
++      expect(messages).toHaveLength(1);
++      expect(messages[0].message.usage).toEqual({
++        input_tokens: 0,
++        output_tokens: 0,
++      });
++    });
++  });
++
+   describe('buildMessage', () => {
+     beforeEach(() => {
+       adapter.startAssistantMessage();
+     });
+ 
+     it('should throw error if message not started', () => {
+@@ -895,12 +986,112 @@ describe('BaseJsonOutputAdapter', () => {
        const state = adapter['mainAgentMessageState'];
        expect(state.blocks[0]).toMatchObject({
          type: 'text',
@@ -1752,6 +1866,7 @@ index e687181..896b4cb 100644
 +            maxOutputTokens: 49152,
 +            outputTokens: 49152,
 +            thinkingTokens: 49152,
++            reasoning: 'Let me first list every file the user touched...',
 +            summaryChars: 0,
 +            finishReason: 'MAX_TOKENS',
 +          },
@@ -1770,6 +1885,7 @@ index e687181..896b4cb 100644
 +          output: {
 +            maxOutputTokens: 49152,
 +            thinkingTokens: 49152,
++            reasoning: 'Let me first list every file the user touched...',
 +            summaryChars: 0,
 +            finishReason: 'MAX_TOKENS',
 +          },
@@ -1810,7 +1926,7 @@ index e687181..896b4cb 100644
      beforeEach(() => {
        adapter.startAssistantMessage();
      });
-@@ -1244,12 +1354,32 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1244,12 +1435,32 @@ describe('BaseJsonOutputAdapter', () => {
  
        const message = adapter.emittedMessages[0];
        if (message.type === 'system') {
@@ -1843,7 +1959,7 @@ index e687181..896b4cb 100644
      it('should be a no-op in base class (does not emit any message)', () => {
        const request: ToolCallRequestInfo = {
          callId: 'tool-call-1',
-@@ -1280,13 +1410,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1280,13 +1491,13 @@ describe('BaseJsonOutputAdapter', () => {
        // Update lastAssistantMessage manually since test adapter doesn't do it automatically
        adapter['lastAssistantMessage'] = message;
      });
@@ -1858,7 +1974,7 @@ index e687181..896b4cb 100644
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1301,13 +1431,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1301,13 +1512,13 @@ describe('BaseJsonOutputAdapter', () => {
          expect(result.num_turns).toBe(1);
        }
      });
@@ -1873,7 +1989,7 @@ index e687181..896b4cb 100644
          numTurns: 1,
        };
  
-@@ -1320,13 +1450,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1320,13 +1531,13 @@ describe('BaseJsonOutputAdapter', () => {
          expect(result.error?.message).toBe('Test error');
        }
      });
@@ -1888,7 +2004,7 @@ index e687181..896b4cb 100644
          numTurns: 1,
        };
  
-@@ -1341,13 +1471,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1341,13 +1552,13 @@ describe('BaseJsonOutputAdapter', () => {
        const usage = {
          input_tokens: 100,
          output_tokens: 50,
@@ -1903,7 +2019,7 @@ index e687181..896b4cb 100644
          numTurns: 1,
        };
  
-@@ -1375,13 +1505,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1375,13 +1586,13 @@ describe('BaseJsonOutputAdapter', () => {
          files: {
            totalLinesAdded: 10,
            totalLinesRemoved: 5,
@@ -1918,7 +2034,7 @@ index e687181..896b4cb 100644
          numTurns: 1,
        };
  
-@@ -1392,13 +1522,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1392,13 +1603,13 @@ describe('BaseJsonOutputAdapter', () => {
        }
      });
  
@@ -1933,7 +2049,7 @@ index e687181..896b4cb 100644
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1408,13 +1538,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1408,13 +1619,13 @@ describe('BaseJsonOutputAdapter', () => {
        }
      });
  
@@ -1948,7 +2064,7 @@ index e687181..896b4cb 100644
          structuredResult: payload,
        };
  
-@@ -1428,13 +1558,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1428,13 +1639,13 @@ describe('BaseJsonOutputAdapter', () => {
          ).toEqual(payload);
        }
      });
@@ -1963,7 +2079,7 @@ index e687181..896b4cb 100644
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1451,13 +1581,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1451,13 +1662,13 @@ describe('BaseJsonOutputAdapter', () => {
        // schema (`{}`). The previous `!== undefined` guard collapsed
        // "absent" with "submitted-as-undefined", silently dropping the
        // field and falling back to the free-text result. Track presence
@@ -1978,7 +2094,7 @@ index e687181..896b4cb 100644
          structuredResult: undefined,
        };
  
-@@ -1502,13 +1632,18 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1502,13 +1713,18 @@ describe('BaseJsonOutputAdapter', () => {
  
    describe('emitSubagentErrorResult', () => {
      it('should emit subagent error result', () => {
@@ -1998,7 +2114,7 @@ index e687181..896b4cb 100644
          (msg) => msg.type === 'result' && msg.is_error === true,
        );
        expect(errorResult).toBeDefined();
-@@ -1525,13 +1660,18 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1525,13 +1741,18 @@ describe('BaseJsonOutputAdapter', () => {
      it('should finalize pending assistant message before emitting error', () => {
        const parentToolUseId = 'parent-tool-1';
        adapter.startSubagentAssistantMessage(parentToolUseId);
@@ -2018,7 +2134,7 @@ index e687181..896b4cb 100644
        );
        expect(assistantMessage).toBeDefined();
      });
-@@ -1619,25 +1759,124 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1619,25 +1840,124 @@ describe('BaseJsonOutputAdapter', () => {
      });
    });
  
@@ -2143,7 +2259,7 @@ index e687181..896b4cb 100644
    describe('getSessionId and getModel', () => {
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
-@@ -1764,12 +2003,44 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1764,12 +2084,44 @@ describe('BaseJsonOutputAdapter', () => {
  
          const result = toolResultContent(response);
  
@@ -2188,7 +2304,7 @@ index e687181..896b4cb 100644
            resultDisplay: {
              type: 'vision_bridge_notice' as const,
              summary: 'Transcribed PDF pages 20-23; remaining pages 24-25',
-@@ -1810,13 +2081,13 @@ describe('BaseJsonOutputAdapter', () => {
+@@ -1810,13 +2162,13 @@ describe('BaseJsonOutputAdapter', () => {
            error: undefined,
            errorType: undefined,
          };
@@ -2204,10 +2320,10 @@ index e687181..896b4cb 100644
          const response = {
            callId: 'pdf-failure',
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
-index 0b15577..769a694 100644
+index 0b15577..639d796 100644
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
-@@ -3,12 +3,13 @@
+@@ -3,18 +3,20 @@
   * Copyright 2025 Qwen Team
   * SPDX-License-Identifier: Apache-2.0
   */
@@ -2221,7 +2337,14 @@ index 0b15577..769a694 100644
    SessionMetrics,
    ServerGeminiStreamEvent,
    AgentResultDisplay,
-@@ -35,15 +36,17 @@ import type {
++  SubagentRoundRecord,
+   McpToolProgressData,
+   ShellProgressData,
+ } from '@qwen-code/qwen-code-core';
+ import {
+   formatVisionBridgeNoticeDisplay,
+   GeminiEventType,
+@@ -35,15 +37,17 @@ import type {
    ControlMessage,
    ExtendedUsage,
    PermissionSuggestion,
@@ -2239,7 +2362,7 @@ index 0b15577..769a694 100644
  /**
   * Internal state for managing a single message context (main agent or subagent).
   */
-@@ -59,21 +62,25 @@ export interface MessageState {
+@@ -59,21 +63,25 @@ export interface MessageState {
  
  /**
   * Options for building result messages.
@@ -2267,7 +2390,7 @@ index 0b15577..769a694 100644
     * top-level `structured_result` field is added to the result message.
     */
    readonly structuredResult?: unknown;
-@@ -91,13 +98,17 @@ export interface MessageEmitter {
+@@ -91,13 +99,17 @@ export interface MessageEmitter {
    emitUserMessage(parts: Part[], parentToolUseId?: string | null): void;
    emitToolResult(
      request: ToolCallRequestInfo,
@@ -2286,12 +2409,17 @@ index 0b15577..769a694 100644
     * In non-streaming mode, this is a no-op.
     *
     * @param request - Tool call request info
-@@ -126,12 +137,13 @@ export interface JsonOutputAdapterInterface extends MessageEmitter {
+@@ -125,13 +137,18 @@ export interface JsonOutputAdapterInterface extends MessageEmitter {
+     toolCall: NonNullable<AgentResultDisplay['toolCalls']>[number],
      parentToolUseId: string,
    ): void;
    finalizeSubagentAssistantMessage?(
      parentToolUseId: string,
    ): CLIAssistantMessage;
++  emitSubagentRound?(
++    round: SubagentRoundRecord,
++    parentToolUseId: string,
++  ): void;
    emitSubagentErrorResult?(
 +    terminateMode: SubagentStopState,
      errorMessage: string,
@@ -2300,7 +2428,23 @@ index 0b15577..769a694 100644
    ): void;
  
    getSessionId(): string;
-@@ -658,12 +670,22 @@ export abstract class BaseJsonOutputAdapter {
+@@ -220,12 +237,15 @@ export abstract class BaseJsonOutputAdapter {
+     if (typeof metadata.candidatesTokenCount === 'number') {
+       usage.output_tokens = metadata.candidatesTokenCount;
+     }
+     if (typeof metadata.cachedContentTokenCount === 'number') {
+       usage.cache_read_input_tokens = metadata.cachedContentTokenCount;
+     }
++    if (typeof metadata.thoughtsTokenCount === 'number') {
++      usage.reasoning_output_tokens = metadata.thoughtsTokenCount;
++    }
+     if (typeof metadata.totalTokenCount === 'number') {
+       usage.total_tokens = metadata.totalTokenCount;
+     }
+ 
+     return usage;
+   }
+@@ -658,12 +678,22 @@ export abstract class BaseJsonOutputAdapter {
            fromModel: event.fromModel,
            toModel: event.toModel,
            statusCode: event.statusCode,
@@ -2323,7 +2467,7 @@ index 0b15577..769a694 100644
    }
  
    // ========== Subagent APIs ==========
-@@ -694,28 +716,35 @@ export abstract class BaseJsonOutputAdapter {
+@@ -694,28 +724,35 @@ export abstract class BaseJsonOutputAdapter {
    }
  
    /**
@@ -2360,7 +2504,51 @@ index 0b15577..769a694 100644
    /**
     * Processes a subagent tool call.
     * This is a shared implementation used by both streaming and non-streaming adapters.
-@@ -1077,20 +1106,28 @@ export abstract class BaseJsonOutputAdapter {
+@@ -760,12 +797,43 @@ export abstract class BaseJsonOutputAdapter {
+ 
+     // Finalize tool_use message immediately
+     this.finalizeSubagentAssistantMessage(parentToolUseId);
+     this.startSubagentAssistantMessage(parentToolUseId);
+   }
+ 
++  /**
++   * Emits one completed subagent model round as the assistant messages it
++   * produced: its reasoning as a thinking block, its visible text as a text
++   * block, and the usage the backend served for the round on the last of
++   * them. A round that produced neither still emits one message carrying its
++   * usage, so a billed round is never absent from the stream. Each round
++   * closes its own messages, exactly as a tool call does.
++   *
++   * @param round - The round's text, reasoning and served usage
++   * @param parentToolUseId - Parent tool use ID
++   */
++  emitSubagentRound(round: SubagentRoundRecord, parentToolUseId: string): void {
++    const state = this.getMessageState(parentToolUseId);
++    if (state.messageStarted && !state.finalized) {
++      this.finalizeSubagentAssistantMessage(parentToolUseId);
++    }
++    this.startAssistantMessageInternal(state);
++
++    if (round.reasoning.length > 0) {
++      this.appendThinking(state, undefined, round.reasoning, parentToolUseId);
++    }
++    if (round.text.length > 0) {
++      this.appendText(state, round.text, parentToolUseId);
++    }
++    this.ensureMessageStarted(state, parentToolUseId);
++    state.usage = this.createUsage(round.usageMetadata);
++
++    this.finalizeSubagentAssistantMessage(parentToolUseId);
++    this.startSubagentAssistantMessage(parentToolUseId);
++  }
++
+   /**
+    * Processes a tool use block for subagent.
+    * This method is called by processSubagentToolCall to handle tool use block creation,
+    * input setting, and closure. Subclasses can override this to customize behavior.
+    *
+    * @param state - Message state
+@@ -1077,20 +1145,28 @@ export abstract class BaseJsonOutputAdapter {
    }
  
    /**
@@ -2391,7 +2579,7 @@ index 0b15577..769a694 100644
    }
  
    /**
-@@ -1189,22 +1226,22 @@ export abstract class BaseJsonOutputAdapter {
+@@ -1189,22 +1265,22 @@ export abstract class BaseJsonOutputAdapter {
        (lastAssistantMessage
          ? extractTextFromBlocks(lastAssistantMessage.message.content)
          : '');
@@ -2418,7 +2606,7 @@ index 0b15577..769a694 100644
          num_turns: options.numTurns,
          usage,
          permission_denials: [...this.permissionDenials],
-@@ -1231,16 +1268,16 @@ export abstract class BaseJsonOutputAdapter {
+@@ -1231,16 +1307,16 @@ export abstract class BaseJsonOutputAdapter {
          : resultText;
        const success: CLIResultMessageSuccess & {
          stats?: SessionMetrics;
@@ -2437,7 +2625,7 @@ index 0b15577..769a694 100644
          num_turns: options.numTurns,
          result: finalResult,
          usage,
-@@ -1260,30 +1297,43 @@ export abstract class BaseJsonOutputAdapter {
+@@ -1260,30 +1336,43 @@ export abstract class BaseJsonOutputAdapter {
  
    /**
     * Builds a subagent error result message.
@@ -2482,7 +2670,7 @@ index 0b15577..769a694 100644
        num_turns: numTurns,
        usage,
        permission_denials: [],
-@@ -1436,23 +1486,29 @@ export function toolResultContent(
+@@ -1436,23 +1525,29 @@ export function toolResultContent(
    if (responsePartsError) {
      return responsePartsError;
    }
@@ -3048,7 +3236,7 @@ index 357c502..2b543b2 100644
        usage: undefined,
      });
 diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInteractive/types.ts
-index 53801c8..0597b98 100644
+index 53801c8..4a87805 100644
 --- a/packages/cli/src/nonInteractive/types.ts
 +++ b/packages/cli/src/nonInteractive/types.ts
 @@ -1,7 +1,8 @@
@@ -3060,7 +3248,25 @@ index 53801c8..0597b98 100644
    SubagentConfig,
    McpToolProgressData,
    ShellProgressData,
-@@ -160,12 +161,19 @@ export interface CLISystemMessage {
+@@ -20,12 +21,17 @@ export interface Annotation {
+  */
+ export interface Usage {
+   input_tokens: number;
+   output_tokens: number;
+   cache_creation_input_tokens?: number;
+   cache_read_input_tokens?: number;
++  /**
++   * Of `output_tokens`, the generated tokens the backend counted as
++   * reasoning. Present exactly when the backend served the count.
++   */
++  reasoning_output_tokens?: number;
+   total_tokens?: number;
+ }
+ 
+ export interface ExtendedUsage extends Usage {
+   server_tool_use?: {
+     web_search_requests: number;
+@@ -160,12 +166,19 @@ export interface CLISystemMessage {
  
  export interface CLIResultMessageSuccess {
    type: 'result';
@@ -3080,7 +3286,7 @@ index 53801c8..0597b98 100644
    num_turns: number;
    result: string;
    usage: ExtendedUsage;
-@@ -173,15 +181,44 @@ export interface CLIResultMessageSuccess {
+@@ -173,15 +186,44 @@ export interface CLIResultMessageSuccess {
    permission_denials: CLIPermissionDenial[];
    [key: string]: unknown;
  }
@@ -3126,7 +3332,7 @@ index 53801c8..0597b98 100644
    num_turns: number;
    usage: ExtendedUsage;
    modelUsage?: Record<string, ModelUsage>;
-@@ -193,12 +230,114 @@ export interface CLIResultMessageError {
+@@ -193,12 +235,114 @@ export interface CLIResultMessageError {
    };
    [key: string]: unknown;
  }
@@ -3242,7 +3448,7 @@ index 53801c8..0597b98 100644
    type: 'message_start';
    message: {
 diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonInteractiveCli.test.ts
-index e6950ce..c036207 100644
+index e6950ce..56a7394 100644
 --- a/packages/cli/src/nonInteractiveCli.test.ts
 +++ b/packages/cli/src/nonInteractiveCli.test.ts
 @@ -42,14 +42,15 @@ import {
@@ -5161,7 +5367,21 @@ index e6950ce..c036207 100644
          ]),
        );
  
-@@ -5681,13 +5947,16 @@ describe('runNonInteractive', () => {
+@@ -5655,12 +5921,13 @@ describe('runNonInteractive', () => {
+     const resultEnvelope = envelopes.at(-1);
+     expect(resultEnvelope?.type).toBe('result');
+     expect(resultEnvelope?.duration_api_ms).toBeGreaterThan(0);
+     expect(resultEnvelope?.usage).toEqual({
+       input_tokens: 11,
+       output_tokens: 5,
++      reasoning_output_tokens: 0,
+       total_tokens: 16,
+       cache_read_input_tokens: 3,
+     });
+ 
+     nowSpy.mockRestore();
+   });
+@@ -5681,13 +5948,16 @@ describe('runNonInteractive', () => {
      });
  
      const events: ServerGeminiStreamEvent[] = [
@@ -5179,7 +5399,7 @@ index e6950ce..c036207 100644
        createStreamFromEvents(events),
      );
  
-@@ -5781,13 +6050,16 @@ describe('runNonInteractive', () => {
+@@ -5781,13 +6051,16 @@ describe('runNonInteractive', () => {
  
      const firstCallEvents: ServerGeminiStreamEvent[] = [toolCallEvent];
      const secondCallEvents: ServerGeminiStreamEvent[] = [
@@ -5197,7 +5417,7 @@ index e6950ce..c036207 100644
      mockGeminiClient.sendMessageStream
        .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
        .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
-@@ -5892,13 +6164,16 @@ describe('runNonInteractive', () => {
+@@ -5892,13 +6165,16 @@ describe('runNonInteractive', () => {
        {
          type: GeminiEventType.Content,
          value: 'I encountered an error',
@@ -5215,7 +5435,7 @@ index e6950ce..c036207 100644
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(createStreamFromEvents(finalResponse));
  
-@@ -5960,13 +6235,16 @@ describe('runNonInteractive', () => {
+@@ -5960,13 +6236,16 @@ describe('runNonInteractive', () => {
  
      const events: ServerGeminiStreamEvent[] = [
        { type: GeminiEventType.Content, value: 'Hello' },
@@ -5233,7 +5453,7 @@ index e6950ce..c036207 100644
        createStreamFromEvents(events),
      );
  
-@@ -6020,13 +6298,16 @@ describe('runNonInteractive', () => {
+@@ -6020,13 +6299,16 @@ describe('runNonInteractive', () => {
          type: GeminiEventType.Thought,
          value: { subject: 'Analysis', description: 'Processing request' },
        },
@@ -5251,7 +5471,7 @@ index e6950ce..c036207 100644
        createStreamFromEvents(events),
      );
  
-@@ -6104,13 +6385,16 @@ describe('runNonInteractive', () => {
+@@ -6104,13 +6386,16 @@ describe('runNonInteractive', () => {
  
      const firstCallEvents: ServerGeminiStreamEvent[] = [toolCall1, toolCall2];
      const secondCallEvents: ServerGeminiStreamEvent[] = [
@@ -5269,7 +5489,7 @@ index e6950ce..c036207 100644
      mockGeminiClient.sendMessageStream
        .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
        .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
-@@ -6220,13 +6504,13 @@ describe('runNonInteractive', () => {
+@@ -6220,13 +6505,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'done' },
@@ -5284,7 +5504,7 @@ index e6950ce..c036207 100644
          ]),
        );
  
-@@ -6322,13 +6606,13 @@ describe('runNonInteractive', () => {
+@@ -6322,13 +6607,13 @@ describe('runNonInteractive', () => {
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'done' },
@@ -5299,7 +5519,7 @@ index e6950ce..c036207 100644
          ]),
        );
  
-@@ -6378,13 +6662,16 @@ describe('runNonInteractive', () => {
+@@ -6378,13 +6663,16 @@ describe('runNonInteractive', () => {
      });
  
      const events: ServerGeminiStreamEvent[] = [
@@ -5317,7 +5537,7 @@ index e6950ce..c036207 100644
        createStreamFromEvents(events),
      );
  
-@@ -6478,13 +6765,16 @@ describe('runNonInteractive', () => {
+@@ -6478,13 +6766,16 @@ describe('runNonInteractive', () => {
      mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
@@ -5335,7 +5555,7 @@ index e6950ce..c036207 100644
  
      await runNonInteractive(mockConfig, mockSettings, 'test', 'p-cron-wiring');
  
-@@ -6996,13 +7286,16 @@ describe('runNonInteractive', () => {
+@@ -6996,13 +7287,16 @@ describe('runNonInteractive', () => {
        });
  
        const plainTextTurn: ServerGeminiStreamEvent[] = [
@@ -5353,7 +5573,7 @@ index e6950ce..c036207 100644
          createStreamFromEvents(plainTextTurn),
        );
  
-@@ -7027,14 +7320,14 @@ describe('runNonInteractive', () => {
+@@ -7027,14 +7321,14 @@ describe('runNonInteractive', () => {
              (m as { type?: string }).type === 'result',
          );
        expect(result?.is_error).toBe(true);
@@ -5370,7 +5590,7 @@ index e6950ce..c036207 100644
      it('synthesises tool_result for suppressed sibling calls when structured_output fails validation', async () => {
        // Same-turn batch: [side_effect_tool, structured_output(bad)]. The
        // pre-scan suppresses the side_effect_tool; structured_output then
-@@ -7383,13 +7676,13 @@ describe('runNonInteractive', () => {
+@@ -7383,13 +7677,13 @@ describe('runNonInteractive', () => {
          .mockReturnValueOnce(
            createStreamFromEvents([
              { type: GeminiEventType.Content, value: 'Monitor launched.' },
@@ -5385,7 +5605,7 @@ index e6950ce..c036207 100644
            ]),
          )
          .mockReturnValueOnce(createStreamFromEvents([drainStructuredCall]));
-@@ -7698,13 +7991,16 @@ describe('runNonInteractive', () => {
+@@ -7698,13 +7992,16 @@ describe('runNonInteractive', () => {
  
        setupMetricsMock();
        const events: ServerGeminiStreamEvent[] = [
@@ -5403,7 +5623,7 @@ index e6950ce..c036207 100644
          createStreamFromEvents(events),
        );
  
-@@ -7739,13 +8035,16 @@ describe('runNonInteractive', () => {
+@@ -7739,13 +8036,16 @@ describe('runNonInteractive', () => {
  
        setupMetricsMock();
        const events: ServerGeminiStreamEvent[] = [
@@ -5421,7 +5641,7 @@ index e6950ce..c036207 100644
          createStreamFromEvents(events),
        );
  
-@@ -7794,13 +8093,16 @@ describe('runNonInteractive', () => {
+@@ -7794,13 +8094,16 @@ describe('runNonInteractive', () => {
  
        setupMetricsMock();
        const events: ServerGeminiStreamEvent[] = [
@@ -7474,7 +7694,7 @@ index b806a6c..25dda44 100644
    });
  });
 diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/ui/commands/contextCommand.ts
-index 1bd2599..2401f4a 100644
+index 1bd2599..78f6e45 100644
 --- a/packages/cli/src/ui/commands/contextCommand.ts
 +++ b/packages/cli/src/ui/commands/contextCommand.ts
 @@ -23,31 +23,25 @@ import {
@@ -7544,7 +7764,32 @@ index 1bd2599..2401f4a 100644
      allToolsTokens +
      memoryFilesTokens +
      loadedBodiesTokens;
-@@ -465,19 +451,30 @@ export function formatContextUsageText(data: HistoryItemContextUsage): string {
+@@ -346,21 +332,15 @@ export async function collectContextData(
+   // dominated by system prompt / skills / MCP tools doesn't silently show
+   // "safe". (R2.2)
+   //
+   // SCOPE GAP (R5.1): `rawOverhead` excludes `messagesTokens` — the actual
+   // chat history. A `--continue` restore with 100K of historical messages
+   // (but small overhead) will still display "safe" here, even though the
+-  // cheap-gate inside chatCompressionService will trigger compression on
+-  // the very next send (it uses `estimatePromptTokens(history, ...)` which
+-  // walks the real history). This is a UI/runtime divergence — for a
+-  // single render — that resolves the moment any send happens.
+-  //
+-  // TODO: plumb the chat history into collectContextData and use
+-  // estimatePromptTokens(history, undefined, 0, 0, imageTokenEstimate) here
+-  // for same-source-of-truth as the cheap-gate. Defer because Config
+-  // doesn't expose the active chat instance today.
++  // exact rendered-request count taken before the very next send will
++  // trigger compression. This is a UI/runtime divergence — for a single
++  // render — that resolves the moment any send happens.
+   const tierTokens = hasTokenCount ? apiTotalTokens : rawOverhead;
+ 
+   const breakdown: ContextCategoryBreakdown = {
+     systemPrompt: displaySystemPrompt,
+     builtinTools: displayBuiltinTools,
+     mcpTools: displayMcpTools,
+@@ -465,19 +445,30 @@ export function formatContextUsageText(data: HistoryItemContextUsage): string {
        );
        lines.push('');
      }
@@ -9752,7 +9997,7 @@ index 82afca4..123606d 100644
 +  return String(error);
  }
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
-index d0bb989..cfcde54 100644
+index d0bb989..0acdce1 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.test.ts
 @@ -8,12 +8,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -9806,7 +10051,63 @@ index d0bb989..cfcde54 100644
      .fn()
      .mockImplementation(
        async (_config: unknown, _signal: AbortSignal, mode: string = 'acp') => {
-@@ -423,13 +439,43 @@ describe('buildSystemMessage', () => {
+@@ -274,12 +290,13 @@ describe('computeUsageFromMetrics', () => {
+     };
+     const result = computeUsageFromMetrics(metrics);
+     expect(result).toEqual({
+       input_tokens: 100,
+       output_tokens: 100,
+       cache_read_input_tokens: 20,
++      reasoning_output_tokens: 0,
+       total_tokens: 150,
+     });
+   });
+ 
+   it('should aggregate usage across multiple models', () => {
+     const metrics: SessionMetrics = {
+@@ -327,12 +344,13 @@ describe('computeUsageFromMetrics', () => {
+     };
+     const result = computeUsageFromMetrics(metrics);
+     expect(result).toEqual({
+       input_tokens: 100,
+       output_tokens: 225,
+       cache_read_input_tokens: 20,
++      reasoning_output_tokens: 0,
+       total_tokens: 350,
+     });
+   });
+ 
+   it('should not include total_tokens when it is 0', () => {
+     const metrics: SessionMetrics = {
+@@ -370,12 +388,13 @@ describe('computeUsageFromMetrics', () => {
+     const result = computeUsageFromMetrics(metrics);
+     expect(result).not.toHaveProperty('total_tokens');
+     expect(result).toEqual({
+       input_tokens: 100,
+       output_tokens: 100,
+       cache_read_input_tokens: 20,
++      reasoning_output_tokens: 0,
+     });
+   });
+ 
+   it('should handle empty models', () => {
+     const metrics: SessionMetrics = {
+       models: {},
+@@ -399,12 +418,13 @@ describe('computeUsageFromMetrics', () => {
+     };
+     const result = computeUsageFromMetrics(metrics);
+     expect(result).toEqual({
+       input_tokens: 100,
+       output_tokens: 0,
+       cache_read_input_tokens: 20,
++      reasoning_output_tokens: 0,
+     });
+   });
+ });
+ 
+ describe('buildSystemMessage', () => {
+   let mockConfig: Config;
+@@ -423,13 +443,43 @@ describe('buildSystemMessage', () => {
          'mcp-server-2': {},
        }),
        getTargetDir: vi.fn().mockReturnValue('/test/dir'),
@@ -9850,11 +10151,14 @@ index d0bb989..cfcde54 100644
      const result = await buildSystemMessage(
        mockConfig,
        'test-session-id',
-@@ -674,12 +720,13 @@ describe('createAgentToolProgressHandler', () => {
+@@ -672,14 +722,16 @@ describe('createAgentToolProgressHandler', () => {
+       getOutputFormat: vi.fn().mockReturnValue(OutputFormat.JSON),
+     } as unknown as Config;
  
      mockAdapter = {
        processSubagentToolCall: vi.fn(),
        emitSubagentErrorResult: vi.fn(),
++      emitSubagentRound: vi.fn(),
        emitToolResult: vi.fn(),
        emitUserMessage: vi.fn(),
 +      emitSystemMessage: vi.fn(),
@@ -9864,7 +10168,7 @@ index d0bb989..cfcde54 100644
    it('should create handler that processes task tool calls', () => {
      const { handler } = createAgentToolProgressHandler(
        mockConfig,
-@@ -941,26 +988,72 @@ describe('createAgentToolProgressHandler', () => {
+@@ -941,26 +993,72 @@ describe('createAgentToolProgressHandler', () => {
      const failedDisplay: AgentResultDisplay = {
        type: 'task_execution',
        subagentName: 'test-agent',
@@ -9937,7 +10241,7 @@ index d0bb989..cfcde54 100644
        'parent-tool-id',
        mockAdapter,
      );
-@@ -977,25 +1070,83 @@ describe('createAgentToolProgressHandler', () => {
+@@ -977,25 +1075,83 @@ describe('createAgentToolProgressHandler', () => {
      const cancelledDisplay: AgentResultDisplay = {
        type: 'task_execution',
        subagentName: 'test-agent',
@@ -10021,7 +10325,7 @@ index d0bb989..cfcde54 100644
        'parent-tool-id',
        mockAdapter,
      );
-@@ -1076,12 +1227,70 @@ describe('createAgentToolProgressHandler', () => {
+@@ -1076,12 +1232,152 @@ describe('createAgentToolProgressHandler', () => {
      handler('task-call-id', taskDisplay);
  
      // Should not emit tool_result if no content
@@ -10086,6 +10390,88 @@ index d0bb989..cfcde54 100644
 +    );
 +  });
 +
++  it('[subagent-rounds] emits each completed subagent round exactly once, ahead of the tool calls it produced', () => {
++    const { handler } = createAgentToolProgressHandler(
++      mockConfig,
++      'parent-tool-id',
++      mockAdapter,
++    );
++
++    const firstRound = {
++      round: 1,
++      text: '',
++      reasoning: 'I should read the manifest before editing anything.',
++      usageMetadata: {
++        promptTokenCount: 18_204,
++        candidatesTokenCount: 96,
++        thoughtsTokenCount: 71,
++        cachedContentTokenCount: 18_176,
++        totalTokenCount: 18_300,
++      },
++    };
++    const secondRound = {
++      round: 2,
++      text: 'The manifest lists three services.',
++      reasoning: '',
++      usageMetadata: null,
++    };
++    const toolCall = {
++      callId: 'call-1',
++      name: 'read_file',
++      status: 'executing' as const,
++      args: { path: 'manifest.json' },
++    };
++
++    const baseDisplay: AgentResultDisplay = {
++      type: 'task_execution',
++      subagentName: 'Explore',
++      taskDescription: 'Survey the repository',
++      taskPrompt: 'Survey the repository',
++      status: 'running',
++      toolCalls: [],
++    };
++
++    const order: string[] = [];
++    vi.mocked(mockAdapter.emitSubagentRound!).mockImplementation(() => {
++      order.push('round');
++    });
++    vi.mocked(mockAdapter.processSubagentToolCall!).mockImplementation(() => {
++      order.push('tool_use');
++    });
++
++    handler('task-call-id', {
++      ...baseDisplay,
++      rounds: [firstRound],
++      toolCalls: [toolCall],
++    });
++    // The same round replayed in the next snapshot is not emitted twice.
++    handler('task-call-id', {
++      ...baseDisplay,
++      rounds: [firstRound],
++      toolCalls: [toolCall],
++    });
++    handler('task-call-id', {
++      ...baseDisplay,
++      rounds: [firstRound, secondRound],
++      toolCalls: [toolCall],
++    });
++
++    expect(mockAdapter.emitSubagentRound).toHaveBeenCalledTimes(2);
++    expect(mockAdapter.emitSubagentRound).toHaveBeenNthCalledWith(
++      1,
++      firstRound,
++      'parent-tool-id',
++    );
++    expect(mockAdapter.emitSubagentRound).toHaveBeenNthCalledWith(
++      2,
++      secondRound,
++      'parent-tool-id',
++    );
++    // The round is the generation; the tool call is its consequence, and
++    // the next round follows both.
++    expect(order).toEqual(['round', 'tool_use', 'round']);
++  });
++
    it('should work with adapter that does not support subagent APIs', () => {
      const limitedAdapter = {
        emitToolResult: vi.fn(),
@@ -10093,7 +10479,7 @@ index d0bb989..cfcde54 100644
  
      const { handler } = createAgentToolProgressHandler(
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/utils/nonInteractiveHelpers.ts
-index b17b1a7..1a802ab 100644
+index b17b1a7..dccadfd 100644
 --- a/packages/cli/src/utils/nonInteractiveHelpers.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.ts
 @@ -28,12 +28,13 @@ import type { Part, PartListUnion } from '@google/genai';
@@ -10132,7 +10518,30 @@ index b17b1a7..1a802ab 100644
   * @param message - User message sourced from the CLI protocol layer
   * @returns Extracted parts or null if the message lacks textual content
   */
-@@ -226,21 +236,29 @@ export async function buildSystemMessage(
+@@ -117,17 +127,22 @@ export function computeUsageFromMetrics(metrics: SessionMetrics): Usage {
+     0,
+   );
+   const totalTokens = Object.values(models).reduce(
+     (acc, model) => acc + model.tokens.total,
+     0,
+   );
++  const totalReasoningTokens = Object.values(models).reduce(
++    (acc, model) => acc + model.tokens.thoughts,
++    0,
++  );
+ 
+   const usage: Usage = {
+     input_tokens: stats.totalPromptTokens,
+     output_tokens: totalOutputTokens,
+     cache_read_input_tokens: stats.totalCachedTokens,
++    reasoning_output_tokens: totalReasoningTokens,
+   };
+ 
+   // Only include total_tokens if it's greater than 0
+   if (totalTokens > 0) {
+     usage.total_tokens = totalTokens;
+   }
+@@ -226,21 +241,29 @@ export async function buildSystemMessage(
      ? Object.keys(mcpServers).map((name) => ({
          name,
          status: getMCPServerStatus(name),
@@ -10164,7 +10573,7 @@ index b17b1a7..1a802ab 100644
  
    const systemMessage: CLISystemMessage = {
      type: 'system',
-@@ -321,12 +339,16 @@ export function createAgentToolProgressHandler(
+@@ -321,12 +344,18 @@ export function createAgentToolProgressHandler(
    // Track previous AgentResultDisplay states per tool call to detect changes
    const previousTaskStates = new Map<string, AgentResultDisplay>();
    // Track which tool call IDs have already emitted tool_use to prevent duplicates
@@ -10175,13 +10584,44 @@ index b17b1a7..1a802ab 100644
 +  // display's `compactions` array is append-only, so the count is the exact
 +  // boundary between what has been reported and what has not.
 +  const emittedCompactionCounts = new Map<string, number>();
++  // The same boundary for the display's append-only `rounds`.
++  const emittedRoundCounts = new Map<string, number>();
  
    /**
     * Builds a ToolCallRequestInfo object from a tool call.
     *
     * @param toolCall - The tool call information
     * @returns ToolCallRequestInfo object
-@@ -530,31 +552,55 @@ export function createAgentToolProgressHandler(
+@@ -513,12 +542,28 @@ export function createAgentToolProgressHandler(
+         !adapter.emitSubagentErrorResult
+       ) {
+         previousTaskStates.set(callId, taskDisplay);
+         return;
+       }
+ 
++      // Emit each model round this subagent completed since the last update,
++      // before the tool calls it produced: the display publishes a round the
++      // moment its stream ends, ahead of the calls it requested, and the
++      // parent stream keeps that order.
++      if (
++        adapter.emitSubagentRound &&
++        taskDisplay.rounds &&
++        taskDisplay.rounds.length > 0
++      ) {
++        const alreadyEmitted = emittedRoundCounts.get(callId) ?? 0;
++        for (const round of taskDisplay.rounds.slice(alreadyEmitted)) {
++          adapter.emitSubagentRound(round, agentToolCallId);
++        }
++        emittedRoundCounts.set(callId, taskDisplay.rounds.length);
++      }
++
+       if (taskDisplay.toolCalls) {
+         if (!previous || !previous.toolCalls) {
+           // First time seeing tool calls - process all initial ones
+           for (const toolCall of taskDisplay.toolCalls) {
+             processToolCall(toolCall);
+           }
+@@ -530,31 +575,55 @@ export function createAgentToolProgressHandler(
              );
              processToolCall(toolCall, previousCall);
            }
@@ -13101,7 +13541,7 @@ index 0000000..fc35b67
 +    : base;
 +}
 diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/core/baseLlmClient.test.ts
-index b40857d..8bd7eb7 100644
+index b40857d..2eb5f6f 100644
 --- a/packages/core/src/core/baseLlmClient.test.ts
 +++ b/packages/core/src/core/baseLlmClient.test.ts
 @@ -11,13 +11,13 @@ import {
@@ -13173,16 +13613,73 @@ index b40857d..8bd7eb7 100644
            functionDeclarations: [
              { name: 'read_file', description: 'Read a file' },
            ],
-@@ -761,15 +784,15 @@ describe('BaseLlmClient', () => {
+@@ -757,19 +780,72 @@ describe('BaseLlmClient', () => {
+         abortSignal: abortController.signal,
+         promptId: 'p',
+         stream: true,
+       });
  
        expect(result.text).toBe('answer');
++      // The reasoning is dropped from the text and kept whole beside it.
++      expect(result.thoughtText).toBe('reasoning');
        expect(result.usage).toBeUndefined();
      });
  
-     it('does not stream when stream is omitted (non-streaming path, still trimmed)', async () => {
+-    it('does not stream when stream is omitted (non-streaming path, still trimmed)', async () => {
 -      mockGenerateContent.mockResolvedValue(
 -        createMockTextResponse('  plain  '),
--      );
++    it('[served-usage] refuses a side query without served usage under exactTokenCounting=vllm', async () => {
++      mockConfig.getContentGeneratorConfig.mockReturnValue({
++        model: 'test-model',
++        authType: AuthType.USE_OPENAI,
++        exactTokenCounting: 'vllm',
++      });
++      mockGenerateContentStream.mockImplementation(async () =>
++        mockTextStream(['answer'], undefined),
++      );
++      vi.mocked(getFunctionCalls).mockReturnValue(undefined);
++
++      await expect(
++        client.generateText({
++          contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
++          model: 'test-model',
++          abortSignal: abortController.signal,
++          promptId: 'p',
++          stream: true,
++        }),
++      ).rejects.toThrow('requires served usage.promptTokenCount');
++    });
++
++    it('[served-usage] returns the served usage whole under exactTokenCounting=vllm', async () => {
++      mockConfig.getContentGeneratorConfig.mockReturnValue({
++        model: 'test-model',
++        authType: AuthType.USE_OPENAI,
++        exactTokenCounting: 'vllm',
++      });
++      const usage = {
++        promptTokenCount: 11,
++        candidatesTokenCount: 7,
++        thoughtsTokenCount: 4,
++        cachedContentTokenCount: 8,
++        totalTokenCount: 18,
++      };
++      mockGenerateContentStream.mockImplementation(async () =>
++        mockTextStream(['answer'], usage),
+       );
++      vi.mocked(getFunctionCalls).mockReturnValue(undefined);
++
++      const result = await client.generateText({
++        contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
++        model: 'test-model',
++        abortSignal: abortController.signal,
++        promptId: 'p',
++        stream: true,
++      });
++
++      expect(result.usage).toEqual(usage);
++    });
++
++    it('does not stream when stream is omitted (non-streaming path, still trimmed)', async () => {
 +      const response = createMockTextResponse('  plain  ');
 +      response.candidates![0]!.finishReason = FinishReason.MAX_TOKENS;
 +      mockGenerateContent.mockResolvedValue(response);
@@ -13192,7 +13689,7 @@ index b40857d..8bd7eb7 100644
          contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
          model: 'test-model',
          abortSignal: abortController.signal,
-@@ -777,12 +800,13 @@ describe('BaseLlmClient', () => {
+@@ -777,12 +853,13 @@ describe('BaseLlmClient', () => {
        });
  
        expect(mockGenerateContent).toHaveBeenCalledTimes(1);
@@ -13206,7 +13703,7 @@ index b40857d..8bd7eb7 100644
        const response = createMockResponseWithFunctionCall({});
        mockGenerateContent.mockResolvedValue(response);
        vi.mocked(getFunctionCalls).mockReturnValueOnce([
-@@ -899,12 +923,96 @@ describe('BaseLlmClient', () => {
+@@ -899,12 +976,96 @@ describe('BaseLlmClient', () => {
  
        expect(result.text).toBe('Hello, world');
        expect(result.usage).toEqual(usage);
@@ -13304,7 +13801,7 @@ index b40857d..8bd7eb7 100644
      const fastContentGenerator = {
        generateContent: fastGenerateContent,
 diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/baseLlmClient.ts
-index df74cec..d03b0a6 100644
+index df74cec..65db5f6 100644
 --- a/packages/core/src/core/baseLlmClient.ts
 +++ b/packages/core/src/core/baseLlmClient.ts
 @@ -16,12 +16,13 @@ import type {
@@ -13321,22 +13818,86 @@ index df74cec..d03b0a6 100644
  import type { ResolvedModelConfig } from '../models/types.js';
  import { buildAgentContentGeneratorConfig } from '../models/content-generator-config.js';
  import {
-@@ -131,12 +132,14 @@ export interface GenerateTextOptions {
+@@ -33,13 +34,16 @@ import { reportError } from '../utils/errorReporting.js';
+ import { getErrorMessage } from '../utils/errors.js';
+ import { retryWithBackoff, isUnattendedMode } from '../utils/retry.js';
+ import { subagentNameContext } from '../utils/subagentNameContext.js';
+ import { ApiRetryEvent } from '../telemetry/types.js';
+ import { logApiRetry } from '../telemetry/loggers.js';
+ import { getFunctionCalls } from '../utils/generateContentResponseUtilities.js';
+-import { getResponseText } from '../utils/partUtils.js';
++import {
++  getResponseText,
++  getResponseThoughtText,
++} from '../utils/partUtils.js';
+ import { createDebugLogger } from '../utils/debugLogger.js';
+ import type { RuntimeContentGeneratorView } from '../agents/runtime/agent-context.js';
+ import { slimCompactionInput } from '../services/compactionInputSlimming.js';
+ 
+ const DEFAULT_MAX_ATTEMPTS = 7;
+ 
+@@ -128,15 +132,60 @@ export interface GenerateTextOptions {
+ 
+ /**
+  * Result of a generateText call.
   */
  export interface GenerateTextResult {
    text: string;
++  /**
++   * The reasoning the model emitted before its text, verbatim, so what a
++   * side query thought is observable. Never fed back to a model.
++   */
++  thoughtText: string;
    usage: GenerateContentResponseUsageMetadata | undefined;
    /** Whether the response contained a function call. No call is executed here. */
    hadToolCall?: boolean;
 +  /** Provider terminal reason from the final response/chunk. */
 +  finishReason?: string;
++}
++
++/**
++ * Usage the pinned backend serves on every generation it completes: the four
++ * counts that together say what a request cost and where its output went.
++ */
++export type ServedUsage = GenerateContentResponseUsageMetadata & {
++  promptTokenCount: number;
++  candidatesTokenCount: number;
++  thoughtsTokenCount: number;
++  cachedContentTokenCount: number;
++};
++
++const SERVED_USAGE_FIELDS = [
++  'promptTokenCount',
++  'candidatesTokenCount',
++  'thoughtsTokenCount',
++  'cachedContentTokenCount',
++] as const;
++
++/**
++ * Under `exactTokenCounting: 'vllm'` a generation that arrived without its
++ * served usage did not complete in a way this client can account for, and no
++ * count is invented in its place.
++ */
++export function requireServedUsage(
++  usage: GenerateContentResponseUsageMetadata | undefined,
++  site: string,
++): ServedUsage {
++  for (const field of SERVED_USAGE_FIELDS) {
++    const value = usage?.[field];
++    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
++      throw new Error(
++        `${site}: exactTokenCounting=vllm requires served usage.${field}; received ${JSON.stringify(usage)}`,
++      );
++    }
++  }
++  return usage as ServedUsage;
  }
  
  /**
   * Best-effort JSON-object extraction from a model's text response. Used as a
   * fallback when the model emits plain-text JSON instead of calling the
   * registered tool. Strips a leading ```json / ``` fence, then takes the
-@@ -359,12 +362,57 @@ export class BaseLlmClient {
+@@ -359,12 +408,57 @@ export class BaseLlmClient {
          `Failed to generate JSON content${promptId ? ` (${promptId})` : ''}: ${getErrorMessage(error)}`,
          { cause: error },
        );
@@ -13394,16 +13955,26 @@ index df74cec..d03b0a6 100644
     * Distinct from `GeminiClient.generateContent`: this calls the underlying
     * `ContentGenerator` directly, so the caller's `systemInstruction` is sent
     * through verbatim — no `getCustomSystemPrompt` wrapping (which would append
-@@ -424,30 +472,34 @@ export class BaseLlmClient {
+@@ -419,35 +513,43 @@ export class BaseLlmClient {
+         ? async () => {
+             const responseStream = await contentGenerator.generateContentStream(
+               request,
+               promptId ?? '',
+             );
              // Chunks are deltas, not cumulative snapshots, so concatenate.
-             // getResponseText already drops thought parts; usageMetadata rides
-             // the final chunk (last one wins), matching the non-streaming read.
+-            // getResponseText already drops thought parts; usageMetadata rides
+-            // the final chunk (last one wins), matching the non-streaming read.
++            // getResponseText drops thought parts and getResponseThoughtText
++            // keeps only them; usageMetadata rides the final chunk (last one
++            // wins), matching the non-streaming read.
              let text = '';
++            let thoughtText = '';
              let usage: GenerateContentResponseUsageMetadata | undefined;
              let hadToolCall = false;
 +            let finishReason: string | undefined;
              for await (const chunk of responseStream) {
                text += getResponseText(chunk) ?? '';
++              thoughtText += getResponseThoughtText(chunk) ?? '';
                hadToolCall ||= (getFunctionCalls(chunk)?.length ?? 0) > 0;
                if (chunk.usageMetadata) {
                  usage = chunk.usageMetadata;
@@ -13412,7 +13983,7 @@ index df74cec..d03b0a6 100644
 +              if (chunkFinishReason) finishReason = chunkFinishReason;
              }
 -            return { text, usage, hadToolCall };
-+            return { text, usage, hadToolCall, finishReason };
++            return { text, thoughtText, usage, hadToolCall, finishReason };
            }
          : async () => {
              const result = await contentGenerator.generateContent(
@@ -13421,6 +13992,7 @@ index df74cec..d03b0a6 100644
              );
              return {
                text: getResponseText(result) ?? '',
++              thoughtText: getResponseThoughtText(result) ?? '',
                usage: result.usageMetadata,
                hadToolCall: (getFunctionCalls(result)?.length ?? 0) > 0,
 +              finishReason: result.candidates?.[0]?.finishReason,
@@ -13430,11 +14002,20 @@ index df74cec..d03b0a6 100644
        const result = await retryWithBackoff(apiCall, {
          maxAttempts: maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
          authType: retryAuthType,
-@@ -476,12 +528,13 @@ export class BaseLlmClient {
+@@ -472,16 +574,22 @@ export class BaseLlmClient {
+               subagentName: subagentNameContext.getStore(),
+             }),
+           );
+         },
        });
  
++      if (contentGeneratorConfig.exactTokenCounting === 'vllm') {
++        requireServedUsage(result.usage, 'generateText');
++      }
++
        return {
          text: result.text.trim(),
++        thoughtText: result.thoughtText,
          usage: result.usage,
          hadToolCall: result.hadToolCall,
 +        finishReason: result.finishReason,
@@ -13445,10 +14026,109 @@ index df74cec..d03b0a6 100644
        }
  
 diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/client.test.ts
-index 1939fef..2c5b735 100644
+index 1939fef..c2b1b0a 100644
 --- a/packages/core/src/core/client.test.ts
 +++ b/packages/core/src/core/client.test.ts
-@@ -4205,13 +4205,13 @@ describe('Gemini Client (client.ts)', () => {
+@@ -739,25 +739,24 @@ describe('Gemini Client (client.ts)', () => {
+     vi.restoreAllMocks();
+     __resetActiveGoalStoreForTests();
+   });
+ 
+   describe('initialize', () => {
+     it('initializes from the selective runtime projection without the full transcript', async () => {
+-      const seedResumeTokenCountsSpy = vi.spyOn(
++      const setLastPromptTokenCountSpy = vi.spyOn(
+         GeminiChat.prototype,
+-        'seedResumeTokenCounts',
++        'setLastPromptTokenCount',
+       );
+       const apiHistory = [
+         { role: 'user' as const, parts: [{ text: 'projected history' }] },
+       ];
+       const uiEvent = { type: 'projected-event' };
+       vi.mocked(mockConfig.getSessionRestoreRuntime).mockReturnValue({
+         apiHistory,
+         resumeTokenCounts: {
+           promptTokenCount: 321,
+-          outputTokenCount: 45,
+           isEstimated: false,
+         },
+         uiTelemetryEvents: [uiEvent],
+         recording: {
+           lastCompletedUuid: 'record-1',
+           turnParentUuids: [],
+@@ -775,13 +774,13 @@ describe('Gemini Client (client.ts)', () => {
+         'test-session-id',
+       );
+       expect(uiTelemetryService.addEvent).toHaveBeenCalledWith(
+         uiEvent,
+         'test-session-id',
+       );
+-      expect(seedResumeTokenCountsSpy).toHaveBeenCalledWith(321, 45, false);
++      expect(setLastPromptTokenCountSpy).toHaveBeenCalledWith(321, false);
+     });
+ 
+     it('seeds resumed chat with replayed prompt token count', async () => {
+       vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({
+         conversation: {
+           sessionId: 'resumed-session-id',
+@@ -801,15 +800,15 @@ describe('Gemini Client (client.ts)', () => {
+       await resumedClient.initialize();
+ 
+       expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(123_456);
+     });
+ 
+     it('seeds resumed chat with previous response output token count', async () => {
+-      const seedResumeTokenCountsSpy = vi.spyOn(
++      const setLastPromptTokenCountSpy = vi.spyOn(
+         GeminiChat.prototype,
+-        'seedResumeTokenCounts',
++        'setLastPromptTokenCount',
+       );
+       vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({
+         conversation: {
+           sessionId: 'resumed-session-id',
+           projectHash: 'project-hash',
+           startTime: new Date(0).toISOString(),
+@@ -838,19 +837,19 @@ describe('Gemini Client (client.ts)', () => {
+       });
+ 
+       const resumedClient = new GeminiClient(mockConfig);
+       await resumedClient.initialize();
+ 
+       expect(resumedClient.getChat().getLastPromptTokenCount()).toBe(200);
+-      expect(seedResumeTokenCountsSpy).toHaveBeenCalledWith(200, 80, false);
++      expect(setLastPromptTokenCountSpy).toHaveBeenCalledWith(200, false);
+     });
+ 
+     it('restores estimated provenance from a compression checkpoint', async () => {
+-      const seedResumeTokenCountsSpy = vi.spyOn(
++      const setLastPromptTokenCountSpy = vi.spyOn(
+         GeminiChat.prototype,
+-        'seedResumeTokenCounts',
++        'setLastPromptTokenCount',
+       );
+       vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({
+         conversation: {
+           sessionId: 'resumed-session-id',
+           projectHash: 'project-hash',
+           startTime: new Date(0).toISOString(),
+@@ -881,13 +880,13 @@ describe('Gemini Client (client.ts)', () => {
+         lastCompletedUuid: null,
+       });
+ 
+       const resumedClient = new GeminiClient(mockConfig);
+       await resumedClient.initialize();
+ 
+-      expect(seedResumeTokenCountsSpy).toHaveBeenCalledWith(200, 0, true);
++      expect(setLastPromptTokenCountSpy).toHaveBeenCalledWith(200, true);
+       expect(resumedClient.getChat().isLastPromptTokenCountEstimated()).toBe(
+         true,
+       );
+     });
+ 
+     it('seeds recently completed tools from resumed history', async () => {
+@@ -4205,13 +4204,13 @@ describe('Gemini Client (client.ts)', () => {
      });
    });
  
@@ -13464,7 +14144,7 @@ index 1939fef..2c5b735 100644
        // The top-level beforeEach stubs tryCompressChat to NOOP for unrelated
        // tests; restore the real implementation here so we can observe it.
 diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
-index 60ffda3..2be7511 100644
+index 60ffda3..d057f21 100644
 --- a/packages/core/src/core/client.ts
 +++ b/packages/core/src/core/client.ts
 @@ -15,12 +15,13 @@ import type {
@@ -13481,7 +14161,41 @@ index 60ffda3..2be7511 100644
  import { recordStartupEvent } from '../utils/startupEventSink.js';
  import {
    microcompactHistory,
-@@ -1620,12 +1621,13 @@ export class GeminiClient {
+@@ -443,15 +444,14 @@ export class GeminiClient {
+         sessionStartSource ?? SessionStartSource.Resume,
+       );
+       const chat = this.getChat();
+       if (restoreRuntime.resumeTokenCounts) {
+         const counts = restoreRuntime.resumeTokenCounts;
+         uiTelemetryService.setLastPromptTokenCount(counts.promptTokenCount);
+-        chat.seedResumeTokenCounts(
++        chat.setLastPromptTokenCount(
+           counts.promptTokenCount,
+-          counts.outputTokenCount,
+           counts.isEstimated,
+         );
+       } else {
+         chat.setLastPromptTokenCount(
+           uiTelemetryService.getLastPromptTokenCount(),
+         );
+@@ -470,15 +470,14 @@ export class GeminiClient {
+       await this.startChat(
+         resumedHistory,
+         sessionStartSource ?? SessionStartSource.Resume,
+       );
+       const chat = this.getChat();
+       if (resumeTokenCounts) {
+-        chat.seedResumeTokenCounts(
++        chat.setLastPromptTokenCount(
+           resumeTokenCounts.promptTokenCount,
+-          resumeTokenCounts.outputTokenCount,
+           resumeTokenCounts.isEstimated,
+         );
+       } else {
+         chat.setLastPromptTokenCount(
+           uiTelemetryService.getLastPromptTokenCount(),
+         );
+@@ -1620,12 +1619,13 @@ export class GeminiClient {
          'gemini_chat_construct',
          () =>
            new GeminiChat(
@@ -13495,7 +14209,7 @@ index 60ffda3..2be7511 100644
              uiTelemetryService,
            ),
        );
-@@ -2844,13 +2846,32 @@ export class GeminiClient {
+@@ -2844,13 +2844,32 @@ export class GeminiClient {
          const checkpoint = this.lastHookMicrocompactionTimestamp;
          if (await this.microcompactHistoryBeforeSend(checkpoint)) {
            this.lastHookMicrocompactionTimestamp = Date.now();
@@ -13529,7 +14243,7 @@ index 60ffda3..2be7511 100644
          this.config
            .getChatRecordingService()
            ?.recordAttributionSnapshot(
-@@ -2876,26 +2897,12 @@ export class GeminiClient {
+@@ -2876,26 +2895,12 @@ export class GeminiClient {
                debugLogger.error(`FileHistory: recordSnapshot failed: ${e}`);
              }
            } catch (e) {
@@ -13556,7 +14270,7 @@ index 60ffda3..2be7511 100644
        const boundedTurns =
          messageType === SendMessageType.Goal
            ? MAX_TURNS
-@@ -2914,17 +2921,17 @@ export class GeminiClient {
+@@ -2914,17 +2919,17 @@ export class GeminiClient {
            !signal ||
            signal.aborted ||
            !options?.getSteerInput
@@ -15926,7 +16640,7 @@ index c224235..ecc05ce 100644
        const result = {
          callId: call.request.callId,
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
-index 5ae5029..165ba5c 100644
+index 5ae5029..9981198 100644
 --- a/packages/core/src/core/geminiChat.test.ts
 +++ b/packages/core/src/core/geminiChat.test.ts
 @@ -2,16 +2,20 @@
@@ -19526,6 +20240,21 @@ index 5ae5029..165ba5c 100644
        const compressSpy = mockCompressionService('compressed');
  
        await chat.tryCompress('p1', true);
+@@ -14954,13 +14031,13 @@ describe('GeminiChat', async () => {
+         ],
+         {
+           recordChatCompression,
+         } as unknown as ConstructorParameters<typeof GeminiChat>[3],
+         uiTelemetryService,
+       );
+-      recordingChat.seedResumeTokenCounts(1000, 0, false);
++      recordingChat.setLastPromptTokenCount(1000, false);
+ 
+       const result = recordingChat.compressFast();
+ 
+       expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
+       expect(result.info.newTokenCount).toBeGreaterThan(0);
+       expect(result.info.newTokenCount).toBeLessThan(1000);
 @@ -14970,153 +14047,12 @@ describe('GeminiChat', async () => {
            info: expect.objectContaining({ newTokenCountIsEstimated: true }),
          }),
@@ -19730,7 +20459,7 @@ index 5ae5029..165ba5c 100644
          (async function* () {
            yield xmlChunk(xml, 'STOP');
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
-index 8051292..f150088 100644
+index 8051292..77321f9 100644
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
 @@ -15,13 +15,16 @@ import type {
@@ -19751,7 +20480,7 @@ index 8051292..f150088 100644
    type HeartbeatInfo,
  } from '../utils/retry.js';
  import {
-@@ -43,56 +46,60 @@ import {
+@@ -43,70 +46,76 @@ import {
  } from '../utils/rateLimit.js';
  import {
    classifyRetryError,
@@ -19809,16 +20538,17 @@ index 8051292..f150088 100644
 +  referencedImagePayloads,
    replaceImagePayloadsInPlace,
  } from '../services/image-payload-references.js';
- import {
-   estimateContentTokens,
+-import {
+-  estimateContentTokens,
 -  estimatePromptTokens,
-   getUsageOutputTokenCountForPromptEstimate,
- } from '../services/tokenEstimation.js';
+-  getUsageOutputTokenCountForPromptEstimate,
+-} from '../services/tokenEstimation.js';
++import { estimateContentTokens } from '../services/tokenEstimation.js';
  import {
    microcompactHistory,
    type MicrocompactMeta,
  } from '../services/microcompaction/microcompact.js';
-@@ -100,13 +107,18 @@ import {
+ import {
    ContentRetryEvent,
    ContentRetryFailureEvent,
    ApiRetryEvent,
@@ -19838,7 +20568,7 @@ index 8051292..f150088 100644
    isSystemReminderContent,
  } from '../utils/environmentContext.js';
  import type { SessionStartSource } from '../hooks/types.js';
-@@ -123,12 +135,13 @@ import {
+@@ -123,12 +132,13 @@ import {
  import {
    getToolCallPreparations,
    setToolCallPreparations,
@@ -19852,7 +20582,7 @@ index 8051292..f150088 100644
  const debugLogger = createDebugLogger('QWEN_CODE_CHAT');
  // Gemini can emit this filler after tool results; filtering and validation
  // must stay in sync.
-@@ -321,53 +334,12 @@ export function redactStructuredOutputArgsForRecording(
+@@ -321,53 +331,12 @@ export function redactStructuredOutputArgsForRecording(
        ...part.functionCall,
        args: { ...STRUCTURED_OUTPUT_REDACTED_ARGS },
      },
@@ -19906,7 +20636,7 @@ index 8051292..f150088 100644
   * Hostile providers (broken upstream, OpenAI-compat proxy returning
   * `null`/`NaN`, misconfigured override) can yield non-finite or negative
   * token counts on `usageMetadata`. This function coerces the four fields that
-@@ -406,12 +378,18 @@ export enum StreamEventType {
+@@ -406,12 +375,18 @@ export enum StreamEventType {
    RETRY = 'retry',
    /** Emitted once at the start of the stream when an automatic compression
     * pass succeeded. Carries the compression result so callers (the main
@@ -19925,7 +20655,7 @@ index 8051292..f150088 100644
     * notification about the model switch. */
    MODEL_FALLBACK = 'model_fallback',
  }
-@@ -438,22 +416,23 @@ export type StreamEvent =
+@@ -438,22 +413,23 @@ export type StreamEvent =
         *  buffer so the continuation appends to it. */
        isContinuation?: boolean;
        /** Set when the retry raised the automatic max output token limit. */
@@ -19950,7 +20680,7 @@ index 8051292..f150088 100644
     * Pre-computed all-inclusive effective prompt count from the caller. When
     * set, the cheap-gate uses this instead of recomputing — avoids a second
     * `getHistory(true)` clone per send and prevents provider-reported overflow
-@@ -483,12 +462,19 @@ interface TryCompressOptions {
+@@ -483,12 +459,19 @@ interface TryCompressOptions {
  const INVALID_STREAM_RETRY_CONFIG = {
    transientMaxRetries: 4,
    protocolTagLeakMaxRetries: 2,
@@ -19970,7 +20700,7 @@ index 8051292..f150088 100644
    /**
     * Budget for *continuation* recovery after a socket-level cut that already
     * delivered output (issue #7832). This is a different mechanism from the
-@@ -499,28 +485,12 @@ const TRANSPORT_STREAM_RETRY_CONFIG = {
+@@ -499,28 +482,12 @@ const TRANSPORT_STREAM_RETRY_CONFIG = {
     * once by the same gateway idle timeout, so this is sized like
     * {@link MAX_OUTPUT_RECOVERY_ATTEMPTS} rather than like the replay budget.
     */
@@ -19999,7 +20729,7 @@ index 8051292..f150088 100644
   * message so the model can continue from where it left off.
   */
  const MAX_OUTPUT_RECOVERY_ATTEMPTS = 3;
-@@ -1360,15 +1330,13 @@ class LeadingProtocolTagLeakDetector {
+@@ -1360,15 +1327,13 @@ class LeadingProtocolTagLeakDetector {
   * in for a real tool result that never made it back into history (e.g. the
   * process crashed between the partial-tool_use push and tool completion, or
   * the user hit Ctrl+Y before the in-flight tool finished and the scheduler's
@@ -20016,13 +20746,21 @@ index 8051292..f150088 100644
   * Partial-tool_use repair subsystem — canonical design note.
   * ============================================================================
   *
-@@ -1729,45 +1697,12 @@ export class GeminiChat {
-    * previous response is appended to local history after `promptTokenCount`
-    * was reported, so steady-state prompt estimates add this value to avoid
-    * under-counting the next request near the hard compaction threshold.
+@@ -1721,53 +1686,12 @@ export class GeminiChat {
+    * (which intentionally don't write to the global telemetry singleton) can
+    * still make compaction decisions based on their *own* context size.
     */
-   private lastOutputTokenCount = 0;
+   private lastPromptTokenCount = 0;
+   private lastPromptTokenCountIsEstimated = false;
  
+-  /**
+-   * Per-chat output-token count from the previous model response. The
+-   * previous response is appended to local history after `promptTokenCount`
+-   * was reported, so steady-state prompt estimates add this value to avoid
+-   * under-counting the next request near the hard compaction threshold.
+-   */
+-  private lastOutputTokenCount = 0;
+-
 -  /**
 -   * Number of consecutive auto-compaction failures for this chat. The
 -   * cheap-gate NOOPs once this reaches MAX_CONSECUTIVE_FAILURES (default 3)
@@ -20062,7 +20800,7 @@ index 8051292..f150088 100644
     * above `ORPHAN_TOOL_USE_REPAIR_REASON` for the lifecycle and the
     * wedge they prevent.
     */
-@@ -1826,13 +1761,13 @@ export class GeminiChat {
+@@ -1826,13 +1750,13 @@ export class GeminiChat {
     * @param telemetryService - Optional UI telemetry service. When provided,
     *   prompt token counts are reported on each API response. Pass `undefined`
     *   for sub-agent chats to avoid overwriting the main agent's context usage.
@@ -20077,7 +20815,20 @@ index 8051292..f150088 100644
    ) {
      validateHistory(history);
      this.redactApprovedPlansFromLoadedHistory();
-@@ -1863,33 +1798,49 @@ export class GeminiChat {
+@@ -1850,46 +1774,57 @@ export class GeminiChat {
+    * of whether the global telemetry is updated.
+    */
+   getLastPromptTokenCount(): number {
+     return this.lastPromptTokenCount;
+   }
+ 
+-  /** Previous model-response tokens used by the next prompt estimate. */
+-  getLastOutputTokenCount(): number {
+-    return this.lastOutputTokenCount;
+-  }
+-
+   /**
+    * Builds request contents for the content generator without deep-cloning the
     * whole chat history. This is an internal hot path: long sessions can make a
     * full `structuredClone` larger than the remaining V8 heap headroom.
     *
@@ -20132,7 +20883,7 @@ index 8051292..f150088 100644
            last.parts = [...(last.parts ?? []), ...reattachParts];
          } else {
            requestHistory.push({ role: 'user', parts: reattachParts });
-@@ -1897,22 +1848,160 @@ export class GeminiChat {
+@@ -1897,68 +1832,183 @@ export class GeminiChat {
        }
        return requestHistory;
      }
@@ -20292,8 +21043,56 @@ index 8051292..f150088 100644
     * history (forks, subagents, speculation). Without this, the auto-compress
     * threshold check sees `0` and refuses to compress — so the first API call
     * can 400 from oversized history. Callers pass the parent chat's
-    * `getLastPromptTokenCount()` here. This also clears any remembered
-@@ -1993,13 +2082,12 @@ export class GeminiChat {
+-   * `getLastPromptTokenCount()` here. This also clears any remembered
+-   * previous-response output token count because the seeded prompt count
+-   * comes from a different chat instance and should not inherit this chat's
+-   * last response size.
++   * `getLastPromptTokenCount()` here. A resumed session seeds the count and
++   * the provenance its checkpoint recorded through the same call.
+    */
+   setLastPromptTokenCount(count: number, isEstimated = false): void {
+     this.lastPromptTokenCount = count;
+     this.lastPromptTokenCountIsEstimated = isEstimated;
+-    this.lastOutputTokenCount = 0;
+   }
+ 
+   isLastPromptTokenCountEstimated(): boolean {
+     return this.lastPromptTokenCountIsEstimated;
+   }
+ 
+   private promptCountIsEstimateDerived(): boolean {
+     return (
+       this.lastPromptTokenCount === 0 || this.lastPromptTokenCountIsEstimated
+     );
+   }
+ 
+-  /**
+-   * Seed the restored prompt and previous-response output token counts in one
+-   * step. Resume restores chat history plus both counters and their provenance
+-   * from the same checkpoint, so callers must avoid the normal
+-   * setLastPromptTokenCount() clearing behavior.
+-   */
+-  seedResumeTokenCounts(
+-    promptTokenCount: number,
+-    outputTokenCount: number,
+-    isEstimated = false,
+-  ): void {
+-    this.lastPromptTokenCount = Number.isFinite(promptTokenCount)
+-      ? Math.max(0, promptTokenCount)
+-      : 0;
+-    this.lastPromptTokenCountIsEstimated = isEstimated;
+-    this.lastOutputTokenCount = Number.isFinite(outputTokenCount)
+-      ? Math.max(0, outputTokenCount)
+-      : 0;
+-  }
+-
+   /**
+    * Attempt to compress this chat's history.
+    *
+    * Returns the compression info regardless of outcome. On a successful
+    * compaction (`COMPRESSED`), this method has already mutated the chat's
+    * history, recorded the event to `chatRecordingService` (if wired and
+@@ -1993,13 +2043,12 @@ export class GeminiChat {
      );
      const service = new ChatCompressionService();
      const { newHistory, info } = await service.compress(this, {
@@ -20307,7 +21106,7 @@ index 8051292..f150088 100644
        requestGenerationConfig: options?.requestGenerationConfig,
        trigger: options?.trigger,
        customInstructions: options?.customInstructions,
-@@ -2022,29 +2110,12 @@ export class GeminiChat {
+@@ -2022,29 +2071,12 @@ export class GeminiChat {
        this.config.getFileReadCache().clear();
        this.setLastPromptTokenCount(
          info.newTokenCount,
@@ -20337,7 +21136,7 @@ index 8051292..f150088 100644
    }
  
    /**
-@@ -2125,13 +2196,12 @@ export class GeminiChat {
+@@ -2125,13 +2157,12 @@ export class GeminiChat {
        }),
      );
      this.setHistory(newHistory);
@@ -20351,7 +21150,7 @@ index 8051292..f150088 100644
  
    setSystemInstruction(sysInstr: string) {
      this.generationConfig.systemInstruction = sysInstr;
-@@ -2206,12 +2276,26 @@ export class GeminiChat {
+@@ -2206,12 +2237,26 @@ export class GeminiChat {
        model = exactRoute.model;
      }
      const requestModalities =
@@ -20378,7 +21177,7 @@ index 8051292..f150088 100644
      const streamDonePromise = new Promise<void>((resolve) => {
        streamDoneResolver = resolve;
      });
-@@ -2224,47 +2308,69 @@ export class GeminiChat {
+@@ -2224,47 +2269,69 @@ export class GeminiChat {
      // stash gets the same per-send reset for the same reason: a
      // leftover from a prior unretryable break would otherwise get
      // appended to JSONL by THIS send's retry-loop flush, attaching
@@ -20469,7 +21268,7 @@ index 8051292..f150088 100644
      try {
        // The send-lock above is held but the generator's `finally` (which
        // resolves it) has not run yet. Any setup error before returning the
-@@ -2272,196 +2378,44 @@ export class GeminiChat {
+@@ -2272,196 +2339,44 @@ export class GeminiChat {
        // at `await this.sendPromise`.
        // Build the user content BEFORE compression so the cheap-gate can size
        // the upcoming prompt — closes the "first send after inherited history"
@@ -20678,7 +21477,7 @@ index 8051292..f150088 100644
          if (notice) {
            manualPlanExitNoticeVersion = notice.version;
            manualPlanExitNoticeText = getManualPlanExitSystemReminder(
-@@ -2515,63 +2469,30 @@ export class GeminiChat {
+@@ -2515,63 +2430,30 @@ export class GeminiChat {
        }
        requestContents = this.getRequestHistoryForRoute(
          currentUserContent,
@@ -20754,7 +21553,7 @@ index 8051292..f150088 100644
        if (userContentAdded) {
          this.history.pop();
          // The push above was rolled back, so undo its count too.
-@@ -2579,29 +2500,52 @@ export class GeminiChat {
+@@ -2579,29 +2461,52 @@ export class GeminiChat {
        }
        if (manualPlanExitNoticeVersion !== undefined) {
          this.config.restorePendingManualPlanExitNotice(
@@ -20810,7 +21609,7 @@ index 8051292..f150088 100644
            yield {
              type: StreamEventType.COMPRESSED,
              info: compressionInfo,
-@@ -2641,12 +2585,13 @@ export class GeminiChat {
+@@ -2641,12 +2546,13 @@ export class GeminiChat {
          let streamYieldedAnyChunk = false;
  
          // Read per-config overrides; fall back to built-in defaults.
@@ -20824,7 +21623,7 @@ index 8051292..f150088 100644
                retryAuthType: exactRoute.retryAuthType,
                retryErrorCodes: exactRoute.retryErrorCodes,
              }
-@@ -2671,16 +2616,15 @@ export class GeminiChat {
+@@ -2671,16 +2577,15 @@ export class GeminiChat {
              cgConfig?.samplingParams?.max_tokens !== null) ||
            parsedEnvMaxTokens !== undefined;
          // params.config.maxOutputTokens is set by the first-send clamp; the
@@ -20843,7 +21642,7 @@ index 8051292..f150088 100644
  
          let lastFinishReason: string | undefined;
  
-@@ -2949,13 +2893,15 @@ export class GeminiChat {
+@@ -2949,13 +2854,15 @@ export class GeminiChat {
                // second discards output the caller is watching. The
                // accumulated buffer is what distinguishes them, and it must be
                // consulted here because this branch is checked before the
@@ -20860,7 +21659,7 @@ index 8051292..f150088 100644
                const delayMs =
                  TRANSPORT_STREAM_RETRY_CONFIG.initialDelayMs *
                  transportStreamRetryCount;
-@@ -3002,13 +2948,15 @@ export class GeminiChat {
+@@ -3002,13 +2909,15 @@ export class GeminiChat {
              // check), and the scheduler's repair path already covers it.
              const canContinueAfterTransportCut =
                isRetryableStreamTransportError &&
@@ -20877,7 +21676,7 @@ index 8051292..f150088 100644
                // Everything delivered so far — across earlier continuation
                // attempts too, since `transportContinuationText` accumulates
                // and is never reset while continuing. Each attempt's own text
-@@ -3063,14 +3011,13 @@ export class GeminiChat {
+@@ -3063,14 +2972,13 @@ export class GeminiChat {
              if (contextOverflow.isExceeded) {
                if (!exactRoute && !reactiveCompressionAttempted) {
                  reactiveCompressionAttempted = true;
@@ -20893,7 +21692,7 @@ index 8051292..f150088 100644
                  try {
                    const reactiveInfo = await self.tryCompress(
                      prompt_id,
-@@ -3081,12 +3028,24 @@ export class GeminiChat {
+@@ -3081,12 +2989,24 @@ export class GeminiChat {
                        precomputedEffectiveTokens: reactiveOriginalTokenCount,
                        requestGenerationConfig: params.config,
                        trigger: 'auto',
@@ -20918,7 +21717,7 @@ index 8051292..f150088 100644
                    ) {
                      // No-op today: tryCompress's setHistory has already
                      // cleared the marker. Kept for uniformity with the
-@@ -3141,31 +3100,12 @@ export class GeminiChat {
+@@ -3141,31 +3061,12 @@ export class GeminiChat {
                    }
  
                    debugLogger.warn(
@@ -20950,7 +21749,7 @@ index 8051292..f150088 100644
                      isAbortError(compressionError)
                    ) {
                      throw compressionError;
-@@ -3196,22 +3136,29 @@ export class GeminiChat {
+@@ -3196,22 +3097,29 @@ export class GeminiChat {
                break;
              }
  
@@ -20982,7 +21781,7 @@ index 8051292..f150088 100644
                const nextInvalidStreamRetryCount = invalidStreamRetryCount + 1;
                if (error.type === 'PROTOCOL_TAG_LEAK') {
                  protocolTagLeakRetryCount = nextInvalidStreamRetryCount;
-@@ -3320,14 +3267,15 @@ export class GeminiChat {
+@@ -3320,14 +3228,15 @@ export class GeminiChat {
                }
                return;
              } catch (error) {
@@ -21000,7 +21799,7 @@ index 8051292..f150088 100644
                  error.type === 'PROTOCOL_TAG_LEAK'
                    ? protocolTagLeakRetryCount
                    : transientRetryCount;
-@@ -3362,12 +3310,13 @@ export class GeminiChat {
+@@ -3362,12 +3271,13 @@ export class GeminiChat {
                await delay(delayMs, attemptState.params.config?.abortSignal)
                  .promise;
              }
@@ -21014,7 +21813,7 @@ index 8051292..f150088 100644
            !hasUserMaxTokensOverride
          ) {
            maxTokensEscalated = true;
-@@ -3463,73 +3412,22 @@ export class GeminiChat {
+@@ -3463,73 +3373,22 @@ export class GeminiChat {
              // Signal UI/turn to clear pending (incomplete) tool calls.
              // isContinuation tells the UI to keep the text buffer so the
              // model's continuation appends to the previous partial output.
@@ -21089,7 +21888,7 @@ index 8051292..f150088 100644
              try {
                for await (const event of streamWithInvalidStreamRetries(
                  () => {
-@@ -3614,15 +3512,16 @@ export class GeminiChat {
+@@ -3614,15 +3473,16 @@ export class GeminiChat {
            // - Do NOT trigger fallback when persistent mode is active
            //   (QWEN_CODE_UNATTENDED_RETRY) — persistent mode retries the primary
            //   model indefinitely by design.
@@ -21109,7 +21908,7 @@ index 8051292..f150088 100644
              !isUnattendedMode() &&
              !streamYieldedAnyChunk
            ) {
-@@ -3897,19 +3796,24 @@ export class GeminiChat {
+@@ -3897,19 +3757,24 @@ export class GeminiChat {
            contents: requestContents,
            config: { ...this.generationConfig, ...params.config },
          },
@@ -21135,7 +21934,7 @@ index 8051292..f150088 100644
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -4393,13 +4297,13 @@ export class GeminiChat {
+@@ -4393,13 +4258,13 @@ export class GeminiChat {
  
    setTools(tools: Tool[]): void {
      this.generationConfig.tools = tools;
@@ -21150,7 +21949,7 @@ index 8051292..f150088 100644
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4441,12 +4345,14 @@ export class GeminiChat {
+@@ -4441,12 +4306,14 @@ export class GeminiChat {
    private async *processStreamResponse(
      model: string,
      streamResponse: AsyncGenerator<GenerateContentResponse>,
@@ -21165,7 +21964,45 @@ index 8051292..f150088 100644
      const rawToolCallIdsInCurrentTurn = new Set<string>();
      const reservedToolCallIds = new Map<string, string>();
      let usageMetadata: GenerateContentResponseUsageMetadata | undefined;
-@@ -4771,12 +4677,13 @@ export class GeminiChat {
+@@ -4605,16 +4472,12 @@ export class GeminiChat {
+           // so the compaction gate arithmetic stays well-defined; see
+           // `coerceUsageCount` for the failure modes this guards against.
+           const hasUsablePromptTokenCount =
+             typeof usageMetadata.promptTokenCount === 'number' &&
+             Number.isFinite(usageMetadata.promptTokenCount) &&
+             usageMetadata.promptTokenCount >= 0;
+-          const hasUsableTotalTokenCount =
+-            typeof usageMetadata.totalTokenCount === 'number' &&
+-            Number.isFinite(usageMetadata.totalTokenCount) &&
+-            usageMetadata.totalTokenCount >= 0;
+           const promptTokenCount = coerceUsageCount(
+             usageMetadata.promptTokenCount,
+             'promptTokenCount',
+           );
+           const totalTokenCount = coerceUsageCount(
+             usageMetadata.totalTokenCount,
+@@ -4646,20 +4509,12 @@ export class GeminiChat {
+             : totalTokenCount;
+           if (lastPromptTokenCount) {
+             // Always update the per-chat counter so this chat (including
+             // subagents) can make its own compaction decisions.
+             this.lastPromptTokenCount = lastPromptTokenCount;
+             this.lastPromptTokenCountIsEstimated = false;
+-            this.lastOutputTokenCount = hasUsablePromptTokenCount
+-              ? getUsageOutputTokenCountForPromptEstimate({
+-                  promptTokenCount,
+-                  ...(hasUsableTotalTokenCount ? { totalTokenCount } : {}),
+-                  candidatesTokenCount,
+-                  thoughtsTokenCount,
+-                })
+-              : 0;
+             // Mirror to the global telemetry only when wired — subagents
+             // pass `telemetryService=undefined` to keep their context usage
+             // out of the main session's UI counters.
+             this.telemetryService?.setLastPromptTokenCount(
+               lastPromptTokenCount,
+             );
+@@ -4771,12 +4626,13 @@ export class GeminiChat {
  
      // XML tool call fallback: some models (e.g. qwen3.8-max-preview in very
      // long contexts) occasionally emit tool calls as raw XML in the content
@@ -21179,7 +22016,7 @@ index 8051292..f150088 100644
        contentText &&
        containsXmlToolCalls(contentText)
      ) {
-@@ -4946,12 +4853,54 @@ export class GeminiChat {
+@@ -4946,12 +4802,54 @@ export class GeminiChat {
        contentText = consolidatedHistoryParts
          .filter((part) => part.text)
          .map((part) => part.text)
@@ -21234,7 +22071,7 @@ index 8051292..f150088 100644
      ) {
        const contextWindowSize =
          this.config.getContentGeneratorConfig()?.contextWindowSize;
-@@ -5108,12 +5057,21 @@ export class GeminiChat {
+@@ -5108,12 +5006,21 @@ export class GeminiChat {
        this.history.splice(len - 2, 2);
      }
    }
@@ -21400,7 +22237,7 @@ index 0ef4e79..139cb59 100644
      const request: ToolCallRequestInfo = {
        callId: 'call5',
 diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/packages/core/src/core/openaiContentGenerator/converter.test.ts
-index 9c65b85..e7f565c 100644
+index 9c65b85..261dbb3 100644
 --- a/packages/core/src/core/openaiContentGenerator/converter.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/converter.test.ts
 @@ -1991,13 +1991,96 @@ describe('OpenAIContentConverter', () => {
@@ -21677,7 +22514,386 @@ index 9c65b85..e7f565c 100644
            object: 'chat.completion',
            id: 'chatcmpl-usage',
            created: 123,
-@@ -6800,17 +6919,21 @@ describe('Truncated tool call detection in streaming', () => {
+@@ -3818,13 +3937,13 @@ describe('OpenAIContentConverter', () => {
+       ).toBe(false);
+       expect(
+         getGenAiUsageProvenance(zero.usageMetadata)?.cachedInputTokensReported,
+       ).toBe(true);
+     });
+ 
+-    it('estimates missing reasoning tokens from non-streaming content', () => {
++    it('leaves reasoning and cached counts absent when the provider served none', () => {
+       const response = converter.convertOpenAIResponseToGemini(
+         {
+           object: 'chat.completion',
+           id: 'chatcmpl-reasoning-usage',
+           created: 123,
+           model: 'test-model',
+@@ -3842,68 +3961,116 @@ describe('OpenAIContentConverter', () => {
+           ],
+           usage: { prompt_tokens: 1, completion_tokens: 10, total_tokens: 11 },
+         } as unknown as OpenAI.Chat.ChatCompletion,
+         requestContext,
+       );
+ 
+-      expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);
++      // Nothing is derived from the reasoning text: a count the provider did
++      // not serve is absent, never approximated.
++      expect(response.usageMetadata).toEqual({
++        promptTokenCount: 1,
++        candidatesTokenCount: 10,
++        totalTokenCount: 11,
++      });
+     });
+ 
+-    it('estimates missing reasoning tokens from non-streaming reasoning field', () => {
++    it('[served-usage] reports exactly the served non-streaming counts under exactTokenCounting=vllm', () => {
+       const response = converter.convertOpenAIResponseToGemini(
+         {
+           object: 'chat.completion',
+-          id: 'chatcmpl-reasoning-field-usage',
++          id: 'chatcmpl-served-usage',
+           created: 123,
+           model: 'test-model',
+           choices: [
+             {
+               index: 0,
+               message: {
+                 role: 'assistant',
+                 content: 'answer',
+-                reasoning: '先仔细想',
++                reasoning_content: '先仔细想',
+               },
+               finish_reason: 'stop',
+               logprobs: null,
+             },
+           ],
+-          usage: { prompt_tokens: 1, completion_tokens: 10, total_tokens: 11 },
++          usage: {
++            prompt_tokens: 7,
++            completion_tokens: 10,
++            total_tokens: 17,
++            prompt_tokens_details: { cached_tokens: 3 },
++            completion_tokens_details: { reasoning_tokens: 6 },
++          },
+         } as unknown as OpenAI.Chat.ChatCompletion,
+-        requestContext,
++        { ...requestContext, exactTokenCounting: true },
+       );
+ 
+-      expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);
++      expect(response.usageMetadata).toEqual({
++        promptTokenCount: 7,
++        candidatesTokenCount: 10,
++        totalTokenCount: 17,
++        cachedContentTokenCount: 3,
++        thoughtsTokenCount: 6,
++      });
++      expect(getGenAiUsageProvenance(response.usageMetadata)).toMatchObject({
++        cachedInputTokensReported: true,
++      });
+     });
+ 
+-    it('clamps estimated non-streaming reasoning tokens to completion tokens', () => {
+-      const response = converter.convertOpenAIResponseToGemini(
++    it.each([
++      [
++        'reasoning',
++        { prompt_tokens_details: { cached_tokens: 0 } },
++        'requires usage.completion_tokens_details.reasoning_tokens',
++      ],
++      [
++        'cached',
++        { completion_tokens_details: { reasoning_tokens: 4 } },
++        'requires usage.prompt_tokens_details.cached_tokens',
++      ],
++      [
++        'integer reasoning',
+         {
+-          object: 'chat.completion',
+-          id: 'chatcmpl-reasoning-clamped-usage',
+-          created: 123,
+-          model: 'test-model',
+-          choices: [
++          prompt_tokens_details: { cached_tokens: 0 },
++          completion_tokens_details: { reasoning_tokens: 4.5 },
++        },
++        'requires usage.completion_tokens_details.reasoning_tokens',
++      ],
++    ])(
++      '[served-usage] refuses a non-streaming usage without served %s tokens under exactTokenCounting=vllm',
++      (_name, details, message) => {
++        expect(() =>
++          converter.convertOpenAIResponseToGemini(
+             {
+-              index: 0,
+-              message: {
+-                role: 'assistant',
+-                content: 'answer',
+-                reasoning_content: '想'.repeat(10),
+-              },
+-              finish_reason: 'stop',
+-              logprobs: null,
+-            },
+-          ],
+-          usage: { prompt_tokens: 1, completion_tokens: 3, total_tokens: 4 },
+-        } as unknown as OpenAI.Chat.ChatCompletion,
+-        requestContext,
+-      );
+-
+-      expect(response.usageMetadata?.thoughtsTokenCount).toBe(3);
+-    });
++              object: 'chat.completion',
++              id: 'chatcmpl-unserved-usage',
++              created: 123,
++              model: 'test-model',
++              choices: [
++                {
++                  index: 0,
++                  message: {
++                    role: 'assistant',
++                    content: 'answer',
++                    reasoning_content: '先仔细想',
++                  },
++                  finish_reason: 'stop',
++                  logprobs: null,
++                },
++              ],
++              usage: {
++                prompt_tokens: 1,
++                completion_tokens: 10,
++                total_tokens: 11,
++                ...details,
++              },
++            } as unknown as OpenAI.Chat.ChatCompletion,
++            { ...requestContext, exactTokenCounting: true },
++          ),
++        ).toThrow(message);
++      },
++    );
+ 
+     it.each([0, 42])(
+       'preserves provider reasoning tokens for non-streaming content: %s',
+       (reasoningTokens) => {
+         const response = converter.convertOpenAIResponseToGemini(
+           {
+@@ -3938,13 +4105,13 @@ describe('OpenAIContentConverter', () => {
+         expect(response.usageMetadata?.thoughtsTokenCount).toBe(
+           reasoningTokens,
+         );
+       },
+     );
+ 
+-    it('estimates reasoning tokens past the streaming detection window', () => {
++    it('leaves streaming reasoning and cached counts absent when the provider served none', () => {
+       const context = withStreamParser();
+       const reasoningChunk = (id: string, reasoning_content: string) =>
+         ({
+           object: 'chat.completion.chunk',
+           id,
+           created: 123,
+@@ -3956,12 +4123,13 @@ describe('OpenAIContentConverter', () => {
+               finish_reason: null,
+               logprobs: null,
+             },
+           ],
+         }) as unknown as OpenAI.Chat.ChatCompletionChunk;
+ 
++      // Enough reasoning text that any text-derived count would be large.
+       converter.convertOpenAIChunkToGemini(
+         reasoningChunk('chunk-reasoning-1', '想'.repeat(1024)),
+         context,
+       );
+       converter.convertOpenAIChunkToGemini(
+         reasoningChunk('chunk-reasoning-2', '想'),
+@@ -3980,126 +4148,101 @@ describe('OpenAIContentConverter', () => {
+             total_tokens: 1201,
+           },
+         } as unknown as OpenAI.Chat.ChatCompletionChunk,
+         context,
+       );
+ 
+-      expect(response.usageMetadata?.thoughtsTokenCount).toBe(1128);
+-    });
+-
+-    it('estimates reasoning tokens for short streaming content', () => {
+-      const context = withStreamParser();
+-      const reasoningChunk = (id: string, reasoning_content: string) =>
+-        ({
+-          object: 'chat.completion.chunk',
+-          id,
+-          created: 123,
+-          model: 'test-model',
+-          choices: [
+-            {
+-              index: 0,
+-              delta: { reasoning_content },
+-              finish_reason: null,
+-              logprobs: null,
+-            },
+-          ],
+-        }) as unknown as OpenAI.Chat.ChatCompletionChunk;
+-
+-      converter.convertOpenAIChunkToGemini(
+-        reasoningChunk('chunk-short-reasoning-1', '先'),
+-        context,
+-      );
+-      converter.convertOpenAIChunkToGemini(
+-        reasoningChunk('chunk-short-reasoning-2', '仔细想'),
+-        context,
+-      );
+-      const response = converter.convertOpenAIChunkToGemini(
+-        {
+-          object: 'chat.completion.chunk',
+-          id: 'chunk-short-reasoning-usage',
+-          created: 123,
+-          model: 'test-model',
+-          choices: [],
+-          usage: { prompt_tokens: 1, completion_tokens: 10, total_tokens: 11 },
+-        } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-        context,
+-      );
+-
+-      expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);
+-    });
+-
+-    it('estimates normalized cumulative reasoning without a completion count', () => {
+-      const context = withStreamParser();
+-      for (const reasoning_content of ['先仔细想', '先仔细想再检查']) {
+-        converter.convertOpenAIChunkToGemini(
+-          {
+-            object: 'chat.completion.chunk',
+-            id: 'chunk-cumulative-reasoning',
+-            created: 123,
+-            model: 'test-model',
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { reasoning_content },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          context,
+-        );
+-      }
+-      const response = converter.convertOpenAIChunkToGemini(
+-        {
+-          object: 'chat.completion.chunk',
+-          id: 'chunk-cumulative-reasoning-usage',
+-          created: 123,
+-          model: 'test-model',
+-          choices: [],
+-          usage: { prompt_tokens: 1, completion_tokens: 0, total_tokens: 1 },
+-        } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-        context,
+-      );
+-
+-      expect(response.usageMetadata?.thoughtsTokenCount).toBe(8);
++      expect(response.usageMetadata).toEqual({
++        promptTokenCount: 1,
++        candidatesTokenCount: 1200,
++        totalTokenCount: 1201,
++      });
+     });
+ 
+-    it('clamps estimated streaming reasoning tokens to completion tokens', () => {
+-      const context = withStreamParser();
++    it('[served-usage] reports exactly the served streaming counts under exactTokenCounting=vllm', () => {
++      const context = { ...withStreamParser(), exactTokenCounting: true };
+       converter.convertOpenAIChunkToGemini(
+         {
+           object: 'chat.completion.chunk',
+-          id: 'chunk-clamped-reasoning',
++          id: 'chunk-served-reasoning',
+           created: 123,
+           model: 'test-model',
+           choices: [
+             {
+               index: 0,
+-              delta: { reasoning_content: '想'.repeat(10) },
++              delta: { reasoning_content: '先仔细想' },
+               finish_reason: null,
+               logprobs: null,
+             },
+           ],
+         } as unknown as OpenAI.Chat.ChatCompletionChunk,
+         context,
+       );
+       const response = converter.convertOpenAIChunkToGemini(
+         {
+           object: 'chat.completion.chunk',
+-          id: 'chunk-clamped-reasoning-usage',
++          id: 'chunk-served-usage',
+           created: 123,
+           model: 'test-model',
+           choices: [],
+-          usage: { prompt_tokens: 1, completion_tokens: 3, total_tokens: 4 },
++          usage: {
++            prompt_tokens: 7,
++            completion_tokens: 10,
++            total_tokens: 17,
++            prompt_tokens_details: { cached_tokens: 3 },
++            completion_tokens_details: { reasoning_tokens: 6 },
++          },
+         } as unknown as OpenAI.Chat.ChatCompletionChunk,
+         context,
+       );
+ 
+-      expect(response.usageMetadata?.thoughtsTokenCount).toBe(3);
++      expect(response.usageMetadata).toEqual({
++        promptTokenCount: 7,
++        candidatesTokenCount: 10,
++        totalTokenCount: 17,
++        cachedContentTokenCount: 3,
++        thoughtsTokenCount: 6,
++      });
+     });
+ 
++    it.each([
++      [
++        'reasoning',
++        { prompt_tokens_details: { cached_tokens: 0 } },
++        'requires usage.completion_tokens_details.reasoning_tokens',
++      ],
++      [
++        'cached',
++        { completion_tokens_details: { reasoning_tokens: 4 } },
++        'requires usage.prompt_tokens_details.cached_tokens',
++      ],
++    ])(
++      '[served-usage] refuses a streaming usage without served %s tokens under exactTokenCounting=vllm',
++      (_name, details, message) => {
++        const context = { ...withStreamParser(), exactTokenCounting: true };
++        expect(() =>
++          converter.convertOpenAIChunkToGemini(
++            {
++              object: 'chat.completion.chunk',
++              id: 'chunk-unserved-usage',
++              created: 123,
++              model: 'test-model',
++              choices: [],
++              usage: {
++                prompt_tokens: 1,
++                completion_tokens: 10,
++                total_tokens: 11,
++                ...details,
++              },
++            } as unknown as OpenAI.Chat.ChatCompletionChunk,
++            context,
++          ),
++        ).toThrow(message);
++      },
++    );
++
+     it.each([0, 42])(
+       'preserves provider reasoning tokens for streaming content: %s',
+       (reasoningTokens) => {
+         const context = withStreamParser();
+         converter.convertOpenAIChunkToGemini(
+           {
+@@ -6800,17 +6943,21 @@ describe('Truncated tool call detection in streaming', () => {
    let converter: typeof OpenAIContentConverter;
  
    beforeEach(() => {
@@ -21700,7 +22916,7 @@ index 9c65b85..e7f565c 100644
  
    /**
     * Helper: feed streaming chunks then a final chunk with finish_reason,
-@@ -6822,15 +6945,16 @@ describe('Truncated tool call detection in streaming', () => {
+@@ -6822,15 +6969,16 @@ describe('Truncated tool call detection in streaming', () => {
        index: number;
        id?: string;
        name?: string;
@@ -21718,7 +22934,7 @@ index 9c65b85..e7f565c 100644
        conv.convertOpenAIChunkToGemini(
          {
            object: 'chat.completion.chunk',
-@@ -7325,12 +7449,76 @@ describe('Truncated tool call detection in streaming', () => {
+@@ -7325,12 +7473,76 @@ describe('Truncated tool call detection in streaming', () => {
      expect(fnCall?.functionCall?.name).toBe('write_file');
      expect(fnCall?.functionCall?.args).toEqual({
        file_path: '/tmp/test.cpp',
@@ -21795,7 +23011,7 @@ index 9c65b85..e7f565c 100644
      const ctx = createStreamingRequestContext();
  
      // Chunk 1: start of JSON with tool metadata
-@@ -7494,30 +7682,25 @@ describe('modality filtering', () => {
+@@ -7494,30 +7706,25 @@ describe('modality filtering', () => {
      expect(parts).toHaveLength(1);
      expect(parts[0].type).toBe('text');
      expect(parts[0].text).toContain('image file');
@@ -21834,10 +23050,81 @@ index 9c65b85..e7f565c 100644
      const request = makeRequest([
        {
 diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packages/core/src/core/openaiContentGenerator/converter.ts
-index ffd8dfc..01455bc 100644
+index ffd8dfc..bf5ccf1 100644
 --- a/packages/core/src/core/openaiContentGenerator/converter.ts
 +++ b/packages/core/src/core/openaiContentGenerator/converter.ts
-@@ -879,12 +879,17 @@ function createMediaContentPart(
+@@ -19,17 +19,12 @@ import type {
+ } from '@google/genai';
+ import { GenerateContentResponse, FinishReason } from '@google/genai';
+ import type OpenAI from 'openai';
+ import { safeJsonParse } from '../../utils/safeJsonParse.js';
+ import { createDebugLogger } from '../../utils/debugLogger.js';
+ import { createOpenAIReasoningThoughtPart } from '../../utils/thoughtUtils.js';
+-import {
+-  estimateTextTokens,
+-  estimateTextTokenUnits,
+-  TOKEN_ESTIMATE_UNITS_PER_TOKEN,
+-} from '../../utils/request-tokenizer/textTokenizer.js';
+ import type { RequestContext, StreamingTextDeltaState } from './types.js';
+ import { parseTaggedThinkingText } from './taggedThinkingParser.js';
+ import {
+   convertSchema,
+   relaxSchemaForFunctionCalling,
+   type SchemaComplianceMode,
+@@ -50,12 +45,52 @@ const SPLIT_TOOL_MEDIA_TEXT = '(attached media from previous tool call)';
+  * Some models return cached_tokens at the top level instead of in prompt_tokens_details
+  */
+ interface ExtendedCompletionUsage extends OpenAI.CompletionUsage {
+   cached_tokens?: number;
+ }
+ 
++function isServedCount(value: unknown): value is number {
++  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
++}
++
++/**
++ * The served usage detail counts: the prompt tokens the backend reused from
++ * its prefix cache and the generated tokens it spent on reasoning. Both are
++ * read from the response and only from the response. Under
++ * `exactTokenCounting: 'vllm'` the pinned backend serves both on every usage
++ * it emits, so a usage without either is a protocol failure and the request
++ * fails closed; elsewhere a count a provider did not serve is left absent
++ * rather than approximated from the text.
++ */
++function readServedUsageDetails(
++  usage: OpenAI.CompletionUsage,
++  requestContext: RequestContext,
++  site: string,
++): { cachedTokens?: number; reasoningTokens?: number } {
++  const extendedUsage = usage as ExtendedCompletionUsage;
++  const cachedTokens =
++    usage.prompt_tokens_details?.cached_tokens ?? extendedUsage.cached_tokens;
++  const reasoningTokens = usage.completion_tokens_details?.reasoning_tokens;
++  if (requestContext.exactTokenCounting) {
++    if (!isServedCount(reasoningTokens)) {
++      throw new Error(
++        `${site}: exactTokenCounting=vllm requires usage.completion_tokens_details.reasoning_tokens on every served usage; received ${JSON.stringify(usage)}`,
++      );
++    }
++    if (!isServedCount(cachedTokens)) {
++      throw new Error(
++        `${site}: exactTokenCounting=vllm requires usage.prompt_tokens_details.cached_tokens on every served usage; received ${JSON.stringify(usage)}`,
++      );
++    }
++  }
++  return {
++    ...(typeof cachedTokens === 'number' ? { cachedTokens } : {}),
++    ...(typeof reasoningTokens === 'number' ? { reasoningTokens } : {}),
++  };
++}
++
+ export interface ExtendedChatCompletionAssistantMessageParam
+   extends OpenAI.Chat.ChatCompletionAssistantMessageParam {
+   reasoning_content?: string | null;
+ }
+ 
+ type ExtendedChatCompletionMessageParam =
+@@ -879,12 +914,17 @@ function createMediaContentPart(
          return unsupportedModalityPlaceholder(
            'image',
            displayName,
@@ -21855,7 +23142,7 @@ index ffd8dfc..01455bc 100644
          image_url: { url: dataUrl },
        };
      }
-@@ -960,16 +965,15 @@ function createMediaContentPart(
+@@ -960,16 +1000,15 @@ function createMediaContentPart(
          return unsupportedModalityPlaceholder(
            'image',
            filename,
@@ -21875,7 +23162,7 @@ index ffd8dfc..01455bc 100644
        if (!modalities.pdf) {
          return unsupportedModalityPlaceholder('pdf', filename, requestContext);
        }
-@@ -1233,19 +1237,64 @@ export function convertOpenAIResponseToGemini(
+@@ -1233,19 +1272,64 @@ export function convertOpenAIResponseToGemini(
        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
      }
  
@@ -21943,7 +23230,90 @@ index ffd8dfc..01455bc 100644
              functionCall: {
                id: toolCall.id,
                name: toolCall.function.name,
-@@ -1663,20 +1712,34 @@ export function convertOpenAIChunkToGemini(
+@@ -1285,54 +1369,38 @@ export function convertOpenAIResponseToGemini(
+   if (openaiResponse.usage) {
+     const usage = openaiResponse.usage;
+ 
+     const promptTokens = usage.prompt_tokens || 0;
+     const completionTokens = usage.completion_tokens || 0;
+     const totalTokens = usage.total_tokens || 0;
+-    // Support both formats: prompt_tokens_details.cached_tokens (OpenAI standard)
+-    // and cached_tokens (some models return it at top level)
+-    const extendedUsage = usage as ExtendedCompletionUsage;
+-    const cachedTokens =
+-      usage.prompt_tokens_details?.cached_tokens ??
+-      extendedUsage.cached_tokens ??
+-      0;
+-    const cachedInputTokensReported =
+-      typeof usage.prompt_tokens_details?.cached_tokens === 'number' ||
+-      typeof extendedUsage.cached_tokens === 'number';
+-    const providerReasoningTokens =
+-      usage.completion_tokens_details?.reasoning_tokens;
+-    let thinkingTokens = providerReasoningTokens;
+-    if (thinkingTokens == null) {
+-      const estimatedThinkingTokens = estimateTextTokens(reasoningText ?? '');
+-      thinkingTokens =
+-        completionTokens > 0
+-          ? Math.min(estimatedThinkingTokens, completionTokens)
+-          : estimatedThinkingTokens;
+-      if (thinkingTokens > 0) {
+-        debugLogger.debug(
+-          `convertOpenAIResponseToGemini: reasoning_tokens absent; estimated ${thinkingTokens} from text`,
+-        );
+-      }
+-    }
++    const served = readServedUsageDetails(
++      usage,
++      requestContext,
++      'convertOpenAIResponseToGemini',
++    );
+ 
+     const hasTokenBreakdown =
+       totalTokens === 0 || promptTokens !== 0 || completionTokens !== 0;
+ 
+     response.usageMetadata = {
+       ...(hasTokenBreakdown
+         ? {
+             promptTokenCount: promptTokens,
+             candidatesTokenCount: completionTokens,
+           }
+         : {}),
+       totalTokenCount: totalTokens,
+-      cachedContentTokenCount: cachedTokens,
+-      thoughtsTokenCount: thinkingTokens,
++      ...(served.cachedTokens !== undefined
++        ? { cachedContentTokenCount: served.cachedTokens }
++        : {}),
++      ...(served.reasoningTokens !== undefined
++        ? { thoughtsTokenCount: served.reasoningTokens }
++        : {}),
+     };
+     setGenAiUsageProvenance(response.usageMetadata, {
+-      cachedInputTokensReported,
++      cachedInputTokensReported: served.cachedTokens !== undefined,
+     });
+   }
+ 
+   return response;
+ }
+ 
+@@ -1418,15 +1486,12 @@ export function convertOpenAIChunkToGemini(
+       });
+       const normalizedReasoningText = normalizeStreamingTextDelta(
+         reasoningText,
+         reasoningDeltaState,
+       );
+       if (normalizedReasoningText) {
+-        reasoningDeltaState.emittedTokenUnits =
+-          (reasoningDeltaState.emittedTokenUnits ?? 0) +
+-          estimateTextTokenUnits(normalizedReasoningText);
+         requestContext.hasStructuredReasoningContent = true;
+         if (THINKING_TAG_PATTERN.test(normalizedReasoningText)) {
+           requestContext.hasThinkingTagInReasoning = true;
+         }
+       }
+       if (
+@@ -1663,20 +1728,34 @@ export function convertOpenAIChunkToGemini(
      }
      if (leakedThinkingTag) {
        throwProtocolTagLeak(requestContext);
@@ -21981,7 +23351,7 @@ index ffd8dfc..01455bc 100644
      ) {
        if (
          requestContext.hasThinkingTagInReasoning === true ||
-@@ -1694,15 +1757,30 @@ export function convertOpenAIChunkToGemini(
+@@ -1694,15 +1773,30 @@ export function convertOpenAIChunkToGemini(
          toolCallCount: completedToolCalls.length,
        };
        requestContext.pendingThinkingTagCandidate = undefined;
@@ -22014,6 +23384,73 @@ index ffd8dfc..01455bc 100644
        requestContext.pendingUntrustedResponseParts = undefined;
        throw new InvalidStreamError(
          'Model response contained a malformed tool call.',
+@@ -1778,55 +1872,38 @@ export function convertOpenAIChunkToGemini(
+   if (chunk.usage) {
+     const usage = chunk.usage;
+ 
+     const promptTokens = usage.prompt_tokens || 0;
+     const completionTokens = usage.completion_tokens || 0;
+     const totalTokens = usage.total_tokens || 0;
+-    const providerReasoningTokens =
+-      usage.completion_tokens_details?.reasoning_tokens;
+-    const estimatedThinkingTokens = Math.ceil(
+-      (requestContext.reasoningDeltaState?.emittedTokenUnits ?? 0) /
+-        TOKEN_ESTIMATE_UNITS_PER_TOKEN,
++    const served = readServedUsageDetails(
++      usage,
++      requestContext,
++      'convertOpenAIChunkToGemini',
+     );
+-    const thinkingTokens =
+-      providerReasoningTokens ??
+-      (completionTokens > 0
+-        ? Math.min(estimatedThinkingTokens, completionTokens)
+-        : estimatedThinkingTokens);
+-    if (providerReasoningTokens == null && estimatedThinkingTokens > 0) {
+-      debugLogger.debug(
+-        `convertOpenAIChunkToGemini: reasoning_tokens absent; estimated ${thinkingTokens} from streamed text`,
+-      );
+-    }
+-    // Support both formats: prompt_tokens_details.cached_tokens (OpenAI standard)
+-    // and cached_tokens (some models return it at top level)
+-    const extendedUsage = usage as ExtendedCompletionUsage;
+-    const cachedTokens =
+-      usage.prompt_tokens_details?.cached_tokens ??
+-      extendedUsage.cached_tokens ??
+-      0;
+-    const cachedInputTokensReported =
+-      typeof usage.prompt_tokens_details?.cached_tokens === 'number' ||
+-      typeof extendedUsage.cached_tokens === 'number';
+ 
+     const hasTokenBreakdown =
+       totalTokens === 0 || promptTokens !== 0 || completionTokens !== 0;
+ 
+     response.usageMetadata = {
+       ...(hasTokenBreakdown
+         ? {
+             promptTokenCount: promptTokens,
+             candidatesTokenCount: completionTokens,
+           }
+         : {}),
+-      thoughtsTokenCount: thinkingTokens,
+       totalTokenCount: totalTokens,
+-      cachedContentTokenCount: cachedTokens,
++      ...(served.cachedTokens !== undefined
++        ? { cachedContentTokenCount: served.cachedTokens }
++        : {}),
++      ...(served.reasoningTokens !== undefined
++        ? { thoughtsTokenCount: served.reasoningTokens }
++        : {}),
+     };
+     setGenAiUsageProvenance(response.usageMetadata, {
+-      cachedInputTokensReported,
++      cachedInputTokensReported: served.cachedTokens !== undefined,
+     });
+   }
+ 
+   if (preparations.length > 0) {
+     setToolCallPreparations(response, preparations);
+   }
 diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
 index f4166d4..c5ee9a3 100644
 --- a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
@@ -22206,7 +23643,7 @@ index 0000000..9e8125a
 +  });
 +});
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-index a7aaf90..c482fdb 100644
+index a7aaf90..0d283e1 100644
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 @@ -8,12 +8,13 @@ import type OpenAI from 'openai';
@@ -22380,7 +23817,7 @@ index a7aaf90..c482fdb 100644
        userPromptId,
      );
      if (
-@@ -1417,12 +1536,13 @@ export class ContentGenerationPipeline {
+@@ -1417,12 +1536,15 @@ export class ContentGenerationPipeline {
          : undefined;
  
      return {
@@ -22388,6 +23825,8 @@ index a7aaf90..c482fdb 100644
        modalities: this.contentGeneratorConfig.modalities ?? {},
        startTime: Date.now(),
 +      strictToolCalling: this.contentGeneratorConfig.strictToolCalling === true,
++      exactTokenCounting:
++        this.contentGeneratorConfig.exactTokenCounting === 'vllm',
        splitToolMedia:
          providerOverrides.splitToolMedia ??
          this.contentGeneratorConfig.splitToolMedia ??
@@ -22395,10 +23834,19 @@ index a7aaf90..c482fdb 100644
          // `role: "tool"` messages, so tool-returned media (e.g. an image read
          // by read_file) embedded there is silently dropped or rejected by
 diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/core/src/core/openaiContentGenerator/types.ts
-index 134ecd7..1cc33ff 100644
+index 134ecd7..c196ce4 100644
 --- a/packages/core/src/core/openaiContentGenerator/types.ts
 +++ b/packages/core/src/core/openaiContentGenerator/types.ts
-@@ -40,12 +40,13 @@ export interface StreamingTextDeltaState {
+@@ -31,21 +31,28 @@ export interface StreamingTextDeltaState {
+    * the correct suffix when an incremental-then-cumulative hybrid stream
+    * transitions into cumulative mode after the cap (otherwise the suffix would
+    * re-include bytes between the cap and the true emitted length, producing
+    * visible duplication).
+    */
+   emittedLength: number;
+-  /** Integer token-estimate units accumulated from normalized emitted text. */
+-  emittedTokenUnits?: number;
+   cumulativeMode: boolean;
  }
  
  export interface RequestContext {
@@ -22406,6 +23854,14 @@ index 134ecd7..1cc33ff 100644
    modalities: InputModalities;
    startTime: number;
 +  strictToolCalling?: boolean;
++  /**
++   * True when the active model is configured with `exactTokenCounting: 'vllm'`.
++   * Every usage the backend then serves carries
++   * `completion_tokens_details.reasoning_tokens` and
++   * `prompt_tokens_details.cached_tokens`, so a usage without either is a
++   * protocol failure rather than a value to approximate.
++   */
++  exactTokenCounting?: boolean;
    toolCallParser?: StreamingToolCallParser;
    responseParsingOptions?: OpenAIResponseParsingOptions;
    taggedThinkingParser?: TaggedThinkingParser;
@@ -22413,7 +23869,7 @@ index 134ecd7..1cc33ff 100644
    // user message for strict OpenAI-compat servers. See ContentGeneratorConfig
    // for details.
 diff --git a/packages/core/src/core/prompts.test.ts b/packages/core/src/core/prompts.test.ts
-index b91a8f4..83d6c72 100644
+index b91a8f4..846d698 100644
 --- a/packages/core/src/core/prompts.test.ts
 +++ b/packages/core/src/core/prompts.test.ts
 @@ -1018,41 +1018,64 @@ describe('New Applications workflow deferred to skill', () => {
@@ -22501,7 +23957,7 @@ index b91a8f4..83d6c72 100644
      // the prompt. Keeping it out of the prompt saves output tokens per
      // compaction and prevents wording drift.
 diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.ts
-index 72d1aa5..6de1739 100644
+index 72d1aa5..37317eb 100644
 --- a/packages/core/src/core/prompts.ts
 +++ b/packages/core/src/core/prompts.ts
 @@ -11,12 +11,16 @@ import { ToolNames } from '../tools/tool-names.js';
@@ -22584,24 +24040,24 @@ index 72d1aa5..6de1739 100644
 +This applies above all to what the user asked for: the original request, every instruction, every constraint, and every stated preference survive every compaction, restated in full each time, in the user's own words where the wording carries intent. A snapshot that forgets the task because a previous snapshot remembered it has destroyed the session.
 +
 +Use your native hidden reasoning to walk the conversation chronologically and reconcile it into current state: what was asked, what the environment turned out to be, what was completed and how it was verified, what failed and what that taught, and precisely where work stands. Do not place reasoning or an <analysis> block in the final response.
-+
-+Then write exactly one <state_snapshot> XML document in the final channel, and nothing else.
  
 -    <key_technical_concepts>
 -        <!-- List all important technical concepts, technologies, and frameworks discussed. -->
 -    </key_technical_concepts>
-+Two properties, both mandatory:
-+- DENSE: facts, not narrative. Never recount the conversation ("then I read X, then I ran Y"); state what is now known or done.
-+- NO DUPLICATION: each fact appears exactly once, in the one section defined for it. The sections are disjoint; nothing is repeated for emphasis.
++Then write exactly one <state_snapshot> XML document in the final channel, and nothing else.
  
 -    <files_and_code_sections>
 -        <!-- Enumerate specific files and code sections examined, modified, or created. Pay special attention to the most recent messages. Include full code snippets where applicable, and a summary of why this file read or edit is important. -->
 -    </files_and_code_sections>
-+Never copy file contents the resuming agent can re-read from disk. Refer to code as path:line (or path:function) plus one line on why it matters. Reproduce verbatim only what exists nowhere on disk: key error lines, command output, user phrasing where exact wording carries intent, and content that was deleted or overwritten.
++Two properties, both mandatory:
++- DENSE: facts, not narrative. Never recount the conversation ("then I read X, then I ran Y"); state what is now known or done.
++- NO DUPLICATION: each fact appears exactly once, in the one section defined for it. The sections are disjoint; nothing is repeated for emphasis.
  
 -    <errors_and_fixes>
 -        <!-- List every error encountered and how it was fixed. Include the verbatim error message when it was quoted to the agent. Pay special attention to specific user feedback on the error, especially if the user told you to do something differently. -->
 -    </errors_and_fixes>
++Never copy file contents the resuming agent can re-read from disk. Refer to code as path:line (or path:function) plus one line on why it matters. Reproduce verbatim only what exists nowhere on disk: key error lines, command output, user phrasing where exact wording carries intent, and content that was deleted or overwritten.
++
 +<state_snapshot>
 +    <intent>
 +        <!-- The task: what was asked, by whom it is judged done, and every explicit constraint on how. Quote the user's exact phrasing where wording carries intent. Record each later user correction or redirect, in order — shifting intent is the one thing no file on disk records. Holds only what is WANTED; progress toward it lives elsewhere. -->
@@ -23404,7 +24860,7 @@ index 65277a5..810575c 100644
      sendMessageStream: typeof mockSendMessageStream;
      getHistory: typeof mockGetHistory;
 diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
-index d2801d0..8d65315 100644
+index d2801d0..c0acea2 100644
 --- a/packages/core/src/core/turn.ts
 +++ b/packages/core/src/core/turn.ts
 @@ -77,12 +77,21 @@ export enum GeminiEventType {
@@ -23471,7 +24927,7 @@ index d2801d0..8d65315 100644
     * Original tool-call id emitted by the provider/model. When present, this is
     * the idempotency key for suppressing duplicate provider tool calls.
     */
-@@ -345,51 +383,140 @@ export enum CompressionStatus {
+@@ -345,51 +383,146 @@ export enum CompressionStatus {
    COMPRESSION_FAILED_EMPTY_SUMMARY,
  
    /** The compression was not necessary and no action was taken */
@@ -23529,6 +24985,12 @@ index d2801d0..8d65315 100644
 +  outputTokens: number;
 +  /** Of those, the ones spent in the hidden reasoning channel. */
 +  thinkingTokens: number;
++  /**
++   * The reasoning the attempt emitted, verbatim, so a budget spent on
++   * thinking can be read rather than only counted. It is never fed back to
++   * the model.
++   */
++  reasoning: string;
 +  /**
 +   * Characters of usable summary the attempt yielded. Zero alongside a large
 +   * `thinkingTokens` is the exact signature of reasoning consuming a
@@ -23616,7 +25078,7 @@ index d2801d0..8d65315 100644
  
  export type ServerGeminiSessionTokenLimitExceededEvent = {
    type: GeminiEventType.SessionTokenLimitExceeded;
-@@ -450,12 +577,13 @@ export type ServerGeminiGoalStateEvent = {
+@@ -450,12 +583,13 @@ export type ServerGeminiGoalStateEvent = {
  };
  
  // The original union type, now composed of the individual types
@@ -23630,7 +25092,7 @@ index d2801d0..8d65315 100644
    | ServerGeminiErrorEvent
    | ServerGeminiFinishedEvent
    | ServerGeminiHookSystemMessageEvent
-@@ -578,12 +706,27 @@ export class Turn {
+@@ -578,12 +712,27 @@ export class Turn {
              statusCode: streamEvent.info.statusCode,
              fallbackIndex: streamEvent.info.fallbackIndex,
            };
@@ -24148,10 +25610,10 @@ index 8e53833..bfc063a 100644
      }
  
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
-index 59b9c51..8bc51e9 100644
+index 59b9c51..b8d6c5d 100644
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,793 @@
+@@ -1,4405 +1,817 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -24239,11 +25701,14 @@ index 59b9c51..8bc51e9 100644
 +): GenerateTextResult {
 +  return {
 +    text: snapshot(),
++    thoughtText: '',
 +    finishReason: FinishReason.STOP,
 +    hadToolCall: false,
 +    usage: {
 +      promptTokenCount: 220_000,
 +      candidatesTokenCount: 2_000,
++      thoughtsTokenCount: 0,
++      cachedContentTokenCount: 0,
 +      totalTokenCount: 222_000,
 +    },
 +    ...overrides,
@@ -25419,11 +26884,13 @@ index 59b9c51..8bc51e9 100644
 +    harness.generateText.mockResolvedValueOnce(
 +      summaryResult({
 +        text: '',
++        thoughtText: 'Let me first list every file the user touched...',
 +        finishReason: FinishReason.MAX_TOKENS,
 +        usage: {
 +          promptTokenCount: 233_926,
 +          candidatesTokenCount: 19_900,
 +          thoughtsTokenCount: 19_900,
++          cachedContentTokenCount: 233_926,
 +          totalTokenCount: 253_826,
 +        },
 +      }),
@@ -25459,6 +26926,7 @@ index 59b9c51..8bc51e9 100644
 +      maxOutputTokens: WINDOW - 195_000,
 +      outputTokens: 19_900,
 +      thinkingTokens: 19_900,
++      reasoning: 'Let me first list every file the user touched...',
 +      summaryChars: 0,
 +      finishReason: FinishReason.MAX_TOKENS,
      });
@@ -25489,11 +26957,11 @@ index 59b9c51..8bc51e9 100644
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateText,
 -    } as unknown as BaseLlmClient);
-+  it('[compaction-event] leaves the accounting null when no generation ran', async () => {
++  it('[compaction-event] fails closed when the summary generation served no usage', async () => {
 +    const harness = makeHarness();
-+    harness.countSideQuery
-+      .mockReset()
-+      .mockRejectedValueOnce(new Error('tokenizer down'));
++    harness.generateText.mockResolvedValueOnce(
++      summaryResult({ usage: undefined }),
++    );
  
 -    await service.compress(mockChat, {
 -      promptId: mockPromptId,
@@ -25509,12 +26977,13 @@ index 59b9c51..8bc51e9 100644
 -      expect.objectContaining({
 -        abortSignal: abortController.signal,
 -      }),
++    // A generation without served usage cannot be accounted for, and no
++    // count is invented in its place: the attempt is refused as a protocol
++    // failure and the history is preserved.
++    expect(result.newHistory).toBeNull();
 +    expect(result.info.compressionStatus).toBe(
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
      );
-+    expect(harness.generateText).not.toHaveBeenCalled();
-+    // No attempt, no accounting to invent: a refusal before generation and a
-+    // generation that produced nothing must stay distinguishable.
 +    expect(result.info.output).toBeUndefined();
    });
  
@@ -25537,6 +27006,65 @@ index 59b9c51..8bc51e9 100644
 -    vi.mocked(mockChat.getHistory).mockReturnValue(history);
 -    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
 -    vi.mocked(tokenLimit).mockReturnValue(1000);
+-
+-    const mockGenerateText = vi.fn().mockResolvedValue({
+-      text: 'Summary',
+-      usage: {
+-        promptTokenCount: 200,
+-        candidatesTokenCount: 50,
+-        totalTokenCount: 250,
+-      },
+-    });
+-    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
+-      generateText: mockGenerateText,
+-    } as unknown as BaseLlmClient);
++  it('[compaction-event] leaves the accounting null when no generation ran', async () => {
++    const harness = makeHarness();
++    harness.countSideQuery
++      .mockReset()
++      .mockRejectedValueOnce(new Error('tokenizer down'));
+ 
+-    await service.compress(mockChat, {
+-      promptId: mockPromptId,
+-      force: true,
+-      config: mockConfig,
+-      consecutiveFailures: 0,
+-      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
+-    });
++    const result = await compress(harness);
+ 
+-    // Inspect the actual contents passed to the summary model.
+-    const call = mockGenerateText.mock.calls[0]?.[0] as { contents: Content[] };
+-    expect(call).toBeDefined();
+-    const serialized = JSON.stringify(call.contents);
+-    // No base64 image bytes leaked through.
+-    expect(serialized).not.toContain('AAAAAAAA');
+-    // Placeholder is present.
+-    expect(serialized).toContain('[image: image/png]');
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(harness.generateText).not.toHaveBeenCalled();
++    // No attempt, no accounting to invent: a refusal before generation and a
++    // generation that produced nothing must stay distinguishable.
++    expect(result.info.output).toBeUndefined();
+   });
+ 
+-  it('passes getCompactionModel to runSideQuery for compression', async () => {
+-    // Compression passes config.getCompactionModel?.() to runSideQuery so it uses
+-    // the compaction model (falls back to the main model) instead of
+-    // the expensive main model, reducing cost. See https://github.com/QwenLM/qwen-code/issues/5956
+-    const history: Content[] = [
+-      { role: 'user', parts: [{ text: 'msg1' }] },
+-      { role: 'model', parts: [{ text: 'msg2' }] },
+-      { role: 'user', parts: [{ text: 'msg3' }] },
+-      { role: 'model', parts: [{ text: 'msg4' }] },
+-    ];
+-    vi.mocked(mockChat.getHistory).mockReturnValue(history);
+-    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
+-    vi.mocked(tokenLimit).mockReturnValue(1000);
+-    vi.mocked(mockConfig.getCompactionModel).mockReturnValue(
+-      'compaction-model-v1',
 +  it('fails closed instead of fabricating history when composition fails', async () => {
 +    const harness = makeHarness();
 +    vi.mocked(attachments.composePostCompactHistory).mockRejectedValueOnce(
@@ -25546,16 +27074,16 @@ index 59b9c51..8bc51e9 100644
 +    expect(result.newHistory).toBeNull();
 +    expect(result.info.compressionStatus).toBe(
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
+     );
 +    expect(harness.countCandidate).toHaveBeenCalledTimes(1);
 +  });
  
 -    const mockGenerateText = vi.fn().mockResolvedValue({
 -      text: 'Summary',
 -      usage: {
--        promptTokenCount: 200,
+-        promptTokenCount: 1100,
 -        candidatesTokenCount: 50,
--        totalTokenCount: 250,
+-        totalTokenCount: 1150,
 -      },
 -    });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
@@ -25587,68 +27115,6 @@ index 59b9c51..8bc51e9 100644
 +      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
 +    );
  
--    // Inspect the actual contents passed to the summary model.
--    const call = mockGenerateText.mock.calls[0]?.[0] as { contents: Content[] };
--    expect(call).toBeDefined();
--    const serialized = JSON.stringify(call.contents);
--    // No base64 image bytes leaked through.
--    expect(serialized).not.toContain('AAAAAAAA');
--    // Placeholder is present.
--    expect(serialized).toContain('[image: image/png]');
-+    const noRoom = makeHarness();
-+    noRoom.countCandidate
-+      .mockReset()
-+      .mockResolvedValueOnce({ totalTokens: 250_000, maxModelLen: WINDOW })
-+      .mockResolvedValueOnce({ totalTokens: 245_000, maxModelLen: WINDOW });
-+    expect((await compress(noRoom)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
-+    );
-   });
- 
--  it('passes getCompactionModel to runSideQuery for compression', async () => {
--    // Compression passes config.getCompactionModel?.() to runSideQuery so it uses
--    // the compaction model (falls back to the main model) instead of
--    // the expensive main model, reducing cost. See https://github.com/QwenLM/qwen-code/issues/5956
--    const history: Content[] = [
--      { role: 'user', parts: [{ text: 'msg1' }] },
--      { role: 'model', parts: [{ text: 'msg2' }] },
--      { role: 'user', parts: [{ text: 'msg3' }] },
--      { role: 'model', parts: [{ text: 'msg4' }] },
--    ];
--    vi.mocked(mockChat.getHistory).mockReturnValue(history);
--    vi.mocked(uiTelemetryService.getLastPromptTokenCount).mockReturnValue(100);
--    vi.mocked(tokenLimit).mockReturnValue(1000);
--    vi.mocked(mockConfig.getCompactionModel).mockReturnValue(
--      'compaction-model-v1',
-+  it('fails closed on pre- and post-compaction hook errors', async () => {
-+    const pre = makeHarness();
-+    pre.setHookSystem(true);
-+    pre.firePreCompactEvent.mockRejectedValueOnce(new Error('pre hook failed'));
-+    expect((await compress(pre)).info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-     );
-+    expect(pre.generateText).not.toHaveBeenCalled();
- 
--    const mockGenerateText = vi.fn().mockResolvedValue({
--      text: 'Summary',
--      usage: {
--        promptTokenCount: 1100,
--        candidatesTokenCount: 50,
--        totalTokenCount: 1150,
--      },
--    });
--    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
--      generateText: mockGenerateText,
--    } as unknown as BaseLlmClient);
--
--    await service.compress(mockChat, {
--      promptId: mockPromptId,
--      force: true,
--      config: mockConfig,
--      consecutiveFailures: 0,
--      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
--    });
--
 -    // Thinking is intentionally disabled (per-provider budget semantics are
 -    // inconsistent) and the output is hard-capped by COMPACT_MAX_OUTPUT_TOKENS
 -    // so subsequent threshold math has a predictable reserve. maxAttempts=1
@@ -25663,15 +27129,13 @@ index 59b9c51..8bc51e9 100644
 -          maxOutputTokens: 20_000,
 -        }),
 -      }),
-+    const post = makeHarness();
-+    post.setHookSystem(true);
-+    post.firePostCompactEvent.mockRejectedValueOnce(
-+      new Error('post hook failed'),
-+    );
-+    const result = await compress(post);
-+    expect(result.newHistory).toBeNull();
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    const noRoom = makeHarness();
++    noRoom.countCandidate
++      .mockReset()
++      .mockResolvedValueOnce({ totalTokens: 250_000, maxModelLen: WINDOW })
++      .mockResolvedValueOnce({ totalTokens: 245_000, maxModelLen: WINDOW });
++    expect((await compress(noRoom)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
      );
    });
  
@@ -25696,16 +27160,7 @@ index 59b9c51..8bc51e9 100644
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 1150,
 -      },
-+  it('fires hooks in order and gives PostCompact the committed summary body', async () => {
-+    const harness = makeHarness();
-+    harness.setHookSystem(true);
-+    const order: string[] = [];
-+    harness.firePreCompactEvent.mockImplementation(async () => {
-+      order.push('pre');
-+      return {
-+        getAdditionalContext: () => 'Retain exact file paths.',
-+      };
-     });
+-    });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateText,
 -    } as unknown as BaseLlmClient);
@@ -25716,26 +27171,29 @@ index 59b9c51..8bc51e9 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
-+    harness.firePostCompactEvent.mockImplementation(async () => {
-+      order.push('post');
-     });
--
+-    });
++  it('fails closed on pre- and post-compaction hook errors', async () => {
++    const pre = makeHarness();
++    pre.setHookSystem(true);
++    pre.firePreCompactEvent.mockRejectedValueOnce(new Error('pre hook failed'));
++    expect((await compress(pre)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(pre.generateText).not.toHaveBeenCalled();
+ 
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        model: 'test-model',
 -      }),
-+    await compress(harness, { customInstructions: 'Retain user intent.' });
-+    expect(order).toEqual(['pre', 'post']);
-+    expect(harness.firePostCompactEvent).toHaveBeenCalledWith(
-+      'manual',
-+      snapshot(),
-+      undefined,
++    const post = makeHarness();
++    post.setHookSystem(true);
++    post.firePostCompactEvent.mockRejectedValueOnce(
++      new Error('post hook failed'),
 +    );
-+    const generated = harness.generateText.mock
-+      .calls[0]![0] as GenerateTextOptions;
-+    const directive = generated.contents.at(-1)?.parts?.[0]?.text ?? '';
-+    expect(directive.indexOf('Retain user intent.')).toBeLessThan(
-+      directive.indexOf('Retain exact file paths.'),
++    const result = await compress(post);
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
      );
    });
  
@@ -25761,7 +27219,16 @@ index 59b9c51..8bc51e9 100644
 -        candidatesTokenCount: 50,
 -        totalTokenCount: 1150,
 -      },
--    });
++  it('fires hooks in order and gives PostCompact the committed summary body', async () => {
++    const harness = makeHarness();
++    harness.setHookSystem(true);
++    const order: string[] = [];
++    harness.firePreCompactEvent.mockImplementation(async () => {
++      order.push('pre');
++      return {
++        getAdditionalContext: () => 'Retain exact file paths.',
++      };
+     });
 -    vi.mocked(mockConfig.getBaseLlmClient).mockReturnValue({
 -      generateText: mockGenerateText,
 -    } as unknown as BaseLlmClient);
@@ -25772,39 +27239,31 @@ index 59b9c51..8bc51e9 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: 100,
-+  it('propagates cancellation and does not convert it into a fallback status', async () => {
-+    const harness = makeHarness();
-+    const controller = new AbortController();
-+    harness.generateText.mockImplementationOnce(async () => {
-+      controller.abort();
-+      throw new DOMException('cancelled', 'AbortError');
++    harness.firePostCompactEvent.mockImplementation(async () => {
++      order.push('post');
      });
 -
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        model: 'test-model',
-+    await expect(
-+      compress(harness, { signal: controller.signal }),
-+    ).rejects.toThrow();
-+    expect(harness.generateText).toHaveBeenCalledTimes(1);
-+  });
-+
-+  it('discards a truncated response even when its text parses as a complete snapshot', async () => {
-+    // Truncation can land after the closing tag (inside trailing whitespace
-+    // or a dropped epilogue), so superficial completeness proves nothing.
-+    // The finishReason check must dominate content validation or a clipped
-+    // memory gets committed as if whole.
-+    const harness = makeHarness();
-+    harness.generateText.mockResolvedValueOnce(
-+      summaryResult({
-+        text: snapshot('looks complete'),
-+        finishReason: FinishReason.MAX_TOKENS,
-       }),
+-      }),
++    await compress(harness, { customInstructions: 'Retain user intent.' });
++    expect(order).toEqual(['pre', 'post']);
++    expect(harness.firePostCompactEvent).toHaveBeenCalledWith(
++      'manual',
++      snapshot(),
++      undefined,
++    );
++    const generated = harness.generateText.mock
++      .calls[0]![0] as GenerateTextOptions;
++    const directive = generated.contents.at(-1)?.parts?.[0]?.text ?? '';
++    expect(directive.indexOf('Retain user intent.')).toBeLessThan(
++      directive.indexOf('Retain exact file paths.'),
      );
 -    expect(result.info.warning).toBeDefined();
 -    expect(result.info.warning).toContain('too small');
--  });
--
+   });
+ 
 -  it('uses the compaction model when its context window is large enough', async () => {
 -    const history: Content[] = [
 -      { role: 'user', parts: [{ text: 'msg1' }] },
@@ -25924,13 +27383,35 @@ index 59b9c51..8bc51e9 100644
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: 100,
--    });
++  it('propagates cancellation and does not convert it into a fallback status', async () => {
++    const harness = makeHarness();
++    const controller = new AbortController();
++    harness.generateText.mockImplementationOnce(async () => {
++      controller.abort();
++      throw new DOMException('cancelled', 'AbortError');
+     });
 -
 -    expect(mockGenerateText).toHaveBeenCalledWith(
 -      expect.objectContaining({
 -        model: 'test-model',
--      }),
--    );
++    await expect(
++      compress(harness, { signal: controller.signal }),
++    ).rejects.toThrow();
++    expect(harness.generateText).toHaveBeenCalledTimes(1);
++  });
++
++  it('discards a truncated response even when its text parses as a complete snapshot', async () => {
++    // Truncation can land after the closing tag (inside trailing whitespace
++    // or a dropped epilogue), so superficial completeness proves nothing.
++    // The finishReason check must dominate content validation or a clipped
++    // memory gets committed as if whole.
++    const harness = makeHarness();
++    harness.generateText.mockResolvedValueOnce(
++      summaryResult({
++        text: snapshot('looks complete'),
++        finishReason: FinishReason.MAX_TOKENS,
+       }),
+     );
 -    // No warning — guard was skipped for the main model
 -    expect(result.info.warning).toBeUndefined();
 -  });
@@ -29246,15 +30727,22 @@ index 59b9c51..8bc51e9 100644
    });
  });
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
-index 9a37b9b..4020c0f 100644
+index 9a37b9b..8fb6d90 100644
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
-@@ -6,127 +6,43 @@
+@@ -4,129 +4,49 @@
+  * SPDX-License-Identifier: Apache-2.0
+  */
  
  import type { Content, GenerateContentConfig } from '@google/genai';
  import type { Config } from '../config/config.js';
  import { ApprovalMode } from '../config/config.js';
- import type { GenerateTextResult } from '../core/baseLlmClient.js';
+-import type { GenerateTextResult } from '../core/baseLlmClient.js';
++import {
++  requireServedUsage,
++  type GenerateTextResult,
++  type ServedUsage,
++} from '../core/baseLlmClient.js';
  import { AuthType } from '../core/contentGenerator.js';
 +import {
 +  FinishReason,
@@ -29386,7 +30874,7 @@ index 9a37b9b..4020c0f 100644
   * into the side-query system prompt. The user-supplied `/compress` text is
   * already capped at `MAX_COMPRESS_INSTRUCTIONS_CHARS` (2000) in
   * compressCommand.ts for exactly this reason — the side-query has no
-@@ -134,121 +50,40 @@ function estimateSummaryOutputTokens(
+@@ -134,121 +54,40 @@ function estimateSummaryOutputTokens(
   * prompt and trigger a PTL the compaction path can't recover from. Hooks
   * may legitimately concatenate context across several scripts, so this cap
   * is set higher than the user-text cap.
@@ -29516,7 +31004,7 @@ index 9a37b9b..4020c0f 100644
    requestGenerationConfig?: GenerateContentConfig;
    /**
     * User-supplied focus directives passed to the compression side-query.
-@@ -350,95 +185,94 @@ function hasStateSnapshot(summary: string): boolean {
+@@ -350,95 +189,94 @@ function hasStateSnapshot(summary: string): boolean {
  
  export class ChatCompressionService {
    async compress(
@@ -29661,7 +31149,7 @@ index 9a37b9b..4020c0f 100644
              info: {
                originalTokenCount,
                newTokenCount: originalTokenCount,
-@@ -448,29 +282,12 @@ export class ChatCompressionService {
+@@ -448,29 +286,12 @@ export class ChatCompressionService {
          }
          // Below the token threshold but the screenshot trigger fired.
          triggerReason = 'image_overflow';
@@ -29691,7 +31179,7 @@ index 9a37b9b..4020c0f 100644
      // composePostCompactHistory below (summary + model ack + recent
      // file restores + recent image restore).
  
-@@ -517,611 +334,465 @@ export class ChatCompressionService {
+@@ -517,611 +338,469 @@ export class ChatCompressionService {
            // side-query prompt past a recoverable size.
            hookExtraInstructions = merged
              .trim()
@@ -30057,6 +31545,7 @@ index 9a37b9b..4020c0f 100644
 +    let summaryRequestTokenCount: number;
 +    let compactionOutputBudget: number;
 +    let summaryResult: GenerateTextResult;
++    let summaryUsage: ServedUsage;
 +    try {
 +      const originalCount = await chat.countRequestTokensForCandidateHistory(
 +        historyForSummary,
@@ -30146,6 +31635,7 @@ index 9a37b9b..4020c0f 100644
 +          maxOutputTokens: compactionOutputBudget,
 +        },
 +      });
++      summaryUsage = requireServedUsage(summaryResult.usage, 'chat-compression');
 +    } catch (error) {
 +      if (abortSignal.aborted) throw error;
 +      config
@@ -30195,17 +31685,19 @@ index 9a37b9b..4020c0f 100644
 -        compressionUsageMetadata.totalTokenCount - compressionInputTokenCount,
 -      );
 +    const processedSummary = stripAnalysisBlock(summary ?? '');
-+    const compressionOutputTokenCount =
-+      summaryResult.usage?.candidatesTokenCount;
++    const compressionOutputTokenCount = summaryUsage.candidatesTokenCount;
 +    // Every outcome from here on carries the same accounting, because the
 +    // only way to tell these failures apart afterwards is where the fixed
-+    // maintenance budget went. `getResponseText` drops thought parts, so a
++    // maintenance budget went. The summary text drops the reasoning, so a
 +    // run whose reasoning consumed the whole ceiling and emitted no summary
-+    // is otherwise indistinguishable from one that never generated.
++    // is otherwise indistinguishable from one that never generated; the
++    // reasoning itself rides along, so that spend can be read and not only
++    // counted.
 +    const outputAccounting: CompactionOutputAccounting = {
 +      maxOutputTokens: compactionOutputBudget,
-+      outputTokens: compressionOutputTokenCount ?? 0,
-+      thinkingTokens: summaryResult.usage?.thoughtsTokenCount ?? 0,
++      outputTokens: compressionOutputTokenCount,
++      thinkingTokens: summaryUsage.thoughtsTokenCount,
++      reasoning: summaryResult.thoughtText,
 +      summaryChars: processedSummary.length,
 +      finishReason: summaryResult.finishReason ?? null,
 +    };
@@ -30568,19 +32060,19 @@ index 9a37b9b..4020c0f 100644
      );
  
 -    if (isSummaryEmpty) {
--      return {
--        newHistory: null,
--        info: {
++    if (newTokenCount >= exactOriginalTokenCount) {
+       return {
+         newHistory: null,
+         info: {
 -          originalTokenCount,
 -          newTokenCount: originalTokenCount,
 -          compressionStatus: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
 -        },
 -      };
 -    } else if (!canCalculateNewTokenCount) {
-+    if (newTokenCount >= exactOriginalTokenCount) {
-       return {
-         newHistory: null,
-         info: {
+-      return {
+-        newHistory: null,
+-        info: {
 -          originalTokenCount,
 -          newTokenCount: originalTokenCount,
 +          originalTokenCount: exactOriginalTokenCount,
@@ -30930,6 +32422,472 @@ index 0749a7e..d88c5ad 100644
   */
  export class LoopDetectionService {
    private readonly config: Config;
+diff --git a/packages/core/src/services/session-resume-token-counts.ts b/packages/core/src/services/session-resume-token-counts.ts
+index 50bc956..56b46e9 100644
+--- a/packages/core/src/services/session-resume-token-counts.ts
++++ b/packages/core/src/services/session-resume-token-counts.ts
+@@ -5,17 +5,15 @@
+  */
+ 
+ import type {
+   ChatCompressionRecordPayload,
+   ChatRecord,
+ } from './chatRecordingService.js';
+-import { getUsageOutputTokenCountForPromptEstimate } from './tokenEstimation.js';
+ 
+ export interface ResumeTokenCounts {
+   promptTokenCount: number;
+-  outputTokenCount: number;
+   isEstimated: boolean;
+ }
+ 
+ export class ResumeTokenCountsAccumulator {
+   private value: ResumeTokenCounts | undefined;
+ 
+@@ -23,13 +21,12 @@ export class ResumeTokenCountsAccumulator {
+     if (record.type === 'assistant') {
+       const usage = record.usageMetadata;
+       const candidate = usage?.promptTokenCount ?? usage?.totalTokenCount;
+       if (candidate) {
+         this.value = {
+           promptTokenCount: candidate,
+-          outputTokenCount: getUsageOutputTokenCountForPromptEstimate(usage),
+           isEstimated: false,
+         };
+       }
+       return;
+     }
+ 
+@@ -37,13 +34,12 @@ export class ResumeTokenCountsAccumulator {
+       const payload = record.systemPayload as
+         | ChatCompressionRecordPayload
+         | undefined;
+       if (payload?.info) {
+         this.value = {
+           promptTokenCount: payload.info.newTokenCount,
+-          outputTokenCount: 0,
+           isEstimated: payload.info.newTokenCountIsEstimated ?? true,
+         };
+       }
+     }
+   }
+ 
+diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/src/services/sessionService.test.ts
+index 4f8cc51..bbffda6 100644
+--- a/packages/core/src/services/sessionService.test.ts
++++ b/packages/core/src/services/sessionService.test.ts
+@@ -2766,13 +2766,12 @@ describe('SessionService', () => {
+         ),
+       ).toBe(450);
+       expect(
+         getResumeTokenCounts(makeConversation([compressionRecord, assistant])),
+       ).toEqual({
+         promptTokenCount: 450,
+-        outputTokenCount: 0,
+         isEstimated: false,
+       });
+     });
+ 
+     it('should prefer promptTokenCount over totalTokenCount when both are present', () => {
+       const assistant: ChatRecord = {
+@@ -2788,34 +2787,12 @@ describe('SessionService', () => {
+         ),
+       ).toBe(200);
+       expect(
+         getResumeTokenCounts(makeConversation([compressionRecord, assistant])),
+       ).toEqual({
+         promptTokenCount: 200,
+-        outputTokenCount: 250,
+-        isEstimated: false,
+-      });
+-    });
+-
+-    it('should restore disjoint candidate and thought output tokens when total is unavailable', () => {
+-      const assistant: ChatRecord = {
+-        ...baseRecord,
+-        uuid: 'a1',
+-        parentUuid: 'comp',
+-        type: 'assistant',
+-        usageMetadata: {
+-          promptTokenCount: 200,
+-          candidatesTokenCount: 40,
+-          thoughtsTokenCount: 60,
+-        },
+-      };
+-      expect(
+-        getResumeTokenCounts(makeConversation([compressionRecord, assistant])),
+-      ).toEqual({
+-        promptTokenCount: 200,
+-        outputTokenCount: 100,
+         isEstimated: false,
+       });
+     });
+ 
+     it('should fall back to compression when latest assistant has zero usage', () => {
+       const assistant: ChatRecord = {
+@@ -2831,13 +2808,12 @@ describe('SessionService', () => {
+         ),
+       ).toBe(300);
+       expect(
+         getResumeTokenCounts(makeConversation([compressionRecord, assistant])),
+       ).toEqual({
+         promptTokenCount: 300,
+-        outputTokenCount: 0,
+         isEstimated: true,
+       });
+     });
+ 
+     it('conservatively treats legacy compression checkpoints as estimated', () => {
+       const legacyCompressionRecord: ChatRecord = {
+@@ -2853,13 +2829,12 @@ describe('SessionService', () => {
+       };
+ 
+       expect(
+         getResumeTokenCounts(makeConversation([legacyCompressionRecord])),
+       ).toEqual({
+         promptTokenCount: 300,
+-        outputTokenCount: 0,
+         isEstimated: true,
+       });
+     });
+ 
+     it('restores an explicit authoritative compression-checkpoint provenance', () => {
+       const authoritativeCompressionRecord: ChatRecord = {
+@@ -2878,13 +2853,12 @@ describe('SessionService', () => {
+       expect(
+         getResumeTokenCounts(
+           makeConversation([authoritativeCompressionRecord]),
+         ),
+       ).toEqual({
+         promptTokenCount: 300,
+-        outputTokenCount: 0,
+         isEstimated: false,
+       });
+     });
+   });
+ 
+   describe('buildApiHistoryFromConversation', () => {
+diff --git a/packages/core/src/services/tokenEstimation.test.ts b/packages/core/src/services/tokenEstimation.test.ts
+index 1fd1b75..f2b5666 100644
+--- a/packages/core/src/services/tokenEstimation.test.ts
++++ b/packages/core/src/services/tokenEstimation.test.ts
+@@ -3,17 +3,13 @@
+  * Copyright 2025 Google LLC
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import { describe, it, expect } from 'vitest';
+ import type { Content } from '@google/genai';
+-import {
+-  estimateContentTokens,
+-  estimatePromptTokens,
+-  getUsageOutputTokenCountForPromptEstimate,
+-} from './tokenEstimation.js';
++import { estimateContentTokens } from './tokenEstimation.js';
+ 
+ const textContent = (text: string): Content => ({
+   role: 'user',
+   parts: [{ text }],
+ });
+ 
+@@ -70,160 +66,15 @@ describe('estimateContentTokens', () => {
+     };
+     const result = estimateContentTokens([c]);
+     expect(result).toBeGreaterThan(0);
+   });
+ });
+ 
+-describe('estimatePromptTokens', () => {
+-  const history: Content[] = [
+-    textContent('older message a'),
+-    textContent('older message b'),
+-  ];
+-  const user = textContent('current user message');
+-
+-  it('uses lastPromptTokenCount + user-message estimate when count > 0', () => {
+-    const userEst = estimateContentTokens([user]);
+-    expect(estimatePromptTokens(history, user, 5000)).toBe(5000 + userEst);
+-  });
+-
+-  it('includes the previous turn candidate tokens in the steady-state estimate', () => {
+-    const userEst = estimateContentTokens([user]);
+-    expect(estimatePromptTokens(history, user, 5000, 1200)).toBe(
+-      5000 + 1200 + userEst,
+-    );
+-  });
+-
+-  it('keeps custom image-token estimates as the fifth argument', () => {
+-    const imageUser: Content = {
+-      role: 'user',
+-      parts: [{ inlineData: { mimeType: 'image/png', data: 'xxx' } }],
+-    };
+-
+-    expect(estimatePromptTokens(history, imageUser, 5000, 1200, 1600)).toBe(
+-      5000 + 1200 + 1600,
+-    );
+-  });
+-
+-  it('falls back to full estimate when lastPromptTokenCount is 0', () => {
+-    const fullEst = estimateContentTokens([...history, user]);
+-    expect(estimatePromptTokens(history, user, 0)).toBe(fullEst);
+-  });
+-
+-  describe('conservative mode (window-clamp callers)', () => {
+-    it('defaults to non-conservative (identical to the 5-arg call) when omitted', () => {
+-      const userEst = estimateContentTokens([user]);
+-      expect(estimatePromptTokens(history, user, 5000, 1200)).toBe(
+-        estimatePromptTokens(history, user, 5000, 1200, undefined, false),
+-      );
+-      expect(
+-        estimatePromptTokens(history, user, 5000, 1200, undefined, false),
+-      ).toBe(5000 + 1200 + userEst);
+-    });
+-
+-    it('inflates only the new-content term by 1.5x (ceil), not the API-authoritative running total', () => {
+-      const userEst = estimateContentTokens([user]);
+-      const conservativeEst = Math.ceil(userEst * 1.5);
+-      expect(
+-        estimatePromptTokens(history, user, 5000, 1200, undefined, true),
+-      ).toBe(5000 + 1200 + conservativeEst);
+-    });
+-
+-    it('reproduces the real-world 2026-07-28 window-overflow scenario: a large CJK-heavy tool result under-counted by char/4 without conservative mode, corrected with it', () => {
+-      // Mirrors the KAT-Coder-V2.5-Dev / Nex-N2-mini real failures: several
+-      // parallel read_file results returning CJK-dense design docs pushed
+-      // the true prompt to ~35,619 tokens while char/4 (which does not
+-      // account for CJK density) estimated a smaller figure from
+-      // lastPromptTokenCount + this turn's new content alone, causing
+-      // maxOutputTokens to be clamped too loosely and
+-      // `prompt + max_tokens` to exceed the window by ~1 token in
+-      // production (see Research/Discovery_QwenCode-MainTurnOutputClamp-
+-      // SeparateBug_20260728.md in the ArgoStack repo).
+-      const cjkToolResult: Content = {
+-        role: 'user',
+-        parts: [
+-          {
+-            functionResponse: {
+-              name: 'read_file',
+-              // A realistic stand-in for a CJK-dense design doc chunk.
+-              response: { output: '设计文档章节内容。'.repeat(2000) },
+-            },
+-          },
+-        ],
+-      };
+-      const lastPromptTokenCount = 25_000;
+-      const nonConservative = estimatePromptTokens(
+-        [],
+-        cjkToolResult,
+-        lastPromptTokenCount,
+-        0,
+-      );
+-      const conservative = estimatePromptTokens(
+-        [],
+-        cjkToolResult,
+-        lastPromptTokenCount,
+-        0,
+-        undefined,
+-        true,
+-      );
+-      // Conservative mode must produce a strictly larger (safer, smaller
+-      // effective output budget) estimate for the same inputs.
+-      expect(conservative).toBeGreaterThan(nonConservative);
+-      expect(conservative).toBe(
+-        lastPromptTokenCount +
+-          Math.ceil(estimateContentTokens([cjkToolResult]) * 1.5),
+-      );
+-    });
+-  });
+-});
+-
+-describe('getUsageOutputTokenCountForPromptEstimate', () => {
+-  it('uses totalTokenCount when available to avoid candidate/thought overlap ambiguity', () => {
+-    expect(
+-      getUsageOutputTokenCountForPromptEstimate({
+-        promptTokenCount: 100,
+-        totalTokenCount: 180,
+-        candidatesTokenCount: 70,
+-        thoughtsTokenCount: 50,
+-      }),
+-    ).toBe(80);
+-  });
+-
+-  it('does not double-count thoughts that appear included in candidates', () => {
+-    expect(
+-      getUsageOutputTokenCountForPromptEstimate({
+-        promptTokenCount: 100,
+-        candidatesTokenCount: 150,
+-        thoughtsTokenCount: 120,
+-      }),
+-    ).toBe(150);
+-  });
+-
+-  it('adds thoughts when they exceed candidates and are likely disjoint', () => {
+-    expect(
+-      getUsageOutputTokenCountForPromptEstimate({
+-        promptTokenCount: 100,
+-        candidatesTokenCount: 50,
+-        thoughtsTokenCount: 120,
+-      }),
+-    ).toBe(170);
+-  });
+-
+-  it('adds equal candidate and thought counts because equality does not prove overlap', () => {
+-    expect(
+-      getUsageOutputTokenCountForPromptEstimate({
+-        promptTokenCount: 100,
+-        candidatesTokenCount: 80,
+-        thoughtsTokenCount: 80,
+-      }),
+-    ).toBe(160);
+-  });
+-
+-  it('clamps negative disjoint output token counts to zero', () => {
+-    expect(
+-      getUsageOutputTokenCountForPromptEstimate({
+-        promptTokenCount: 100,
+-        candidatesTokenCount: -10,
+-        thoughtsTokenCount: -5,
+-      }),
+-    ).toBe(0);
++describe('module surface', () => {
++  it('estimates held content only: no output or reasoning count is derived here', async () => {
++    const surface = await import('./tokenEstimation.js');
++    expect(Object.keys(surface).sort()).toEqual([
++      'CHARS_PER_TOKEN',
++      'estimateContentTokens',
++    ]);
+   });
+ });
+diff --git a/packages/core/src/services/tokenEstimation.ts b/packages/core/src/services/tokenEstimation.ts
+index 2664fb9..7b34e4a 100644
+--- a/packages/core/src/services/tokenEstimation.ts
++++ b/packages/core/src/services/tokenEstimation.ts
+@@ -1,16 +1,13 @@
+ /**
+  * @license
+  * Copyright 2025 Google LLC
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+-import type {
+-  Content,
+-  GenerateContentResponseUsageMetadata,
+-} from '@google/genai';
++import type { Content } from '@google/genai';
+ import {
+   DEFAULT_IMAGE_TOKEN_ESTIMATE,
+   TOKEN_TO_CHAR_RATIO,
+   estimateContentChars,
+ } from './compactionInputSlimming.js';
+ 
+@@ -28,99 +25,26 @@ export const CHARS_PER_TOKEN = TOKEN_TO_CHAR_RATIO;
+ /**
+  * Estimate the token count of a list of Content objects via char/4.
+  *
+  * Reuses `estimateContentChars` so that inlineData / functionCall /
+  * functionResponse get the same treatment they receive when computing
+  * compression size estimates — keeping the two estimators in sync prevents
+- * the auto-compaction trigger and the compressor from disagreeing on size.
++ * the two from disagreeing on size.
+  *
+- * Intended for the pre-send threshold gate only. char/4 is a conservative
+- * lower bound (real tokenizers vary ±30%); using it to TRIGGER compaction
+- * earlier is safe (false-positive), using it to SKIP compaction is not.
++ * A heuristic for content this client holds, never for what a generation
++ * produced: the fast compaction paths that drop content without a summary
++ * generation carry its result forward as an estimated count, session
++ * references size their attachments with it, and the pre-send gate never
++ * reads it — that gate counts the rendered request on the backend's
++ * tokenizer, and every output and reasoning count is the one the backend
++ * served.
+  */
+ export function estimateContentTokens(
+   contents: Content[],
+   imageTokenEstimate: number = DEFAULT_IMAGE_TOKEN_ESTIMATE,
+ ): number {
+   let totalChars = 0;
+   for (const content of contents) {
+     totalChars += estimateContentChars(content, imageTokenEstimate);
+   }
+   return Math.ceil(totalChars / CHARS_PER_TOKEN);
+ }
+-
+-/**
+- * Compute an effective prompt-token count for the auto-compaction gate.
+- *
+- * `lastPromptTokenCount` (from the previous turn's usage metadata) lacks
+- * three things: the current user message, the previous model response that
+- * was appended to local history after that prompt count was reported, and
+- * any initial value on the very first send. This helper closes those gaps via
+- * local estimation plus `lastOutputTokenCount` when available.
+- *
+- * WARNING: like estimateContentTokens, this is a conservative lower
+- * bound. Use it to TRIGGER earlier, never to SKIP — the fallback path
+- * (lastPromptTokenCount === 0) returns a pure estimate with no API-
+- * authoritative anchor.
+- */
+-/**
+- * Multiplier applied to the char/4 estimate of NEWLY-added content when
+- * `conservative` is set. char/4 is documented (see file header) as varying
+- * ±30% against real tokenizers, but that band was measured against mixed
+- * English-heavy content; two independent real production failures
+- * (chatCompressionService's 400-overflow root cause doc and a main-turn
+- * `prompt + max_tokens > window` overflow, both 2026-07-28) traced back to
+- * char/4 under-counting CJK-dense tool output (design docs, large file
+- * reads) by 39-54% — beyond the documented band. 1.5x covers both observed
+- * cases with headroom without materially eating into the output budget for
+- * ordinary (non-CJK-heavy) content, since it only scales the incremental
+- * new-content term, not the API-authoritative running total.
+- */
+-export const CONSERVATIVE_NEW_CONTENT_SAFETY_FACTOR = 1.5;
+-
+-export function estimatePromptTokens(
+-  history: Content[],
+-  userMessage: Content,
+-  lastPromptTokenCount: number,
+-  lastOutputTokenCount: number = 0,
+-  imageTokenEstimate: number = DEFAULT_IMAGE_TOKEN_ESTIMATE,
+-  conservative: boolean = false,
+-): number {
+-  if (lastPromptTokenCount > 0) {
+-    const newContentTokens = estimateContentTokens(
+-      [userMessage],
+-      imageTokenEstimate,
+-    );
+-    return (
+-      lastPromptTokenCount +
+-      lastOutputTokenCount +
+-      (conservative
+-        ? Math.ceil(newContentTokens * CONSERVATIVE_NEW_CONTENT_SAFETY_FACTOR)
+-        : newContentTokens)
+-    );
+-  }
+-  // First-send fallback (no API data yet): estimate from `history + userMessage`
+-  // only. This MISSES the system prompt (~8-15K), tool definitions (~5K),
+-  // skill content, and cache headers — typically ~15-20K of under-estimate.
+-  // The reactive overflow handler is the safety net if the hard-tier rescue
+-  // misses for that reason. See review #4168 R3.3.
+-  return estimateContentTokens([...history, userMessage], imageTokenEstimate);
+-}
+-
+-export function getUsageOutputTokenCountForPromptEstimate(
+-  usage: GenerateContentResponseUsageMetadata | undefined,
+-): number {
+-  if (usage?.promptTokenCount === undefined) {
+-    return 0;
+-  }
+-  if (usage.totalTokenCount !== undefined) {
+-    return Math.max(0, usage.totalTokenCount - usage.promptTokenCount);
+-  }
+-  const candidates = Math.max(0, usage.candidatesTokenCount ?? 0);
+-  const thoughts = Math.max(0, usage.thoughtsTokenCount ?? 0);
+-  // Some OpenAI-compatible providers include reasoning tokens inside
+-  // candidatesTokenCount when totalTokenCount is unavailable. If candidates
+-  // strictly dominates thoughts, treat thoughts as potentially overlapping;
+-  // otherwise add the larger reasoning-only count so long-thinking responses
+-  // still advance the steady-state prompt estimate.
+-  return candidates > thoughts ? candidates : candidates + thoughts;
+-}
 diff --git a/packages/core/src/services/visionBridge/vision-bridge-service.test.ts b/packages/core/src/services/visionBridge/vision-bridge-service.test.ts
 index b07a460..f6b0d67 100644
 --- a/packages/core/src/services/visionBridge/vision-bridge-service.test.ts
@@ -32034,10 +33992,10 @@ index ecd9117..7031b5a 100644
    <good-example>
    pytest /foo/bar/tests
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..97b4fb2 100644
+index 6d3fb50..c9d5dc7 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
-@@ -28,13 +28,15 @@ import {
+@@ -28,13 +28,16 @@ import {
  import { AgentTerminateMode } from '../../agents/runtime/agent-types.js';
  import {
    AgentHeadless,
@@ -32047,13 +34005,14 @@ index 6d3fb50..97b4fb2 100644
 +import { LoopType } from '../../telemetry/types.js';
  import type {
 +  AgentCompactionEvent,
++  AgentRoundTextEvent,
    AgentToolCallEvent,
    AgentToolResultEvent,
    AgentApprovalRequestEvent,
    AgentEventEmitter,
  } from '../../agents/runtime/agent-events.js';
  import { partToString } from '../../utils/partUtils.js';
-@@ -202,12 +204,13 @@ describe('AgentTool', () => {
+@@ -202,12 +205,13 @@ describe('AgentTool', () => {
        getTargetDir: vi.fn().mockReturnValue('/test/project'),
        getCwd: vi.fn().mockReturnValue('/test/project'),
        getWorkingDir: vi.fn().mockReturnValue('/test/project'),
@@ -32067,7 +34026,7 @@ index 6d3fb50..97b4fb2 100644
        getTranscriptPath: vi.fn().mockReturnValue('/test/transcript'),
        getTeamManager: vi.fn().mockReturnValue(undefined),
        isAgentTeamEnabled: vi.fn().mockReturnValue(false),
-@@ -446,12 +449,57 @@ describe('AgentTool', () => {
+@@ -446,12 +450,57 @@ describe('AgentTool', () => {
          'Launch multiple agents concurrently whenever possible',
        );
      });
@@ -32125,7 +34084,7 @@ index 6d3fb50..97b4fb2 100644
          properties: {
            subagent_type: {
              type?: string;
-@@ -2042,12 +2090,14 @@ describe('AgentTool', () => {
+@@ -2042,12 +2091,14 @@ describe('AgentTool', () => {
            totalDurationMs: 1500,
            totalToolCalls: 3,
            successfulToolCalls: 3,
@@ -32140,7 +34099,7 @@ index 6d3fb50..97b4fb2 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -2221,13 +2271,213 @@ describe('AgentTool', () => {
+@@ -2221,13 +2272,213 @@ describe('AgentTool', () => {
  
        const invocation = (
          agentTool as AgentToolWithProtectedMethods
@@ -32355,7 +34314,7 @@ index 6d3fb50..97b4fb2 100644
        vi.mocked(mockAgent.getFinalText).mockReturnValue(
          '<analysis>scratch only</analysis>',
        );
-@@ -3213,24 +3463,12 @@ describe('AgentTool', () => {
+@@ -3213,24 +3464,12 @@ describe('AgentTool', () => {
          // mode came from inside the subagent itself).
          const meta = lastEndMeta();
          expect(meta.status).toBe('cancelled');
@@ -32380,7 +34339,7 @@ index 6d3fb50..97b4fb2 100644
          // OTel exception attributes — generic 'subagent failed' was
          // hiding the reason from dashboards. wenshao @ #4410 DeepSeek
          // 3291876053.
-@@ -3404,12 +3642,14 @@ describe('AgentTool', () => {
+@@ -3404,12 +3643,14 @@ describe('AgentTool', () => {
            totalDurationMs: 0,
            totalToolCalls: 0,
            successfulToolCalls: 0,
@@ -32395,7 +34354,7 @@ index 6d3fb50..97b4fb2 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4667,12 +4907,14 @@ describe('AgentTool', () => {
+@@ -4667,12 +4908,14 @@ describe('AgentTool', () => {
            totalDurationMs: 500,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -32410,7 +34369,7 @@ index 6d3fb50..97b4fb2 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4863,12 +5105,14 @@ describe('AgentTool', () => {
+@@ -4863,12 +5106,14 @@ describe('AgentTool', () => {
            totalDurationMs: 500,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -32425,7 +34384,7 @@ index 6d3fb50..97b4fb2 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -5214,12 +5458,14 @@ describe('AgentTool', () => {
+@@ -5214,12 +5459,14 @@ describe('AgentTool', () => {
            totalDurationMs: 100,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -32440,13 +34399,74 @@ index 6d3fb50..97b4fb2 100644
          emitDuringExecute(capturedInvocation.eventEmitter);
        });
  
-@@ -5283,12 +5529,82 @@ describe('AgentTool', () => {
+@@ -5283,12 +5530,143 @@ describe('AgentTool', () => {
          (entry) => entry.callId === 'call-read-1',
        );
        expect(toolCall?.args).toEqual({ path: '/test.ts' });
        expect(toolCall?.responseParts).toBe(responseParts);
      });
  
++    it('[subagent-rounds] publishes every completed round on the display, oldest first, with its served usage', async () => {
++      vi.mocked(config.isInteractive).mockReturnValue(false);
++      const snapshots: AgentResultDisplay[] = [];
++      const servedUsage = {
++        promptTokenCount: 18_204,
++        candidatesTokenCount: 96,
++        thoughtsTokenCount: 71,
++        cachedContentTokenCount: 18_176,
++        totalTokenCount: 18_300,
++      };
++
++      const invocation = createInvocationWithEventDrivenAgent((emitter) => {
++        emitter.emit(AgentEventType.ROUND_TEXT, {
++          subagentId: 'sub-1',
++          round: 1,
++          text: '',
++          thoughtText: 'I should read the manifest first.',
++          usageMetadata: servedUsage,
++          timestamp: Date.now(),
++        } satisfies AgentRoundTextEvent);
++
++        emitter.emit(AgentEventType.ROUND_TEXT, {
++          subagentId: 'sub-1',
++          round: 2,
++          text: 'The manifest lists three services.',
++          thoughtText: '',
++          timestamp: Date.now(),
++        } satisfies AgentRoundTextEvent);
++      });
++
++      await invocation.execute(undefined, (output) => {
++        snapshots.push(output as AgentResultDisplay);
++      });
++
++      const withBoth = snapshots.filter(
++        (snapshot) => (snapshot.rounds?.length ?? 0) === 2,
++      );
++      expect(withBoth.length).toBeGreaterThan(0);
++      // Append-only and in order: the reasoning and the served usage ride
++      // the round they belong to, and a round without usage says so rather
++      // than carrying a count invented for it.
++      expect(withBoth.at(-1)?.rounds).toEqual([
++        {
++          round: 1,
++          text: '',
++          reasoning: 'I should read the manifest first.',
++          usageMetadata: servedUsage,
++        },
++        {
++          round: 2,
++          text: 'The manifest lists three services.',
++          reasoning: '',
++          usageMetadata: null,
++        },
++      ]);
++      const firstSnapshotWithRound = snapshots.find(
++        (snapshot) => (snapshot.rounds?.length ?? 0) === 1,
++      );
++      expect(firstSnapshotWithRound?.rounds?.[0]?.round).toBe(1);
++    });
++
 +    it('[compaction-event] accumulates every subagent compaction attempt on the display, oldest first', async () => {
 +      vi.mocked(config.isInteractive).mockReturnValue(false);
 +      const snapshots: AgentResultDisplay[] = [];
@@ -32523,7 +34543,7 @@ index 6d3fb50..97b4fb2 100644
        const snapshots: AgentResultDisplay[] = [];
  
        const invocation = createInvocationWithEventDrivenAgent((emitter) => {
-@@ -5590,12 +5906,14 @@ describe('AgentTool', () => {
+@@ -5590,12 +5968,14 @@ describe('AgentTool', () => {
      beforeEach(() => {
        mockAgent = {
          execute: vi.fn().mockResolvedValue(undefined),
@@ -32539,7 +34559,7 @@ index 6d3fb50..97b4fb2 100644
          // test-time listener hookup doesn't throw.
          getCore: vi.fn().mockReturnValue({
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..1b2663d 100644
+index 4bcea69..17deae6 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -3,13 +3,18 @@
@@ -32562,7 +34582,7 @@ index 4bcea69..1b2663d 100644
    extractParentToolNames,
  } from '../../agents/runtime/agent-core.js';
  import type {
-@@ -85,12 +90,13 @@ import {
+@@ -85,12 +90,14 @@ import {
  } from '../../telemetry/index.js';
  import {
    AgentEventEmitter,
@@ -32570,13 +34590,14 @@ index 4bcea69..1b2663d 100644
  } from '../../agents/runtime/agent-events.js';
  import type {
 +  AgentCompactionEvent,
++  AgentRoundTextEvent,
    AgentToolCallEvent,
    AgentToolResultEvent,
    AgentFinishEvent,
    AgentErrorEvent,
    AgentApprovalRequestEvent,
    AgentUsageEvent,
-@@ -103,19 +109,22 @@ import { createDebugLogger } from '../../utils/debugLogger.js';
+@@ -103,19 +110,22 @@ import { createDebugLogger } from '../../utils/debugLogger.js';
  import { PermissionMode } from '../../hooks/types.js';
  import type { StopHookOutput } from '../../hooks/types.js';
  import {
@@ -32601,7 +34622,7 @@ index 4bcea69..1b2663d 100644
  import {
    buildAgentTranscriptAttach,
    getAgentMetaPath,
-@@ -127,12 +136,18 @@ import {
+@@ -127,12 +137,18 @@ import {
  import type {
    BackgroundSlotReservation,
    ResidentBackgroundAgent,
@@ -32620,7 +34641,7 @@ index 4bcea69..1b2663d 100644
    persistedStatus: 'running' | 'cancelled',
  ): void {
    patchAgentMeta(metaPath, {
-@@ -752,20 +767,12 @@ export async function createApprovalModeOverride(
+@@ -752,20 +768,12 @@ export async function createApprovalModeOverride(
   * The tool dynamically loads available agents and includes them in its description
   * for the model to choose from.
   */
@@ -32641,7 +34662,7 @@ index 4bcea69..1b2663d 100644
    private readonly removeChangeListener: () => void;
  
    constructor(private readonly config: Config) {
-@@ -859,12 +866,36 @@ export class AgentTool extends BaseDeclarativeTool<AgentParams, ToolResult> {
+@@ -859,12 +867,36 @@ export class AgentTool extends BaseDeclarativeTool<AgentParams, ToolResult> {
        Kind.Agent,
        initialSchema,
        true, // isOutputMarkdown
@@ -32678,7 +34699,7 @@ index 4bcea69..1b2663d 100644
      });
  
      // Initialize the tool asynchronously
-@@ -1001,14 +1032,54 @@ function isPrime(n) {
+@@ -1001,14 +1033,54 @@ function isPrime(n) {
  Since a significant piece of code was written and the task was completed, now use the test-runner agent to run the tests
  </commentary>
  assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
@@ -32735,7 +34756,7 @@ index 4bcea69..1b2663d 100644
        properties?: {
          model?: {
            type: string;
-@@ -1032,25 +1103,31 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1032,25 +1104,31 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
          delete schema.properties.read_only;
        }
  
@@ -32768,7 +34789,7 @@ index 4bcea69..1b2663d 100644
        !params.description ||
        typeof params.description !== 'string' ||
        params.description.trim() === ''
-@@ -1072,12 +1149,40 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1072,12 +1150,40 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
          params.todo_id.trim() === '' ||
          params.todo_id.length > 500)
      ) {
@@ -32809,7 +34830,7 @@ index 4bcea69..1b2663d 100644
          params.subagent_type.trim() === ''
        ) {
          return 'Parameter "subagent_type" must be a non-empty string.';
-@@ -1281,13 +1386,28 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1281,13 +1387,28 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
          if (params.plan_mode_required === true) {
            return 'Parameters "read_only" and "plan_mode_required" cannot be used together.';
          }
@@ -32839,7 +34860,7 @@ index 4bcea69..1b2663d 100644
      const invocationParams = params.working_dir
        ? { ...params, isolation: undefined }
        : params;
-@@ -1372,22 +1492,12 @@ function deriveSubagentOutcomeMetadata(opts: {
+@@ -1372,22 +1493,12 @@ function deriveSubagentOutcomeMetadata(opts: {
      return {
        status: 'cancelled',
        terminateReason: signalAborted ? 'signal_aborted' : 'subagent_cancelled',
@@ -32862,7 +34883,7 @@ index 4bcea69..1b2663d 100644
    // Non-throwing failure paths (ERROR / MAX_TURNS / TIMEOUT) — populate
    // `error`/`errorType` so endSubagentSpan sets standard OTel exception
    // attributes instead of a generic `'subagent failed'` placeholder.
-@@ -1422,12 +1532,15 @@ function deriveSubagentExceptionMetadata(
+@@ -1422,12 +1533,17 @@ function deriveSubagentExceptionMetadata(
  }
  
  class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
@@ -32872,19 +34893,36 @@ index 4bcea69..1b2663d 100644
 +  private readonly currentCompactions: NonNullable<
 +    AgentResultDisplay['compactions']
 +  > = [];
++  private readonly currentRounds: NonNullable<AgentResultDisplay['rounds']> =
++    [];
    private callId?: string;
  
    constructor(
      private readonly config: Config,
      private readonly subagentManager: SubagentManager,
      params: AgentParams,
-@@ -1549,29 +1662,52 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1549,29 +1665,67 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            },
            updateOutput,
          );
        }
      });
  
++    // A round's text, reasoning and served usage are published the moment
++    // the round's stream ends, before the tool calls it requested run, so a
++    // consumer sees the generation ahead of its consequences. Append-only
++    // like `compactions`.
++    this.eventEmitter.on(AgentEventType.ROUND_TEXT, (...args: unknown[]) => {
++      const event = args[0] as AgentRoundTextEvent;
++      this.currentRounds.push({
++        round: event.round,
++        text: event.text,
++        reasoning: event.thoughtText,
++        usageMetadata: event.usageMetadata ?? null,
++      });
++      this.updateDisplay({ rounds: [...this.currentRounds] }, updateOutput);
++    });
++
 +    // Compactions are append-only: each event adds one entry and never
 +    // rewrites an earlier one, so a consumer diffing successive displays
 +    // emits exactly the tail it has not seen.
@@ -32932,7 +34970,7 @@ index 4bcea69..1b2663d 100644
      });
  
      // Track real-time token consumption from subagent API calls.
-@@ -1873,13 +2009,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1873,13 +2027,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      }
  
      const subagent = await AgentHeadless.create(
@@ -32947,7 +34985,7 @@ index 4bcea69..1b2663d 100644
      );
  
      return { subagent, initialMessages, taskPrompt, toolConfig };
-@@ -2171,13 +2307,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2171,13 +2325,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        }
  
        // Get the results
@@ -32967,7 +35005,7 @@ index 4bcea69..1b2663d 100644
        const executionSummary = subagent.getExecutionSummary();
  
        // Publish span outcome BEFORE side-effectful UI/registry calls — if
-@@ -2196,28 +2337,40 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2196,28 +2355,40 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            resultSummaryPresent: Boolean(
              subagentRawText && subagentRawText.length > 0,
            ),
@@ -33009,7 +35047,7 @@ index 4bcea69..1b2663d 100644
        }
        return stopHookWarning;
      } catch (error) {
-@@ -2231,12 +2384,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2231,12 +2402,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        debugLogger.error(
          `[AgentTool] Error inside subagent background task: ${errorMessage}`,
        );
@@ -33023,7 +35061,7 @@ index 4bcea69..1b2663d 100644
        );
        return undefined;
      }
-@@ -2256,16 +2410,16 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2256,16 +2428,16 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // `error` marks the call failed in the scheduler, so tool-usage stats
        // record a failure — a blocked spawn must not count as a spawned
        // sub-agent (the scrollback summary derives its sub-agent count from
@@ -33044,7 +35082,7 @@ index 4bcea69..1b2663d 100644
          subagentName:
            this.params.subagent_type ?? DEFAULT_BUILTIN_SUBAGENT_TYPE,
          taskDescription: this.params.description,
-@@ -2564,12 +2718,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2564,12 +2736,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
      let backgroundSlotReservationConsumed = false;
      // Concrete model ID the sub-agent will run with, resolved from its model
      // selector once subagentConfig is loaded. Used to enforce per-model
@@ -33058,7 +35096,7 @@ index 4bcea69..1b2663d 100644
            .getBackgroundTaskRegistry()
            .releaseBackgroundSlot(backgroundSlotReservation);
          backgroundSlotReservation = undefined;
-@@ -2693,14 +2848,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2693,14 +2866,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        // BackgroundTaskRegistry's single session-level notification callback
        // would inject the child's completion into the top-level conversation
        // while the launcher (typically finished by then) never hears back.
@@ -33076,7 +35114,7 @@ index 4bcea69..1b2663d 100644
                (!isForkRequested &&
                  this.params.working_dir === undefined &&
                  // A `name` passed without an active team falls through to a regular
-@@ -3074,15 +3230,31 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3074,15 +3248,31 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        } else {
          const result = await this.subagentManager.createAgentHeadless(
            subagentConfig,
@@ -33110,7 +35148,7 @@ index 4bcea69..1b2663d 100644
            },
          );
          subagent = result.subagent;
-@@ -3259,12 +3431,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3259,12 +3449,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
              );
            }
  
@@ -33124,7 +35162,7 @@ index 4bcea69..1b2663d 100644
            );
            void agentConfig
              .getToolRegistry()
-@@ -3533,15 +3706,14 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3533,15 +3724,14 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
                  );
                }
  
@@ -33142,7 +35180,7 @@ index 4bcea69..1b2663d 100644
                const hadWorktreeIsolation = worktreeIsolation !== null;
                const recordTerminalOutcome = () =>
                  recordSpanOutcome(
-@@ -3617,21 +3789,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3617,21 +3807,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
                  patchAgentMeta(metaPath, {
                    status: 'completed',
                    lastUpdatedAt: new Date().toISOString(),
@@ -33165,7 +35203,7 @@ index 4bcea69..1b2663d 100644
                    completionStats,
                  );
                  persistBackgroundCancellation(
-@@ -3941,25 +4105,56 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3941,25 +4123,56 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
          fgAbortController.abort();
        } else {
          signal?.addEventListener('abort', onParentAbort, { once: true });
@@ -33227,7 +35265,7 @@ index 4bcea69..1b2663d 100644
        // Register in BackgroundTaskRegistry with isBackgrounded:false so the
        // pill counts the run and the dialog can drill in. Foreground entries
        // skip XML notification and headless-holdback (see the registry for
-@@ -4109,18 +4304,59 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4109,18 +4322,59 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
            resumeCount: 0,
            // Persisted so resume restores the original nesting level; see
            // childLaunchDepth() for the rationale.
@@ -33292,7 +35330,7 @@ index 4bcea69..1b2663d 100644
              llmContent: (finalText || 'Subagent execution failed.') + wtSuffix,
              returnDisplay: this.currentDisplay!,
            };
-@@ -4263,14 +4499,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4263,14 +4517,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
        const errorDisplay: AgentResultDisplay = {
          ...this.currentDisplay!,
          status: 'failed',
@@ -38256,18 +40294,24 @@ index 72f09ba..42b6ac9 100644
      // Determine if this is a create or update operation by checking if todos file exists
      const sessionId = this.config.getSessionId();
 diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
-index e98c50a..ff4088f 100644
+index e98c50a..c0b6431 100644
 --- a/packages/core/src/tools/tools.ts
 +++ b/packages/core/src/tools/tools.ts
-@@ -1,19 +1,21 @@
+@@ -1,19 +1,26 @@
  /**
   * @license
   * Copyright 2025 Google LLC
   * SPDX-License-Identifier: Apache-2.0
   */
  
+-import type { FunctionDeclaration, Part, PartListUnion } from '@google/genai';
 +import type { AgentTerminateMode } from '../agents/runtime/agent-types.js';
- import type { FunctionDeclaration, Part, PartListUnion } from '@google/genai';
++import type {
++  FunctionDeclaration,
++  GenerateContentResponseUsageMetadata,
++  Part,
++  PartListUnion,
++} from '@google/genai';
  import { ToolErrorType } from './tool-error.js';
  import type { ShellExecutionConfig } from '../services/shellExecutionService.js';
  import { SchemaValidator } from '../utils/schemaValidator.js';
@@ -38281,7 +40325,7 @@ index e98c50a..ff4088f 100644
   * Represents a validated and ready-to-execute tool call.
   * An instance of this is created by a `ToolBuilder`.
   */
-@@ -245,33 +247,12 @@ export abstract class DeclarativeTool<
+@@ -245,33 +252,12 @@ export abstract class DeclarativeTool<
        name: this.name,
        description: this.description,
        parametersJsonSchema: this.parameterSchema,
@@ -38315,7 +40359,7 @@ index e98c50a..ff4088f 100644
     * Tools with security-relevant parameters (file paths, shell commands,
     * URLs) should override this to redact voluminous or sensitive fields
     * (full content, secrets) while exposing enough for the classifier to
-@@ -392,12 +373,86 @@ export abstract class DeclarativeTool<
+@@ -392,12 +378,86 @@ export abstract class DeclarativeTool<
          },
        };
      }
@@ -38402,7 +40446,7 @@ index e98c50a..ff4088f 100644
   * validates parameters before deferring to a `createInvocation` method for
   * the final `ToolInvocation` object instantiation.
   */
-@@ -410,16 +465,56 @@ export abstract class BaseDeclarativeTool<
+@@ -410,16 +470,56 @@ export abstract class BaseDeclarativeTool<
      if (validationError) {
        throw new Error(validationError);
      }
@@ -38460,7 +40504,35 @@ index e98c50a..ff4088f 100644
        return errors;
      }
      return this.validateToolParamValues(params);
-@@ -637,22 +732,46 @@ export interface AgentResultDisplay {
+@@ -630,29 +730,80 @@ export function hasCycleInSchema(schema: object): boolean {
+     return false;
+   }
+ 
+   return traverse(schema, new Set<string>(), new Set<string>());
+ }
+ 
++/**
++ * One completed model round of a subagent: what it reasoned, what it said,
++ * and the usage the backend served for it. Published on the display so a
++ * consumer of the parent stream sees the subagent's own generations, which
++ * otherwise reach it only as the tool calls they produced. Observation only:
++ * nothing recorded here is ever fed back to a model.
++ */
++export interface SubagentRoundRecord {
++  /** The subagent's own round counter, starting at 1. */
++  round: number;
++  /** Visible text the round produced, verbatim; empty on a tool-only round. */
++  text: string;
++  /** The round's reasoning, verbatim; empty when the model emitted none. */
++  reasoning: string;
++  /**
++   * The usage the backend served for the round, or null when the round's
++   * stream carried none. Never a count invented on the round's behalf.
++   */
++  usageMetadata: GenerateContentResponseUsageMetadata | null;
++}
++
+ export interface AgentResultDisplay {
    type: 'task_execution';
    subagentName: string;
    subagentColor?: string;
@@ -38500,6 +40572,12 @@ index e98c50a..ff4088f 100644
 +   * for tool_use/tool_result.
 +   */
 +  compactions?: CompactionRecord[];
++
++  /**
++   * Append-only log of the model rounds this subagent has completed, oldest
++   * first, under the same never-rewritten discipline as `compactions`.
++   */
++  rounds?: SubagentRoundRecord[];
 +
    toolCalls?: Array<{
      callId: string;
@@ -42736,6 +44814,92 @@ index ba3d14d..cd4d3cc 100644
    filePath: string,
    region: NormalizedRegion,
    signal: AbortSignal,
+diff --git a/packages/core/src/utils/partUtils.test.ts b/packages/core/src/utils/partUtils.test.ts
+index 23b0c98..57b9347 100644
+--- a/packages/core/src/utils/partUtils.test.ts
++++ b/packages/core/src/utils/partUtils.test.ts
+@@ -5,12 +5,13 @@
+  */
+ 
+ import { describe, it, expect } from 'vitest';
+ import {
+   partToString,
+   getResponseText,
++  getResponseThoughtText,
+   flatMapTextParts,
+   appendToLastTextPart,
+   prependToFirstTextPart,
+ } from './partUtils.js';
+ import { createOpenAIReasoningThoughtPart } from './thoughtUtils.js';
+ import type { GenerateContentResponse, Part, PartUnion } from '@google/genai';
+@@ -172,12 +173,32 @@ describe('partUtils', () => {
+       expect(partToString(parts as Part, verboseOptions)).toBe(
+         'start middle[Function Call: func1] end<audio/mp3>',
+       );
+     });
+   });
+ 
++  describe('getResponseThoughtText', () => {
++    it('returns null when no candidates exist', () => {
++      expect(getResponseThoughtText(mockResponse(undefined))).toBeNull();
++    });
++
++    it('returns null when the candidate has no parts', () => {
++      expect(getResponseThoughtText(mockResponse([]))).toBeNull();
++    });
++
++    it('keeps exactly the thought parts getResponseText drops', () => {
++      const result = mockResponse([
++        { text: 'first ', thought: true } as { text: string },
++        { text: 'answer' },
++        { text: 'second', thought: true } as { text: string },
++      ]);
++      expect(getResponseThoughtText(result)).toBe('first second');
++      expect(getResponseText(result)).toBe('answer');
++    });
++  });
++
+   describe('getResponseText', () => {
+     it('should return null when no candidates exist', () => {
+       const response = mockResponse(undefined);
+       expect(getResponseText(response)).toBeNull();
+     });
+ 
+diff --git a/packages/core/src/utils/partUtils.ts b/packages/core/src/utils/partUtils.ts
+index 7520c0d..8e3ff41 100644
+--- a/packages/core/src/utils/partUtils.ts
++++ b/packages/core/src/utils/partUtils.ts
+@@ -91,12 +91,30 @@ export function getResponseText(
+         .join('');
+     }
+   }
+   return null;
+ }
+ 
++/**
++ * The reasoning the first candidate emitted, concatenated: exactly the parts
++ * `getResponseText` drops. For observation only; this text is never handed
++ * back to a model.
++ */
++export function getResponseThoughtText(
++  response: GenerateContentResponse,
++): string | null {
++  const parts = response.candidates?.[0]?.content?.parts;
++  if (!parts || parts.length === 0) {
++    return null;
++  }
++  return parts
++    .filter((part) => part.text && part.thought)
++    .map((part) => part.text)
++    .join('');
++}
++
+ /**
+  * Asynchronously maps over a PartListUnion, applying a transformation function
+  * to the text content of each text-based part.
+  *
+  * @param parts The PartListUnion to process.
+  * @param transform A function that takes a string of text and returns a Promise
 diff --git a/packages/core/src/utils/pathReader.test.ts b/packages/core/src/utils/pathReader.test.ts
 index 1db43d1..6f6b727 100644
 --- a/packages/core/src/utils/pathReader.test.ts
@@ -47986,6 +50150,57 @@ index 1d7dc09..b9e81e6 100644
    if (isShellTracePropagationEnabled()) {
      const ctx = getTraceContext();
      env['TRACEPARENT'] = ctx ? formatTraceparent(ctx) : '';
+diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils/sideQuery.test.ts
+index 6c5a588..7317e6d 100644
+--- a/packages/core/src/utils/sideQuery.test.ts
++++ b/packages/core/src/utils/sideQuery.test.ts
+@@ -304,12 +304,13 @@ describe('runSideQuery', () => {
+   });
+ 
+   describe('text mode (no schema)', () => {
+     function mockTextResult(text: string, withUsage = true) {
+       vi.mocked(mockBaseLlmClient.generateText).mockResolvedValue({
+         text,
++        thoughtText: '',
+         usage: withUsage
+           ? {
+               promptTokenCount: 10,
+               candidatesTokenCount: 5,
+               totalTokenCount: 15,
+             }
+@@ -326,12 +327,13 @@ describe('runSideQuery', () => {
+         systemInstruction: 'You are a recap generator.',
+         abortSignal: abortController.signal,
+       });
+ 
+       expect(result).toEqual({
+         text: 'hello world',
++        thoughtText: '',
+         usage: expect.objectContaining({ totalTokenCount: 15 }),
+       });
+       expect(mockBaseLlmClient.generateText).toHaveBeenCalledWith(
+         expect.objectContaining({
+           contents: [{ role: 'user', parts: [{ text: 'recap please' }] }],
+           model: 'main-model',
+diff --git a/packages/core/src/utils/sideQuery.ts b/packages/core/src/utils/sideQuery.ts
+index a659571..348d123 100644
+--- a/packages/core/src/utils/sideQuery.ts
++++ b/packages/core/src/utils/sideQuery.ts
+@@ -114,12 +114,14 @@ export interface SideQueryTextOptions {
+    */
+   failClosed?: boolean;
+ }
+ 
+ export interface SideQueryTextResult {
+   text: string;
++  /** The reasoning the query emitted, verbatim; observation only. */
++  thoughtText: string;
+   usage: GenerateContentResponseUsageMetadata | undefined;
+ }
+ 
+ export type SideQueryOptions<TResponse> = SideQueryJsonOptions<TResponse>;
+ 
+ function buildDefaultPromptId(purpose?: string): string {
 diff --git a/packages/core/src/utils/sync-file-encoding.test.ts b/packages/core/src/utils/sync-file-encoding.test.ts
 index f1e2b85..56154f7 100644
 --- a/packages/core/src/utils/sync-file-encoding.test.ts
