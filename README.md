@@ -542,6 +542,22 @@ record is a stream this service lost rather than a run that ended quietly. The t
 budget is asked before the turn it decides is counted, so a run it stops reports
 exactly the budget it was given as `num_turns` and has interrupted no turn.
 
+A status read taken while a run is in flight reports what the live reader has
+accounted so far — `observed_output_tokens`, `observed_reasoning_tokens` and
+`observed_subagent_scope_count` — and how many completed records it could not
+read whole, as `observed_unaccounted_records`. These are a growing lower bound
+over what has been written, not a verdict: the strict parse that produces
+`main_output_tokens`, `main_reasoning_tokens` and the subagent table runs once,
+at teardown, and refuses anything it does not recognise. The two are named
+apart because they are different claims, and a running session carries only the
+first while a terminal one carries only the second. Nothing reports a
+placeholder for the other: an empty subagent table is a finished run's
+statement that it delegated nothing, so it is never published by a run that has
+not finished, where it would read as exactly that evidence. A live read never
+fails on a malformed record either — refusing a status request over one bad
+line would make observing a healthy run a way to lose it — so it counts the
+record as unaccounted and leaves the verdict to the parse entitled to give one.
+
 Every turn is issued with the same output budget, the window's share, whatever
 the conversation has already cost: the trigger holds the history below the size
 at which a turn plus its tool results would outgrow the room the summary reserve

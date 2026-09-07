@@ -924,6 +924,63 @@ fn has_billed_usage(object: &serde_json::Map<String, serde_json::Value>) -> bool
         .is_some_and(|tokens| tokens > 0)
 }
 
+/// What one completed record tells the live progress reader.
+///
+/// The terminal parse refuses a stream it does not fully recognise, and that
+/// verdict is the right one to publish once a run is over. A status read taken
+/// mid-run cannot borrow it: refusing there would turn one malformed line into
+/// a failed status request for a session that is still healthy, and silently
+/// skipping the line would report a total that is quietly short. So this
+/// reader reports what it could account and says how much it could not,
+/// leaving the verdict to the parse that is entitled to give one.
+pub(crate) struct ObservedRecord {
+    /// A completed main-thread model invocation, counted as a turn.
+    pub(crate) main_turn: bool,
+    /// The subagent scope this record belongs to, if it is not the main
+    /// session. Read only for its identity; a shape this reader does not
+    /// recognise names no scope rather than inventing one.
+    pub(crate) subagent_scope: Option<String>,
+    /// Served output and reasoning tokens, when the record bills a turn and
+    /// every count it must carry is present and consistent.
+    pub(crate) usage: Option<(u64, u64)>,
+    /// The record bills a turn but its usage could not be read whole.
+    pub(crate) usage_unreadable: bool,
+}
+
+/// Read a completed record for live progress. Never fails: an unreadable
+/// usage is reported as unreadable, not raised and not ignored.
+pub(crate) fn observe_record(
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> ObservedRecord {
+    let subagent_scope = match object.get("parent_tool_use_id") {
+        Some(serde_json::Value::String(id)) if !id.is_empty() => Some(id.clone()),
+        _ => None,
+    };
+    let bills = has_billed_usage(object)
+        && object.get("type").and_then(serde_json::Value::as_str) == Some("assistant");
+    let usage = if bills {
+        let counts = object
+            .get("message")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|message| message.get("usage"))
+            .and_then(serde_json::Value::as_object)
+            .and_then(|usage| {
+                let output = usage.get("output_tokens")?.as_u64()?;
+                let reasoning = usage.get("reasoning_output_tokens")?.as_u64()?;
+                (reasoning <= output).then_some((output, reasoning))
+            });
+        counts
+    } else {
+        None
+    };
+    ObservedRecord {
+        main_turn: is_completed_main_turn(object),
+        subagent_scope,
+        usage,
+        usage_unreadable: bills && usage.is_none(),
+    }
+}
+
 pub(crate) fn is_completed_main_turn(object: &serde_json::Map<String, serde_json::Value>) -> bool {
     object.get("type").and_then(serde_json::Value::as_str) == Some("assistant")
         && is_main_session_event(object)
@@ -1386,6 +1443,55 @@ mod tests {
         let error = parse_text(&complete_looking_but_torn)
             .expect_err("a terminal JSON object without its record delimiter is torn evidence");
         assert!(error.to_string().contains("not newline-terminated"));
+    }
+
+    #[test]
+    fn observes_a_billed_main_turn_without_borrowing_the_strict_verdict() {
+        let record = serde_json::json!({
+            "type": "assistant",
+            "message": {"usage": {
+                "input_tokens": 100, "output_tokens": 40,
+                "reasoning_output_tokens": 30, "cache_read_input_tokens": 0
+            }}
+        });
+        let observed = observe_record(record.as_object().expect("object"));
+        assert!(observed.main_turn);
+        assert_eq!(observed.usage, Some((40, 30)));
+        assert!(!observed.usage_unreadable);
+        assert_eq!(observed.subagent_scope, None);
+    }
+
+    #[test]
+    fn observes_a_subagent_scope_without_counting_it_as_a_main_turn() {
+        let record = serde_json::json!({
+            "type": "assistant",
+            "parent_tool_use_id": "call_abc",
+            "message": {"usage": {
+                "input_tokens": 10, "output_tokens": 5,
+                "reasoning_output_tokens": 1, "cache_read_input_tokens": 0
+            }}
+        });
+        let observed = observe_record(record.as_object().expect("object"));
+        assert!(!observed.main_turn);
+        assert_eq!(observed.subagent_scope.as_deref(), Some("call_abc"));
+        assert_eq!(observed.usage, Some((5, 1)));
+    }
+
+    #[test]
+    fn reports_an_unreadable_usage_rather_than_skipping_or_refusing_it() {
+        // The strict parse refuses reasoning that exceeds output. A live read
+        // may not refuse a whole status request over one such record, and may
+        // not quietly drop it either: it says the tally is short instead.
+        let record = serde_json::json!({
+            "type": "assistant",
+            "message": {"usage": {
+                "input_tokens": 10, "output_tokens": 5,
+                "reasoning_output_tokens": 9, "cache_read_input_tokens": 0
+            }}
+        });
+        let observed = observe_record(record.as_object().expect("object"));
+        assert_eq!(observed.usage, None);
+        assert!(observed.usage_unreadable);
     }
 
     #[test]

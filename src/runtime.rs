@@ -159,7 +159,41 @@ pub struct SessionBody {
     pub num_turns: u64,
     pub last_event_at_unix: u64,
 
-    // Populated on transition to terminal. Zeroed/empty while running.
+    /// What the live reader has accounted in `events.jsonl` so far: served
+    /// output and reasoning tokens summed over the completed billed turns it
+    /// could read whole, and the distinct subagent scopes it has seen.
+    /// Present exactly while a run is in flight; once the terminal parse has
+    /// spoken its certified sums are the answer and a running tally is no
+    /// longer a fact about anything. An observation and a verdict are
+    /// different claims and are named apart: the first is a growing lower
+    /// bound over what has been written, the second refused everything it did
+    /// not recognise. Neither is ever presented as the other, and neither is
+    /// ever fabricated to fill the other's silence.
+    #[serde(default)]
+    pub observed_output_tokens: Option<u64>,
+    #[serde(default)]
+    pub observed_reasoning_tokens: Option<u64>,
+    #[serde(default)]
+    pub observed_subagent_scope_count: Option<u64>,
+    /// Completed records billing a turn whose usage could not be read whole.
+    /// Non-zero says the tallies above are short by an unknown amount: a live
+    /// read neither refuses an entire status request over one bad line nor
+    /// reports a total it knows is incomplete without saying so. The verdict
+    /// on such a record belongs to the terminal parse, which may refuse the
+    /// stream outright.
+    #[serde(default)]
+    pub observed_unaccounted_records: Option<u64>,
+
+    // Established when the run reaches a terminal state.
+    //
+    // The accounting the strict parse certifies -- the served token sums and
+    // the subagent table below -- is absent until there is a verdict to
+    // report. A zero and an empty table are answers a finished run can
+    // genuinely give, so neither may be borrowed to mean "no verdict yet":
+    // that is what made an empty subagent table read as proof that a run in
+    // flight had delegated nothing. Live progress is reported instead by the
+    // `observed_*` fields above, which say what has been seen rather than
+    // what has been certified.
     pub finished_at_unix: u64,
     pub duration_wall_ms: u64,
     /// Exit code reported by `docker wait` for the agent container. The
@@ -230,9 +264,9 @@ pub struct SessionBody {
     // This is an explicit persisted-data schema migration, not a runtime
     // behavior fallback.
     #[serde(default)]
-    pub main_output_tokens: u64,
+    pub main_output_tokens: Option<u64>,
     #[serde(default)]
-    pub main_reasoning_tokens: u64,
+    pub main_reasoning_tokens: Option<u64>,
     /// Per-subagent accounting from the strict terminal parse, in order of
     /// first appearance in the stream. Each row is one scope: the id-resolved
     /// `tool_use` call that spawned it, the turns the stream billed to it,
@@ -247,16 +281,16 @@ pub struct SessionBody {
     // valid migration value. This is an explicit persisted-data schema
     // migration, not a runtime behavior fallback.
     #[serde(default)]
-    pub subagent_scopes: Vec<crate::result_parse::AgentScope>,
+    pub subagent_scopes: Option<Vec<crate::result_parse::AgentScope>>,
     /// Summary counts over `subagent_scopes`, precomputed so a caller can
     /// read delegation volume and failure count without walking the array.
     /// A scope counts as an error only when its own terminal record reported
     /// `is_error: true`: a scope that never reported is surfaced as absent
     /// evidence, never inflated into a failure.
     #[serde(default)]
-    pub subagent_scope_count: u64,
+    pub subagent_scope_count: Option<u64>,
     #[serde(default)]
-    pub subagent_error_count: u64,
+    pub subagent_error_count: Option<u64>,
     /// SHA-256 of the published `bundle.tar.zst`, computed at bundle
     /// acceptance. Empty exactly when no bundle was accepted; the bundle
     /// itself is retrieved over the connection from the bundle endpoint,
@@ -1778,8 +1812,9 @@ fn unix_now() -> u64 {
         .unwrap_or(0)
 }
 
-/// Build the wire body for a running snapshot. Required-field discipline:
-/// every field present, terminal-only fields zeroed. `progress` carries
+/// Build the wire body for a running snapshot: what the run has established
+/// so far, including the live reader's tally, and no terminal verdict,
+/// because none exists yet. `progress` carries
 /// the live `(num_turns, last_event_at_unix)` reading the caller has
 /// just taken from disk.
 fn running_body(
@@ -1820,11 +1855,11 @@ fn running_body(
         agent_duration_ms: None,
         agent_api_duration_ms: None,
         agent_result_subtype: None,
-        main_output_tokens: 0,
-        main_reasoning_tokens: 0,
-        subagent_scopes: Vec::new(),
-        subagent_scope_count: 0,
-        subagent_error_count: 0,
+        main_output_tokens: Some(0),
+        main_reasoning_tokens: Some(0),
+        subagent_scopes: Some(Vec::new()),
+        subagent_scope_count: Some(0),
+        subagent_error_count: Some(0),
         bundle_sha256: String::new(),
         bundle_compressed_bytes: 0,
         bundle_uncompressed_bytes: 0,
@@ -1832,6 +1867,10 @@ fn running_body(
         bundle_artifacts_file_count: 0,
         raw_session_tree_retained: false,
         teardown_diagnostics: Vec::new(),
+        observed_output_tokens: None,
+        observed_reasoning_tokens: None,
+        observed_subagent_scope_count: None,
+        observed_unaccounted_records: None,
     }
 }
 
@@ -1900,6 +1939,14 @@ pub struct RunningOutputProgress {
     pub num_turns: u64,
     pub last_event_at_unix: u64,
     pub output_event_bytes: u64,
+    /// Served tokens summed over the completed billed turns this read could
+    /// account whole, and the distinct subagent scopes it saw: a growing
+    /// lower bound over what has been written, never a terminal verdict.
+    pub observed_output_tokens: u64,
+    pub observed_reasoning_tokens: u64,
+    pub observed_subagent_scope_count: u64,
+    /// Completed records billing a turn whose usage could not be read whole.
+    pub observed_unaccounted_records: u64,
 }
 
 /// Read the live `events.jsonl` and return its exact completed-turn count,
@@ -1978,6 +2025,10 @@ pub fn read_running_progress(
     let snapshot_len = meta.len();
     let mut reader = BufReader::new(file.take(snapshot_len));
     let mut num_turns = 0u64;
+    let mut observed_output_tokens = 0u64;
+    let mut observed_reasoning_tokens = 0u64;
+    let mut observed_unaccounted_records = 0u64;
+    let mut subagent_scopes = std::collections::BTreeSet::<String>::new();
     let mut index = 0usize;
     let mut chunk = Vec::new();
     loop {
@@ -2017,16 +2068,45 @@ pub fn read_running_progress(
                     "read_running_progress: completed JSONL record {index} lacks string type"
                 ))
             })?;
-        if crate::result_parse::is_completed_main_turn(object) {
+        let observed = crate::result_parse::observe_record(object);
+        if observed.main_turn {
             num_turns = num_turns.checked_add(1).ok_or_else(|| {
                 ServiceError::Internal("read_running_progress: turn count overflowed".into())
             })?;
+        }
+        if let Some(scope) = observed.subagent_scope {
+            subagent_scopes.insert(scope);
+        }
+        if let Some((output, reasoning)) = observed.usage {
+            observed_output_tokens = observed_output_tokens.checked_add(output).ok_or_else(|| {
+                ServiceError::Internal("read_running_progress: output token sum overflowed".into())
+            })?;
+            observed_reasoning_tokens = observed_reasoning_tokens
+                .checked_add(reasoning)
+                .ok_or_else(|| {
+                    ServiceError::Internal(
+                        "read_running_progress: reasoning token sum overflowed".into(),
+                    )
+                })?;
+        }
+        if observed.usage_unreadable {
+            observed_unaccounted_records = observed_unaccounted_records
+                .checked_add(1)
+                .ok_or_else(|| {
+                    ServiceError::Internal(
+                        "read_running_progress: unaccounted record count overflowed".into(),
+                    )
+                })?;
         }
     }
     Ok(RunningOutputProgress {
         num_turns,
         last_event_at_unix,
         output_event_bytes: meta.len(),
+        observed_output_tokens,
+        observed_reasoning_tokens,
+        observed_subagent_scope_count: subagent_scopes.len() as u64,
+        observed_unaccounted_records,
     })
 }
 
@@ -3422,6 +3502,31 @@ async fn prepare_terminal(results_dir: &Path, body: &SessionBody) -> ServiceResu
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
 
+    // A terminal record is the strict parse's verdict. The live reader's
+    // running tally belongs to a run still in flight and would read here as a
+    // second, weaker answer to a question this record already answers, so a
+    // body carrying one is a construction defect rather than something to
+    // publish and explain away.
+    for (field, present) in [
+        ("observed_output_tokens", body.observed_output_tokens.is_some()),
+        ("observed_reasoning_tokens", body.observed_reasoning_tokens.is_some()),
+        (
+            "observed_subagent_scope_count",
+            body.observed_subagent_scope_count.is_some(),
+        ),
+        (
+            "observed_unaccounted_records",
+            body.observed_unaccounted_records.is_some(),
+        ),
+    ] {
+        if present {
+            return Err(ServiceError::Internal(format!(
+                "prepare_terminal({}): terminal record carries live-progress {field}",
+                body.session_id
+            )));
+        }
+    }
+
     let dir = results_dir.join(&body.session_id);
     crate::bundle::ensure_service_owned_result_directory(&dir)?;
     let final_path = dir.join("finished.json");
@@ -4252,11 +4357,11 @@ mod tests {
             agent_duration_ms: Some(1),
             agent_api_duration_ms: Some(1),
             agent_result_subtype: Some("success".to_string()),
-            main_output_tokens: 0,
-            main_reasoning_tokens: 0,
-            subagent_scopes: Vec::new(),
-            subagent_scope_count: 0,
-            subagent_error_count: 0,
+            main_output_tokens: Some(0),
+            main_reasoning_tokens: Some(0),
+            subagent_scopes: Some(Vec::new()),
+            subagent_scope_count: Some(0),
+            subagent_error_count: Some(0),
             bundle_sha256: String::new(),
             bundle_compressed_bytes: 0,
             bundle_uncompressed_bytes: 0,
@@ -4264,6 +4369,10 @@ mod tests {
             bundle_artifacts_file_count: 0,
             raw_session_tree_retained: false,
             teardown_diagnostics: Vec::new(),
+            observed_output_tokens: None,
+            observed_reasoning_tokens: None,
+            observed_subagent_scope_count: None,
+            observed_unaccounted_records: None,
         }
     }
 
