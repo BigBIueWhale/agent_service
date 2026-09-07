@@ -33,7 +33,7 @@ The fixed stack is:
 | Corrected model SHA-256 | `5fd70b38b3708e47adc1e9e9ab90f5d688ec01177d0718fdd16678696fdb0988` |
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
-| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v20 profile |
+| vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v21 profile |
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
 | Context | Native `262144` tokens |
@@ -66,7 +66,7 @@ The service independently requires `/model` to be the exact corrected directory 
 one read-only bind mount and requires the backend container's source revision,
 official revision, correction recipe, corrected model digest, and manifest digest
 labels. It also requires a read-only backend root running as `2000:0`, exact bounded
-`/tmp` and `/run` tmpfs contracts, exactly one labelled v20 vLLM cache volume at
+`/tmp` and `/run` tmpfs contracts, exactly one labelled v21 vLLM cache volume at
 `/home/vllm/.cache/vllm`, and no other mount. Every persistent JIT/cache path is
 rooted beneath that exact volume; runtime writes cannot mutate the container layer.
 The backend's own status performs the complete file-manifest verification.
@@ -914,7 +914,7 @@ misleading 404. Shutdown has no arbitrary teardown deadline.
 ## Acceptance gates
 
 A release is not complete merely because the images build. Every required gate below
-passed against the current pinned agent release and the exact live v20 corrected
+passed against the current pinned agent release and the exact live v21 corrected
 backend; unchanged historical cache measurements are identified as such:
 
 1. strict JSON, shell syntax, formatting, locked Cargo build, and Rust tests;
