@@ -7,7 +7,7 @@ IDENTITY_FILES = {'package.json': '9b0198b3869b7b40316140422436ea3adc6580030baf1
 
 GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
   'review_patch': 'patches/qwen-code-0.21.12-agent-service.patch',
-  'review_sha256': 'a0ccc567ade8556ca03254296ff909f5e333fe8e35ec6b8eb183f7610cda8414',
+  'review_sha256': '1b05587d65f17dea6a262a32ac9a731a4939e6b73d87d46a4ee2c40385fc1896',
   'files': ({'path': 'packages/cli/src/acp-integration/session/Session.test.ts',
              'before_sha256': '79540f9f6c9407085e0160a12aaf5bb30fa3d94d6fdb0fb017ac6083e2b5fafb',
              'after_sha256': '6b9a035a99a6ea4de2e5455da2a63ed7a1efe8f3c4a58b0629bc05d206c51f4e'},
@@ -106,7 +106,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '488d15f59afc8ddcf25fdd008d6ca723385a58147c1dea51f673b0aa4b0fc9e9'},
             {'path': 'packages/cli/src/ui/commands/contextCommand.ts',
              'before_sha256': '9a95980131c9dea7c03b8f1e3a9f20bff4c4da7c135b99c337b56b9b4d8c2115',
-             'after_sha256': 'd8bf91bbaba56641effd71de23115fedd3a8a0bfcf0f9e54dad1504c9efa8f17'},
+             'after_sha256': 'd686fac91be35ca501185c37d5a4d6ef552994b909eabca18193fc2e74ae5f98'},
             {'path': 'packages/cli/src/ui/commands/doctorCommand.test.ts',
              'before_sha256': '70297273883e4d4ccd0cff5a9742dd8804c1e21a72e7f87bf036bc101faeb7c4',
              'after_sha256': '5605f0fe40734369db9b5c16f386c4f428e6231aa0a91f3eb513aac14898b749'},
@@ -124,7 +124,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '1e9ca3cfd022b55bca6e8a110416c85c63235f046ad06a2a5aeb33cb97bb4857'},
             {'path': 'packages/cli/src/ui/components/views/ContextUsage.tsx',
              'before_sha256': '7c7e6e9938f3a714f478bc6c9badbcf8a23e4c5052c30a06918d7c443d87ab1a',
-             'after_sha256': '319b9d10555965be3a6f537618f8202612c2725f5db5e18cc7e31bd71b202a67'},
+             'after_sha256': 'f13e0539896a99f8f758692ba57eaa1194af4b1ad6d34025005403ac03854936'},
             {'path': 'packages/cli/src/ui/hooks/atCommandProcessor.test.ts',
              'before_sha256': '4b103ea965aaf6f61fae088e82df873b52d163f742f83040ace37032c6cc1315',
              'after_sha256': 'e3594b080a5b93f06902925dced00476f4b7c710e34ebbd6257afb9822b63fba'},
@@ -133,10 +133,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '061c3cccfb1ca3a4ee6d74a3e7c07e2ef51e7a541d006145e28fdd135a84b1b8'},
             {'path': 'packages/cli/src/ui/hooks/useGeminiStream.test.tsx',
              'before_sha256': 'cff8d89be1898e0d3d83a3f828512ecef48fba1875440c9ddbcdbf815c86e6be',
-             'after_sha256': 'b4309b336cd3e5f662ca116c0d7bce3fabbc06c8cf48f5358991ed2d7b4833f5'},
+             'after_sha256': 'b051797ecf7cecefeaad69c4b10dda5f0d2aebbce407565cca43cf7dccae8a9d'},
             {'path': 'packages/cli/src/ui/hooks/useGeminiStream.ts',
              'before_sha256': '81ae8edc386ed5b31b09a99435bbb94925117c9a56e6bf4bb80d3c9be422f5ba',
-             'after_sha256': '23cd9a04996f5dc7544fd7350841f3895a10fc055ff8d1a89ff690388b16f02b'},
+             'after_sha256': '756f3589f968257d241e81395c0f59da6fcb6d596918ad6e3ddf315074684375'},
             {'path': 'packages/cli/src/ui/hooks/useToolScheduler.test.ts',
              'before_sha256': '10018c77144b67290135a92158454fcd989684516bebd472fe193e5df34b4a0f',
              'after_sha256': 'aa5bce71c9b6789fe43630e5a22e70bf86b47e6ed9102bbb13e1c92cc9d6073b'},
@@ -181,7 +181,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'b9bb1b3221091d0d4b348d228c31d6ba098a5549cfec6aef195f98bd8a60ed4d'},
             {'path': 'packages/core/src/agents/runtime/agent-headless.ts',
              'before_sha256': 'db6d8ed8f7714a83483fb9f22c860a3f2e7e38cf53171e79c5fc49a363d3c3ce',
-             'after_sha256': '24f953533bc130c33687e2cbe1b324dc0f49fb5a3f78860e30682193ac272cf5'},
+             'after_sha256': '665e58586c9249717ffe768fc82d23a0b2e9bf027fe42453e9619c36cd924935'},
             {'path': 'packages/core/src/agents/runtime/agent-interactive.ts',
              'before_sha256': 'cac28d09504895090d48ed0de3c3c0813a9631f1cc83780df59d53c35b7e1ff2',
              'after_sha256': '68ecd4bb93b57778021f1cbfcf866060bc9ffc4f6dd875ee1e0ad20e72735986'},
@@ -250,10 +250,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '0d3644f3c77c8aeddd4a668b601f9d3a91881d82119fe7a476c9704abedd6cb3'},
             {'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
              'before_sha256': '0297088a5fb7ce2eaf6fb7d556f488ace146995a0267eede844761437701a926',
-             'after_sha256': 'c8a3db9f165ef582c6748c8d35b87578b83098f7a01d49b4892d6ae3c1ec2703'},
+             'after_sha256': '37ace705b3f354c93b22f5d527e1734cd29dc3372edf8352760ebb25cac265e3'},
             {'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
              'before_sha256': 'ca7c3d7e4c30a3f1b219ea4981a9e1b175a54617b780fc9cc28e0af53e65d638',
-             'after_sha256': '440293b8c114d3e299b6757c8c26d7db218a76469c6581d754d10bf8259ba755'},
+             'after_sha256': '27f66433632760ccb1459565c60bdc89043250e1a0d870bfe0096e5908ca5855'},
             {'path': 'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts',
              'before_sha256': '0f90249e95cc6f5142faf7f2f69436054b5424c8dceb4c515286f6dd5f13d5b3',
              'after_sha256': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1'},
@@ -280,7 +280,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851'},
             {'path': 'packages/core/src/core/qwen38-deployment-prompt.ts',
              'before_sha256': None,
-             'after_sha256': '0397a0cf6e4c71f9df3d0f04a2058c9703ae6b8507cd5cbcd9682603a993b24a'},
+             'after_sha256': '619c6507f7d5651a77c68502cefd45011c4a04640f5fe73895903ead89dbbdd0'},
             {'path': 'packages/core/src/core/session-recovery.ts',
              'before_sha256': '65e3c71d4fc1661976daaab2add6dbcb6ae6a740f85c88f47ca0106c863186a6',
              'after_sha256': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513'},
@@ -295,10 +295,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9'},
             {'path': 'packages/core/src/core/turn.test.ts',
              'before_sha256': '23a61903d7201ad49ed84dfbaf5b3c7ae991d56c69e0e34edfa5d8364cc7f222',
-             'after_sha256': '5de15292c793f4227c500e3680a621ce492a7bb11fb88375a1ee6deb42d313c9'},
+             'after_sha256': 'cd8776cc0b8250eb030f489a02b8824cf5472a1f2120edb2b93efb72fcb7bb31'},
             {'path': 'packages/core/src/core/turn.ts',
              'before_sha256': 'f1be47023cae4b9e3a4fd9fd756c28bf36724f772bd9759e8ecd72e73cdea6b7',
-             'after_sha256': '3cfaed5ff7fc6f4836ec7916564450f9b47642efd1ec6327990ef3e9f7d0f714'},
+             'after_sha256': 'f693b8ed3522f8eb4b7c1dd0b64022ccb6bc7cca1ec5aaf12e69f4f7891b1373'},
             {'path': 'packages/core/src/followup/speculation.test.ts',
              'before_sha256': 'c570eb9c7b6056fd58adb00fe3bea48a4c2c2476838012a7b3b3e9ad91f2f6f2',
              'after_sha256': '37f44fb1afc78c0de72e2378eb7c714b68ee53abc523307e744e20e647351764'},
@@ -391,10 +391,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
              'after_sha256': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41'},
             {'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before_sha256': 'e34a3e771b48a9689591278f9d5f146f31c7a99960f1c2fdc5550f978c53d468',
-             'after_sha256': '0453def3b4f48864aa9162b9292161cb79c928b7eb8a11dac643f8e36c0908ec'},
+             'after_sha256': '605369fc7b4c753aeea8b1b303f46deb385142bb8100766a8abc3eca2aa142bb'},
             {'path': 'packages/core/src/tools/agent/agent.ts',
              'before_sha256': '0f932baa5a53c2a0ace9398aca84ad13f1a4ea273026af7d5a5e2b503b456f31',
-             'after_sha256': '2b692878e32c7b18969ead1e1951e1618d7a87d95590b43053d04903b86b3a80'},
+             'after_sha256': 'e59bc0752ea8097d11235b72cc51a59bf94fdd1d7388d20212ba79d547eadd97'},
             {'path': 'packages/core/src/tools/agent/qwen38-effect-journal.test.ts',
              'before_sha256': None,
              'after_sha256': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07'},
@@ -28508,8 +28508,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "import { t } from '../../i18n/index.js';\n"
                       '\n'
                       '/**\n'
-                      ' * Classify a token count against the three-tier compaction '
-                      'ladder. Mirrors\n'
+                      ' * Classify a token count against the compaction trigger. '
+                      'Mirrors\n'
                       ' * the gating logic in `chatCompressionService` / `geminiChat` '
                       'so the\n'
                       ' * `/context` output\'s "current tier" label reflects exactly '
@@ -28576,8 +28576,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "import { t } from '../../i18n/index.js';\n"
                              '\n'
                              '/**\n'
-                             ' * Classify a token count against the three-tier '
-                             'compaction ladder. Mirrors\n'
+                             ' * Classify a token count against the compaction '
+                             'trigger. Mirrors\n'
                              ' * the gating logic in `chatCompressionService` / '
                              '`geminiChat` so the\n'
                              ' * `/context` output\'s "current tier" label reflects '
@@ -28637,7 +28637,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '\n'
                       '  const thresholds = '
                       'partitionContextWindow(contextWindowSize);\n'
-                      '  // The three reserved shares, which is exactly the headroom '
+                      '  // The four reserved shares, which is exactly the headroom '
                       'the\n'
                       '  // three-segment progress bar in ContextUsage.tsx draws '
                       'between the\n'
@@ -28689,7 +28689,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '\n'
                              '  const thresholds = '
                              'partitionContextWindow(contextWindowSize);\n'
-                             '  // The three reserved shares, which is exactly the '
+                             '  // The four reserved shares, which is exactly the '
                              'headroom the\n'
                              '  // three-segment progress bar in ContextUsage.tsx '
                              'draws between the\n'
@@ -31547,7 +31547,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '}\n'
                       '\n'
                       '/**\n'
-                      " * Renders the window's four shares with a marker on the "
+                      " * Renders the window's five shares with a marker on the "
                       'compaction trigger\n'
                       ' * when the session has reached it. Source of the data is\n'
                       ' * `breakdown.thresholds` + `breakdown.currentTier`, which the '
@@ -31679,7 +31679,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '}\n'
                              '\n'
                              '/**\n'
-                             " * Renders the window's four shares with a marker on the "
+                             " * Renders the window's five shares with a marker on the "
                              'compaction trigger\n'
                              ' * when the session has reached it. Source of the data '
                              'is\n'
@@ -32242,10 +32242,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'as Mock;\n'},
             {'name': 'packages/cli/src/ui/hooks/useGeminiStream.test.tsx:landmark-3',
              'path': 'packages/cli/src/ui/hooks/useGeminiStream.test.tsx',
-             'before': '    // The calls streamed before the halt must not be '
-                       'scheduled for execution.\n'
-                       '    expect(mockScheduleToolCalls).not.toHaveBeenCalled();\n'
-                       '  });\n'
+             'before': '  });\n'
                        '\n'
                        "  it('suppresses duplicate provider tool-call ids before TUI "
                        "scheduling', async () => {\n"
@@ -32263,11 +32260,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        getChatRecordingService: () => {\n'
                        '          recordToolResult: typeof recordToolResult;\n'
                        '        };\n'
-                       '      }\n',
-             'after': '    // The calls streamed before the halt must not be scheduled '
-                      'for execution.\n'
-                      '    expect(mockScheduleToolCalls).not.toHaveBeenCalled();\n'
-                      '  });\n'
+                       '      }\n'
+                       '    ).getChatRecordingService = () => ({ recordToolResult });\n'
+                       '    let capturedOnComplete:\n',
+             'after': '  });\n'
                       '\n'
                       "  it('suppresses duplicate provider tool-call ids before TUI "
                       "scheduling', async () => {\n"
@@ -32277,12 +32273,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        getChatRecordingService: () => {\n'
                       '          recordToolResult: typeof recordToolResult;\n'
                       '        };\n'
-                      '      }\n',
-             'review_before': '    // The calls streamed before the halt must not be '
-                              'scheduled for execution.\n'
-                              '    '
-                              'expect(mockScheduleToolCalls).not.toHaveBeenCalled();\n'
-                              '  });\n'
+                      '      }\n'
+                      '    ).getChatRecordingService = () => ({ recordToolResult });\n'
+                      '    let capturedOnComplete:\n',
+             'review_before': '  });\n'
                               '\n'
                               "  it('suppresses duplicate provider tool-call ids "
                               "before TUI scheduling', async () => {\n"
@@ -32300,12 +32294,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        getChatRecordingService: () => {\n'
                               '          recordToolResult: typeof recordToolResult;\n'
                               '        };\n'
-                              '      }\n',
-             'review_after': '    // The calls streamed before the halt must not be '
-                             'scheduled for execution.\n'
-                             '    '
-                             'expect(mockScheduleToolCalls).not.toHaveBeenCalled();\n'
-                             '  });\n'
+                              '      }\n'
+                              '    ).getChatRecordingService = () => ({ '
+                              'recordToolResult });\n'
+                              '    let capturedOnComplete:\n',
+             'review_after': '  });\n'
                              '\n'
                              "  it('suppresses duplicate provider tool-call ids before "
                              "TUI scheduling', async () => {\n"
@@ -32315,7 +32308,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        getChatRecordingService: () => {\n'
                              '          recordToolResult: typeof recordToolResult;\n'
                              '        };\n'
-                             '      }\n'},
+                             '      }\n'
+                             '    ).getChatRecordingService = () => ({ '
+                             'recordToolResult });\n'
+                             '    let capturedOnComplete:\n'},
             {'name': 'packages/cli/src/ui/hooks/useGeminiStream.test.tsx:landmark-4',
              'path': 'packages/cli/src/ui/hooks/useGeminiStream.test.tsx',
              'before': '        responseParts: [\n'
@@ -32558,6 +32554,279 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      ]);\n'
                              '    });\n'
                              '\n'},
+            {'name': 'packages/cli/src/ui/hooks/useGeminiStream.test.tsx:landmark-7',
+             'path': 'packages/cli/src/ui/hooks/useGeminiStream.test.tsx',
+             'before': '        expect.objectContaining({ type: MessageType.INFO }),\n'
+                       '        expect.any(Number),\n'
+                       '      );\n'
+                       '    });\n'
+                       '  });\n'
+                       '\n'
+                       "  describe('ChatCompressed event', () => {\n"
+                       "    it('starts a fresh prefixed text item after the status "
+                       "row', async () => {\n"
+                       '      mockSendMessageStream.mockReturnValue(\n'
+                       '        (async function* () {\n'
+                       '          yield {\n'
+                       '            type: ServerGeminiEventType.Content,\n',
+             'after': '        expect.objectContaining({ type: MessageType.INFO }),\n'
+                      '        expect.any(Number),\n'
+                      '      );\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('ChatCompaction event', () => {\n"
+                      '    it.each([\n'
+                      '      null,\n'
+                      '      {\n'
+                      '        maxOutputTokens: 200,\n'
+                      '        outputTokens: 200,\n'
+                      '        thinkingTokens: 190,\n'
+                      "        reasoning: 'private reasoning must not flood the "
+                      "terminal',\n"
+                      '        summaryChars: 10,\n'
+                      "        finishReason: 'MAX_TOKENS',\n"
+                      '      },\n'
+                      '    ])(\n'
+                      "      'reports a refused compaction without rendering its "
+                      "reasoning',\n"
+                      '      async (output) => {\n'
+                      '        mockSendMessageStream.mockReturnValue(\n'
+                      '          (async function* () {\n'
+                      '            yield {\n'
+                      '              type: ServerGeminiEventType.ChatCompaction,\n'
+                      '              value: {\n'
+                      "                status: 'COMPRESSION_FAILED_OUTPUT_TRUNCATED',\n"
+                      '                succeeded: false,\n'
+                      '                originalTokenCount: 1000,\n'
+                      '                newTokenCount: 1000,\n'
+                      '                triggerReason: null,\n'
+                      '                output,\n'
+                      '              },\n'
+                      '            };\n'
+                      '            yield {\n'
+                      '              type: ServerGeminiEventType.Finished,\n'
+                      "              value: { reason: 'STOP' },\n"
+                      '            };\n'
+                      '          })(),\n'
+                      '        );\n'
+                      '        const { result } = renderTestHook();\n'
+                      '        await act(async () => {\n'
+                      "          await result.current.submitQuery('test failed "
+                      "compaction');\n"
+                      '        });\n'
+                      '        const notices = mockAddItem.mock.calls\n'
+                      '          .map(([item]) => item as HistoryItem)\n'
+                      "          .filter((item) => item.type === 'info');\n"
+                      '        expect(notices).toEqual([\n'
+                      '          expect.objectContaining({\n'
+                      '            text: expect.stringContaining(\n'
+                      "              'Compaction failed "
+                      '(COMPRESSION_FAILED_OUTPUT_TRUNCATED); the original context was '
+                      "preserved.',\n"
+                      '            ),\n'
+                      '          }),\n'
+                      '        ]);\n'
+                      "        expect(JSON.stringify(notices)).not.toContain('private "
+                      "reasoning');\n"
+                      '        expect(JSON.stringify(notices)).toContain(\n'
+                      '          output\n'
+                      "            ? '200 tokens, including 190 reasoning tokens'\n"
+                      "            : 'No summary generation was recorded.',\n"
+                      '        );\n'
+                      '      },\n'
+                      '    );\n'
+                      '\n'
+                      "    it('leaves successful notices to ChatCompressed', async () "
+                      '=> {\n'
+                      '      mockSendMessageStream.mockReturnValue(\n'
+                      '        (async function* () {\n'
+                      '          yield {\n'
+                      '            type: ServerGeminiEventType.ChatCompaction,\n'
+                      '            value: {\n'
+                      "              status: 'COMPRESSED',\n"
+                      '              succeeded: true,\n'
+                      '              originalTokenCount: 100,\n'
+                      '              newTokenCount: 50,\n'
+                      "              triggerReason: 'token_limit',\n"
+                      '              output: null,\n'
+                      '            },\n'
+                      '          };\n'
+                      '          yield {\n'
+                      '            type: ServerGeminiEventType.ChatCompressed,\n'
+                      '            value: {\n'
+                      '              originalTokenCount: 100,\n'
+                      '              newTokenCount: 50,\n'
+                      '            },\n'
+                      '          };\n'
+                      '          yield {\n'
+                      '            type: ServerGeminiEventType.Finished,\n'
+                      "            value: { reason: 'STOP' },\n"
+                      '          };\n'
+                      '        })(),\n'
+                      '      );\n'
+                      '      const { result } = renderTestHook();\n'
+                      '      await act(async () => {\n'
+                      "        await result.current.submitQuery('test successful "
+                      "compaction');\n"
+                      '      });\n'
+                      '      const notices = mockAddItem.mock.calls\n'
+                      '        .map(([item]) => item as HistoryItem)\n'
+                      "        .filter((item) => item.type === 'info');\n"
+                      '      expect(notices).toEqual([\n'
+                      '        expect.objectContaining({\n'
+                      "          text: expect.stringContaining('compressed context'),\n"
+                      '        }),\n'
+                      '      ]);\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  describe('ChatCompressed event', () => {\n"
+                      "    it('starts a fresh prefixed text item after the status "
+                      "row', async () => {\n"
+                      '      mockSendMessageStream.mockReturnValue(\n'
+                      '        (async function* () {\n'
+                      '          yield {\n'
+                      '            type: ServerGeminiEventType.Content,\n',
+             'review_before': '        expect.objectContaining({ type: '
+                              'MessageType.INFO }),\n'
+                              '        expect.any(Number),\n'
+                              '      );\n'
+                              '    });\n'
+                              '  });\n'
+                              '\n'
+                              "  describe('ChatCompressed event', () => {\n"
+                              "    it('starts a fresh prefixed text item after the "
+                              "status row', async () => {\n"
+                              '      mockSendMessageStream.mockReturnValue(\n'
+                              '        (async function* () {\n'
+                              '          yield {\n'
+                              '            type: ServerGeminiEventType.Content,\n',
+             'review_after': '        expect.objectContaining({ type: MessageType.INFO '
+                             '}),\n'
+                             '        expect.any(Number),\n'
+                             '      );\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('ChatCompaction event', () => {\n"
+                             '    it.each([\n'
+                             '      null,\n'
+                             '      {\n'
+                             '        maxOutputTokens: 200,\n'
+                             '        outputTokens: 200,\n'
+                             '        thinkingTokens: 190,\n'
+                             "        reasoning: 'private reasoning must not flood the "
+                             "terminal',\n"
+                             '        summaryChars: 10,\n'
+                             "        finishReason: 'MAX_TOKENS',\n"
+                             '      },\n'
+                             '    ])(\n'
+                             "      'reports a refused compaction without rendering "
+                             "its reasoning',\n"
+                             '      async (output) => {\n'
+                             '        mockSendMessageStream.mockReturnValue(\n'
+                             '          (async function* () {\n'
+                             '            yield {\n'
+                             '              type: '
+                             'ServerGeminiEventType.ChatCompaction,\n'
+                             '              value: {\n'
+                             '                status: '
+                             "'COMPRESSION_FAILED_OUTPUT_TRUNCATED',\n"
+                             '                succeeded: false,\n'
+                             '                originalTokenCount: 1000,\n'
+                             '                newTokenCount: 1000,\n'
+                             '                triggerReason: null,\n'
+                             '                output,\n'
+                             '              },\n'
+                             '            };\n'
+                             '            yield {\n'
+                             '              type: ServerGeminiEventType.Finished,\n'
+                             "              value: { reason: 'STOP' },\n"
+                             '            };\n'
+                             '          })(),\n'
+                             '        );\n'
+                             '        const { result } = renderTestHook();\n'
+                             '        await act(async () => {\n'
+                             "          await result.current.submitQuery('test failed "
+                             "compaction');\n"
+                             '        });\n'
+                             '        const notices = mockAddItem.mock.calls\n'
+                             '          .map(([item]) => item as HistoryItem)\n'
+                             "          .filter((item) => item.type === 'info');\n"
+                             '        expect(notices).toEqual([\n'
+                             '          expect.objectContaining({\n'
+                             '            text: expect.stringContaining(\n'
+                             "              'Compaction failed "
+                             '(COMPRESSION_FAILED_OUTPUT_TRUNCATED); the original '
+                             "context was preserved.',\n"
+                             '            ),\n'
+                             '          }),\n'
+                             '        ]);\n'
+                             '        '
+                             "expect(JSON.stringify(notices)).not.toContain('private "
+                             "reasoning');\n"
+                             '        expect(JSON.stringify(notices)).toContain(\n'
+                             '          output\n'
+                             "            ? '200 tokens, including 190 reasoning "
+                             "tokens'\n"
+                             "            : 'No summary generation was recorded.',\n"
+                             '        );\n'
+                             '      },\n'
+                             '    );\n'
+                             '\n'
+                             "    it('leaves successful notices to ChatCompressed', "
+                             'async () => {\n'
+                             '      mockSendMessageStream.mockReturnValue(\n'
+                             '        (async function* () {\n'
+                             '          yield {\n'
+                             '            type: ServerGeminiEventType.ChatCompaction,\n'
+                             '            value: {\n'
+                             "              status: 'COMPRESSED',\n"
+                             '              succeeded: true,\n'
+                             '              originalTokenCount: 100,\n'
+                             '              newTokenCount: 50,\n'
+                             "              triggerReason: 'token_limit',\n"
+                             '              output: null,\n'
+                             '            },\n'
+                             '          };\n'
+                             '          yield {\n'
+                             '            type: ServerGeminiEventType.ChatCompressed,\n'
+                             '            value: {\n'
+                             '              originalTokenCount: 100,\n'
+                             '              newTokenCount: 50,\n'
+                             '            },\n'
+                             '          };\n'
+                             '          yield {\n'
+                             '            type: ServerGeminiEventType.Finished,\n'
+                             "            value: { reason: 'STOP' },\n"
+                             '          };\n'
+                             '        })(),\n'
+                             '      );\n'
+                             '      const { result } = renderTestHook();\n'
+                             '      await act(async () => {\n'
+                             "        await result.current.submitQuery('test "
+                             "successful compaction');\n"
+                             '      });\n'
+                             '      const notices = mockAddItem.mock.calls\n'
+                             '        .map(([item]) => item as HistoryItem)\n'
+                             "        .filter((item) => item.type === 'info');\n"
+                             '      expect(notices).toEqual([\n'
+                             '        expect.objectContaining({\n'
+                             "          text: expect.stringContaining('compressed "
+                             "context'),\n"
+                             '        }),\n'
+                             '      ]);\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  describe('ChatCompressed event', () => {\n"
+                             "    it('starts a fresh prefixed text item after the "
+                             "status row', async () => {\n"
+                             '      mockSendMessageStream.mockReturnValue(\n'
+                             '        (async function* () {\n'
+                             '          yield {\n'
+                             '            type: ServerGeminiEventType.Content,\n'},
             {'name': 'packages/cli/src/ui/hooks/useGeminiStream.ts:landmark-1',
              'path': 'packages/cli/src/ui/hooks/useGeminiStream.ts',
              'before': '  markDuplicateProviderToolCallResponseSent,\n'
@@ -32616,7 +32885,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  HistoryItem,\n'},
             {'name': 'packages/cli/src/ui/hooks/useGeminiStream.ts:landmark-2',
              'path': 'packages/cli/src/ui/hooks/useGeminiStream.ts',
-             'before': '            case ServerGeminiEventType.ChatCompressed:\n'
+             'before': '              break;\n'
+                       '            case ServerGeminiEventType.ChatCompressed:\n'
                        '              flushBufferedStreamEvents();\n'
                        '              handleChatCompressionEvent(event.value, '
                        'userMessageTimestamp);\n'
@@ -32627,9 +32897,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '            case ServerGeminiEventType.ToolCallResponse:\n'
                        '              flushBufferedStreamEvents();\n'
                        '              break;\n'
-                       '            case ServerGeminiEventType.MaxSessionTurns:\n'
-                       '              flushBufferedStreamEvents();\n',
-             'after': '            case ServerGeminiEventType.ChatCompressed:\n'
+                       '            case ServerGeminiEventType.MaxSessionTurns:\n',
+             'after': '              break;\n'
+                      '            case ServerGeminiEventType.ChatCompressed:\n'
                       '              flushBufferedStreamEvents();\n'
                       '              handleChatCompressionEvent(event.value, '
                       'userMessageTimestamp);\n'
@@ -32637,21 +32907,37 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '              assistantOutputStarted = false;\n'
                       '              break;\n'
                       '            case ServerGeminiEventType.ChatCompaction:\n'
-                      '              // Machine-readable record of a compaction '
-                      'attempt, consumed by\n'
-                      '              // the headless output adapters. The interactive '
-                      'notice for a\n'
-                      '              // successful compaction is driven by '
-                      'ChatCompressed above, so\n'
-                      '              // rendering this too would duplicate it.\n'
+                      '              // Successful replacement has its own '
+                      'ChatCompressed notice.\n'
+                      '              if (!event.value.succeeded && event.value.status '
+                      "!== 'NOOP') {\n"
+                      '                flushBufferedStreamEvents();\n'
+                      '                addItem(\n'
+                      '                  {\n'
+                      "                    type: 'info',\n"
+                      '                    text:\n'
+                      '                      `Compaction failed '
+                      '(${event.value.status}); the original context was preserved.` '
+                      '+\n'
+                      '                      (event.value.output\n'
+                      '                        ? ` Output: '
+                      '${event.value.output.outputTokens} tokens, including '
+                      '${event.value.output.thinkingTokens} reasoning tokens, from a '
+                      '${event.value.output.maxOutputTokens}-token budget.`\n'
+                      "                        : ' No summary generation was "
+                      "recorded.'),\n"
+                      '                  },\n'
+                      '                  userMessageTimestamp,\n'
+                      '                );\n'
+                      '              }\n'
                       '              break;\n'
                       '            case ServerGeminiEventType.ToolCallConfirmation:\n'
                       '            case ServerGeminiEventType.ToolCallResponse:\n'
                       '              flushBufferedStreamEvents();\n'
                       '              break;\n'
-                      '            case ServerGeminiEventType.MaxSessionTurns:\n'
-                      '              flushBufferedStreamEvents();\n',
-             'review_before': '            case ServerGeminiEventType.ChatCompressed:\n'
+                      '            case ServerGeminiEventType.MaxSessionTurns:\n',
+             'review_before': '              break;\n'
+                              '            case ServerGeminiEventType.ChatCompressed:\n'
                               '              flushBufferedStreamEvents();\n'
                               '              handleChatCompressionEvent(event.value, '
                               'userMessageTimestamp);\n'
@@ -32665,9 +32951,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '              flushBufferedStreamEvents();\n'
                               '              break;\n'
                               '            case '
-                              'ServerGeminiEventType.MaxSessionTurns:\n'
-                              '              flushBufferedStreamEvents();\n',
-             'review_after': '            case ServerGeminiEventType.ChatCompressed:\n'
+                              'ServerGeminiEventType.MaxSessionTurns:\n',
+             'review_after': '              break;\n'
+                             '            case ServerGeminiEventType.ChatCompressed:\n'
                              '              flushBufferedStreamEvents();\n'
                              '              handleChatCompressionEvent(event.value, '
                              'userMessageTimestamp);\n'
@@ -32675,13 +32961,30 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '              assistantOutputStarted = false;\n'
                              '              break;\n'
                              '            case ServerGeminiEventType.ChatCompaction:\n'
-                             '              // Machine-readable record of a compaction '
-                             'attempt, consumed by\n'
-                             '              // the headless output adapters. The '
-                             'interactive notice for a\n'
-                             '              // successful compaction is driven by '
-                             'ChatCompressed above, so\n'
-                             '              // rendering this too would duplicate it.\n'
+                             '              // Successful replacement has its own '
+                             'ChatCompressed notice.\n'
+                             '              if (!event.value.succeeded && '
+                             "event.value.status !== 'NOOP') {\n"
+                             '                flushBufferedStreamEvents();\n'
+                             '                addItem(\n'
+                             '                  {\n'
+                             "                    type: 'info',\n"
+                             '                    text:\n'
+                             '                      `Compaction failed '
+                             '(${event.value.status}); the original context was '
+                             'preserved.` +\n'
+                             '                      (event.value.output\n'
+                             '                        ? ` Output: '
+                             '${event.value.output.outputTokens} tokens, including '
+                             '${event.value.output.thinkingTokens} reasoning tokens, '
+                             'from a ${event.value.output.maxOutputTokens}-token '
+                             'budget.`\n'
+                             "                        : ' No summary generation was "
+                             "recorded.'),\n"
+                             '                  },\n'
+                             '                  userMessageTimestamp,\n'
+                             '                );\n'
+                             '              }\n'
                              '              break;\n'
                              '            case '
                              'ServerGeminiEventType.ToolCallConfirmation:\n'
@@ -32689,8 +32992,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'ServerGeminiEventType.ToolCallResponse:\n'
                              '              flushBufferedStreamEvents();\n'
                              '              break;\n'
-                             '            case ServerGeminiEventType.MaxSessionTurns:\n'
-                             '              flushBufferedStreamEvents();\n'},
+                             '            case '
+                             'ServerGeminiEventType.MaxSessionTurns:\n'},
             {'name': 'packages/cli/src/ui/hooks/useGeminiStream.ts:landmark-3',
              'path': 'packages/cli/src/ui/hooks/useGeminiStream.ts',
              'before': '          }\n'
@@ -43858,8 +44161,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '          failedToolCalls: summary.failedToolCalls,\n'},
             {'name': 'packages/core/src/agents/runtime/agent-headless.ts:landmark-5',
              'path': 'packages/core/src/agents/runtime/agent-headless.ts',
-             'before': '  }\n'
-                       '\n'
+             'before': '\n'
                        '  getTerminateMode(): AgentTerminateMode {\n'
                        '    return this.terminateMode;\n'
                        '  }\n'
@@ -43871,16 +44173,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '   */\n'
                        '  setExternalMessageProvider(provider: () => '
                        'AgentExternalInput[]): void {\n'
-                       '    this.externalMessageProvider = provider;\n',
-             'after': '  }\n'
-                      '\n'
+                       '    this.externalMessageProvider = provider;\n'
+                       '  }\n',
+             'after': '\n'
                       '  getTerminateMode(): AgentTerminateMode {\n'
                       '    return this.terminateMode;\n'
                       '  }\n'
                       '\n'
                       '  /**\n'
-                      '   * Model round-trips this agent actually completed. Reported '
-                      'to the parent\n'
+                      '   * Model round-trips this agent started. Reported to the '
+                      'parent\n'
                       '   * when the agent stopped for any reason other than reaching '
                       'its goal, so the\n'
                       '   * parent can tell an unfinished assignment from a finished '
@@ -43910,9 +44212,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '   */\n'
                       '  setExternalMessageProvider(provider: () => '
                       'AgentExternalInput[]): void {\n'
-                      '    this.externalMessageProvider = provider;\n',
-             'review_before': '  }\n'
-                              '\n'
+                      '    this.externalMessageProvider = provider;\n'
+                      '  }\n',
+             'review_before': '\n'
                               '  getTerminateMode(): AgentTerminateMode {\n'
                               '    return this.terminateMode;\n'
                               '  }\n'
@@ -43925,16 +44227,16 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '   */\n'
                               '  setExternalMessageProvider(provider: () => '
                               'AgentExternalInput[]): void {\n'
-                              '    this.externalMessageProvider = provider;\n',
-             'review_after': '  }\n'
-                             '\n'
+                              '    this.externalMessageProvider = provider;\n'
+                              '  }\n',
+             'review_after': '\n'
                              '  getTerminateMode(): AgentTerminateMode {\n'
                              '    return this.terminateMode;\n'
                              '  }\n'
                              '\n'
                              '  /**\n'
-                             '   * Model round-trips this agent actually completed. '
-                             'Reported to the parent\n'
+                             '   * Model round-trips this agent started. Reported to '
+                             'the parent\n'
                              '   * when the agent stopped for any reason other than '
                              'reaching its goal, so the\n'
                              '   * parent can tell an unfinished assignment from a '
@@ -43965,7 +44267,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '   */\n'
                              '  setExternalMessageProvider(provider: () => '
                              'AgentExternalInput[]): void {\n'
-                             '    this.externalMessageProvider = provider;\n'},
+                             '    this.externalMessageProvider = provider;\n'
+                             '  }\n'},
             {'name': 'packages/core/src/agents/runtime/agent-interactive.ts:landmark-1',
              'path': 'packages/core/src/agents/runtime/agent-interactive.ts',
              'before': '\n'
@@ -77531,6 +77834,153 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "      ).toThrow('malformed tool arguments');\n"
                       '    });\n'
                       '\n'
+                      "    describe('strict batch tool-call validation', () => {\n"
+                      '      function convertBatch(toolCalls: unknown, finishReason = '
+                      "'tool_calls') {\n"
+                      '        return converter.convertOpenAIResponseToGemini(\n'
+                      '          {\n'
+                      "            object: 'chat.completion',\n"
+                      "            id: 'batch-tool-test',\n"
+                      '            created: 123,\n'
+                      "            model: 'test-model',\n"
+                      '            choices: [\n'
+                      '              {\n'
+                      '                index: 0,\n'
+                      '                message: {\n'
+                      "                  role: 'assistant',\n"
+                      "                  content: 'Diagnostic text',\n"
+                      '                  tool_calls: toolCalls,\n'
+                      '                },\n'
+                      '                finish_reason: finishReason,\n'
+                      '                logprobs: null,\n'
+                      '              },\n'
+                      '            ],\n'
+                      '          } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                      '          { ...requestContext, strictToolCalling: true },\n'
+                      '        );\n'
+                      '      }\n'
+                      '\n'
+                      '      it.each([\n'
+                      "        ['missing', undefined],\n"
+                      "        ['null', null],\n"
+                      "        ['empty', []],\n"
+                      "      ])('rejects a tool terminal with %s tool calls', (_label, "
+                      'calls) => {\n'
+                      "        expect(() => convertBatch(calls)).toThrow('without a "
+                      "tool call');\n"
+                      '      });\n'
+                      '\n'
+                      '      it.each([\n'
+                      "        ['missing', undefined],\n"
+                      "        ['null', null],\n"
+                      "      ])('rejects a tool call with a %s function', (_label, fn) "
+                      '=> {\n'
+                      '        expect(() =>\n'
+                      "          convertBatch([{ id: 'call_1', type: 'function', "
+                      'function: fn }]),\n'
+                      "        ).toThrow('without a function');\n"
+                      '      });\n'
+                      '\n'
+                      '      const invalidArgumentFields: Array<[string, '
+                      'Record<string, unknown>]> = [\n'
+                      "        ['missing', {}],\n"
+                      "        ['undefined', { arguments: undefined }],\n"
+                      "        ['null', { arguments: null }],\n"
+                      "        ['empty string', { arguments: '' }],\n"
+                      "        ['whitespace', { arguments: '   ' }],\n"
+                      "        ['false', { arguments: false }],\n"
+                      "        ['zero', { arguments: 0 }],\n"
+                      "        ['object', { arguments: {} }],\n"
+                      "        ['array', { arguments: [] }],\n"
+                      "        ['partial JSON', { arguments: '{' }],\n"
+                      "        ['serialized null', { arguments: 'null' }],\n"
+                      "        ['serialized array', { arguments: '[]' }],\n"
+                      "        ['serialized scalar', { arguments: 'false' }],\n"
+                      '      ];\n'
+                      '      it.each(invalidArgumentFields)(\n'
+                      "        'rejects %s arguments instead of fabricating a "
+                      "no-argument call',\n"
+                      '        (_label, argumentFields) => {\n'
+                      '          expect(() =>\n'
+                      '            convertBatch([\n'
+                      '              {\n'
+                      "                id: 'call_1',\n"
+                      "                type: 'function',\n"
+                      "                function: { name: 'read_file', "
+                      '...argumentFields },\n'
+                      '              },\n'
+                      '            ]),\n'
+                      "          ).toThrow('malformed tool arguments');\n"
+                      '        },\n'
+                      '      );\n'
+                      '\n'
+                      "      it('accepts an explicit empty JSON object for a "
+                      "no-parameter tool', () => {\n"
+                      '        const response = convertBatch([\n'
+                      '          {\n'
+                      "            id: 'call_1',\n"
+                      "            type: 'function',\n"
+                      "            function: { name: 'get_status', arguments: '{}' },\n"
+                      '          },\n'
+                      '        ]);\n'
+                      '        expect(response.functionCalls).toEqual([\n'
+                      "          { id: 'call_1', name: 'get_status', args: {} },\n"
+                      '        ]);\n'
+                      '      });\n'
+                      '\n'
+                      "      it('refuses the whole batch when a later call has no "
+                      "serialized arguments', () => {\n"
+                      '        expect(() =>\n'
+                      '          convertBatch([\n'
+                      '            {\n'
+                      "              id: 'call_1',\n"
+                      "              type: 'function',\n"
+                      "              function: { name: 'get_status', arguments: '{}' "
+                      '},\n'
+                      '            },\n'
+                      '            {\n'
+                      "              id: 'call_2',\n"
+                      "              type: 'function',\n"
+                      "              function: { name: 'run_shell_command', arguments: "
+                      "'' },\n"
+                      '            },\n'
+                      '          ]),\n'
+                      "        ).toThrow('malformed tool arguments');\n"
+                      '      });\n'
+                      '\n'
+                      '      it.each([\n'
+                      "        ['missing function', {}],\n"
+                      '        [\n'
+                      "          'empty arguments',\n"
+                      "          { function: { name: 'run_shell_command', arguments: "
+                      "'' } },\n"
+                      '        ],\n'
+                      '        [\n'
+                      "          'complete arguments',\n"
+                      '          {\n'
+                      '            function: {\n'
+                      "              name: 'run_shell_command',\n"
+                      '              arguments: \'{"command":"unsafe-prefix"}\',\n'
+                      '            },\n'
+                      '          },\n'
+                      '        ],\n'
+                      '      ])(\n'
+                      "        'keeps a length-terminal %s prefix diagnostic and "
+                      "unexecutable',\n"
+                      '        (_label, call) => {\n'
+                      '          const response = convertBatch(\n'
+                      "            [{ id: 'call_1', type: 'function', ...call }],\n"
+                      "            'length',\n"
+                      '          );\n'
+                      '          expect(response.functionCalls).toBeUndefined();\n'
+                      "          expect(response.text).toBe('Diagnostic text');\n"
+                      '          expect(response.candidates?.[0]?.finishReason).toBe(\n'
+                      '            FinishReason.MAX_TOKENS,\n'
+                      '          );\n'
+                      '        },\n'
+                      '      );\n'
+                      '    });\n'
+                      '\n'
                       "    it('omits the input/output breakdown when only total tokens "
                       "are reported', () => {\n"
                       '      const response = '
@@ -77637,6 +78087,162 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '},\n'
                              '        ),\n'
                              "      ).toThrow('malformed tool arguments');\n"
+                             '    });\n'
+                             '\n'
+                             "    describe('strict batch tool-call validation', () => "
+                             '{\n'
+                             '      function convertBatch(toolCalls: unknown, '
+                             "finishReason = 'tool_calls') {\n"
+                             '        return converter.convertOpenAIResponseToGemini(\n'
+                             '          {\n'
+                             "            object: 'chat.completion',\n"
+                             "            id: 'batch-tool-test',\n"
+                             '            created: 123,\n'
+                             "            model: 'test-model',\n"
+                             '            choices: [\n'
+                             '              {\n'
+                             '                index: 0,\n'
+                             '                message: {\n'
+                             "                  role: 'assistant',\n"
+                             "                  content: 'Diagnostic text',\n"
+                             '                  tool_calls: toolCalls,\n'
+                             '                },\n'
+                             '                finish_reason: finishReason,\n'
+                             '                logprobs: null,\n'
+                             '              },\n'
+                             '            ],\n'
+                             '          } as unknown as OpenAI.Chat.ChatCompletion,\n'
+                             '          { ...requestContext, strictToolCalling: true '
+                             '},\n'
+                             '        );\n'
+                             '      }\n'
+                             '\n'
+                             '      it.each([\n'
+                             "        ['missing', undefined],\n"
+                             "        ['null', null],\n"
+                             "        ['empty', []],\n"
+                             "      ])('rejects a tool terminal with %s tool calls', "
+                             '(_label, calls) => {\n'
+                             '        expect(() => '
+                             "convertBatch(calls)).toThrow('without a tool call');\n"
+                             '      });\n'
+                             '\n'
+                             '      it.each([\n'
+                             "        ['missing', undefined],\n"
+                             "        ['null', null],\n"
+                             "      ])('rejects a tool call with a %s function', "
+                             '(_label, fn) => {\n'
+                             '        expect(() =>\n'
+                             "          convertBatch([{ id: 'call_1', type: "
+                             "'function', function: fn }]),\n"
+                             "        ).toThrow('without a function');\n"
+                             '      });\n'
+                             '\n'
+                             '      const invalidArgumentFields: Array<[string, '
+                             'Record<string, unknown>]> = [\n'
+                             "        ['missing', {}],\n"
+                             "        ['undefined', { arguments: undefined }],\n"
+                             "        ['null', { arguments: null }],\n"
+                             "        ['empty string', { arguments: '' }],\n"
+                             "        ['whitespace', { arguments: '   ' }],\n"
+                             "        ['false', { arguments: false }],\n"
+                             "        ['zero', { arguments: 0 }],\n"
+                             "        ['object', { arguments: {} }],\n"
+                             "        ['array', { arguments: [] }],\n"
+                             "        ['partial JSON', { arguments: '{' }],\n"
+                             "        ['serialized null', { arguments: 'null' }],\n"
+                             "        ['serialized array', { arguments: '[]' }],\n"
+                             "        ['serialized scalar', { arguments: 'false' }],\n"
+                             '      ];\n'
+                             '      it.each(invalidArgumentFields)(\n'
+                             "        'rejects %s arguments instead of fabricating a "
+                             "no-argument call',\n"
+                             '        (_label, argumentFields) => {\n'
+                             '          expect(() =>\n'
+                             '            convertBatch([\n'
+                             '              {\n'
+                             "                id: 'call_1',\n"
+                             "                type: 'function',\n"
+                             "                function: { name: 'read_file', "
+                             '...argumentFields },\n'
+                             '              },\n'
+                             '            ]),\n'
+                             "          ).toThrow('malformed tool arguments');\n"
+                             '        },\n'
+                             '      );\n'
+                             '\n'
+                             "      it('accepts an explicit empty JSON object for a "
+                             "no-parameter tool', () => {\n"
+                             '        const response = convertBatch([\n'
+                             '          {\n'
+                             "            id: 'call_1',\n"
+                             "            type: 'function',\n"
+                             "            function: { name: 'get_status', arguments: "
+                             "'{}' },\n"
+                             '          },\n'
+                             '        ]);\n'
+                             '        expect(response.functionCalls).toEqual([\n'
+                             "          { id: 'call_1', name: 'get_status', args: {} "
+                             '},\n'
+                             '        ]);\n'
+                             '      });\n'
+                             '\n'
+                             "      it('refuses the whole batch when a later call has "
+                             "no serialized arguments', () => {\n"
+                             '        expect(() =>\n'
+                             '          convertBatch([\n'
+                             '            {\n'
+                             "              id: 'call_1',\n"
+                             "              type: 'function',\n"
+                             "              function: { name: 'get_status', arguments: "
+                             "'{}' },\n"
+                             '            },\n'
+                             '            {\n'
+                             "              id: 'call_2',\n"
+                             "              type: 'function',\n"
+                             "              function: { name: 'run_shell_command', "
+                             "arguments: '' },\n"
+                             '            },\n'
+                             '          ]),\n'
+                             "        ).toThrow('malformed tool arguments');\n"
+                             '      });\n'
+                             '\n'
+                             '      it.each([\n'
+                             "        ['missing function', {}],\n"
+                             '        [\n'
+                             "          'empty arguments',\n"
+                             "          { function: { name: 'run_shell_command', "
+                             "arguments: '' } },\n"
+                             '        ],\n'
+                             '        [\n'
+                             "          'complete arguments',\n"
+                             '          {\n'
+                             '            function: {\n'
+                             "              name: 'run_shell_command',\n"
+                             '              arguments: '
+                             '\'{"command":"unsafe-prefix"}\',\n'
+                             '            },\n'
+                             '          },\n'
+                             '        ],\n'
+                             '      ])(\n'
+                             "        'keeps a length-terminal %s prefix diagnostic "
+                             "and unexecutable',\n"
+                             '        (_label, call) => {\n'
+                             '          const response = convertBatch(\n'
+                             "            [{ id: 'call_1', type: 'function', ...call "
+                             '}],\n'
+                             "            'length',\n"
+                             '          );\n'
+                             '          '
+                             'expect(response.functionCalls).toBeUndefined();\n'
+                             "          expect(response.text).toBe('Diagnostic "
+                             "text');\n"
+                             '          '
+                             'expect(response.candidates?.[0]?.finishReason).toBe(\n'
+                             '            FinishReason.MAX_TOKENS,\n'
+                             '          );\n'
+                             '        },\n'
+                             '      );\n'
                              '    });\n'
                              '\n'
                              "    it('omits the input/output breakdown when only total "
@@ -78403,8 +79009,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        "content: %s',\n"
                        '      (reasoningTokens) => {\n'
                        '        const context = withStreamParser();\n'
-                       '        converter.convertOpenAIChunkToGemini(\n'
-                       '          {\n',
+                       '        converter.convertOpenAIChunkToGemini(\n',
              'after': '            total_tokens: 1201,\n'
                       '          },\n'
                       '        } as unknown as OpenAI.Chat.ChatCompletionChunk,\n'
@@ -78512,8 +79117,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       "content: %s',\n"
                       '      (reasoningTokens) => {\n'
                       '        const context = withStreamParser();\n'
-                      '        converter.convertOpenAIChunkToGemini(\n'
-                      '          {\n',
+                      '        converter.convertOpenAIChunkToGemini(\n',
              'review_before': '            total_tokens: 1201,\n'
                               '          },\n'
                               '        } as unknown as '
@@ -78664,8 +79268,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               "streaming content: %s',\n"
                               '      (reasoningTokens) => {\n'
                               '        const context = withStreamParser();\n'
-                              '        converter.convertOpenAIChunkToGemini(\n'
-                              '          {\n',
+                              '        converter.convertOpenAIChunkToGemini(\n',
              'review_after': '            total_tokens: 1201,\n'
                              '          },\n'
                              '        } as unknown as '
@@ -78782,8 +79385,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "content: %s',\n"
                              '      (reasoningTokens) => {\n'
                              '        const context = withStreamParser();\n'
-                             '        converter.convertOpenAIChunkToGemini(\n'
-                             '          {\n'},
+                             '        converter.convertOpenAIChunkToGemini(\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-11',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
              'before': '  let converter: typeof OpenAIContentConverter;\n'
@@ -78941,7 +79543,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "          object: 'chat.completion.chunk',\n"},
             {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-13',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
-             'before': "    expect(fnCall?.functionCall?.name).toBe('write_file');\n"
+             'before': '    const fnCall = parts.find((p: Part) => p.functionCall);\n'
+                       '    expect(fnCall).toBeDefined();\n'
+                       "    expect(fnCall?.functionCall?.name).toBe('write_file');\n"
                        '    expect(fnCall?.functionCall?.args).toEqual({\n'
                        "      file_path: '/tmp/test.cpp',\n"
                        '    });\n'
@@ -78952,10 +79556,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '    // Feed arguments in multiple small chunks like real '
                        'streaming\n'
                        '    const conv = OpenAIContentConverter;\n'
-                       '    const ctx = createStreamingRequestContext();\n'
-                       '\n'
-                       '    // Chunk 1: start of JSON with tool metadata\n',
-             'after': "    expect(fnCall?.functionCall?.name).toBe('write_file');\n"
+                       '    const ctx = createStreamingRequestContext();\n',
+             'after': '    const fnCall = parts.find((p: Part) => p.functionCall);\n'
+                      '    expect(fnCall).toBeDefined();\n'
+                      "    expect(fnCall?.functionCall?.name).toBe('write_file');\n"
                       '    expect(fnCall?.functionCall?.args).toEqual({\n'
                       "      file_path: '/tmp/test.cpp',\n"
                       '    });\n'
@@ -79034,10 +79638,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    // Feed arguments in multiple small chunks like real '
                       'streaming\n'
                       '    const conv = OpenAIContentConverter;\n'
-                      '    const ctx = createStreamingRequestContext();\n'
-                      '\n'
-                      '    // Chunk 1: start of JSON with tool metadata\n',
-             'review_before': '    '
+                      '    const ctx = createStreamingRequestContext();\n',
+             'review_before': '    const fnCall = parts.find((p: Part) => '
+                              'p.functionCall);\n'
+                              '    expect(fnCall).toBeDefined();\n'
+                              '    '
                               "expect(fnCall?.functionCall?.name).toBe('write_file');\n"
                               '    expect(fnCall?.functionCall?.args).toEqual({\n'
                               "      file_path: '/tmp/test.cpp',\n"
@@ -79049,10 +79654,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '    // Feed arguments in multiple small chunks like '
                               'real streaming\n'
                               '    const conv = OpenAIContentConverter;\n'
-                              '    const ctx = createStreamingRequestContext();\n'
-                              '\n'
-                              '    // Chunk 1: start of JSON with tool metadata\n',
-             'review_after': '    '
+                              '    const ctx = createStreamingRequestContext();\n',
+             'review_after': '    const fnCall = parts.find((p: Part) => '
+                             'p.functionCall);\n'
+                             '    expect(fnCall).toBeDefined();\n'
+                             '    '
                              "expect(fnCall?.functionCall?.name).toBe('write_file');\n"
                              '    expect(fnCall?.functionCall?.args).toEqual({\n'
                              "      file_path: '/tmp/test.cpp',\n"
@@ -79135,9 +79741,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // Feed arguments in multiple small chunks like real '
                              'streaming\n'
                              '    const conv = OpenAIContentConverter;\n'
-                             '    const ctx = createStreamingRequestContext();\n'
-                             '\n'
-                             '    // Chunk 1: start of JSON with tool metadata\n'},
+                             '    const ctx = createStreamingRequestContext();\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/converter.test.ts:landmark-14',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.test.ts',
              'before': '    expect(parts).toHaveLength(1);\n'
@@ -79354,7 +79958,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  type SchemaComplianceMode,\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-2',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
-             'before': ' * Some models return cached_tokens at the top level instead '
+             'before': '/**\n'
+                       ' * Extended usage type that supports both OpenAI standard '
+                       'format and alternative formats\n'
+                       ' * Some models return cached_tokens at the top level instead '
                        'of in prompt_tokens_details\n'
                        ' */\n'
                        'interface ExtendedCompletionUsage extends '
@@ -79365,10 +79972,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'export interface ExtendedChatCompletionAssistantMessageParam\n'
                        '  extends OpenAI.Chat.ChatCompletionAssistantMessageParam {\n'
                        '  reasoning_content?: string | null;\n'
-                       '}\n'
-                       '\n'
-                       'type ExtendedChatCompletionMessageParam =\n',
-             'after': ' * Some models return cached_tokens at the top level instead of '
+                       '}\n',
+             'after': '/**\n'
+                      ' * Extended usage type that supports both OpenAI standard '
+                      'format and alternative formats\n'
+                      ' * Some models return cached_tokens at the top level instead of '
                       'in prompt_tokens_details\n'
                       ' */\n'
                       'interface ExtendedCompletionUsage extends '
@@ -79433,10 +80041,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'export interface ExtendedChatCompletionAssistantMessageParam\n'
                       '  extends OpenAI.Chat.ChatCompletionAssistantMessageParam {\n'
                       '  reasoning_content?: string | null;\n'
-                      '}\n'
-                      '\n'
-                      'type ExtendedChatCompletionMessageParam =\n',
-             'review_before': ' * Some models return cached_tokens at the top level '
+                      '}\n',
+             'review_before': '/**\n'
+                              ' * Extended usage type that supports both OpenAI '
+                              'standard format and alternative formats\n'
+                              ' * Some models return cached_tokens at the top level '
                               'instead of in prompt_tokens_details\n'
                               ' */\n'
                               'interface ExtendedCompletionUsage extends '
@@ -79449,10 +80058,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  extends '
                               'OpenAI.Chat.ChatCompletionAssistantMessageParam {\n'
                               '  reasoning_content?: string | null;\n'
-                              '}\n'
-                              '\n'
-                              'type ExtendedChatCompletionMessageParam =\n',
-             'review_after': ' * Some models return cached_tokens at the top level '
+                              '}\n',
+             'review_after': '/**\n'
+                             ' * Extended usage type that supports both OpenAI '
+                             'standard format and alternative formats\n'
+                             ' * Some models return cached_tokens at the top level '
                              'instead of in prompt_tokens_details\n'
                              ' */\n'
                              'interface ExtendedCompletionUsage extends '
@@ -79523,9 +80133,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  extends '
                              'OpenAI.Chat.ChatCompletionAssistantMessageParam {\n'
                              '  reasoning_content?: string | null;\n'
-                             '}\n'
-                             '\n'
-                             'type ExtendedChatCompletionMessageParam =\n'},
+                             '}\n'},
             {'name': 'packages/core/src/core/openaiContentGenerator/converter.ts:landmark-3',
              'path': 'packages/core/src/core/openaiContentGenerator/converter.ts',
              'before': '        return unsupportedModalityPlaceholder(\n'
@@ -79712,16 +80320,41 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      );\n'
                       '    }\n'
                       '    if (\n'
+                      '      requestContext.strictToolCalling &&\n'
+                      "      choice.finish_reason === 'tool_calls' &&\n"
+                      '      !choice.message.tool_calls?.length\n'
+                      '    ) {\n'
+                      '      throw new InvalidStreamError(\n'
+                      "        'Model response completed the tool branch without a "
+                      "tool call.',\n"
+                      "        'MALFORMED_TOOL_CALL',\n"
+                      '      );\n'
+                      '    }\n'
+                      '    if (\n'
                       '      choice.message.tool_calls &&\n'
                       '      (!requestContext.strictToolCalling ||\n'
                       "        choice.finish_reason === 'tool_calls')\n"
                       '    ) {\n'
                       '      for (const toolCall of choice.message.tool_calls) {\n'
+                      '        if (requestContext.strictToolCalling && '
+                      '!toolCall.function) {\n'
+                      '          throw new InvalidStreamError(\n'
+                      "            'Model response contained a tool call without a "
+                      "function.',\n"
+                      "            'MALFORMED_TOOL_CALL',\n"
+                      '          );\n'
+                      '        }\n'
                       '        if (toolCall.function) {\n'
                       '          let args: Record<string, unknown> = {};\n'
-                      '          if (toolCall.function.arguments) {\n'
+                      '          if (requestContext.strictToolCalling || '
+                      'toolCall.function.arguments) {\n'
                       '            if (requestContext.strictToolCalling) {\n'
                       '              try {\n'
+                      '                if (typeof toolCall.function.arguments !== '
+                      "'string') {\n"
+                      "                  throw new Error('tool arguments are not a "
+                      "serialized object');\n"
+                      '                }\n'
                       '                const parsed: unknown = '
                       'JSON.parse(toolCall.function.arguments);\n'
                       '                if (\n'
@@ -79807,17 +80440,42 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '      );\n'
                              '    }\n'
                              '    if (\n'
+                             '      requestContext.strictToolCalling &&\n'
+                             "      choice.finish_reason === 'tool_calls' &&\n"
+                             '      !choice.message.tool_calls?.length\n'
+                             '    ) {\n'
+                             '      throw new InvalidStreamError(\n'
+                             "        'Model response completed the tool branch "
+                             "without a tool call.',\n"
+                             "        'MALFORMED_TOOL_CALL',\n"
+                             '      );\n'
+                             '    }\n'
+                             '    if (\n'
                              '      choice.message.tool_calls &&\n'
                              '      (!requestContext.strictToolCalling ||\n'
                              "        choice.finish_reason === 'tool_calls')\n"
                              '    ) {\n'
                              '      for (const toolCall of choice.message.tool_calls) '
                              '{\n'
+                             '        if (requestContext.strictToolCalling && '
+                             '!toolCall.function) {\n'
+                             '          throw new InvalidStreamError(\n'
+                             "            'Model response contained a tool call "
+                             "without a function.',\n"
+                             "            'MALFORMED_TOOL_CALL',\n"
+                             '          );\n'
+                             '        }\n'
                              '        if (toolCall.function) {\n'
                              '          let args: Record<string, unknown> = {};\n'
-                             '          if (toolCall.function.arguments) {\n'
+                             '          if (requestContext.strictToolCalling || '
+                             'toolCall.function.arguments) {\n'
                              '            if (requestContext.strictToolCalling) {\n'
                              '              try {\n'
+                             '                if (typeof toolCall.function.arguments '
+                             "!== 'string') {\n"
+                             "                  throw new Error('tool arguments are "
+                             "not a serialized object');\n"
+                             '                }\n'
                              '                const parsed: unknown = '
                              'JSON.parse(toolCall.function.arguments);\n'
                              '                if (\n'
@@ -83376,30 +84034,30 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'string {\n'
                       '  if (!isQwen38LockedAgentServiceRuntime()) return base;\n'
                       '  return `${base.trim()}\\n\\n## This session\\n\\n- You are '
-                      'the main agent in one long-lived, non-interactive session, and '
-                      'you own the final response.\\n- Context length is the most '
-                      'important thing in AI, and it is immoral to waste it. Reading '
-                      'is what wastes it: material you open once to learn one fact '
-                      'stays in this thread for the rest of the session and drags you '
-                      'toward compaction.\\n- That is what subagents are for. A '
-                      "subagent's reading never enters your context; only its report "
-                      'comes back, so one that spends sixty turns costs you one. It is '
-                      'what lets a single long thread keep running without compacting '
-                      'the conversation, and that is the whole point -- you stay on '
-                      'trajectory for longer.\\n- Delegate generously, then, to a '
+                      'the main agent in one long-lived session, and you own the final '
+                      'response.\\n- Context length is the most important thing in AI, '
+                      'and it is immoral to waste it. Reading is what wastes it: '
+                      'material you open once to learn one fact stays in this thread '
+                      'for the rest of the session and drags you toward '
+                      "compaction.\\n- That is what subagents are for. A subagent's "
+                      'reading never enters your context; only its report comes back, '
+                      'so the invocation consumes one parent turn while the child '
+                      'spends its own turn budget. Short reports can delay compaction '
+                      'of the parent conversation.\\n- Delegate generously, then, to a '
                       'foreground \\`general-purpose\\` or \\`Explore\\` subagent: '
                       'broad searches, surveying unfamiliar code, reproducing a '
                       'failure, converting documents -- any bounded work whose useful '
-                      'output is short but takes a lot of reading. Your own KV cache '
-                      'is held in DDR5 while it runs, so nothing you have already said '
-                      'is re-ingested when it returns; delegating is close to '
-                      'free.\\n- Subagents run one at a time, in the foreground. Give '
-                      'it a self-contained assignment; it cannot see this '
-                      'conversation. Treat its report as evidence to verify, not a '
-                      'conclusion.\\n- Keep the design decisions, the edits, and the '
-                      'final verification yourself.\\n- Lead the final response with '
-                      'the outcome, then the material files, verification, and '
-                      'unresolved risks.`;\n'
+                      'output is short but takes a lot of reading. The backend can '
+                      'retain your KV cache in DDR5 while the child runs, but cache '
+                      'eviction can require prefix processing again. Delegation still '
+                      'consumes child tokens, computation, and time; bound the '
+                      'assignment and verify the report.\\n- Subagents run one at a '
+                      'time, in the foreground. Give it a self-contained assignment; '
+                      'it cannot see this conversation. Treat its report as evidence '
+                      'to verify, not a conclusion.\\n- Keep the design decisions, the '
+                      'edits, and the final verification yourself.\\n- Lead the final '
+                      'response with the outcome, then the material files, '
+                      'verification, and unresolved risks.`;\n'
                       '}\n'
                       '\n'
                       'export function appendQwen38DeploymentContract(base: string): '
@@ -83571,33 +84229,33 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  if (!isQwen38LockedAgentServiceRuntime()) return '
                              'base;\n'
                              '  return `${base.trim()}\\n\\n## This session\\n\\n- You '
-                             'are the main agent in one long-lived, non-interactive '
-                             'session, and you own the final response.\\n- Context '
-                             'length is the most important thing in AI, and it is '
-                             'immoral to waste it. Reading is what wastes it: material '
-                             'you open once to learn one fact stays in this thread for '
-                             'the rest of the session and drags you toward '
-                             'compaction.\\n- That is what subagents are for. A '
-                             "subagent's reading never enters your context; only its "
-                             'report comes back, so one that spends sixty turns costs '
-                             'you one. It is what lets a single long thread keep '
-                             'running without compacting the conversation, and that is '
-                             'the whole point -- you stay on trajectory for '
-                             'longer.\\n- Delegate generously, then, to a foreground '
-                             '\\`general-purpose\\` or \\`Explore\\` subagent: broad '
-                             'searches, surveying unfamiliar code, reproducing a '
-                             'failure, converting documents -- any bounded work whose '
-                             'useful output is short but takes a lot of reading. Your '
-                             'own KV cache is held in DDR5 while it runs, so nothing '
-                             'you have already said is re-ingested when it returns; '
-                             'delegating is close to free.\\n- Subagents run one at a '
-                             'time, in the foreground. Give it a self-contained '
-                             'assignment; it cannot see this conversation. Treat its '
-                             'report as evidence to verify, not a conclusion.\\n- Keep '
-                             'the design decisions, the edits, and the final '
-                             'verification yourself.\\n- Lead the final response with '
-                             'the outcome, then the material files, verification, and '
-                             'unresolved risks.`;\n'
+                             'are the main agent in one long-lived session, and you '
+                             'own the final response.\\n- Context length is the most '
+                             'important thing in AI, and it is immoral to waste it. '
+                             'Reading is what wastes it: material you open once to '
+                             'learn one fact stays in this thread for the rest of the '
+                             'session and drags you toward compaction.\\n- That is '
+                             "what subagents are for. A subagent's reading never "
+                             'enters your context; only its report comes back, so the '
+                             'invocation consumes one parent turn while the child '
+                             'spends its own turn budget. Short reports can delay '
+                             'compaction of the parent conversation.\\n- Delegate '
+                             'generously, then, to a foreground \\`general-purpose\\` '
+                             'or \\`Explore\\` subagent: broad searches, surveying '
+                             'unfamiliar code, reproducing a failure, converting '
+                             'documents -- any bounded work whose useful output is '
+                             'short but takes a lot of reading. The backend can retain '
+                             'your KV cache in DDR5 while the child runs, but cache '
+                             'eviction can require prefix processing again. Delegation '
+                             'still consumes child tokens, computation, and time; '
+                             'bound the assignment and verify the report.\\n- '
+                             'Subagents run one at a time, in the foreground. Give it '
+                             'a self-contained assignment; it cannot see this '
+                             'conversation. Treat its report as evidence to verify, '
+                             'not a conclusion.\\n- Keep the design decisions, the '
+                             'edits, and the final verification yourself.\\n- Lead the '
+                             'final response with the outcome, then the material '
+                             'files, verification, and unresolved risks.`;\n'
                              '}\n'
                              '\n'
                              'export function appendQwen38DeploymentContract(base: '
@@ -84918,6 +85576,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  GeminiEventType,\n'
                       '  createDuplicateProviderToolCallResponse,\n'
                       '  describeIncompleteGeneration,\n'
+                      '  toCompactionRecord,\n'
                       '  findRepeatedDuplicateProviderToolCall,\n'
                       "} from './turn.js';\n"
                       "import { FinishReason } from './genai-compat.js';\n"
@@ -84948,6 +85607,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  GeminiEventType,\n'
                              '  createDuplicateProviderToolCallResponse,\n'
                              '  describeIncompleteGeneration,\n'
+                             '  toCompactionRecord,\n'
                              '  findRepeatedDuplicateProviderToolCall,\n'
                              "} from './turn.js';\n"
                              "import { FinishReason } from './genai-compat.js';\n"
@@ -84959,7 +85619,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "} from '@google/genai';\n"},
             {'name': 'packages/core/src/core/turn.test.ts:landmark-2',
              'path': 'packages/core/src/core/turn.test.ts',
-             'before': '    });\n'
+             'before': '      args: {},\n'
+                       '      isClientInitiated: false,\n'
+                       "      prompt_id: 'prompt-duplicate',\n"
+                       '    });\n'
                        '\n'
                        "    expect(response.executionStatus).toBe('not_started');\n"
                        '  });\n'
@@ -84967,11 +85630,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '\n'
                        "describe('Turn', () => {\n"
                        '  let turn: Turn;\n'
-                       '  // Define a type for the mocked Chat instance for clarity\n'
-                       '  type MockedChatInstance = {\n'
-                       '    sendMessageStream: typeof mockSendMessageStream;\n'
-                       '    getHistory: typeof mockGetHistory;\n',
-             'after': '    });\n'
+                       '  // Define a type for the mocked Chat instance for clarity\n',
+             'after': '      args: {},\n'
+                      '      isClientInitiated: false,\n'
+                      "      prompt_id: 'prompt-duplicate',\n"
+                      '    });\n'
                       '\n'
                       "    expect(response.executionStatus).toBe('not_started');\n"
                       '  });\n'
@@ -85011,11 +85674,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '\n'
                       "describe('Turn', () => {\n"
                       '  let turn: Turn;\n'
-                      '  // Define a type for the mocked Chat instance for clarity\n'
-                      '  type MockedChatInstance = {\n'
-                      '    sendMessageStream: typeof mockSendMessageStream;\n'
-                      '    getHistory: typeof mockGetHistory;\n',
-             'review_before': '    });\n'
+                      '  // Define a type for the mocked Chat instance for clarity\n',
+             'review_before': '      args: {},\n'
+                              '      isClientInitiated: false,\n'
+                              "      prompt_id: 'prompt-duplicate',\n"
+                              '    });\n'
                               '\n'
                               '    '
                               "expect(response.executionStatus).toBe('not_started');\n"
@@ -85025,11 +85688,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               "describe('Turn', () => {\n"
                               '  let turn: Turn;\n'
                               '  // Define a type for the mocked Chat instance for '
-                              'clarity\n'
-                              '  type MockedChatInstance = {\n'
-                              '    sendMessageStream: typeof mockSendMessageStream;\n'
-                              '    getHistory: typeof mockGetHistory;\n',
-             'review_after': '    });\n'
+                              'clarity\n',
+             'review_after': '      args: {},\n'
+                             '      isClientInitiated: false,\n'
+                             "      prompt_id: 'prompt-duplicate',\n"
+                             '    });\n'
                              '\n'
                              '    '
                              "expect(response.executionStatus).toBe('not_started');\n"
@@ -85073,10 +85736,110 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "describe('Turn', () => {\n"
                              '  let turn: Turn;\n'
                              '  // Define a type for the mocked Chat instance for '
-                             'clarity\n'
-                             '  type MockedChatInstance = {\n'
-                             '    sendMessageStream: typeof mockSendMessageStream;\n'
-                             '    getHistory: typeof mockGetHistory;\n'},
+                             'clarity\n'},
+            {'name': 'packages/core/src/core/turn.test.ts:landmark-3',
+             'path': 'packages/core/src/core/turn.test.ts',
+             'before': '      expect(turn.pendingToolCalls).toHaveLength(2);\n'
+                       '      '
+                       'expect(turn.pendingToolCalls[0].wasOutputTruncated).toBe(true);\n'
+                       '      '
+                       'expect(turn.pendingToolCalls[1].wasOutputTruncated).toBe(true);\n'
+                       '    });\n'
+                       '  });\n'
+                       '});\n',
+             'after': '      expect(turn.pendingToolCalls).toHaveLength(2);\n'
+                      '      '
+                      'expect(turn.pendingToolCalls[0].wasOutputTruncated).toBe(true);\n'
+                      '      '
+                      'expect(turn.pendingToolCalls[1].wasOutputTruncated).toBe(true);\n'
+                      '    });\n'
+                      '  });\n'
+                      '});\n'
+                      '\n'
+                      "describe('toCompactionRecord', () => {\n"
+                      "  it('reports preserved history when an inflated candidate was "
+                      "refused', () => {\n"
+                      '    expect(\n'
+                      '      toCompactionRecord({\n'
+                      '        originalTokenCount: 100,\n'
+                      '        newTokenCount: 150,\n'
+                      '        compressionStatus:\n'
+                      '          '
+                      'CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,\n'
+                      '      }),\n'
+                      '    ).toMatchObject({\n'
+                      '      succeeded: false,\n'
+                      '      originalTokenCount: 100,\n'
+                      '      newTokenCount: 100,\n'
+                      '    });\n'
+                      '  });\n'
+                      '\n'
+                      "  it('reports the accepted history only after replacement "
+                      "succeeded', () => {\n"
+                      '    expect(\n'
+                      '      toCompactionRecord({\n'
+                      '        originalTokenCount: 100,\n'
+                      '        newTokenCount: 50,\n'
+                      '        compressionStatus: CompressionStatus.COMPRESSED,\n'
+                      '      }),\n'
+                      '    ).toMatchObject({\n'
+                      '      succeeded: true,\n'
+                      '      originalTokenCount: 100,\n'
+                      '      newTokenCount: 50,\n'
+                      '    });\n'
+                      '  });\n'
+                      '});\n',
+             'review_before': '      expect(turn.pendingToolCalls).toHaveLength(2);\n'
+                              '      '
+                              'expect(turn.pendingToolCalls[0].wasOutputTruncated).toBe(true);\n'
+                              '      '
+                              'expect(turn.pendingToolCalls[1].wasOutputTruncated).toBe(true);\n'
+                              '    });\n'
+                              '  });\n'
+                              '});\n',
+             'review_after': '      expect(turn.pendingToolCalls).toHaveLength(2);\n'
+                             '      '
+                             'expect(turn.pendingToolCalls[0].wasOutputTruncated).toBe(true);\n'
+                             '      '
+                             'expect(turn.pendingToolCalls[1].wasOutputTruncated).toBe(true);\n'
+                             '    });\n'
+                             '  });\n'
+                             '});\n'
+                             '\n'
+                             "describe('toCompactionRecord', () => {\n"
+                             "  it('reports preserved history when an inflated "
+                             "candidate was refused', () => {\n"
+                             '    expect(\n'
+                             '      toCompactionRecord({\n'
+                             '        originalTokenCount: 100,\n'
+                             '        newTokenCount: 150,\n'
+                             '        compressionStatus:\n'
+                             '          '
+                             'CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,\n'
+                             '      }),\n'
+                             '    ).toMatchObject({\n'
+                             '      succeeded: false,\n'
+                             '      originalTokenCount: 100,\n'
+                             '      newTokenCount: 100,\n'
+                             '    });\n'
+                             '  });\n'
+                             '\n'
+                             "  it('reports the accepted history only after "
+                             "replacement succeeded', () => {\n"
+                             '    expect(\n'
+                             '      toCompactionRecord({\n'
+                             '        originalTokenCount: 100,\n'
+                             '        newTokenCount: 50,\n'
+                             '        compressionStatus: '
+                             'CompressionStatus.COMPRESSED,\n'
+                             '      }),\n'
+                             '    ).toMatchObject({\n'
+                             '      succeeded: true,\n'
+                             '      originalTokenCount: 100,\n'
+                             '      newTokenCount: 50,\n'
+                             '    });\n'
+                             '  });\n'
+                             '});\n'},
             {'name': 'packages/core/src/core/turn.ts:landmark-1',
              'path': 'packages/core/src/core/turn.ts',
              'before': "  StopHookLoop = 'stop_hook_loop',\n"
@@ -85169,7 +85932,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'rather than a fresh\n'},
             {'name': 'packages/core/src/core/turn.ts:landmark-2',
              'path': 'packages/core/src/core/turn.ts',
-             'before': '\n'
+             'before': '  message: string;\n'
+                       '}\n'
+                       '\n'
                        'export interface GeminiFinishedEventValue {\n'
                        '  reason: FinishReason | undefined;\n'
                        '  usageMetadata: GenerateContentResponseUsageMetadata | '
@@ -85180,11 +85945,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '  callId: string;\n'
                        '  /**\n'
                        '   * Original tool-call id emitted by the provider/model. When '
-                       'present, this is\n'
-                       '   * the idempotency key for suppressing duplicate provider '
-                       'tool calls.\n'
-                       '   */\n',
-             'after': '\n'
+                       'present, this is\n',
+             'after': '  message: string;\n'
+                      '}\n'
+                      '\n'
                       'export interface GeminiFinishedEventValue {\n'
                       '  reason: FinishReason | undefined;\n'
                       '  usageMetadata: GenerateContentResponseUsageMetadata | '
@@ -85236,11 +86000,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  callId: string;\n'
                       '  /**\n'
                       '   * Original tool-call id emitted by the provider/model. When '
-                      'present, this is\n'
-                      '   * the idempotency key for suppressing duplicate provider '
-                      'tool calls.\n'
-                      '   */\n',
-             'review_before': '\n'
+                      'present, this is\n',
+             'review_before': '  message: string;\n'
+                              '}\n'
+                              '\n'
                               'export interface GeminiFinishedEventValue {\n'
                               '  reason: FinishReason | undefined;\n'
                               '  usageMetadata: GenerateContentResponseUsageMetadata | '
@@ -85251,11 +86014,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  callId: string;\n'
                               '  /**\n'
                               '   * Original tool-call id emitted by the '
-                              'provider/model. When present, this is\n'
-                              '   * the idempotency key for suppressing duplicate '
-                              'provider tool calls.\n'
-                              '   */\n',
-             'review_after': '\n'
+                              'provider/model. When present, this is\n',
+             'review_after': '  message: string;\n'
+                             '}\n'
+                             '\n'
                              'export interface GeminiFinishedEventValue {\n'
                              '  reason: FinishReason | undefined;\n'
                              '  usageMetadata: GenerateContentResponseUsageMetadata | '
@@ -85308,10 +86070,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  callId: string;\n'
                              '  /**\n'
                              '   * Original tool-call id emitted by the '
-                             'provider/model. When present, this is\n'
-                             '   * the idempotency key for suppressing duplicate '
-                             'provider tool calls.\n'
-                             '   */\n'},
+                             'provider/model. When present, this is\n'},
             {'name': 'packages/core/src/core/turn.ts:landmark-3',
              'path': 'packages/core/src/core/turn.ts',
              'before': '  COMPRESSION_FAILED_EMPTY_SUMMARY,\n'
@@ -85375,9 +86134,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        'export type ServerGeminiMaxSessionTurnsEvent = {\n'
                        '  type: GeminiEventType.MaxSessionTurns;\n'
                        '};\n'
-                       '\n'
-                       'export type ServerGeminiSessionTokenLimitExceededEvent = {\n'
-                       '  type: GeminiEventType.SessionTokenLimitExceeded;\n',
+                       '\n',
              'after': '  COMPRESSION_FAILED_EMPTY_SUMMARY,\n'
                       '\n'
                       '  /** The compression was not necessary and no action was taken '
@@ -85549,7 +86306,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    succeeded: info.compressionStatus === '
                       'CompressionStatus.COMPRESSED,\n'
                       '    originalTokenCount: info.originalTokenCount,\n'
-                      '    newTokenCount: info.newTokenCount,\n'
+                      '    newTokenCount:\n'
+                      '      info.compressionStatus === CompressionStatus.COMPRESSED\n'
+                      '        ? info.newTokenCount\n'
+                      '        : info.originalTokenCount,\n'
                       '    triggerReason: info.triggerReason ?? null,\n'
                       '    output: info.output ?? null,\n'
                       '  };\n'
@@ -85563,9 +86323,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       'export type ServerGeminiMaxSessionTurnsEvent = {\n'
                       '  type: GeminiEventType.MaxSessionTurns;\n'
                       '};\n'
-                      '\n'
-                      'export type ServerGeminiSessionTokenLimitExceededEvent = {\n'
-                      '  type: GeminiEventType.SessionTokenLimitExceeded;\n',
+                      '\n',
              'review_before': '  COMPRESSION_FAILED_EMPTY_SUMMARY,\n'
                               '\n'
                               '  /** The compression was not necessary and no action '
@@ -85627,10 +86385,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'export type ServerGeminiMaxSessionTurnsEvent = {\n'
                               '  type: GeminiEventType.MaxSessionTurns;\n'
                               '};\n'
-                              '\n'
-                              'export type ServerGeminiSessionTokenLimitExceededEvent '
-                              '= {\n'
-                              '  type: GeminiEventType.SessionTokenLimitExceeded;\n',
+                              '\n',
              'review_after': '  COMPRESSION_FAILED_EMPTY_SUMMARY,\n'
                              '\n'
                              '  /** The compression was not necessary and no action '
@@ -85806,7 +86561,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    succeeded: info.compressionStatus === '
                              'CompressionStatus.COMPRESSED,\n'
                              '    originalTokenCount: info.originalTokenCount,\n'
-                             '    newTokenCount: info.newTokenCount,\n'
+                             '    newTokenCount:\n'
+                             '      info.compressionStatus === '
+                             'CompressionStatus.COMPRESSED\n'
+                             '        ? info.newTokenCount\n'
+                             '        : info.originalTokenCount,\n'
                              '    triggerReason: info.triggerReason ?? null,\n'
                              '    output: info.output ?? null,\n'
                              '  };\n'
@@ -85820,10 +86579,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'export type ServerGeminiMaxSessionTurnsEvent = {\n'
                              '  type: GeminiEventType.MaxSessionTurns;\n'
                              '};\n'
-                             '\n'
-                             'export type ServerGeminiSessionTokenLimitExceededEvent = '
-                             '{\n'
-                             '  type: GeminiEventType.SessionTokenLimitExceeded;\n'},
+                             '\n'},
             {'name': 'packages/core/src/core/turn.ts:landmark-4',
              'path': 'packages/core/src/core/turn.ts',
              'before': '};\n'
@@ -85882,7 +86638,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  | ServerGeminiHookSystemMessageEvent\n'},
             {'name': 'packages/core/src/core/turn.ts:landmark-5',
              'path': 'packages/core/src/core/turn.ts',
-             'before': '            statusCode: streamEvent.info.statusCode,\n'
+             'before': '          yield {\n'
+                       '            type: GeminiEventType.ModelFallback,\n'
+                       '            fromModel: streamEvent.info.fromModel,\n'
+                       '            toModel: streamEvent.info.toModel,\n'
+                       '            statusCode: streamEvent.info.statusCode,\n'
                        '            fallbackIndex: streamEvent.info.fallbackIndex,\n'
                        '          };\n'
                        '          continue;\n'
@@ -85891,14 +86651,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '        // Surface auto-compaction that fired inside '
                        'chat.sendMessageStream\n'
                        '        // as the top-level ChatCompressed event so existing '
-                       'UI handlers stay\n'
-                       '        // connected. This bridge is the primary path for '
-                       'auto-compaction\n'
-                       '        // events; manual /compress emits its own '
-                       'ChatCompressed in\n'
-                       '        // GeminiClient.tryCompressChat.\n'
-                       "        if (streamEvent.type === 'compressed') {\n",
-             'after': '            statusCode: streamEvent.info.statusCode,\n'
+                       'UI handlers stay\n',
+             'after': '          yield {\n'
+                      '            type: GeminiEventType.ModelFallback,\n'
+                      '            fromModel: streamEvent.info.fromModel,\n'
+                      '            toModel: streamEvent.info.toModel,\n'
+                      '            statusCode: streamEvent.info.statusCode,\n'
                       '            fallbackIndex: streamEvent.info.fallbackIndex,\n'
                       '          };\n'
                       '          continue;\n'
@@ -85928,14 +86686,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '        // Surface auto-compaction that fired inside '
                       'chat.sendMessageStream\n'
                       '        // as the top-level ChatCompressed event so existing UI '
-                      'handlers stay\n'
-                      '        // connected. This bridge is the primary path for '
-                      'auto-compaction\n'
-                      '        // events; manual /compress emits its own '
-                      'ChatCompressed in\n'
-                      '        // GeminiClient.tryCompressChat.\n'
-                      "        if (streamEvent.type === 'compressed') {\n",
-             'review_before': '            statusCode: streamEvent.info.statusCode,\n'
+                      'handlers stay\n',
+             'review_before': '          yield {\n'
+                              '            type: GeminiEventType.ModelFallback,\n'
+                              '            fromModel: streamEvent.info.fromModel,\n'
+                              '            toModel: streamEvent.info.toModel,\n'
+                              '            statusCode: streamEvent.info.statusCode,\n'
                               '            fallbackIndex: '
                               'streamEvent.info.fallbackIndex,\n'
                               '          };\n'
@@ -85945,14 +86701,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '        // Surface auto-compaction that fired inside '
                               'chat.sendMessageStream\n'
                               '        // as the top-level ChatCompressed event so '
-                              'existing UI handlers stay\n'
-                              '        // connected. This bridge is the primary path '
-                              'for auto-compaction\n'
-                              '        // events; manual /compress emits its own '
-                              'ChatCompressed in\n'
-                              '        // GeminiClient.tryCompressChat.\n'
-                              "        if (streamEvent.type === 'compressed') {\n",
-             'review_after': '            statusCode: streamEvent.info.statusCode,\n'
+                              'existing UI handlers stay\n',
+             'review_after': '          yield {\n'
+                             '            type: GeminiEventType.ModelFallback,\n'
+                             '            fromModel: streamEvent.info.fromModel,\n'
+                             '            toModel: streamEvent.info.toModel,\n'
+                             '            statusCode: streamEvent.info.statusCode,\n'
                              '            fallbackIndex: '
                              'streamEvent.info.fallbackIndex,\n'
                              '          };\n'
@@ -85983,13 +86737,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        // Surface auto-compaction that fired inside '
                              'chat.sendMessageStream\n'
                              '        // as the top-level ChatCompressed event so '
-                             'existing UI handlers stay\n'
-                             '        // connected. This bridge is the primary path '
-                             'for auto-compaction\n'
-                             '        // events; manual /compress emits its own '
-                             'ChatCompressed in\n'
-                             '        // GeminiClient.tryCompressChat.\n'
-                             "        if (streamEvent.type === 'compressed') {\n"},
+                             'existing UI handlers stay\n'},
             {'name': 'packages/core/src/followup/speculation.test.ts:landmark-1',
              'path': 'packages/core/src/followup/speculation.test.ts',
              'before': '    });\n'
@@ -111069,6 +111817,75 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              "'../../utils/partUtils.js';\n"},
             {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-2',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': 'import { runWithTeammateIdentity } from '
+                       "'../../agents/team/identity.js';\n"
+                       "import * as fs from 'node:fs';\n"
+                       "import * as os from 'node:os';\n"
+                       "import * as path from 'node:path';\n"
+                       "import { execFileSync } from 'node:child_process';\n"
+                       'import * as transcript from '
+                       "'../../agents/agent-transcript.js';\n"
+                       '\n'
+                       '// Type for accessing protected methods in tests\n'
+                       'type AgentToolInvocation = {\n'
+                       '  params: AgentParams;\n'
+                       '  execute: (\n'
+                       '    signal?: AbortSignal,\n',
+             'after': 'import { runWithTeammateIdentity } from '
+                      "'../../agents/team/identity.js';\n"
+                      "import * as fs from 'node:fs';\n"
+                      "import * as os from 'node:os';\n"
+                      "import * as path from 'node:path';\n"
+                      "import { execFileSync } from 'node:child_process';\n"
+                      'import * as transcript from '
+                      "'../../agents/agent-transcript.js';\n"
+                      'import * as deploymentPrompt from '
+                      "'../../core/qwen38-deployment-prompt.js';\n"
+                      "import * as effectJournal from './qwen38-effect-journal.js';\n"
+                      'import * as subagentScratch from '
+                      "'./qwen38-subagent-scratch.js';\n"
+                      '\n'
+                      '// Type for accessing protected methods in tests\n'
+                      'type AgentToolInvocation = {\n'
+                      '  params: AgentParams;\n'
+                      '  execute: (\n'
+                      '    signal?: AbortSignal,\n',
+             'review_before': 'import { runWithTeammateIdentity } from '
+                              "'../../agents/team/identity.js';\n"
+                              "import * as fs from 'node:fs';\n"
+                              "import * as os from 'node:os';\n"
+                              "import * as path from 'node:path';\n"
+                              "import { execFileSync } from 'node:child_process';\n"
+                              'import * as transcript from '
+                              "'../../agents/agent-transcript.js';\n"
+                              '\n'
+                              '// Type for accessing protected methods in tests\n'
+                              'type AgentToolInvocation = {\n'
+                              '  params: AgentParams;\n'
+                              '  execute: (\n'
+                              '    signal?: AbortSignal,\n',
+             'review_after': 'import { runWithTeammateIdentity } from '
+                             "'../../agents/team/identity.js';\n"
+                             "import * as fs from 'node:fs';\n"
+                             "import * as os from 'node:os';\n"
+                             "import * as path from 'node:path';\n"
+                             "import { execFileSync } from 'node:child_process';\n"
+                             'import * as transcript from '
+                             "'../../agents/agent-transcript.js';\n"
+                             'import * as deploymentPrompt from '
+                             "'../../core/qwen38-deployment-prompt.js';\n"
+                             'import * as effectJournal from '
+                             "'./qwen38-effect-journal.js';\n"
+                             'import * as subagentScratch from '
+                             "'./qwen38-subagent-scratch.js';\n"
+                             '\n'
+                             '// Type for accessing protected methods in tests\n'
+                             'type AgentToolInvocation = {\n'
+                             '  params: AgentParams;\n'
+                             '  execute: (\n'
+                             '    signal?: AbortSignal,\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-3',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': "      getTargetDir: vi.fn().mockReturnValue('/test/project'),\n"
                        "      getCwd: vi.fn().mockReturnValue('/test/project'),\n"
                        '      getWorkingDir: '
@@ -111146,7 +111963,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.fn().mockReturnValue(undefined),\n'
                              '      isAgentTeamEnabled: '
                              'vi.fn().mockReturnValue(false),\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-3',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-4',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': "        'Launch multiple agents concurrently whenever "
                        "possible',\n"
@@ -111309,7 +112126,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        properties: {\n'
                              '          subagent_type: {\n'
                              '            type?: string;\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-4',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-5',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '          totalDurationMs: 1500,\n'
                        '          totalToolCalls: 3,\n'
@@ -111367,7 +112184,374 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        set: vi.fn(),\n'
                              '      } as unknown as ContextState;\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-5',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-6',
+             'path': 'packages/core/src/tools/agent/agent.test.ts',
+             'before': '      '
+                       'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(\n'
+                       '        mockSubagents[0],\n'
+                       '      );\n'
+                       '      '
+                       'vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({\n'
+                       '        subagent: mockAgent,\n'
+                       '        dispose: vi.fn().mockResolvedValue(undefined),\n'
+                       '      });\n'
+                       '    });\n'
+                       '\n'
+                       "    it('should execute subagent successfully', async () => {\n"
+                       '      const params: AgentParams = {\n'
+                       "        description: 'Search files',\n",
+             'after': '      '
+                      'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(\n'
+                      '        mockSubagents[0],\n'
+                      '      );\n'
+                      '      '
+                      'vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({\n'
+                      '        subagent: mockAgent,\n'
+                      '        dispose: vi.fn().mockResolvedValue(undefined),\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    describe('foreground execution failure preservation', () => "
+                      '{\n'
+                      '      const failures: Array<[string, unknown]> = [\n'
+                      "        ['undefined', undefined],\n"
+                      "        ['null', null],\n"
+                      "        ['false', false],\n"
+                      "        ['zero', 0],\n"
+                      "        ['negative zero', -0],\n"
+                      "        ['bigint zero', 0n],\n"
+                      "        ['empty string', ''],\n"
+                      "        ['NaN', Number.NaN],\n"
+                      "        ['Error', new Error('execution setup failed')],\n"
+                      '      ];\n'
+                      '\n'
+                      '      afterEach(() => {\n'
+                      '        mockStartSubagentSpan.mockReset();\n'
+                      '        vi.restoreAllMocks();\n'
+                      '      });\n'
+                      '\n'
+                      "      function invocationFor(subagentType = 'file-search') {\n"
+                      '        return (agentTool as '
+                      'AgentToolWithProtectedMethods).createInvocation({\n'
+                      "          description: 'Inspect files',\n"
+                      "          prompt: 'Find the implementation',\n"
+                      '          subagent_type: subagentType,\n'
+                      '          run_in_background: false,\n'
+                      '        });\n'
+                      '      }\n'
+                      '\n'
+                      '      function rejectJournal() {\n'
+                      '        vi.spyOn(\n'
+                      '          deploymentPrompt,\n'
+                      "          'isQwen38LockedAgentServiceRuntime',\n"
+                      '        ).mockReturnValue(true);\n'
+                      '        '
+                      'vi.mocked(config.getForegroundAgentsOnly).mockReturnValue(true);\n'
+                      '        '
+                      'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({\n'
+                      '          ...mockSubagents[0],\n'
+                      "          name: 'Explore',\n"
+                      "          level: 'builtin',\n"
+                      '        });\n'
+                      '        vi.spyOn(\n'
+                      '          subagentScratch,\n'
+                      "          'createQwen38SubagentScratch',\n"
+                      '        ).mockReturnValue({\n'
+                      "          root: '/tmp/mock-explore',\n"
+                      "          cache: '/tmp/mock-explore/cache',\n"
+                      "          pip: '/tmp/mock-explore/pip',\n"
+                      "          npm: '/tmp/mock-explore/npm',\n"
+                      "          cargo: '/tmp/mock-explore/cargo',\n"
+                      "          go: '/tmp/mock-explore/go',\n"
+                      '        });\n'
+                      '        const journal: effectJournal.Qwen38EffectJournal = {\n'
+                      "          journalId: 'mock-journal',\n"
+                      "          workspaceRoot: '/workspace',\n"
+                      "          artifactsRoot: '/artifacts',\n"
+                      "          journalRoot: '/tmp/mock-effects',\n"
+                      '          beforeWorkspace: {\n'
+                      "            label: 'workspace',\n"
+                      "            root: '/workspace',\n"
+                      '            entries: new Map(),\n'
+                      '          },\n'
+                      '          beforeArtifacts: {\n'
+                      "            label: 'artifacts',\n"
+                      "            root: '/artifacts',\n"
+                      '            entries: new Map(),\n'
+                      '          },\n'
+                      '        };\n'
+                      '        vi.spyOn(effectJournal, '
+                      "'beginQwen38EffectJournal').mockResolvedValue(\n"
+                      '          journal,\n'
+                      '        );\n'
+                      "        const journalError = new Error('journal persistence "
+                      "failed');\n"
+                      '        const finish = vi\n'
+                      "          .spyOn(effectJournal, 'finishQwen38EffectJournal')\n"
+                      '          .mockRejectedValue(journalError);\n'
+                      '        return { journal, journalError, finish };\n'
+                      '      }\n'
+                      '\n'
+                      '      it.each(failures)(\n'
+                      "        'reports a failed framed run that throws %s',\n"
+                      '        async (_label, failure) => {\n'
+                      '          mockStartSubagentSpan.mockImplementationOnce(() => {\n'
+                      '            throw failure;\n'
+                      '          });\n'
+                      '          const result = await invocationFor().execute();\n'
+                      '          expect(mockAgent.execute).not.toHaveBeenCalled();\n'
+                      '          expect(result.returnDisplay).toMatchObject({ status: '
+                      "'failed' });\n"
+                      '          expect(partToString(result.llmContent)).toBe(\n'
+                      '            `Failed to run subagent: ${failure instanceof Error '
+                      '? failure.message : String(failure)}`,\n'
+                      '          );\n'
+                      '        },\n'
+                      '      );\n'
+                      '\n'
+                      '      it.each(failures)(\n'
+                      "        'retains an execution failure (%s) alongside mandatory "
+                      "journal failure',\n"
+                      '        async (_label, failure) => {\n'
+                      '          const { journal, journalError, finish } = '
+                      'rejectJournal();\n'
+                      '          const aggregate = vi.spyOn(globalThis, '
+                      "'AggregateError');\n"
+                      '          mockStartSubagentSpan.mockImplementationOnce(() => {\n'
+                      '            throw failure;\n'
+                      '          });\n'
+                      '          const result = await '
+                      "invocationFor('Explore').execute();\n"
+                      '          expect(mockAgent.execute).not.toHaveBeenCalled();\n'
+                      '          '
+                      'expect(finish).toHaveBeenCalledExactlyOnceWith(journal);\n'
+                      '          expect(aggregate).toHaveBeenCalledExactlyOnceWith(\n'
+                      '            [failure, journalError],\n'
+                      "            'subagent execution and mandatory Explore effect "
+                      "journaling both failed',\n"
+                      '          );\n'
+                      '          expect(result.returnDisplay).toMatchObject({ status: '
+                      "'failed' });\n"
+                      '          expect(partToString(result.llmContent)).toContain(\n'
+                      "            'execution and mandatory Explore effect journaling "
+                      "both failed',\n"
+                      '          );\n'
+                      '        },\n'
+                      '      );\n'
+                      '\n'
+                      "      it('reports journal failure after a successful run "
+                      "without inventing an execution failure', async () => {\n"
+                      '        const { journal, finish } = rejectJournal();\n'
+                      '        const aggregate = vi.spyOn(globalThis, '
+                      "'AggregateError');\n"
+                      '        const result = await '
+                      "invocationFor('Explore').execute();\n"
+                      '        expect(mockAgent.execute).toHaveBeenCalledOnce();\n'
+                      '        '
+                      'expect(finish).toHaveBeenCalledExactlyOnceWith(journal);\n'
+                      '        expect(aggregate).not.toHaveBeenCalled();\n'
+                      '        expect(result.returnDisplay).toMatchObject({ status: '
+                      "'failed' });\n"
+                      '        expect(partToString(result.llmContent)).toBe(\n'
+                      "          'Failed to run subagent: journal persistence "
+                      "failed',\n"
+                      '        );\n'
+                      '      });\n'
+                      '    });\n'
+                      '\n'
+                      "    it('should execute subagent successfully', async () => {\n"
+                      '      const params: AgentParams = {\n'
+                      "        description: 'Search files',\n",
+             'review_before': '      '
+                              'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(\n'
+                              '        mockSubagents[0],\n'
+                              '      );\n'
+                              '      '
+                              'vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({\n'
+                              '        subagent: mockAgent,\n'
+                              '        dispose: vi.fn().mockResolvedValue(undefined),\n'
+                              '      });\n'
+                              '    });\n'
+                              '\n'
+                              "    it('should execute subagent successfully', async () "
+                              '=> {\n'
+                              '      const params: AgentParams = {\n'
+                              "        description: 'Search files',\n",
+             'review_after': '      '
+                             'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(\n'
+                             '        mockSubagents[0],\n'
+                             '      );\n'
+                             '      '
+                             'vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({\n'
+                             '        subagent: mockAgent,\n'
+                             '        dispose: vi.fn().mockResolvedValue(undefined),\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    describe('foreground execution failure "
+                             "preservation', () => {\n"
+                             '      const failures: Array<[string, unknown]> = [\n'
+                             "        ['undefined', undefined],\n"
+                             "        ['null', null],\n"
+                             "        ['false', false],\n"
+                             "        ['zero', 0],\n"
+                             "        ['negative zero', -0],\n"
+                             "        ['bigint zero', 0n],\n"
+                             "        ['empty string', ''],\n"
+                             "        ['NaN', Number.NaN],\n"
+                             "        ['Error', new Error('execution setup failed')],\n"
+                             '      ];\n'
+                             '\n'
+                             '      afterEach(() => {\n'
+                             '        mockStartSubagentSpan.mockReset();\n'
+                             '        vi.restoreAllMocks();\n'
+                             '      });\n'
+                             '\n'
+                             '      function invocationFor(subagentType = '
+                             "'file-search') {\n"
+                             '        return (agentTool as '
+                             'AgentToolWithProtectedMethods).createInvocation({\n'
+                             "          description: 'Inspect files',\n"
+                             "          prompt: 'Find the implementation',\n"
+                             '          subagent_type: subagentType,\n'
+                             '          run_in_background: false,\n'
+                             '        });\n'
+                             '      }\n'
+                             '\n'
+                             '      function rejectJournal() {\n'
+                             '        vi.spyOn(\n'
+                             '          deploymentPrompt,\n'
+                             "          'isQwen38LockedAgentServiceRuntime',\n"
+                             '        ).mockReturnValue(true);\n'
+                             '        '
+                             'vi.mocked(config.getForegroundAgentsOnly).mockReturnValue(true);\n'
+                             '        '
+                             'vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({\n'
+                             '          ...mockSubagents[0],\n'
+                             "          name: 'Explore',\n"
+                             "          level: 'builtin',\n"
+                             '        });\n'
+                             '        vi.spyOn(\n'
+                             '          subagentScratch,\n'
+                             "          'createQwen38SubagentScratch',\n"
+                             '        ).mockReturnValue({\n'
+                             "          root: '/tmp/mock-explore',\n"
+                             "          cache: '/tmp/mock-explore/cache',\n"
+                             "          pip: '/tmp/mock-explore/pip',\n"
+                             "          npm: '/tmp/mock-explore/npm',\n"
+                             "          cargo: '/tmp/mock-explore/cargo',\n"
+                             "          go: '/tmp/mock-explore/go',\n"
+                             '        });\n'
+                             '        const journal: effectJournal.Qwen38EffectJournal '
+                             '= {\n'
+                             "          journalId: 'mock-journal',\n"
+                             "          workspaceRoot: '/workspace',\n"
+                             "          artifactsRoot: '/artifacts',\n"
+                             "          journalRoot: '/tmp/mock-effects',\n"
+                             '          beforeWorkspace: {\n'
+                             "            label: 'workspace',\n"
+                             "            root: '/workspace',\n"
+                             '            entries: new Map(),\n'
+                             '          },\n'
+                             '          beforeArtifacts: {\n'
+                             "            label: 'artifacts',\n"
+                             "            root: '/artifacts',\n"
+                             '            entries: new Map(),\n'
+                             '          },\n'
+                             '        };\n'
+                             '        vi.spyOn(effectJournal, '
+                             "'beginQwen38EffectJournal').mockResolvedValue(\n"
+                             '          journal,\n'
+                             '        );\n'
+                             "        const journalError = new Error('journal "
+                             "persistence failed');\n"
+                             '        const finish = vi\n'
+                             '          .spyOn(effectJournal, '
+                             "'finishQwen38EffectJournal')\n"
+                             '          .mockRejectedValue(journalError);\n'
+                             '        return { journal, journalError, finish };\n'
+                             '      }\n'
+                             '\n'
+                             '      it.each(failures)(\n'
+                             "        'reports a failed framed run that throws %s',\n"
+                             '        async (_label, failure) => {\n'
+                             '          '
+                             'mockStartSubagentSpan.mockImplementationOnce(() => {\n'
+                             '            throw failure;\n'
+                             '          });\n'
+                             '          const result = await '
+                             'invocationFor().execute();\n'
+                             '          '
+                             'expect(mockAgent.execute).not.toHaveBeenCalled();\n'
+                             '          expect(result.returnDisplay).toMatchObject({ '
+                             "status: 'failed' });\n"
+                             '          expect(partToString(result.llmContent)).toBe(\n'
+                             '            `Failed to run subagent: ${failure '
+                             'instanceof Error ? failure.message : String(failure)}`,\n'
+                             '          );\n'
+                             '        },\n'
+                             '      );\n'
+                             '\n'
+                             '      it.each(failures)(\n'
+                             "        'retains an execution failure (%s) alongside "
+                             "mandatory journal failure',\n"
+                             '        async (_label, failure) => {\n'
+                             '          const { journal, journalError, finish } = '
+                             'rejectJournal();\n'
+                             '          const aggregate = vi.spyOn(globalThis, '
+                             "'AggregateError');\n"
+                             '          '
+                             'mockStartSubagentSpan.mockImplementationOnce(() => {\n'
+                             '            throw failure;\n'
+                             '          });\n'
+                             '          const result = await '
+                             "invocationFor('Explore').execute();\n"
+                             '          '
+                             'expect(mockAgent.execute).not.toHaveBeenCalled();\n'
+                             '          '
+                             'expect(finish).toHaveBeenCalledExactlyOnceWith(journal);\n'
+                             '          '
+                             'expect(aggregate).toHaveBeenCalledExactlyOnceWith(\n'
+                             '            [failure, journalError],\n'
+                             "            'subagent execution and mandatory Explore "
+                             "effect journaling both failed',\n"
+                             '          );\n'
+                             '          expect(result.returnDisplay).toMatchObject({ '
+                             "status: 'failed' });\n"
+                             '          '
+                             'expect(partToString(result.llmContent)).toContain(\n'
+                             "            'execution and mandatory Explore effect "
+                             "journaling both failed',\n"
+                             '          );\n'
+                             '        },\n'
+                             '      );\n'
+                             '\n'
+                             "      it('reports journal failure after a successful run "
+                             "without inventing an execution failure', async () => {\n"
+                             '        const { journal, finish } = rejectJournal();\n'
+                             '        const aggregate = vi.spyOn(globalThis, '
+                             "'AggregateError');\n"
+                             '        const result = await '
+                             "invocationFor('Explore').execute();\n"
+                             '        '
+                             'expect(mockAgent.execute).toHaveBeenCalledOnce();\n'
+                             '        '
+                             'expect(finish).toHaveBeenCalledExactlyOnceWith(journal);\n'
+                             '        expect(aggregate).not.toHaveBeenCalled();\n'
+                             '        expect(result.returnDisplay).toMatchObject({ '
+                             "status: 'failed' });\n"
+                             '        expect(partToString(result.llmContent)).toBe(\n'
+                             "          'Failed to run subagent: journal persistence "
+                             "failed',\n"
+                             '        );\n'
+                             '      });\n'
+                             '    });\n'
+                             '\n'
+                             "    it('should execute subagent successfully', async () "
+                             '=> {\n'
+                             '      const params: AgentParams = {\n'
+                             "        description: 'Search files',\n"},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-7',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '\n'
                        '      const invocation = (\n'
@@ -111917,7 +113101,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.mocked(mockAgent.getFinalText).mockReturnValue(\n'
                              "        '<analysis>scratch only</analysis>',\n"
                              '      );\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-6',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-8',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '        // mode came from inside the subagent itself).\n'
                        '        const meta = lastEndMeta();\n'
@@ -112023,7 +113207,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        // hiding the reason from dashboards. wenshao @ '
                              '#4410 DeepSeek\n'
                              '        // 3291876053.\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-7',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-9',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '          totalDurationMs: 0,\n'
                        '          totalToolCalls: 0,\n'
@@ -112081,7 +113265,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        set: vi.fn(),\n'
                              '      } as unknown as ContextState;\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-8',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-10',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '    beforeEach(() => {\n'
                        '      mockAgent = {\n'
@@ -112263,7 +113447,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        set: vi.fn(),\n'
                              '      } as unknown as ContextState;\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-9',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-11',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '    beforeEach(() => {\n'
                        '      mockAgent = {\n'
@@ -112445,7 +113629,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '        set: vi.fn(),\n'
                              '      } as unknown as ContextState;\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-10',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-12',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '          totalDurationMs: 100,\n'
                        '          totalToolCalls: 1,\n'
@@ -112511,9 +113695,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'emitDuringExecute(capturedInvocation.eventEmitter);\n'
                              '      });\n'
                              '\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-11',
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-13',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
-             'before': "        (entry) => entry.callId === 'call-read-1',\n"
+             'before': '      );\n'
+                       '      const toolCall = resultSnapshot?.toolCalls?.find(\n'
+                       "        (entry) => entry.callId === 'call-read-1',\n"
                        '      );\n'
                        "      expect(toolCall?.args).toEqual({ path: '/test.ts' });\n"
                        '      expect(toolCall?.responseParts).toBe(responseParts);\n'
@@ -112524,11 +113710,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '      vi.mocked(config.isInteractive).mockReturnValue(true);\n'
                        "      const responseParts: Part[] = [{ text: 'raw protocol "
                        "result' }];\n"
-                       '      const snapshots: AgentResultDisplay[] = [];\n'
-                       '\n'
-                       '      const invocation = '
-                       'createInvocationWithEventDrivenAgent((emitter) => {\n',
-             'after': "        (entry) => entry.callId === 'call-read-1',\n"
+                       '      const snapshots: AgentResultDisplay[] = [];\n',
+             'after': '      );\n'
+                      '      const toolCall = resultSnapshot?.toolCalls?.find(\n'
+                      "        (entry) => entry.callId === 'call-read-1',\n"
                       '      );\n'
                       "      expect(toolCall?.args).toEqual({ path: '/test.ts' });\n"
                       '      expect(toolCall?.responseParts).toBe(responseParts);\n'
@@ -112683,11 +113868,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '      vi.mocked(config.isInteractive).mockReturnValue(true);\n'
                       "      const responseParts: Part[] = [{ text: 'raw protocol "
                       "result' }];\n"
-                      '      const snapshots: AgentResultDisplay[] = [];\n'
-                      '\n'
-                      '      const invocation = '
-                      'createInvocationWithEventDrivenAgent((emitter) => {\n',
-             'review_before': "        (entry) => entry.callId === 'call-read-1',\n"
+                      '      const snapshots: AgentResultDisplay[] = [];\n',
+             'review_before': '      );\n'
+                              '      const toolCall = '
+                              'resultSnapshot?.toolCalls?.find(\n'
+                              "        (entry) => entry.callId === 'call-read-1',\n"
                               '      );\n'
                               "      expect(toolCall?.args).toEqual({ path: '/test.ts' "
                               '});\n'
@@ -112701,11 +113886,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               'vi.mocked(config.isInteractive).mockReturnValue(true);\n'
                               "      const responseParts: Part[] = [{ text: 'raw "
                               "protocol result' }];\n"
-                              '      const snapshots: AgentResultDisplay[] = [];\n'
-                              '\n'
-                              '      const invocation = '
-                              'createInvocationWithEventDrivenAgent((emitter) => {\n',
-             'review_after': "        (entry) => entry.callId === 'call-read-1',\n"
+                              '      const snapshots: AgentResultDisplay[] = [];\n',
+             'review_after': '      );\n'
+                             '      const toolCall = resultSnapshot?.toolCalls?.find(\n'
+                             "        (entry) => entry.callId === 'call-read-1',\n"
                              '      );\n'
                              "      expect(toolCall?.args).toEqual({ path: '/test.ts' "
                              '});\n'
@@ -112871,11 +114055,8 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'vi.mocked(config.isInteractive).mockReturnValue(true);\n'
                              "      const responseParts: Part[] = [{ text: 'raw "
                              "protocol result' }];\n"
-                             '      const snapshots: AgentResultDisplay[] = [];\n'
-                             '\n'
-                             '      const invocation = '
-                             'createInvocationWithEventDrivenAgent((emitter) => {\n'},
-            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-12',
+                             '      const snapshots: AgentResultDisplay[] = [];\n'},
+            {'name': 'packages/core/src/tools/agent/agent.test.ts:landmark-14',
              'path': 'packages/core/src/tools/agent/agent.test.ts',
              'before': '    beforeEach(() => {\n'
                        '      mockAgent = {\n'
@@ -113254,7 +114435,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  patchAgentMeta(metaPath, {\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-5',
              'path': 'packages/core/src/tools/agent/agent.ts',
-             'before': ' * The tool dynamically loads available agents and includes '
+             'before': ' * Agent tool that enables primary agents to delegate tasks to '
+                       'specialized agents.\n'
+                       ' * The tool dynamically loads available agents and includes '
                        'them in its description\n'
                        ' * for the model to choose from.\n'
                        ' */\n'
@@ -113274,9 +114457,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '  private availableSubagents: SubagentConfig[] =\n'
                        '    BuiltinAgentRegistry.getBuiltinAgents();\n'
                        '  private readonly removeChangeListener: () => void;\n'
-                       '\n'
-                       '  constructor(private readonly config: Config) {\n',
-             'after': ' * The tool dynamically loads available agents and includes '
+                       '\n',
+             'after': ' * Agent tool that enables primary agents to delegate tasks to '
+                      'specialized agents.\n'
+                      ' * The tool dynamically loads available agents and includes '
                       'them in its description\n'
                       ' * for the model to choose from.\n'
                       ' */\n'
@@ -113288,9 +114472,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '  private availableSubagents: SubagentConfig[] =\n'
                       '    BuiltinAgentRegistry.getBuiltinAgents();\n'
                       '  private readonly removeChangeListener: () => void;\n'
-                      '\n'
-                      '  constructor(private readonly config: Config) {\n',
-             'review_before': ' * The tool dynamically loads available agents and '
+                      '\n',
+             'review_before': ' * Agent tool that enables primary agents to delegate '
+                              'tasks to specialized agents.\n'
+                              ' * The tool dynamically loads available agents and '
                               'includes them in its description\n'
                               ' * for the model to choose from.\n'
                               ' */\n'
@@ -113310,9 +114495,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '  private availableSubagents: SubagentConfig[] =\n'
                               '    BuiltinAgentRegistry.getBuiltinAgents();\n'
                               '  private readonly removeChangeListener: () => void;\n'
-                              '\n'
-                              '  constructor(private readonly config: Config) {\n',
-             'review_after': ' * The tool dynamically loads available agents and '
+                              '\n',
+             'review_after': ' * Agent tool that enables primary agents to delegate '
+                             'tasks to specialized agents.\n'
+                             ' * The tool dynamically loads available agents and '
                              'includes them in its description\n'
                              ' * for the model to choose from.\n'
                              ' */\n'
@@ -113324,8 +114510,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '  private availableSubagents: SubagentConfig[] =\n'
                              '    BuiltinAgentRegistry.getBuiltinAgents();\n'
                              '  private readonly removeChangeListener: () => void;\n'
-                             '\n'
-                             '  constructor(private readonly config: Config) {\n'},
+                             '\n'},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-6',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '      Kind.Agent,\n'
@@ -113677,8 +114862,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '    // Validate required fields\n'
                        '    if (\n'
                        '      !params.description ||\n'
-                       "      typeof params.description !== 'string' ||\n"
-                       "      params.description.trim() === ''\n",
+                       "      typeof params.description !== 'string' ||\n",
              'after': '        delete schema.properties.read_only;\n'
                       '      }\n'
                       '\n'
@@ -113713,8 +114897,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    // Validate required fields\n'
                       '    if (\n'
                       '      !params.description ||\n'
-                      "      typeof params.description !== 'string' ||\n"
-                      "      params.description.trim() === ''\n",
+                      "      typeof params.description !== 'string' ||\n",
              'review_before': '        delete schema.properties.read_only;\n'
                               '      }\n'
                               '\n'
@@ -113743,8 +114926,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '    // Validate required fields\n'
                               '    if (\n'
                               '      !params.description ||\n'
-                              "      typeof params.description !== 'string' ||\n"
-                              "      params.description.trim() === ''\n",
+                              "      typeof params.description !== 'string' ||\n",
              'review_after': '        delete schema.properties.read_only;\n'
                              '      }\n'
                              '\n'
@@ -113780,11 +114962,12 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    // Validate required fields\n'
                              '    if (\n'
                              '      !params.description ||\n'
-                             "      typeof params.description !== 'string' ||\n"
-                             "      params.description.trim() === ''\n"},
+                             "      typeof params.description !== 'string' ||\n"},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-9',
              'path': 'packages/core/src/tools/agent/agent.ts',
-             'before': "        params.todo_id.trim() === '' ||\n"
+             'before': '      params.todo_id !== undefined &&\n'
+                       "      (typeof params.todo_id !== 'string' ||\n"
+                       "        params.todo_id.trim() === '' ||\n"
                        '        params.todo_id.length > 500)\n'
                        '    ) {\n'
                        '      return \'Parameter "todo_id" must be a non-empty string '
@@ -113794,11 +114977,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                        '    if (params.subagent_type !== undefined) {\n'
                        '      if (\n'
                        "        typeof params.subagent_type !== 'string' ||\n"
-                       "        params.subagent_type.trim() === ''\n"
-                       '      ) {\n'
-                       '        return \'Parameter "subagent_type" must be a non-empty '
-                       "string.';\n",
-             'after': "        params.todo_id.trim() === '' ||\n"
+                       "        params.subagent_type.trim() === ''\n",
+             'after': '      params.todo_id !== undefined &&\n'
+                      "      (typeof params.todo_id !== 'string' ||\n"
+                      "        params.todo_id.trim() === '' ||\n"
                       '        params.todo_id.length > 500)\n'
                       '    ) {\n'
                       '      return \'Parameter "todo_id" must be a non-empty string '
@@ -113841,11 +115023,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '    if (params.subagent_type !== undefined) {\n'
                       '      if (\n'
                       "        typeof params.subagent_type !== 'string' ||\n"
-                      "        params.subagent_type.trim() === ''\n"
-                      '      ) {\n'
-                      '        return \'Parameter "subagent_type" must be a non-empty '
-                      "string.';\n",
-             'review_before': "        params.todo_id.trim() === '' ||\n"
+                      "        params.subagent_type.trim() === ''\n",
+             'review_before': '      params.todo_id !== undefined &&\n'
+                              "      (typeof params.todo_id !== 'string' ||\n"
+                              "        params.todo_id.trim() === '' ||\n"
                               '        params.todo_id.length > 500)\n'
                               '    ) {\n'
                               '      return \'Parameter "todo_id" must be a non-empty '
@@ -113855,11 +115036,10 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                               '    if (params.subagent_type !== undefined) {\n'
                               '      if (\n'
                               "        typeof params.subagent_type !== 'string' ||\n"
-                              "        params.subagent_type.trim() === ''\n"
-                              '      ) {\n'
-                              '        return \'Parameter "subagent_type" must be a '
-                              "non-empty string.';\n",
-             'review_after': "        params.todo_id.trim() === '' ||\n"
+                              "        params.subagent_type.trim() === ''\n",
+             'review_after': '      params.todo_id !== undefined &&\n'
+                             "      (typeof params.todo_id !== 'string' ||\n"
+                             "        params.todo_id.trim() === '' ||\n"
                              '        params.todo_id.length > 500)\n'
                              '    ) {\n'
                              '      return \'Parameter "todo_id" must be a non-empty '
@@ -113903,10 +115083,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '    if (params.subagent_type !== undefined) {\n'
                              '      if (\n'
                              "        typeof params.subagent_type !== 'string' ||\n"
-                             "        params.subagent_type.trim() === ''\n"
-                             '      ) {\n'
-                             '        return \'Parameter "subagent_type" must be a '
-                             "non-empty string.';\n"},
+                             "        params.subagent_type.trim() === ''\n"},
             {'name': 'packages/core/src/tools/agent/agent.ts:landmark-10',
              'path': 'packages/core/src/tools/agent/agent.ts',
              'before': '        if (params.plan_mode_required === true) {\n'
@@ -115648,11 +116825,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            ? await beginQwen38EffectJournal()\n'
                       '            : undefined;\n'
                       '        let stopHookWarning: string | undefined;\n'
-                      '        let runError: unknown;\n'
+                      '        let runFailure: { error: unknown } | undefined;\n'
                       '        try {\n'
                       '          stopHookWarning = await runFramed();\n'
                       '        } catch (error) {\n'
-                      '          runError = error;\n'
+                      '          runFailure = { error };\n'
                       '        }\n'
                       '        if (effectJournal) {\n'
                       '          try {\n'
@@ -115660,9 +116837,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '              await finishQwen38EffectJournal(effectJournal)\n'
                       '            ).modelSummary;\n'
                       '          } catch (journalError) {\n'
-                      '            if (runError) {\n'
+                      '            if (runFailure) {\n'
                       '              throw new AggregateError(\n'
-                      '                [runError, journalError],\n'
+                      '                [runFailure.error, journalError],\n'
                       '                `subagent execution and mandatory Explore '
                       'effect journaling both failed`,\n'
                       '              );\n'
@@ -115670,7 +116847,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                       '            throw journalError;\n'
                       '          }\n'
                       '        }\n'
-                      '        if (runError) throw runError;\n'
+                      '        if (runFailure) throw runFailure.error;\n'
                       '        const effectSuffix = qwen38EffectSummary\n'
                       '          ? `\\n\\n${qwen38EffectSummary}`\n'
                       "          : '';\n"
@@ -115742,11 +116919,11 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            ? await beginQwen38EffectJournal()\n'
                              '            : undefined;\n'
                              '        let stopHookWarning: string | undefined;\n'
-                             '        let runError: unknown;\n'
+                             '        let runFailure: { error: unknown } | undefined;\n'
                              '        try {\n'
                              '          stopHookWarning = await runFramed();\n'
                              '        } catch (error) {\n'
-                             '          runError = error;\n'
+                             '          runFailure = { error };\n'
                              '        }\n'
                              '        if (effectJournal) {\n'
                              '          try {\n'
@@ -115755,9 +116932,9 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              'finishQwen38EffectJournal(effectJournal)\n'
                              '            ).modelSummary;\n'
                              '          } catch (journalError) {\n'
-                             '            if (runError) {\n'
+                             '            if (runFailure) {\n'
                              '              throw new AggregateError(\n'
-                             '                [runError, journalError],\n'
+                             '                [runFailure.error, journalError],\n'
                              '                `subagent execution and mandatory '
                              'Explore effect journaling both failed`,\n'
                              '              );\n'
@@ -115765,7 +116942,7 @@ GENERATED_STAGES = ({'name': 'qwen-code-agent-service',
                              '            throw journalError;\n'
                              '          }\n'
                              '        }\n'
-                             '        if (runError) throw runError;\n'
+                             '        if (runFailure) throw runFailure.error;\n'
                              '        const effectSuffix = qwen38EffectSummary\n'
                              '          ? `\\n\\n${qwen38EffectSummary}`\n'
                              "          : '';\n"
@@ -173155,17 +174332,17 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/cli/src/services/tips/tipRegistry.test.ts': '776ca7e48ef297950d8ff16b1c5aa44b8e0cc292140e7cb67caf4d7bc7befdb2',
  'packages/cli/src/services/tips/tipRegistry.ts': '7fba1bdb876863988a902c8e0ee39ae2d1b4637540a9678b462aaf79dd611672',
  'packages/cli/src/ui/commands/contextCommand.test.ts': '488d15f59afc8ddcf25fdd008d6ca723385a58147c1dea51f673b0aa4b0fc9e9',
- 'packages/cli/src/ui/commands/contextCommand.ts': 'd8bf91bbaba56641effd71de23115fedd3a8a0bfcf0f9e54dad1504c9efa8f17',
+ 'packages/cli/src/ui/commands/contextCommand.ts': 'd686fac91be35ca501185c37d5a4d6ef552994b909eabca18193fc2e74ae5f98',
  'packages/cli/src/ui/commands/doctorCommand.test.ts': '5605f0fe40734369db9b5c16f386c4f428e6231aa0a91f3eb513aac14898b749',
  'packages/cli/src/ui/commands/doctorCommand.ts': '35d783334e6b5026b7b84909e650431c59b095d047e01a18a65008153a42d958',
  'packages/cli/src/ui/components/SettingsDialog.test.tsx': '028210723e43f04dabd3e0b6f2d29702f9bb602987d56c8e6e99300fdf49fb9c',
  'packages/cli/src/ui/components/Tips.test.ts': '78959dff49823f28287a4a1df9e8376bf755dae2f224b07bfc533b90eb22534d',
  'packages/cli/src/ui/components/views/ContextUsage.test.tsx': '1e9ca3cfd022b55bca6e8a110416c85c63235f046ad06a2a5aeb33cb97bb4857',
- 'packages/cli/src/ui/components/views/ContextUsage.tsx': '319b9d10555965be3a6f537618f8202612c2725f5db5e18cc7e31bd71b202a67',
+ 'packages/cli/src/ui/components/views/ContextUsage.tsx': 'f13e0539896a99f8f758692ba57eaa1194af4b1ad6d34025005403ac03854936',
  'packages/cli/src/ui/hooks/atCommandProcessor.test.ts': 'e3594b080a5b93f06902925dced00476f4b7c710e34ebbd6257afb9822b63fba',
  'packages/cli/src/ui/hooks/useContextualTips.ts': '061c3cccfb1ca3a4ee6d74a3e7c07e2ef51e7a541d006145e28fdd135a84b1b8',
- 'packages/cli/src/ui/hooks/useGeminiStream.test.tsx': 'b4309b336cd3e5f662ca116c0d7bce3fabbc06c8cf48f5358991ed2d7b4833f5',
- 'packages/cli/src/ui/hooks/useGeminiStream.ts': '23cd9a04996f5dc7544fd7350841f3895a10fc055ff8d1a89ff690388b16f02b',
+ 'packages/cli/src/ui/hooks/useGeminiStream.test.tsx': 'b051797ecf7cecefeaad69c4b10dda5f0d2aebbce407565cca43cf7dccae8a9d',
+ 'packages/cli/src/ui/hooks/useGeminiStream.ts': '756f3589f968257d241e81395c0f59da6fcb6d596918ad6e3ddf315074684375',
  'packages/cli/src/ui/hooks/useToolScheduler.test.ts': 'aa5bce71c9b6789fe43630e5a22e70bf86b47e6ed9102bbb13e1c92cc9d6073b',
  'packages/cli/src/ui/types.ts': '74d13359bda1396627d808211f481321aa3854a6703d7d91687926304128fa37',
  'packages/cli/src/utils/errors.test.ts': '309ecd8f307d32532f4942ad22980db2374fd2661a78610851701e4870554584',
@@ -173180,7 +174357,7 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/agents/runtime/agent-core.ts': '34d28f92c78898c6a88a13bb551d92be41e146c621f69c789378381fd537a622',
  'packages/core/src/agents/runtime/agent-events.ts': 'f8ddde1eb314785fbc47470dda432f2296b9d4d024cbe3c2241e12db69e99dcb',
  'packages/core/src/agents/runtime/agent-headless.test.ts': 'b9bb1b3221091d0d4b348d228c31d6ba098a5549cfec6aef195f98bd8a60ed4d',
- 'packages/core/src/agents/runtime/agent-headless.ts': '24f953533bc130c33687e2cbe1b324dc0f49fb5a3f78860e30682193ac272cf5',
+ 'packages/core/src/agents/runtime/agent-headless.ts': '665e58586c9249717ffe768fc82d23a0b2e9bf027fe42453e9619c36cd924935',
  'packages/core/src/agents/runtime/agent-interactive.ts': '68ecd4bb93b57778021f1cbfcf866060bc9ffc4f6dd875ee1e0ad20e72735986',
  'packages/core/src/agents/runtime/agent-types.ts': '8439101e8098fa07f4942fe28b9651cffe7d0c3b850c8c4585db262ecb44572e',
  'packages/core/src/agents/subagent-result.test.ts': '4b0dbe77348334b6a452a9742c64c2433202a52ccc5578ec78097429682c4f91',
@@ -173203,8 +174380,8 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/core/genai-compat.ts': '3568c866f2848485f4a14363ca98abd142cb6d910f066ea705a859500de12e81',
  'packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts': '39cb515dfc3afb39edfe8dbabd3956351dd4b7b71e82f2fd77e4f6dc2b8ce695',
  'packages/core/src/core/nonInteractiveToolExecutor.test.ts': '0d3644f3c77c8aeddd4a668b601f9d3a91881d82119fe7a476c9704abedd6cb3',
- 'packages/core/src/core/openaiContentGenerator/converter.test.ts': 'c8a3db9f165ef582c6748c8d35b87578b83098f7a01d49b4892d6ae3c1ec2703',
- 'packages/core/src/core/openaiContentGenerator/converter.ts': '440293b8c114d3e299b6757c8c26d7db218a76469c6581d754d10bf8259ba755',
+ 'packages/core/src/core/openaiContentGenerator/converter.test.ts': '37ace705b3f354c93b22f5d527e1734cd29dc3372edf8352760ebb25cac265e3',
+ 'packages/core/src/core/openaiContentGenerator/converter.ts': '27f66433632760ccb1459565c60bdc89043250e1a0d870bfe0096e5908ca5855',
  'packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts': 'c7ce9623938c104a97ef8f6d706fcfbf591d6dbc0c86fc54d06cf2b9201744a1',
  'packages/core/src/core/openaiContentGenerator/pipeline.test.ts': 'ed00320575c8e2b90a1300734588c99d6115ee85f0318e1cd66bc814eb4bf944',
  'packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts': '3e46b9605aaf6a4eb6f6494b6e87ea913344867adf8b124303deb152a06b9888',
@@ -173213,13 +174390,13 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/core/prompts.test.ts': '9369efadaa67f10e218f1be71f3bd1620d67d8958dec94a28a9db300700175d0',
  'packages/core/src/core/prompts.ts': 'f1d1b4db7b943da44a180b3dadaa1dca598797b9e6941578a6ecf51b7a6cc3a5',
  'packages/core/src/core/qwen38-deployment-prompt.test.ts': '0f48330daba540b60a1215ca9695da6c1738a1a04a8897270b4c07758836f851',
- 'packages/core/src/core/qwen38-deployment-prompt.ts': '0397a0cf6e4c71f9df3d0f04a2058c9703ae6b8507cd5cbcd9682603a993b24a',
+ 'packages/core/src/core/qwen38-deployment-prompt.ts': '619c6507f7d5651a77c68502cefd45011c4a04640f5fe73895903ead89dbbdd0',
  'packages/core/src/core/session-recovery.ts': 'ab525a0c4ef117934f966e47e21226f58b2bc283f40b4382126e60c1d53b3513',
  'packages/core/src/core/tokenLimits.test.ts': '5e36a2e981303e59a527e541905233c8227d606af264993a74db33e57a088b2d',
  'packages/core/src/core/tokenLimits.ts': '877e242772bf49c79d893c8e9542fe6dea42f7216996273b5c980a107064a9ca',
  'packages/core/src/core/toolOutcome.ts': 'f630cb9236a5adc9d66638554cfa411cd35a16bd975710b6efd89ebfa7d0a2f9',
- 'packages/core/src/core/turn.test.ts': '5de15292c793f4227c500e3680a621ce492a7bb11fb88375a1ee6deb42d313c9',
- 'packages/core/src/core/turn.ts': '3cfaed5ff7fc6f4836ec7916564450f9b47642efd1ec6327990ef3e9f7d0f714',
+ 'packages/core/src/core/turn.test.ts': 'cd8776cc0b8250eb030f489a02b8824cf5472a1f2120edb2b93efb72fcb7bb31',
+ 'packages/core/src/core/turn.ts': 'f693b8ed3522f8eb4b7c1dd0b64022ccb6bc7cca1ec5aaf12e69f4f7891b1373',
  'packages/core/src/followup/speculation.test.ts': '37f44fb1afc78c0de72e2378eb7c714b68ee53abc523307e744e20e647351764',
  'packages/core/src/followup/speculation.ts': '9a2c00e37fdd722f6451067c3a54b8472d08de2b1f38e462484689200db2c5ba',
  'packages/core/src/index.ts': 'cc4711791123bfbb8a9a226a265ee497e5aea1edf7347fa9d6684f4f9ab558b7',
@@ -173250,8 +174427,8 @@ FINAL_FILES = {'packages/cli/src/acp-integration/session/Session.test.ts': '6b9a
  'packages/core/src/telemetry/types.ts': '79d3bdbe141757c3842b03e2a564aa7ccb496d11c1cb85be03a3e4002c71207f',
  'packages/core/src/test-utils/mock-tool.ts': 'fff01320a9d99802e5891deab4b76d86d2fea09bbfa8b90388546c8069f8904e',
  'packages/core/src/tools/__snapshots__/shell.test.ts.snap': 'df477f1ad309e66f63e3e332590cdd7b0467c32532d30e50def4fa460529ac41',
- 'packages/core/src/tools/agent/agent.test.ts': '0453def3b4f48864aa9162b9292161cb79c928b7eb8a11dac643f8e36c0908ec',
- 'packages/core/src/tools/agent/agent.ts': '2b692878e32c7b18969ead1e1951e1618d7a87d95590b43053d04903b86b3a80',
+ 'packages/core/src/tools/agent/agent.test.ts': '605369fc7b4c753aeea8b1b303f46deb385142bb8100766a8abc3eca2aa142bb',
+ 'packages/core/src/tools/agent/agent.ts': 'e59bc0752ea8097d11235b72cc51a59bf94fdd1d7388d20212ba79d547eadd97',
  'packages/core/src/tools/agent/qwen38-effect-journal.test.ts': '9ef00cc7e83200af18adcb03e6b9999c6f17b68f03523f29133c62aa2c593c07',
  'packages/core/src/tools/agent/qwen38-effect-journal.ts': 'c2da7e261892fe8aecc43fa5602d83e87dd6ed5f5908ebb26ea10cec3431bca1',
  'packages/core/src/tools/agent/qwen38-subagent-scratch.test.ts': '5ccf86968a3e7b25b1c19dd1d08581b881a03ff1cc8a44e09e0964b0d27ce3c0',

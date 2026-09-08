@@ -446,6 +446,9 @@ def _validate_stream_commit_after(state: State) -> None:
             "choice.finish_reason === 'tool_calls'",
             "JSON.parse(toolCall.function.arguments)",
             "tool arguments are not an object",
+            "typeof toolCall.function.arguments !== 'string'",
+            "Model response completed the tool branch without a tool call.",
+            "Model response contained a tool call without a function.",
             "Model response contained an unidentified tool call.",
             "toolCallParser.hasInvalidToolCallIndex()",
             "toolCallParser.hasConflictingToolCallIdentity()",
@@ -713,6 +716,9 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "await finishQwen38EffectJournal(effectJournal)",
             "subagent execution and mandatory Explore effect journaling both failed",
             "qwen38EffectSummary",
+            "let runFailure: { error: unknown } | undefined;",
+            "runFailure = { error };",
+            "[runFailure.error, journalError]",
         ),
         label=label,
     )
@@ -723,7 +729,7 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "await beginQwen38EffectJournal()",
             "stopHookWarning = await runFramed();",
             "await finishQwen38EffectJournal(effectJournal)",
-            "if (runError) throw runError;",
+            "if (runFailure) throw runFailure.error;",
         ),
         label=label,
         location=agent,
@@ -1085,6 +1091,21 @@ def _validate_compaction_event_after(state: State) -> None:
             "export function toCompactionRecord(",
             "succeeded: info.compressionStatus === CompressionStatus.COMPRESSED,",
             "ServerGeminiChatCompactionEvent",
+        ),
+        label=label,
+    )
+    require_text(
+        state, turn,
+        "? info.newTokenCount\n        : info.originalTokenCount",
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/cli/src/ui/hooks/useGeminiStream.ts",
+        (
+            "case ServerGeminiEventType.ChatCompaction:",
+            "!event.value.succeeded && event.value.status !== 'NOOP'",
+            "the original context was preserved.",
         ),
         label=label,
     )
@@ -4162,8 +4183,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "identified, object-valued structured call with a tool_calls terminal. "
             "Upstream retry, continuation, XML recovery, and permissive batch/stream "
             "conversion can otherwise replay a turn or promote degenerate output into "
-            "a local action. Strict mode therefore gets one establishment attempt and "
-            "no semantic recovery; length-stopped prefixes stay non-executable."
+            "a local action. Strict mode forbids XML reconstruction and "
+            "post-visible continuation; fresh resampling is allowed only before "
+            "non-thinking content, once per independent transport/protocol/transient "
+            "retry counter. Length-stopped prefixes stay non-executable."
         ),
         removal_condition=(
             "Remove only when upstream offers an equivalent end-to-end commit barrier "
@@ -4476,7 +4499,7 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         removal_condition=(
             "Remove only when upstream's subagent terminal event reports the "
-            "run's completed turn count on every exit including a thrown "
+            "run's started turn count on every exit including a thrown "
             "one, from state that survives the unwind."
         ),
         validate_before=_validate_turn_count_owner_before,
@@ -4585,7 +4608,7 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         removal_condition=(
             "Remove only when upstream's subagent terminal event carries "
-            "the run's completed turn count and the loop rule that ended "
+            "the run's started turn count and the loop rule that ended "
             "it, and both reach the emitted record and the text the parent "
             "model reads."
         ),
@@ -4642,10 +4665,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "window's demand. The window is divided instead: three "
             "sixteenths for the summary a compaction must be able to "
             "produce, two for one turn's output, one for the tool result "
-            "that turn appends, and the remaining ten for the history a "
-            "turn may stand on. The four sum to the window exactly, so the "
-            "trigger plus a turn plus its tool result is the window less "
-            "the reserve -- the largest history a whole-history summary can "
+            "that turn appends, one 128th for the compaction directive, "
+            "and the remainder for the history a turn may stand on. The "
+            "five sum to the window exactly, so the trigger plus a turn "
+            "plus its tool result and the directive is the window less "
+            "the summary reserve -- the largest request a whole-history summary can "
             "still be issued for -- and the property holds as arithmetic "
             "between shares rather than as a budget maintained while the "
             "session runs. Nothing is a constant: a window twice as large "

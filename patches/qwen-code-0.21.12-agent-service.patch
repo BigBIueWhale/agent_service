@@ -7694,10 +7694,9 @@ index b806a6c..25dda44 100644
    });
  });
 diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/ui/commands/contextCommand.ts
-index 1bd2599..78f6e45 100644
 --- a/packages/cli/src/ui/commands/contextCommand.ts
 +++ b/packages/cli/src/ui/commands/contextCommand.ts
-@@ -23,31 +23,25 @@ import {
+@@ -23,31 +23,25 @@
    uiTelemetryService,
    getCoreSystemPrompt,
    resolveInteractionMode,
@@ -7712,7 +7711,8 @@ index 1bd2599..78f6e45 100644
  import { t } from '../../i18n/index.js';
  
  /**
-  * Classify a token count against the three-tier compaction ladder. Mirrors
+- * Classify a token count against the three-tier compaction ladder. Mirrors
++ * Classify a token count against the compaction trigger. Mirrors
   * the gating logic in `chatCompressionService` / `geminiChat` so the
   * `/context` output's "current tier" label reflects exactly which tier the
   * runtime would treat the session as sitting in.
@@ -7733,7 +7733,7 @@ index 1bd2599..78f6e45 100644
   * Estimate token count for a string using a character-based heuristic.
   * ASCII chars ≈ 4 chars/token, CJK/non-ASCII chars ≈ 1.5 tokens/char.
   */
-@@ -216,25 +210,17 @@ export async function collectContextData(
+@@ -216,25 +210,17 @@
        bodyTokens,
      };
    });
@@ -7754,7 +7754,7 @@ index 1bd2599..78f6e45 100644
 -    Math.round(contextWindowSize - thresholds.auto),
 -  );
 +  const thresholds = partitionContextWindow(contextWindowSize);
-+  // The three reserved shares, which is exactly the headroom the
++  // The four reserved shares, which is exactly the headroom the
 +  // three-segment progress bar in ContextUsage.tsx draws between the
 +  // compaction trigger and the window edge.
 +  const autocompactBuffer = contextWindowSize - thresholds.compactionTrigger;
@@ -7764,7 +7764,7 @@ index 1bd2599..78f6e45 100644
      allToolsTokens +
      memoryFilesTokens +
      loadedBodiesTokens;
-@@ -346,21 +332,15 @@ export async function collectContextData(
+@@ -346,21 +332,15 @@
    // dominated by system prompt / skills / MCP tools doesn't silently show
    // "safe". (R2.2)
    //
@@ -7789,7 +7789,7 @@ index 1bd2599..78f6e45 100644
      systemPrompt: displaySystemPrompt,
      builtinTools: displayBuiltinTools,
      mcpTools: displayMcpTools,
-@@ -465,19 +445,30 @@ export function formatContextUsageText(data: HistoryItemContextUsage): string {
+@@ -465,19 +445,30 @@
        );
        lines.push('');
      }
@@ -7797,6 +7797,12 @@ index 1bd2599..78f6e45 100644
      lines.push(fmtCategoryRow('Free', breakdown.freeSpace, contextWindowSize));
      lines.push('');
 -    lines.push('**Compaction thresholds**');
+-    lines.push(
+-      `  Effective window:   ${formatNum(breakdown.thresholds.effectiveWindow)}  (window − ${formatNum(contextWindowSize - breakdown.thresholds.effectiveWindow)} reserve)`,
+-    );
+-    lines.push(`  Warn threshold:     ${formatNum(breakdown.thresholds.warn)}`);
+-    lines.push(`  Auto threshold:     ${formatNum(breakdown.thresholds.auto)}`);
+-    lines.push(`  Hard threshold:     ${formatNum(breakdown.thresholds.hard)}`);
 +    lines.push('**Context partition**');
 +    lines.push(
 +      `  Compaction trigger: ${formatNum(breakdown.thresholds.compactionTrigger)}`,
@@ -7810,15 +7816,11 @@ index 1bd2599..78f6e45 100644
 +    lines.push(
 +      `  Summary reserve:    ${formatNum(breakdown.thresholds.summaryReserve)}`,
 +    );
-     lines.push(
--      `  Effective window:   ${formatNum(breakdown.thresholds.effectiveWindow)}  (window − ${formatNum(contextWindowSize - breakdown.thresholds.effectiveWindow)} reserve)`,
++    lines.push(
 +      `  Compaction directive: ${formatNum(
 +        breakdown.thresholds.directiveReserve,
 +      )}`,
-     );
--    lines.push(`  Warn threshold:     ${formatNum(breakdown.thresholds.warn)}`);
--    lines.push(`  Auto threshold:     ${formatNum(breakdown.thresholds.auto)}`);
--    lines.push(`  Hard threshold:     ${formatNum(breakdown.thresholds.hard)}`);
++    );
      lines.push(`  Current tier:       ${breakdown.currentTier}`);
      lines.push('');
      lines.push('**Usage by category**');
@@ -8587,10 +8589,9 @@ index 4023035..652aeaf 100644
    });
  });
 diff --git a/packages/cli/src/ui/components/views/ContextUsage.tsx b/packages/cli/src/ui/components/views/ContextUsage.tsx
-index 54d7394..c681612 100644
 --- a/packages/cli/src/ui/components/views/ContextUsage.tsx
 +++ b/packages/cli/src/ui/components/views/ContextUsage.tsx
-@@ -171,63 +171,56 @@ const ThresholdRow: React.FC<{
+@@ -171,63 +171,56 @@
        </Box>
      </Box>
    );
@@ -8624,7 +8625,7 @@ index 54d7394..c681612 100644
  /**
 - * Renders the three-tier compaction threshold ladder (warn / auto / hard) with
 - * the effective window and a current-tier marker. Source of the data is
-+ * Renders the window's four shares with a marker on the compaction trigger
++ * Renders the window's five shares with a marker on the compaction trigger
 + * when the session has reached it. Source of the data is
   * `breakdown.thresholds` + `breakdown.currentTier`, which the context command
 - * derives from `computeThresholds()` in core.
@@ -8642,25 +8643,27 @@ index 54d7394..c681612 100644
      <ThresholdRow
 -      label={t('Effective window')}
 -      tokens={thresholds.effectiveWindow}
--    />
--    <ThresholdRow
--      label={t('Warn threshold')}
--      tokens={thresholds.warn}
--      isCurrent={currentTier === 'warn'}
 +      label={t('Compaction trigger')}
 +      tokens={thresholds.compactionTrigger}
 +      isCurrent={currentTier === 'compact'}
-     />
++    />
 +    <ThresholdRow label={t('Turn output')} tokens={thresholds.turnOutput} />
 +    <ThresholdRow label={t('Tool result')} tokens={thresholds.toolResult} />
-     <ThresholdRow
--      label={t('Auto threshold')}
--      tokens={thresholds.auto}
--      isCurrent={currentTier === 'auto'}
++    <ThresholdRow
 +      label={t('Summary reserve')}
 +      tokens={thresholds.summaryReserve}
      />
      <ThresholdRow
+-      label={t('Warn threshold')}
+-      tokens={thresholds.warn}
+-      isCurrent={currentTier === 'warn'}
+-    />
+-    <ThresholdRow
+-      label={t('Auto threshold')}
+-      tokens={thresholds.auto}
+-      isCurrent={currentTier === 'auto'}
+-    />
+-    <ThresholdRow
 -      label={t('Hard threshold')}
 -      tokens={thresholds.hard}
 -      isCurrent={currentTier === 'hard'}
@@ -8672,7 +8675,7 @@ index 54d7394..c681612 100644
          <Text> </Text>
        </Box>
        <Box width={22}>
-@@ -395,13 +388,13 @@ export const ContextUsage: React.FC<ContextUsageProps> = ({
+@@ -395,13 +388,13 @@
              tokens={breakdown.freeSpace}
              contextWindowSize={contextWindowSize}
              symbolColor={theme.text.secondary}
@@ -8778,10 +8781,9 @@ index 663f24d..b874fb4 100644
        tipHistory.recordShown(tip.id, sessionPromptCount);
        addItem(
 diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/src/ui/hooks/useGeminiStream.test.tsx
-index bd5b48d..1006618 100644
 --- a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx
 +++ b/packages/cli/src/ui/hooks/useGeminiStream.test.tsx
-@@ -124,19 +124,14 @@ vi.mock('../../services/review-worktree-lease.js', () => ({
+@@ -124,19 +124,14 @@
    cleanupReviewWorktreeLeases: mockCleanupReviewWorktreeLeases,
  }));
  
@@ -8801,7 +8803,7 @@ index bd5b48d..1006618 100644
      UserPromptEvent: MockedUserPromptEvent,
      ApiCancelEvent: MockedApiCancelEvent,
      parseAndFormatApiError: mockParseAndFormatApiError,
-@@ -146,13 +141,12 @@ vi.mock('@qwen-code/qwen-code-core', async (importOriginal) => {
+@@ -146,13 +141,12 @@
      setActiveGoal: mockSetActiveGoal,
      clearActiveGoal: mockClearActiveGoal,
      runVisionBridge: mockRunVisionBridge,
@@ -8815,28 +8817,28 @@ index bd5b48d..1006618 100644
  });
  
  const mockUseReactToolScheduler = useReactToolScheduler as Mock;
-@@ -4538,20 +4532,12 @@ describe('useGeminiStream', () => {
-     // The calls streamed before the halt must not be scheduled for execution.
-     expect(mockScheduleToolCalls).not.toHaveBeenCalled();
+@@ -4540,20 +4534,12 @@
    });
  
    it('suppresses duplicate provider tool-call ids before TUI scheduling', async () => {
      const recordToolResult = vi.fn();
--    (
--      mockConfig as Config & {
+     (
+       mockConfig as Config & {
 -        getToolOutputBatchBudget: () => number;
 -        getChatRecordingService: () => {
 -          recordToolResult: typeof recordToolResult;
 -        };
 -      }
 -    ).getToolOutputBatchBudget = () => 10_000;
-     (
-       mockConfig as Config & {
+-    (
+-      mockConfig as Config & {
          getChatRecordingService: () => {
            recordToolResult: typeof recordToolResult;
          };
        }
-@@ -4662,13 +4648,13 @@ describe('useGeminiStream', () => {
+     ).getChatRecordingService = () => ({ recordToolResult });
+     let capturedOnComplete:
+@@ -4662,13 +4648,13 @@
          responseParts: [
            {
              functionResponse: {
@@ -8851,7 +8853,7 @@ index bd5b48d..1006618 100644
          ],
          resultDisplay: 'first',
          error: undefined,
-@@ -4696,28 +4682,17 @@ describe('useGeminiStream', () => {
+@@ -4696,28 +4682,17 @@
      await waitFor(() => {
        expect(mockSendMessageStream).toHaveBeenCalledTimes(2);
      });
@@ -8881,7 +8883,7 @@ index bd5b48d..1006618 100644
      expect(
        recordToolResult.mock.calls.map((call) => call[1].executionStatus),
      ).toEqual(expect.arrayContaining(['success', 'not_started']));
-@@ -9509,13 +9484,12 @@ describe('useGeminiStream', () => {
+@@ -9509,13 +9484,12 @@
          }
        });
  
@@ -8895,11 +8897,121 @@ index bd5b48d..1006618 100644
        ]);
      });
  
+@@ -10622,12 +10596,110 @@
+         expect.objectContaining({ type: MessageType.INFO }),
+         expect.any(Number),
+       );
+     });
+   });
+ 
++  describe('ChatCompaction event', () => {
++    it.each([
++      null,
++      {
++        maxOutputTokens: 200,
++        outputTokens: 200,
++        thinkingTokens: 190,
++        reasoning: 'private reasoning must not flood the terminal',
++        summaryChars: 10,
++        finishReason: 'MAX_TOKENS',
++      },
++    ])(
++      'reports a refused compaction without rendering its reasoning',
++      async (output) => {
++        mockSendMessageStream.mockReturnValue(
++          (async function* () {
++            yield {
++              type: ServerGeminiEventType.ChatCompaction,
++              value: {
++                status: 'COMPRESSION_FAILED_OUTPUT_TRUNCATED',
++                succeeded: false,
++                originalTokenCount: 1000,
++                newTokenCount: 1000,
++                triggerReason: null,
++                output,
++              },
++            };
++            yield {
++              type: ServerGeminiEventType.Finished,
++              value: { reason: 'STOP' },
++            };
++          })(),
++        );
++        const { result } = renderTestHook();
++        await act(async () => {
++          await result.current.submitQuery('test failed compaction');
++        });
++        const notices = mockAddItem.mock.calls
++          .map(([item]) => item as HistoryItem)
++          .filter((item) => item.type === 'info');
++        expect(notices).toEqual([
++          expect.objectContaining({
++            text: expect.stringContaining(
++              'Compaction failed (COMPRESSION_FAILED_OUTPUT_TRUNCATED); the original context was preserved.',
++            ),
++          }),
++        ]);
++        expect(JSON.stringify(notices)).not.toContain('private reasoning');
++        expect(JSON.stringify(notices)).toContain(
++          output
++            ? '200 tokens, including 190 reasoning tokens'
++            : 'No summary generation was recorded.',
++        );
++      },
++    );
++
++    it('leaves successful notices to ChatCompressed', async () => {
++      mockSendMessageStream.mockReturnValue(
++        (async function* () {
++          yield {
++            type: ServerGeminiEventType.ChatCompaction,
++            value: {
++              status: 'COMPRESSED',
++              succeeded: true,
++              originalTokenCount: 100,
++              newTokenCount: 50,
++              triggerReason: 'token_limit',
++              output: null,
++            },
++          };
++          yield {
++            type: ServerGeminiEventType.ChatCompressed,
++            value: {
++              originalTokenCount: 100,
++              newTokenCount: 50,
++            },
++          };
++          yield {
++            type: ServerGeminiEventType.Finished,
++            value: { reason: 'STOP' },
++          };
++        })(),
++      );
++      const { result } = renderTestHook();
++      await act(async () => {
++        await result.current.submitQuery('test successful compaction');
++      });
++      const notices = mockAddItem.mock.calls
++        .map(([item]) => item as HistoryItem)
++        .filter((item) => item.type === 'info');
++      expect(notices).toEqual([
++        expect.objectContaining({
++          text: expect.stringContaining('compressed context'),
++        }),
++      ]);
++    });
++  });
++
+   describe('ChatCompressed event', () => {
+     it('starts a fresh prefixed text item after the status row', async () => {
+       mockSendMessageStream.mockReturnValue(
+         (async function* () {
+           yield {
+             type: ServerGeminiEventType.Content,
 diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/hooks/useGeminiStream.ts
-index 27f4a60..b298a24 100644
 --- a/packages/cli/src/ui/hooks/useGeminiStream.ts
 +++ b/packages/cli/src/ui/hooks/useGeminiStream.ts
-@@ -66,13 +66,12 @@ import {
+@@ -66,13 +66,12 @@
    markDuplicateProviderToolCallResponseSent,
    findRepeatedDuplicateProviderToolCall,
    AutonomousLoopTickResolver,
@@ -8913,26 +9025,37 @@ index 27f4a60..b298a24 100644
  import { type Part, type PartListUnion, FinishReason } from '@google/genai';
  import type {
    HistoryItem,
-@@ -2501,12 +2500,18 @@ export const useGeminiStream = (
+@@ -2500,12 +2499,29 @@
+               break;
              case ServerGeminiEventType.ChatCompressed:
                flushBufferedStreamEvents();
                handleChatCompressionEvent(event.value, userMessageTimestamp);
                geminiMessageBuffer = '';
                assistantOutputStarted = false;
-               break;
-+            case ServerGeminiEventType.ChatCompaction:
-+              // Machine-readable record of a compaction attempt, consumed by
-+              // the headless output adapters. The interactive notice for a
-+              // successful compaction is driven by ChatCompressed above, so
-+              // rendering this too would duplicate it.
 +              break;
++            case ServerGeminiEventType.ChatCompaction:
++              // Successful replacement has its own ChatCompressed notice.
++              if (!event.value.succeeded && event.value.status !== 'NOOP') {
++                flushBufferedStreamEvents();
++                addItem(
++                  {
++                    type: 'info',
++                    text:
++                      `Compaction failed (${event.value.status}); the original context was preserved.` +
++                      (event.value.output
++                        ? ` Output: ${event.value.output.outputTokens} tokens, including ${event.value.output.thinkingTokens} reasoning tokens, from a ${event.value.output.maxOutputTokens}-token budget.`
++                        : ' No summary generation was recorded.'),
++                  },
++                  userMessageTimestamp,
++                );
++              }
+               break;
              case ServerGeminiEventType.ToolCallConfirmation:
              case ServerGeminiEventType.ToolCallResponse:
                flushBufferedStreamEvents();
                break;
              case ServerGeminiEventType.MaxSessionTurns:
-               flushBufferedStreamEvents();
-@@ -3622,31 +3627,21 @@ export const useGeminiStream = (
+@@ -3622,31 +3638,21 @@
            }
  
            const immediateDuplicateToolResponses =
@@ -8970,7 +9093,7 @@ index 27f4a60..b298a24 100644
                      resultDisplay: response.resultDisplay,
                      error: response.error,
                      errorType: response.errorType,
-@@ -4382,28 +4377,19 @@ export const useGeminiStream = (
+@@ -4382,28 +4388,19 @@
          orderedResponses.push(...queue);
        }
        for (const queue of duplicateQueues.values()) {
@@ -8985,12 +9108,12 @@ index 27f4a60..b298a24 100644
 -          responseParts: response.responseParts,
 -          persistedOutputFiles: response.persistedOutputFiles,
 -        })),
--      );
--      const responsesToSend = finalizedResponses.flatMap(
--        (entry) => entry.responseParts,
 +      const responsesToSend = orderedResponses.flatMap(
 +        ({ response }) => response.responseParts,
        );
+-      const responsesToSend = finalizedResponses.flatMap(
+-        (entry) => entry.responseParts,
+-      );
 -      orderedResponses.forEach(({ request, response, status }, index) => {
 +      orderedResponses.forEach(({ request, response, status }) => {
          const goalContext = request.goalContext;
@@ -12156,10 +12279,9 @@ index 1d5b20a..115845e 100644
                    ],
                  },
 diff --git a/packages/core/src/agents/runtime/agent-headless.ts b/packages/core/src/agents/runtime/agent-headless.ts
-index 2870d4b..0b6c8ee 100644
 --- a/packages/core/src/agents/runtime/agent-headless.ts
 +++ b/packages/core/src/agents/runtime/agent-headless.ts
-@@ -36,12 +36,13 @@ import type {
+@@ -36,12 +36,13 @@
    ToolConfig,
    AgentExternalInput,
  } from './agent-types.js';
@@ -12173,7 +12295,7 @@ index 2870d4b..0b6c8ee 100644
  const debugLogger = createDebugLogger('SUBAGENT');
  
  // ─── Utilities (unchanged, re-exported for consumers) ────────
-@@ -136,12 +137,13 @@ export function templateString(
+@@ -136,12 +137,13 @@
   * must be sequential; later calls reuse the same chat and prepared tools.
   */
  export class AgentHeadless {
@@ -12187,7 +12309,7 @@ index 2870d4b..0b6c8ee 100644
    private hasStartedReasoning = false;
    private externalMessageProvider?: () => AgentExternalInput[];
    private externalMessageWaiter?: (
-@@ -214,12 +216,17 @@ export class AgentHeadless {
+@@ -214,12 +216,17 @@
        );
      }
  
@@ -12205,7 +12327,7 @@ index 2870d4b..0b6c8ee 100644
      }
  
      try {
-@@ -374,29 +381,33 @@ export class AgentHeadless {
+@@ -374,29 +381,33 @@
              shouldWaitForExternalMessages: this.externalMessageWaitPredicate,
            },
          );
@@ -12239,15 +12361,14 @@ index 2870d4b..0b6c8ee 100644
            totalToolCalls: summary.totalToolCalls,
            successfulToolCalls: summary.successfulToolCalls,
            failedToolCalls: summary.failedToolCalls,
-@@ -471,12 +482,31 @@ export class AgentHeadless {
-   }
+@@ -472,12 +483,31 @@
  
    getTerminateMode(): AgentTerminateMode {
      return this.terminateMode;
    }
  
-+  /**
-+   * Model round-trips this agent actually completed. Reported to the parent
+   /**
++   * Model round-trips this agent started. Reported to the parent
 +   * when the agent stopped for any reason other than reaching its goal, so the
 +   * parent can tell an unfinished assignment from a finished one.
 +   */
@@ -12265,12 +12386,13 @@ index 2870d4b..0b6c8ee 100644
 +    return this.loopType;
 +  }
 +
-   /**
++  /**
     * Sets a callback that the reasoning loop calls between tool rounds
     * to drain external messages (e.g. from SendMessage tool).
     */
    setExternalMessageProvider(provider: () => AgentExternalInput[]): void {
      this.externalMessageProvider = provider;
+   }
 diff --git a/packages/core/src/agents/runtime/agent-interactive.ts b/packages/core/src/agents/runtime/agent-interactive.ts
 index 0fdb801..cbad7b2 100644
 --- a/packages/core/src/agents/runtime/agent-interactive.ts
@@ -22237,10 +22359,9 @@ index 0ef4e79..139cb59 100644
      const request: ToolCallRequestInfo = {
        callId: 'call5',
 diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/packages/core/src/core/openaiContentGenerator/converter.test.ts
-index 9c65b85..261dbb3 100644
 --- a/packages/core/src/core/openaiContentGenerator/converter.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/converter.test.ts
-@@ -1991,13 +1991,96 @@ describe('OpenAIContentConverter', () => {
+@@ -1991,13 +1991,96 @@
        );
        expect(
          toolContent.find((p) => p.type === 'image_url')?.image_url?.url,
@@ -22338,7 +22459,7 @@ index 9c65b85..261dbb3 100644
            {
              role: 'model',
              parts: [
-@@ -2030,35 +2113,15 @@ describe('OpenAIContentConverter', () => {
+@@ -2030,35 +2113,15 @@
                },
              ],
            },
@@ -22377,7 +22498,7 @@ index 9c65b85..261dbb3 100644
        const request: GenerateContentParameters = {
          model: 'models/test',
          contents: [
-@@ -2190,13 +2253,13 @@ describe('OpenAIContentConverter', () => {
+@@ -2190,13 +2253,13 @@
  
        // No separate user message should be created
        const userMessage = messages.find((message) => message.role === 'user');
@@ -22392,7 +22513,7 @@ index 9c65b85..261dbb3 100644
            {
              role: 'model',
              parts: [
-@@ -2231,32 +2294,15 @@ describe('OpenAIContentConverter', () => {
+@@ -2231,32 +2294,15 @@
                },
              ],
            },
@@ -22428,7 +22549,7 @@ index 9c65b85..261dbb3 100644
        const request: GenerateContentParameters = {
          model: 'models/test',
          contents: [
-@@ -3729,12 +3775,85 @@ describe('OpenAIContentConverter', () => {
+@@ -3729,12 +3775,218 @@
        );
  
        expect(response.candidates).toEqual([]);
@@ -22508,13 +22629,146 @@ index 9c65b85..261dbb3 100644
 +      ).toThrow('malformed tool arguments');
 +    });
 +
++    describe('strict batch tool-call validation', () => {
++      function convertBatch(toolCalls: unknown, finishReason = 'tool_calls') {
++        return converter.convertOpenAIResponseToGemini(
++          {
++            object: 'chat.completion',
++            id: 'batch-tool-test',
++            created: 123,
++            model: 'test-model',
++            choices: [
++              {
++                index: 0,
++                message: {
++                  role: 'assistant',
++                  content: 'Diagnostic text',
++                  tool_calls: toolCalls,
++                },
++                finish_reason: finishReason,
++                logprobs: null,
++              },
++            ],
++          } as unknown as OpenAI.Chat.ChatCompletion,
++          { ...requestContext, strictToolCalling: true },
++        );
++      }
++
++      it.each([
++        ['missing', undefined],
++        ['null', null],
++        ['empty', []],
++      ])('rejects a tool terminal with %s tool calls', (_label, calls) => {
++        expect(() => convertBatch(calls)).toThrow('without a tool call');
++      });
++
++      it.each([
++        ['missing', undefined],
++        ['null', null],
++      ])('rejects a tool call with a %s function', (_label, fn) => {
++        expect(() =>
++          convertBatch([{ id: 'call_1', type: 'function', function: fn }]),
++        ).toThrow('without a function');
++      });
++
++      const invalidArgumentFields: Array<[string, Record<string, unknown>]> = [
++        ['missing', {}],
++        ['undefined', { arguments: undefined }],
++        ['null', { arguments: null }],
++        ['empty string', { arguments: '' }],
++        ['whitespace', { arguments: '   ' }],
++        ['false', { arguments: false }],
++        ['zero', { arguments: 0 }],
++        ['object', { arguments: {} }],
++        ['array', { arguments: [] }],
++        ['partial JSON', { arguments: '{' }],
++        ['serialized null', { arguments: 'null' }],
++        ['serialized array', { arguments: '[]' }],
++        ['serialized scalar', { arguments: 'false' }],
++      ];
++      it.each(invalidArgumentFields)(
++        'rejects %s arguments instead of fabricating a no-argument call',
++        (_label, argumentFields) => {
++          expect(() =>
++            convertBatch([
++              {
++                id: 'call_1',
++                type: 'function',
++                function: { name: 'read_file', ...argumentFields },
++              },
++            ]),
++          ).toThrow('malformed tool arguments');
++        },
++      );
++
++      it('accepts an explicit empty JSON object for a no-parameter tool', () => {
++        const response = convertBatch([
++          {
++            id: 'call_1',
++            type: 'function',
++            function: { name: 'get_status', arguments: '{}' },
++          },
++        ]);
++        expect(response.functionCalls).toEqual([
++          { id: 'call_1', name: 'get_status', args: {} },
++        ]);
++      });
++
++      it('refuses the whole batch when a later call has no serialized arguments', () => {
++        expect(() =>
++          convertBatch([
++            {
++              id: 'call_1',
++              type: 'function',
++              function: { name: 'get_status', arguments: '{}' },
++            },
++            {
++              id: 'call_2',
++              type: 'function',
++              function: { name: 'run_shell_command', arguments: '' },
++            },
++          ]),
++        ).toThrow('malformed tool arguments');
++      });
++
++      it.each([
++        ['missing function', {}],
++        [
++          'empty arguments',
++          { function: { name: 'run_shell_command', arguments: '' } },
++        ],
++        [
++          'complete arguments',
++          {
++            function: {
++              name: 'run_shell_command',
++              arguments: '{"command":"unsafe-prefix"}',
++            },
++          },
++        ],
++      ])(
++        'keeps a length-terminal %s prefix diagnostic and unexecutable',
++        (_label, call) => {
++          const response = convertBatch(
++            [{ id: 'call_1', type: 'function', ...call }],
++            'length',
++          );
++          expect(response.functionCalls).toBeUndefined();
++          expect(response.text).toBe('Diagnostic text');
++          expect(response.candidates?.[0]?.finishReason).toBe(
++            FinishReason.MAX_TOKENS,
++          );
++        },
++      );
++    });
++
      it('omits the input/output breakdown when only total tokens are reported', () => {
        const response = converter.convertOpenAIResponseToGemini(
          {
            object: 'chat.completion',
            id: 'chatcmpl-usage',
            created: 123,
-@@ -3818,13 +3937,13 @@ describe('OpenAIContentConverter', () => {
+@@ -3818,13 +4070,13 @@
        ).toBe(false);
        expect(
          getGenAiUsageProvenance(zero.usageMetadata)?.cachedInputTokensReported,
@@ -22529,7 +22783,7 @@ index 9c65b85..261dbb3 100644
            id: 'chatcmpl-reasoning-usage',
            created: 123,
            model: 'test-model',
-@@ -3842,68 +3961,116 @@ describe('OpenAIContentConverter', () => {
+@@ -3842,68 +4094,116 @@
            ],
            usage: { prompt_tokens: 1, completion_tokens: 10, total_tokens: 11 },
          } as unknown as OpenAI.Chat.ChatCompletion,
@@ -22537,6 +22791,9 @@ index 9c65b85..261dbb3 100644
        );
  
 -      expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);
+-    });
+-
+-    it('estimates missing reasoning tokens from non-streaming reasoning field', () => {
 +      // Nothing is derived from the reasoning text: a count the provider did
 +      // not serve is absent, never approximated.
 +      expect(response.usageMetadata).toEqual({
@@ -22544,9 +22801,8 @@ index 9c65b85..261dbb3 100644
 +        candidatesTokenCount: 10,
 +        totalTokenCount: 11,
 +      });
-     });
- 
--    it('estimates missing reasoning tokens from non-streaming reasoning field', () => {
++    });
++
 +    it('[served-usage] reports exactly the served non-streaming counts under exactTokenCounting=vllm', () => {
        const response = converter.convertOpenAIResponseToGemini(
          {
@@ -22578,10 +22834,16 @@ index 9c65b85..261dbb3 100644
 +          },
          } as unknown as OpenAI.Chat.ChatCompletion,
 -        requestContext,
-+        { ...requestContext, exactTokenCounting: true },
-       );
- 
+-      );
+-
 -      expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);
+-    });
+-
+-    it('clamps estimated non-streaming reasoning tokens to completion tokens', () => {
+-      const response = converter.convertOpenAIResponseToGemini(
++        { ...requestContext, exactTokenCounting: true },
++      );
++
 +      expect(response.usageMetadata).toEqual({
 +        promptTokenCount: 7,
 +        candidatesTokenCount: 10,
@@ -22592,10 +22854,8 @@ index 9c65b85..261dbb3 100644
 +      expect(getGenAiUsageProvenance(response.usageMetadata)).toMatchObject({
 +        cachedInputTokensReported: true,
 +      });
-     });
- 
--    it('clamps estimated non-streaming reasoning tokens to completion tokens', () => {
--      const response = converter.convertOpenAIResponseToGemini(
++    });
++
 +    it.each([
 +      [
 +        'reasoning',
@@ -22615,17 +22875,7 @@ index 9c65b85..261dbb3 100644
 -          created: 123,
 -          model: 'test-model',
 -          choices: [
-+          prompt_tokens_details: { cached_tokens: 0 },
-+          completion_tokens_details: { reasoning_tokens: 4.5 },
-+        },
-+        'requires usage.completion_tokens_details.reasoning_tokens',
-+      ],
-+    ])(
-+      '[served-usage] refuses a non-streaming usage without served %s tokens under exactTokenCounting=vllm',
-+      (_name, details, message) => {
-+        expect(() =>
-+          converter.convertOpenAIResponseToGemini(
-             {
+-            {
 -              index: 0,
 -              message: {
 -                role: 'assistant',
@@ -22643,6 +22893,17 @@ index 9c65b85..261dbb3 100644
 -
 -      expect(response.usageMetadata?.thoughtsTokenCount).toBe(3);
 -    });
++          prompt_tokens_details: { cached_tokens: 0 },
++          completion_tokens_details: { reasoning_tokens: 4.5 },
++        },
++        'requires usage.completion_tokens_details.reasoning_tokens',
++      ],
++    ])(
++      '[served-usage] refuses a non-streaming usage without served %s tokens under exactTokenCounting=vllm',
++      (_name, details, message) => {
++        expect(() =>
++          converter.convertOpenAIResponseToGemini(
++            {
 +              object: 'chat.completion',
 +              id: 'chatcmpl-unserved-usage',
 +              created: 123,
@@ -22677,7 +22938,7 @@ index 9c65b85..261dbb3 100644
        (reasoningTokens) => {
          const response = converter.convertOpenAIResponseToGemini(
            {
-@@ -3938,13 +4105,13 @@ describe('OpenAIContentConverter', () => {
+@@ -3938,13 +4238,13 @@
          expect(response.usageMetadata?.thoughtsTokenCount).toBe(
            reasoningTokens,
          );
@@ -22692,7 +22953,7 @@ index 9c65b85..261dbb3 100644
            object: 'chat.completion.chunk',
            id,
            created: 123,
-@@ -3956,12 +4123,13 @@ describe('OpenAIContentConverter', () => {
+@@ -3956,12 +4256,13 @@
                finish_reason: null,
                logprobs: null,
              },
@@ -22706,7 +22967,7 @@ index 9c65b85..261dbb3 100644
        );
        converter.convertOpenAIChunkToGemini(
          reasoningChunk('chunk-reasoning-2', '想'),
-@@ -3980,126 +4148,101 @@ describe('OpenAIContentConverter', () => {
+@@ -3980,125 +4281,100 @@
              total_tokens: 1201,
            },
          } as unknown as OpenAI.Chat.ChatCompletionChunk,
@@ -22720,18 +22981,31 @@ index 9c65b85..261dbb3 100644
 -      const context = withStreamParser();
 -      const reasoningChunk = (id: string, reasoning_content: string) =>
 -        ({
--          object: 'chat.completion.chunk',
++      expect(response.usageMetadata).toEqual({
++        promptTokenCount: 1,
++        candidatesTokenCount: 1200,
++        totalTokenCount: 1201,
++      });
++    });
++
++    it('[served-usage] reports exactly the served streaming counts under exactTokenCounting=vllm', () => {
++      const context = { ...withStreamParser(), exactTokenCounting: true };
++      converter.convertOpenAIChunkToGemini(
++        {
+           object: 'chat.completion.chunk',
 -          id,
--          created: 123,
--          model: 'test-model',
--          choices: [
--            {
--              index: 0,
++          id: 'chunk-served-reasoning',
+           created: 123,
+           model: 'test-model',
+           choices: [
+             {
+               index: 0,
 -              delta: { reasoning_content },
--              finish_reason: null,
--              logprobs: null,
--            },
--          ],
++              delta: { reasoning_content: '先仔细想' },
+               finish_reason: null,
+               logprobs: null,
+             },
+           ],
 -        }) as unknown as OpenAI.Chat.ChatCompletionChunk;
 -
 -      converter.convertOpenAIChunkToGemini(
@@ -22740,20 +23014,29 @@ index 9c65b85..261dbb3 100644
 -      );
 -      converter.convertOpenAIChunkToGemini(
 -        reasoningChunk('chunk-short-reasoning-2', '仔细想'),
--        context,
--      );
--      const response = converter.convertOpenAIChunkToGemini(
--        {
--          object: 'chat.completion.chunk',
++        } as unknown as OpenAI.Chat.ChatCompletionChunk,
+         context,
+       );
+       const response = converter.convertOpenAIChunkToGemini(
+         {
+           object: 'chat.completion.chunk',
 -          id: 'chunk-short-reasoning-usage',
--          created: 123,
--          model: 'test-model',
--          choices: [],
++          id: 'chunk-served-usage',
+           created: 123,
+           model: 'test-model',
+           choices: [],
 -          usage: { prompt_tokens: 1, completion_tokens: 10, total_tokens: 11 },
--        } as unknown as OpenAI.Chat.ChatCompletionChunk,
--        context,
--      );
--
++          usage: {
++            prompt_tokens: 7,
++            completion_tokens: 10,
++            total_tokens: 17,
++            prompt_tokens_details: { cached_tokens: 3 },
++            completion_tokens_details: { reasoning_tokens: 6 },
++          },
+         } as unknown as OpenAI.Chat.ChatCompletionChunk,
+         context,
+       );
+ 
 -      expect(response.usageMetadata?.thoughtsTokenCount).toBe(5);
 -    });
 -
@@ -22791,57 +23074,41 @@ index 9c65b85..261dbb3 100644
 -      );
 -
 -      expect(response.usageMetadata?.thoughtsTokenCount).toBe(8);
-+      expect(response.usageMetadata).toEqual({
-+        promptTokenCount: 1,
-+        candidatesTokenCount: 1200,
-+        totalTokenCount: 1201,
-+      });
-     });
- 
+-    });
+-
 -    it('clamps estimated streaming reasoning tokens to completion tokens', () => {
 -      const context = withStreamParser();
-+    it('[served-usage] reports exactly the served streaming counts under exactTokenCounting=vllm', () => {
-+      const context = { ...withStreamParser(), exactTokenCounting: true };
-       converter.convertOpenAIChunkToGemini(
-         {
-           object: 'chat.completion.chunk',
+-      converter.convertOpenAIChunkToGemini(
+-        {
+-          object: 'chat.completion.chunk',
 -          id: 'chunk-clamped-reasoning',
-+          id: 'chunk-served-reasoning',
-           created: 123,
-           model: 'test-model',
-           choices: [
-             {
-               index: 0,
+-          created: 123,
+-          model: 'test-model',
+-          choices: [
+-            {
+-              index: 0,
 -              delta: { reasoning_content: '想'.repeat(10) },
-+              delta: { reasoning_content: '先仔细想' },
-               finish_reason: null,
-               logprobs: null,
-             },
-           ],
-         } as unknown as OpenAI.Chat.ChatCompletionChunk,
-         context,
-       );
-       const response = converter.convertOpenAIChunkToGemini(
-         {
-           object: 'chat.completion.chunk',
+-              finish_reason: null,
+-              logprobs: null,
+-            },
+-          ],
+-        } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-        context,
+-      );
+-      const response = converter.convertOpenAIChunkToGemini(
+-        {
+-          object: 'chat.completion.chunk',
 -          id: 'chunk-clamped-reasoning-usage',
-+          id: 'chunk-served-usage',
-           created: 123,
-           model: 'test-model',
-           choices: [],
+-          created: 123,
+-          model: 'test-model',
+-          choices: [],
 -          usage: { prompt_tokens: 1, completion_tokens: 3, total_tokens: 4 },
-+          usage: {
-+            prompt_tokens: 7,
-+            completion_tokens: 10,
-+            total_tokens: 17,
-+            prompt_tokens_details: { cached_tokens: 3 },
-+            completion_tokens_details: { reasoning_tokens: 6 },
-+          },
-         } as unknown as OpenAI.Chat.ChatCompletionChunk,
-         context,
-       );
- 
+-        } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-        context,
+-      );
+-
 -      expect(response.usageMetadata?.thoughtsTokenCount).toBe(3);
+-    });
 +      expect(response.usageMetadata).toEqual({
 +        promptTokenCount: 7,
 +        candidatesTokenCount: 10,
@@ -22849,8 +23116,8 @@ index 9c65b85..261dbb3 100644
 +        cachedContentTokenCount: 3,
 +        thoughtsTokenCount: 6,
 +      });
-     });
- 
++    });
++
 +    it.each([
 +      [
 +        'reasoning',
@@ -22886,14 +23153,13 @@ index 9c65b85..261dbb3 100644
 +        ).toThrow(message);
 +      },
 +    );
-+
+ 
      it.each([0, 42])(
        'preserves provider reasoning tokens for streaming content: %s',
        (reasoningTokens) => {
          const context = withStreamParser();
          converter.convertOpenAIChunkToGemini(
-           {
-@@ -6800,17 +6943,21 @@ describe('Truncated tool call detection in streaming', () => {
+@@ -6800,17 +7076,21 @@
    let converter: typeof OpenAIContentConverter;
  
    beforeEach(() => {
@@ -22916,7 +23182,7 @@ index 9c65b85..261dbb3 100644
  
    /**
     * Helper: feed streaming chunks then a final chunk with finish_reason,
-@@ -6822,15 +6969,16 @@ describe('Truncated tool call detection in streaming', () => {
+@@ -6822,15 +7102,16 @@
        index: number;
        id?: string;
        name?: string;
@@ -22934,13 +23200,15 @@ index 9c65b85..261dbb3 100644
        conv.convertOpenAIChunkToGemini(
          {
            object: 'chat.completion.chunk',
-@@ -7325,12 +7473,76 @@ describe('Truncated tool call detection in streaming', () => {
+@@ -7323,12 +7604,76 @@
+     const fnCall = parts.find((p: Part) => p.functionCall);
+     expect(fnCall).toBeDefined();
      expect(fnCall?.functionCall?.name).toBe('write_file');
      expect(fnCall?.functionCall?.args).toEqual({
        file_path: '/tmp/test.cpp',
      });
-   });
- 
++  });
++
 +  it('does not expose a truncated function call in strict mode', () => {
 +    const result = feedToolCallChunks(
 +      converter,
@@ -23003,15 +23271,13 @@ index 9c65b85..261dbb3 100644
 +        args: { file_path: 'README.md' },
 +      },
 +    ]);
-+  });
-+
+   });
+ 
    it('should detect truncation with multi-chunk streaming arguments', () => {
      // Feed arguments in multiple small chunks like real streaming
      const conv = OpenAIContentConverter;
      const ctx = createStreamingRequestContext();
- 
-     // Chunk 1: start of JSON with tool metadata
-@@ -7494,30 +7706,25 @@ describe('modality filtering', () => {
+@@ -7494,30 +7839,25 @@
      expect(parts).toHaveLength(1);
      expect(parts[0].type).toBe('text');
      expect(parts[0].text).toContain('image file');
@@ -23050,10 +23316,9 @@ index 9c65b85..261dbb3 100644
      const request = makeRequest([
        {
 diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packages/core/src/core/openaiContentGenerator/converter.ts
-index ffd8dfc..bf5ccf1 100644
 --- a/packages/core/src/core/openaiContentGenerator/converter.ts
 +++ b/packages/core/src/core/openaiContentGenerator/converter.ts
-@@ -19,17 +19,12 @@ import type {
+@@ -19,17 +19,12 @@
  } from '@google/genai';
  import { GenerateContentResponse, FinishReason } from '@google/genai';
  import type OpenAI from 'openai';
@@ -23071,13 +23336,15 @@ index ffd8dfc..bf5ccf1 100644
    convertSchema,
    relaxSchemaForFunctionCalling,
    type SchemaComplianceMode,
-@@ -50,12 +45,52 @@ const SPLIT_TOOL_MEDIA_TEXT = '(attached media from previous tool call)';
+@@ -48,12 +43,52 @@
+ /**
+  * Extended usage type that supports both OpenAI standard format and alternative formats
   * Some models return cached_tokens at the top level instead of in prompt_tokens_details
   */
  interface ExtendedCompletionUsage extends OpenAI.CompletionUsage {
    cached_tokens?: number;
- }
- 
++}
++
 +function isServedCount(value: unknown): value is number {
 +  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 +}
@@ -23116,15 +23383,13 @@ index ffd8dfc..bf5ccf1 100644
 +    ...(typeof cachedTokens === 'number' ? { cachedTokens } : {}),
 +    ...(typeof reasoningTokens === 'number' ? { reasoningTokens } : {}),
 +  };
-+}
-+
+ }
+ 
  export interface ExtendedChatCompletionAssistantMessageParam
    extends OpenAI.Chat.ChatCompletionAssistantMessageParam {
    reasoning_content?: string | null;
  }
- 
- type ExtendedChatCompletionMessageParam =
-@@ -879,12 +914,17 @@ function createMediaContentPart(
+@@ -879,12 +914,17 @@
          return unsupportedModalityPlaceholder(
            'image',
            displayName,
@@ -23142,7 +23407,7 @@ index ffd8dfc..bf5ccf1 100644
          image_url: { url: dataUrl },
        };
      }
-@@ -960,16 +1000,15 @@ function createMediaContentPart(
+@@ -960,16 +1000,15 @@
          return unsupportedModalityPlaceholder(
            'image',
            filename,
@@ -23162,7 +23427,7 @@ index ffd8dfc..bf5ccf1 100644
        if (!modalities.pdf) {
          return unsupportedModalityPlaceholder('pdf', filename, requestContext);
        }
-@@ -1233,19 +1272,64 @@ export function convertOpenAIResponseToGemini(
+@@ -1233,19 +1272,83 @@
        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
      }
  
@@ -23186,17 +23451,37 @@ index ffd8dfc..bf5ccf1 100644
 +      );
 +    }
 +    if (
++      requestContext.strictToolCalling &&
++      choice.finish_reason === 'tool_calls' &&
++      !choice.message.tool_calls?.length
++    ) {
++      throw new InvalidStreamError(
++        'Model response completed the tool branch without a tool call.',
++        'MALFORMED_TOOL_CALL',
++      );
++    }
++    if (
 +      choice.message.tool_calls &&
 +      (!requestContext.strictToolCalling ||
 +        choice.finish_reason === 'tool_calls')
 +    ) {
        for (const toolCall of choice.message.tool_calls) {
++        if (requestContext.strictToolCalling && !toolCall.function) {
++          throw new InvalidStreamError(
++            'Model response contained a tool call without a function.',
++            'MALFORMED_TOOL_CALL',
++          );
++        }
          if (toolCall.function) {
            let args: Record<string, unknown> = {};
-           if (toolCall.function.arguments) {
+-          if (toolCall.function.arguments) {
 -            args = safeJsonParse(toolCall.function.arguments, {});
++          if (requestContext.strictToolCalling || toolCall.function.arguments) {
 +            if (requestContext.strictToolCalling) {
 +              try {
++                if (typeof toolCall.function.arguments !== 'string') {
++                  throw new Error('tool arguments are not a serialized object');
++                }
 +                const parsed: unknown = JSON.parse(toolCall.function.arguments);
 +                if (
 +                  typeof parsed !== 'object' ||
@@ -23230,7 +23515,7 @@ index ffd8dfc..bf5ccf1 100644
              functionCall: {
                id: toolCall.id,
                name: toolCall.function.name,
-@@ -1285,54 +1369,38 @@ export function convertOpenAIResponseToGemini(
+@@ -1285,54 +1388,38 @@
    if (openaiResponse.usage) {
      const usage = openaiResponse.usage;
  
@@ -23297,7 +23582,7 @@ index ffd8dfc..bf5ccf1 100644
    return response;
  }
  
-@@ -1418,15 +1486,12 @@ export function convertOpenAIChunkToGemini(
+@@ -1418,15 +1505,12 @@
        });
        const normalizedReasoningText = normalizeStreamingTextDelta(
          reasoningText,
@@ -23313,7 +23598,7 @@ index ffd8dfc..bf5ccf1 100644
          }
        }
        if (
-@@ -1663,20 +1728,34 @@ export function convertOpenAIChunkToGemini(
+@@ -1663,20 +1747,34 @@
      }
      if (leakedThinkingTag) {
        throwProtocolTagLeak(requestContext);
@@ -23351,7 +23636,7 @@ index ffd8dfc..bf5ccf1 100644
      ) {
        if (
          requestContext.hasThinkingTagInReasoning === true ||
-@@ -1694,15 +1773,30 @@ export function convertOpenAIChunkToGemini(
+@@ -1694,15 +1792,30 @@
          toolCallCount: completedToolCalls.length,
        };
        requestContext.pendingThinkingTagCandidate = undefined;
@@ -23384,7 +23669,7 @@ index ffd8dfc..bf5ccf1 100644
        requestContext.pendingUntrustedResponseParts = undefined;
        throw new InvalidStreamError(
          'Model response contained a malformed tool call.',
-@@ -1778,55 +1872,38 @@ export function convertOpenAIChunkToGemini(
+@@ -1778,55 +1891,38 @@
    if (chunk.usage) {
      const usage = chunk.usage;
  
@@ -24255,7 +24540,6 @@ index 0000000..a5cbb8d
 +});
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
 new file mode 100644
-index 0000000..bb7ac8a
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.ts
 @@ -0,0 +1,124 @@
@@ -24357,7 +24641,7 @@ index 0000000..bb7ac8a
 + */
 +export function appendQwen38MainSessionFrame(base: string): string {
 +  if (!isQwen38LockedAgentServiceRuntime()) return base;
-+  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived, non-interactive session, and you own the final response.\n- Context length is the most important thing in AI, and it is immoral to waste it. Reading is what wastes it: material you open once to learn one fact stays in this thread for the rest of the session and drags you toward compaction.\n- That is what subagents are for. A subagent's reading never enters your context; only its report comes back, so one that spends sixty turns costs you one. It is what lets a single long thread keep running without compacting the conversation, and that is the whole point -- you stay on trajectory for longer.\n- Delegate generously, then, to a foreground \`general-purpose\` or \`Explore\` subagent: broad searches, surveying unfamiliar code, reproducing a failure, converting documents -- any bounded work whose useful output is short but takes a lot of reading. Your own KV cache is held in DDR5 while it runs, so nothing you have already said is re-ingested when it returns; delegating is close to free.\n- Subagents run one at a time, in the foreground. Give it a self-contained assignment; it cannot see this conversation. Treat its report as evidence to verify, not a conclusion.\n- Keep the design decisions, the edits, and the final verification yourself.\n- Lead the final response with the outcome, then the material files, verification, and unresolved risks.`;
++  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived session, and you own the final response.\n- Context length is the most important thing in AI, and it is immoral to waste it. Reading is what wastes it: material you open once to learn one fact stays in this thread for the rest of the session and drags you toward compaction.\n- That is what subagents are for. A subagent's reading never enters your context; only its report comes back, so the invocation consumes one parent turn while the child spends its own turn budget. Short reports can delay compaction of the parent conversation.\n- Delegate generously, then, to a foreground \`general-purpose\` or \`Explore\` subagent: broad searches, surveying unfamiliar code, reproducing a failure, converting documents -- any bounded work whose useful output is short but takes a lot of reading. The backend can retain your KV cache in DDR5 while the child runs, but cache eviction can require prefix processing again. Delegation still consumes child tokens, computation, and time; bound the assignment and verify the report.\n- Subagents run one at a time, in the foreground. Give it a self-contained assignment; it cannot see this conversation. Treat its report as evidence to verify, not a conclusion.\n- Keep the design decisions, the edits, and the final verification yourself.\n- Lead the final response with the outcome, then the material files, verification, and unresolved risks.`;
 +}
 +
 +export function appendQwen38DeploymentContract(base: string): string {
@@ -24801,10 +25085,9 @@ index 0000000..0e8e43d
 +  'persisted artifacts before deciding what to do next; do not blindly repeat ' +
 +  'a non-idempotent operation.';
 diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.test.ts
-index 65277a5..810575c 100644
 --- a/packages/core/src/core/turn.test.ts
 +++ b/packages/core/src/core/turn.test.ts
-@@ -12,14 +12,16 @@ import type {
+@@ -12,14 +12,17 @@
  } from './turn.js';
  import {
    CompressionStatus,
@@ -24812,6 +25095,7 @@ index 65277a5..810575c 100644
    GeminiEventType,
    createDuplicateProviderToolCallResponse,
 +  describeIncompleteGeneration,
++  toCompactionRecord,
    findRepeatedDuplicateProviderToolCall,
  } from './turn.js';
 +import { FinishReason } from './genai-compat.js';
@@ -24821,13 +25105,16 @@ index 65277a5..810575c 100644
    Content,
    PartListUnion,
  } from '@google/genai';
-@@ -114,12 +116,37 @@ describe('createDuplicateProviderToolCallResponse', () => {
+@@ -111,12 +114,37 @@
+       args: {},
+       isClientInitiated: false,
+       prompt_id: 'prompt-duplicate',
      });
  
      expect(response.executionStatus).toBe('not_started');
-   });
- });
- 
++  });
++});
++
 +describe('describeIncompleteGeneration', () => {
 +  it('says nothing about a generation the model ended itself', () => {
 +    expect(describeIncompleteGeneration(FinishReason.STOP, 7)).toBeNull();
@@ -24850,20 +25137,54 @@ index 65277a5..810575c 100644
 +
 +    expect(described).toContain('no terminal reason');
 +    expect(described).toContain('turn 1');
-+  });
-+});
-+
+   });
+ });
+ 
  describe('Turn', () => {
    let turn: Turn;
    // Define a type for the mocked Chat instance for clarity
-   type MockedChatInstance = {
-     sendMessageStream: typeof mockSendMessageStream;
-     getHistory: typeof mockGetHistory;
+@@ -1638,6 +1666,37 @@
+       expect(turn.pendingToolCalls).toHaveLength(2);
+       expect(turn.pendingToolCalls[0].wasOutputTruncated).toBe(true);
+       expect(turn.pendingToolCalls[1].wasOutputTruncated).toBe(true);
+     });
+   });
+ });
++
++describe('toCompactionRecord', () => {
++  it('reports preserved history when an inflated candidate was refused', () => {
++    expect(
++      toCompactionRecord({
++        originalTokenCount: 100,
++        newTokenCount: 150,
++        compressionStatus:
++          CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++      }),
++    ).toMatchObject({
++      succeeded: false,
++      originalTokenCount: 100,
++      newTokenCount: 100,
++    });
++  });
++
++  it('reports the accepted history only after replacement succeeded', () => {
++    expect(
++      toCompactionRecord({
++        originalTokenCount: 100,
++        newTokenCount: 50,
++        compressionStatus: CompressionStatus.COMPRESSED,
++      }),
++    ).toMatchObject({
++      succeeded: true,
++      originalTokenCount: 100,
++      newTokenCount: 50,
++    });
++  });
++});
 diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
-index d2801d0..c0acea2 100644
 --- a/packages/core/src/core/turn.ts
 +++ b/packages/core/src/core/turn.ts
-@@ -77,12 +77,21 @@ export enum GeminiEventType {
+@@ -77,12 +77,21 @@
    StopHookLoop = 'stop_hook_loop',
    GoalState = 'goal_state',
    ActiveGoal = 'active_goal',
@@ -24885,13 +25206,15 @@ index d2801d0..c0acea2 100644
    type: GeminiEventType.Retry;
    retryInfo?: RetryInfo;
    /** When true, the retry is a continuation (recovery) rather than a fresh
-@@ -119,12 +128,41 @@ export interface SessionTokenLimitExceededValue {
+@@ -117,12 +126,41 @@
+   message: string;
+ }
  
  export interface GeminiFinishedEventValue {
    reason: FinishReason | undefined;
    usageMetadata: GenerateContentResponseUsageMetadata | undefined;
- }
- 
++}
++
 +/**
 + * Describes a generation the provider stopped from outside, or `null` when
 + * the model ended its own message.
@@ -24919,15 +25242,13 @@ index d2801d0..c0acea2 100644
 +    `rather than the model completing its message, so its text is a cut-off ` +
 +    `prefix and this run carries no final answer.`
 +  );
-+}
-+
+ }
+ 
  export interface ToolCallRequestInfo {
    callId: string;
    /**
     * Original tool-call id emitted by the provider/model. When present, this is
-    * the idempotency key for suppressing duplicate provider tool calls.
-    */
-@@ -345,51 +383,146 @@ export enum CompressionStatus {
+@@ -345,49 +383,147 @@
    COMPRESSION_FAILED_EMPTY_SUMMARY,
  
    /** The compression was not necessary and no action was taken */
@@ -25017,8 +25338,8 @@ index d2801d0..c0acea2 100644
  export type ServerGeminiChatCompressedEvent = {
    type: GeminiEventType.ChatCompressed;
    value: ChatCompressionInfo | null;
- };
- 
++};
++
 +/**
 + * The operator-facing record of one completed compaction attempt.
 + *
@@ -25061,7 +25382,10 @@ index d2801d0..c0acea2 100644
 +      String(info.compressionStatus),
 +    succeeded: info.compressionStatus === CompressionStatus.COMPRESSED,
 +    originalTokenCount: info.originalTokenCount,
-+    newTokenCount: info.newTokenCount,
++    newTokenCount:
++      info.compressionStatus === CompressionStatus.COMPRESSED
++        ? info.newTokenCount
++        : info.originalTokenCount,
 +    triggerReason: info.triggerReason ?? null,
 +    output: info.output ?? null,
 +  };
@@ -25070,15 +25394,13 @@ index d2801d0..c0acea2 100644
 +export type ServerGeminiChatCompactionEvent = {
 +  type: GeminiEventType.ChatCompaction;
 +  value: CompactionRecord;
-+};
-+
+ };
+ 
  export type ServerGeminiMaxSessionTurnsEvent = {
    type: GeminiEventType.MaxSessionTurns;
  };
  
- export type ServerGeminiSessionTokenLimitExceededEvent = {
-   type: GeminiEventType.SessionTokenLimitExceeded;
-@@ -450,12 +583,13 @@ export type ServerGeminiGoalStateEvent = {
+@@ -450,12 +586,13 @@
  };
  
  // The original union type, now composed of the individual types
@@ -25092,13 +25414,17 @@ index d2801d0..c0acea2 100644
    | ServerGeminiErrorEvent
    | ServerGeminiFinishedEvent
    | ServerGeminiHookSystemMessageEvent
-@@ -578,12 +712,27 @@ export class Turn {
+@@ -574,12 +711,27 @@
+           yield {
+             type: GeminiEventType.ModelFallback,
+             fromModel: streamEvent.info.fromModel,
+             toModel: streamEvent.info.toModel,
              statusCode: streamEvent.info.statusCode,
              fallbackIndex: streamEvent.info.fallbackIndex,
-           };
-           continue;
-         }
- 
++          };
++          continue;
++        }
++
 +        // Surface every completed compaction attempt as the top-level
 +        // ChatCompaction event. This is the observability record: it fires
 +        // for refusals and failures as well as successes, and it is the
@@ -25110,16 +25436,12 @@ index d2801d0..c0acea2 100644
 +          yield {
 +            type: GeminiEventType.ChatCompaction,
 +            value: streamEvent.record,
-+          };
-+          continue;
-+        }
-+
+           };
+           continue;
+         }
+ 
          // Surface auto-compaction that fired inside chat.sendMessageStream
          // as the top-level ChatCompressed event so existing UI handlers stay
-         // connected. This bridge is the primary path for auto-compaction
-         // events; manual /compress emits its own ChatCompressed in
-         // GeminiClient.tryCompressChat.
-         if (streamEvent.type === 'compressed') {
 diff --git a/packages/core/src/followup/speculation.test.ts b/packages/core/src/followup/speculation.test.ts
 index e2da6b3..e5697b6 100644
 --- a/packages/core/src/followup/speculation.test.ts
@@ -33992,10 +34314,9 @@ index ecd9117..7031b5a 100644
    <good-example>
    pytest /foo/bar/tests
 diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/tools/agent/agent.test.ts
-index 6d3fb50..c9d5dc7 100644
 --- a/packages/core/src/tools/agent/agent.test.ts
 +++ b/packages/core/src/tools/agent/agent.test.ts
-@@ -28,13 +28,16 @@ import {
+@@ -28,13 +28,16 @@
  import { AgentTerminateMode } from '../../agents/runtime/agent-types.js';
  import {
    AgentHeadless,
@@ -34012,7 +34333,23 @@ index 6d3fb50..c9d5dc7 100644
    AgentEventEmitter,
  } from '../../agents/runtime/agent-events.js';
  import { partToString } from '../../utils/partUtils.js';
-@@ -202,12 +205,13 @@ describe('AgentTool', () => {
+@@ -45,12 +48,15 @@
+ import { runWithTeammateIdentity } from '../../agents/team/identity.js';
+ import * as fs from 'node:fs';
+ import * as os from 'node:os';
+ import * as path from 'node:path';
+ import { execFileSync } from 'node:child_process';
+ import * as transcript from '../../agents/agent-transcript.js';
++import * as deploymentPrompt from '../../core/qwen38-deployment-prompt.js';
++import * as effectJournal from './qwen38-effect-journal.js';
++import * as subagentScratch from './qwen38-subagent-scratch.js';
+ 
+ // Type for accessing protected methods in tests
+ type AgentToolInvocation = {
+   params: AgentParams;
+   execute: (
+     signal?: AbortSignal,
+@@ -202,12 +208,13 @@
        getTargetDir: vi.fn().mockReturnValue('/test/project'),
        getCwd: vi.fn().mockReturnValue('/test/project'),
        getWorkingDir: vi.fn().mockReturnValue('/test/project'),
@@ -34026,7 +34363,7 @@ index 6d3fb50..c9d5dc7 100644
        getTranscriptPath: vi.fn().mockReturnValue('/test/transcript'),
        getTeamManager: vi.fn().mockReturnValue(undefined),
        isAgentTeamEnabled: vi.fn().mockReturnValue(false),
-@@ -446,12 +450,57 @@ describe('AgentTool', () => {
+@@ -446,12 +453,57 @@
          'Launch multiple agents concurrently whenever possible',
        );
      });
@@ -34084,7 +34421,7 @@ index 6d3fb50..c9d5dc7 100644
          properties: {
            subagent_type: {
              type?: string;
-@@ -2042,12 +2091,14 @@ describe('AgentTool', () => {
+@@ -2042,12 +2094,14 @@
            totalDurationMs: 1500,
            totalToolCalls: 3,
            successfulToolCalls: 3,
@@ -34099,7 +34436,146 @@ index 6d3fb50..c9d5dc7 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -2221,13 +2272,213 @@ describe('AgentTool', () => {
+@@ -2056,12 +2110,138 @@
+       vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
+         mockSubagents[0],
+       );
+       vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({
+         subagent: mockAgent,
+         dispose: vi.fn().mockResolvedValue(undefined),
++      });
++    });
++
++    describe('foreground execution failure preservation', () => {
++      const failures: Array<[string, unknown]> = [
++        ['undefined', undefined],
++        ['null', null],
++        ['false', false],
++        ['zero', 0],
++        ['negative zero', -0],
++        ['bigint zero', 0n],
++        ['empty string', ''],
++        ['NaN', Number.NaN],
++        ['Error', new Error('execution setup failed')],
++      ];
++
++      afterEach(() => {
++        mockStartSubagentSpan.mockReset();
++        vi.restoreAllMocks();
++      });
++
++      function invocationFor(subagentType = 'file-search') {
++        return (agentTool as AgentToolWithProtectedMethods).createInvocation({
++          description: 'Inspect files',
++          prompt: 'Find the implementation',
++          subagent_type: subagentType,
++          run_in_background: false,
++        });
++      }
++
++      function rejectJournal() {
++        vi.spyOn(
++          deploymentPrompt,
++          'isQwen38LockedAgentServiceRuntime',
++        ).mockReturnValue(true);
++        vi.mocked(config.getForegroundAgentsOnly).mockReturnValue(true);
++        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
++          ...mockSubagents[0],
++          name: 'Explore',
++          level: 'builtin',
++        });
++        vi.spyOn(
++          subagentScratch,
++          'createQwen38SubagentScratch',
++        ).mockReturnValue({
++          root: '/tmp/mock-explore',
++          cache: '/tmp/mock-explore/cache',
++          pip: '/tmp/mock-explore/pip',
++          npm: '/tmp/mock-explore/npm',
++          cargo: '/tmp/mock-explore/cargo',
++          go: '/tmp/mock-explore/go',
++        });
++        const journal: effectJournal.Qwen38EffectJournal = {
++          journalId: 'mock-journal',
++          workspaceRoot: '/workspace',
++          artifactsRoot: '/artifacts',
++          journalRoot: '/tmp/mock-effects',
++          beforeWorkspace: {
++            label: 'workspace',
++            root: '/workspace',
++            entries: new Map(),
++          },
++          beforeArtifacts: {
++            label: 'artifacts',
++            root: '/artifacts',
++            entries: new Map(),
++          },
++        };
++        vi.spyOn(effectJournal, 'beginQwen38EffectJournal').mockResolvedValue(
++          journal,
++        );
++        const journalError = new Error('journal persistence failed');
++        const finish = vi
++          .spyOn(effectJournal, 'finishQwen38EffectJournal')
++          .mockRejectedValue(journalError);
++        return { journal, journalError, finish };
++      }
++
++      it.each(failures)(
++        'reports a failed framed run that throws %s',
++        async (_label, failure) => {
++          mockStartSubagentSpan.mockImplementationOnce(() => {
++            throw failure;
++          });
++          const result = await invocationFor().execute();
++          expect(mockAgent.execute).not.toHaveBeenCalled();
++          expect(result.returnDisplay).toMatchObject({ status: 'failed' });
++          expect(partToString(result.llmContent)).toBe(
++            `Failed to run subagent: ${failure instanceof Error ? failure.message : String(failure)}`,
++          );
++        },
++      );
++
++      it.each(failures)(
++        'retains an execution failure (%s) alongside mandatory journal failure',
++        async (_label, failure) => {
++          const { journal, journalError, finish } = rejectJournal();
++          const aggregate = vi.spyOn(globalThis, 'AggregateError');
++          mockStartSubagentSpan.mockImplementationOnce(() => {
++            throw failure;
++          });
++          const result = await invocationFor('Explore').execute();
++          expect(mockAgent.execute).not.toHaveBeenCalled();
++          expect(finish).toHaveBeenCalledExactlyOnceWith(journal);
++          expect(aggregate).toHaveBeenCalledExactlyOnceWith(
++            [failure, journalError],
++            'subagent execution and mandatory Explore effect journaling both failed',
++          );
++          expect(result.returnDisplay).toMatchObject({ status: 'failed' });
++          expect(partToString(result.llmContent)).toContain(
++            'execution and mandatory Explore effect journaling both failed',
++          );
++        },
++      );
++
++      it('reports journal failure after a successful run without inventing an execution failure', async () => {
++        const { journal, finish } = rejectJournal();
++        const aggregate = vi.spyOn(globalThis, 'AggregateError');
++        const result = await invocationFor('Explore').execute();
++        expect(mockAgent.execute).toHaveBeenCalledOnce();
++        expect(finish).toHaveBeenCalledExactlyOnceWith(journal);
++        expect(aggregate).not.toHaveBeenCalled();
++        expect(result.returnDisplay).toMatchObject({ status: 'failed' });
++        expect(partToString(result.llmContent)).toBe(
++          'Failed to run subagent: journal persistence failed',
++        );
+       });
+     });
+ 
+     it('should execute subagent successfully', async () => {
+       const params: AgentParams = {
+         description: 'Search files',
+@@ -2221,13 +2401,213 @@
  
        const invocation = (
          agentTool as AgentToolWithProtectedMethods
@@ -34314,7 +34790,7 @@ index 6d3fb50..c9d5dc7 100644
        vi.mocked(mockAgent.getFinalText).mockReturnValue(
          '<analysis>scratch only</analysis>',
        );
-@@ -3213,24 +3464,12 @@ describe('AgentTool', () => {
+@@ -3213,24 +3593,12 @@
          // mode came from inside the subagent itself).
          const meta = lastEndMeta();
          expect(meta.status).toBe('cancelled');
@@ -34339,7 +34815,7 @@ index 6d3fb50..c9d5dc7 100644
          // OTel exception attributes — generic 'subagent failed' was
          // hiding the reason from dashboards. wenshao @ #4410 DeepSeek
          // 3291876053.
-@@ -3404,12 +3643,14 @@ describe('AgentTool', () => {
+@@ -3404,12 +3772,14 @@
            totalDurationMs: 0,
            totalToolCalls: 0,
            successfulToolCalls: 0,
@@ -34354,7 +34830,7 @@ index 6d3fb50..c9d5dc7 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4667,12 +4908,14 @@ describe('AgentTool', () => {
+@@ -4667,12 +5037,14 @@
            totalDurationMs: 500,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -34369,7 +34845,7 @@ index 6d3fb50..c9d5dc7 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4863,12 +5106,14 @@ describe('AgentTool', () => {
+@@ -4863,12 +5235,14 @@
            totalDurationMs: 500,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -34384,7 +34860,7 @@ index 6d3fb50..c9d5dc7 100644
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -5214,12 +5459,14 @@ describe('AgentTool', () => {
+@@ -5214,12 +5588,14 @@
            totalDurationMs: 100,
            totalToolCalls: 1,
            successfulToolCalls: 1,
@@ -34399,13 +34875,15 @@ index 6d3fb50..c9d5dc7 100644
          emitDuringExecute(capturedInvocation.eventEmitter);
        });
  
-@@ -5283,12 +5530,143 @@ describe('AgentTool', () => {
+@@ -5281,12 +5657,143 @@
+       );
+       const toolCall = resultSnapshot?.toolCalls?.find(
          (entry) => entry.callId === 'call-read-1',
        );
        expect(toolCall?.args).toEqual({ path: '/test.ts' });
        expect(toolCall?.responseParts).toBe(responseParts);
-     });
- 
++    });
++
 +    it('[subagent-rounds] publishes every completed round on the display, oldest first, with its served usage', async () => {
 +      vi.mocked(config.isInteractive).mockReturnValue(false);
 +      const snapshots: AgentResultDisplay[] = [];
@@ -34535,15 +35013,13 @@ index 6d3fb50..c9d5dc7 100644
 +      expect(firstSnapshotWithCompaction?.compactions?.[0]?.status).toBe(
 +        'COMPRESSED',
 +      );
-+    });
-+
+     });
+ 
      it('omits subagent protocol payloads from interactive display state', async () => {
        vi.mocked(config.isInteractive).mockReturnValue(true);
        const responseParts: Part[] = [{ text: 'raw protocol result' }];
        const snapshots: AgentResultDisplay[] = [];
- 
-       const invocation = createInvocationWithEventDrivenAgent((emitter) => {
-@@ -5590,12 +5968,14 @@ describe('AgentTool', () => {
+@@ -5590,12 +6097,14 @@
      beforeEach(() => {
        mockAgent = {
          execute: vi.fn().mockResolvedValue(undefined),
@@ -34559,7 +35035,6 @@ index 6d3fb50..c9d5dc7 100644
          // test-time listener hookup doesn't throw.
          getCore: vi.fn().mockReturnValue({
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
-index 4bcea69..17deae6 100644
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
 @@ -3,13 +3,18 @@
@@ -34582,7 +35057,7 @@ index 4bcea69..17deae6 100644
    extractParentToolNames,
  } from '../../agents/runtime/agent-core.js';
  import type {
-@@ -85,12 +90,14 @@ import {
+@@ -85,12 +90,14 @@
  } from '../../telemetry/index.js';
  import {
    AgentEventEmitter,
@@ -34597,7 +35072,7 @@ index 4bcea69..17deae6 100644
    AgentErrorEvent,
    AgentApprovalRequestEvent,
    AgentUsageEvent,
-@@ -103,19 +110,22 @@ import { createDebugLogger } from '../../utils/debugLogger.js';
+@@ -103,19 +110,22 @@
  import { PermissionMode } from '../../hooks/types.js';
  import type { StopHookOutput } from '../../hooks/types.js';
  import {
@@ -34622,7 +35097,7 @@ index 4bcea69..17deae6 100644
  import {
    buildAgentTranscriptAttach,
    getAgentMetaPath,
-@@ -127,12 +137,18 @@ import {
+@@ -127,12 +137,18 @@
  import type {
    BackgroundSlotReservation,
    ResidentBackgroundAgent,
@@ -34641,13 +35116,14 @@ index 4bcea69..17deae6 100644
    persistedStatus: 'running' | 'cancelled',
  ): void {
    patchAgentMeta(metaPath, {
-@@ -752,20 +768,12 @@ export async function createApprovalModeOverride(
+@@ -751,20 +767,12 @@
+  * Agent tool that enables primary agents to delegate tasks to specialized agents.
   * The tool dynamically loads available agents and includes them in its description
   * for the model to choose from.
   */
  export class AgentTool extends BaseDeclarativeTool<AgentParams, ToolResult> {
    static readonly Name: string = ToolNames.AGENT;
- 
+-
 -  override get maxOutputChars(): number {
 -    return 32_000;
 -  }
@@ -34655,14 +35131,13 @@ index 4bcea69..17deae6 100644
 -  override get truncateKeep(): 'tail' {
 -    return 'tail';
 -  }
--
+ 
    private subagentManager: SubagentManager;
    private availableSubagents: SubagentConfig[] =
      BuiltinAgentRegistry.getBuiltinAgents();
    private readonly removeChangeListener: () => void;
  
-   constructor(private readonly config: Config) {
-@@ -859,12 +867,36 @@ export class AgentTool extends BaseDeclarativeTool<AgentParams, ToolResult> {
+@@ -859,12 +867,36 @@
        Kind.Agent,
        initialSchema,
        true, // isOutputMarkdown
@@ -34699,7 +35174,7 @@ index 4bcea69..17deae6 100644
      });
  
      // Initialize the tool asynchronously
-@@ -1001,14 +1033,54 @@ function isPrime(n) {
+@@ -1001,14 +1033,54 @@
  Since a significant piece of code was written and the task was completed, now use the test-runner agent to run the tests
  </commentary>
  assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
@@ -34756,7 +35231,7 @@ index 4bcea69..17deae6 100644
        properties?: {
          model?: {
            type: string;
-@@ -1032,25 +1104,31 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1032,24 +1104,30 @@
          delete schema.properties.read_only;
        }
  
@@ -34779,23 +35254,24 @@ index 4bcea69..17deae6 100644
        }
      }
    }
- 
++
 +  /** Every parameter name this tool can accept, before schema trimming. */
 +  private readonly everyDeclaredParam: readonly string[];
-+
+ 
    override validateToolParams(params: AgentParams): string | null {
      // Validate required fields
      if (
        !params.description ||
        typeof params.description !== 'string' ||
-       params.description.trim() === ''
-@@ -1072,12 +1150,40 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1070,12 +1148,40 @@
+       params.todo_id !== undefined &&
+       (typeof params.todo_id !== 'string' ||
          params.todo_id.trim() === '' ||
          params.todo_id.length > 500)
      ) {
        return 'Parameter "todo_id" must be a non-empty string of at most 500 characters.';
-     }
- 
++    }
++
 +    if (this.config.getForegroundAgentsOnly()) {
 +      if (params.run_in_background === true) {
 +        return 'Background agents are disabled: this installation permits only one awaited foreground subagent at a time.';
@@ -34822,15 +35298,13 @@ index 4bcea69..17deae6 100644
 +      if (unsupported) {
 +        return `Parameter "${unsupported[0]}" is disabled by foreground-agents-only mode.`;
 +      }
-+    }
-+
+     }
+ 
      if (params.subagent_type !== undefined) {
        if (
          typeof params.subagent_type !== 'string' ||
          params.subagent_type.trim() === ''
-       ) {
-         return 'Parameter "subagent_type" must be a non-empty string.';
-@@ -1281,13 +1387,28 @@ assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
+@@ -1281,13 +1387,28 @@
          if (params.plan_mode_required === true) {
            return 'Parameters "read_only" and "plan_mode_required" cannot be used together.';
          }
@@ -34860,7 +35334,7 @@ index 4bcea69..17deae6 100644
      const invocationParams = params.working_dir
        ? { ...params, isolation: undefined }
        : params;
-@@ -1372,22 +1493,12 @@ function deriveSubagentOutcomeMetadata(opts: {
+@@ -1372,22 +1493,12 @@
      return {
        status: 'cancelled',
        terminateReason: signalAborted ? 'signal_aborted' : 'subagent_cancelled',
@@ -34883,7 +35357,7 @@ index 4bcea69..17deae6 100644
    // Non-throwing failure paths (ERROR / MAX_TURNS / TIMEOUT) — populate
    // `error`/`errorType` so endSubagentSpan sets standard OTel exception
    // attributes instead of a generic `'subagent failed'` placeholder.
-@@ -1422,12 +1533,17 @@ function deriveSubagentExceptionMetadata(
+@@ -1422,12 +1533,17 @@
  }
  
  class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
@@ -34901,7 +35375,7 @@ index 4bcea69..17deae6 100644
      private readonly config: Config,
      private readonly subagentManager: SubagentManager,
      params: AgentParams,
-@@ -1549,29 +1665,67 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1549,29 +1665,67 @@
            },
            updateOutput,
          );
@@ -34970,7 +35444,7 @@ index 4bcea69..17deae6 100644
      });
  
      // Track real-time token consumption from subagent API calls.
-@@ -1873,13 +2027,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -1873,13 +2027,13 @@
      }
  
      const subagent = await AgentHeadless.create(
@@ -34985,7 +35459,7 @@ index 4bcea69..17deae6 100644
      );
  
      return { subagent, initialMessages, taskPrompt, toolConfig };
-@@ -2171,13 +2325,18 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2171,13 +2325,18 @@
        }
  
        // Get the results
@@ -35005,7 +35479,7 @@ index 4bcea69..17deae6 100644
        const executionSummary = subagent.getExecutionSummary();
  
        // Publish span outcome BEFORE side-effectful UI/registry calls — if
-@@ -2196,28 +2355,40 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2196,28 +2355,40 @@
            resultSummaryPresent: Boolean(
              subagentRawText && subagentRawText.length > 0,
            ),
@@ -35047,7 +35521,7 @@ index 4bcea69..17deae6 100644
        }
        return stopHookWarning;
      } catch (error) {
-@@ -2231,12 +2402,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2231,12 +2402,13 @@
        debugLogger.error(
          `[AgentTool] Error inside subagent background task: ${errorMessage}`,
        );
@@ -35061,7 +35535,7 @@ index 4bcea69..17deae6 100644
        );
        return undefined;
      }
-@@ -2256,16 +2428,16 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2256,16 +2428,16 @@
        // `error` marks the call failed in the scheduler, so tool-usage stats
        // record a failure — a blocked spawn must not count as a spawned
        // sub-agent (the scrollback summary derives its sub-agent count from
@@ -35082,7 +35556,7 @@ index 4bcea69..17deae6 100644
          subagentName:
            this.params.subagent_type ?? DEFAULT_BUILTIN_SUBAGENT_TYPE,
          taskDescription: this.params.description,
-@@ -2564,12 +2736,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2564,12 +2736,13 @@
      let backgroundSlotReservationConsumed = false;
      // Concrete model ID the sub-agent will run with, resolved from its model
      // selector once subagentConfig is loaded. Used to enforce per-model
@@ -35096,7 +35570,7 @@ index 4bcea69..17deae6 100644
            .getBackgroundTaskRegistry()
            .releaseBackgroundSlot(backgroundSlotReservation);
          backgroundSlotReservation = undefined;
-@@ -2693,14 +2866,15 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -2693,14 +2866,15 @@
        // BackgroundTaskRegistry's single session-level notification callback
        // would inject the child's completion into the top-level conversation
        // while the launcher (typically finished by then) never hears back.
@@ -35114,7 +35588,7 @@ index 4bcea69..17deae6 100644
                (!isForkRequested &&
                  this.params.working_dir === undefined &&
                  // A `name` passed without an active team falls through to a regular
-@@ -3074,15 +3248,31 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3074,15 +3248,31 @@
        } else {
          const result = await this.subagentManager.createAgentHeadless(
            subagentConfig,
@@ -35148,7 +35622,7 @@ index 4bcea69..17deae6 100644
            },
          );
          subagent = result.subagent;
-@@ -3259,12 +3449,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3259,12 +3449,13 @@
              );
            }
  
@@ -35162,7 +35636,7 @@ index 4bcea69..17deae6 100644
            );
            void agentConfig
              .getToolRegistry()
-@@ -3533,15 +3724,14 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3533,15 +3724,14 @@
                  );
                }
  
@@ -35180,7 +35654,7 @@ index 4bcea69..17deae6 100644
                const hadWorktreeIsolation = worktreeIsolation !== null;
                const recordTerminalOutcome = () =>
                  recordSpanOutcome(
-@@ -3617,21 +3807,13 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3617,21 +3807,13 @@
                  patchAgentMeta(metaPath, {
                    status: 'completed',
                    lastUpdatedAt: new Date().toISOString(),
@@ -35203,7 +35677,7 @@ index 4bcea69..17deae6 100644
                    completionStats,
                  );
                  persistBackgroundCancellation(
-@@ -3941,25 +4123,56 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -3941,25 +4123,56 @@
          fgAbortController.abort();
        } else {
          signal?.addEventListener('abort', onParentAbort, { once: true });
@@ -35265,7 +35739,7 @@ index 4bcea69..17deae6 100644
        // Register in BackgroundTaskRegistry with isBackgrounded:false so the
        // pill counts the run and the dialog can drill in. Foreground entries
        // skip XML notification and headless-holdback (see the registry for
-@@ -4109,18 +4322,59 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4109,18 +4322,59 @@
            resumeCount: 0,
            // Persisted so resume restores the original nesting level; see
            // childLaunchDepth() for the rationale.
@@ -35278,11 +35752,11 @@ index 4bcea69..17deae6 100644
 +            ? await beginQwen38EffectJournal()
 +            : undefined;
 +        let stopHookWarning: string | undefined;
-+        let runError: unknown;
++        let runFailure: { error: unknown } | undefined;
 +        try {
 +          stopHookWarning = await runFramed();
 +        } catch (error) {
-+          runError = error;
++          runFailure = { error };
 +        }
 +        if (effectJournal) {
 +          try {
@@ -35290,16 +35764,16 @@ index 4bcea69..17deae6 100644
 +              await finishQwen38EffectJournal(effectJournal)
 +            ).modelSummary;
 +          } catch (journalError) {
-+            if (runError) {
++            if (runFailure) {
 +              throw new AggregateError(
-+                [runError, journalError],
++                [runFailure.error, journalError],
 +                `subagent execution and mandatory Explore effect journaling both failed`,
 +              );
 +            }
 +            throw journalError;
 +          }
 +        }
-+        if (runError) throw runError;
++        if (runFailure) throw runFailure.error;
 +        const effectSuffix = qwen38EffectSummary
 +          ? `\n\n${qwen38EffectSummary}`
 +          : '';
@@ -35330,7 +35804,7 @@ index 4bcea69..17deae6 100644
              llmContent: (finalText || 'Subagent execution failed.') + wtSuffix,
              returnDisplay: this.currentDisplay!,
            };
-@@ -4263,14 +4517,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
+@@ -4263,14 +4517,17 @@
        const errorDisplay: AgentResultDisplay = {
          ...this.currentDisplay!,
          status: 'failed',

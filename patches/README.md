@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `a0ccc567ade8556ca03254296ff909f5e333fe8e35ec6b8eb183f7610cda8414`
+- Review-diff SHA-256: `1b05587d65f17dea6a262a32ac9a731a4939e6b73d87d46a4ee2c40385fc1896`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `c68f256ed23ac54b3e94bfa72e4574cc1dd95cbdaee5fc47e78e5f61ca476fea`
+- Transformer-manifest SHA-256: `bd2324b658b25cfe64b22d6adcdd6abe97f6a724fab7f5ca5aca3ad9126fed2d`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -48,11 +48,16 @@ provide as one fail-closed mode:
 - an exact per-turn output budget: the smaller of the configured output ceiling and the turn's share of the served window, carrying no heuristic margin, padding, or fallback estimate;
 - exact rendered-token automatic-compaction gating before generation, including
   the actual image expansion, template, and tool schemas;
-- strict native tool-call parsing and a successful-tool-call terminal invariant;
+- strict native tool-call parsing and a successful-tool-call terminal invariant.
+  Both streaming and batch conversion require an identified function and
+  serialized object arguments. A batch tool terminal without a call, function,
+  or arguments is refused; an explicit empty object is a valid no-parameter
+  call, and a length-stopped prefix remains diagnostic;
 - no XML recovery, length-stop/transport continuation, model fallback, or partial
   tool execution after a length stop;
-- at most one fresh resample for malformed output before any visible/non-thinking
-  content, never after visible output or a potentially executable side effect;
+- fresh resampling only before visible/non-thinking content, with at most one
+  retry in each independent transport, protocol-tag, and transient-invalid-stream
+  counter; never after visible output or a potentially executable side effect;
 - exact, same-model compaction whose input and candidate output are both counted by
   vLLM and whose summary must end normally without tool calls;
 - a conversation that stays summarizable at every size it can reach,
@@ -68,9 +73,9 @@ provide as one fail-closed mode:
   window sizes including one twice the served window. At 262,144 the shares
   are 49,152, 32,768, 16,384, 2,048, and a 161,792-token trigger; at
   1,048,576 they are four times that, with no edit. The summary generation
-  is issued at the reserve rather than at whatever room a particular history
-  leaves, so its budget does not depend on how full the conversation was
-  when compaction fell due. The request is otherwise ordinary: it declares
+  is issued at the room its exact rendered request leaves in the window.
+  The request is refused if that room is smaller than the summary reserve.
+  The request is otherwise ordinary: it declares
   no per-request phase budgets, so the model thinks to a natural stop and
   writes the snapshot under the pinned `extra_body` ceilings exactly as on
   any turn, and the reasoning-end marker is never forced. The snapshot
@@ -450,8 +455,12 @@ provide as one fail-closed mode:
   session, the `agent` tool-call id for a subagent). The send that refuses an
   oversized prompt reports its attempt on the same path: the record reaches
   the caller as the stream's first event and the refusal follows it, so the
-  one send that ends a session is not the one attempt that left no trace. A
-  NOOP — no attempt was made — stays silent, and the narrower
+  one send that ends a session is not the one attempt that left no trace.
+  The after-count describes the history actually retained: a failed candidate
+  reports the preserved original count. Failed attempts also produce a compact
+  terminal notice with any available output/reasoning accounting; successful
+  attempts retain their single success notice. NOOP — no attempt was made —
+  stays silent, and the narrower
   `ChatCompressed` event keeps its exact meaning of "the history was
   replaced", so startup-context restoration and the interactive notice still
   fire only on real successes, and a refusal that put the pre-compaction
@@ -549,3 +558,10 @@ The production Docker build repeats semantic transformation, review-diff identit
 compilation, and contract tests from clean upstream source. The review diff is human
 evidence, not an alternate `git apply` path. The temporary research clone and
 research images are not build inputs and are removed during final cleanup.
+
+Foreground execution keeps a caught failure in an explicit object, so any thrown
+value remains a failure while mandatory Explore journaling runs. If both fail,
+the aggregate retains both causes. The main-session frame distinguishes a parent
+turn from child spending and describes cache retention without promising that an
+evicted prefix never needs processing again. Child turn counts describe rounds
+started, including a round whose send fails.
