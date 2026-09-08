@@ -13,7 +13,7 @@ when durable records are read or written.
 | Resource | `progress_revision`, `progress_at_unix_ms`, `progress_phase`, `progress_message`, `progress_events` | Durable lifecycle observations, including the complete ordered history |
 | Resource | `staged_bytes`, `staged_entries`, `staged_regular_files`, `output_event_bytes`, `num_turns` | Observed work counters, retained at terminal; zero means no such work observed |
 | Resource | `last_event_at_unix` | Event-file modification time in Unix seconds; `null` if no trustworthy event-file timestamp was observed |
-| Resource | `observed_output_tokens`, `observed_reasoning_tokens`, `observed_subagent_scope_count`, `observed_unaccounted_records` | Integer live observations while running; all `null` once terminal |
+| Resource | `observed_output_tokens`, `observed_reasoning_tokens`, `observed_subagent_scope_count`, `observed_unaccounted_records` | Snapshot observations retained at terminal; all `null` only when terminal storage could not be read |
 | Resource | `terminal` | `null` while running; the complete ending object once terminal |
 
 `num_turns` counts completed billed main turns while running. At terminal it also
@@ -21,7 +21,26 @@ honors the agent's reported started-turn count, which can include a final failed
 invocation without billed output. These work counters do not substitute for the
 strict token accounting. `observed_output_tokens` and `observed_reasoning_tokens`
 include completed billed turns across the main and subagent scopes. An unaccounted
-record means their totals are short by an unknown amount.
+record means unknown evidence is absent from those observations. Zero unaccounted
+records does not prove a complete stream; only `terminal.agent_result` certifies
+the whole pinned protocol.
+
+Captured event JSONL uses **LF-committed records with an incomplete tail**. Each
+newline commits the preceding JSON object to the captured stream. A nonempty
+trailing prefix without LF contributes exactly one `observed_unaccounted_records`,
+even if its bytes form valid JSON; it cannot certify a result. Malformed complete
+records and unreadable served usage are also explicitly unaccounted. Independently
+readable records survive such damage. The reader takes one descriptor-anchored
+snapshot for observations and complete-result certification, so finalization does
+not reinterpret a second, potentially different scan.
+
+The transport is a Unix byte stream: one application write is ordered, but is not
+an atomic record transaction. Complete capture proves which bytes reached the
+capture process, not that every application-queued byte was sent. Orderly shutdown
+must await output write callbacks; forced termination can still leave an
+incomplete tail. This rule applies to captured wire output. Canonical session
+journals used to restore or mutate history retain their own strict durability
+and framing requirements.
 
 The `terminal` object has these required fields:
 
@@ -66,8 +85,9 @@ absence, zero artifact files, and no bundle decision yet have three distinct sha
 ```
 
 These examples show only the relevant fields, not complete resources. A running
-record cannot carry any ending object. A terminal record cannot carry any live
-observation, including a live zero. The same checks apply to private terminal
+record cannot carry any ending object. A terminal record retains the final snapshot observations, even if its
+`agent_result` is null. A complete observation group and an entirely absent group
+are distinct; partially populated groups are invalid. The same checks apply to private terminal
 drafts, committed records, and startup sweeps before cleanup can use their claims.
 
 To inspect final evidence from a downloaded resource:

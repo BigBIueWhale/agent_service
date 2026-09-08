@@ -285,34 +285,54 @@ def _validate_exact_tokens_before(state: State) -> None:
 
 
 def _validate_exact_tokens_after(state: State) -> None:
-    label = "server-authoritative token count result"
-    limits = "packages/core/src/core/tokenLimits.ts"
+    require_text(
+        state,
+        "packages/core/src/core/generation-context.ts",
+        "{ ...request, generationContext: this.context }",
+        count=3,
+        label="captured generation owner precedence",
+    )
+    label = "owned server-authoritative generation result"
+    context = "packages/core/src/core/generation-context.ts"
     pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    tokenizer = "packages/core/src/core/exact-request-tokenizer.ts"
     chat = "packages/core/src/core/geminiChat.ts"
     content = "packages/core/src/core/contentGenerator.ts"
-    compression = "packages/core/src/services/chatCompressionService.ts"
-    base_client = "packages/core/src/core/baseLlmClient.ts"
-    pipeline_source = _require_all(
+    _require_all(
         state,
-        pipeline,
+        context,
+        (
+            "Object.freeze(this)",
+            "readonly generationContext: GenerationContext",
+            "generateContent(request: GenerateContentParameters",
+            "generateContentStream(request: GenerateContentParameters",
+            "countRequestTokens(request: GenerateContentParameters",
+        ),
+        label=label,
+    )
+    require_text(
+        state, context, "generationContext: this.context", count=3, label=label
+    )
+    _require_all(
+        state,
+        tokenizer,
         (
             "export function deriveVllmTokenizeUrl(",
             "normalizedPath.endsWith('/v1')",
             "export function validateVllmTokenizeResponse(",
             "refusing to estimate",
-            "async countRequestTokens(",
-            "const wireRequest = await this.buildRequest(",
-            "model: wireRequest.model",
-            "messages: wireRequest.messages",
-            "add_generation_prompt: true",
-            "tokenizeBody['tools'] = wireRequest.tools",
-            "tokenizeBody['chat_template_kwargs']",
-            "deriveVllmTokenizeUrl(this.contentGeneratorConfig.baseUrl)",
             "response.max_model_len",
-            # Every request names the agent it belongs to, so the backend can
-            # group offloaded KV by agent instead of by block recency.
-            "(request.config as { kvScope?: string } | undefined)",
-            "['kv_scope'] = kvScope",
+        ),
+        label=label,
+    )
+    pipeline_source = _require_all(
+        state,
+        pipeline,
+        (
+            "async countRequestTokens(",
+            "model: wireRequest.model",
+            "add_generation_prompt: true",
+            "typed['kv_scope'] = request.generationContext.kvScope;",
         ),
         label=label,
     )
@@ -330,11 +350,35 @@ def _validate_exact_tokens_after(state: State) -> None:
         label=label,
         location=pipeline,
     )
+    _require_ordered(
+        pipeline_source,
+        (
+            "this.config.provider.buildRequest(",
+            "typed['kv_scope'] = request.generationContext.kvScope;",
+        ),
+        label=label,
+        location=pipeline,
+    )
+    _require_all(
+        state,
+        content,
+        (
+            "OwnedGenerationRequest as GenerateContentParameters",
+            "countRequestTokens?(",
+            "config.authType !== AuthType.USE_OPENAI",
+            "config.exactTokenCounting !== 'vllm'",
+            "config.strictToolCalling !== true",
+            "Number.isSafeInteger(config.contextWindowSize)",
+            "deriveVllmTokenizeUrl(config.baseUrl)",
+        ),
+        label=label,
+    )
     chat_source = _require_all(
         state,
         chat,
         (
-            "Exact rendered-request token counting is required",
+            "readonly generationContext: GenerationContext",
+            "this.generationContext.bind(",
             "result.maxModelLen !== partition.window",
             "this.getRequestHistoryWithPendingForRoute(",
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
@@ -343,53 +387,22 @@ def _validate_exact_tokens_after(state: State) -> None:
     )
     _require(
         chat_source.count("await countExactRequestTokens(") >= 2,
-        f"{label}: compaction and generation no longer share the exact renderer count",
+        f"{label}: generation and compaction must use exact rendered requests",
     )
-    # There is one counter and no second way to size a request: the
-    # character estimator the clamp used is gone from the send path.
-    for absent in (
-        "estimatePromptTokens(",
-        "ESTIMATE_CLAMP_OVERHEAD_PAD",
-    ):
-        _require(
-            absent not in chat_source,
-            f"{label}: {chat} sizes a request from a character estimate via '{absent}'",
-        )
+    for path in (chat, "packages/core/src/services/chatCompressionService.ts"):
+        for symbol in (
+            "estimatePromptTokens(",
+            "ESTIMATE_CLAMP_OVERHEAD_PAD",
+            "newTokenCountIsEstimated",
+        ):
+            forbid_text(state, path, symbol, label=label)
     _require_all(
         state,
-        content,
+        "packages/core/src/models/modelsConfig.ts",
         (
-            "countRequestTokens?(",
-            "Promise<ExactRequestTokenCount>",
-            "exactTokenCounting?: 'vllm'",
-        ),
-        label=label,
-    )
-    compression_source = _require_all(
-        state,
-        compression,
-        (
-            "`${promptId}:auto-threshold`",
-            "await chat.countRequestTokensForCandidateHistory(",
-            "COMPRESSION_FAILED_TOKEN_COUNT_ERROR",
-            "partitionContextWindow(contextLimit)",
-            "summaryResult.finishReason === FinishReason.MAX_TOKENS",
-            "summaryResult.finishReason !== FinishReason.STOP",
-            "newTokenCountIsEstimated: false",
-        ),
-        label=label,
-    )
-    _require(
-        "estimatePromptTokens(" not in compression_source,
-        f"{label}: compaction threshold silently regained a heuristic tokenizer",
-    )
-    _require_all(
-        state,
-        base_client,
-        (
-            "async countRequestTokens(",
-            "contentGeneratorConfig.exactTokenCounting !== 'vllm'",
-            "finishReason: result.finishReason",
+            "withSelectionTransaction",
+            "rollbackSnapshot",
+            "syncAfterAuthRefresh",
         ),
         label=label,
     )
@@ -414,42 +427,50 @@ def _validate_stream_commit_before(state: State) -> None:
 
 
 def _validate_stream_commit_after(state: State) -> None:
-    label = "strict stream commit barrier result"
+    label = "durable stream commit result"
     chat = "packages/core/src/core/geminiChat.ts"
     converter = "packages/core/src/core/openaiContentGenerator/converter.ts"
-    types = "packages/core/src/core/openaiContentGenerator/types.ts"
-    chat_source = _require_all(
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    source = _require_all(
         state,
         chat,
         (
-            "const strictToolCalling = cgConfig?.strictToolCalling === true;",
-            "STRICT_FRESH_RESAMPLE_MAX_RETRIES = 1",
-            "!streamYieldedContentChunk",
-            "const maxContinuationRetries = strictToolCalling\n                ? 0",
-            "overrides || strictToolCalling ? false : isUnattendedMode()",
-            "maxAttempts: Math.max(1, Math.floor(cgConfig.maxRetries) + 1)",
-            "!strictToolCalling &&",
-            "exactRoute || strictToolCalling",
+            "FRESH_RESAMPLE_MAX_RETRIES = 1",
+            "let deliveredContent = false;",
+            "private readonly chatRecordingService: ChatCommitRecorder",
+            "requireServedUsage(usageMetadata, 'completed chat stream')",
         ),
         label=label,
     )
-    _require(
-        chat_source.count("strictToolCalling") >= 15,
-        f"{label}: strict mode no longer gates every retry/recovery boundary",
+    _require_ordered(
+        source,
+        (
+            "await this.chatRecordingService.recordAssistantTurn({",
+            "this.history.push({",
+            "committed = true;",
+            "syncFunctionCallsField(terminal, committedCalls)",
+            "yield terminal;",
+        ),
+        label=label,
+        location=chat,
     )
-    converter_source = _require_all(
+    for symbol in (
+        "maxContinuationRetries",
+        "transportContinuationPrefix",
+        "const strictToolCalling",
+        "extractToolCallsFromText",
+    ):
+        forbid_text(state, chat, symbol, label=label)
+    _require_all(
         state,
         converter,
         (
             "choice.finish_reason !== 'tool_calls'",
             "choice.finish_reason !== 'length'",
-            "choice.finish_reason === 'tool_calls'",
             "JSON.parse(toolCall.function.arguments)",
             "tool arguments are not an object",
             "typeof toolCall.function.arguments !== 'string'",
             "Model response completed the tool branch without a tool call.",
-            "Model response contained a tool call without a function.",
-            "Model response contained an unidentified tool call.",
             "toolCallParser.hasInvalidToolCallIndex()",
             "toolCallParser.hasConflictingToolCallIdentity()",
             "toolCallParser.hasInvalidToolCallArguments()",
@@ -457,15 +478,14 @@ def _validate_stream_commit_after(state: State) -> None:
         ),
         label=label,
     )
-    _require(
-        converter_source.count("requestContext.strictToolCalling") >= 7,
-        f"{label}: batch and stream converters are not both under the terminal gate",
-    )
-    require_text(
+    _require_all(
         state,
-        types,
-        "strictToolCalling?: boolean;",
-        count=1,
+        pipeline,
+        (
+            "let terminal: GenerateContentResponse | undefined;",
+            "INVALID_RESPONSE_SEQUENCE",
+            "ResponseObservationError",
+        ),
         label=label,
     )
 
@@ -524,8 +544,8 @@ def _validate_tool_policy_after(state: State) -> None:
             "foregroundOnlyDescription",
             "enum: ['general-purpose', 'Explore']",
             "Background agents are disabled",
-            "Parameter \"${unsupported[0]}\" is disabled",
-            "this.config.getForegroundAgentsOnly()\n        ? false",
+            'Parameter "${unsupported[0]}" is disabled',
+            "const backgroundRequested =\n        !this.config.getForegroundAgentsOnly() &&",
         ),
         label=label,
     )
@@ -693,11 +713,11 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         state,
         builtin,
         (
-            "Exploration is a role, not a mechanical read-only permission profile",
+            "File operations can affect the real workspace",
             "ToolNames.WRITE_FILE",
             "ToolNames.EDIT",
             "ToolNames.NOTEBOOK_EDIT",
-            "hashed before and after your run",
+            "a report does not establish exclusive attribution of concurrent or external effects",
         ),
         label=label,
     )
@@ -916,12 +936,12 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         "packages/core/src/core/geminiChat.test.ts": (
             "gives every turn the window share, whatever the prompt costs",
             "refuses when the request cannot be counted at all",
-            "resamples one invalid pre-content stream in strict tool-calling mode",
-            "never resamples an invalid strict stream after visible output escaped",
-            "does not synthesize an output continuation after MAX_TOKENS in strict mode",
-            "never enters a configured model fallback chain in strict mode",
+            "resamples one invalid pre-content stream",
+            "never resamples an invalid stream after visible output escaped",
+            "publishes MAX_TOKENS without another request",
+            "literal response preservation",
             "maps maxRetries zero to one outer establishment attempt",
-            "keeps XML text non-executable in strict tool-calling mode",
+            "literal-with-structure",
         ),
         "packages/core/src/services/chatCompressionService.test.ts": (
             "sends the ENTIRE history to one cache-preserving main-model request",
@@ -984,21 +1004,18 @@ def _validate_session_time_before(state: State) -> None:
 
 
 def _validate_session_time_after(state: State) -> None:
-    label = "session time-anchor result"
+    label = "CLI invocation time anchor result"
     prompt = "packages/core/src/core/qwen38-deployment-prompt.ts"
-    # One timestamp computed at process start keeps the system prompt
-    # byte-stable for the session (prefix-cache friendly) while giving the
-    # model an absolute time anchor.
     require_text(
         state,
         prompt,
-        "const QWEN38_SESSION_STARTED_AT_UTC = new Date().toISOString();",
+        "const QWEN38_INVOCATION_STARTED_AT_UTC = new Date().toISOString();",
         label=label,
     )
     require_text(
         state,
         prompt,
-        "Session started: ${QWEN38_SESSION_STARTED_AT_UTC}",
+        "CLI invocation started: ${QWEN38_INVOCATION_STARTED_AT_UTC}",
         label=label,
     )
 
@@ -1095,7 +1112,8 @@ def _validate_compaction_event_after(state: State) -> None:
         label=label,
     )
     require_text(
-        state, turn,
+        state,
+        turn,
         "? info.newTokenCount\n        : info.originalTokenCount",
         label=label,
     )
@@ -1142,16 +1160,17 @@ def _validate_compaction_event_after(state: State) -> None:
         f"{label}: {chat} no longer reports failed pre-stream compactions",
     )
     _require(
-        chat_source.count(
-            "reactiveInfo.compressionStatus !== CompressionStatus.NOOP"
-        )
-        == 1,
-        f"{label}: {chat} no longer reports the reactive overflow rescue",
+        chat_source.count("type: StreamEventType.COMPACTION,") == 1,
+        f"{label}: one pre-stream owning seam must emit the compaction attempt",
     )
-    _require(
-        chat_source.count("type: StreamEventType.COMPACTION,") == 2,
-        f"{label}: {chat} must report every compaction site — the pre-stream "
-        f"attempt and the reactive overflow rescue",
+    _require_ordered(
+        chat_source,
+        (
+            "await this.chatRecordingService.recordChatCompression({",
+            "await this.chatRecordingService.flush()",
+        ),
+        label=label,
+        location=chat,
     )
 
     # Subagent attribution: the agent event carries the record to the agent
@@ -1207,9 +1226,7 @@ def _validate_compaction_event_after(state: State) -> None:
         "      data,",
         label=label,
     )
-    require_text(
-        state, adapter, "case GeminiEventType.ChatCompaction:", label=label
-    )
+    require_text(state, adapter, "case GeminiEventType.ChatCompaction:", label=label)
     require_text(
         state,
         adapter,
@@ -1388,7 +1405,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
     require_text(
         state,
         agent_tool,
-        "            executionSummary,\n            turnsUsed,\n          },",
+        "            turnsUsed,\n          },",
         count=2,
         label=label,
     )
@@ -1428,12 +1445,12 @@ def _validate_subagent_result_scope_after(state: State) -> None:
     require_text(
         state,
         agent_tool,
-        "            toModelVisibleSubagentResult(\n"
-        "              subagent.getFinalText(),\n"
-        "              terminateMode,\n"
-        "              subagent.getTurnsUsed(),\n"
-        "              subagent.getLoopType(),\n"
-        "            ),",
+        "              toModelVisibleSubagentResult(\n"
+        "                subagent.getFinalText(),\n"
+        "                terminateMode,\n"
+        "                subagent.getTurnsUsed(),\n"
+        "                subagent.getLoopType(),\n"
+        "              ),",
         label=label,
     )
     forbid_text(
@@ -1483,8 +1500,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
     require_text(
         state,
         agent_tool_test,
-        "[subagent-scope] publishes the turn count with the terminal display "
-        "status",
+        "[subagent-scope] publishes the turn count with the terminal display status",
         label=label,
     )
 
@@ -1505,7 +1521,10 @@ def _validate_pages_affordance_before(state: State) -> None:
     require_text(state, tool, "        pages: this.params.pages,", label=label)
     # And every remediation message points back at that parameter.
     require_text(
-        state, pdf, "Use the 'pages' parameter to read a specific page range", label=label
+        state,
+        pdf,
+        "Use the 'pages' parameter to read a specific page range",
+        label=label,
     )
     forbid_text(state, pdf, "PDF_PAGE_RANGE_REMEDY", label=label)
     forbid_text(state, files, "applies only to PDF files", label=label)
@@ -1523,7 +1542,6 @@ def _validate_pages_affordance_after(state: State) -> None:
     files = "packages/core/src/utils/fileUtils.ts"
     pdf = "packages/core/src/utils/pdf.ts"
     tool_test = "packages/core/src/tools/read-file.test.ts"
-    files_test = "packages/core/src/utils/fileUtils.test.ts"
 
     # The parameter is gone from the tool's type, its advertised schema, and
     # everything it forwards: the model is never offered a parameter whose
@@ -1562,7 +1580,7 @@ def _validate_pages_affordance_after(state: State) -> None:
     forbid_text(state, pdf, "'pages' parameter", label=label)
     forbid_text(state, files, "'pages' parameter to", label=label)
     _require(
-        _source(state, pdf, label=label).count("pdfPageRangeRemedy(") == 7
+        _source(state, pdf, label=label).count("pdfPageRangeRemedy(") == 6
         and _source(state, files, label=label).count("pdfPageRangeRemedy(") == 1,
         f"{label}: every large/truncated PDF message must name the one remedy",
     )
@@ -1675,12 +1693,8 @@ def _validate_param_contract_before(state: State) -> None:
         label=label,
     )
     # Two live tool descriptions instruct the model to batch parallel calls.
-    require_text(
-        state, glob, "call multiple tools in a single response", label=label
-    )
-    require_text(
-        state, shell, "run_shell_command tool calls in parallel.", label=label
-    )
+    require_text(state, glob, "call multiple tools in a single response", label=label)
+    require_text(state, shell, "run_shell_command tool calls in parallel.", label=label)
 
 
 def _validate_param_contract_after(state: State) -> None:
@@ -1726,47 +1740,33 @@ def _validate_param_contract_after(state: State) -> None:
             f"{label}: {path} must declare its parameter schema closed",
         )
 
-    # The modification flow re-enters build() with the runtime's own
-    # bookkeeping. Those names are enumerated in one place and removed before
-    # the schema check rather than declared in the schema, which would put
-    # them in front of the model.
-    for path in (
-        "packages/core/src/tools/edit.ts",
-        "packages/core/src/tools/write-file.ts",
-    ):
-        require_text(
-            state,
-            path,
-            "  protected override get runtimeOnlyParams(): readonly string[] {",
-            label=label,
-        )
-        require_text(
-            state,
-            path,
-            "    return ['ai_proposed_content', 'modified_by_user'];",
-            label=label,
-        )
-    require_text(
+    _require_all(
         state,
         tools,
-        "  protected get runtimeOnlyParams(): readonly string[] {",
+        (
+            "schema.additionalProperties !== false",
+            "schema.patternProperties !== undefined",
+        ),
         label=label,
     )
-    # No other native tool opens one; notebook_edit keeps its bookkeeping in a
-    # side map instead of the parameter object.
-    for path in _NATIVE_TOOL_SOURCES:
-        if path in (
-            "packages/core/src/tools/edit.ts",
-            "packages/core/src/tools/write-file.ts",
-        ):
-            continue
-        forbid_text(state, path, "runtimeOnlyParams", label=label)
+    _require_all(
+        state,
+        "packages/core/src/tools/tool-modification.ts",
+        (
+            "new WeakMap",
+            "getToolModification",
+            "cloneToolParams",
+        ),
+        label=label,
+    )
     require_text(
         state,
-        contract_test,
-        "[param-contract] no other native tool opens a runtime channel",
+        "packages/core/src/core/coreToolScheduler.ts",
+        "cloneToolParams(args)",
         label=label,
     )
+    for path in _NATIVE_TOOL_SOURCES:
+        forbid_text(state, path, "runtimeOnlyParams", label=label)
 
     # The two tools that replace validateToolParams wholesale never run Ajv,
     # so they have to apply the shared rule themselves or they stay the only
@@ -1809,7 +1809,9 @@ def _validate_param_contract_after(state: State) -> None:
         "To continue from where this read stopped, call read_file with file_path: ",
         label=label,
     )
-    require_text(state, files, "nextRead?: { offset: number; limit: number };", label=label)
+    require_text(
+        state, files, "nextRead?: { offset: number; limit: number };", label=label
+    )
 
     # No tool description advertises a dispatch this build does not have.
     for path in (glob, shell):
@@ -1832,7 +1834,7 @@ def _validate_param_contract_after(state: State) -> None:
     require_text(
         state,
         contract_test,
-        "[param-contract] the shared refusal runs before schema validation for every tool",
+        "[param-contract] the shared closed-schema refusal precedes validation while preserving external schema rules",
         label=label,
     )
     require_text(
@@ -1887,9 +1889,7 @@ def _validate_required_read_offset_after(state: State) -> None:
     # armed decode-time grammar refuses the omission in-span, and Ajv refuses
     # it for any call that reaches the harness another way. 0 is the explicit
     # spelling of "from the beginning".
-    require_text(
-        state, tool, "        required: ['file_path', 'offset'],", label=label
-    )
+    require_text(state, tool, "        required: ['file_path', 'offset'],", label=label)
     require_text(state, tool, "  offset: number;", label=label)
     forbid_text(state, tool, "offset?: number;", label=label)
     require_text(state, tool, "pass 0 to start at the beginning", label=label)
@@ -1905,7 +1905,7 @@ def _validate_required_read_offset_after(state: State) -> None:
     require_text(
         state,
         tool,
-        "const isFullRead = this.params.offset === 0 && this.params.limit === undefined;",
+        "const isFullRead =\n      this.params.offset === 0 && this.params.limit === undefined;",
         label=label,
     )
     require_text(
@@ -1917,9 +1917,7 @@ def _validate_required_read_offset_after(state: State) -> None:
     require_text(
         state, files, "Re-send the call with offset: 0 and no limit.", label=label
     )
-    forbid_text(
-        state, files, "Re-send the call with only 'file_path'.", label=label
-    )
+    forbid_text(state, files, "Re-send the call with only 'file_path'.", label=label)
     # Executable evidence, in the suites the image runs.
     require_text(
         state,
@@ -1962,16 +1960,22 @@ def _validate_text_read_fidelity_before(state: State) -> None:
         "  // Final fallback: UTF-8 with replacement characters",
         label=label,
     )
-    require_text(state, sync, "          content: iconvDecode(full, detected),", label=label)
+    require_text(
+        state, sync, "          content: iconvDecode(full, detected),", label=label
+    )
     # The BOM decoders are lossy in the same way: an ill-formed code unit
     # becomes U+FFFD rather than an error.
     require_text(state, files, "      out += '\\uFFFD';", label=label)
     # A sampled guess and an exact decode answer different questions, and only
     # the second one decides what is returned.
-    require_text(state, files, "    const sampleSize = Math.min(8192, stats.size);", label=label)
+    require_text(
+        state, files, "    const sampleSize = Math.min(8192, stats.size);", label=label
+    )
     # The refusal the streamed reader already has is named for the size of the
     # file rather than for the property that fails.
-    require_text(state, ranges, "export class LargeNonUtf8TextError extends Error {", label=label)
+    require_text(
+        state, ranges, "export class LargeNonUtf8TextError extends Error {", label=label
+    )
     require_text(state, ranges, "    readonly reason?: 'invalid-utf8',", label=label)
     # A page drops trailing whitespace from every line it returns, and ends a
     # line short with a marker of its own rather than at a line boundary.
@@ -2108,8 +2112,8 @@ def _validate_text_read_fidelity_after(state: State) -> None:
     )
 
 
-def _validate_residue_quarantine_before(state: State) -> None:
-    label = "residue quarantine precondition"
+def _validate_literal_response_before(state: State) -> None:
+    label = "literal response fidelity precondition"
     chat = "packages/core/src/core/geminiChat.ts"
     # Upstream commits the streamed text parts to history verbatim; nothing
     # between the stream and the push inspects prose for call syntax.
@@ -2119,48 +2123,48 @@ def _validate_residue_quarantine_before(state: State) -> None:
     forbid_text(state, chat, "stripTrailingToolCallResidue", label=label)
 
 
-def _validate_residue_quarantine_after(state: State) -> None:
-    label = "residue quarantine result"
+def _validate_literal_response_after(state: State) -> None:
+    label = "literal response fidelity result"
     chat = "packages/core/src/core/geminiChat.ts"
-    residue = "packages/core/src/utils/toolCallResidue.ts"
-    residue_test = "packages/core/src/utils/toolCallResidue.test.ts"
-    chat_test = "packages/core/src/core/geminiChat.test.ts"
-
-    require_text(
-        state, residue, "export function stripTrailingToolCallResidue(", label=label
-    )
-    # The strip runs once, between the transport-continuation merge and the
-    # durable record, so in-memory history and the JSONL record derive from
-    # the same cleaned parts; and only on turns that carried a call, because
-    # the discharge signature exists only beside a call in the same
-    # completion and a final answer must never be rewritten.
-    source = _source(state, chat, label=label)
-    _require(
-        source.count("stripTrailingToolCallResidue(") == 1
-        and "if (hasToolCall) {" in source,
-        f"{label}: {chat} must apply the strip exactly once, gated on a tool call",
-    )
-    _require_ordered(
-        source,
+    for path in (
+        chat,
+        "packages/core/src/core/openaiContentGenerator/converter.ts",
+        "packages/core/src/core/openaiContentGenerator/pipeline.ts",
+    ):
+        for symbol in (
+            "stripTrailingToolCallResidue",
+            "LeadingProtocolTagLeakDetector",
+            "protocolTagSanitized",
+        ):
+            forbid_text(state, path, symbol, label=label)
+    for path in (
+        "packages/core/src/utils/toolCallResidue.ts",
+        "packages/core/src/utils/toolCallResidue.test.ts",
+        "packages/core/src/core/toolCallRecovery.ts",
+    ):
+        _require(
+            path not in state,
+            f"{label}: deleted text-repair mechanism remains at {path}",
+        )
+    _require_all(
+        state,
+        chat,
         (
-            "if (streamError === null && transportContinuationPrefix) {",
-            "stripTrailingToolCallResidue(",
-            "this.chatRecordingService?.recordAssistantTurn(recordArgs);",
+            "const consolidatedHistoryParts: Part[] = [];",
+            "await this.chatRecordingService.recordAssistantTurn({",
+            "message: message",
+            "...consolidatedHistoryParts",
         ),
         label=label,
-        location=chat,
     )
-    require_text(
+    _require_all(
         state,
-        residue_test,
-        "[residue-quarantine] keeps the prose and removes only the trailing fragment",
-        label=label,
-    )
-    require_text(state, residue_test, "false-positive control", count=4, label=label)
-    require_text(
-        state,
-        chat_test,
-        "[residue-quarantine] a turn without tool calls is never rewritten",
+        "packages/core/src/core/geminiChat.test.ts",
+        (
+            "literal response preservation",
+            "streams and commits the exact literal %j once",
+            "literal-with-structure",
+        ),
         label=label,
     )
 
@@ -2339,7 +2343,9 @@ def _validate_pdf_text_only_before(state: State) -> None:
     pdf = "packages/core/src/utils/pdf.ts"
     bridge = "packages/core/src/services/visionBridge/vision-bridge-service.ts"
     # A page renderer exists and three separate paths fall back to it.
-    require_text(state, pdf, "export async function renderPDFPagesToImages(", label=label)
+    require_text(
+        state, pdf, "export async function renderPDFPagesToImages(", label=label
+    )
     require_text(state, pdf, "export async function isPdftoppmAvailable(", label=label)
     _require(
         _source(state, files, label=label).count("renderPDFPagesToImages") == 3,
@@ -2402,9 +2408,7 @@ def _validate_pdf_text_only_after(state: State) -> None:
 
     # The boundary is stated where the renderer used to be, so the next reader
     # is told why there is no fallback rather than inferring it from absence.
-    require_text(
-        state, pdf, "// PDF support ends at text extraction.", label=label
-    )
+    require_text(state, pdf, "// PDF support ends at text extraction.", label=label)
     # The image bridge itself survives: it serves ordinary images, and only
     # its PDF-specific half is removed.
     require_text(state, bridge, "export async function runVisionBridge(", label=label)
@@ -2550,7 +2554,7 @@ def _validate_subagent_progress_after(state: State) -> None:
     require_text(
         state,
         agent_tool,
-        "            executionSummary,\n            turnsUsed,\n          },",
+        "            turnsUsed,\n          },",
         count=2,
         label=label,
     )
@@ -2564,7 +2568,7 @@ def _validate_subagent_progress_after(state: State) -> None:
     require_text(
         state,
         agent_tool,
-        "              subagent.getTurnsUsed(),\n              subagent.getLoopType(),\n            ),",
+        "                subagent.getTurnsUsed(),\n                subagent.getLoopType(),\n              ),",
         label=label,
     )
     # One vocabulary for the rules, beside the detector, used by the headless
@@ -2580,7 +2584,9 @@ def _validate_subagent_progress_after(state: State) -> None:
     )
     require_text(state, index, "  describeLoopType,", label=label)
     forbid_text(state, cli, "const LOOP_TYPE_LABELS", label=label)
-    require_text(state, cli, "const described = describeLoopType(loopType);", label=label)
+    require_text(
+        state, cli, "const described = describeLoopType(loopType);", label=label
+    )
     require_text(
         state,
         subagent_result,
@@ -2725,7 +2731,7 @@ def _validate_context_partition(state: State, *, label: str) -> None:
     )
     _require(
         all(value > 0 for value in shares.values()),
-        f"{label}: every share must be a positive number of sixteenths",
+        f"{label}: every share must be a positive integer number of window shares",
     )
     _require(
         reserved < shares["WINDOW_SHARES"],
@@ -2767,6 +2773,48 @@ def _validate_context_partition(state: State, *, label: str) -> None:
 
 
 def _validate_compaction_budget_after(state: State) -> None:
+    authored_path = "packages/core/src/core/authored-instructions.ts"
+    authored = _source(state, authored_path, label="complete authored retention")
+    retained = authored.split("export function retainedInstructionParts(", 1)[1].split(
+        "function collectInstructions(", 1
+    )[0]
+    _require_ordered(
+        retained,
+        (
+            "const instructions = collectInstructions(history);",
+            "for (const instruction of instructions)",
+            "...attachInstructions(structuredClone(instruction.parts), [instruction])",
+            "return parts;",
+        ),
+        label="complete authored retention",
+        location=authored_path,
+    )
+    snapshot_path = "packages/core/src/services/state-snapshot.ts"
+    snapshot = _source(state, snapshot_path, label="complete state snapshot")
+    section_match = re.search(r"const SECTIONS = \[(.*?)\] as const;", snapshot, re.S)
+    _require(section_match is not None, "state snapshot section declaration missing")
+    _require(
+        re.findall(r"'([^']+)'", section_match[1])
+        == [
+            "intent",
+            "environment",
+            "completed",
+            "in_progress",
+            "learnings",
+            "next_step",
+        ],
+        "state snapshot requires exactly the ordered six sections",
+    )
+    _require_all(
+        state,
+        snapshot_path,
+        (
+            "if (!text.trim()) refuse();",
+            "if (section !== SECTIONS.length) refuse();",
+            "return complete && depth === 0;",
+        ),
+        label="complete state snapshot",
+    )
     label = "context-partition result"
     limits = "packages/core/src/core/tokenLimits.ts"
     limits_test = "packages/core/src/core/tokenLimits.test.ts"
@@ -2856,7 +2904,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "compactionOutputBudget = contextLimit - summaryRequestTokenCount;",
             "if (compactionOutputBudget < partition.summaryReserve) {",
             "if (directiveTokens > partition.directiveReserve) {",
-            "      if (effectiveTokens < partition.compactionTrigger) {",
+            "      if (originalTokenCount < partition.compactionTrigger) {",
             "    if (newTokenCount >= partition.compactionTrigger) {",
             "          maxOutputTokens: compactionOutputBudget,",
         ),
@@ -2982,6 +3030,42 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
 
+    _require_all(
+        state,
+        "packages/core/src/core/authored-instructions.ts",
+        (
+            "retainUserInput",
+            "retainDelegatedTask",
+            "retainedInstructionParts",
+            "carryHistoryInstructions",
+            "Conflicting authored instruction",
+            "structuredClone",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/services/postCompactAttachments.ts",
+        (
+            "const authoredParts = retainedInstructionParts(history)",
+            "...authoredParts",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/services/state-snapshot.ts",
+        (
+            "new SaxesParser",
+            "parser.on('doctype', refuse)",
+            "parser.on('comment', refuse)",
+            "tag.name !== SECTIONS[section]",
+            "section !== SECTIONS.length",
+        ),
+        label=label,
+    )
+    require_text(state, service, "!isValidStateSnapshot(processedSummary)", label=label)
+
 
 def _validate_compaction_accounting_before(state: State) -> None:
     label = "compaction output-accounting precondition"
@@ -3002,66 +3086,57 @@ def _validate_compaction_accounting_before(state: State) -> None:
 
 def _validate_compaction_accounting_after(state: State) -> None:
     label = "compaction output-accounting result"
-    turn = "packages/core/src/core/turn.ts"
-    service = "packages/core/src/services/chatCompressionService.ts"
-    service_test = "packages/core/src/services/chatCompressionService.test.ts"
-    adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
-
-    # The record answers "where did the output budget go": the ceiling, what
-    # was produced, how much of it was hidden reasoning, how much summary
-    # survived, and why generation stopped.
     _require_all(
         state,
-        turn,
+        "packages/core/src/core/turn.ts",
         (
             "export interface CompactionOutputAccounting {",
-            "  maxOutputTokens: number;",
-            "  outputTokens: number;",
-            "  thinkingTokens: number;",
-            "  summaryChars: number;",
-            "  finishReason: string | null;",
-            "  output: CompactionOutputAccounting | null;",
-            "    output: info.output ?? null,",
+            "maxOutputTokens: number;",
+            "usage: ServedUsage | null;",
+            "summary: string;",
+            "reasoning: string;",
+            "finishReason: string | null;",
+            "requestAttempts: number;",
+            "output: CompactionOutputAccounting | null;",
+            "output: info.output ?? null,",
         ),
         label=label,
     )
-    # Populated once from the single generation, and attached to every
-    # outcome reachable after it, so no post-generation status can be silent
-    # about the budget. A refusal before generation stays empty.
-    service_source = _require_all(
+    service = "packages/core/src/services/chatCompressionService.ts"
+    source = _require_all(
         state,
         service,
         (
-            "    const outputAccounting: CompactionOutputAccounting = {",
-            "      thinkingTokens: summaryUsage.thoughtsTokenCount,",
-            "      summaryChars: processedSummary.length,",
+            "error instanceof GenerationTextFailure",
+            "error.partial.requestAttempts > 0",
+            "summary: error.partial.text",
+            "reasoning: error.partial.thoughtText",
+            "finishReason: error.partial.finishReason ?? null",
+            "requestAttempts: error.partial.requestAttempts",
+            "const outputAccounting: CompactionOutputAccounting = {",
+            "usage: summaryUsage",
+            "reasoning: summaryResult.thoughtText",
+            "requestAttempts: summaryResult.requestAttempts",
         ),
         label=label,
     )
     _require(
-        service_source.count("const outputAccounting") == 1,
-        f"{label}: {service} must derive the accounting exactly once",
+        source.count("const outputAccounting") == 1
+        and source.count("output: outputAccounting,") == 10,
+        f"{label}: all post-generation outcomes must retain the same served evidence",
     )
-    _require(
-        service_source.count("output: outputAccounting,") == 10,
-        f"{label}: {service} must attach the accounting to every "
-        "post-generation outcome",
-    )
-    require_text(
+    _require_all(
         state,
-        service_test,
-        "[compaction-event] records where a truncated attempt spent its output budget",
+        "packages/core/src/services/chatCompressionService.test.ts",
+        (
+            "[compaction-event] records where a truncated attempt spent its output budget",
+            "[compaction-event] leaves the accounting null when no generation ran",
+        ),
         label=label,
     )
     require_text(
         state,
-        service_test,
-        "[compaction-event] leaves the accounting null when no generation ran",
-        label=label,
-    )
-    require_text(
-        state,
-        adapter_test,
+        "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts",
         "[compaction-event] carries the failed attempt output accounting to the stream",
         label=label,
     )
@@ -3156,8 +3231,8 @@ def _validate_incomplete_generation_after(state: State) -> None:
         f"{label}: the main-turn and drain loops do not both record the terminal reason",
     )
     _require(
-        cli_source.count("lastGenerationFinishReason = undefined;") == 3,
-        f"{label}: a turn head or an abandoned fallback response can inherit a stale terminal reason",
+        cli_source.count("lastGenerationFinishReason = undefined;") == 2,
+        f"{label}: a turn head can inherit a stale terminal reason",
     )
     _require_ordered(
         cli_source,
@@ -3322,9 +3397,7 @@ _DECLARED_SUCCESS = re.compile(
     r"export interface CLIResultMessageSuccess \{\n  type: 'result';\n"
     r"  subtype: '([a-z_]+)';"
 )
-_DECLARED_ERRORS = re.compile(
-    r"\n  subtype:\n((?:    \| '[a-z_]+'(?:;|\n))+)"
-)
+_DECLARED_ERRORS = re.compile(r"\n  subtype:\n((?:    \| '[a-z_]+'(?:;|\n))+)")
 _NAMED = re.compile(
     r"\n  \[AgentTerminateMode\.([A-Z_]+)\]: \{\n"
     r"    subtype: '([a-z_]+)',\n"
@@ -3344,6 +3417,35 @@ _BUDGET_STATE_TABLE = re.compile(
 
 
 def _validate_terminal_state_after(state: State) -> None:
+    writer_path = "packages/cli/src/utils/output-writer.ts"
+    _require_all(
+        state,
+        writer_path,
+        (
+            "this.failure ??= { error };",
+            "this.pending++;",
+            "this.pending--;",
+            "while (this.pending > 0 && !this.failure)",
+            "if (this.pending === 0 || this.failure)",
+        ),
+        label="callback-owned output settlement",
+    )
+    require_text(
+        state,
+        writer_path,
+        "if (this.failure) throw this.failure.error;",
+        count=2,
+        label="falsy output failure retention",
+    )
+    _require_all(
+        state,
+        "packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts",
+        (
+            "this.writer = outputWriter(outputStream ?? process.stdout);",
+            "return this.writer.flush();",
+        ),
+        label="adapter joins its own output writer",
+    )
     label = "terminal-state result"
     types = "packages/cli/src/nonInteractive/types.ts"
     types_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
@@ -3472,7 +3574,9 @@ def _validate_terminal_state_after(state: State) -> None:
             forbid_text(state, path, f"'{name}'", label=label)
         forbid_text(state, path, "CLIResultMessageError['subtype']", label=label)
         forbid_text(state, path, "CLIResultMessageSuccess['subtype']", label=label)
-    require_text(state, adapter, "TERMINAL_RESULT_BY_STATE[options.terminateMode]", label=label)
+    require_text(
+        state, adapter, "TERMINAL_RESULT_BY_STATE[options.terminateMode]", label=label
+    )
     require_text(state, adapter, "TERMINAL_RESULT_BY_STATE[terminateMode]", label=label)
     require_text(state, adapter, "subtype: terminal.subtype,", count=3, label=label)
     forbid_text(state, adapter, "readonly subtype?: string;", label=label)
@@ -3510,7 +3614,8 @@ def _validate_terminal_state_after(state: State) -> None:
         "single emitter",
     )
     _require(
-        cli_source.count("return finish({") + cli_source.count("return finish(error.ending)")
+        cli_source.count("return finish({")
+        + cli_source.count("return finish(error.ending)")
         >= 10,
         f"{label}: {cli} has fewer terminal paths returning a state than the "
         "run has endings",
@@ -3534,14 +3639,9 @@ def _validate_terminal_state_after(state: State) -> None:
         forbid_text(state, path, "getMaxSessionTurns() > 0", label=label)
     forbid_text(state, cli, "limitedTurnCount", label=label)
     forbid_text(state, cli, "budgetedTurnCount", label=label)
-    _require_ordered(
-        cli_source,
-        (
-            "admitBudgetedTurn();\n        turnCount++;",
-            "admitBudgetedTurn();\n            turnCount++;",
-        ),
-        label=label,
-        location=cli,
+    _require(
+        len(re.findall(r"admitBudgetedTurn\(\);\s+turnCount\+\+;", cli_source)) == 2,
+        f"{label}: both reasoning loops must admit before charging their turn",
     )
     # Core's own crossing of the same bound is read on the headless path
     # rather than falling through the adapter's default case.
@@ -3552,7 +3652,12 @@ def _validate_terminal_state_after(state: State) -> None:
     )
 
     # ── A subagent's state survives to its own record ────────────────────
-    require_text(state, "packages/core/src/tools/tools.ts", "terminateMode?: AgentTerminateMode;", label=label)
+    require_text(
+        state,
+        "packages/core/src/tools/tools.ts",
+        "terminateMode?: AgentTerminateMode;",
+        label=label,
+    )
     require_text(state, agent_types, "MAX_TOOL_CALLS = 'MAX_TOOL_CALLS',", label=label)
     _require(
         _source(state, agent, label=label).count("terminateMode:") >= 5,
@@ -3623,6 +3728,39 @@ def _validate_terminal_state_after(state: State) -> None:
     )
     for cwd_relative in ("readFileSync('", "copyFileSync('"):
         forbid_text(state, bootstrap_test, cwd_relative, label=label)
+    _require_all(
+        state,
+        "packages/cli/src/utils/output-writer.ts",
+        (
+            "new WeakMap<NodeJS.WritableStream, OutputWriter>()",
+            "this.stream.write(bytes, complete)",
+            "while (this.pending > 0 && !this.failure)",
+            "await writer.flush()",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        cli_source,
+        (
+            "adapter.emitResult(result)",
+            "await adapter.flush()",
+            "options.onResultEmitted?.()",
+        ),
+        label=label,
+        location=cli,
+    )
+    _require_all(
+        state,
+        "packages/cli/src/nonInteractive/session.ts",
+        (
+            "private async runTurn(",
+            "let resultDelivered = false",
+            "if (resultDelivered)",
+            "'turn_cleanup_failed'",
+            "this.shutdownPromise ??= runCleanupSteps",
+        ),
+        label=label,
+    )
 
 
 # Every tool that spilled its own output to disk, or declared its own
@@ -3669,8 +3807,14 @@ _CHARACTER_BOUND_SITES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "getToolOutputBatchBudget",
         ),
     ),
-    ("packages/cli/src/config/settingsSchema.ts", ("truncateToolOutputThreshold", "toolOutputBatchBudget")),
-    ("packages/cli/src/config/config.ts", ("truncateToolOutputThreshold", "toolOutputBatchBudget")),
+    (
+        "packages/cli/src/config/settingsSchema.ts",
+        ("truncateToolOutputThreshold", "toolOutputBatchBudget"),
+    ),
+    (
+        "packages/cli/src/config/config.ts",
+        ("truncateToolOutputThreshold", "toolOutputBatchBudget"),
+    ),
     (
         "packages/core/src/utils/fileUtils.ts",
         ("getTruncateToolOutputThreshold", "getRangeReadByteLimit"),
@@ -3744,7 +3888,9 @@ def _validate_tool_result_bound_before(state: State) -> None:
         ),
         label=label,
     )
-    require_text(state, tools, "  get maxOutputChars(): number | undefined {", label=label)
+    require_text(
+        state, tools, "  get maxOutputChars(): number | undefined {", label=label
+    )
     require_text(
         state,
         files,
@@ -3757,6 +3903,27 @@ def _validate_tool_result_bound_before(state: State) -> None:
 
 
 def _validate_tool_result_bound_after(state: State) -> None:
+    store_path = "packages/core/src/utils/session-artifacts.ts"
+    store = _source(state, store_path, label="durable artifact publication")
+    _require_ordered(
+        store,
+        (
+            "const release = await lockfile.lock(directory,",
+            "for (const entry of await fs.readdir(directory))",
+            "used += stat.size;",
+            "if (exists) {",
+            "if (!Buffer.from(bytes).equals(await file.readFile()))",
+            "await file.sync();",
+            "await syncDirectoryAncestors(directory);",
+            "if (used + bytes.byteLength > MAX_SESSION_ARTIFACT_BYTES) {",
+            "const file = await fs.open(filepath, 'wx', 0o400);",
+            "await file.writeFile(bytes);",
+            "await file.sync();",
+            "await syncDirectoryAncestors(directory);",
+        ),
+        label="durable artifact publication",
+        location=store_path,
+    )
     label = "tool-result-bound result"
     chat = "packages/core/src/core/geminiChat.ts"
     chat_test = "packages/core/src/core/geminiChat.test.ts"
@@ -3821,18 +3988,40 @@ def _validate_tool_result_bound_after(state: State) -> None:
     )
     # A reference that named no file, or a file holding part of the result,
     # would promise the model something it cannot read back.
-    _require_ordered(
-        _source(state, truncation, label=label),
+    require_text(
+        state,
+        truncation,
+        "await persistSessionArtifact(config, Buffer.from(content, 'utf8'), 'txt')",
+        label=label,
+    )
+    store = "packages/core/src/utils/session-artifacts.ts"
+    _require_all(
+        state,
+        store,
         (
-            "export async function persistToolResult(",
-            "config.trackToolResultBytes(byteSize);",
-            "const outputFile = await unusedResultPath(toolResultsDir, safeCallId);",
-            "} catch (error) {",
-            "config.trackToolResultBytes(-byteSize);",
-            "throw new Error(",
+            "MAX_SESSION_ARTIFACT_BYTES = 500 * 1024 * 1024",
+            "await fs.readdir(directory)",
+            "used + bytes.byteLength > MAX_SESSION_ARTIFACT_BYTES",
+            "stale: Number.MAX_SAFE_INTEGER",
+            "await fs.open(filepath, 'wx', 0o400)",
+            "await file.sync()",
+            "await syncDirectoryAncestors(directory)",
+            "return withCleanup(",
+            "createHash('sha256')",
         ),
         label=label,
-        location=truncation,
+    )
+    for path in ("packages/core/src/utils/tool-output-cleanup.ts",):
+        _require(
+            path not in state, f"{label}: age-based artifact cleanup remains at {path}"
+        )
+    for symbol in ("trackToolResultBytes", "unusedResultPath", "cleanupOldToolOutputs"):
+        forbid_text(state, truncation, symbol, label=label)
+    require_text(
+        state,
+        "packages/core/src/tools/web-fetch.ts",
+        "persistSessionArtifact(",
+        label=label,
     )
 
     # One bound on one quantity: every character bound this replaces is gone
@@ -3853,8 +4042,8 @@ def _validate_tool_result_bound_after(state: State) -> None:
         require_text(state, chat_test, case, label=label)
     for case in (
         "writes the result whole and returns a reference naming the file",
-        "refuses rather than dropping the result when the session disk budget is spent",
-        "refuses and releases the reserved bytes when the write fails",
+        "refuses rather than dropping the result when the call id is unusable",
+        "refuses when the write fails",
     ):
         require_text(state, truncation_test, case, label=label)
     for case in (
@@ -3920,240 +4109,300 @@ def _validate_served_accounting_before(state: State) -> None:
 
 
 def _validate_served_accounting_after(state: State) -> None:
-    label = "served-accounting result"
-    converter = "packages/core/src/core/openaiContentGenerator/converter.ts"
-    converter_test = "packages/core/src/core/openaiContentGenerator/converter.test.ts"
-    types = "packages/core/src/core/openaiContentGenerator/types.ts"
-    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
-    chat = "packages/core/src/core/geminiChat.ts"
-    estimation = "packages/core/src/services/tokenEstimation.ts"
-    estimation_test = "packages/core/src/services/tokenEstimation.test.ts"
-    resume = "packages/core/src/services/session-resume-token-counts.ts"
-    client = "packages/core/src/core/client.ts"
-    parts = "packages/core/src/utils/partUtils.ts"
-    parts_test = "packages/core/src/utils/partUtils.test.ts"
-    base = "packages/core/src/core/baseLlmClient.ts"
-    base_test = "packages/core/src/core/baseLlmClient.test.ts"
-    turn = "packages/core/src/core/turn.ts"
-    compression = "packages/core/src/services/chatCompressionService.ts"
-    compression_test = "packages/core/src/services/chatCompressionService.test.ts"
-    tools = "packages/core/src/tools/tools.ts"
-    agent = "packages/core/src/tools/agent/agent.ts"
-    agent_test = "packages/core/src/tools/agent/agent.test.ts"
-    adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
-    adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
-    helpers = "packages/cli/src/utils/nonInteractiveHelpers.ts"
-    helpers_test = "packages/cli/src/utils/nonInteractiveHelpers.test.ts"
-    wire = "packages/cli/src/nonInteractive/types.ts"
-
-    # Both detail counts are read from the served usage and only from it; in
-    # exact mode a usage without either fails the request.
+    usage_path = "packages/core/src/core/served-usage.ts"
+    usage = _source(state, usage_path, label="complete served usage validation")
+    fields = re.search(r"const SERVED_USAGE_FIELDS = \[(.*?)\] as const;", usage, re.S)
+    _require(fields is not None, "served usage field declaration missing")
+    _require(
+        set(re.findall(r"'([^']+)'", fields[1]))
+        == {
+            "totalTokenCount",
+            "promptTokenCount",
+            "candidatesTokenCount",
+            "thoughtsTokenCount",
+            "cachedContentTokenCount",
+        },
+        "served usage must validate all five reported counts",
+    )
+    _require(
+        re.search(
+            r"if\s*\(\s*typeof value !== 'number'\s*\|\|\s*"
+            r"!Number\.isSafeInteger\(value\)\s*\|\|\s*value < 0\s*\)",
+            usage,
+        )
+        is not None,
+        "served usage must refuse every non-integer or negative count",
+    )
+    logging_path = (
+        "packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts"
+    )
+    logging = _source(state, logging_path, label="durable generation dispatch")
     _require_ordered(
-        _source(state, converter, label=label),
+        logging,
         (
-            "function readServedUsageDetails(",
-            "if (requestContext.exactTokenCounting) {",
-            "requires usage.completion_tokens_details.reasoning_tokens",
-            "requires usage.prompt_tokens_details.cached_tokens",
+            "await observation.begin();",
+            "this.wrapped.generateContent(req, userPromptId)",
+            "await observation.begin();",
+            "this.wrapped.generateContentStream(",
         ),
-        label=label,
-        location=converter,
+        label="durable generation dispatch",
+        location=logging_path,
     )
-    for needle in (
-        "estimateTextTokens",
-        "TOKEN_ESTIMATE_UNITS_PER_TOKEN",
-        "emittedTokenUnits",
-        "reasoning_tokens absent",
-        "cached_tokens ??\n      0;",
-    ):
-        forbid_text(state, converter, needle, label=label)
-    require_text(state, types, "exactTokenCounting?: boolean;", label=label)
-    require_text(
-        state,
-        pipeline,
-        "exactTokenCounting:\n        this.contentGeneratorConfig.exactTokenCounting === 'vllm',",
-        label=label,
-    )
-    # The retired estimator and its counter are gone, not disabled.
-    for path, symbols in (
-        (
-            chat,
-            (
-                "lastOutputTokenCount",
-                "getUsageOutputTokenCountForPromptEstimate",
-                "seedResumeTokenCounts",
-            ),
-        ),
-        (
-            estimation,
-            (
-                "getUsageOutputTokenCountForPromptEstimate",
-                "estimatePromptTokens",
-                "lastOutputTokenCount",
-            ),
-        ),
-        (resume, ("outputTokenCount",)),
-        (client, ("seedResumeTokenCounts",)),
-    ):
-        for symbol in symbols:
-            forbid_text(state, path, symbol, label=label)
-    require_text(
-        state,
-        client,
-        "chat.setLastPromptTokenCount(\n          counts.promptTokenCount,\n          counts.isEstimated,\n        );",
-        label=label,
-    )
-
-    # A side query's reasoning is kept beside the text that drops it, and in
-    # exact mode the query requires the served usage.
-    require_text(
-        state, parts, "export function getResponseThoughtText(", label=label
-    )
+    config_path = "packages/core/src/config/config.ts"
+    config = _source(state, config_path, label="initial recording owner")
+    initialization = config.split("private async initializeOnce(", 1)[1].split(
+        "private async initializeInternal(", 1
+    )[0]
     _require_ordered(
-        _source(state, base, label=label),
+        initialization,
+        (
+            "await this.activateSessionWriter();",
+            "await this.initializeInternal(options);",
+        ),
+        label="initial recording owner",
+        location=config_path,
+    )
+    recorder_path = "packages/core/src/services/chatRecordingService.ts"
+    recorder = _source(state, recorder_path, label="owned canonical append")
+    _require_ordered(
+        recorder,
+        (
+            "const lease = this.binding?.lease;",
+            "if (!lease) throw new SessionWriterUnavailableError();",
+            "await lease.appendJsonLine(record);",
+        ),
+        label="owned canonical append",
+        location=recorder_path,
+    )
+    label = "served usage and durable observation result"
+    core = "packages/core/src/"
+    cli = "packages/cli/src/"
+    _require_all(
+        state,
+        core + "core/served-usage.ts",
         (
             "export function requireServedUsage(",
-            "thoughtText += getResponseThoughtText(chunk) ?? '';",
-            "thoughtText: getResponseThoughtText(result) ?? '',",
-            "if (contentGeneratorConfig.exactTokenCounting === 'vllm') {\n        requireServedUsage(result.usage, 'generateText');",
+            "Number.isSafeInteger(value)",
+            "counts.totalTokenCount !==\n      counts.promptTokenCount + counts.candidatesTokenCount",
+            "counts.thoughtsTokenCount > counts.candidatesTokenCount",
+            "counts.cachedContentTokenCount > counts.promptTokenCount",
         ),
         label=label,
-        location=base,
     )
-    _require_ordered(
-        _source(state, turn, label=label),
-        (
-            "export interface CompactionOutputAccounting {",
-            "thinkingTokens: number;",
-            "reasoning: string;",
-            "summaryChars: number;",
-        ),
-        label=label,
-        location=turn,
-    )
-    _require_ordered(
-        _source(state, compression, label=label),
-        (
-            "summaryUsage = requireServedUsage(summaryResult.usage, 'chat-compression');",
-            "thinkingTokens: summaryUsage.thoughtsTokenCount,",
-            "reasoning: summaryResult.thoughtText,",
-        ),
-        label=label,
-        location=compression,
-    )
-    forbid_text(state, compression, "summaryResult.usage?.", label=label)
-
-    # Every completed subagent round reaches the parent stream with its
-    # reasoning, its text and its served usage, before the calls it made.
-    require_text(
-        state, tools, "export interface SubagentRoundRecord {", label=label
-    )
-    require_text(state, tools, "rounds?: SubagentRoundRecord[];", label=label)
-    _require_ordered(
-        _source(state, agent, label=label),
-        (
-            "this.eventEmitter.on(AgentEventType.ROUND_TEXT, (...args: unknown[]) => {",
-            "reasoning: event.thoughtText,",
-            "usageMetadata: event.usageMetadata ?? null,",
-            "this.updateDisplay({ rounds: [...this.currentRounds] }, updateOutput);",
-        ),
-        label=label,
-        location=agent,
-    )
-    _require_ordered(
-        _source(state, adapter, label=label),
-        (
-            "emitSubagentRound?(",
-            "usage.reasoning_output_tokens = metadata.thoughtsTokenCount;",
-            "emitSubagentRound(round: SubagentRoundRecord, parentToolUseId: string): void {",
-            "state.usage = this.createUsage(round.usageMetadata);",
-        ),
-        label=label,
-        location=adapter,
-    )
-    require_text(
+    _require_all(
         state,
-        helpers,
-        "adapter.emitSubagentRound(round, agentToolCallId);",
+        core + "core/openaiContentGenerator/converter.ts",
+        (
+            "function readServedUsage(",
+            "requireServedUsage(mapped, 'OpenAI usage')",
+            "cachedContentTokenCount: usage.prompt_tokens_details?.cached_tokens",
+            "thoughtsTokenCount: usage.completion_tokens_details?.reasoning_tokens",
+        ),
         label=label,
     )
-    require_text(
-        state,
-        helpers,
-        "reasoning_output_tokens: totalReasoningTokens,",
-        label=label,
-    )
-    require_text(state, wire, "reasoning_output_tokens?: number;", label=label)
-
-    # Executed in the build.
-    for path, cases in (
-        (
-            converter_test,
-            (
-                "leaves streaming reasoning and cached counts absent when the provider served none",
-                "[served-usage] refuses a non-streaming usage without served %s tokens under exactTokenCounting=vllm",
-                "[served-usage] refuses a streaming usage without served %s tokens under exactTokenCounting=vllm",
-            ),
-        ),
-        (
-            compression_test,
-            (
-                "[compaction-event] fails closed when the summary generation served no usage",
-            ),
-        ),
-        (
-            base_test,
-            (
-                "[served-usage] refuses a side query without served usage under exactTokenCounting=vllm",
-            ),
-        ),
-        (parts_test, ("keeps exactly the thought parts getResponseText drops",)),
-        (
-            estimation_test,
-            (
-                "estimates held content only: no output or reasoning count is derived here",
-            ),
-        ),
-        (
-            helpers_test,
-            (
-                "[subagent-rounds] emits each completed subagent round exactly once, ahead of the tool calls it produced",
-            ),
-        ),
-        (
-            agent_test,
-            (
-                "[subagent-rounds] publishes every completed round on the display, oldest first, with its served usage",
-            ),
-        ),
-        (
-            adapter_test,
-            (
-                "[subagent-rounds] emits the reasoning, the text and the served usage of a round under the agent tool call",
-                "[subagent-rounds] still emits a message for a round that produced nothing visible, so its billed usage is not lost",
-            ),
-        ),
+    for symbol in (
+        "estimateTextTokens",
+        "TOKEN_ESTIMATE_UNITS_PER_TOKEN",
+        "reasoning_tokens absent",
     ):
-        for case in cases:
-            require_text(state, path, case, label=label)
+        forbid_text(
+            state,
+            core + "core/openaiContentGenerator/converter.ts",
+            symbol,
+            label=label,
+        )
+    _require_all(
+        state,
+        core + "core/baseLlmClient.ts",
+        (
+            "GenerationTextFailure",
+            "getResponseThoughtText",
+            "requireServedUsage",
+            "requestAttempts",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core + "core/loggingContentGenerator/loggingContentGenerator.ts",
+        (
+            "createUsageObserver(",
+            "begin: () => logApiDispatch(this.config, dispatch, recorder)",
+            "await observation.begin()",
+            "observation.finish",
+            "requestSessionId",
+        ),
+        label=label,
+    )
+    observations = core + "telemetry/generation-observations.ts"
+    _require_all(
+        state,
+        observations,
+        (
+            "export class GenerationObservations",
+            "request_id",
+            "kv_scope",
+            "served_usage",
+            "requireServedUsage",
+            "EVENT_API_DISPATCH",
+            "EVENT_API_USAGE",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core + "telemetry/generation-usage.ts",
+        (
+            "export interface GenerationUsageSummary",
+            "usage: ServedUsage | null;",
+            "unfinalizedRequests",
+            "unreportedUsageRequests",
+            "usageReports",
+            "summarizeGenerationUsage",
+            "requireGenerationUsage",
+            "requireServedUsage(summary.usage",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core + "telemetry/uiTelemetry.ts",
+        (
+            "new GenerationObservations()",
+            "getGenerationUsage(",
+            "replaceSessionEvents(",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core + "services/recorded-generation-observations.ts",
+        (
+            "new GenerationObservations()",
+            "getRecordedUiEvent(record)",
+            "getRecordedGenerationObservations(",
+            "return observations.values();",
+        ),
+        label=label,
+    )
+    for path in (
+        "packages/cli/src/commands/review/cost-ledger.ts",
+        "packages/cli/src/ui/utils/export/collect.ts",
+    ):
+        _require_all(
+            state,
+            path,
+            ("getRecordedGenerationObservations", "summarizeGenerationUsage"),
+            label=label,
+        )
+    _require_all(
+        state,
+        core + "agents/runtime/agent-statistics.ts",
+        (
+            "constructor(private readonly readOwnerUsage: () => GenerationUsageSummary)",
+            "ownerUsage: this.readOwnerUsage()",
+            "formatGenerationUsage(stats.ownerUsage)",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core + "tools/agent/agent.ts",
+        (
+            "updates: Partial<Omit<AgentResultDisplay, 'executionSummary'>>",
+            "this.currentDisplay = {\n      ...this.currentDisplay,\n      ...updates,\n"
+            "      executionSummary: this.subagent?.getExecutionSummary(),\n    };",
+        ),
+        label=label,
+    )
+    forbid_text(state, core + "tools/agent/agent.ts", "isInteractive()", label=label)
+    _require_all(
+        state,
+        core + "services/session-resume-usage.ts",
+        ("requireServedUsage",),
+        label=label,
+    )
+    for path in (core + "services/session-resume-token-counts.ts",):
+        _require(
+            path not in state,
+            f"{label}: obsolete estimated usage module remains at {path}",
+        )
+    _require_all(
+        state,
+        cli + "nonInteractive/types.ts",
+        (
+            "export interface Usage",
+            "export type { GenerationUsageSummary } from '@qwen-code/qwen-code-core/generationUsage';",
+            "usage: GenerationUsageSummary | null;",
+            "reasoning_output_tokens: number",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        cli + "ui/status-line-data.ts",
+        (
+            "runOutsideAgentContext",
+            "uiTelemetryService.getGenerationUsage(stats.sessionId)",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core + "agents/agent-transcript.ts",
+        (
+            "ChatCommitRecorder",
+            "generation_failure",
+            "recordChatCompression",
+            "flush",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        cli + "utils/nonInteractiveHelpers.ts",
+        (
+            "adapter.emitSubagentRound(round, agentToolCallId)",
+            "emittedRoundCounts",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core + "config/config.ts",
+        (
+            "await this.activateSessionWriter()",
+            "private async activateChatRecording()",
+            "recorder.activate(",
+            "async startNewSession(",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core + "services/sessionService.ts",
+        (
+            "private async withMutationLease<T>",
+            "await jsonl.readStrict<ChatRecord>(filePath)",
+        ),
+        label=label,
+    )
+    for path in (core + "config/config.ts", core + "services/chatRecordingService.ts"):
+        for symbol in ("sessionWriterLeaseEnabled", "writerLeaseRequired"):
+            forbid_text(state, path, symbol, label=label)
 
 
 CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="locked-config-and-literal-cli",
         rationale=(
-            "Upstream Qwen Code loads workspace settings, environment files, MCP "
-            "servers, hooks, extensions, skills, rules, memory automation, output "
-            "language, slash commands, and dynamic agent advertisements. In an "
-            "unattended copied workspace those are alternate executable policy "
-            "surfaces. The locked mode must keep ordinary QWEN.md/AGENTS.md task "
-            "guidance while making every configuration/plugin surface inert and "
-            "treating the submitted prompt literally."
+            "A sealed deployment loads its explicit settings, prompt, tools, and local task guidance "
+            "without admitting workspace executable policy or interpreting the submitted task as a CLI "
+            "command."
         ),
         removal_condition=(
-            "Remove only when upstream exposes one documented immutable mode that "
-            "provably skips all listed sources before initialization, advertises no "
-            "uncallable commands/agents, and has equivalent adversarial tests."
+            "Upstream provides the same sealed configuration boundary and adversarial initialization "
+            "tests."
         ),
         validate_before=_validate_locked_boundary_before,
         validate_after=_validate_locked_boundary_after,
@@ -4161,17 +4410,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="exact-rendered-request-tokenization",
         rationale=(
-            "Character ratios, cached provider usage, and image-token estimates do "
-            "not describe the next fully rendered multimodal tool request. Both late "
-            "compaction and max_tokens must use vLLM /tokenize with the same messages, "
-            "tools, and template kwargs, require the same max_model_len, and use every "
-            "real remaining token without a fabricated minimum or padding fallback."
+            "Every generation and exact count requires a captured invocation owner at the raw provider "
+            "seam. The final request writes that owner after provider decoration. Configuration admits "
+            "only an explicit OpenAI-compatible vLLM route, strict calls, exact sizing, and a positive "
+            "declared window; selection failure rolls back the route."
         ),
         removal_condition=(
-            "Remove only when upstream has a server-authoritative full-wire request "
-            "tokenizer shared by compaction and generation, including tools/images and "
-            "template kwargs, with mismatch/unavailability as hard errors and no "
-            "heuristic branch for this provider."
+            "Upstream requires owned requests, counts the identical rendered wire payload, and proves "
+            "route isolation and transactional activation."
         ),
         validate_before=_validate_exact_tokens_before,
         validate_after=_validate_exact_tokens_after,
@@ -4179,19 +4425,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="strict-stream-terminal-commit",
         rationale=(
-            "A streaming prefix is diagnostic until the provider supplies a complete, "
-            "identified, object-valued structured call with a tool_calls terminal. "
-            "Upstream retry, continuation, XML recovery, and permissive batch/stream "
-            "conversion can otherwise replay a turn or promote degenerate output into "
-            "a local action. Strict mode forbids XML reconstruction and "
-            "post-visible continuation; fresh resampling is allowed only before "
-            "non-thinking content, once per independent transport/protocol/transient "
-            "retry counter. Length-stopped prefixes stay non-executable."
+            "One generation contract withholds structured calls and the terminal until EOF validation "
+            "and canonical assistant recording succeed. Invalid pre-content requests have a bounded "
+            "identical resample; delivered answers cannot be replayed. Literal text never supplies "
+            "executable calls."
         ),
         removal_condition=(
-            "Remove only when upstream offers an equivalent end-to-end commit barrier "
-            "covering HTTP establishment, invalid-stream replay, transport continuation, "
-            "XML recovery, batch conversion, streaming conversion, and terminal reason."
+            "Upstream provides equivalent batch/stream call grammar, terminal and durable commit "
+            "barriers, with no heuristic recovery path."
         ),
         validate_before=_validate_stream_commit_before,
         validate_after=_validate_stream_commit_after,
@@ -4199,35 +4440,28 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="universal-tools-and-foreground-delegation",
         rationale=(
-            "Upstream coreTools does not gate dynamic, MCP, skill, or synthetic tools, "
-            "and Agent can create background/fork/team/worktree/model variants. The one "
-            "service needs one canonical allowlist before every registry branch and only "
-            "awaited general-purpose/Explore children, enforced in schema, validation, "
-            "advertisement, and dispatch rather than by prompt advice."
+            "The declared tool allowlist gates native, dynamic, and synthetic invocations at the "
+            "permission seam. Explicit foreground delegation exposes only the callable sequential "
+            "built-in surface. An empty allowlist grants nothing."
         ),
         removal_condition=(
-            "Remove only when upstream supplies a universal canonical-name allowlist "
-            "and a schema/validator/dispatcher-enforced sequential foreground agent mode "
-            "with no alternate creation parameters."
+            "Upstream applies the same universal permission rule and exposes only delegation its "
+            "configured runtime can perform."
         ),
         validate_before=_validate_tool_policy_before,
         validate_after=_validate_tool_policy_after,
     ),
     SemanticConcern(
-        name="deployment-prompts-subagent-scratch-and-effect-journal",
+        name="deployment-prompt-and-invocation-facts",
         rationale=(
-            "The generic upstream main prompt advertises unavailable host, parallel, "
-            "background, skill, and fallback behaviors, while upstream Explore is "
-            "mechanically read-only and even forbids /tmp. The sealed deployment must "
-            "replace that base with one immutable prompt contract, give both foreground "
-            "roles unique private scratch, keep Explore computationally writable, and "
-            "hash/journal every Explore workspace or artifact effect for the parent."
+            "Deployment-specific scratch and effect journals are described only inside the invocation "
+            "that provides them. Ordinary host subagent prompts accurately describe real workspace "
+            "effects and report limitations. Sealed prompt files and invocation frames remain explicit "
+            "immutable inputs."
         ),
         removal_condition=(
-            "Remove only when upstream can require an immutable distributor prompt and "
-            "shared subagent contract, attach per-invocation scratch to every shell spawn, "
-            "and provide Git-independent content-hash effect journaling without making "
-            "Explore read-only or following untrusted symlinks."
+            "Upstream binds prompt promises to actual invocation facilities and verifies sealed prompt, "
+            "scratch, journal, and host behavior."
         ),
         validate_before=_validate_deployment_prompt_scratch_before,
         validate_after=_validate_deployment_prompt_scratch_after,
@@ -4235,17 +4469,13 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="original-png-and-image-chronology",
         rationale=(
-            "Upstream resizes/transcodes image overviews, accepts multiple/remote media "
-            "forms, can fall through after decoder failures, and can render PDFs as lossy "
-            "images. The backend accepts one full-quality source contract. Qwen Code must "
-            "fully decode and validate a static 8-bit RGB/RGBA PNG, retain its exact bytes, "
-            "reject every fallback transport, and keep text-image-text in the originating "
-            "tool message so template chronology matches training-time semantics."
+            "Image content preserves the original supported PNG bytes and dimensions. Decoder bounds "
+            "refuse unsupported or oversized input. Ordered text and images remain in their originating "
+            "tool response."
         ),
         removal_condition=(
-            "Remove only when upstream can express and test the identical original-byte "
-            "PNG bounds/decoder policy and non-splitting typed tool-result chronology, "
-            "with no resize, transcode, remote/file media, or PDF-image fallback."
+            "Upstream enforces identical original-byte PNG policy and typed non-splitting tool-result "
+            "chronology."
         ),
         validate_before=_validate_image_before,
         validate_after=_validate_image_after,
@@ -4253,14 +4483,13 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="model-field-isolation",
         rationale=(
-            "Strict tool semantics and exact tokenization are model/provider capabilities, "
-            "not ambient defaults. They must survive registry resolution for the pinned "
-            "model yet be explicitly cleared when a subagent changes model identity, or a "
-            "different provider could inherit an unsupported safety contract."
+            "Exact sizing, strict calls, window, endpoint, and reasoning settings belong to a resolved "
+            "provider route. A different selected model cannot inherit another route’s capabilities or "
+            "identity."
         ),
         removal_condition=(
-            "Remove when upstream types and propagates equivalent provider-scoped fields "
-            "and proves they cannot leak across a model override."
+            "Upstream carries provider-scoped snapshots through model selection and independently tests "
+            "activation rollback and child overrides."
         ),
         validate_before=_validate_model_config_before,
         validate_after=_validate_model_config_after,
@@ -4268,15 +4497,13 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="behavioral-regression-evidence",
         rationale=(
-            "Source landmarks establish intent but not behavior. Every safety boundary "
-            "needs an executable broken/fixed or fail-closed probe in the exact compiled "
-            "tree, including tokenizer mismatch, retries, XML, truncation, chronology, "
-            "universal tool names, foreground agents, and original image bytes."
+            "Exact source identity and semantic relationships are supplemented by executable tests of "
+            "ownership, provider validation, durable recording, usage, retries, text, tool schemas, and "
+            "artifacts. Each test must exercise its stated boundary."
         ),
         removal_condition=(
-            "Retire individual local tests only after equivalent upstream tests execute "
-            "the same failure boundary in the pinned build; never remove the evidence "
-            "merely because the implementation moved."
+            "Equivalent upstream tests execute the same failure and positive-control boundaries in the "
+            "pinned source."
         ),
         validate_before=_validate_behavioral_evidence_before,
         validate_after=_validate_behavioral_evidence_after,
@@ -4284,28 +4511,13 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="read-file-single-range-mechanism",
         rationale=(
-            "read_file advertised a PDF-only `pages` parameter on every file "
-            "type. A tool schema is the model's only map of what is "
-            "callable, and a parameter whose applicability depends on the "
-            "value of another parameter cannot be evaluated from that map, "
-            "so the model used it as a line range on source files. Making "
-            "the error message accurate did not change the behaviour: it "
-            "was measured again afterwards, 106 times across 7 of 18 "
-            "subagent scopes in one run, one subagent issuing 55 such "
-            "calls, and three subagents repeating a byte-identical failing "
-            "call until loop detection killed them. The affordance itself "
-            "is the defect. read_file now reads whole files with exactly "
-            "one range mechanism, offset/limit; page selection happens "
-            "where it is unambiguous, a page-ranged pdftotext run in the "
-            "shell, which is already this deployment's sealed PDF doctrine "
-            "and is named by every message that has to send the model "
-            "somewhere. A `pages` argument supplied anyway is refused at "
-            "both the tool and the shared consumption layer, never dropped."
+            "read_file offers offset/limit as its one range mechanism. PDF page selection belongs to an "
+            "explicit pdftotext command rendered with the requested filename. Unsupported arguments and "
+            "non-text line ranges refuse instead of being ignored."
         ),
         removal_condition=(
-            "Remove only when upstream read_file advertises no parameter "
-            "that is valid for a subset of the file types it accepts, and "
-            "refuses rather than ignores one that is supplied anyway."
+            "Upstream exposes unambiguous file range parameters and refuses unsupported selections "
+            "without losing remediation guidance."
         ),
         validate_before=_validate_pages_affordance_before,
         validate_after=_validate_pages_affordance_after,
@@ -4313,82 +4525,27 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="text-read-fidelity",
         rationale=(
-            "A read returned text that was not in the file, in two ways. A "
-            "file whose bytes are not valid UTF-8 was handed to a statistical "
-            "charset detector and decoded under whatever it guessed, and when "
-            "that produced nothing the bytes were decoded as UTF-8 with "
-            "replacement characters; either way the result came back as the "
-            "file's contents, with no error, no warning, and nothing in the "
-            "result to say the bytes were not what the file holds. A "
-            "benchmark corpus split on byte boundaries put four such files in "
-            "front of the model -- roughly 100,000 bytes, 7.7% of the "
-            "corpus -- as cp1252 mojibake, and it read straight through them. "
-            "The same reader already refused a non-UTF-8 file it had to "
-            "stream, so the guess was not even the one behaviour: it was what "
-            "happened to files small enough to buffer. Reading is now one "
-            "rule at every size. A file is read under the encoding it "
-            "declares -- the Unicode BOM at its head, or UTF-8 when it "
-            "carries none -- every decoder is `fatal`, and a sequence the "
-            "declared encoding does not define ends the read with the "
-            "conversion command the caller needs. Second, paging lost "
-            "characters. Every returned line was right-trimmed, and a page "
-            "that stopped at a line boundary carried no terminator, so the "
-            "newline between two pages was in neither: over one 26-file run, "
-            "12 files could not be reproduced from the union of everything "
-            "returned, each short by exactly one character. A page is now a "
-            "contiguous slice of the file -- lines verbatim, each carrying "
-            "its newline whenever the file continues past it -- so following "
-            "the continuation call from offset 0 concatenates to the file. A "
-            "line wider than one page is the one thing this interface "
-            "cannot page, and it was the case that behaved worst: "
-            "the first page-worth was returned with a marker appended and "
-            "the continuation named the same offset again, so a caller "
-            "following it re-read the identical result until the loop "
-            "detector stopped the session. It is refused, naming the shell "
-            "command that reads the line in slices and the offset that "
-            "continues past it."
+            "Text uses its declared Unicode BOM encoding or fatal UTF-8. Pages preserve line content "
+            "and terminators so their concatenation reproduces the file. An unpageable line refuses "
+            "with an explicit alternative and continuation."
         ),
         removal_condition=(
-            "Remove only when upstream reads a text file under the encoding "
-            "it declares and refuses the rest instead of inferring one, and "
-            "when the pages it tells a caller to read concatenate to the "
-            "file's exact bytes."
+            "Upstream guarantees strict decoding and exact contiguous text paging at every file size."
         ),
         validate_before=_validate_text_read_fidelity_before,
         validate_after=_validate_text_read_fidelity_after,
     ),
     SemanticConcern(
-        name="closed-tool-parameter-schemas",
+        name="schema-faithful-tool-parameters",
         rationale=(
-            "A tool schema is the model's only map of what is callable, and "
-            "it is re-rendered into the tools block of every request, so it "
-            "is the surface that teaches. JSON Schema permits an undeclared "
-            "property by default, so an invented, misremembered, or stale "
-            "parameter name passed validation and was then dropped: the tool "
-            "did something other than what was asked and said nothing. Only "
-            "read_file refused one name, `pages`, and only as a special case "
-            "written after the fact. The same shape ran one layer down -- "
-            "`offset`/`limit` were read by the text branch alone and silently "
-            "ignored on PDFs, images, audio, video, SVG, notebooks, and "
-            "binaries, with `.ipynb` the sole refusal and that one decided by "
-            "guessing from the extension before the file type was known. Two "
-            "live tool descriptions compounded it by instructing the model to "
-            "batch parallel tool calls in a build where parallel_tool_calls "
-            "is false, which the sealed prompt contradicts once while the "
-            "schema repeats it on every request. Every one of the ten native "
-            "schemas is now closed, a shared rule refuses an undeclared name "
-            "before schema validation and names both the offending key and "
-            "the accepted set, the range rule is decided once at the layer "
-            "that knows the file type, and a truncated read carries the exact "
-            "call that continues it instead of naming two parameters and "
-            "leaving the arithmetic to the reader."
+            "Native tool schemas explicitly close their parameter objects; external schemas retain "
+            "their declared openness and pattern rules. Authenticated editor changes travel through "
+            "private object provenance preserved by scheduler cloning, never hidden model parameter "
+            "names."
         ),
         removal_condition=(
-            "Remove only when upstream closes every advertised tool schema, "
-            "refuses an undeclared parameter rather than dropping it, refuses "
-            "a parameter that is valid for only a subset of the inputs a tool "
-            "accepts, and does not advertise a dispatch mode the runtime "
-            "denies."
+            "Upstream validates each schema as written, preserves trusted editor provenance outside "
+            "model JSON, and refuses unsupported file ranges."
         ),
         validate_before=_validate_param_contract_before,
         validate_after=_validate_param_contract_after,
@@ -4396,27 +4553,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="validation-refuses-rather-than-repairs",
         rationale=(
-            "Every tool call passed through a validator that repaired it. "
-            "Four coercion passes rewrote the caller's arguments -- "
-            "\"true\"/\"false\" to boolean, a number to a string, a "
-            "JSON-looking string to an array or object, \"3\" to 3 -- and "
-            "re-validated the mutated object, so a call that violated the "
-            "advertised schema still executed. That is the same defect as "
-            "accepting a parameter and ignoring it, one layer earlier: the "
-            "caller is told its call was well-formed, learns a shape the "
-            "schema does not describe, and nothing downstream can observe "
-            "the difference, which is why it never surfaced as a failure. "
-            "The same function also disabled itself: a schema Ajv could not "
-            "compile skipped validation entirely and warned to a debug "
-            "logger this deployment does not enable, so the guard failed "
-            "open in silence. Both are gone. A violation is reported with "
-            "the parameter and constraint that failed, and an uncompilable "
-            "schema refuses the call rather than waving it through."
+            "Schema validation leaves supplied arguments unchanged. A constraint violation or "
+            "uncompilable schema refuses execution and identifies the error."
         ),
         removal_condition=(
-            "Remove only when upstream validates tool parameters without "
-            "mutating them and treats an uncompilable schema as a refusal "
-            "rather than a skipped check."
+            "Upstream refuses invalid and uncompilable schemas without coercion or skipped validation."
         ),
         validate_before=_validate_no_repair_validation_before,
         validate_after=_validate_no_repair_validation_after,
@@ -4424,27 +4565,12 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="model-facing-failure-text",
         rationale=(
-            "A ToolResult carries two strings: llmContent, written for the "
-            "model, and error.message, an operational summary for telemetry "
-            "and the scrollback. On the failure path the scheduler forwarded "
-            "only error.message and read llmContent for images alone, so any "
-            "remedy a tool wrote into the half named for the model was "
-            "discarded before the model saw it. Tools worked around it one "
-            "at a time by copying llmContent into error.message, and the "
-            "ones that did not silently lost their guidance -- the agent "
-            "tool's 'Use TeamCreate to start a team first' and the teammate "
-            "name in its spawn failures reached nobody. Two in-source "
-            "comments existed only to warn the next author. Neither half can "
-            "simply win: llmContent usually carries the remedy but often "
-            "omits the path, while error.message is sometimes the only "
-            "operational fact there is. Both are now sent, merged at the one "
-            "seam every downstream reader passes through, so a tool added "
-            "later cannot reintroduce the loss whichever half it writes."
+            "Tool failure output preserves both the model-facing remedy and distinct operational error "
+            "information, without dropping or duplicating either."
         ),
         removal_condition=(
-            "Remove only when upstream sends a failing tool call's "
-            "model-facing content to the model rather than the operational "
-            "error summary alone."
+            "Upstream forwards the complete model-facing failure and any distinct operational details "
+            "through the shared scheduler."
         ),
         validate_before=_validate_model_facing_failure_before,
         validate_after=_validate_model_facing_failure_after,
@@ -4452,28 +4578,13 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="pdf-text-extraction-without-a-renderer",
         rationale=(
-            "PDF reads had three image fallbacks: render pages for a "
-            "vision-capable model on text overflow or extraction failure, "
-            "and render them again to feed a text-only model's vision "
-            "bridge. A rendered page is a lossy JPEG substituted for the "
-            "document that was asked for and an unannounced modality change, "
-            "and it cannot satisfy the static original-PNG contract this "
-            "deployment pins. Pinning `willRenderPdfImages = false` "
-            "neutralised the first path but left the code: a typed boolean "
-            "constant the compiler cannot flag, forty lines of unreachable "
-            "fallback, a bridge path still reachable for any caller running "
-            "a text-only model, and continuation guidance inside it that "
-            "told the model to reopen the PDF with a `pages` argument "
-            "read_file refuses -- a guaranteed dead end. A dormant fallback "
-            "is a trap for the next change, so the renderer, the bridge's "
-            "PDF half, and the page-range option that fed them are deleted "
-            "rather than disabled. The image bridge itself is untouched: it "
-            "serves ordinary images and only its PDF-specific half is gone."
+            "PDF input follows the sealed text-extraction contract. Missing tools, malformed or "
+            "encrypted PDFs, timeout, and extraction overflow remain explicit failures with actionable "
+            "page-range guidance."
         ),
         removal_condition=(
-            "Remove only when upstream reads a PDF as text or as a natively "
-            "supported document and never substitutes a rendered image for "
-            "it, with no configuration that re-enables the substitution."
+            "Upstream enforces the same text-only extraction surface and preserves complete extracted "
+            "content or an explicit refusal."
         ),
         validate_before=_validate_pdf_text_only_before,
         validate_after=_validate_pdf_text_only_after,
@@ -4481,74 +4592,41 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="subagent-turn-count-ownership",
         rationale=(
-            "The reasoning loop's turn counter was a stack local and the "
-            "loop has no catch. Every terminate reason reported the true "
-            "count because each of them returns; a throw -- from the model "
-            "stream, a tool call, or a synchronous event listener -- unwound "
-            "past the single line that copied the count onto the headless "
-            "wrapper, and the terminal event then emitted the zero that "
-            "wrapper had initialised. A subagent that died mid-run was "
-            "recorded as having taken no turns at all, which is the one case "
-            "where the count matters most. The earlier fix made every "
-            "non-throwing exit carry the count, which is why only the throw "
-            "path was left. Reading the count out of the exception path "
-            "would be a special case each new throw site has to remember; "
-            "the counter now belongs to the core, which outlives the throw, "
-            "and the wrapper's mirror -- a second writer that could "
-            "disagree -- is removed rather than kept in step."
+            "A child reasoning round count belongs to its execution loop and survives completion, "
+            "failure, cancellation, background continuation, and final display. API request counts are "
+            "a separate fact."
         ),
         removal_condition=(
-            "Remove only when upstream's subagent terminal event reports the "
-            "run's started turn count on every exit including a thrown "
-            "one, from state that survives the unwind."
+            "Upstream retains exact child reasoning-round ownership through every completion and "
+            "continuation path."
         ),
         validate_before=_validate_turn_count_owner_before,
         validate_after=_validate_turn_count_owner_after,
     ),
     SemanticConcern(
-        name="headless-stream-evidence",
+        name="generation-stream-evidence",
         rationale=(
-            "The headless stream-json output is captured as the session's "
-            "evidentiary record. Upstream serialized tool results from the "
-            "human-facing display string, so ranged file reads were recorded "
-            "as a bare 'Read lines X-Y of Z' banner while the model received "
-            "the full content — forensic analysis of production sessions "
-            "misattributed model failures to information blackouts. The "
-            "record must prefer the model-facing responseParts and fall back "
-            "to the display only when no parts exist."
+            "Streaming and batch renderers preserve generation evidence and provider termination under "
+            "the correct root or spawning-call identity. Output drains before successful delivery is "
+            "acknowledged."
         ),
         removal_condition=(
-            "Remove only when upstream stream-json emits the model-facing "
-            "tool-result content for every tool by default."
+            "Upstream emits equivalent scoped generation evidence through callback-settled output "
+            "adapters."
         ),
         validate_before=_validate_stream_evidence_before,
         validate_after=_validate_stream_evidence_after,
     ),
     SemanticConcern(
-        name="headless-compaction-event",
+        name="compaction-attempt-evidence",
         rationale=(
-            "Conversation compaction was invisible in the captured event "
-            "stream. Upstream surfaces it only as an interactive UI signal "
-            "and only when it succeeds, so the sole way to tell that a "
-            "session compacted was to infer it from a drop in "
-            "usage.input_tokens between consecutive billed assistant "
-            "events — a reconstruction from a side effect that cannot "
-            "distinguish an attempt that was refused or failed from one "
-            "that never ran, and that shows nothing at all for a subagent, "
-            "which compacts its own chat outside the parent's history. "
-            "Every completed attempt is now emitted as a first-class "
-            "system/compaction event carrying the rendered prompt token "
-            "count before and after, the outcome, and the same "
-            "parent_tool_use_id convention as every other message, so the "
-            "main session and each subagent are separable from the "
-            "standard bundle alone."
+            "Every attempted compaction is recorded and flushed at the shared chat seam. Success, "
+            "refusal, cancellation, and failure preserve the attempt’s original history and output "
+            "facts; only a successful replacement publishes a compressed-history event."
         ),
         removal_condition=(
-            "Remove only when upstream emits a compaction event in "
-            "stream-json for every attempt — successful, refused, and "
-            "failed alike — attributed to the main session or the owning "
-            "subagent tool call, and carrying the before/after rendered "
-            "prompt token counts."
+            "Upstream records all attempted compactions through one shared root/child recorder and "
+            "scoped renderer projection."
         ),
         validate_before=_validate_compaction_event_before,
         validate_after=_validate_compaction_event_after,
@@ -4556,29 +4634,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="subagent-result-scope-and-turn-count",
         rationale=(
-            "A subagent that exhausted its inherited turn budget emitted a "
-            "terminal result with no parent_tool_use_id and num_turns 0. "
-            "Every other emitted event names its scope -- null for the main "
-            "session, the agent tool-call id for a subagent -- so an unscoped "
-            "result is read as the session's own: the subagent's failure was "
-            "attributed to the parent, and the parent's subsequent recovery "
-            "and real answer became output after the end of the session. The "
-            "service correctly refused the whole capture, so every session in "
-            "which a subagent ran out of turns was discarded even though the "
-            "parent had finished. The turn count was lost twice over: the "
-            "record said the subagent took no turns at all, and the "
-            "model-visible text the parent reads was built by the foreground "
-            "body from a second call that never received the count, while "
-            "only the display-facing call inside runSubagentWithHooks had "
-            "it. A subagent failure has to stay visible in the stream and "
-            "scoped to the subagent, carrying how far it got."
+            "Each child result carries its spawning tool-call scope and actual execution-round count. "
+            "Root and child results cannot absorb each other’s state or usage."
         ),
         removal_condition=(
-            "Remove only when upstream scopes every result message to the "
-            "thread it ends -- null for the main session, the owning agent "
-            "tool-call id for a subagent -- and reports that subagent's own "
-            "completed turn count both on the emitted record and in the text "
-            "the parent model receives."
+            "Upstream emits distinct correctly owned root and child results with preserved turn counts."
         ),
         validate_before=_validate_subagent_result_scope_before,
         validate_after=_validate_subagent_result_scope_after,
@@ -4586,31 +4646,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="subagent-terminal-progress-and-loop-attribution",
         rationale=(
-            "Every subagent error result recorded num_turns 0, whatever "
-            "stopped it -- MAX_TURNS, TIMEOUT, ERROR, CANCELLED, "
-            "LOOP_DETECTED alike -- while the real counts in the same "
-            "capture were 11, 7 and 9. Nothing had lost the count: two "
-            "writers flip the subagent display from running to failed, and "
-            "the one that wins is the terminal event from the reasoning "
-            "loop's own exit, which announced the status without it. The "
-            "emitted record is built on the first running-to-failed "
-            "transition, so the later, complete update from the tool body "
-            "was never read. The terminal event now carries the terminal "
-            "facts in full. It also carries which rule fired: LOOP_DETECTED "
-            "covers nine rules across two tiers, and the subagent path "
-            "never read the detector's last loop type, so a five-identical-"
-            "call halt and an exhausted per-turn tool-call budget reached "
-            "the operator and the parent model as the same word -- which is "
-            "why diagnosing one took a five-hour telemetry reconstruction. "
-            "The rule labels moved beside the detector so the headless "
-            "session's message and a subagent's record name the same cause "
-            "in the same words."
+            "Child rounds, compactions, failures, and cancellations retain inspectable transcript "
+            "evidence. Terminal and web renderers project bounded status from owner usage and execution "
+            "state without repeatedly copying raw reasoning. Loop failures identify the scope they "
+            "stopped."
         ),
         removal_condition=(
-            "Remove only when upstream's subagent terminal event carries "
-            "the run's started turn count and the loop rule that ended "
-            "it, and both reach the emitted record and the text the parent "
-            "model reads."
+            "Upstream provides bounded child status and recoverable scoped evidence with exact loop "
+            "attribution."
         ),
         validate_before=_validate_subagent_progress_before,
         validate_after=_validate_subagent_progress_after,
@@ -4618,29 +4661,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="compaction-output-accounting",
         rationale=(
-            "A failed compaction was undiagnosable. The service captures "
-            "the stream-json event file and enables no debug logging, so "
-            "the '[chat-compression] summary terminated with MAX_TOKENS' "
-            "warning and its siblings went nowhere, and the truncated "
-            "summary was discarded unpersisted. Forensics on the session "
-            "that died could establish that the 20,000-token maintenance "
-            "budget had been exhausted but not how it split between the "
-            "hidden thinking phase and the final response -- the one fact "
-            "that identifies the failure. Turning on debug logging would be "
-            "a second mode and would pollute the captured stream, so the "
-            "native compaction event carries it instead: the ceiling, both "
-            "phase budgets, the output tokens produced, how many of them "
-            "were reasoning, how much summary survived, and the provider's "
-            "terminal reason. It is attached to every outcome reachable "
-            "after the generation and left empty when the attempt was "
-            "refused before it, so a budget consumed entirely by reasoning "
-            "stays distinguishable from a request that never ran."
+            "A compaction attempt retains its observed text, reasoning, terminal, request attempts, and "
+            "full served usage or explicit absence. Failure after a partial stream cannot erase the "
+            "last valid observation. Reasoning remains inline; this contract does not assert reference "
+            "persistence."
         ),
         removal_condition=(
-            "Remove only when upstream reports a compaction attempt's "
-            "output-budget accounting -- at minimum the thinking/visible "
-            "split and the terminal reason -- in the captured event stream "
-            "without enabling debug logging."
+            "Upstream preserves complete success and interrupted compaction evidence with served "
+            "provenance and explicit preflight absence."
         ),
         validate_before=_validate_compaction_accounting_before,
         validate_after=_validate_compaction_accounting_after,
@@ -4648,47 +4676,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="context-window-partition",
         rationale=(
-            "Upstream spends the context window through a ladder of "
-            "independently tuned constants -- a summary cap, an "
-            "auto-compaction buffer, a warn buffer, a hard buffer, a "
-            "percentage, an output floor and a clamp margin -- and no "
-            "arithmetic relates them, so whether a turn can be issued, and "
-            "whether the conversation it produces can still be summarized, "
-            "are separate questions answered at run time by whichever "
-            "constant happened to bind. Production forensics found both "
-            "halves failing: a session died 1,830 tokens below the "
-            "compaction trigger because the clamp had shrunk a turn's "
-            "output to 4,000 tokens against a need that had never been "
-            "below 4,546, and a second died refusing to send 252,945 tokens "
-            "after three summaries were discarded at a cap sized for "
-            "claude-code's 20,000-token measurement rather than this "
-            "window's demand. The window is divided instead: three "
-            "sixteenths for the summary a compaction must be able to "
-            "produce, two for one turn's output, one for the tool result "
-            "that turn appends, one 128th for the compaction directive, "
-            "and the remainder for the history a turn may stand on. The "
-            "five sum to the window exactly, so the trigger plus a turn "
-            "plus its tool result and the directive is the window less "
-            "the summary reserve -- the largest request a whole-history summary can "
-            "still be issued for -- and the property holds as arithmetic "
-            "between shares rather than as a budget maintained while the "
-            "session runs. Nothing is a constant: a window twice as large "
-            "yields budgets twice as large with no edit. The build "
-            "evaluates the identity from the shares the source declares, so "
-            "a share changed without the arithmetic still holding stops the "
-            "build rather than a session. The compaction request is "
-            "otherwise ordinary - it declares no phase budgets, so the "
-            "model thinks to a natural stop and writes the snapshot under "
-            "the pinned provider ceilings, and the reasoning-end marker is "
-            "never forced. The snapshot schema gives every fact exactly one "
-            "home, because the previous nine sections gave one code snippet "
-            "four and duplication is what grew under budget pressure."
+            "All request budgets derive from shares of the declared served window. Exact before/after "
+            "sizing governs compaction and tool-result displacement. Original authored inputs are "
+            "retained independently of model summaries; summaries must satisfy the six-section "
+            "structural contract. No phase budget forces reasoning to stop."
         ),
         removal_condition=(
-            "Remove only when upstream derives every context budget from "
-            "the served window as shares that sum to it, so that a turn "
-            "cannot be issued at a size whose history its own summary "
-            "request could not carry."
+            "Upstream provides the same partition arithmetic, exact request sizing, durable "
+            "authored-input retention, and structural summary validation."
         ),
         validate_before=_validate_compaction_budget_before,
         validate_after=_validate_compaction_budget_after,
@@ -4696,56 +4691,26 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="tool-result-bound",
         rationale=(
-            "A turn appends its tool results to the history, and how much "
-            "they cost is the one term the partition cannot know before the "
-            "turn is issued. Upstream bounds them in characters instead, "
-            "in six places that do not agree: a global 25,000-character "
-            "truncation threshold, nine per-tool budgets from 20,000 to "
-            "500,000, a persistence gate at the threshold plus a 3,000-"
-            "character headroom, a second pass at twice the budget once "
-            "hook metadata is appended, a 200,000-character per-batch "
-            "water-filling allocator, and read_file's own character result "
-            "cap. Characters are not what a request costs, the six bounds "
-            "compose into no stated total, and each one shortens a result "
-            "the model then cannot recover -- production forensics found a "
-            "read whose continuation notice was computed from a line the "
-            "character budget had cut, which silently skipped content. The "
-            "bound is one number now, it is the window share, and it is "
-            "measured rather than estimated: the request is counted with "
-            "the pending batch and without it, and the difference is what "
-            "the batch adds to the history. A batch over its share is not "
-            "shortened -- its largest result is written to disk whole and "
-            "replaced by a reference naming the file, and the batch is "
-            "counted again, so the agent reads back whatever it still "
-            "needs and nothing is lost. A result that cannot be written "
-            "stops the turn rather than being quietly dropped, and a batch "
-            "of references still over the share stops it too, because "
-            "there is nothing left to displace and sending it would carry "
-            "the history past the size the partition holds a summary's "
-            "room for."
+            "The measured contribution of pending tool results fits one window share. Oversized results "
+            "become references to complete immutable session artifacts. Text and binary producers share "
+            "durable quota, exclusive publication, and ownership retention across Config recreation, "
+            "resume, fork, and elapsed time."
         ),
         removal_condition=(
-            "Remove only when upstream bounds the tool results one turn "
-            "appends by a measured share of the served window, in one "
-            "place, degrading by reference to the whole result rather than "
-            "by shortening it."
+            "Upstream bounds actual rendered contribution and preserves full artifacts with durable "
+            "concurrent accounting and reference-aware lifetime."
         ),
         validate_before=_validate_tool_result_bound_before,
         validate_after=_validate_tool_result_bound_after,
     ),
     SemanticConcern(
-        name="session-time-anchor",
+        name="cli-invocation-time-anchor",
         rationale=(
-            "Benchmark forensics found zero time awareness across every "
-            "session: agents never knew when they started. The deployment "
-            "contract now ends with one session-start timestamp computed "
-            "once at process start — an absolute anchor that keeps the "
-            "system prompt byte-stable for the whole session, preserving "
-            "prefix caching; live time remains observable via `date`."
+            "A single process-start timestamp labels the CLI invocation and keeps the deployment prompt "
+            "stable. It is not represented as a persisted session start time."
         ),
         removal_condition=(
-            "Remove only when upstream injects an equivalent stable "
-            "session-start time into the system prompt by default."
+            "Upstream supplies an equivalent correctly named stable invocation timestamp."
         ),
         validate_before=_validate_session_time_before,
         validate_after=_validate_session_time_after,
@@ -4753,104 +4718,41 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="required-read-offset",
         rationale=(
-            "Benchmark forensics over five event logs (1,277 tool calls) "
-            "found 184 read_file calls that executed without `offset` while "
-            "the model's own reasoning named the resume line it intended: "
-            "the sampler occasionally discharges a pending parameter into "
-            "the prose channel just before the `<tool_call>` trigger fires, "
-            "and a call that omits an *optional* parameter is a perfectly "
-            "legal serialization of a wrong request, so every casualty "
-            "silently restarted the file from line 1 -- the byte-identical "
-            "re-reads behind the consecutive_identical_tool_calls session "
-            "deaths. The model already writes an explicit offset on 660 of "
-            "851 reads, so requiring it is with the training grain: the "
-            "armed decode-time grammar refuses the omission in-span "
-            "(verified against the pinned runtime: rejection at the token "
-            "that would skip the parameter), Ajv refuses it for any call "
-            "arriving another way, and 0 is the explicit spelling of a "
-            "whole-file read -- for every file kind, so non-text files stay "
-            "readable and only a range-selecting nonzero offset or a limit "
-            "is refused on them. `limit` stays optional deliberately: its "
-            "omission is fail-visible (the truncation notice carries the "
-            "exact continuation call), while an omitted offset was "
-            "fail-silent."
+            "Every read_file call explicitly declares offset, including zero for whole-file reads. "
+            "Optional limit carries an exact continuation when paging occurs. Non-text files accept "
+            "zero but refuse line ranges."
         ),
         removal_condition=(
-            "Remove only when the serving stack guarantees at the turn "
-            "level that a parameter the model resolved cannot be silently "
-            "dropped from the serialized call, or upstream makes `offset` "
-            "required itself."
+            "Upstream requires explicit offset and preserves exact continuation and non-text range "
+            "behavior."
         ),
         validate_before=_validate_required_read_offset_before,
         validate_after=_validate_required_read_offset_after,
     ),
     SemanticConcern(
-        name="residue-quarantine",
+        name="literal-response-fidelity",
         rationale=(
-            "The same discharge leaves a visible trace in about 4% of "
-            "cases: a fragment of call syntax -- foreign and Qwen closers "
-            "first, sometimes carrying the very parameter the call then "
-            "omitted -- lands in the assistant's visible text beside the "
-            "executed call. History re-renders assistant text verbatim "
-            "into every later prompt, so the fragment becomes a serialized "
-            "exemplar of exactly the malformed shape it came from, and the "
-            "chat template renders it ahead of the turn's re-rendered tool "
-            "calls -- one bad serialization teaching the next. The "
-            "trailing fragment is stripped from what history and the JSONL "
-            "record keep, on tool-call turns only; the emitted event "
-            "stream has already carried the raw text, so ground truth "
-            "stays observable, and executability is never touched -- a "
-            "detector this rare (4 fragments in 3,278 events) must degrade "
-            "gracefully on a false positive, not spend a turn. All four "
-            "corpus fragments strip; the corpus's legitimate call-syntax "
-            "quoting (inline prose mentions and thinking-channel "
-            "self-diagnosis) does not match the trailing closers-first "
-            "shape and is untouched."
+            "Visible text and reasoning retain their original bytes through stream, history, and "
+            "recording, including XML-like text beside real structured calls. Execution depends on "
+            "validated structured calls rather than text classification."
         ),
         removal_condition=(
-            "Remove only when the serving stack itself refuses to place "
-            "tool-call syntax in the prose channel of a turn that carries "
-            "structured tool calls, or re-rendered history stops being the "
-            "model's serialization exemplar."
+            "Upstream preserves arbitrary literal response text with the same strict executable-call "
+            "separation."
         ),
-        validate_before=_validate_residue_quarantine_before,
-        validate_after=_validate_residue_quarantine_after,
+        validate_before=_validate_literal_response_before,
+        validate_after=_validate_literal_response_after,
     ),
     SemanticConcern(
         name="incomplete-generation-terminal-state",
         rationale=(
-            "A reasoning loop ends when a turn requests no tools, and that "
-            "silence has two causes: the model finished its message, or the "
-            "provider stopped generation from outside while it was still "
-            "being written. Only the terminal reason separates them, and it "
-            "reaches the headless adapter, which reads the usage half of the "
-            "event and discards the reason. Under this deployment's strict "
-            "tool-call contract a length terminal yields no executable tool "
-            "call at all, so every generation the output cap severs lands in "
-            "exactly that silence and the session reports `subtype: success`, "
-            "`is_error: false`, exit 0 -- a cut-off prefix presented as a "
-            "final answer, indistinguishable from a run that answered. "
-            "Production forensics found a 66-turn session whose last turn was "
-            "clamped to the 19,064 tokens left below the auto-compaction "
-            "threshold and returned exactly that many: it announced a write, "
-            "was cut off before the call, and was recorded as a success that "
-            "had read 18 of 26 files and written none. The reason is a "
-            "provider fact, so the terminal record can state it without "
-            "judging whether the work was done: success asserts only that the "
-            "model wrote its final message to the end, and every other "
-            "terminal reason -- including one that never arrived -- ends the "
-            "run as `error_incomplete_generation` naming the reason. A "
-            "severed generation is reported rather than continued, because "
-            "the strict terminal contract makes a length-stopped prefix "
-            "non-executable and unresumable. The same rule holds inside a "
-            "subagent, whose partial report the parent would otherwise "
-            "integrate as a conclusion."
+            "Only a self-ended STOP can satisfy the completed-generation predicate. Missing or "
+            "externally stopped terminals retain an explicit incomplete state in root and child "
+            "reasoning loops and UI."
         ),
         removal_condition=(
-            "Remove only when upstream gates its own headless success path on "
-            "the provider's terminal reason, in the main loop and the subagent "
-            "reasoning loop alike, and expresses a severed generation as a "
-            "terminal state distinct from success and from an execution error."
+            "Upstream distinguishes self-ended generation from a severed response and preserves that "
+            "fact in every renderer."
         ),
         validate_before=_validate_incomplete_generation_before,
         validate_after=_validate_incomplete_generation_after,
@@ -4858,55 +4760,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="terminal-state-is-a-value",
         rationale=(
-            "How a run ended was a position in control flow rather than a "
-            "value: whichever return or process.exit happened to execute, "
-            "spread over the whole non-interactive runner, with two endings "
-            "-- the session turn budget and a cancellation -- leaving the "
-            "process without emitting a terminal record at all. A caller "
-            "then read a turn-exhausted run as invalid output, because the "
-            "only evidence it had was a stream that stopped. The subagent "
-            "scope had the opposite problem: it carried a proper "
-            "enumeration of how a scope can stop and collapsed all of it to "
-            "one wire name, so a subagent that ran out of turns and one "
-            "whose tool threw were the same record. The protocol declared a "
-            "third model again, a closed set of names of which one, "
-            "`error_max_turns`, no code path could produce. "
-            "The terminal state is now a value both scopes carry. One table "
-            "maps each state an agentic run can end in to the record that "
-            "reports it -- the wire name, whether that name is an error, and "
-            "the exit code -- and the table is total over the state set, so a "
-            "state added without a name is a compile error rather than a run "
-            "reported under a neighbour's name. The wire vocabulary is the "
-            "set of names that table produces, which is what makes a "
-            "timeout, a cancellation, a loop halt and both remaining budgets "
-            "nameable instead of masquerading as a generic execution "
-            "failure. That set is the set of states this build constructs: "
-            "every member has a statement somewhere in the tree that "
-            "produces it, and the assertion below reads both out of the "
-            "post-patch source and requires them to agree, so a name cannot "
-            "be declared for a state nothing reaches. The assertion is "
-            "production, not reachability -- whether a deployment's argv "
-            "reaches a producing statement is that deployment's business, "
-            "and the state set is kept equal to the states this build can "
-            "reach so the two coincide. Every ending in the runner returns "
-            "or raises a state and one emitter writes the record, so a run "
-            "cannot end without saying how, and one shape carries it: an "
-            "ending whose text is already on stderr says so, and one whose "
-            "thrown value classifies itself in the CLI's exit-code taxonomy "
-            "carries that code, both as fields of the ending rather than as "
-            "a second class beside it. The session turn budget charges every "
-            "turn the run starts and is asked once, before the turn it "
-            "decides is counted, so the budget and the `num_turns` the "
-            "record reports are one number, and a run stopped by it reports "
-            "exactly the budget it was given, having interrupted nothing."
+            "A closed terminal-state value maps once to wire name, error classification, and exit code. "
+            "The declared, constructed, and mapped state sets agree. Budget admission precedes "
+            "charging. One queued-turn lifetime tracks result delivery, so failed cleanup cannot mint a "
+            "second terminal; cleanup and output callbacks are awaited."
         ),
         removal_condition=(
-            "Remove only when upstream represents a run's terminal state as a "
-            "value that both the session and every subagent carry to one "
-            "emitter, with a total mapping from that state set to the "
-            "declared wire vocabulary, no state in that set without a "
-            "statement that produces it, and no terminal path that ends the "
-            "process without emitting its record."
+            "Upstream provides total state mapping, exact budget ownership, one result delivery, and "
+            "error-preserving cleanup/output settlement."
         ),
         validate_before=_validate_terminal_state_before,
         validate_after=_validate_terminal_state_after,
@@ -4914,31 +4775,15 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="served-accounting",
         rationale=(
-            "Every count the client reports about a generation is the count "
-            "the backend served for it. The pinned backend counts reasoning "
-            "tokens at its parser engine's own token-id split and reports the "
-            "prompt tokens it read back from its prefix cache; upstream "
-            "instead estimated reasoning from the reasoning text at a fixed "
-            "characters-per-token ratio clamped to the completion count, "
-            "reported a cached count of zero when none was served, and kept a "
-            "previous-response output counter for a prompt estimator this "
-            "build has already retired. Under `exactTokenCounting` a usage "
-            "without either served count fails the request; nowhere does a "
-            "count get approximated from text. The reasoning the session was "
-            "blind to is captured where it is spent and never fed back: a "
-            "compaction attempt's record carries the reasoning it emitted "
-            "beside its counts, and every completed subagent round is "
-            "published on the agent tool's display and written under the "
-            "spawning tool-call id with its reasoning, its text and its "
-            "served usage, so a subagent's turns are billed to the subagent in "
-            "the captured stream instead of arriving as zero-usage tool calls."
+            "One validated five-count report describes served prompt, output, reasoning, cache, and "
+            "total. Durable dispatch and finalization share request identity; no request, reported "
+            "zero, missing usage, and absent finalization remain distinct. The same accumulator "
+            "supplies owner-scoped live, resumed, child, ledger, export, and UI projections. All "
+            "generating chats require canonical recording under shared session write ownership."
         ),
         removal_condition=(
-            "Remove only when upstream reports reasoning and cached-prompt "
-            "counts solely as the provider served them, refusing rather than "
-            "estimating when they are absent, and writes a side query's "
-            "reasoning and every subagent round's reasoning, text and usage "
-            "into the headless stream under the owning scope."
+            "Upstream supplies durable owned observations, required canonical writers, strict replay, "
+            "and equivalent provenance-preserving consumer projections."
         ),
         validate_before=_validate_served_accounting_before,
         validate_after=_validate_served_accounting_after,

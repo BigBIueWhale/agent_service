@@ -135,9 +135,9 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
       packages/core/src/generated/git-commit.ts \
  && DEV=true node esbuild.config.js \
  && node scripts/copy_bundle_assets.js \
- && grep '^diff --git' \
-      /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch \
-      | sed 's|diff --git a/||; s| b/.*||' | sort -u > /tmp/patched-files.txt \
+ && PYTHONPATH=/opt/agent-artifacts python3 -c \
+      'from patches.source_patch_v1.generated_qwen_code_stage import FINAL_FILES; print("\n".join(sorted(path for path, digest in FINAL_FILES.items() if digest is not None)))' \
+      > /tmp/patched-files.txt \
  && grep -E '\.test\.tsx?$' /tmp/patched-files.txt > /tmp/patched-tests.txt \
  && grep -vE '\.test\.tsx?$' /tmp/patched-files.txt \
       | grep -E '\.tsx?$' \

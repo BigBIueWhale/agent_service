@@ -142,27 +142,19 @@ pub struct SessionBody {
     #[serde(deserialize_with = "required_nullable")]
     pub last_event_at_unix: Option<u64>,
 
-    /// What the live reader has accounted in `events.jsonl` so far: served
-    /// output and reasoning tokens summed over the completed billed turns it
-    /// could read whole, and the distinct subagent scopes it has seen.
-    /// Present exactly while a run is in flight; once the terminal parse has
-    /// spoken its certified sums are the answer and a running tally is no
-    /// longer a fact about anything. An observation and a verdict are
-    /// different claims and are named apart: the first is a growing lower
-    /// bound over what has been written, the second refused everything it did
-    /// not recognise. Neither is ever presented as the other, and neither is
-    /// ever fabricated to fill the other's silence.
+    /// Served usage and scope observations from complete records in an immutable
+    /// event-file snapshot, retained when the run ends. All four fields are
+    /// present together; absence at terminal means storage could not be read.
+    /// Observations never certify a complete stream, including when all are zero.
     #[serde(deserialize_with = "required_nullable")]
     pub observed_output_tokens: Option<u64>,
     #[serde(deserialize_with = "required_nullable")]
     pub observed_reasoning_tokens: Option<u64>,
     #[serde(deserialize_with = "required_nullable")]
     pub observed_subagent_scope_count: Option<u64>,
-    /// Completed records billing a turn whose usage could not be read whole.
-    /// Non-zero says the tallies above are short by an unknown amount. A
-    /// completed JSON record with unusable usage remains explicitly unaccounted;
-    /// malformed JSON syntax still fails the read. The terminal parser decides
-    /// whether the complete stream can certify a result.
+    /// Records that could not be accounted, including a nonempty trailing prefix
+    /// without LF. Nonzero means the observed sums omit unknown evidence. Zero
+    /// does not establish a terminal result; only terminal.agent_result does.
     #[serde(deserialize_with = "required_nullable")]
     pub observed_unaccounted_records: Option<u64>,
 
@@ -220,7 +212,7 @@ pub struct AgentResult {
     pub subagent_error_count: u64,
 }
 
-fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+pub(crate) fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
     T: Deserialize<'de>,
@@ -257,11 +249,20 @@ impl SessionBody {
                 self.observed_unaccounted_records.is_some(),
             ),
         ] {
-            if present != running {
+            if present != self.observed_output_tokens.is_some() || (running && !present) {
                 return Err(ServiceError::Internal(format!(
-                    "session {} has invalid live-progress {field} presence for {:?}",
+                    "session {} has inconsistent output-observation {field} presence for {:?}",
                     self.session_id, self.status
                 )));
+            }
+        }
+        if let (Some(output), Some(reasoning)) =
+            (self.observed_output_tokens, self.observed_reasoning_tokens)
+        {
+            if reasoning > output {
+                return Err(ServiceError::Internal(
+                    "observed reasoning tokens exceed observed output tokens".into(),
+                ));
             }
         }
         if let Some(terminal) = &self.terminal {
@@ -281,6 +282,29 @@ impl SessionBody {
                 }
             }
             if let Some(result) = &terminal.agent_result {
+                let output = result
+                    .subagent_scopes
+                    .iter()
+                    .try_fold(result.main_output_tokens, |sum, scope| {
+                        sum.checked_add(scope.output_tokens)
+                    });
+                let reasoning = result
+                    .subagent_scopes
+                    .iter()
+                    .try_fold(result.main_reasoning_tokens, |sum, scope| {
+                        sum.checked_add(scope.reasoning_tokens)
+                    });
+                if self.observed_unaccounted_records != Some(0)
+                    || output.is_none()
+                    || reasoning.is_none()
+                    || self.observed_output_tokens != output
+                    || self.observed_reasoning_tokens != reasoning
+                    || self.observed_subagent_scope_count != Some(result.subagent_scope_count)
+                {
+                    return Err(ServiceError::Internal(
+                        "certified agent result disagrees with complete output observations".into(),
+                    ));
+                }
                 if result.main_reasoning_tokens > result.main_output_tokens
                     || result.subagent_scope_count != result.subagent_scopes.len() as u64
                     || result.subagent_error_count
@@ -1828,7 +1852,7 @@ fn running_body(
     s: &RunningSnapshot,
     progress: &ProgressEvent,
     progress_events: Vec<ProgressEvent>,
-    output: RunningOutputProgress,
+    output: OutputProgress,
 ) -> SessionBody {
     SessionBody {
         session_id: s.session_id.clone(),
@@ -1866,7 +1890,7 @@ fn running_body_for_entry(cfg: &Config, entry: &RunningEntry) -> ServiceResult<S
     let progress = progress_events.last().cloned().ok_or_else(|| {
         ServiceError::Internal("progress snapshot has no initial accepted event".into())
     })?;
-    let output = read_running_progress(&events_jsonl_path(cfg, &entry.snapshot.session_id))?;
+    let output = read_output_progress(&events_jsonl_path(cfg, &entry.snapshot.session_id))?;
     Ok(running_body(
         &entry.snapshot,
         &progress,
@@ -1920,183 +1944,14 @@ pub fn events_jsonl_path(cfg: &Config, session_id: &str) -> PathBuf {
         .join("events.jsonl")
 }
 
-/// Exact output observations available from one pure snapshot read.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct RunningOutputProgress {
-    pub num_turns: u64,
-    pub last_event_at_unix: Option<u64>,
-    pub output_event_bytes: u64,
-    /// Served tokens summed over the completed billed turns this read could
-    /// account whole, and the distinct subagent scopes it saw: a growing
-    /// lower bound over what has been written, never a terminal verdict.
-    pub observed_output_tokens: u64,
-    pub observed_reasoning_tokens: u64,
-    pub observed_subagent_scope_count: u64,
-    /// Completed records billing a turn whose usage could not be read whole.
-    pub observed_unaccounted_records: u64,
-}
+pub use crate::result_parse::OutputProgress;
 
-/// Read the live `events.jsonl` and return its exact completed-turn count,
-/// modification time, and byte size.
-/// `num_turns` is the number of completed main-thread model invocations. Qwen
-/// stream-JSON can emit zero-usage thinking/text fragments before the one
-/// assistant record carrying final per-invocation usage, so fragments are not
-/// turns. The timestamp is absent only when the file does not exist yet;
-/// malformed or unreadable state is an explicit error.
-///
-/// Cost: a linear byte scan per explicit API read of one session's live
-/// progress, so this favors exactness over a mutable cache.
-pub fn read_running_progress(
-    events_path: &std::path::Path,
-) -> ServiceResult<RunningOutputProgress> {
-    use std::io::{BufReader, Read};
-    use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
-
-    let file = match std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
-        .open(events_path)
-    {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(RunningOutputProgress::default())
-        }
-        Err(error) => {
-            return Err(ServiceError::Internal(io_msg(
-                "read_running_progress: stat",
-                events_path,
-                &error,
-            )))
-        }
-    };
-    let meta = file.metadata().map_err(|error| {
-        ServiceError::Internal(io_msg(
-            "read_running_progress: fstat opened event stream",
-            events_path,
-            &error,
-        ))
-    })?;
-    if !meta.is_file()
-        || meta.permissions().mode() & 0o777 != 0o600
-        || meta.uid() != 1000
-        || meta.gid() != 1000
-    {
-        return Err(ServiceError::Internal(format!(
-            "read_running_progress: {} has unsafe opened type/mode/owner: type={:?} mode={:o} uid={} gid={} expected=1000:1000",
-            events_path.display(),
-            meta.file_type(),
-            meta.permissions().mode() & 0o777,
-            meta.uid(),
-            meta.gid()
-        )));
-    }
-    let modified = meta.modified().map_err(|error| {
-        ServiceError::Internal(io_msg(
-            "read_running_progress: event modification time",
-            events_path,
-            &error,
-        ))
-    })?;
-    let last_event_at_unix = modified
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|error| {
-            ServiceError::Internal(format!(
-                "read_running_progress: event modification time for {} predates the Unix epoch: {error}",
-                events_path.display()
-            ))
-        })?
-        .as_secs();
-    // Freeze this read at the descriptor's observed byte length. The capture
-    // process may append after fstat; those newer bytes belong to a later GET
-    // and must not turn this snapshot into a moving target.
-    let snapshot_len = meta.len();
-    let mut reader = BufReader::new(file.take(snapshot_len));
-    let mut num_turns = 0u64;
-    let mut observed_output_tokens = 0u64;
-    let mut observed_reasoning_tokens = 0u64;
-    let mut observed_unaccounted_records = 0u64;
-    let mut subagent_scopes = std::collections::BTreeSet::<String>::new();
-    let mut index = 0usize;
-    let mut chunk = Vec::new();
-    loop {
-        chunk.clear();
-        let terminated =
-            crate::result_parse::read_bounded_record(&mut reader, &mut chunk, events_path)?;
-        if chunk.is_empty() && !terminated {
-            break;
-        }
-        index = index.checked_add(1).ok_or_else(|| {
-            ServiceError::Internal("read_running_progress: JSONL record count overflowed".into())
-        })?;
-        // `tee` can be observed after writing part of the next JSON object.
-        // That is an explicit in-progress state, not malformed completed
-        // data, so only newline-terminated records participate in progress.
-        if !terminated {
-            break;
-        }
-        if chunk.iter().all(|byte| byte.is_ascii_whitespace()) {
-            continue;
-        }
-        let value: serde_json::Value = serde_json::from_slice(&chunk).map_err(|error| {
-            ServiceError::Internal(format!(
-                "read_running_progress: completed JSONL record {index} is malformed: {error}"
-            ))
-        })?;
-        let object = value.as_object().ok_or_else(|| {
-            ServiceError::Internal(format!(
-                "read_running_progress: completed JSONL record {index} is not an object"
-            ))
-        })?;
-        object
-            .get("type")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| {
-                ServiceError::Internal(format!(
-                    "read_running_progress: completed JSONL record {index} lacks string type"
-                ))
-            })?;
-        let observed = crate::result_parse::observe_record(object);
-        if observed.main_turn {
-            num_turns = num_turns.checked_add(1).ok_or_else(|| {
-                ServiceError::Internal("read_running_progress: turn count overflowed".into())
-            })?;
-        }
-        if let Some(scope) = observed.subagent_scope {
-            subagent_scopes.insert(scope);
-        }
-        if let Some((output, reasoning)) = observed.usage {
-            observed_output_tokens =
-                observed_output_tokens.checked_add(output).ok_or_else(|| {
-                    ServiceError::Internal(
-                        "read_running_progress: output token sum overflowed".into(),
-                    )
-                })?;
-            observed_reasoning_tokens = observed_reasoning_tokens
-                .checked_add(reasoning)
-                .ok_or_else(|| {
-                    ServiceError::Internal(
-                        "read_running_progress: reasoning token sum overflowed".into(),
-                    )
-                })?;
-        }
-        if observed.usage_unreadable {
-            observed_unaccounted_records =
-                observed_unaccounted_records.checked_add(1).ok_or_else(|| {
-                    ServiceError::Internal(
-                        "read_running_progress: unaccounted record count overflowed".into(),
-                    )
-                })?;
-        }
-    }
-    Ok(RunningOutputProgress {
-        num_turns,
-        last_event_at_unix: Some(last_event_at_unix),
-        output_event_bytes: meta.len(),
-        observed_output_tokens,
-        observed_reasoning_tokens,
-        observed_subagent_scope_count: subagent_scopes.len() as u64,
-        observed_unaccounted_records,
-    })
+/// Read the same immutable event snapshot used by terminal certification.
+/// No file means no output has been observed; unreadable storage is an error.
+pub fn read_output_progress(events_path: &Path) -> ServiceResult<OutputProgress> {
+    Ok(crate::result_parse::read_event_snapshot(events_path)?
+        .map(|snapshot| snapshot.observed)
+        .unwrap_or_default())
 }
 
 pub fn preview(s: &str) -> String {
@@ -4193,7 +4048,7 @@ mod tests {
         finish_delete_intent, grant_owner_write_recursively, is_current_session_id,
         is_safe_session_id, persist_cancel_intent, persist_delete_intent,
         persist_terminal_transaction, prepare_durable_acceptance, prepare_terminal,
-        read_cancel_intent, read_delete_intent, read_running_progress, read_terminal,
+        read_cancel_intent, read_delete_intent, read_output_progress, read_terminal,
         reconcile_unpublished_cancel_intent, reconcile_unpublished_delete_intent,
         remove_terminalized_state, resume_prepared_terminal_transaction, rewrite_prepared_terminal,
         AcceptanceRecord, AgentResult, CancelIntent, LifecycleTracker, SessionBody, SessionStatus,
@@ -4304,6 +4159,14 @@ mod tests {
         bytes
     }
 
+    fn event_init() -> String {
+        serde_json::json!({
+            "type": "system", "subtype": "init", "uuid": "init", "session_id": "a",
+            "cwd": "/workspace", "tools": ["agent", "edit", "glob", "grep_search", "list_directory", "notebook_edit", "read_file", "run_shell_command", "todo_write", "write_file"],
+            "mcp_servers": [], "model": "qwen3.8-27b-nvfp4-k8v4", "permission_mode": "yolo", "slash_commands": [], "qwen_code_version": "0.21.12", "agents": ["Explore", "general-purpose"]
+        }).to_string() + "\n"
+    }
+
     fn body(session_id: &str) -> SessionBody {
         SessionBody {
             session_id: session_id.to_string(),
@@ -4347,10 +4210,10 @@ mod tests {
                 }),
                 bundle: None,
             }),
-            observed_output_tokens: None,
-            observed_reasoning_tokens: None,
-            observed_subagent_scope_count: None,
-            observed_unaccounted_records: None,
+            observed_output_tokens: Some(0),
+            observed_reasoning_tokens: Some(0),
+            observed_subagent_scope_count: Some(0),
+            observed_unaccounted_records: Some(0),
         }
     }
 
@@ -4377,12 +4240,12 @@ mod tests {
             &snapshot,
             &progress,
             vec![progress.clone()],
-            super::RunningOutputProgress {
+            super::OutputProgress {
                 observed_output_tokens: 123,
                 observed_reasoning_tokens: 100,
                 observed_subagent_scope_count: 2,
                 observed_unaccounted_records: 1,
-                ..super::RunningOutputProgress::default()
+                ..super::OutputProgress::default()
             },
         );
         running.validate_shape().expect("valid running snapshot");
@@ -4527,11 +4390,31 @@ mod tests {
         serde_json::from_value::<SessionBody>(json).expect("explicit nulls are valid");
     }
 
+    #[test]
+    fn terminal_retains_partial_observations_without_certifying_a_result() {
+        let mut terminal = body("s-44444444444444444444444444444444");
+        terminal.terminal_mut().agent_result = None;
+        terminal.observed_output_tokens = Some(123);
+        terminal.observed_reasoning_tokens = Some(90);
+        terminal.observed_subagent_scope_count = Some(0);
+        terminal.observed_unaccounted_records = Some(1);
+        terminal.validate_shape().unwrap();
+        let json = serde_json::to_value(&terminal).unwrap();
+        assert_eq!(json["observed_output_tokens"], 123);
+        assert!(json["terminal"]["agent_result"].is_null());
+        let decoded: SessionBody = serde_json::from_value(json).unwrap();
+        decoded.validate_shape().unwrap();
+    }
+
     #[tokio::test]
-    async fn terminal_prepare_rejects_every_live_tally_before_creating_files() {
+    async fn terminal_prepare_rejects_incomplete_observation_groups_before_creating_files() {
         let directory = std::env::temp_dir().join(format!("qwen38-shape-{}", uuid::Uuid::new_v4()));
         for index in 0..4 {
             let mut terminal = body("s-44444444444444444444444444444444");
+            terminal.observed_output_tokens = None;
+            terminal.observed_reasoning_tokens = None;
+            terminal.observed_subagent_scope_count = None;
+            terminal.observed_unaccounted_records = None;
             match index {
                 0 => terminal.observed_output_tokens = Some(0),
                 1 => terminal.observed_reasoning_tokens = Some(0),
@@ -4540,8 +4423,8 @@ mod tests {
             }
             let error = super::prepare_terminal(&directory, &terminal)
                 .await
-                .expect_err("reject live tally");
-            assert!(error.to_string().contains("live-progress"));
+                .expect_err("reject incomplete observation group");
+            assert!(error.to_string().contains("output-observation"));
             assert!(!directory.exists());
         }
         let mut terminal = body("s-55555555555555555555555555555555");
@@ -5190,19 +5073,20 @@ mod tests {
     }
 
     #[test]
-    fn running_progress_is_descriptor_anchored_and_ignores_only_partial_tail() {
+    fn output_progress_is_descriptor_anchored_and_marks_partial_tail() {
         let tree = TestTree::new("running-progress");
         let events = tree.0.join("events.jsonl");
         let bytes = concat!(
-            "{\"type\":\"system\",\"session_id\":\"fixture\"}\n",
             "{\"type\":\"assistant\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":7}}}\n",
             "{\"type\":\"assistant\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":9}}}"
         );
+        let bytes = event_init() + bytes;
         private_write(&events, bytes.as_bytes());
         make_service_owned(&events);
 
-        let observed = read_running_progress(&events).expect("read exact event snapshot");
-        assert_eq!(observed.num_turns, 1);
+        let observed = read_output_progress(&events).expect("read exact event snapshot");
+        assert_eq!(observed.num_turns, 0);
+        assert_eq!(observed.observed_unaccounted_records, 2);
         assert_eq!(observed.output_event_bytes, bytes.len() as u64);
         assert!(observed
             .last_event_at_unix
@@ -5212,9 +5096,9 @@ mod tests {
         private_write(&outside, bytes.as_bytes());
         std::fs::remove_file(&events).expect("remove original event file");
         symlink(&outside, &events).expect("replace event path with hostile symlink");
-        let error = read_running_progress(&events)
+        let error = read_output_progress(&events)
             .expect_err("descriptor open must reject a symlink rather than follow it");
-        assert!(error.to_string().contains("read_running_progress: stat"));
+        assert!(error.to_string().contains("without following links"));
         assert_eq!(
             std::fs::read(&outside).expect("read untouched outside events"),
             bytes.as_bytes()
@@ -5222,16 +5106,15 @@ mod tests {
     }
 
     #[test]
-    fn running_progress_rejects_malformed_completed_records() {
+    fn output_progress_retains_malformed_completed_records_as_unaccounted() {
         let tree = TestTree::new("running-progress-malformed");
         let events = tree.0.join("events.jsonl");
         private_write(&events, b"{not-json}\n");
         make_service_owned(&events);
-        let error = read_running_progress(&events)
-            .expect_err("newline-terminated malformed JSON is durable bad evidence");
-        assert!(error
-            .to_string()
-            .contains("completed JSONL record 1 is malformed"));
+        let observed =
+            read_output_progress(&events).expect("malformed record is explicitly unaccounted");
+        assert_eq!(observed.observed_unaccounted_records, 1);
+        assert_eq!(observed.observed_output_tokens, 0);
     }
 
     #[test]
@@ -5260,5 +5143,114 @@ mod tests {
             std::fs::read(outside.join("sentinel")).expect("read preserved sentinel"),
             b"preserve"
         );
+    }
+    #[test]
+    fn terminal_cannot_publish_a_certified_result_with_unaccounted_records() {
+        let mut terminal = body("s-44444444444444444444444444444444");
+        terminal.observed_output_tokens = Some(0);
+        terminal.observed_reasoning_tokens = Some(0);
+        terminal.observed_subagent_scope_count = Some(0);
+        terminal.observed_unaccounted_records = Some(1);
+        assert!(
+            terminal.validate_shape().is_err(),
+            "explicitly incomplete evidence cannot accompany a certified complete result"
+        );
+    }
+
+    #[test]
+    fn output_progress_preserves_known_usage_and_explicit_tail_without_a_result() {
+        let tree = TestTree::new("partial-known-usage");
+        let events = tree.0.join("events.jsonl");
+        let bytes = concat!(
+            "{\"type\":\"assistant\",\"uuid\":\"main\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":7,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0,\"total_tokens\":16}}}\n",
+            "{\"type\":\"assistant\",\"uuid\":\"child\",\"session_id\":\"a\",\"parent_tool_use_id\":\"child-scope\",\"message\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":8,\"reasoning_output_tokens\":4,\"cache_read_input_tokens\":0,\"total_tokens\":13}}}\n",
+            "{\"type\":\"result\"}"
+        );
+        let bytes = event_init() + bytes;
+        private_write(&events, bytes.as_bytes());
+        make_service_owned(&events);
+        let observed = read_output_progress(&events).unwrap();
+        let snapshot = crate::result_parse::read_event_snapshot(&events)
+            .unwrap()
+            .unwrap();
+        assert_eq!(observed, snapshot.observed);
+        assert!(snapshot.certified.is_err());
+        assert_eq!(observed.num_turns, 1);
+        assert_eq!(observed.observed_output_tokens, 17);
+        assert_eq!(observed.observed_reasoning_tokens, 10);
+        assert_eq!(observed.observed_subagent_scope_count, 1);
+        assert_eq!(observed.observed_unaccounted_records, 1);
+    }
+    #[test]
+    fn certified_terminal_requires_matching_complete_observations() {
+        for field in ["output", "reasoning", "scopes", "absent"] {
+            let mut terminal = body("s-44444444444444444444444444444444");
+            match field {
+                "output" => terminal.observed_output_tokens = Some(1),
+                "reasoning" => terminal.observed_reasoning_tokens = Some(1),
+                "scopes" => terminal.observed_subagent_scope_count = Some(1),
+                _ => {
+                    terminal.observed_output_tokens = None;
+                    terminal.observed_reasoning_tokens = None;
+                    terminal.observed_subagent_scope_count = None;
+                    terminal.observed_unaccounted_records = None;
+                }
+            }
+            assert!(terminal.validate_shape().is_err(), "{field}");
+        }
+    }
+
+    #[test]
+    fn partial_terminal_observation_counts_must_preserve_reasoning_nesting() {
+        let mut terminal = body("s-44444444444444444444444444444444");
+        terminal.terminal_mut().agent_result = None;
+        terminal.observed_output_tokens = Some(1);
+        terminal.observed_reasoning_tokens = Some(2);
+        terminal.observed_unaccounted_records = Some(1);
+        assert!(
+            terminal.validate_shape().is_err(),
+            "even partial served observations cannot contain more reasoning than total output"
+        );
+    }
+
+    #[test]
+    fn persisted_child_usage_cannot_default_missing_counts_to_certified_zero() {
+        let terminal = body("s-44444444444444444444444444444444");
+        let mut encoded = serde_json::to_value(&terminal).unwrap();
+        encoded["observed_subagent_scope_count"] = serde_json::json!(1);
+        encoded["terminal"]["agent_result"]["subagent_scope_count"] = serde_json::json!(1);
+        encoded["terminal"]["agent_result"]["subagent_scopes"] = serde_json::json!([{
+            "tool_use_id": "child", "tool_name": "agent", "billed_turns": 1,
+            "reported_num_turns": null, "is_error": null, "subtype": null, "error_message": null
+        }]);
+        assert!(
+            serde_json::from_value::<SessionBody>(encoded).is_err(),
+            "missing child served counts are unknown, never certified zero"
+        );
+    }
+    #[test]
+    fn persisted_child_terminal_absence_requires_explicit_nullable_fields() {
+        let terminal = body("s-44444444444444444444444444444444");
+        let mut encoded = serde_json::to_value(&terminal).unwrap();
+        encoded["observed_subagent_scope_count"] = serde_json::json!(1);
+        encoded["terminal"]["agent_result"]["subagent_scope_count"] = serde_json::json!(1);
+        encoded["terminal"]["agent_result"]["subagent_scopes"] = serde_json::json!([{
+            "tool_use_id": "child", "tool_name": "agent", "billed_turns": 1,
+            "output_tokens": 0, "reasoning_tokens": 0,
+            "reported_num_turns": null, "is_error": null, "subtype": null, "error_message": null
+        }]);
+        let complete: SessionBody = serde_json::from_value(encoded.clone()).unwrap();
+        complete.validate_shape().unwrap();
+        for field in ["reported_num_turns", "is_error", "subtype", "error_message"] {
+            let mut missing = encoded.clone();
+            missing["terminal"]["agent_result"]["subagent_scopes"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove(field);
+            assert!(
+                serde_json::from_value::<SessionBody>(missing).is_err(),
+                "{field}"
+            );
+        }
     }
 }

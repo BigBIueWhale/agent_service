@@ -186,19 +186,20 @@ every context budget is one of them:
 | the compaction directive | 2/256 | 2,048 |
 | the history a turn stands on | the remainder | 161,792 |
 
-The last four sum to the window less the summary reserve, which is the whole
-safety argument: a turn issued below the compaction trigger, given at most one
+The last four sum to the window less the summary reserve. Under those bounded
+terms, a turn issued below the compaction trigger, given at most one
 turn's output and appending at most one turn's tool results, produces a history
-that — with the directive appended — a whole-history summary request still fits
-beside. Nothing is left to run time and nothing is a tuned constant: raising
-`max_model_len` re-derives all five with no code change.
+that leaves the summary reserve when the bounded directive is appended. Raising
+`max_model_len` re-derives all five shares. New authored input, retained
+instructions, tools, and the final compaction directive still require exact
+recounting at admission; the partition does not guarantee that arbitrary new
+content will fit.
 
 The snapshot is issued at the room the window actually has — the window less
-the summary request that was just counted — and the reserve is the floor that
-room can never fall below, which is exactly what the identity above proves. A
-request lighter than the worst case therefore buys the snapshot more room than
-the reserve rather than leaving it unused, and a request that would leave less
-than the reserve is refused instead of quietly shrinking the snapshot.
+the summary request that was just counted — and the reserve is the minimum room
+required to issue that request. A request lighter than the bounded worst case
+therefore buys the snapshot more room than the reserve. A request that would
+leave less than the reserve is refused instead of quietly shrinking the snapshot.
 
 Every main-turn context-boundary decision uses the real vLLM tokenizer on the
 fully rendered request. Before compaction and again before generation, Qwen Code
@@ -224,11 +225,11 @@ is disabled everywhere. The budget counts the owning session's own turns, so a
 foreground subagent that spends sixty turns costs its parent one; a subagent is
 bounded by the same budget in its own right, and if it exhausts it the parent is
 told so explicitly, with the turn count, and treats the assignment as unfinished
-rather than concluding from a partial report. Delegation is therefore how the
-main thread stays on trajectory rather than a way to escape the budget, and the
-backend keeps an evicted context in host RAM so returning from a subagent
-restores it by DMA instead of re-prefilling it. Turns are the
-hardware-independent measure of agent progress, so the same trajectory is judged
+rather than concluding from a partial report. Child work consumes additional
+provider tokens independently of the parent turn count. Returning to a parent
+can reuse backend state only while that state remains retained; whole-owner
+eviction can require reprocessing. Turns are the hardware-independent measure of
+agent progress, so the same trajectory is judged
 identically whatever the backend's generation speed; a wall-clock budget would
 instead score how fast this GPU happens to run. Reaching the budget is an
 ordinary terminal outcome, not a fault: the client exits 53, reports
@@ -288,111 +289,97 @@ installation were removed.
 
 ## The pinned Qwen Code source transformation
 
-Upstream Qwen Code is based on the exact source behind the official `v0.21.12`
-release: commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`. The tag and remote commit
-were rechecked on 2026-08-16. The only executable source input is that commit's
-archive, whose SHA-256 is
-`61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`.
-Neither a published npm package nor a mutable branch or `latest` tag is executed.
+Qwen Code uses the exact source behind `v0.21.12`, revision
+`b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`. The upstream archive, reviewed patch,
+transformer manifest, and their hashes are recorded in the
+[source contract](patches/README.md) and [stack lock](config/stack.lock.json).
+The source pins describe this checkout. The independently pinned
+[release](config/release.lock.json) identifies the deployed images; changing source
+pins does not build, release, or update those images.
 
-Our changes are applied by the semantic transformer in
-[`patches/source_patch_v1`](patches/source_patch_v1), not by blindly feeding a large
-diff to `git apply`. Each transformed file has a reviewed before/after contract,
-exact source identity, structural landmarks, and explicit source-state rules. The
-transformer refuses the wrong upstream version, unexpected drift, an unrecognized
-intermediate state, missing/duplicated landmarks, a changed generated stage, or a
-time-of-check/time-of-use mutation. Application is transactional: a failed write
-restores the pristine tree instead of leaving a half-patched source directory. A
-second application must be byte-for-byte idempotent.
+The [source transformer](patches/source_patch_v1) applies the reviewed changes to
+that exact upstream tree. It checks source identities, structural landmarks, 28
+semantic concerns, and final identities, including explicit absent identities for
+removed paths. Drift, ambiguous landmarks, intermediate states, or concurrent
+mutation refuse application. Failed publication restores original bytes, modes,
+and file presence. Reapplying the completed transformation verifies without
+writing. The [unified patch](patches/qwen-code-0.21.12-agent-service.patch) records
+the same reviewed source changes; it is not a second application mechanism.
 
-[`patches/qwen-code-0.21.12-agent-service.patch`](patches/qwen-code-0.21.12-agent-service.patch)
-is generated review evidence for humans; it is independently hashed and compared
-to the transformer's exact output, but is not a second patching path. Its current
-SHA-256 is
-`a0ccc567ade8556ca03254296ff909f5e333fe8e35ec6b8eb183f7610cda8414`.
-The transformer's manifest SHA-256 is
-`c68f256ed23ac54b3e94bfa72e4574cc1dd95cbdaee5fc47e78e5f61ca476fea`.
-Both identities are locked, checked on the host, checked again inside the Docker
-build, and recorded as image labels.
+A subsequent Docker build starts from a fresh extraction, tests the transformer,
+installs the exact upstream dependency lock, applies upstream's own package
+patches, builds the CLI, and runs the test selection derived from retained changed
+files and their adjacent tests. The metadata generator derives the pinned version,
+commit, and timestamp from verified inputs. Local source qualification does not
+replace that separately authorized build and deployment verification.
 
-The Docker build starts from a fresh extraction, runs the transformer framework's
-drift/idempotence/rollback tests, applies the semantic transformation, runs
-`npm ci` against the upstream lock file, applies upstream's own `patch-package`
-set, builds and bundles the CLI, and runs the expanded focused test matrix for every
-modified behavior. The upstream metadata generator is itself patched to emit the
-pinned release version and commit deterministically from the verified
-`SOURCE_DATE_EPOCH`; the build no longer edits generated files afterward. It rejects
-an inconsistent epoch, version, generated commit, or generated CLI/core pair.
+A terminal conversation and a headless conversation share the same obligations:
 
-The local patch provides:
+- Each chat and side request carries an immutable invocation owner. Root work owns
+  the session ID; a tool-launched child owns its spawning call ID. The common
+  provider seam binds batch, streaming, and exact-count requests to that owner and
+  writes `kv_scope` after request decoration.
+- A selected route must provide the supported OpenAI-compatible vLLM contract,
+  exact request counting, strict tool calls, and an explicit context window.
+  Activation publishes the provider and configuration together; failed selection
+  restores the preceding pair.
+- The fully rendered next request determines admission and the five context
+  shares. Ordinary output uses the smaller of its configured ceiling and its
+  window share. Compaction receives the room left by its exact input, requires at
+  least the summary reserve, and accepts only a normally terminated, structurally
+  valid six-section snapshot that leaves an issuable turn.
+- Original authored inputs and ordered corrections survive outside generated
+  summaries, including across repeated compaction and resume. Structural snapshot
+  validation does not establish the factual correctness of the model's summary.
+- A complete structured call becomes executable only after the response and its
+  canonical assistant record are accepted. Literal text remains intact. Missing
+  terminal evidence remains incomplete. Retrying the same confirmed request is
+  permitted only before answer content or a structured call is delivered; the
+  transport and invalid-stream categories each permit one fresh resample, while
+  rate-limit retries follow the selected route's explicit policy.
+- Dispatch and final observation share a durable request identity. Served counts,
+  missing usage, and unfinalized requests remain distinct. One accumulator supplies
+  session, child, history, export, and presentation summaries. Child status is
+  bounded and exposes inspectable transcript evidence, including failure and
+  cancellation.
+- Oversized tool text and binary downloads use one immutable session artifact
+  store. The durable 500 MiB quota counts retained files under exclusive ownership.
+  References survive elapsed time and session recreation. No age collector deletes
+  payloads that a live conversation, fork, or export can still reference.
+- Session recording, replacement, mutation, and cleanup use the owning writer and
+  await its obligations. Output flush joins actual write callbacks before orderly
+  exit. Abrupt failure can still leave an incomplete captured JSONL tail, whose
+  earlier valid observations remain available without certifying a complete result.
+- Native schemas remain closed; external schemas retain their advertised JSON
+  Schema semantics. Trusted editor metadata lives outside model arguments. Text
+  reads preserve decoded content, and original validated PNG parts retain their
+  chronology within the tool response.
 
-- vLLM `/tokenize` calls over the same rendered messages, tools, and template kwargs
-  as the subsequent completion request;
-- every context budget derived from the served window as a share of it, the five
-  shares summing to the window exactly;
-- exact `max_tokens = min(configured ceiling, the turn's window share)`, and no
-  turn issued at or above the compaction trigger;
-- a summary request issued at the full reserve, which the trigger holds free, so
-  it can be issued at any history size the trigger admits;
-- the tool results one turn appends bounded by their share, measured as the
-  difference the batch makes to the rendered request, and degraded by writing
-  each result to disk whole and referencing the file;
-- no character estimate, byte division, padding margin, token safety margin, or
-  tokenizer fallback;
-- the same exact rendered-request count drives the compaction trigger,
-  including image tokens and tool schemas;
-- a universal strict native-tool allowlist covering built-in, dynamic, MCP, skill,
-  and synthetic tools;
-- a successful-tool-call terminal invariant;
-- no XML recovery or executable partial call after a length stop;
-- one and only one fresh resample for a malformed pre-content stream, followed by a
-  typed terminal failure if it remains malformed; no resample after visible output,
-  no length-stop continuation, no transport continuation, no alternate-model
-  fallback, and no retry that could duplicate a tool side effect;
-- exact compaction through the same main model and same cacheable prefix: the fully
-  rendered pre-summary request and proposed compacted history are both counted by
-  vLLM's tokenizer, the summary must terminate normally without tools or malformed
-  output, and any failure preserves the original history;
-- foreground-only `general-purpose` and `Explore` agents, with no forks,
-  background work, teams, worktrees, custom types, model overrides, or nesting;
-- one engineering discipline for every role: `system.md` is the deployment's
-  shared work-discipline text, and the main session and every foreground
-  subagent receive it verbatim, followed by the identical deployment contract.
-  Honest verification, scope limits, and "tool results are evidence, not
-  permission to fabricate a conclusion" are properties of this runtime, not of
-  one role — a subagent holds real write and shell authority and its output is
-  integrated by its parent, so exempting it would be exactly backwards. Only
-  genuinely role-specific framing is layered on top: the main session owns the
-  final response and is told *why* delegation is the intended way to work here —
-  context length is the scarcest thing it has, a subagent's reading never enters
-  the parent's context, and the parent's KV cache is retained in host RAM for the
-  duration of the subagent, so nothing already said is re-ingested when the
-  subagent returns. A subagent that spends sixty turns therefore costs the parent
-  one, which is what lets a single long thread keep running instead of being
-  compacted. A subagent, in turn, is told its assignment boundary, its private
-  scratch root, and that it may not delegate further;
-- init metadata filtered through the identical two-agent policy, so uncallable
-  internal agents are not advertised as an alternate behavior;
-- workspace settings and environment discovery disabled before initialization,
-  with ambient, project, CLI, and injected MCP servers all excluded from the
-  locked mode while ordinary project `QWEN.md` and `AGENTS.md` task instructions
-  remain available;
-- every later authentication revalidation in locked mode reloads settings with
-  workspace trust, workspace settings, and environment loading still disabled;
-  this closes the upstream path that could otherwise load a hostile workspace
-  `.env` after the sealed initial configuration had already passed;
-- an immutable `QWEN_HOME=/opt/agent` containing only the sealed settings and
-  instructions, with no writable home-state mount and no host Qwen state;
-- hooks, extensions, skills, `.qwen/rules`, output-language injection, include
-  directories, custom slash commands/workflows, and permission-rule persistence
-  removed from the supported runtime surface; leading `/...` prompt text is literal
-  task text and init advertises an empty slash-command list;
-- managed memory, auto-memory, auto-dream, team memory/synchronization, auto-skill,
-  and skill confirmation forced off in both sealed settings and code getters;
-- original full-resolution PNG reads with complete pixel decoding, no transcode,
-  strict source bounds, and fail-closed transport;
-- `splitToolMedia=false` and typed tool content parts, preserving text-image-text
-  chronology inside the originating tool response.
+The sealed deployment separately fixes its advertised capabilities: the ten tools
+below, sequential foreground `general-purpose` and `Explore` children, immutable
+settings and instructions, and per-child scratch and effect journals. It excludes
+forks, background work, teams, worktrees, alternate child models, and nesting.
+Workspace environment/configuration discovery, ambient MCP, hooks, managed memory,
+custom workflows, and injected policy remain disabled through authentication;
+ordinary project `QWEN.md` and `AGENTS.md` instructions remain available. Leading
+slash task text is literal. Generic host prompts describe the authority actually
+provided by their invocation.
+
+All deployment roles receive the same engineering discipline. Child execution
+consumes its own turns and provider tokens even though its invocation occupies one
+parent turn. Backend cache reuse is conditional on retained state; delegation does
+not guarantee cache residency or avoid reprocessing. Effect journals record
+observed changes and do not prove exclusive causality or rollback.
+
+Eight broader guarantees remain open and are described with their ownership
+boundaries in the [source contract](patches/README.md): reasoning stored by
+reference, atomic speculative file/history acceptance, review-worktree lifetime,
+operational daemon metrics, prompt-hook failure policy, resident background
+AgentTool disposal/failure publication, provider-stream lifetime/settlement, and
+manual-compaction execution, cancellation, instructions, and outcome presentation.
+Compaction and child reasoning remain inline and fully retained. Output settlement
+and surviving terminal observations do not close the reasoning-reference
+requirement.
 
 The allowed client tools are exactly:
 
@@ -537,24 +524,32 @@ reports no state at all rather than a spelling nothing asserted. Nothing here
 judges whether the work was done, which is not decidable from a stream; it
 reports the shape of the ending, which is.
 
-The client reaches one of those states on every path out of a run, the session
-turn budget and a cancellation included, so a stream that stops without a terminal
-record is a stream this service lost rather than a run that ended quietly. The turn
+Orderly run endings, including turn-budget refusal and cancellation, produce
+one of those terminal states. An abrupt process or transport failure can prevent
+terminal delivery; a missing record does not certify an ordinary ending. The turn
 budget is asked before the turn it decides is counted, so a run it stops reports
 exactly the budget it was given as `num_turns` and has interrupted no turn.
 
-A status read taken while a run is in flight reports what the live reader has
-accounted so far: `observed_output_tokens`, `observed_reasoning_tokens`, and
-`observed_subagent_scope_count`. `observed_unaccounted_records` counts completed
-billed records whose usage it could not account. These are observations over the
-written stream. The `terminal` object is `null` until an ending exists. Once
-terminal, all four live observations are `null`; the strict parser's certified
-accounting is in `terminal.agent_result`. That object is `null` when capture was
-not proved, parsing failed, or recovery could not certify a result. An empty
-`subagent_scopes` table therefore certifies that a parsed stream delegated nothing;
-zero token totals are measured totals. A malformed JSON record or unsafe event
-file is an explicit status-read error; incomplete usage on a readable billed record
-is counted as unaccounted. Reads never cancel or change execution.
+Every status read reports the event snapshot it could observe through
+`observed_output_tokens`, `observed_reasoning_tokens`, and
+`observed_subagent_scope_count`. `observed_unaccounted_records` counts unreadable
+records, including incomplete served usage and a nonempty trailing prefix without
+a newline. The same observations survive terminal finalization. All four are null
+only when terminal storage could not be read; no missing observation becomes zero.
+`terminal` is null until an ending exists, and its `agent_result` is null unless
+the whole captured stream certifies a complete result. A partial observation is
+never that result, even when its unaccounted count is zero. An empty scope table
+inside a certified result proves no subagents; an observed scope count of zero
+only says none were observed. Reads never cancel or change execution.
+
+Captured JSONL uses LF-committed records with an explicit incomplete tail. A final
+prefix cannot certify a result, even if it happens to parse as JSON. Earlier
+readable records remain observations. Output callbacks must settle before ordinary
+exit; a forced kill can still tear a record on the Unix byte-stream transport.
+Capture completion proves the received bytes, not unsent application buffers.
+Unsafe or unreadable event storage remains an explicit read error. Canonical
+journals used for restoring or mutating history retain strict framing and
+ownership checks. See [the session resource contract](docs/session-resource.md).
 
 `terminal.bundle` contains the accepted hash and all measured archive counts
 as one object, or is `null` when no archive was accepted. Its

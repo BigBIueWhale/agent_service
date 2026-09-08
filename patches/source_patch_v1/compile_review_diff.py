@@ -57,50 +57,35 @@ def emit_python(value: object) -> str:
 
 
 def line_offset(text: str, one_based_line: int) -> int:
-    """Byte offset of a review-diff line number in the text being patched.
-
-    The number is stated in the pre-image's coordinates while `text` is the
-    file as the review's earlier hunks have already left it, so the two agree
-    only until the first hunk that changes a line count. It is used solely to
-    choose between equal occurrences, so a number past the end of `text` means
-    "late in the file" and resolves to its end.
-    """
-
-    if one_based_line < 1:
-        raise PatchRefusedError(f"invalid one-based line {one_based_line}")
+    """Character offset in the current preimage after preceding hunks."""
     lines = text.splitlines(keepends=True)
+    if one_based_line < 1 or one_based_line > len(lines):
+        raise PatchRefusedError(f"invalid current source line {one_based_line}")
     return sum(len(line) for line in lines[: one_based_line - 1])
-
-
-def occurrence_offsets(text: str, needle: str) -> list[int]:
-    if needle == "":
-        return [0] if text == "" else []
-    offsets: list[int] = []
-    start = 0
-    while True:
-        found = text.find(needle, start)
-        if found < 0:
-            return offsets
-        offsets.append(found)
-        start = found + 1
 
 
 def expand_to_unique_landmark(
     current: str,
     review_before: str,
     review_after: str,
-    old_start: int,
+    current_start: int,
 ) -> tuple[str, str]:
-    offsets = occurrence_offsets(current, review_before)
-    if len(offsets) == 1 and current.count(review_after) == 0:
+    if review_after == "":
+        if current != review_before:
+            raise PatchRefusedError("deletion must describe the complete source file")
         return review_before, review_after
     if review_before == "":
-        raise PatchRefusedError("new-file review hunk unexpectedly has source text")
+        if current != "":
+            raise PatchRefusedError("new-file review hunk unexpectedly has source text")
+        return review_before, review_after
 
-    expected_offset = line_offset(current, old_start)
-    selected = min(offsets, key=lambda offset: abs(offset - expected_offset))
-    if offsets.count(selected) != 1:
-        raise PatchRefusedError("cannot select a unique review-hunk occurrence")
+    selected = line_offset(current, current_start)
+    if current[selected : selected + len(review_before)] != review_before:
+        raise PatchRefusedError(
+            "review hunk does not match its exact current source line"
+        )
+    if current.count(review_before) == 1:
+        return review_before, review_after
 
     line_starts = [0]
     for match in re.finditer("\n", current):
@@ -119,7 +104,7 @@ def expand_to_unique_landmark(
         suffix = current[suffix_start:suffix_end]
         expanded_before = prefix + review_before + suffix
         expanded_after = prefix + review_after + suffix
-        if current.count(expanded_before) == 1 and current.count(expanded_after) == 0:
+        if current.count(expanded_before) == 1:
             return expanded_before, expanded_after
     raise PatchRefusedError("could not expand an ambiguous hunk to unique landmarks")
 
@@ -167,19 +152,18 @@ def main() -> None:
                 current,
                 parsed_edit.before,
                 parsed_edit.after,
-                parsed_edit.old_start,
+                parsed_edit.new_start,
             )
             before_count = current.count(landmark_before)
-            after_count = current.count(landmark_after)
-            if before_count != 1 or after_count != 0:
+            if before_count != 1:
                 raise PatchRefusedError(
                     f"{stage_arg.name}:{parsed_edit.path}:landmark-{index}: "
-                    f"before_count={before_count}, after_count={after_count}"
+                    f"before_count={before_count}"
                 )
             state[parsed_edit.path] = current.replace(
                 landmark_before, landmark_after, 1
             )
-            exists_state[parsed_edit.path] = True
+            exists_state[parsed_edit.path] = landmark_after != ""
             edits.append(
                 {
                     "name": f"{parsed_edit.path}:landmark-{index}",
@@ -196,7 +180,9 @@ def main() -> None:
                 {
                     "path": relative,
                     "before_sha256": before_by_path[relative],
-                    "after_sha256": sha256_text(state[relative]),
+                    "after_sha256": sha256_text(state[relative])
+                    if exists_state[relative]
+                    else None,
                 }
             )
         stages.append(
@@ -209,7 +195,10 @@ def main() -> None:
             }
         )
 
-    final_files = {path: sha256_text(state[path]) for path in sorted(all_first)}
+    final_files = {
+        path: sha256_text(state[path]) if exists_state[path] else None
+        for path in sorted(all_first)
+    }
     output = (
         '"""Generated redundant landmark blocks; see compile_review_diff.py."""\n\n'
         f"SOURCE_REVISION = {args.source_revision!r}\n\n"

@@ -60,8 +60,9 @@ class LandmarkEdit:
 
     ``before`` and ``after`` include the surrounding source landmarks needed
     to identify the intended construct.  An edit applies only when ``before``
-    occurs exactly once and ``after`` does not already occur outside that
-    block.  Whole-file hashes provide the stronger outer identity boundary.
+    occurs exactly once. Whole-file before and after hashes distinguish pristine,
+    completed, and partial states; the replacement may already occur in the
+    original text, as it does when an edit removes a final block.
     """
 
     name: str
@@ -116,17 +117,22 @@ class LandmarkEdit:
 class FileIdentity:
     path: str
     before_sha256: str | None
-    after_sha256: str
+    after_sha256: str | None
 
     def __post_init__(self) -> None:
         _safe_relative_path(self.path)
+        _require(
+            self.before_sha256 is not None or self.after_sha256 is not None,
+            f"{self.path}: a file cannot be absent before and after a change",
+        )
         if self.before_sha256 is not None:
             _require(
                 bool(re.fullmatch(r"[0-9a-f]{64}", self.before_sha256)),
                 f"{self.path}: invalid before SHA-256",
             )
         _require(
-            bool(re.fullmatch(r"[0-9a-f]{64}", self.after_sha256)),
+            self.after_sha256 is None
+            or bool(re.fullmatch(r"[0-9a-f]{64}", self.after_sha256)),
             f"{self.path}: invalid after SHA-256",
         )
 
@@ -177,13 +183,18 @@ class PatchSet:
     source_revision: str
     identity_files: Mapping[str, str]
     stages: tuple[PatchStage, ...]
-    final_files: Mapping[str, str]
+    final_files: Mapping[str, str | None]
     validate_final: StateValidator
 
     def __post_init__(self) -> None:
         _require(bool(self.name.strip()), "patch set has an empty name")
         _require(bool(self.source_revision.strip()), f"{self.name}: empty revision")
         _require(bool(self.stages), f"{self.name}: no stages")
+        changed_paths = {file.path for stage in self.stages for file in stage.files}
+        _require(
+            not changed_paths.intersection(self.identity_files),
+            f"{self.name}: immutable identity files cannot also be transformed",
+        )
         for path, digest in self.identity_files.items():
             _safe_relative_path(path)
             _require(
@@ -193,7 +204,7 @@ class PatchSet:
         for path, digest in self.final_files.items():
             _safe_relative_path(path)
             _require(
-                bool(re.fullmatch(r"[0-9a-f]{64}", digest)),
+                digest is None or bool(re.fullmatch(r"[0-9a-f]{64}", digest)),
                 f"{self.name}: invalid final digest for {path}",
             )
 
@@ -292,9 +303,7 @@ class _ParsedReviewEdit:
 
 
 _DIFF_HEADER = re.compile(r"^diff --git a/(.+) b/(.+)$")
-_HUNK_HEADER = re.compile(
-    r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@"
-)
+_HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
 
 def _parse_review_diff(data: bytes, *, label: str) -> tuple[_ParsedReviewEdit, ...]:
@@ -368,8 +377,8 @@ class SourcePatchTransaction:
         self.source_root = source_root.resolve(strict=True)
         self.artifact_root = artifact_root.resolve(strict=True)
         self.patchset = patchset
-        _require(self.source_root.is_dir(), f"source root is not a directory")
-        _require(self.artifact_root.is_dir(), f"artifact root is not a directory")
+        _require(self.source_root.is_dir(), "source root is not a directory")
+        _require(self.artifact_root.is_dir(), "artifact root is not a directory")
 
     def _path(self, relative: str, *, existing: bool) -> Path:
         safe = _safe_relative_path(relative)
@@ -429,15 +438,16 @@ class SourcePatchTransaction:
 
     def _read_state(self) -> dict[str, str]:
         state: dict[str, str] = {}
-        new_paths = {
+        absent_paths = {
             contract.path
             for stage in self.patchset.stages
             for contract in stage.files
-            if contract.before_sha256 is None
+            if contract.before_sha256 is None or contract.after_sha256 is None
         }
         for path in self._all_paths():
             candidate = self.source_root.joinpath(*PurePosixPath(path).parts)
-            if not candidate.exists() and path in new_paths:
+            if not candidate.exists() and path in absent_paths:
+                _require(not candidate.is_symlink(), f"{path} is a symlink")
                 continue
             state[path] = self._read_text(path)
         return state
@@ -484,9 +494,11 @@ class SourcePatchTransaction:
         )
 
     @staticmethod
-    def _matches(state: Mapping[str, str], expected: Mapping[str, str]) -> bool:
+    def _matches(state: Mapping[str, str], expected: Mapping[str, str | None]) -> bool:
         return all(
-            path in state and sha256_text(state[path]) == digest
+            path not in state
+            if digest is None
+            else path in state and sha256_text(state[path]) == digest
             for path, digest in expected.items()
         )
 
@@ -556,7 +568,9 @@ class SourcePatchTransaction:
             contracts = {contract.path: contract for contract in stage.files}
             for path, contract in contracts.items():
                 if contract.before_sha256 is None:
-                    _require(path not in planned, f"{stage.name}: {path} already exists")
+                    _require(
+                        path not in planned, f"{stage.name}: {path} already exists"
+                    )
                 else:
                     _require(path in planned, f"{stage.name}: missing {path}")
                     actual = sha256_text(planned[path])
@@ -569,22 +583,27 @@ class SourcePatchTransaction:
             for edit in stage.edits:
                 current = planned.get(edit.path, "")
                 before_count = current.count(edit.before)
-                after_count = current.count(edit.after)
                 _require(
                     before_count == 1,
                     f"{stage.name}:{edit.name}: expected one before landmark "
                     f"in {edit.path}, found {before_count}; no writes performed",
                 )
-                _require(
-                    after_count == 0,
-                    f"{stage.name}:{edit.name}: after block already appears "
-                    f"{after_count} time(s) in {edit.path}; source is partial or "
-                    "the landmarks overlap; no writes performed",
-                )
-                planned[edit.path] = current.replace(edit.before, edit.after, 1)
+                if contracts[edit.path].after_sha256 is None:
+                    _require(
+                        edit.after == "" and current == edit.before,
+                        f"{stage.name}:{edit.name}: deletion must name the complete file",
+                    )
+                    del planned[edit.path]
+                else:
+                    planned[edit.path] = current.replace(edit.before, edit.after, 1)
                 changed.add(edit.path)
 
             for path, contract in contracts.items():
+                if contract.after_sha256 is None:
+                    _require(
+                        path not in planned, f"{stage.name}: failed to remove {path}"
+                    )
+                    continue
                 _require(path in planned, f"{stage.name}: failed to produce {path}")
                 actual = sha256_text(planned[path])
                 _require(
@@ -652,6 +671,8 @@ class SourcePatchTransaction:
                     *_safe_relative_path(relative).parts
                 )
                 backup = backups[relative]
+                if relative not in planned:
+                    continue
                 descriptor, raw_temp = tempfile.mkstemp(
                     prefix=f".{destination.name}.qwen-source-patch.",
                     dir=destination.parent,
@@ -664,7 +685,9 @@ class SourcePatchTransaction:
                         handle.write(data)
                         handle.flush()
                         os.fsync(handle.fileno())
-                    os.chmod(temp_path, backup.mode or 0o644)
+                    os.chmod(
+                        temp_path, backup.mode if backup.mode is not None else 0o644
+                    )
                 except BaseException:
                     try:
                         os.close(descriptor)
@@ -695,7 +718,10 @@ class SourcePatchTransaction:
                 # so it is rechecked at the final mutation boundary as well.
                 for stage in self.patchset.stages:
                     self._verify_review_artifact(stage)
-                os.replace(temporary[relative], destination)
+                if relative in planned:
+                    os.replace(temporary[relative], destination)
+                else:
+                    destination.unlink()
                 replaced.append(relative)
                 directory_fd = os.open(destination.parent, os.O_RDONLY)
                 try:
@@ -729,7 +755,9 @@ class SourcePatchTransaction:
                             handle.write(prior.data)
                             handle.flush()
                             os.fsync(handle.fileno())
-                        os.chmod(restore, prior.mode or 0o644)
+                        os.chmod(
+                            restore, prior.mode if prior.mode is not None else 0o644
+                        )
                         os.replace(restore, destination)
                     directory_fd = os.open(destination.parent, os.O_RDONLY)
                     try:

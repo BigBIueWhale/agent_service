@@ -3629,7 +3629,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_storage_rejects_live_values_and_incomplete_evidence() {
+    fn terminal_storage_rejects_incomplete_observation_groups_and_endings() {
         let tree = TestTree::new("terminal-evidence");
         let (uid, gid) = owner();
         let mut body = terminal("s-77777777777777777777777777777777", false);

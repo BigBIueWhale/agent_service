@@ -680,12 +680,12 @@ pub async fn run_one(
             diagnostics.push(format!("read final agent logs: {error}"));
             "<agent logs unavailable>".into()
         });
-    let pre_teardown_observed = crate::runtime::read_running_progress(&paths.events_jsonl())
+    let pre_teardown_observed = crate::runtime::read_output_progress(&paths.events_jsonl())
         .unwrap_or_else(|error| {
             diagnostics.push(format!(
                 "read pre-teardown event progress metadata: {error}"
             ));
-            crate::runtime::RunningOutputProgress::default()
+            crate::runtime::OutputProgress::default()
         });
     let observed_counters = ProgressCounters {
         output_event_bytes: pre_teardown_observed.output_event_bytes,
@@ -719,69 +719,68 @@ pub async fn run_one(
         ));
     }
 
+    let snapshot = result_parse::read_event_snapshot(&paths.events_jsonl());
+    let final_output_observations = match &snapshot {
+        Ok(snapshot) => Some(
+            snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.observed)
+                .unwrap_or_default(),
+        ),
+        Err(error) => {
+            diagnostics.push(format!("read final event snapshot: {error}"));
+            None
+        }
+    };
     let parsed = if capture_proved {
-        result_parse::parse_events_jsonl(&paths.events_jsonl())
+        snapshot.and_then(|snapshot| {
+            snapshot
+                .ok_or_else(|| {
+                    ServiceError::AgentOutputMissing("events.jsonl does not exist".into())
+                })?
+                .certified
+        })
     } else {
         Err(ServiceError::AgentOutputMissing(
-            "trusted stream capture was not proved complete; refusing to parse or promote its event file"
-                .into(),
+            "trusted stream capture was not proved complete; refusing complete-result certification".into(),
         ))
     };
-    let (mut response, agent_result, num_turns, billed_main_turns, mut is_process_error) =
-        match parsed {
-            Ok(result) => {
-                let agent_result = AgentResult {
-                    agent_duration_ms: result.duration_ms,
-                    agent_api_duration_ms: result.api_duration_ms,
-                    agent_result_subtype: result.subtype,
-                    main_output_tokens: result.main_output_tokens,
-                    main_reasoning_tokens: result.main_reasoning_tokens,
-                    subagent_scope_count: result.scopes.len() as u64,
-                    subagent_error_count: result
-                        .scopes
-                        .iter()
-                        .filter(|scope| scope.is_error == Some(true))
-                        .count() as u64,
-                    subagent_scopes: result.scopes,
-                };
-                (
-                    result.response,
-                    Some(agent_result),
-                    result.num_turns,
-                    result.billed_main_turns,
-                    result.is_error,
-                )
-            }
-            Err(error) => {
-                diagnostics.push(format!("strict event parse failed: {error}"));
-                (
-                    format!("agent output was invalid: {error}; recent container logs:\n{logs}"),
-                    None,
-                    0,
-                    0,
-                    true,
-                )
-            }
-        };
-    let final_observed = match crate::runtime::read_running_progress(&paths.events_jsonl()) {
-        Ok(observed) => {
-            // Both readers count the same thing — main-scope assistant events
-            // carrying billed usage — so they must agree exactly. Comparing
-            // against the terminal `num_turns` instead would compare finished
-            // turns with started ones and fire on every errored run.
-            if agent_result.is_some() && observed.num_turns != billed_main_turns {
-                diagnostics.push(format!(
-                    "live/final turn-count mismatch: live reader observed {}, strict terminal parser observed {billed_main_turns} billed of {num_turns} started",
-                    observed.num_turns
-                ));
-            }
-            observed
+    let (mut response, agent_result, num_turns, mut is_process_error) = match parsed {
+        Ok(result) => {
+            let agent_result = AgentResult {
+                agent_duration_ms: result.duration_ms,
+                agent_api_duration_ms: result.api_duration_ms,
+                agent_result_subtype: result.subtype,
+                main_output_tokens: result.main_output_tokens,
+                main_reasoning_tokens: result.main_reasoning_tokens,
+                subagent_scope_count: result.scopes.len() as u64,
+                subagent_error_count: result
+                    .scopes
+                    .iter()
+                    .filter(|scope| scope.is_error == Some(true))
+                    .count() as u64,
+                subagent_scopes: result.scopes,
+            };
+            (
+                result.response,
+                Some(agent_result),
+                result.num_turns,
+                result.is_error,
+            )
         }
         Err(error) => {
-            diagnostics.push(format!("read final event progress metadata: {error}"));
-            pre_teardown_observed
+            diagnostics.push(format!("strict event parse failed: {error}"));
+            (
+                format!("agent output was invalid: {error}; recent container logs:\n{logs}"),
+                None,
+                0,
+                true,
+            )
         }
     };
+    // Lifecycle counters retain their prior observations if storage is unreadable.
+    // The explicit optional output observations below remain absent in that case.
+    let final_observed = final_output_observations.unwrap_or(pre_teardown_observed);
     let last_event_at_unix = final_observed.last_event_at_unix;
     let final_num_turns = num_turns.max(final_observed.num_turns);
     if status == SessionStatus::Completed
@@ -878,10 +877,14 @@ pub async fn run_one(
             agent_result,
             bundle: accepted_bundle,
         }),
-        observed_output_tokens: None,
-        observed_reasoning_tokens: None,
-        observed_subagent_scope_count: None,
-        observed_unaccounted_records: None,
+        observed_output_tokens: final_output_observations
+            .map(|observed| observed.observed_output_tokens),
+        observed_reasoning_tokens: final_output_observations
+            .map(|observed| observed.observed_reasoning_tokens),
+        observed_subagent_scope_count: final_output_observations
+            .map(|observed| observed.observed_subagent_scope_count),
+        observed_unaccounted_records: final_output_observations
+            .map(|observed| observed.observed_unaccounted_records),
     };
     apply_reporter_progress(&mut body, &progress);
     body
@@ -1163,7 +1166,8 @@ pub async fn recover_after_execution_panic(
     .map(|(cause, context)| retain_raw_evidence(&paths, cause, context, &mut diagnostics))
     .unwrap_or(false);
 
-    let observed = read_running_progress_for_recovery(&paths, &mut diagnostics);
+    let output_observations = read_output_progress_for_recovery(&paths, &mut diagnostics);
+    let observed = output_observations.unwrap_or_default();
     let agent_exit_code =
         read_exit_code(&paths.output.join("qwen-exit-code")).unwrap_or_else(|error| {
             diagnostics.push(format!("read panic-recovery exit code: {error}"));
@@ -1203,10 +1207,13 @@ pub async fn recover_after_execution_panic(
             agent_result: None,
             bundle: accepted_bundle,
         }),
-        observed_output_tokens: None,
-        observed_reasoning_tokens: None,
-        observed_subagent_scope_count: None,
-        observed_unaccounted_records: None,
+        observed_output_tokens: output_observations.map(|observed| observed.observed_output_tokens),
+        observed_reasoning_tokens: output_observations
+            .map(|observed| observed.observed_reasoning_tokens),
+        observed_subagent_scope_count: output_observations
+            .map(|observed| observed.observed_subagent_scope_count),
+        observed_unaccounted_records: output_observations
+            .map(|observed| observed.observed_unaccounted_records),
     }
 }
 
@@ -1283,7 +1290,8 @@ pub async fn recover_after_service_restart(
         ensure_private_forensic_file(&path, contents)?;
     }
 
-    let observed = read_running_progress_for_recovery(&paths, &mut diagnostics);
+    let output_observations = read_output_progress_for_recovery(&paths, &mut diagnostics);
+    let observed = output_observations.unwrap_or_default();
     let agent_exit_code =
         read_exit_code(&paths.output.join("qwen-exit-code")).unwrap_or_else(|error| {
             diagnostics.push(format!("read restart-recovery exit code: {error}"));
@@ -1370,23 +1378,27 @@ pub async fn recover_after_service_restart(
             agent_result: None,
             bundle: accepted_bundle,
         }),
-        observed_output_tokens: None,
-        observed_reasoning_tokens: None,
-        observed_subagent_scope_count: None,
-        observed_unaccounted_records: None,
+        observed_output_tokens: output_observations.map(|observed| observed.observed_output_tokens),
+        observed_reasoning_tokens: output_observations
+            .map(|observed| observed.observed_reasoning_tokens),
+        observed_subagent_scope_count: output_observations
+            .map(|observed| observed.observed_subagent_scope_count),
+        observed_unaccounted_records: output_observations
+            .map(|observed| observed.observed_unaccounted_records),
     })
 }
 
-fn read_running_progress_for_recovery(
+fn read_output_progress_for_recovery(
     paths: &SessionPaths,
     diagnostics: &mut Vec<String>,
-) -> crate::runtime::RunningOutputProgress {
-    crate::runtime::read_running_progress(&paths.events_jsonl()).unwrap_or_else(|error| {
-        diagnostics.push(format!(
-            "read service-restart event progress metadata: {error}"
-        ));
-        crate::runtime::RunningOutputProgress::default()
-    })
+) -> Option<crate::runtime::OutputProgress> {
+    match crate::runtime::read_output_progress(&paths.events_jsonl()) {
+        Ok(observed) => Some(observed),
+        Err(error) => {
+            diagnostics.push(format!("read recovery event observations: {error}"));
+            None
+        }
+    }
 }
 
 fn ensure_prompt_record(paths: &SessionPaths, prompt: &str) -> ServiceResult<()> {
@@ -1805,16 +1817,17 @@ async fn finalize_setup_failure(
             process_error = true;
             None
         });
-    let observed = match crate::runtime::read_running_progress(&paths.events_jsonl()) {
-        Ok(observed) => observed,
+    let output_observations = match crate::runtime::read_output_progress(&paths.events_jsonl()) {
+        Ok(observed) => Some(observed),
         Err(progress_error) => {
             diagnostics.push(format!(
-                "read setup-failure event progress metadata: {progress_error}"
+                "read setup-failure event observations: {progress_error}"
             ));
             process_error = true;
-            crate::runtime::RunningOutputProgress::default()
+            None
         }
     };
+    let observed = output_observations.unwrap_or_default();
 
     let final_counters = merge_progress_counters(
         counters,
@@ -1895,10 +1908,13 @@ async fn finalize_setup_failure(
             agent_result: None,
             bundle: accepted_bundle,
         }),
-        observed_output_tokens: None,
-        observed_reasoning_tokens: None,
-        observed_subagent_scope_count: None,
-        observed_unaccounted_records: None,
+        observed_output_tokens: output_observations.map(|observed| observed.observed_output_tokens),
+        observed_reasoning_tokens: output_observations
+            .map(|observed| observed.observed_reasoning_tokens),
+        observed_subagent_scope_count: output_observations
+            .map(|observed| observed.observed_subagent_scope_count),
+        observed_unaccounted_records: output_observations
+            .map(|observed| observed.observed_unaccounted_records),
     };
     apply_reporter_progress(&mut body, &progress);
     body
