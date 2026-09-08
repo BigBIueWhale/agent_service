@@ -3122,7 +3122,7 @@ def _validate_compaction_accounting_after(state: State) -> None:
     )
     _require(
         source.count("const outputAccounting") == 1
-        and source.count("output: outputAccounting,") == 10,
+        and source.count("output: outputAccounting,") == 11,
         f"{label}: all post-generation outcomes must retain the same served evidence",
     )
     _require_all(
@@ -4392,7 +4392,94 @@ def _validate_served_accounting_after(state: State) -> None:
             forbid_text(state, path, symbol, label=label)
 
 
+def _validate_manual_compaction_before(state: State) -> None:
+    label = "manual compaction precondition"
+    _require_all(state, "packages/cli/src/ui/commands/compressCommand.ts", (
+        "context.executionMode ?? 'interactive'",
+        "MAX_COMPRESS_INSTRUCTIONS_CHARS",
+        "originalTokenCount: null",
+    ), label=label)
+    require_text(state, "packages/cli/src/ui/hooks/slashCommandProcessor.ts",
+                 "Promise.race", label=label)
+    require_text(state, "packages/cli/src/ui/components/messages/CompressionMessage.tsx",
+                 "originalTokenCount ?? 0", label=label)
+
+
+def _validate_manual_compaction_after(state: State) -> None:
+    label = "manual compaction ownership and outcome"
+    cli = "packages/cli/src/"
+    core = "packages/core/src/"
+    for command in ("compressCommand.ts", "compressFastCommand.ts"):
+        path = cli + "ui/commands/" + command
+        require_text(state, path, "runCompressionCommand(", label=label)
+        for absent in ("executionMode", "setPendingItem", "MAX_COMPRESS_INSTRUCTIONS_CHARS"):
+            forbid_text(state, path, absent, label=label)
+    outcome_path = cli + "utils/compression-result.ts"
+    outcome = _require_all(state, outcome_path, (
+        "Number.isSafeInteger(count)", "const unhandled: never = status;",
+        "createCompressionHistoryItem(", "text: formatCompressionResult(compression).content",
+        "error instanceof CompactionFinalizationError", "finalizationFailure: error.message",
+    ), label=label)
+    forbid_text(state, outcome_path, "?? 0", label=label)
+    turn = _source(state, core + "core/turn.ts", label=label)
+    statuses = set(re.findall(r"^\s+(COMPRESSED|NOOP|COMPRESSION_FAILED_[A-Z_]+)\b", turn, re.M))
+    _require("COMPRESSION_FAILED_INSUFFICIENT_ROOM" in statuses, label + ": missing room rejection")
+    for status in statuses:
+        _require("case CompressionStatus." + status + ":" in outcome,
+                 label + ": missing presentation for " + status)
+    processor = _source(state, cli + "ui/hooks/slashCommandProcessor.ts", label=label)
+    cancel = processor.split("const cancelSlashCommand =", 1)[1].split("useKeypress(", 1)[0]
+    _require("controller.abort()" in cancel and "setIsProcessing(false)" not in cancel,
+             label + ": cancellation releases the owner")
+    action = processor.split("const handleSlashCommand =", 1)[1]
+    _require("Promise.race" not in action, label + ": action settlement is raced")
+    _require_ordered(action, (
+        "await commandToExecute.action(", "case 'compression':",
+        "createCompressionHistoryItem(outcome)", "await chatRecorder?.flush()",
+        "setIsProcessing(false)",
+    ), label=label, location="terminal command owner")
+    _require_all(state, cli + "nonInteractiveCliCommands.ts", (
+        "abortSignal: abortController.signal", "case 'compression':",
+    ), label=label)
+    headless = _source(state, cli + "nonInteractiveCli.ts", label=label)
+    manual = headless.split("case 'compression':", 1)[1].split("case 'submit_prompt':", 1)[0]
+    _require_ordered(manual, ("adapter.emitSystemMessage(", "'compaction'",
+        "toCompactionRecord(slashCommandResult.info)", "emitFinalAssistantMessage"),
+        label=label, location="headless command event")
+    _require_all(state, cli + "acp-integration/session/Session.ts", (
+        "case 'compression':", "createCompressionHistoryItem(outcome)", "await recorder.flush()",
+    ), label=label)
+    _require_all(state, core + "core/client.ts", (
+        "private async runCompaction(", "this.compactionFinalizationError = error",
+        "{ cause: this.compactionFinalizationError }",
+    ), label=label)
+    chat = _source(state, core + "core/geminiChat.ts", label=label)
+    fast = chat.split("async compressFast()", 1)[1].split("setSystemInstruction(", 1)[0]
+    _require_ordered(fast, ("recordChatCompression(", "chatRecordingService.flush()",
+        "this.setHistory(newHistory)", "throw new CompactionFinalizationError(info, error)"),
+        label=label, location="fast durable checkpoint")
+    recorder = _source(state, core + "services/chatRecordingService.ts", label=label)
+    admission = recorder.split("recordSlashCommand(payload:", 1)[1].split("async recordAdoptedMessage", 1)[0]
+    _require("SessionWriterUnavailableError" in admission and "this.enterWriteFailure(error, this.getSessionId())" in admission,
+             label + ": command admission failure is not owned by the recorder")
+    forbid_text(state, core + "services/chatCompressionService.ts", "MAX_HOOK_INSTRUCTIONS_CHARS", label=label)
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
+    SemanticConcern(
+        name="manual-compaction-ownership-and-outcome",
+        rationale=(
+            "Manual compaction joins its action, presentation and recording; cancellation cannot "
+            "admit a successor or discard a completed checkpoint. Every renderer receives the same "
+            "named outcome with exact counts and separately reported finalization failure."
+        ),
+        removal_condition=(
+            "Upstream provides joined command ownership, complete outcome projection and replay, "
+            "durable checkpoint failure ownership, and exact admission of whole directives."
+        ),
+        validate_before=_validate_manual_compaction_before,
+        validate_after=_validate_manual_compaction_after,
+    ),
     SemanticConcern(
         name="locked-config-and-literal-cli",
         rationale=(

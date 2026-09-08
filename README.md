@@ -298,7 +298,7 @@ The source pins describe this checkout. The independently pinned
 pins does not build, release, or update those images.
 
 The [source transformer](patches/source_patch_v1) applies the reviewed changes to
-that exact upstream tree. It checks source identities, structural landmarks, 28
+that exact upstream tree. It checks source identities, structural landmarks, 29
 semantic concerns, and final identities, including explicit absent identities for
 removed paths. Drift, ambiguous landmarks, intermediate states, or concurrent
 mutation refuse application. Failed publication restores original bytes, modes,
@@ -371,15 +371,23 @@ parent turn. Backend cache reuse is conditional on retained state; delegation do
 not guarantee cache residency or avoid reprocessing. Effect journals record
 observed changes and do not prove exclusive causality or rollback.
 
-Eight broader guarantees remain open and are described with their ownership
-boundaries in the [source contract](patches/README.md): reasoning stored by
-reference, atomic speculative file/history acceptance, review-worktree lifetime,
-operational daemon metrics, prompt-hook failure policy, resident background
-AgentTool disposal/failure publication, provider-stream lifetime/settlement, and
-manual-compaction execution, cancellation, instructions, and outcome presentation.
-Compaction and child reasoning remain inline and fully retained. Output settlement
-and surviving terminal observations do not close the reasoning-reference
-requirement.
+Manual compaction commands share one completed outcome across terminal, ACP and
+headless presentation. Cancellation retains command ownership through action and
+recording settlement; it cannot admit a successor or discard a completed
+checkpoint. Every failure status is named, absent counts are refused, and complete
+user and hook directives reach exact admission. A later finalization failure
+retains the committed checkpoint and blocks further chat use until restoration
+with a new client. The [source contract](patches/README.md) describes the boundaries
+and qualification limits; TypeScript runtime qualification of this change has not
+been run under the current local Cargo/Python/Git-only constraint.
+
+Six broader implementation obligations remain open: operational daemon metrics,
+provider-stream lifetime, reasoning stored by reference, prompt-hook failure
+policy, atomic speculative file/history acceptance, and resident background
+AgentTool settlement. Review-worktree ownership was deliberately excluded from
+this round because fetch-pr and PR worktrees are not used. Compaction and child
+reasoning remain inline and fully retained; output settlement and surviving
+terminal observations do not close the reasoning-reference requirement.
 
 The allowed client tools are exactly:
 

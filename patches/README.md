@@ -12,14 +12,14 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `a04ad4ca743713a4e6bd5636b070f0d67c2821d2314ec920750a579a59279e33`
+- Review-diff SHA-256: `1b34e3d95ec7896626ce6388be2b2771f219742f1134bd6ee8725ef54d9775c2`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `e622550f06e5242e44dc31fa2f5ce26449f4b78dab2b293540e6582db2763753`
+- Transformer-manifest SHA-256: `2fd6fdf27d3bc2170f1a9a08dfe5840a45a8431079d62767a678a9b0b135218f`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 28 semantic concerns before changing the private source tree.
+identities, and 29 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its test selection from the
@@ -192,11 +192,14 @@ Unreadable evidence is represented as unavailable, not a fabricated zero group.
 
 ## Verification scope and remaining limits
 
-This round uses local source tests with mocked generation boundaries, test-owned
-files and streams, noEmit type checks, Python transformer tests, and Cargo checks.
-It does not build or release the application or launch a provider, CLI session,
-benchmark, or service. The production image will run its own build and derived
-test selection after a separate deployment action.
+The published preceding source revision was qualified with mocked source tests,
+test-owned files and streams, noEmit type checks, Python transformer tests and
+Cargo checks. Those historical JavaScript results do not qualify changed source.
+The current manual-compaction change uses source review, Python transformer and
+manifest checks, Cargo checks and a local Rust TypeScript grammar parser. Its new
+TypeScript regression controls are not executed: this round permits local Cargo,
+Python and Git only. Grammar parsing is not TypeScript type or runtime checking.
+No application build, release, provider, CLI session, benchmark or service is run.
 
 Compaction reasoning and child reasoning still appear inline in recorded
 content. Persisting these by reference remains open: a complete change needs a
@@ -212,7 +215,9 @@ cleanup failures retain their causes and the terminal reports acceptance failure
 resubmitting the prompt. A complete guarantee requires coordinated ownership and
 recovery for both resources, including the overlay's per-file failure handling.
 
-Review worktree lifetime and cleanup remain open. Per-PR leases can be overwritten;
+Review worktree lifetime and cleanup were deliberately excluded because this
+project does not use fetch-pr or PR worktrees. Their existing gaps remain: per-PR
+leases can be overwritten;
 creation removes fixed trees and branches without establishing that a prior owner
 has ended. Separate cleanup implementations suppress errors and can force
 filesystem removal after Git refusal. A correct lifecycle must establish exclusive
@@ -260,15 +265,34 @@ settlement, preserving primary and cleanup failures. Strict configuration
 admission does not establish that lifetime contract. These are source-confirmed
 findings; no live stream or cancellation experiment was run for this assessment.
 
-Manual compaction remains open as a complete command-lifetime and outcome
-contract. Terminal cancellation races the action, releases the processing state,
-and can admit a successor while compaction still mutates history. Completed
-results can then be discarded. Other command renderers can label failed attempts
-as successful, omit named failure statuses, or substitute zero for absent counts.
-The inflated-candidate status also represents a reduced candidate that still
-exceeds the admission trigger; these are distinct rejection causes. Command and
-hook instruction clipping precedes an exact shared directive-size check and can
-lose authored input. Fixing this requires joined command ownership, cancellation
-settlement, truthful outcome projection, and exact instruction admission across
-renderers. Returning the observed Core compaction result does not establish that
-whole contract; no text-only or cap-only correction is counted as closure.
+## Manual compaction ownership and presentation
+
+Both commands return a completed compaction observation through one result type,
+without consumer branches or UI side effects. The terminal executor awaits action,
+presentation and recording settlement. Cancellation retains that owner and blocks
+future work; a completed fact remains visible. Confirmation continuations keep the
+same owner. Queued input and external rewind admission wait for command settlement.
+ACP retains its prompt owner and attempts both durable result recording and result
+delivery, preserving independent failures. Headless output emits the existing
+session-level compaction event even when its assistant adapter was finalized by a
+previous turn.
+
+One formatter handles all named statuses and rejects absent, non-finite, unsafe or
+negative counts. A reduced candidate with insufficient request room is distinct
+from a candidate that did not shrink. The terminal retains a compression marker
+for history mapping, and its shared text projection survives browser replay.
+Successful counts describe the committed checkpoint; restored startup context is
+an independent subsequent change.
+
+Checkpoint recording and flush precede live installation. An independent failure
+after durable acceptance preserves the completed info and its cause and blocks
+further chat access until restoration with a new client. Later admission refusal
+never repeats the earlier completion. Synchronous command-record admission
+failure enters the recorder's existing persistent failure state and is observed
+by flush, preserving completed UI actions and the original recording failure.
+User and hook directives are supplied whole to exact sizing; no reasoning budget,
+output budget, reserve or payload retention rule changes.
+
+These changes have source and delivery checks. Their TypeScript runtime controls
+remain unexecuted under the current operational constraint, so this is not a
+runtime qualification or a general extended-session correctness claim.
