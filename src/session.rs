@@ -23,7 +23,8 @@ use crate::error::{ServiceError, ServiceResult};
 use crate::progress::{ProgressCounters, ProgressPhase, ProgressReporter};
 use crate::result_parse;
 use crate::runtime::{
-    apply_progress, merge_progress_counters, AcceptanceRecord, SessionBody, SessionStatus,
+    apply_progress, merge_progress_counters, AcceptanceRecord, AgentResult, SessionBody,
+    SessionStatus, SessionTerminal,
 };
 use crate::staging::{self, SessionPaths};
 use crate::validation::ValidatedRequest;
@@ -661,11 +662,13 @@ pub async fn run_one(
         )),
         None => {}
     }
-    if let Err(error) = write_private_file(
-        &paths.output.join("qwen-exit-code"),
-        format!("{container_exit_code}\n").as_bytes(),
-    ) {
-        diagnostics.push(format!("write trusted Qwen exit-code sidecar: {error}"));
+    if let Some(code) = container_exit_code {
+        if let Err(error) = write_private_file(
+            &paths.output.join("qwen-exit-code"),
+            format!("{code}\n").as_bytes(),
+        ) {
+            diagnostics.push(format!("write trusted Qwen exit-code sidecar: {error}"));
+        }
     }
     if let Err(error) = sync_directory(&paths.output, "sync completion sidecars") {
         diagnostics.push(error.to_string());
@@ -704,11 +707,17 @@ pub async fn run_one(
         diagnostics.push(format!("persist bounded final container logs: {error}"));
     }
 
-    let agent_exit_code = read_required_exit_code(&paths.output.join("qwen-exit-code"))
-        .unwrap_or_else(|error| {
+    let agent_exit_code =
+        read_exit_code(&paths.output.join("qwen-exit-code")).unwrap_or_else(|error| {
             diagnostics.push(error.to_string());
-            -1
+            None
         });
+
+    if agent_exit_code != container_exit_code {
+        diagnostics.push(format!(
+            "trusted exit-code sidecar disagrees with Docker wait: wait={container_exit_code:?}, sidecar={agent_exit_code:?}"
+        ));
+    }
 
     let parsed = if capture_proved {
         result_parse::parse_events_jsonl(&paths.events_jsonl())
@@ -718,60 +727,49 @@ pub async fn run_one(
                 .into(),
         ))
     };
-    // Subagent scopes exist only as parser output: a session whose stream
-    // was never strictly parsed (capture or parse refused) reports an empty
-    // scope list, because an unparsed stream can prove nothing about
-    // subagents and a fabricated row would read as evidence.
-    let (
-        mut response,
-        agent_duration_ms,
-        agent_api_duration_ms,
-        agent_result_subtype,
-        num_turns,
-        billed_main_turns,
-        main_output_tokens,
-        main_reasoning_tokens,
-        subagent_scopes,
-        mut is_process_error,
-        parsed_valid,
-    ) = match parsed {
-        Ok(result) => (
-            result.response,
-            Some(result.duration_ms),
-            Some(result.api_duration_ms),
-            Some(result.subtype),
-            result.num_turns,
-            result.billed_main_turns,
-            result.main_output_tokens,
-            result.main_reasoning_tokens,
-            result.scopes,
-            result.is_error,
-            true,
-        ),
-        Err(error) => {
-            diagnostics.push(format!("strict event parse failed: {error}"));
-            (
-                format!("agent output was invalid: {error}; recent container logs:\n{logs}"),
-                None,
-                None,
-                None,
-                0,
-                0,
-                0,
-                0,
-                Vec::new(),
-                true,
-                false,
-            )
-        }
-    };
+    let (mut response, agent_result, num_turns, billed_main_turns, mut is_process_error) =
+        match parsed {
+            Ok(result) => {
+                let agent_result = AgentResult {
+                    agent_duration_ms: result.duration_ms,
+                    agent_api_duration_ms: result.api_duration_ms,
+                    agent_result_subtype: result.subtype,
+                    main_output_tokens: result.main_output_tokens,
+                    main_reasoning_tokens: result.main_reasoning_tokens,
+                    subagent_scope_count: result.scopes.len() as u64,
+                    subagent_error_count: result
+                        .scopes
+                        .iter()
+                        .filter(|scope| scope.is_error == Some(true))
+                        .count() as u64,
+                    subagent_scopes: result.scopes,
+                };
+                (
+                    result.response,
+                    Some(agent_result),
+                    result.num_turns,
+                    result.billed_main_turns,
+                    result.is_error,
+                )
+            }
+            Err(error) => {
+                diagnostics.push(format!("strict event parse failed: {error}"));
+                (
+                    format!("agent output was invalid: {error}; recent container logs:\n{logs}"),
+                    None,
+                    0,
+                    0,
+                    true,
+                )
+            }
+        };
     let final_observed = match crate::runtime::read_running_progress(&paths.events_jsonl()) {
         Ok(observed) => {
             // Both readers count the same thing — main-scope assistant events
             // carrying billed usage — so they must agree exactly. Comparing
             // against the terminal `num_turns` instead would compare finished
             // turns with started ones and fire on every errored run.
-            if parsed_valid && observed.num_turns != billed_main_turns {
+            if agent_result.is_some() && observed.num_turns != billed_main_turns {
                 diagnostics.push(format!(
                     "live/final turn-count mismatch: live reader observed {}, strict terminal parser observed {billed_main_turns} billed of {num_turns} started",
                     observed.num_turns
@@ -786,10 +784,12 @@ pub async fn run_one(
     };
     let last_event_at_unix = final_observed.last_event_at_unix;
     let final_num_turns = num_turns.max(final_observed.num_turns);
-    if status == SessionStatus::Completed && (container_exit_code != 0 || agent_exit_code != 0) {
+    if status == SessionStatus::Completed
+        && (container_exit_code != Some(0) || agent_exit_code != Some(0))
+    {
         is_process_error = true;
         response = format!(
-            "agent exited abnormally (container={container_exit_code}, qwen={agent_exit_code}). {response}"
+            "agent exited abnormally (container={container_exit_code:?}, qwen={agent_exit_code:?}). {response}"
         );
     }
     if !diagnostics.is_empty() {
@@ -826,24 +826,17 @@ pub async fn run_one(
                 .into(),
         ))
     };
-    let (bundle_sha256, compressed, uncompressed, file_count, artifacts_count) = match bundle_result
-    {
-        Ok(stats) => (
-            stats.sha256,
-            stats.compressed_bytes,
-            stats.uncompressed_bytes,
-            stats.file_count,
-            stats.artifacts_file_count,
-        ),
+    let accepted_bundle = match bundle_result {
+        Ok(stats) => Some(stats),
         Err(error) => {
             diagnostics.push(format!("required bundle creation failed: {error}"));
             is_process_error = true;
-            (String::new(), 0, 0, 0, 0)
+            None
         }
     };
     let raw_session_tree_retained = raw_retention_decision(
         teardown,
-        !bundle_sha256.is_empty(),
+        accepted_bundle.is_some(),
         FinalizationPhase::Normal,
     )
     .map(|(cause, context)| retain_raw_evidence(&paths, cause, context, &mut diagnostics))
@@ -852,11 +845,6 @@ pub async fn run_one(
         is_process_error = true;
     }
 
-    let subagent_scope_count = subagent_scopes.len() as u64;
-    let subagent_error_count = subagent_scopes
-        .iter()
-        .filter(|scope| scope.is_error == Some(true))
-        .count() as u64;
     let mut body = SessionBody {
         session_id: session_id.to_string(),
         status,
@@ -878,27 +866,18 @@ pub async fn run_one(
         progress_events: Vec::new(),
         num_turns: final_num_turns,
         last_event_at_unix,
-        finished_at_unix: now_unix(),
-        duration_wall_ms: elapsed_ms(wall_start),
-        container_exit_code,
-        agent_exit_code,
-        is_process_error,
-        response,
-        agent_duration_ms,
-        agent_api_duration_ms,
-        agent_result_subtype,
-        main_output_tokens: Some(main_output_tokens),
-        main_reasoning_tokens: Some(main_reasoning_tokens),
-        subagent_scopes: Some(subagent_scopes),
-        subagent_scope_count: Some(subagent_scope_count),
-        subagent_error_count: Some(subagent_error_count),
-        bundle_sha256,
-        bundle_compressed_bytes: compressed,
-        bundle_uncompressed_bytes: uncompressed,
-        bundle_file_count: file_count,
-        bundle_artifacts_file_count: artifacts_count,
-        raw_session_tree_retained,
-        teardown_diagnostics: diagnostics,
+        terminal: Some(SessionTerminal {
+            finished_at_unix: now_unix(),
+            duration_wall_ms: elapsed_ms(wall_start),
+            container_exit_code,
+            agent_exit_code,
+            is_process_error,
+            response,
+            raw_session_tree_retained,
+            teardown_diagnostics: diagnostics,
+            agent_result,
+            bundle: accepted_bundle,
+        }),
         observed_output_tokens: None,
         observed_reasoning_tokens: None,
         observed_subagent_scope_count: None,
@@ -974,13 +953,13 @@ async fn wait_for_completion_or_cancel(
     cfg: &Config,
     session_id: &str,
     cancel: &CancellationToken,
-) -> (SessionStatus, i32, Vec<String>, bool) {
+) -> (SessionStatus, Option<i32>, Vec<String>, bool) {
     let mut diagnostics = Vec::new();
     let wait = docker_ops::wait_session(cfg, session_id);
     tokio::pin!(wait);
     tokio::select! {
         result = &mut wait => match result {
-            Ok(code) => (SessionStatus::Completed, code, diagnostics, true),
+            Ok(code) => (SessionStatus::Completed, Some(code), diagnostics, true),
             Err(error) => {
                 diagnostics.push(format!("docker wait failed: {error}"));
                 let producer_stopped = match docker_ops::stop_session(cfg, session_id).await {
@@ -992,7 +971,7 @@ async fn wait_for_completion_or_cancel(
                         false
                     }
                 };
-                (SessionStatus::Completed, -1, diagnostics, producer_stopped)
+                (SessionStatus::Completed, None, diagnostics, producer_stopped)
             }
         },
         () = cancel.cancelled() => {
@@ -1007,10 +986,10 @@ async fn wait_for_completion_or_cancel(
                 }
             }
             let code = match wait.await {
-                Ok(value) => value,
+                Ok(value) => Some(value),
                 Err(error) => {
                     diagnostics.push(format!("docker wait after cancellation failed: {error}"));
-                    -1
+                    None
                 }
             };
             (SessionStatus::Cancelled, code, diagnostics, producer_stopped)
@@ -1094,11 +1073,7 @@ pub async fn recover_after_execution_panic(
     )
     .await;
 
-    let mut bundle_sha256 = String::new();
-    let mut compressed = 0;
-    let mut uncompressed = 0;
-    let mut file_count = 0;
-    let mut artifacts_count = 0;
+    let mut accepted_bundle = None;
     match paths.ensure_recovery_dirs() {
         Ok(()) => {
             if let Err(error) = ensure_prompt_record(&paths, full_prompt) {
@@ -1118,7 +1093,6 @@ pub async fn recover_after_execution_panic(
                 ),
                 (paths.output.join("events.jsonl"), b"".as_slice()),
                 (paths.output.join("qwen.stderr"), b"".as_slice()),
-                (paths.output.join("qwen-exit-code"), b"-1\n".as_slice()),
                 (paths.output.join("response.txt"), response.as_bytes()),
                 (
                     paths.control.join("container-logs.txt"),
@@ -1164,11 +1138,7 @@ pub async fn recover_after_execution_panic(
                     };
                     match bundle_result {
                         Ok(stats) => {
-                            bundle_sha256 = stats.sha256;
-                            compressed = stats.compressed_bytes;
-                            uncompressed = stats.uncompressed_bytes;
-                            file_count = stats.file_count;
-                            artifacts_count = stats.artifacts_file_count;
+                            accepted_bundle = Some(stats);
                         }
                         Err(bundle_error) => diagnostics.push(format!(
                             "panic-recovery forensic bundle failed: {bundle_error}"
@@ -1187,11 +1157,18 @@ pub async fn recover_after_execution_panic(
     }
     let raw_session_tree_retained = raw_retention_decision(
         teardown,
-        !bundle_sha256.is_empty(),
+        accepted_bundle.is_some(),
         FinalizationPhase::PanicRecovery,
     )
     .map(|(cause, context)| retain_raw_evidence(&paths, cause, context, &mut diagnostics))
     .unwrap_or(false);
+
+    let observed = read_running_progress_for_recovery(&paths, &mut diagnostics);
+    let agent_exit_code =
+        read_exit_code(&paths.output.join("qwen-exit-code")).unwrap_or_else(|error| {
+            diagnostics.push(format!("read panic-recovery exit code: {error}"));
+            None
+        });
 
     SessionBody {
         session_id: session_id.to_string(),
@@ -1212,29 +1189,20 @@ pub async fn recover_after_execution_panic(
         staged_regular_files: 0,
         output_event_bytes: 0,
         progress_events: Vec::new(),
-        num_turns: 0,
-        last_event_at_unix: 0,
-        finished_at_unix: now_unix(),
-        duration_wall_ms: elapsed_ms(wall_start),
-        container_exit_code: -1,
-        agent_exit_code: -1,
-        is_process_error: true,
-        response,
-        agent_duration_ms: None,
-        agent_api_duration_ms: None,
-        agent_result_subtype: None,
-        main_output_tokens: Some(0),
-        main_reasoning_tokens: Some(0),
-        subagent_scopes: Some(Vec::new()),
-        subagent_scope_count: Some(0),
-        subagent_error_count: Some(0),
-        bundle_sha256,
-        bundle_compressed_bytes: compressed,
-        bundle_uncompressed_bytes: uncompressed,
-        bundle_file_count: file_count,
-        bundle_artifacts_file_count: artifacts_count,
-        raw_session_tree_retained,
-        teardown_diagnostics: diagnostics,
+        num_turns: observed.num_turns,
+        last_event_at_unix: observed.last_event_at_unix,
+        terminal: Some(SessionTerminal {
+            finished_at_unix: now_unix(),
+            duration_wall_ms: elapsed_ms(wall_start),
+            container_exit_code: None,
+            agent_exit_code,
+            is_process_error: true,
+            response,
+            raw_session_tree_retained,
+            teardown_diagnostics: diagnostics,
+            agent_result: None,
+            bundle: accepted_bundle,
+        }),
         observed_output_tokens: None,
         observed_reasoning_tokens: None,
         observed_subagent_scope_count: None,
@@ -1309,7 +1277,6 @@ pub async fn recover_after_service_restart(
         ),
         (paths.output.join("events.jsonl"), b"".as_slice()),
         (paths.output.join("qwen.stderr"), b"".as_slice()),
-        (paths.output.join("qwen-exit-code"), b"-1\n".as_slice()),
         (paths.output.join("response.txt"), response.as_bytes()),
         (paths.control.join("container-logs.txt"), logs.as_bytes()),
     ] {
@@ -1317,18 +1284,14 @@ pub async fn recover_after_service_restart(
     }
 
     let observed = read_running_progress_for_recovery(&paths, &mut diagnostics);
-    let agent_exit_code = read_required_exit_code(&paths.output.join("qwen-exit-code"))
-        .unwrap_or_else(|error| {
+    let agent_exit_code =
+        read_exit_code(&paths.output.join("qwen-exit-code")).unwrap_or_else(|error| {
             diagnostics.push(format!("read restart-recovery exit code: {error}"));
-            -1
+            None
         });
 
     let archive = cfg.results_dir.join(session_id).join("bundle.tar.zst");
-    let mut bundle_sha256 = String::new();
-    let mut compressed = 0;
-    let mut uncompressed = 0;
-    let mut file_count = 0;
-    let mut artifacts_count = 0;
+    let mut accepted_bundle = None;
     match std::fs::symlink_metadata(&archive) {
         Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
             diagnostics.push(
@@ -1344,11 +1307,7 @@ pub async fn recover_after_service_restart(
             if teardown.quiescent {
                 match bundle::create_bundle(&paths.root, &archive).await {
                     Ok(stats) => {
-                        bundle_sha256 = stats.sha256;
-                        compressed = stats.compressed_bytes;
-                        uncompressed = stats.uncompressed_bytes;
-                        file_count = stats.file_count;
-                        artifacts_count = stats.artifacts_file_count;
+                        accepted_bundle = Some(stats);
                     }
                     Err(bundle_error) => diagnostics.push(format!(
                         "service-restart forensic bundle failed: {bundle_error}"
@@ -1368,7 +1327,7 @@ pub async fn recover_after_service_restart(
     }
     let raw_session_tree_retained = raw_retention_decision(
         teardown,
-        !bundle_sha256.is_empty(),
+        accepted_bundle.is_some(),
         FinalizationPhase::ServiceRestart,
     )
     .map(|(cause, context)| retain_raw_evidence(&paths, cause, context, &mut diagnostics))
@@ -1399,27 +1358,18 @@ pub async fn recover_after_service_restart(
         progress_events: Vec::new(),
         num_turns: observed.num_turns,
         last_event_at_unix: observed.last_event_at_unix,
-        finished_at_unix,
-        duration_wall_ms,
-        container_exit_code: -1,
-        agent_exit_code,
-        is_process_error: true,
-        response,
-        agent_duration_ms: None,
-        agent_api_duration_ms: None,
-        agent_result_subtype: None,
-        main_output_tokens: Some(0),
-        main_reasoning_tokens: Some(0),
-        subagent_scopes: Some(Vec::new()),
-        subagent_scope_count: Some(0),
-        subagent_error_count: Some(0),
-        bundle_sha256,
-        bundle_compressed_bytes: compressed,
-        bundle_uncompressed_bytes: uncompressed,
-        bundle_file_count: file_count,
-        bundle_artifacts_file_count: artifacts_count,
-        raw_session_tree_retained,
-        teardown_diagnostics: diagnostics,
+        terminal: Some(SessionTerminal {
+            finished_at_unix,
+            duration_wall_ms,
+            container_exit_code: None,
+            agent_exit_code,
+            is_process_error: true,
+            response,
+            raw_session_tree_retained,
+            teardown_diagnostics: diagnostics,
+            agent_result: None,
+            bundle: accepted_bundle,
+        }),
         observed_output_tokens: None,
         observed_reasoning_tokens: None,
         observed_subagent_scope_count: None,
@@ -1834,7 +1784,6 @@ async fn finalize_setup_failure(
         ),
         (paths.output.join("events.jsonl"), b"".as_slice()),
         (paths.output.join("qwen.stderr"), captured_logs.as_bytes()),
-        (paths.output.join("qwen-exit-code"), b"-1\n".as_slice()),
         (paths.output.join("response.txt"), response.as_bytes()),
         (
             paths.control.join("container-logs.txt"),
@@ -1850,11 +1799,11 @@ async fn finalize_setup_failure(
         }
     }
 
-    let agent_exit_code = read_required_exit_code(&paths.output.join("qwen-exit-code"))
-        .unwrap_or_else(|exit_error| {
+    let agent_exit_code =
+        read_exit_code(&paths.output.join("qwen-exit-code")).unwrap_or_else(|exit_error| {
             diagnostics.push(format!("read setup-failure exit code: {exit_error}"));
             process_error = true;
-            -1
+            None
         });
     let observed = match crate::runtime::read_running_progress(&paths.events_jsonl()) {
         Ok(observed) => observed,
@@ -1895,26 +1844,19 @@ async fn finalize_setup_failure(
                 .into(),
         ))
     };
-    let (bundle_sha256, compressed, uncompressed, file_count, artifacts_count) = match bundle_result
-    {
-        Ok(stats) => (
-            stats.sha256,
-            stats.compressed_bytes,
-            stats.uncompressed_bytes,
-            stats.file_count,
-            stats.artifacts_file_count,
-        ),
+    let accepted_bundle = match bundle_result {
+        Ok(stats) => Some(stats),
         Err(bundle_error) => {
             diagnostics.push(format!(
                 "setup-failure forensic bundle failed: {bundle_error}"
             ));
             process_error = true;
-            (String::new(), 0, 0, 0, 0)
+            None
         }
     };
     let raw_session_tree_retained = raw_retention_decision(
         teardown,
-        !bundle_sha256.is_empty(),
+        accepted_bundle.is_some(),
         FinalizationPhase::SetupFailure,
     )
     .map(|(cause, context)| retain_raw_evidence(&paths, cause, context, &mut diagnostics))
@@ -1941,27 +1883,18 @@ async fn finalize_setup_failure(
         progress_events: Vec::new(),
         num_turns: observed.num_turns,
         last_event_at_unix: observed.last_event_at_unix,
-        finished_at_unix: now_unix(),
-        duration_wall_ms: elapsed_ms(context.wall_start),
-        container_exit_code: -1,
-        agent_exit_code,
-        is_process_error: process_error,
-        response,
-        agent_duration_ms: None,
-        agent_api_duration_ms: None,
-        agent_result_subtype: None,
-        main_output_tokens: Some(0),
-        main_reasoning_tokens: Some(0),
-        subagent_scopes: Some(Vec::new()),
-        subagent_scope_count: Some(0),
-        subagent_error_count: Some(0),
-        bundle_sha256,
-        bundle_compressed_bytes: compressed,
-        bundle_uncompressed_bytes: uncompressed,
-        bundle_file_count: file_count,
-        bundle_artifacts_file_count: artifacts_count,
-        raw_session_tree_retained,
-        teardown_diagnostics: diagnostics,
+        terminal: Some(SessionTerminal {
+            finished_at_unix: now_unix(),
+            duration_wall_ms: elapsed_ms(context.wall_start),
+            container_exit_code: None,
+            agent_exit_code,
+            is_process_error: process_error,
+            response,
+            raw_session_tree_retained,
+            teardown_diagnostics: diagnostics,
+            agent_result: None,
+            bundle: accepted_bundle,
+        }),
         observed_output_tokens: None,
         observed_reasoning_tokens: None,
         observed_subagent_scope_count: None,
@@ -1971,23 +1904,27 @@ async fn finalize_setup_failure(
     body
 }
 
-fn read_required_exit_code(path: &Path) -> ServiceResult<i32> {
+fn read_exit_code(path: &Path) -> ServiceResult<Option<i32>> {
     use std::io::Read;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
-    let mut file = std::fs::OpenOptions::new()
+    let mut file = match std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
         .open(path)
-        .map_err(|error| {
-            ServiceError::AgentOutputMissing(format!(
-                "required exit-code file {} is missing or cannot be opened without following links: {error}",
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(ServiceError::AgentOutputMissing(format!(
+                "exit-code file {} cannot be opened without following links: {error}",
                 path.display()
-            ))
-        })?;
+            )))
+        }
+    };
     let metadata = file.metadata().map_err(|error| {
         ServiceError::AgentOutputMissing(format!(
-            "required exit-code file {} cannot be fstat'd: {error}",
+            "exit-code file {} cannot be fstat'd: {error}",
             path.display()
         ))
     })?;
@@ -1999,26 +1936,26 @@ fn read_required_exit_code(path: &Path) -> ServiceResult<i32> {
         || metadata.len() > 64
     {
         return Err(ServiceError::AgentOutputMissing(format!(
-            "required exit-code file {} has unsafe opened type/mode/owner/size",
+            "exit-code file {} has unsafe opened type/mode/owner/size",
             path.display()
         )));
     }
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
     file.read_to_end(&mut bytes).map_err(|error| {
         ServiceError::AgentOutputMissing(format!(
-            "required exit-code file {} is unreadable through its opened descriptor: {error}",
+            "exit-code file {} is unreadable through its opened descriptor: {error}",
             path.display()
         ))
     })?;
     if bytes.len() as u64 != metadata.len() {
         return Err(ServiceError::AgentOutputMissing(format!(
-            "required exit-code file {} changed length while open",
+            "exit-code file {} changed length while open",
             path.display()
         )));
     }
     let text = std::str::from_utf8(&bytes).map_err(|error| {
         ServiceError::AgentOutputMissing(format!(
-            "required exit-code file {} is not UTF-8: {error}",
+            "exit-code file {} is not UTF-8: {error}",
             path.display()
         ))
     })?;
@@ -2034,29 +1971,37 @@ fn read_required_exit_code(path: &Path) -> ServiceResult<i32> {
             path.display()
         ))
     })?;
+    if !(0..=255).contains(&value) {
+        return Err(ServiceError::AgentOutputMissing(format!(
+            "exit-code file {} has out-of-range process status {value}",
+            path.display()
+        )));
+    }
     if text != format!("{value}\n") {
         return Err(ServiceError::AgentOutputMissing(format!(
             "exit-code file {} is not the canonical decimal representation {value} followed by one newline",
             path.display()
         )));
     }
-    Ok(value)
+    Ok(Some(value))
 }
 
 fn apply_reporter_progress(body: &mut SessionBody, progress: &ProgressReporter) {
     match progress.latest() {
         Ok(event) => apply_progress(body, &event),
         Err(error) => {
-            body.is_process_error = true;
-            body.teardown_diagnostics
+            body.terminal_mut().is_process_error = true;
+            body.terminal_mut()
+                .teardown_diagnostics
                 .push(format!("read latest lifecycle progress: {error}"));
         }
     }
     match progress.events() {
         Ok(events) => body.progress_events = events,
         Err(error) => {
-            body.is_process_error = true;
-            body.teardown_diagnostics
+            body.terminal_mut().is_process_error = true;
+            body.terminal_mut()
+                .teardown_diagnostics
                 .push(format!("read complete lifecycle progress history: {error}"));
         }
     }
@@ -2147,6 +2092,34 @@ mod tests {
         TeardownProof,
     };
     use crate::docker_ops::CaptureComplete;
+
+    #[test]
+    fn exit_sidecar_reports_only_an_actual_canonical_process_status() {
+        let directory = std::env::temp_dir().join(format!("qwen38-exit-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).expect("create exit fixture");
+        let path = directory.join("qwen-exit-code");
+        assert_eq!(
+            super::read_exit_code(&path).expect("absent observation"),
+            None
+        );
+        for (bytes, expected) in [("0\n", Some(0)), ("130\n", Some(130)), ("255\n", Some(255))] {
+            std::fs::write(&path, bytes).expect("write exit fixture");
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+                .expect("private exit fixture");
+            if unsafe { libc::geteuid() } == 0 {
+                std::os::unix::fs::chown(&path, Some(1000), Some(1000)).expect("service ownership");
+            }
+            assert_eq!(
+                super::read_exit_code(&path).expect("canonical status"),
+                expected
+            );
+        }
+        for bytes in ["-1\n", "256\n", "00\n", "0", "0\n\n"] {
+            std::fs::write(&path, bytes).expect("write invalid status");
+            assert!(super::read_exit_code(&path).is_err(), "{bytes:?}");
+        }
+        std::fs::remove_dir_all(directory).expect("remove exit fixture");
+    }
 
     #[test]
     fn panic_forensic_sidecars_are_no_clobber_and_reject_symlinks() {

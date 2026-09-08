@@ -20,7 +20,8 @@ use tokio::process::Command;
 
 use crate::error::{io_msg, ServiceError, ServiceResult};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BundleStats {
     /// SHA-256 of the exact published archive bytes, computed from the
     /// synced partial file that the no-clobber publication links into place.
@@ -50,7 +51,6 @@ pub async fn create_bundle(session_dir: &Path, archive_path: &Path) -> ServiceRe
         "output/ready.json",
         "output/events.jsonl",
         "output/qwen.stderr",
-        "output/qwen-exit-code",
         "output/response.txt",
     ] {
         let path = session_dir.join(required);

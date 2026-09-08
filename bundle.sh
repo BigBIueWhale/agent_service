@@ -40,18 +40,21 @@ if (( CURL_STATUS != 0 )) || [[ "${HTTP_STATUS}" != 200 ]]; then
     "${CURL_STATUS}" "${HTTP_STATUS}" "${SESSION_ID}" >&2
   exit 1
 fi
-RESOURCE_STATUS="$(jq -r '.status' "${BODY_FILE}")"
-RESOURCE_SHA256="$(jq -r '.bundle_sha256' "${BODY_FILE}")"
-RESOURCE_BYTES="$(jq -r '.bundle_compressed_bytes' "${BODY_FILE}")"
-readonly RESOURCE_STATUS RESOURCE_SHA256 RESOURCE_BYTES
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+jq -e -f "${SCRIPT_DIR}/scripts/session-body.jq" "${BODY_FILE}" >/dev/null
+RESOURCE_STATUS="$(jq -er '.status' "${BODY_FILE}")"
+readonly RESOURCE_STATUS
 if [[ "${RESOURCE_STATUS}" == running ]]; then
-  printf 'ERROR: session %s is still running; a bundle exists only for terminal sessions.\n' "${SESSION_ID}" >&2
+  printf 'ERROR: session %s is still running; no terminal bundle decision exists.\n' "${SESSION_ID}" >&2
   exit 1
 fi
-if [[ ! "${RESOURCE_SHA256}" =~ ^[0-9a-f]{64}$ ]]; then
-  printf 'ERROR: terminal session %s accepted no result bundle; its terminal record is the only artifact.\n' "${SESSION_ID}" >&2
+if jq -e '.terminal.bundle == null' "${BODY_FILE}" >/dev/null; then
+  printf 'ERROR: terminal session %s accepted no result bundle; consult its teardown diagnostics and raw-tree retention decision.\n' "${SESSION_ID}" >&2
   exit 1
 fi
+RESOURCE_SHA256="$(jq -er '.terminal.bundle.sha256 | select(type == "string" and test("^[0-9a-f]{64}$"))' "${BODY_FILE}")"
+RESOURCE_BYTES="$(jq -er '.terminal.bundle.compressed_bytes | select(type == "number" and . > 0 and floor == .)' "${BODY_FILE}")"
+readonly RESOURCE_SHA256 RESOURCE_BYTES
 
 set +e
 HTTP_STATUS="$(curl --noproxy '*' --silent --show-error \

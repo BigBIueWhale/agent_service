@@ -18,9 +18,6 @@ HTTP_STATUS="$(curl --noproxy '*' --silent --show-error \
   "http://127.0.0.1:8090/v1/agent/sessions/${SESSION_ID}")"
 CURL_STATUS=$?
 set -e
-if [[ -s "${RESPONSE_FILE}" ]]; then
-  jq . "${RESPONSE_FILE}" || sed -n '1,80p' "${RESPONSE_FILE}"
-fi
 if (( CURL_STATUS != 0 )); then
   printf 'ERROR: state read failed for %s (curl=%s). The operation is unaffected; retry this GET later.\n' "${SESSION_ID}" "${CURL_STATUS}" >&2
   exit 1
@@ -29,3 +26,5 @@ if [[ "${HTTP_STATUS}" != 200 ]]; then
   printf 'ERROR: state read returned HTTP %s for %s.\n' "${HTTP_STATUS}" "${SESSION_ID}" >&2
   exit 1
 fi
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+jq -e -f "${SCRIPT_DIR}/scripts/session-body.jq" "${RESPONSE_FILE}"

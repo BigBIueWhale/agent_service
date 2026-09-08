@@ -502,7 +502,8 @@ tokens it read back from its prefix cache. The client computes none of these —
 generation that arrives without them fails that request — so a billed event
 lacking one, or one whose reasoning exceeds its output, is a stream this service
 does not recognise and is refused rather than tallied. The parser sums the served
-output and reasoning per scope (`main_output_tokens`, `main_reasoning_tokens`,
+output and reasoning per scope (`main_output_tokens`, `main_reasoning_tokens` in
+`terminal.agent_result`,
 and `output_tokens`/`reasoning_tokens` on every subagent scope). A subagent's own
 generations reach the stream too: each completed round is written under the
 scope's tool-call id as its reasoning, its text and its served usage, so a
@@ -512,7 +513,7 @@ its counts, validated in full. All of it is evidence for the reader; nothing in
 it is ever handed back to a model.
 
 The envelope names which terminal state ended the run, and the service carries that
-name through to the caller as `agent_result_subtype`. `success` is the agent's
+name through to the caller as `terminal.agent_result.agent_result_subtype`. `success` is the agent's
 assertion that the model wrote its final message to the end. Seven `error_*`
 spellings name the states that stopped a run instead, one name per state:
 `error_during_execution` when the run failed on its own terms, `error_timeout`,
@@ -543,20 +544,25 @@ budget is asked before the turn it decides is counted, so a run it stops reports
 exactly the budget it was given as `num_turns` and has interrupted no turn.
 
 A status read taken while a run is in flight reports what the live reader has
-accounted so far — `observed_output_tokens`, `observed_reasoning_tokens` and
-`observed_subagent_scope_count` — and how many completed records it could not
-read whole, as `observed_unaccounted_records`. These are a growing lower bound
-over what has been written, not a verdict: the strict parse that produces
-`main_output_tokens`, `main_reasoning_tokens` and the subagent table runs once,
-at teardown, and refuses anything it does not recognise. The two are named
-apart because they are different claims, and a running session carries only the
-first while a terminal one carries only the second. Nothing reports a
-placeholder for the other: an empty subagent table is a finished run's
-statement that it delegated nothing, so it is never published by a run that has
-not finished, where it would read as exactly that evidence. A live read never
-fails on a malformed record either — refusing a status request over one bad
-line would make observing a healthy run a way to lose it — so it counts the
-record as unaccounted and leaves the verdict to the parse entitled to give one.
+accounted so far: `observed_output_tokens`, `observed_reasoning_tokens`, and
+`observed_subagent_scope_count`. `observed_unaccounted_records` counts completed
+billed records whose usage it could not account. These are observations over the
+written stream. The `terminal` object is `null` until an ending exists. Once
+terminal, all four live observations are `null`; the strict parser's certified
+accounting is in `terminal.agent_result`. That object is `null` when capture was
+not proved, parsing failed, or recovery could not certify a result. An empty
+`subagent_scopes` table therefore certifies that a parsed stream delegated nothing;
+zero token totals are measured totals. A malformed JSON record or unsafe event
+file is an explicit status-read error; incomplete usage on a readable billed record
+is counted as unaccounted. Reads never cancel or change execution.
+
+`terminal.bundle` contains the accepted hash and all measured archive counts
+as one object, or is `null` when no archive was accepted. Its
+`artifacts_file_count: 0` certifies that an accepted archive contains no artifact
+files. The terminal response, process-error decision, exit observations, durations,
+retention decision, and teardown diagnostics all live inside `terminal`; a running
+session supplies no answers for them. See the [session resource contract](docs/session-resource.md)
+for exact fields and reader examples.
 
 Every turn is issued with the same output budget, the window's share, whatever
 the conversation has already cost: the trigger holds the history below the size
@@ -920,6 +926,11 @@ belongs to a connection, and callers poll the monotonic `progress_revision` /
 prompt bytes enter Qwen through text stdin, not a shell argument, so Linux's
 per-argument limit does not invalidate the API contract or expose the prompt
 in a process listing.
+
+All session endpoints return the [same evidence contract](docs/session-resource.md).
+`session.sh` validates its live/terminal distinction before displaying the JSON;
+`bundle.sh` requires an accepted `terminal.bundle` and verifies the downloaded bytes
+against both its hash/size and the transport header.
 
 Terminal persistence is atomic and no-clobber (`create_new`, write, `fsync`,
 same-directory hard-link publication, directory `fsync`). If persistence fails,

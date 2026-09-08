@@ -4,8 +4,8 @@
 //! All session-related endpoints share one wire body
 //! (`runtime::SessionBody`), discriminated by a `status` field with values
 //! `running` | `completed` | `cancelled`. Required-field discipline:
-//! every field is always serialised; running-only fields are zeroed for
-//! terminal states and vice versa, so clients have one parser.
+//! live observations accompany running sessions; terminal evidence exists only
+//! inside the terminal object once an ending is established.
 //!
 //! Errors are non-streaming JSON with shape `error::WireError`.
 //!
@@ -445,9 +445,13 @@ async fn download_bundle(
     if body.status == crate::runtime::SessionStatus::Running {
         return Err(ServiceError::SessionRunning { session_id: id });
     }
-    if body.bundle_sha256.is_empty() {
-        return Err(ServiceError::BundleAbsent { session_id: id });
-    }
+    let bundle = body
+        .terminal()
+        .bundle
+        .as_ref()
+        .ok_or_else(|| ServiceError::BundleAbsent {
+            session_id: id.clone(),
+        })?;
     let archive = state.cfg.results_dir.join(&id).join("bundle.tar.zst");
     let file = tokio::fs::File::open(&archive).await.map_err(|error| {
         ServiceError::Internal(format!(
@@ -463,13 +467,13 @@ async fn download_bundle(
             archive.display()
         ))
     })?;
-    if metadata.len() != body.bundle_compressed_bytes {
+    if metadata.len() != bundle.compressed_bytes {
         return Err(ServiceError::Internal(format!(
             "terminal {} bundle at {} is {} bytes but the terminal record accepted {}",
             id,
             archive.display(),
             metadata.len(),
-            body.bundle_compressed_bytes
+            bundle.compressed_bytes
         )));
     }
     let mut headers = session_response_headers(&id)?;
@@ -479,7 +483,7 @@ async fn download_bundle(
     );
     headers.insert(
         header::CONTENT_LENGTH,
-        HeaderValue::from_str(&body.bundle_compressed_bytes.to_string()).map_err(|error| {
+        HeaderValue::from_str(&bundle.compressed_bytes.to_string()).map_err(|error| {
             ServiceError::Internal(format!(
                 "construct bundle Content-Length header for {id}: {error}"
             ))
@@ -487,7 +491,7 @@ async fn download_bundle(
     );
     headers.insert(
         HeaderName::from_static("x-bundle-sha256"),
-        HeaderValue::from_str(&body.bundle_sha256).map_err(|error| {
+        HeaderValue::from_str(&bundle.sha256).map_err(|error| {
             ServiceError::Internal(format!("construct bundle hash header for {id}: {error}"))
         })?,
     );
@@ -2227,7 +2231,7 @@ fn sweep_state_dir(
             validate_raw_cause_for_terminal(cause, body, "sweep_state_dir")?;
         }
         match terminal {
-            Some(body) if body.raw_session_tree_retained && marker_cause.is_some() => {
+            Some(body) if body.terminal().raw_session_tree_retained && marker_cause.is_some() => {
                 tracing::warn!(
                     session_id = name,
                     dir = %path.display(),
@@ -2235,7 +2239,7 @@ fn sweep_state_dir(
                 );
                 continue;
             }
-            Some(body) if body.raw_session_tree_retained => {
+            Some(body) if body.terminal().raw_session_tree_retained => {
                 return Err(ServiceError::Internal(format!(
                     "sweep_state_dir: terminal {name} claims retained raw evidence but its service-owned marker is absent at {}",
                     marker.display()
@@ -2465,7 +2469,7 @@ fn validate_terminal_state_reconciliation(
             )));
         }
     };
-    if !body.raw_session_tree_retained {
+    if !body.terminal().raw_session_tree_retained {
         if metadata.is_some() {
             return Err(ServiceError::Internal(format!(
                 "terminal reconciliation: non-retained terminal {} still has raw state at {} after the state sweep",
@@ -2588,6 +2592,7 @@ fn committed_terminal_for_sweep(
             terminal_path.display()
         ))
     })?;
+    body.validate_shape()?;
     if body.session_id != session_id || body.status == crate::runtime::SessionStatus::Running {
         return Err(ServiceError::Internal(format!(
             "terminal sweep: identity/status mismatch in {}",
@@ -2808,7 +2813,7 @@ fn validate_raw_cause_for_terminal(
     body: &crate::runtime::SessionBody,
     context: &str,
 ) -> ServiceResult<()> {
-    let accepted_bundle = !body.bundle_sha256.is_empty();
+    let accepted_bundle = body.terminal().bundle.is_some();
     let shape_valid = if accepted_bundle {
         matches!(
             cause,
@@ -2930,34 +2935,19 @@ pub(crate) fn validate_terminal_storage(
 ) -> ServiceResult<()> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
+    body.validate_shape()?;
+    let terminal = body
+        .terminal
+        .as_ref()
+        .ok_or_else(|| ServiceError::Internal("terminal storage requires an ending".into()))?;
     let archive = result_dir.join("bundle.tar.zst");
-    if body.raw_session_tree_retained && body.bundle_sha256.is_empty() {
-        if body.bundle_compressed_bytes != 0
-            || body.bundle_uncompressed_bytes != 0
-            || body.bundle_file_count != 0
-            || body.bundle_artifacts_file_count != 0
-        {
-            return Err(ServiceError::Internal(format!(
-                "terminal {} retains raw evidence after bundle failure but has nonzero bundle counters",
-                body.session_id
-            )));
-        }
+    if terminal.raw_session_tree_retained && terminal.bundle.is_none() {
         // A failed bundle publication may deliberately leave a partial or
         // ambiguous archive as additional evidence. It is not accepted by the
         // terminal counters/path and is never deleted by startup.
         return Ok(());
     }
-    if body.bundle_sha256.is_empty() {
-        if body.bundle_compressed_bytes != 0
-            || body.bundle_uncompressed_bytes != 0
-            || body.bundle_file_count != 0
-            || body.bundle_artifacts_file_count != 0
-        {
-            return Err(ServiceError::Internal(format!(
-                "terminal {} has an empty bundle hash but nonzero bundle counters",
-                body.session_id
-            )));
-        }
+    if terminal.bundle.is_none() {
         match std::fs::symlink_metadata(&archive) {
             Ok(_) => {
                 return Err(ServiceError::Internal(format!(
@@ -2977,20 +2967,10 @@ pub(crate) fn validate_terminal_storage(
         }
         return Ok(());
     }
-    // Deep hash equality is proved once at bundle acceptance from the exact
-    // bytes being published, and any bundle download re-proves it end to
-    // end. Reads only require the recorded commitment to be well-formed.
-    if body.bundle_sha256.len() != 64
-        || !body
-            .bundle_sha256
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
-    {
-        return Err(ServiceError::Internal(format!(
-            "terminal {} bundle hash {:?} is not exactly 64 lowercase hexadecimal characters",
-            body.session_id, body.bundle_sha256
-        )));
-    }
+    let bundle = terminal
+        .bundle
+        .as_ref()
+        .expect("bundle presence was checked");
     let metadata = std::fs::symlink_metadata(&archive).map_err(|error| {
         ServiceError::Internal(format!(
             "terminal {} accepted bundle cannot be stat'd at {}: {error}",
@@ -3004,7 +2984,7 @@ pub(crate) fn validate_terminal_storage(
         || metadata.uid() != service_uid
         || metadata.gid() != service_gid
         || metadata.len() == 0
-        || metadata.len() != body.bundle_compressed_bytes
+        || metadata.len() != bundle.compressed_bytes
     {
         return Err(ServiceError::Internal(format!(
             "terminal {} accepted bundle metadata drift at {}: type={:?} mode={:o} uid={} gid={} expected_owner={}:{} size={} recorded={}",
@@ -3017,7 +2997,7 @@ pub(crate) fn validate_terminal_storage(
             service_uid,
             service_gid,
             metadata.len(),
-            body.bundle_compressed_bytes
+            bundle.compressed_bytes
         )));
     }
     Ok(())
@@ -3168,28 +3148,19 @@ mod tests {
             output_event_bytes: 0,
             progress_events: Vec::new(),
             num_turns: 0,
-            last_event_at_unix: 0,
-            finished_at_unix: 2,
-            duration_wall_ms: 1,
-            container_exit_code: -1,
-            agent_exit_code: -1,
-            is_process_error: true,
-            response: "fixture terminal".to_string(),
-            agent_duration_ms: None,
-            agent_api_duration_ms: None,
-            agent_result_subtype: None,
-            main_output_tokens: Some(0),
-            main_reasoning_tokens: Some(0),
-            subagent_scopes: Some(Vec::new()),
-            subagent_scope_count: Some(0),
-            subagent_error_count: Some(0),
-            bundle_sha256: String::new(),
-            bundle_compressed_bytes: 0,
-            bundle_uncompressed_bytes: 0,
-            bundle_file_count: 0,
-            bundle_artifacts_file_count: 0,
-            raw_session_tree_retained: raw_retained,
-            teardown_diagnostics: Vec::new(),
+            last_event_at_unix: None,
+            terminal: Some(crate::runtime::SessionTerminal {
+                finished_at_unix: 2,
+                duration_wall_ms: 1,
+                container_exit_code: None,
+                agent_exit_code: None,
+                is_process_error: true,
+                response: "fixture terminal".to_string(),
+                raw_session_tree_retained: raw_retained,
+                teardown_diagnostics: Vec::new(),
+                agent_result: None,
+                bundle: None,
+            }),
             observed_output_tokens: None,
             observed_reasoning_tokens: None,
             observed_subagent_scope_count: None,
@@ -3523,11 +3494,14 @@ mod tests {
         let archive = result_dir.join("bundle.tar.zst");
         private_write(&archive, b"accepted-bundle");
         let mut body = terminal(session_id, true);
-        body.bundle_sha256 =
-            crate::bundle::hash_file_sha256(&archive).expect("hash accepted-bundle fixture");
-        body.bundle_compressed_bytes = b"accepted-bundle".len() as u64;
-        body.bundle_uncompressed_bytes = 100;
-        body.bundle_file_count = 2;
+        body.terminal_mut().bundle = Some(crate::bundle::BundleStats {
+            sha256: crate::bundle::hash_file_sha256(&archive)
+                .expect("hash accepted-bundle fixture"),
+            compressed_bytes: b"accepted-bundle".len() as u64,
+            uncompressed_bytes: 100,
+            file_count: 2,
+            artifacts_file_count: 0,
+        });
         write_terminal(&result_dir.join("finished.json"), &body);
         let marker = control.join("raw-evidence-retained.txt");
         private_write(
@@ -3545,10 +3519,7 @@ mod tests {
         sweep_partial_results(&results, &state, uid, gid)
             .expect("accepted retained bundle remains a valid terminal");
 
-        body.bundle_sha256.clear();
-        body.bundle_compressed_bytes = 0;
-        body.bundle_uncompressed_bytes = 0;
-        body.bundle_file_count = 0;
+        body.terminal_mut().bundle = None;
         std::fs::remove_file(result_dir.join("finished.json")).expect("replace terminal fixture");
         write_terminal(&result_dir.join("finished.json"), &body);
         let error = sweep_state_dir(&state, &results, uid, gid)
@@ -3632,57 +3603,40 @@ mod tests {
         let archive = result_dir.join("bundle.tar.zst");
         private_write(&archive, b"bundle-bytes");
         let mut body = terminal("s-66666666666666666666666666666666", false);
-        body.bundle_sha256 =
-            crate::bundle::hash_file_sha256(&archive).expect("hash bundle-bytes fixture");
-        body.bundle_compressed_bytes = b"bundle-bytes".len() as u64;
-        body.bundle_uncompressed_bytes = 100;
-        body.bundle_file_count = 2;
+        body.terminal_mut().bundle = Some(crate::bundle::BundleStats {
+            sha256: crate::bundle::hash_file_sha256(&archive).expect("hash bundle-bytes fixture"),
+            compressed_bytes: b"bundle-bytes".len() as u64,
+            uncompressed_bytes: 100,
+            file_count: 2,
+            artifacts_file_count: 0,
+        });
         let (uid, gid) = owner();
 
         validate_terminal_storage(&result_dir, &body, uid, gid)
             .expect("exact accepted bundle metadata");
-        body.raw_session_tree_retained = true;
+        body.terminal_mut().raw_session_tree_retained = true;
         validate_terminal_storage(&result_dir, &body, uid, gid)
             .expect("teardown-incomplete raw evidence may coexist with an exact bundle");
-        body.raw_session_tree_retained = false;
-        body.bundle_compressed_bytes += 1;
+        body.terminal_mut().raw_session_tree_retained = false;
+        body.terminal_mut()
+            .bundle
+            .as_mut()
+            .expect("accepted bundle")
+            .compressed_bytes += 1;
         let error = validate_terminal_storage(&result_dir, &body, uid, gid)
             .expect_err("bundle size drift must fail");
         assert!(error.to_string().contains("metadata drift"));
     }
 
     #[test]
-    fn historical_terminal_without_raw_field_has_only_false_migration_value() {
-        let body = terminal("s-77777777777777777777777777777777", false);
-        let mut value = serde_json::to_value(&body).expect("serialize historical fixture");
-        value
-            .as_object_mut()
-            .expect("terminal object")
-            .remove("raw_session_tree_retained");
-        let migrated: SessionBody = serde_json::from_value(value).expect("decode historical body");
-        assert!(!migrated.raw_session_tree_retained);
-    }
-
-    #[test]
-    fn historical_terminal_without_subagent_fields_reports_them_absent() {
-        // Records committed before subagent surfacing ran through the same
-        // strict parser, which validated scope shape and then discarded the
-        // accounting. What they can say about subagents and served tokens is
-        // nothing, and absent is the only reading of that: an empty table and
-        // a zero are answers those records never gave.
-        let body = terminal("s-88888888888888888888888888888888", false);
-        let mut value = serde_json::to_value(&body).expect("serialize historical fixture");
-        let object = value.as_object_mut().expect("terminal object");
-        object.remove("subagent_scopes");
-        object.remove("subagent_scope_count");
-        object.remove("subagent_error_count");
-        object.remove("main_output_tokens");
-        object.remove("main_reasoning_tokens");
-        let migrated: SessionBody = serde_json::from_value(value).expect("decode historical body");
-        assert_eq!(migrated.subagent_scopes, None);
-        assert_eq!(migrated.subagent_scope_count, None);
-        assert_eq!(migrated.subagent_error_count, None);
-        assert_eq!(migrated.main_output_tokens, None);
-        assert_eq!(migrated.main_reasoning_tokens, None);
+    fn terminal_storage_rejects_live_values_and_incomplete_evidence() {
+        let tree = TestTree::new("terminal-evidence");
+        let (uid, gid) = owner();
+        let mut body = terminal("s-77777777777777777777777777777777", false);
+        body.observed_output_tokens = Some(0);
+        assert!(validate_terminal_storage(&tree.0, &body, uid, gid).is_err());
+        body.observed_output_tokens = None;
+        body.terminal = None;
+        assert!(validate_terminal_storage(&tree.0, &body, uid, gid).is_err());
     }
 }

@@ -86,12 +86,13 @@ pub enum SessionStatus {
     Cancelled,
 }
 
-/// Single source of truth for the wire-shape body returned by **every**
-/// session-related endpoint. Required-field discipline: every field is
-/// always present in the JSON; running-only fields are zeroed/empty for
-/// terminal states, and terminal-only fields are zeroed/empty for running.
-/// Clients have one parser regardless of state.
+/// The session resource returned by every session endpoint. Live observations
+/// and terminal evidence are separate facts. `terminal: null` means no ending
+/// exists yet; an ending with `agent_result: null` or `bundle: null` means that
+/// no strict agent result or accepted archive exists. Zero and empty values
+/// inside those objects are measured answers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SessionBody {
     pub session_id: String,
     pub status: SessionStatus,
@@ -104,48 +105,28 @@ pub struct SessionBody {
     /// number the launcher passed to Qwen Code, so an operator reading a
     /// finished session can tell what bound it actually ran under instead of
     /// inferring it from the deployment's current default.
-    // Terminal records committed before the budget became a request field
-    // could only ever have run at the locked default, so that is their one
-    // semantically valid migration value. This is an explicit persisted-data
-    // schema migration, not a runtime behavior fallback.
-    #[serde(default = "default_recorded_max_session_turns")]
     pub max_session_turns: u32,
     /// Byte count and SHA-256 of the exact workspace archive the caller
     /// streamed over the connection for this session. Carried through every
     /// state so any later reader can re-verify which workspace bytes this
     /// session was created from.
-    // Historical committed records predate the streamed-archive contract and
-    // carry no archive commitment; zero/empty is their only semantically
-    // valid migration value. This is an explicit persisted-data schema
-    // migration, not a runtime behavior fallback.
-    #[serde(default)]
     pub archive_bytes: u64,
-    #[serde(default)]
     pub archive_sha256: String,
     pub prompt_preview: String,
 
     /// Monotonic lifecycle revision. Revision 1 is durably published before
     /// a newly accepted POST can return. It is a resource version, not a
     /// stream cursor, and reading it never consumes or acknowledges anything.
-    #[serde(default)]
     pub progress_revision: u64,
-    #[serde(default)]
     pub progress_at_unix_ms: u64,
-    #[serde(default)]
     pub progress_phase: ProgressPhase,
-    #[serde(default)]
     pub progress_message: String,
-    #[serde(default)]
     pub staged_bytes: u64,
-    #[serde(default)]
     pub staged_entries: u64,
-    #[serde(default)]
     pub staged_regular_files: u64,
-    #[serde(default)]
     pub output_event_bytes: u64,
     /// Complete durable lifecycle history.  Reading it is optional and does
     /// not subscribe, acknowledge, consume, or otherwise mutate the session.
-    #[serde(default)]
     pub progress_events: Vec<ProgressEvent>,
 
     /// Number of distinct LLM invocations the agent has made so far.
@@ -157,7 +138,9 @@ pub struct SessionBody {
     /// because it counts the turn that started and never billed, and that
     /// count is the one reported.
     pub num_turns: u64,
-    pub last_event_at_unix: u64,
+    /// Event file modification time, when a trustworthy timestamp was observed.
+    #[serde(deserialize_with = "required_nullable")]
+    pub last_event_at_unix: Option<u64>,
 
     /// What the live reader has accounted in `events.jsonl` so far: served
     /// output and reasoning tokens summed over the completed billed turns it
@@ -169,154 +152,178 @@ pub struct SessionBody {
     /// bound over what has been written, the second refused everything it did
     /// not recognise. Neither is ever presented as the other, and neither is
     /// ever fabricated to fill the other's silence.
-    #[serde(default)]
+    #[serde(deserialize_with = "required_nullable")]
     pub observed_output_tokens: Option<u64>,
-    #[serde(default)]
+    #[serde(deserialize_with = "required_nullable")]
     pub observed_reasoning_tokens: Option<u64>,
-    #[serde(default)]
+    #[serde(deserialize_with = "required_nullable")]
     pub observed_subagent_scope_count: Option<u64>,
     /// Completed records billing a turn whose usage could not be read whole.
-    /// Non-zero says the tallies above are short by an unknown amount: a live
-    /// read neither refuses an entire status request over one bad line nor
-    /// reports a total it knows is incomplete without saying so. The verdict
-    /// on such a record belongs to the terminal parse, which may refuse the
-    /// stream outright.
-    #[serde(default)]
+    /// Non-zero says the tallies above are short by an unknown amount. A
+    /// completed JSON record with unusable usage remains explicitly unaccounted;
+    /// malformed JSON syntax still fails the read. The terminal parser decides
+    /// whether the complete stream can certify a result.
+    #[serde(deserialize_with = "required_nullable")]
     pub observed_unaccounted_records: Option<u64>,
 
-    // Established when the run reaches a terminal state.
-    //
-    // The accounting the strict parse certifies -- the served token sums and
-    // the subagent table below -- is absent until there is a verdict to
-    // report. A zero and an empty table are answers a finished run can
-    // genuinely give, so neither may be borrowed to mean "no verdict yet":
-    // that is what made an empty subagent table read as proof that a run in
-    // flight had delegated nothing. Live progress is reported instead by the
-    // `observed_*` fields above, which say what has been seen rather than
-    // what has been certified.
+    /// The completed lifecycle decision, absent exactly while work is in flight.
+    #[serde(deserialize_with = "required_nullable")]
+    pub terminal: Option<SessionTerminal>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SessionTerminal {
     pub finished_at_unix: u64,
     pub duration_wall_ms: u64,
-    /// Exit code reported by `docker wait` for the agent container. The
-    /// wrapper propagates Qwen Code's exit status after durably capturing
-    /// output, so it is the agent's own status on an ordinary run.
-    pub container_exit_code: i32,
-    /// The same number as `container_exit_code`, read back from the
-    /// `output/qwen-exit-code` record this service writes from it before the
-    /// bundle is sealed, so a bundle carries the exit status without the
-    /// caller having to consult the session body. -1 if that record is
-    /// missing or unparseable. It is not an independent observation of the
-    /// agent's status and must not be read as corroborating evidence for
-    /// one. Common values:
-    ///   0   normal completion
-    ///   53  the session turn budget stopped the run
-    ///   55  a wall-clock or tool-call budget stopped the run
-    ///   130 the run was cancelled
-    ///   other non-zero: an agent-side failure; see events.jsonl
-    pub agent_exit_code: i32,
-    /// True iff the run did not end cleanly: a terminal record reporting an
-    /// error, an abnormal container or agent exit, a setup failure before
-    /// model/tokenizer readiness, or a capture/teardown failure this service
-    /// observed around the run. **It describes how the run ended, never
-    /// whether the answer is useful**: whether a response satisfies the
-    /// prompt is not decidable here, and nothing in this service claims it
-    /// is. `agent_result_subtype` names which ending it was.
+    /// The actual status returned by Docker wait. Absent if no wait succeeded.
+    #[serde(deserialize_with = "required_nullable")]
+    pub container_exit_code: Option<i32>,
+    /// Read back from the trusted output/qwen-exit-code sidecar. This records
+    /// the same observation as container_exit_code, not independent evidence.
+    /// Absent if no valid sidecar exists; no synthetic exit status is written.
+    #[serde(deserialize_with = "required_nullable")]
+    pub agent_exit_code: Option<i32>,
+    /// Whether execution or mandatory evidence handling failed. This describes
+    /// process correctness, never whether the answer satisfies the prompt.
     pub is_process_error: bool,
+    /// The service's final response, including any execution failure explanation.
     pub response: String,
-    /// Wall time the agent itself reported, or `None` when no terminal
-    /// result was parsed and there is therefore nothing to report. The field
-    /// was a bare `u64` and every path that never saw a terminal result wrote
-    /// `0` into it, which is indistinguishable from a genuine zero and reads
-    /// as "the agent ran for no time" rather than "the agent never told us".
-    /// `Option` makes the fabricated value unrepresentable: absent is the
-    /// only way to say nothing was measured.
-    pub agent_duration_ms: Option<u64>,
-    /// Of `agent_duration_ms`, the wall time spent inside model API calls.
-    /// The terminal result has always been required to carry it and the
-    /// parser has always type-checked it; it was then discarded, leaving an
-    /// operator unable to tell a backend stall from a local tool loop.
-    // Terminal records committed before this field existed cannot supply it,
-    // and absent is its one semantically valid migration value: those runs
-    // report no API time because none was recorded. This is an explicit
-    // persisted-data schema migration, not a runtime behavior fallback.
-    #[serde(default)]
-    pub agent_api_duration_ms: Option<u64>,
-    /// How the agent's own terminal record named the run's ending, verbatim:
-    /// `success` when the model wrote its final message to the end, or the
-    /// `error_*` spelling of the state that stopped it instead — a failure
-    /// during execution, one of the three caller-supplied bounds, a loop the
-    /// detector halted, a generation the provider cut short, or a cancellation
-    /// from outside. The complete set is `result_parse::SUCCESS_SUBTYPE` and
-    /// `result_parse::ERROR_SUBTYPES`.
-    /// `None` exactly when no terminal result was parsed and there is
-    /// therefore nothing the agent asserted about its own ending.
-    // `#[serde(default)]` admits a committed record that carries no terminal
-    // state, and absent is its only honest reading of one: nothing here
-    // synthesizes a spelling the agent did not assert. That is an admission
-    // of the persisted schema, not a runtime behavior fallback.
-    #[serde(default)]
-    pub agent_result_subtype: Option<String>,
-    /// Generated tokens the backend billed to the session's own turns, summed
-    /// from the served usage every billed turn carries, and the part of them
-    /// the backend counted as reasoning. Zero on a session whose stream was
-    /// never strictly parsed, for the same reason `subagent_scopes` is empty.
-    // Terminal records committed before the served split was carried cannot
-    // supply it, and zero is their only migration value: nothing was summed.
-    // This is an explicit persisted-data schema migration, not a runtime
-    // behavior fallback.
-    #[serde(default)]
-    pub main_output_tokens: Option<u64>,
-    #[serde(default)]
-    pub main_reasoning_tokens: Option<u64>,
-    /// Per-subagent accounting from the strict terminal parse, in order of
-    /// first appearance in the stream. Each row is one scope: the id-resolved
-    /// `tool_use` call that spawned it, the turns the stream billed to it,
-    /// and the terminal record it reported for itself, if any. Empty when the
-    /// run delegated nothing — and empty on any session whose stream was
-    /// never strictly parsed (capture unproved, parse refused), because an
-    /// unparsed stream can prove nothing about subagents and a fabricated row
-    /// would read as evidence.
-    // Terminal records committed before subagent surfacing existed carry no
-    // scope rows and ran through the same parser, which validated and then
-    // discarded exactly this information; empty is their only semantically
-    // valid migration value. This is an explicit persisted-data schema
-    // migration, not a runtime behavior fallback.
-    #[serde(default)]
-    pub subagent_scopes: Option<Vec<crate::result_parse::AgentScope>>,
-    /// Summary counts over `subagent_scopes`, precomputed so a caller can
-    /// read delegation volume and failure count without walking the array.
-    /// A scope counts as an error only when its own terminal record reported
-    /// `is_error: true`: a scope that never reported is surfaced as absent
-    /// evidence, never inflated into a failure.
-    #[serde(default)]
-    pub subagent_scope_count: Option<u64>,
-    #[serde(default)]
-    pub subagent_error_count: Option<u64>,
-    /// SHA-256 of the published `bundle.tar.zst`, computed at bundle
-    /// acceptance. Empty exactly when no bundle was accepted; the bundle
-    /// itself is retrieved over the connection from the bundle endpoint,
-    /// never through a shared filesystem path.
-    // Historical committed records published a server-local
-    // `bundle_archive_path` instead of a content hash; empty is the only
-    // semantically valid migration value for them. This is an explicit
-    // persisted-data schema migration, not a runtime behavior fallback.
-    #[serde(default)]
-    pub bundle_sha256: String,
-    pub bundle_compressed_bytes: u64,
-    pub bundle_uncompressed_bytes: u64,
-    pub bundle_file_count: u64,
-    pub bundle_artifacts_file_count: u64,
-    /// True when the exact raw state/session tree was deliberately retained
-    /// for forensic recovery because required archive creation failed or the
-    /// broker could not prove complete container teardown. In the latter case
-    /// a valid accepted bundle may coexist with the retained raw tree.
-    /// DELETE removes that retained tree before deleting the terminal record.
-    // Historical accepted v12 records predate this field and always deleted
-    // their raw tree even when bundling failed. Their only semantically valid
-    // migration value is therefore false; this is an explicit persisted-data
-    // schema migration, not a runtime behavior fallback.
-    #[serde(default)]
+    /// All and only the evidence certified by the strict event parser. Absence
+    /// says that no such result exists, including capture refusal and recovery.
+    #[serde(deserialize_with = "required_nullable")]
+    pub agent_result: Option<AgentResult>,
+    /// The exact accepted archive and its measured counts. Absence says no
+    /// bundle was accepted; diagnostics explain the failure or prohibition.
+    #[serde(deserialize_with = "required_nullable")]
+    pub bundle: Option<crate::bundle::BundleStats>,
+    /// Whether the exact raw session tree was retained for forensic recovery.
+    /// A valid bundle may coexist with raw evidence after incomplete teardown.
     pub raw_session_tree_retained: bool,
     pub teardown_diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentResult {
+    pub agent_duration_ms: u64,
+    pub agent_api_duration_ms: u64,
+    /// The agent's verbatim terminal subtype from the closed parser vocabulary.
+    pub agent_result_subtype: String,
+    /// Served output and reasoning tokens billed to main-scope turns.
+    pub main_output_tokens: u64,
+    pub main_reasoning_tokens: u64,
+    /// Strictly parsed scopes in order of first appearance. An empty table
+    /// certifies that the stream contained no subagents.
+    pub subagent_scopes: Vec<crate::result_parse::AgentScope>,
+    pub subagent_scope_count: u64,
+    pub subagent_error_count: u64,
+}
+
+fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)
+}
+
+impl SessionBody {
+    /// Enforce the same evidence contract before publication and after every
+    /// persisted read, including recovery drafts and startup sweeps.
+    pub(crate) fn validate_shape(&self) -> ServiceResult<()> {
+        let running = self.status == SessionStatus::Running;
+        if running == self.terminal.is_some() {
+            return Err(ServiceError::Internal(format!(
+                "session {} status and terminal evidence disagree",
+                self.session_id
+            )));
+        }
+        for (field, present) in [
+            (
+                "observed_output_tokens",
+                self.observed_output_tokens.is_some(),
+            ),
+            (
+                "observed_reasoning_tokens",
+                self.observed_reasoning_tokens.is_some(),
+            ),
+            (
+                "observed_subagent_scope_count",
+                self.observed_subagent_scope_count.is_some(),
+            ),
+            (
+                "observed_unaccounted_records",
+                self.observed_unaccounted_records.is_some(),
+            ),
+        ] {
+            if present != running {
+                return Err(ServiceError::Internal(format!(
+                    "session {} has invalid live-progress {field} presence for {:?}",
+                    self.session_id, self.status
+                )));
+            }
+        }
+        if let Some(terminal) = &self.terminal {
+            if terminal.finished_at_unix < self.started_at_unix {
+                return Err(ServiceError::Internal(
+                    "terminal timestamp precedes acceptance".into(),
+                ));
+            }
+            for code in [terminal.container_exit_code, terminal.agent_exit_code]
+                .into_iter()
+                .flatten()
+            {
+                if !(0..=255).contains(&code) {
+                    return Err(ServiceError::Internal(format!(
+                        "invalid process exit status {code}"
+                    )));
+                }
+            }
+            if let Some(result) = &terminal.agent_result {
+                if result.main_reasoning_tokens > result.main_output_tokens
+                    || result.subagent_scope_count != result.subagent_scopes.len() as u64
+                    || result.subagent_error_count
+                        != result
+                            .subagent_scopes
+                            .iter()
+                            .filter(|scope| scope.is_error == Some(true))
+                            .count() as u64
+                    || (result.agent_result_subtype != crate::result_parse::SUCCESS_SUBTYPE
+                        && !crate::result_parse::ERROR_SUBTYPES
+                            .contains(&result.agent_result_subtype.as_str()))
+                {
+                    return Err(ServiceError::Internal(
+                        "terminal agent result has inconsistent certified evidence".into(),
+                    ));
+                }
+            }
+            if let Some(bundle) = &terminal.bundle {
+                if bundle.sha256.len() != 64
+                    || !bundle
+                        .sha256
+                        .bytes()
+                        .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+                    || bundle.compressed_bytes == 0
+                    || bundle.artifacts_file_count > bundle.file_count
+                {
+                    return Err(ServiceError::Internal(
+                        "terminal bundle has invalid accepted metadata".into(),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Only terminal constructors and validated terminal reads may use this.
+    pub(crate) fn terminal(&self) -> &SessionTerminal {
+        self.terminal.as_ref().expect("terminal body has an ending")
+    }
+
+    pub(crate) fn terminal_mut(&mut self) -> &mut SessionTerminal {
+        self.terminal.as_mut().expect("terminal body has an ending")
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1327,8 +1334,8 @@ impl Manager {
                 "execution, mandatory capture, teardown, and bundle handling are complete; preparing the no-clobber terminal resource",
                 counters,
             ) {
-                body.is_process_error = true;
-                body.teardown_diagnostics.push(format!(
+                body.terminal_mut().is_process_error = true;
+                body.terminal_mut().teardown_diagnostics.push(format!(
                     "publish terminal-persistence progress: {error}"
                 ));
             }
@@ -1338,7 +1345,7 @@ impl Manager {
                     SessionStatus::Cancelled => {
                         "session cancellation is terminal; mandatory capture, teardown, and evidence handling are complete and the terminal record is ready for publication"
                     }
-                    SessionStatus::Completed if body.is_process_error => {
+                    SessionStatus::Completed if body.terminal().is_process_error => {
                         "session is terminal with a process or lifecycle error; evidence handling is complete and the terminal record is ready for publication"
                     }
                     SessionStatus::Completed => {
@@ -1351,8 +1358,8 @@ impl Manager {
             match terminal_progress {
                 Ok(event) => apply_progress(&mut body, &event),
                 Err(error) => {
-                    body.is_process_error = true;
-                    body.teardown_diagnostics.push(format!(
+                    body.terminal_mut().is_process_error = true;
+                    body.terminal_mut().teardown_diagnostics.push(format!(
                         "publish final mandatory progress revision: {error}"
                     ));
                     if let Ok(event) = entry_for_task.progress.latest() {
@@ -1363,8 +1370,8 @@ impl Manager {
             if let Ok(events) = entry_for_task.progress.events() {
                 body.progress_events = events;
             } else {
-                body.is_process_error = true;
-                body.teardown_diagnostics.push(
+                body.terminal_mut().is_process_error = true;
+                body.terminal_mut().teardown_diagnostics.push(
                     "copy complete progress history into terminal body: progress state mutex was poisoned"
                         .to_string(),
                 );
@@ -1388,8 +1395,8 @@ impl Manager {
             inner.running.remove(&session_id_for_task);
             if let Some(error) = persist_error {
                 let mut retained = body;
-                retained.is_process_error = true;
-                retained.teardown_diagnostics.push(format!(
+                retained.terminal_mut().is_process_error = true;
+                retained.terminal_mut().teardown_diagnostics.push(format!(
                     "terminal persistence failed; body retained only in service memory: {error}"
                 ));
                 tracing::error!(session_id = %retained.session_id, error = %error,
@@ -1705,7 +1712,7 @@ impl Manager {
         // safely resume without rereading files that a prior attempt already
         // removed.
         let retained_state = self.cfg.state_dir.join("sessions").join(session_id);
-        if terminal.raw_session_tree_retained {
+        if terminal.terminal().raw_session_tree_retained {
             validate_delete_state_marker(&retained_state, &terminal)?;
         }
         persist_delete_intent(&self.cfg.results_dir, session_id)?;
@@ -1846,31 +1853,11 @@ fn running_body(
         progress_events,
         num_turns: output.num_turns.max(progress.counters.num_turns),
         last_event_at_unix: output.last_event_at_unix,
-        finished_at_unix: 0,
-        duration_wall_ms: 0,
-        container_exit_code: 0,
-        agent_exit_code: 0,
-        is_process_error: false,
-        response: String::new(),
-        agent_duration_ms: None,
-        agent_api_duration_ms: None,
-        agent_result_subtype: None,
-        main_output_tokens: Some(0),
-        main_reasoning_tokens: Some(0),
-        subagent_scopes: Some(Vec::new()),
-        subagent_scope_count: Some(0),
-        subagent_error_count: Some(0),
-        bundle_sha256: String::new(),
-        bundle_compressed_bytes: 0,
-        bundle_uncompressed_bytes: 0,
-        bundle_file_count: 0,
-        bundle_artifacts_file_count: 0,
-        raw_session_tree_retained: false,
-        teardown_diagnostics: Vec::new(),
-        observed_output_tokens: None,
-        observed_reasoning_tokens: None,
-        observed_subagent_scope_count: None,
-        observed_unaccounted_records: None,
+        terminal: None,
+        observed_output_tokens: Some(output.observed_output_tokens),
+        observed_reasoning_tokens: Some(output.observed_reasoning_tokens),
+        observed_subagent_scope_count: Some(output.observed_subagent_scope_count),
+        observed_unaccounted_records: Some(output.observed_unaccounted_records),
     }
 }
 
@@ -1937,7 +1924,7 @@ pub fn events_jsonl_path(cfg: &Config, session_id: &str) -> PathBuf {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct RunningOutputProgress {
     pub num_turns: u64,
-    pub last_event_at_unix: u64,
+    pub last_event_at_unix: Option<u64>,
     pub output_event_bytes: u64,
     /// Served tokens summed over the completed billed turns this read could
     /// account whole, and the distinct subagent scopes it saw: a growing
@@ -1954,8 +1941,8 @@ pub struct RunningOutputProgress {
 /// `num_turns` is the number of completed main-thread model invocations. Qwen
 /// stream-JSON can emit zero-usage thinking/text fragments before the one
 /// assistant record carrying final per-invocation usage, so fragments are not
-/// turns. Both fields are 0 only when the file does not exist yet; malformed or
-/// unreadable state is an explicit error.
+/// turns. The timestamp is absent only when the file does not exist yet;
+/// malformed or unreadable state is an explicit error.
 ///
 /// Cost: a linear byte scan per explicit API read of one session's live
 /// progress, so this favors exactness over a mutable cache.
@@ -2078,9 +2065,12 @@ pub fn read_running_progress(
             subagent_scopes.insert(scope);
         }
         if let Some((output, reasoning)) = observed.usage {
-            observed_output_tokens = observed_output_tokens.checked_add(output).ok_or_else(|| {
-                ServiceError::Internal("read_running_progress: output token sum overflowed".into())
-            })?;
+            observed_output_tokens =
+                observed_output_tokens.checked_add(output).ok_or_else(|| {
+                    ServiceError::Internal(
+                        "read_running_progress: output token sum overflowed".into(),
+                    )
+                })?;
             observed_reasoning_tokens = observed_reasoning_tokens
                 .checked_add(reasoning)
                 .ok_or_else(|| {
@@ -2090,9 +2080,8 @@ pub fn read_running_progress(
                 })?;
         }
         if observed.usage_unreadable {
-            observed_unaccounted_records = observed_unaccounted_records
-                .checked_add(1)
-                .ok_or_else(|| {
+            observed_unaccounted_records =
+                observed_unaccounted_records.checked_add(1).ok_or_else(|| {
                     ServiceError::Internal(
                         "read_running_progress: unaccounted record count overflowed".into(),
                     )
@@ -2101,7 +2090,7 @@ pub fn read_running_progress(
     }
     Ok(RunningOutputProgress {
         num_turns,
-        last_event_at_unix,
+        last_event_at_unix: Some(last_event_at_unix),
         output_event_bytes: meta.len(),
         observed_output_tokens,
         observed_reasoning_tokens,
@@ -3312,7 +3301,7 @@ async fn finish_prepared_terminal_transaction(
 
     let result_dir = cfg.results_dir.join(&body.session_id);
     crate::api::validate_terminal_storage(&result_dir, body, 1000, 1000)?;
-    if body.raw_session_tree_retained {
+    if body.terminal().raw_session_tree_retained {
         // A retained-state claim is not self-authenticating.  The exact raw
         // tree and its durable cause marker are the deletion/recovery
         // authority, so prove both before publishing a terminal record that
@@ -3328,7 +3317,7 @@ async fn finish_prepared_terminal_transaction(
     // retains that tree before preparing the terminal. If a crash-left draft
     // contradicts that invariant, preserve both sources of evidence and stop
     // recovery instead of turning malformed metadata into data loss.
-    if body.bundle_sha256.is_empty() {
+    if body.terminal().bundle.is_none() {
         let state_root = cfg.state_dir.join("sessions").join(&body.session_id);
         match std::fs::symlink_metadata(&state_root) {
             Ok(_) => {
@@ -3355,8 +3344,10 @@ async fn finish_prepared_terminal_transaction(
         return commit_prepared_terminal(&cfg.results_dir, &body.session_id).await;
     }
 
-    body.is_process_error = true;
-    body.teardown_diagnostics.extend(cleanup_diagnostics);
+    body.terminal_mut().is_process_error = true;
+    body.terminal_mut()
+        .teardown_diagnostics
+        .extend(cleanup_diagnostics);
     let state_root = cfg.state_dir.join("sessions").join(&body.session_id);
     match std::fs::symlink_metadata(&state_root) {
         Ok(metadata)
@@ -3366,14 +3357,14 @@ async fn finish_prepared_terminal_transaction(
                 && metadata.uid() == 1000
                 && metadata.gid() == 1000 =>
         {
-            if body.bundle_sha256.is_empty() {
+            if body.terminal().bundle.is_none() {
                 return Err(ServiceError::Internal(format!(
                     "terminal raw-state cleanup failed for {} without an accepted bundle; refusing to invent a retained-bundle cleanup state",
                     body.session_id
                 )));
             }
-            body.raw_session_tree_retained = true;
-            body.teardown_diagnostics.push(format!(
+            body.terminal_mut().raw_session_tree_retained = true;
+            body.terminal_mut().teardown_diagnostics.push(format!(
                 "terminal raw-state cleanup failed after the bundle was accepted; the exact tree is durably retained at {}",
                 state_root.display()
             ));
@@ -3396,7 +3387,7 @@ async fn finish_prepared_terminal_transaction(
             // failed. Do not claim the deletion durable. Leave the updated
             // draft unpublished; startup can re-observe whether the tree
             // stayed absent or reappeared and complete the same protocol.
-            body.teardown_diagnostics.push(format!(
+            body.terminal_mut().teardown_diagnostics.push(format!(
                 "terminal raw-state removal is visible but its durability barrier failed; leaving the terminal draft unpublished for restart reconciliation at {}",
                 state_root.display()
             ));
@@ -3413,7 +3404,7 @@ async fn finish_prepared_terminal_transaction(
             )))
         }
         Ok(metadata) => {
-            body.teardown_diagnostics.push(format!(
+            body.terminal_mut().teardown_diagnostics.push(format!(
                 "terminal raw-state cleanup left an unsafe object at {}: type={:?} mode={:o} uid={} gid={}",
                 state_root.display(),
                 metadata.file_type(),
@@ -3502,29 +3493,11 @@ async fn prepare_terminal(results_dir: &Path, body: &SessionBody) -> ServiceResu
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
 
-    // A terminal record is the strict parse's verdict. The live reader's
-    // running tally belongs to a run still in flight and would read here as a
-    // second, weaker answer to a question this record already answers, so a
-    // body carrying one is a construction defect rather than something to
-    // publish and explain away.
-    for (field, present) in [
-        ("observed_output_tokens", body.observed_output_tokens.is_some()),
-        ("observed_reasoning_tokens", body.observed_reasoning_tokens.is_some()),
-        (
-            "observed_subagent_scope_count",
-            body.observed_subagent_scope_count.is_some(),
-        ),
-        (
-            "observed_unaccounted_records",
-            body.observed_unaccounted_records.is_some(),
-        ),
-    ] {
-        if present {
-            return Err(ServiceError::Internal(format!(
-                "prepare_terminal({}): terminal record carries live-progress {field}",
-                body.session_id
-            )));
-        }
+    body.validate_shape()?;
+    if body.terminal.is_none() {
+        return Err(ServiceError::Internal(
+            "cannot prepare a running session as terminal".into(),
+        ));
     }
 
     let dir = results_dir.join(&body.session_id);
@@ -3590,6 +3563,7 @@ async fn rewrite_prepared_terminal(
     use std::io::{Seek, SeekFrom, Write};
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
+    body.validate_shape()?;
     let dir = results_dir.join(&body.session_id);
     let final_path = dir.join("finished.json");
     let tmp_path = dir.join("finished.json.tmp");
@@ -3843,7 +3817,7 @@ fn validate_delete_state_marker(
             )));
         }
     };
-    match (terminal.raw_session_tree_retained, opened) {
+    match (terminal.terminal().raw_session_tree_retained, opened) {
         (false, None) => Ok(()),
         (false, Some(_)) => Err(ServiceError::Internal(format!(
             "delete: terminal {} does not claim retained evidence but marker {} exists",
@@ -3915,7 +3889,7 @@ fn validate_delete_state_marker(
                     | "cause=container-teardown-incomplete"
                     | "cause=raw-state-cleanup-failure"
             );
-            let cause_matches_bundle = if terminal.bundle_sha256.is_empty() {
+            let cause_matches_bundle = if terminal.terminal().bundle.is_none() {
                 matches!(
                     cause,
                     "cause=required-bundle-failure"
@@ -4055,6 +4029,7 @@ fn read_terminal_body_file(
             path.display()
         )));
     }
+    body.validate_shape()?;
     Ok(body)
 }
 
@@ -4063,7 +4038,7 @@ fn validate_terminal_state_storage(cfg: &Config, body: &SessionBody) -> ServiceR
 
     let state_root = cfg.state_dir.join("sessions").join(&body.session_id);
     match std::fs::symlink_metadata(&state_root) {
-        Ok(metadata) if !body.raw_session_tree_retained => Err(ServiceError::Internal(format!(
+        Ok(metadata) if !body.terminal().raw_session_tree_retained => Err(ServiceError::Internal(format!(
             "terminal {} does not claim retained raw evidence but state path {} exists with type {:?}",
             body.session_id,
             state_root.display(),
@@ -4085,7 +4060,7 @@ fn validate_terminal_state_storage(cfg: &Config, body: &SessionBody) -> ServiceR
         ))),
         Err(error)
             if error.kind() == std::io::ErrorKind::NotFound
-                && !body.raw_session_tree_retained =>
+                && !body.terminal().raw_session_tree_retained =>
         {
             Ok(())
         }
@@ -4109,6 +4084,7 @@ fn validate_terminal_resource(
     session_id: &str,
     body: &SessionBody,
 ) -> ServiceResult<()> {
+    body.validate_shape()?;
     if body.session_id != session_id || body.status == SessionStatus::Running {
         return Err(ServiceError::Internal(format!(
             "read_terminal({session_id}): terminal identity/status drift: body_id={:?} status={:?}",
@@ -4126,10 +4102,11 @@ fn validate_terminal_resource(
             cfg.lock.backend.max_model_len
         )));
     }
-    if body.started_at_unix == 0 || body.finished_at_unix < body.started_at_unix {
+    if body.started_at_unix == 0 || body.terminal().finished_at_unix < body.started_at_unix {
         return Err(ServiceError::Internal(format!(
             "read_terminal({session_id}): impossible terminal timestamps: started={} finished={}",
-            body.started_at_unix, body.finished_at_unix
+            body.started_at_unix,
+            body.terminal().finished_at_unix
         )));
     }
 
@@ -4219,7 +4196,8 @@ mod tests {
         read_cancel_intent, read_delete_intent, read_running_progress, read_terminal,
         reconcile_unpublished_cancel_intent, reconcile_unpublished_delete_intent,
         remove_terminalized_state, resume_prepared_terminal_transaction, rewrite_prepared_terminal,
-        AcceptanceRecord, CancelIntent, LifecycleTracker, SessionBody, SessionStatus,
+        AcceptanceRecord, AgentResult, CancelIntent, LifecycleTracker, SessionBody, SessionStatus,
+        SessionTerminal,
     };
     use crate::config::{Config, StackLock, STACK_LOCK_JSON};
     use crate::error::ServiceError;
@@ -4347,28 +4325,28 @@ mod tests {
             output_event_bytes: 0,
             progress_events: Vec::new(),
             num_turns: 1,
-            last_event_at_unix: 1,
-            finished_at_unix: 2,
-            duration_wall_ms: 1,
-            container_exit_code: 0,
-            agent_exit_code: 0,
-            is_process_error: false,
-            response: "done".to_string(),
-            agent_duration_ms: Some(1),
-            agent_api_duration_ms: Some(1),
-            agent_result_subtype: Some("success".to_string()),
-            main_output_tokens: Some(0),
-            main_reasoning_tokens: Some(0),
-            subagent_scopes: Some(Vec::new()),
-            subagent_scope_count: Some(0),
-            subagent_error_count: Some(0),
-            bundle_sha256: String::new(),
-            bundle_compressed_bytes: 0,
-            bundle_uncompressed_bytes: 0,
-            bundle_file_count: 0,
-            bundle_artifacts_file_count: 0,
-            raw_session_tree_retained: false,
-            teardown_diagnostics: Vec::new(),
+            last_event_at_unix: Some(1),
+            terminal: Some(SessionTerminal {
+                finished_at_unix: 2,
+                duration_wall_ms: 1,
+                container_exit_code: Some(0),
+                agent_exit_code: Some(0),
+                is_process_error: false,
+                response: "done".to_string(),
+                raw_session_tree_retained: false,
+                teardown_diagnostics: Vec::new(),
+                agent_result: Some(AgentResult {
+                    agent_duration_ms: 1,
+                    agent_api_duration_ms: 1,
+                    agent_result_subtype: "success".to_string(),
+                    main_output_tokens: 0,
+                    main_reasoning_tokens: 0,
+                    subagent_scopes: Vec::new(),
+                    subagent_scope_count: 0,
+                    subagent_error_count: 0,
+                }),
+                bundle: None,
+            }),
             observed_output_tokens: None,
             observed_reasoning_tokens: None,
             observed_subagent_scope_count: None,
@@ -4377,79 +4355,201 @@ mod tests {
     }
 
     #[test]
-    fn unmeasured_agent_durations_are_absent_rather_than_zero() {
-        // Every path that never parses a terminal result used to write 0 into
-        // both duration fields, which reads as "the agent ran instantly"
-        // rather than "the agent never reported". `Option` removes the
-        // fabricated value: a run that reported nothing serializes null, and
-        // there is no way to write a zero without meaning it.
-        let mut unreported = body("s-00000000000000000000000000000000");
-        unreported.agent_duration_ms = None;
-        unreported.agent_api_duration_ms = None;
-        let json = serde_json::to_value(&unreported).expect("serialize");
-        assert!(json["agent_duration_ms"].is_null());
-        assert!(json["agent_api_duration_ms"].is_null());
-
-        let reported = body("s-11111111111111111111111111111111");
-        let json = serde_json::to_value(&reported).expect("serialize");
-        assert_eq!(json["agent_duration_ms"], serde_json::json!(1));
-        assert_eq!(json["agent_api_duration_ms"], serde_json::json!(1));
-
-        // A genuine zero stays representable and stays distinct from absent.
-        let mut instant = body("s-22222222222222222222222222222222");
-        instant.agent_duration_ms = Some(0);
-        instant.agent_api_duration_ms = Some(0);
-        let json = serde_json::to_value(&instant).expect("serialize");
-        assert_eq!(json["agent_duration_ms"], serde_json::json!(0));
-        assert!(!json["agent_duration_ms"].is_null());
+    fn running_snapshot_publishes_observations_without_terminal_answers() {
+        let snapshot = super::RunningSnapshot {
+            session_id: "s-11111111111111111111111111111111".into(),
+            started_at_unix: 1,
+            prompt_preview: "fixture".into(),
+            model: "fixture".into(),
+            context_window: 262_144,
+            max_session_turns: 100,
+            archive_bytes: 1,
+            archive_sha256: "1".repeat(64),
+        };
+        let progress = crate::progress::ProgressEvent {
+            revision: 1,
+            at_unix_ms: 1000,
+            phase: ProgressPhase::Accepted,
+            message: "accepted".into(),
+            counters: crate::progress::ProgressCounters::default(),
+        };
+        let running = super::running_body(
+            &snapshot,
+            &progress,
+            vec![progress.clone()],
+            super::RunningOutputProgress {
+                observed_output_tokens: 123,
+                observed_reasoning_tokens: 100,
+                observed_subagent_scope_count: 2,
+                observed_unaccounted_records: 1,
+                ..super::RunningOutputProgress::default()
+            },
+        );
+        running.validate_shape().expect("valid running snapshot");
+        let json = serde_json::to_value(&running).expect("serialize");
+        assert!(json["terminal"].is_null());
+        assert_eq!(json["observed_output_tokens"], 123);
+        assert_eq!(json["observed_reasoning_tokens"], 100);
+        assert_eq!(json["observed_subagent_scope_count"], 2);
+        assert_eq!(json["observed_unaccounted_records"], 1);
+        let mut invalid = running.clone();
+        invalid.terminal = body(&snapshot.session_id).terminal;
+        assert!(invalid.validate_shape().is_err());
+        let mut invalid = running;
+        invalid.observed_output_tokens = None;
+        assert!(invalid.validate_shape().is_err());
     }
 
     #[test]
-    fn a_record_written_before_the_api_duration_field_reads_as_unmeasured() {
-        // Historical committed records cannot supply the newer field. Absent
-        // is its one valid migration value; defaulting it to 0 would claim a
-        // measurement that was never taken.
-        let mut json =
-            serde_json::to_value(body("s-33333333333333333333333333333333")).expect("serialize");
-        json.as_object_mut()
-            .expect("object")
-            .remove("agent_api_duration_ms");
-        let restored: SessionBody = serde_json::from_value(json).expect("deserialize");
-        assert_eq!(restored.agent_api_duration_ms, None);
-        assert_eq!(restored.agent_duration_ms, Some(1));
+    fn terminal_evidence_distinguishes_unavailable_from_measured_empty() {
+        let mut terminal = body("s-22222222222222222222222222222222");
+        let result = terminal
+            .terminal_mut()
+            .agent_result
+            .as_mut()
+            .expect("parsed result");
+        result.agent_duration_ms = 0;
+        result.agent_api_duration_ms = 0;
+        terminal.terminal_mut().response.clear();
+        terminal.terminal_mut().bundle = Some(crate::bundle::BundleStats {
+            sha256: "1".repeat(64),
+            compressed_bytes: 10,
+            uncompressed_bytes: 0,
+            file_count: 0,
+            artifacts_file_count: 0,
+        });
+        terminal
+            .validate_shape()
+            .expect("zero is a measured answer");
+        let json = serde_json::to_value(&terminal).expect("serialize");
+        let ending = &json["terminal"];
+        assert_eq!(ending["container_exit_code"], 0);
+        assert_eq!(ending["agent_exit_code"], 0);
+        assert_eq!(ending["response"], "");
+        assert_eq!(ending["agent_result"]["agent_duration_ms"], 0);
+        assert_eq!(ending["agent_result"]["main_output_tokens"], 0);
+        assert_eq!(
+            ending["agent_result"]["subagent_scopes"],
+            serde_json::json!([])
+        );
+        assert_eq!(ending["bundle"]["artifacts_file_count"], 0);
+        let ending = terminal.terminal_mut();
+        ending.agent_result = None;
+        ending.bundle = None;
+        ending.container_exit_code = None;
+        ending.agent_exit_code = None;
+        ending.is_process_error = true;
+        terminal
+            .validate_shape()
+            .expect("unavailable evidence is explicit");
+        let json = serde_json::to_value(&terminal).expect("serialize");
+        let ending = &json["terminal"];
+        assert!(ending.is_object());
+        for field in [
+            "agent_result",
+            "bundle",
+            "container_exit_code",
+            "agent_exit_code",
+        ] {
+            assert!(ending[field].is_null(), "{field}");
+        }
     }
 
     #[test]
-    fn the_terminal_state_is_carried_verbatim_or_absent() {
-        // The agent's own name for its ending is evidence, so a run that
-        // never produced a terminal record must serialize null rather than a
-        // spelling nothing asserted. Every spelling the parser admits round
-        // trips unchanged.
-        let mut unparsed = body("s-44444444444444444444444444444444");
-        unparsed.agent_result_subtype = None;
-        let json = serde_json::to_value(&unparsed).expect("serialize");
-        assert!(json["agent_result_subtype"].is_null());
-
+    fn every_certified_ending_round_trips_without_synthesized_fields() {
         for subtype in std::iter::once(crate::result_parse::SUCCESS_SUBTYPE)
             .chain(crate::result_parse::ERROR_SUBTYPES)
         {
-            let mut reported = body("s-55555555555555555555555555555555");
-            reported.agent_result_subtype = Some(subtype.to_string());
-            let json = serde_json::to_value(&reported).expect("serialize");
-            assert_eq!(json["agent_result_subtype"], serde_json::json!(subtype));
-            let restored: SessionBody = serde_json::from_value(json).expect("deserialize");
-            assert_eq!(restored.agent_result_subtype.as_deref(), Some(subtype));
+            let mut terminal = body("s-33333333333333333333333333333333");
+            terminal
+                .terminal_mut()
+                .agent_result
+                .as_mut()
+                .expect("parsed result")
+                .agent_result_subtype = subtype.to_string();
+            let json = serde_json::to_value(&terminal).expect("serialize");
+            let restored: SessionBody = serde_json::from_value(json.clone()).expect("deserialize");
+            restored.validate_shape().expect("valid restored terminal");
+            assert_eq!(
+                serde_json::to_value(restored).expect("serialize again"),
+                json
+            );
+            let mut incomplete = json;
+            incomplete["terminal"]["agent_result"]
+                .as_object_mut()
+                .expect("result")
+                .remove("main_output_tokens");
+            assert!(serde_json::from_value::<SessionBody>(incomplete).is_err());
         }
+    }
 
-        // A record written without the field reads as an unreported ending,
-        // never as a fabricated success.
-        let mut json =
-            serde_json::to_value(body("s-66666666666666666666666666666666")).expect("serialize");
-        json.as_object_mut()
-            .expect("object")
-            .remove("agent_result_subtype");
-        let restored: SessionBody = serde_json::from_value(json).expect("deserialize");
-        assert_eq!(restored.agent_result_subtype, None);
+    #[test]
+    fn nullable_evidence_keys_are_required_even_when_their_value_is_absent() {
+        let mut terminal = body("s-33333333333333333333333333333333");
+        terminal.last_event_at_unix = None;
+        let ending = terminal.terminal_mut();
+        ending.agent_result = None;
+        ending.bundle = None;
+        ending.container_exit_code = None;
+        ending.agent_exit_code = None;
+        let json = serde_json::to_value(terminal).expect("serialize explicit absence");
+        for field in [
+            "terminal",
+            "last_event_at_unix",
+            "observed_output_tokens",
+            "observed_reasoning_tokens",
+            "observed_subagent_scope_count",
+            "observed_unaccounted_records",
+        ] {
+            let mut missing = json.clone();
+            missing.as_object_mut().expect("body").remove(field);
+            assert!(
+                serde_json::from_value::<SessionBody>(missing).is_err(),
+                "{field}"
+            );
+        }
+        for field in [
+            "agent_result",
+            "bundle",
+            "container_exit_code",
+            "agent_exit_code",
+        ] {
+            let mut missing = json.clone();
+            missing["terminal"]
+                .as_object_mut()
+                .expect("ending")
+                .remove(field);
+            assert!(
+                serde_json::from_value::<SessionBody>(missing).is_err(),
+                "{field}"
+            );
+        }
+        serde_json::from_value::<SessionBody>(json).expect("explicit nulls are valid");
+    }
+
+    #[tokio::test]
+    async fn terminal_prepare_rejects_every_live_tally_before_creating_files() {
+        let directory = std::env::temp_dir().join(format!("qwen38-shape-{}", uuid::Uuid::new_v4()));
+        for index in 0..4 {
+            let mut terminal = body("s-44444444444444444444444444444444");
+            match index {
+                0 => terminal.observed_output_tokens = Some(0),
+                1 => terminal.observed_reasoning_tokens = Some(0),
+                2 => terminal.observed_subagent_scope_count = Some(0),
+                _ => terminal.observed_unaccounted_records = Some(0),
+            }
+            let error = super::prepare_terminal(&directory, &terminal)
+                .await
+                .expect_err("reject live tally");
+            assert!(error.to_string().contains("live-progress"));
+            assert!(!directory.exists());
+        }
+        let mut terminal = body("s-55555555555555555555555555555555");
+        terminal.terminal = None;
+        assert!(super::prepare_terminal(&directory, &terminal)
+            .await
+            .is_err());
+        assert!(!directory.exists());
     }
 
     fn test_config(state_dir: PathBuf, results_dir: PathBuf) -> Config {
@@ -4741,8 +4841,9 @@ mod tests {
         assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
         assert!(!final_path.exists());
 
-        terminal.is_process_error = true;
+        terminal.terminal_mut().is_process_error = true;
         terminal
+            .terminal_mut()
             .teardown_diagnostics
             .push("exact cleanup failure fixture".to_string());
         let (uid, gid) = owner(&temporary);
@@ -4756,9 +4857,9 @@ mod tests {
         let observed: SessionBody =
             serde_json::from_slice(&std::fs::read(&final_path).expect("read committed terminal"))
                 .expect("parse committed terminal");
-        assert!(observed.is_process_error);
+        assert!(observed.terminal().is_process_error);
         assert_eq!(
-            observed.teardown_diagnostics,
+            observed.terminal().teardown_diagnostics,
             vec!["exact cleanup failure fixture"]
         );
 
@@ -4787,7 +4888,7 @@ mod tests {
 
         let cfg = test_config(state, results.clone());
         let mut terminal = body(session_id);
-        terminal.raw_session_tree_retained = true;
+        terminal.terminal_mut().raw_session_tree_retained = true;
         let error = persist_terminal_transaction(&cfg, &mut terminal)
             .await
             .expect_err("a retained-state claim without its exact marker must not publish");
@@ -4864,11 +4965,13 @@ mod tests {
             .expect("read exact progress fixture");
         let archive = results.join(session_id).join("bundle.tar.zst");
         private_write(&archive, b"accepted restart bundle");
-        terminal.bundle_sha256 =
-            crate::bundle::hash_file_sha256(&archive).expect("hash restart bundle fixture");
-        terminal.bundle_compressed_bytes = b"accepted restart bundle".len() as u64;
-        terminal.bundle_uncompressed_bytes = 100;
-        terminal.bundle_file_count = 2;
+        terminal.terminal_mut().bundle = Some(crate::bundle::BundleStats {
+            sha256: crate::bundle::hash_file_sha256(&archive).expect("hash restart bundle fixture"),
+            compressed_bytes: b"accepted restart bundle".len() as u64,
+            uncompressed_bytes: 100,
+            file_count: 2,
+            artifacts_file_count: 0,
+        });
         prepare_terminal(&results, &terminal)
             .await
             .expect("prepare private terminal fixture");
@@ -5101,7 +5204,9 @@ mod tests {
         let observed = read_running_progress(&events).expect("read exact event snapshot");
         assert_eq!(observed.num_turns, 1);
         assert_eq!(observed.output_event_bytes, bytes.len() as u64);
-        assert!(observed.last_event_at_unix > 0);
+        assert!(observed
+            .last_event_at_unix
+            .is_some_and(|timestamp| timestamp > 0));
 
         let outside = tree.0.join("outside-events");
         private_write(&outside, bytes.as_bytes());
