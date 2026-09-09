@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "profile": "qwen38-agent-service-v3",
-  "implementation_commit": "6c51bd5acad6b77f37fbf4096de5048b3016ee18",
-  "build_inputs_manifest_sha256": "75279be19ba258399c46d2c93a39fc73aa09745f8345c0d2550667c6947d588c",
-  "stack_lock_sha256": "29b54c0d2b5bacf24b29e7bda7f1fd946eea9cc435b968b0c92219f7764e941f",
+  "implementation_commit": "906cef8629881603e33bc33ad204bdbe71344528",
+  "build_inputs_manifest_sha256": "9a142b45fa7d4d0eb24a59dbb13a68dc2100220c48e6f7c4955a18c39bc1555e",
+  "stack_lock_sha256": "cd79f91b07626c4822f5ac2f5fe0b779eb77a0feea9d1866947f6c791d2cb6a4",
   "archive": {
     "sha256": "c9406fddce2614f58ad50526a3801b26e8e81bac0a9bfbfb9a82391656bd75ad"
   },
