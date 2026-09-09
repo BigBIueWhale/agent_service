@@ -25,7 +25,7 @@
   "model_ingress_container_name": "qwen38-model-ingress",
   "agent": {
     "image_tag": "qwen38-agent:0.21.12-b965d5f8-v9",
-    "image_id": "sha256:ad6f7d85bd0cfc7250934586b0c28be17a45f96396c0b8147dcff49f523af539",
+    "image_id": "sha256:72638cb26c58ec265eb3cb80403df82ec70335db344a7c272a09c2736d21300d",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
