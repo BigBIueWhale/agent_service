@@ -141,7 +141,6 @@
     "max_wall_time_seconds": -1,
     "stream_idle_timeout_ms": 240000,
     "stream_max_lifetime_ms": 21600000,
-    "chat_recording": false,
     "slash_commands": false,
     "runtime_installation": false,
     "xml_tool_recovery": false,
@@ -167,12 +166,12 @@
     ]
   },
   "components": {
-    "settings_sha256": "271b638018877c69be897b36a01ffcd534f457b7c786a83e82dbf12bcff2e281",
+    "settings_sha256": "5be5eb3e2287654acea147942aca944fed5c90656e98850f55fb5c6d25731e03",
     "instructions_sha256": "1f7ed3adadae34d9d319091230ef55a6c3853224db40fac5da9e252d68e05a58",
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "35294a010ce77498a5cceffdd416a0e5cac1d327ac1842280f39615b1b7cc5d4",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
     "wrapper_sha256": "b32cd546debbecfdc04c427cf04e8612c4340c8b822270612ea366fc05ccda0e",
-    "agent_exec_source_sha256": "47be663991c5f5860966f43c441c72e65effcc23fb34420666486d67f71401bd"
+    "agent_exec_source_sha256": "fd4aada2c72f09ad5474686186dedea05c5c22b4ea7638480c43962511365de2"
   }
 }

@@ -306,12 +306,27 @@ and file presence. Reapplying the completed transformation verifies without
 writing. The [unified patch](patches/qwen-code-0.21.12-agent-service.patch) records
 the same reviewed source changes; it is not a second application mechanism.
 
-A subsequent Docker build starts from a fresh extraction, tests the transformer,
+The Docker build starts from a fresh extraction, tests the transformer,
 installs the exact upstream dependency lock, applies upstream's own package
-patches, builds the CLI, and runs the test selection derived from retained changed
-files and their adjacent tests. The metadata generator derives the pinned version,
-commit, and timestamp from verified inputs. Local source qualification does not
-replace that separately authorized build and deployment verification.
+patches, builds the CLI, and runs the unit test selection derived from retained
+changed files and adjacent tests, with each suite in its package directory. Provider
+integration scenarios require their own environment; the final smoke supplies the
+controlled provider protocol for build-time CLI qualification. The metadata
+generator derives the pinned version, commit, and timestamp from verified inputs. The final agent stage then runs the
+installed CLI as UID/GID 1000 with the launcher's fixed argument vector and shipping
+settings. A private loopback protocol fixture asks it to read a fresh nonce from a
+file and return it. Qualification requires successful exit, actual tool execution,
+structured events, exact fixture usage, and a durable owned transcript. Empty output
+and nonzero exit are tested negative controls. No program or settings are installed
+after this smoke gate. This qualifies CLI startup and wiring without a model;
+deployment networking, sandbox mounts, and real model behavior remain separate.
+
+Every Config constructs its session recorder. Session initialization acquires its
+writer lease before chat initialization, so interactive, headless, ACP and hidden
+memory requests share the same owner. Workspace-only preparation has an explicit
+`initializeWorkspace` operation for replay and MCP discovery, with no writing
+session or chat activation. Recorder presence and writer ownership are distinct:
+a workspace helper cannot make a generation valid merely by possessing a recorder.
 
 A terminal conversation and a headless conversation share the same obligations:
 

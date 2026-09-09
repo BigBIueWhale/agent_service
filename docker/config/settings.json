@@ -1,7 +1,6 @@
 {
   "general": {
-    "enableAutoUpdate": false,
-    "chatRecording": false
+    "enableAutoUpdate": false
   },
   "ui": {
     "enableFollowupSuggestions": false,

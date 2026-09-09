@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `adee471efe9f0e3f6a6c302c14725e4e70a8758fd0eae8d80ae2f5b0f1ce704e`
+- Review-diff SHA-256: `e4a2b2d0211e8a673f21a2c3b674231de2f5cc330568fba8c727ab447ff27dc1`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `dada8018b585a0eadc89f51f8cc35f8aebe6d50669af6bc79205c4e6526ae689`
+- Transformer-manifest SHA-256: `f8f211ec592e09bfad7607bc5cf8ce6b353bf9a0dc00160e18f793d8eb08e4f4`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -22,7 +22,7 @@ The transformer validates the pinned source, the reviewed diff, exact final file
 identities, and 29 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
-permissions, and file presence. The image derives its test selection from the
+permissions, and file presence. The image derives its unit test selection from the
 retained final files plus their existing adjacent tests.
 
 ## Generation and ownership
@@ -189,6 +189,25 @@ counts malformed or incomplete records as unaccounted. These observations are
 independent of complete terminal certification. A torn tail, invalid chronology,
 or absent ending refuses certification without erasing earlier observed usage.
 Unreadable evidence is represented as unavailable, not a fabricated zero group.
+
+## Recorder ownership and image qualification
+
+Config constructs one required session recorder. Session initialization acquires
+its writer before creating chat; every interactive, headless and ACP generation
+therefore meets the same recording obligation. Workspace replay and MCP discovery
+use explicit service initialization without acquiring a session writer or opening
+chat. Hidden memory operations keep their bootstrap owner; UI telemetry suppression
+does not suppress canonical request evidence. Source settings, CLI arguments,
+SDK reservations and daemon feature negotiation expose that single contract.
+
+The final agent image stage runs its installed CLI as UID/GID 1000 through a private
+protocol fixture. The smoke consumes the same fixed Rust launcher argument vector,
+substitutes only provider endpoints in shipping settings, and requires a fresh file
+nonce to pass through read_file and the following response. Successful exit, nonempty
+structured events, served fixture usage and the owned canonical transcript are all
+required. Empty and failing processes are negative controls; communication failure,
+timeout and interruption controls prove child termination, join and pipe cleanup.
+No program or settings installation follows the gate.
 
 ## Verification scope and remaining limits
 

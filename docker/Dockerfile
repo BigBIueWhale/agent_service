@@ -127,6 +127,7 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && npm ci --ignore-scripts \
  && npx --no-install patch-package \
  && npm run build -- --cli-only \
+ && npm run build --workspace=packages/webui \
  && grep -Fx "export const GIT_COMMIT_INFO = 'b965d5f8c24f';" \
       packages/cli/src/generated/git-commit.ts \
  && grep -Fx "export const CLI_VERSION = '0.21.12';" \
@@ -150,11 +151,16 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
         test -f "/src/$f" && echo "$f"; \
       done < /tmp/adjacent-tests.txt || true; } > /tmp/adjacent-present.txt \
  && sort -u /tmp/patched-tests.txt /tmp/adjacent-present.txt \
-      > /tmp/qwen-test-files.txt \
+      | grep -v '^integration-tests/' > /tmp/qwen-test-files.txt \
  && test -s /tmp/qwen-test-files.txt \
  && echo "executing $(wc -l < /tmp/qwen-test-files.txt) test files in full:" \
  && cat /tmp/qwen-test-files.txt \
- && xargs npx --no-install vitest run < /tmp/qwen-test-files.txt \
+ && cut -d/ -f1,2 /tmp/qwen-test-files.txt | sort -u > /tmp/qwen-test-packages.txt \
+ && while read -r package; do \
+      (cd "/src/$package" \
+        && sed -n "s|^$package/||p" /tmp/qwen-test-files.txt \
+          | xargs npx --no-install vitest run) || exit 1; \
+    done < /tmp/qwen-test-packages.txt \
  && test "$(node dist/cli.js --version)" = '0.21.12' \
  && rm -rf node_modules/.vite /tmp/node-compile-cache
 
@@ -237,6 +243,8 @@ COPY docker/config/run_agent.sh /tmp/runtime-contract-tests/docker/config/run_ag
 COPY src/bin/agent_exec.rs /tmp/runtime-contract-tests/src/bin/agent_exec.rs
 COPY docker/scripts/verify_runtime_contract.py /tmp/runtime-contract-tests/docker/scripts/verify_runtime_contract.py
 COPY docker/tests/test_verify_runtime_contract.py /tmp/runtime-contract-tests/docker/tests/test_verify_runtime_contract.py
+COPY docker/scripts/check_headless_cli.py /tmp/runtime-contract-tests/docker/scripts/check_headless_cli.py
+COPY docker/tests/test_headless_cli_smoke.py /tmp/runtime-contract-tests/docker/tests/test_headless_cli_smoke.py
 COPY docker/scripts/verify_toolchain.py /tmp/toolchain-tests/docker/scripts/verify_toolchain.py
 COPY docker/tests/test_verify_toolchain.py /tmp/toolchain-tests/docker/tests/test_verify_toolchain.py
 COPY LICENSE /usr/share/doc/agent_service/UNLICENSE
@@ -260,6 +268,7 @@ RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_S
  && test -s /usr/share/doc/agent_service/Apache-2.0.txt \
  && bash /tmp/run_agent_signal_contract.sh /opt/agent/run_agent.sh \
  && python3 /tmp/runtime-contract-tests/docker/tests/test_verify_runtime_contract.py -v \
+ && python3 /tmp/runtime-contract-tests/docker/tests/test_headless_cli_smoke.py -v \
  && python3 /opt/agent/verify_runtime_contract.py \
       /opt/agent/runtime-contract.json \
       /opt/agent/settings.json \
@@ -283,7 +292,12 @@ RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_S
       /usr/share/doc/agent_service/Apache-2.0.txt \
  && chmod -R a-w /opt/agent
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+COPY --chown=1000:1000 docker/scripts/check_headless_cli.py /tmp/check_headless_cli.py
 USER 1000:1000
+RUN PYTHONPATH=/opt/agent python3 /tmp/check_headless_cli.py \
+      /opt/qwen-code/dist/cli.js /opt/agent/settings.json \
+      /usr/share/agent-service/agent_exec.rs \
+ && rm /tmp/check_headless_cli.py
 WORKDIR /workspace
 ENTRYPOINT ["/opt/agent/run_agent.sh"]
 

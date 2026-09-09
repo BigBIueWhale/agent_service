@@ -130,7 +130,6 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
         "voiceModel",
     ):
         require_equal(f"settings {key}", settings[key], "")
-    require_equal("settings chat recording", settings["general"]["chatRecording"], False)
     require_equal("settings sandbox", settings["tools"]["sandbox"], False)
     # Compaction is the only thing that rewrites history here, and the size
     # it is due at is a share of the served window rather than a setting.
@@ -478,8 +477,7 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             # Qwen Code's memory-pressure monitor calls global.gc() in its
             # critical tier, which exists only under this flag.
             '.arg("--expose-gc")',
-            '.arg("--foreground-agents-only")',
-            '.arg("--max-subagent-depth=1")',
+            ".args(CLI_ARGS)",
             # The budget the launcher passes is the per-session one it read from
             # the sealed control record, not a compiled-in number. That single
             # flag is also what every foreground subagent inherits, because the
@@ -487,14 +485,26 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             # resolved config value this flag sets.
             'let max_session_turns = read_session_turn_budget()?;',
             '.arg(format!("--max-session-turns={max_session_turns}"))',
-            '.arg("--max-tool-calls=-1")',
         ],
     )
     verify_agent_exec_turn_budget(contract, source)
-    match = re.search(r'const STRICT_TOOLS: &str =\s*"([^"]+)";', source)
-    if not match:
-        raise ContractError("agent_exec strict-tool declaration is missing")
-    require_equal("agent_exec strict tools", match.group(1).split(","), contract["native_tools"])
+    arguments = cli_arguments(source)
+    strict_tools = [arg.removeprefix("--strict-tools=") for arg in arguments if arg.startswith("--strict-tools=")]
+    require_equal("agent_exec strict tools", strict_tools, [",".join(contract["native_tools"])])
+    for required in ["--input-format=text", "--approval-mode=yolo", "--output-format=stream-json",
+                     "--foreground-agents-only", "--max-subagent-depth=1", "--max-tool-calls=-1"]:
+        require_equal(f"agent_exec argument {required}", arguments.count(required), 1)
+
+
+def cli_arguments(source: str) -> list[str]:
+    """Read the launcher's fixed argument vector for contract checks and the image smoke."""
+    declarations = re.findall(r"const CLI_ARGS: &\[&str\] = &\[([^;]+)\];", source)
+    if len(declarations) != 1:
+        raise ContractError("agent_exec must declare one CLI_ARGS vector")
+    arguments = json.loads("[" + declarations[0].rstrip().removesuffix(",") + "]")
+    if not arguments or not all(isinstance(arg, str) and arg.startswith("--") for arg in arguments):
+        raise ContractError("agent_exec CLI_ARGS must contain explicit option strings")
+    return arguments
 
 
 def verify(paths: list[Path]) -> None:

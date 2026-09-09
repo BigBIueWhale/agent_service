@@ -90,8 +90,15 @@ const DIRECTORY_WRITE_ACCESS: u64 = LANDLOCK_ACCESS_FS_WRITE_FILE
 const FILE_WRITE_ACCESS: u64 = LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_TRUNCATE;
 const DEVICE_WRITE_ACCESS: u64 = LANDLOCK_ACCESS_FS_WRITE_FILE;
 
-const STRICT_TOOLS: &str =
-    "agent,edit,glob,grep_search,list_directory,notebook_edit,read_file,run_shell_command,todo_write,write_file";
+const CLI_ARGS: &[&str] = &[
+    "--input-format=text",
+    "--approval-mode=yolo",
+    "--output-format=stream-json",
+    "--strict-tools=agent,edit,glob,grep_search,list_directory,notebook_edit,read_file,run_shell_command,todo_write,write_file",
+    "--foreground-agents-only",
+    "--max-subagent-depth=1",
+    "--max-tool-calls=-1",
+];
 
 #[repr(C)]
 struct LandlockRulesetAttr {
@@ -186,15 +193,8 @@ fn run() -> Result<std::convert::Infallible, String> {
         Command::new(NODE)
             .arg("--expose-gc")
             .arg(CLI)
-            .arg("--input-format=text")
-            .arg("--approval-mode=yolo")
-            .arg("--output-format=stream-json")
-            .arg(format!("--strict-tools={STRICT_TOOLS}"))
-            .arg("--foreground-agents-only")
-            .arg("--max-subagent-depth=1")
-            .arg(format!("--max-session-turns={max_session_turns}"))
-            .arg("--max-tool-calls=-1")
-            .arg("--no-chat-recording"),
+            .args(CLI_ARGS)
+            .arg(format!("--max-session-turns={max_session_turns}")),
     );
     Err(format!("exec pinned Qwen Code entrypoint: {error}"))
 }

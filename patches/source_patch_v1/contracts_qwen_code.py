@@ -4171,8 +4171,8 @@ def _validate_served_accounting_after(state: State) -> None:
     )
     config_path = "packages/core/src/config/config.ts"
     config = _source(state, config_path, label="initial recording owner")
-    initialization = config.split("private async initializeOnce(", 1)[1].split(
-        "private async initializeInternal(", 1
+    initialization = config.split("async initialize(options?", 1)[1].split(
+        "async initializeWorkspace(", 1
     )[0]
     _require_ordered(
         initialization,
@@ -4182,6 +4182,29 @@ def _validate_served_accounting_after(state: State) -> None:
         ),
         label="initial recording owner",
         location=config_path,
+    )
+    _require_all(
+        state,
+        config_path,
+        (
+            "private chatRecordingService: ChatRecordingService;",
+            "getChatRecordingService(): ChatRecordingService {",
+            "return this.initializeConfig(async () => {",
+            "private async initializeConfig(start: () => Promise<void>)",
+            "const initialization = this.initializeOnce(start);",
+            "private async initializeOnce(start: () => Promise<void>)",
+            "await start();",
+        ),
+        label="mandatory recorder and shared initialization lifetime",
+    )
+    workspace = config.split("async initializeWorkspace(", 1)[1].split(
+        "private async initializeConfig(", 1
+    )[0]
+    _require(
+        "return this.initializeConfig(() =>" in workspace
+        and "this.initializeInternal({ ...options, skipGeminiInitialization: true })" in workspace
+        and "activateSessionWriter" not in workspace,
+        "workspace preparation must share initialization settlement without a session writer",
     )
     recorder_path = "packages/core/src/services/chatRecordingService.ts"
     recorder = _source(state, recorder_path, label="owned canonical append")
@@ -4456,7 +4479,7 @@ def _validate_manual_compaction_after(state: State) -> None:
     _require("Promise.race" not in action, label + ": action settlement is raced")
     _require_ordered(action, (
         "await commandToExecute.action(", "case 'compression':",
-        "createCompressionHistoryItem(outcome)", "await chatRecorder?.flush()",
+        "createCompressionHistoryItem(outcome)", "await chatRecorder.flush()",
         "setIsProcessing(false)",
     ), label=label, location="terminal command owner")
     _require_all(state, cli + "nonInteractiveCliCommands.ts", (
