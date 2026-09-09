@@ -39,7 +39,7 @@
     "policy_id": "qwen38-docker-broker-v1",
     "container_name": "qwen38-docker-broker",
     "image_tag": "qwen38-docker-broker:1.1.0",
-    "image_id": "sha256:e827ccabbc06514ee0d6a8cd792471b07643db9fe1708d20ccb77af9b9ae3b57",
+    "image_id": "sha256:cb6d9b876c1ebc575b5519743433768d8ef6881f5d3d22b5b8a9ed279087cb70",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
     "policy_sha256": "0d4f43cad351197592a839e8e9241573a48e77557293b5d407a3261ae7c26171",
     "source_sha256": "e065a5a5fc8a6fdf13ca739f007a511650edd56aefd55c5f5331f6433220343b",
