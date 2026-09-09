@@ -378,8 +378,10 @@ checkpoint. Every failure status is named, absent counts are refused, and comple
 user and hook directives reach exact admission. A later finalization failure
 retains the committed checkpoint and blocks further chat use until restoration
 with a new client. The [source contract](patches/README.md) describes the boundaries
-and qualification limits; TypeScript runtime qualification of this change has not
-been run under the current local Cargo/Python/Git-only constraint.
+and qualification limits. CPU-only native TypeScript builds and targeted runtime
+checks cover the shared formatter, ACP recording and delivery, and browser SDK.
+The browser SDK retains its upstream size assertion and shares exact scalar-count
+validation with Core.
 
 Six broader implementation obligations remain open: operational daemon metrics,
 provider-stream lifetime, reasoning stored by reference, prompt-hook failure

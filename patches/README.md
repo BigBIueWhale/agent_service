@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `1b34e3d95ec7896626ce6388be2b2771f219742f1134bd6ee8725ef54d9775c2`
+- Review-diff SHA-256: `adee471efe9f0e3f6a6c302c14725e4e70a8758fd0eae8d80ae2f5b0f1ce704e`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `2fd6fdf27d3bc2170f1a9a08dfe5840a45a8431079d62767a678a9b0b135218f`
+- Transformer-manifest SHA-256: `dada8018b585a0eadc89f51f8cc35f8aebe6d50669af6bc79205c4e6526ae689`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -192,14 +192,12 @@ Unreadable evidence is represented as unavailable, not a fabricated zero group.
 
 ## Verification scope and remaining limits
 
-The published preceding source revision was qualified with mocked source tests,
-test-owned files and streams, noEmit type checks, Python transformer tests and
-Cargo checks. Those historical JavaScript results do not qualify changed source.
-The current manual-compaction change uses source review, Python transformer and
-manifest checks, Cargo checks and a local Rust TypeScript grammar parser. Its new
-TypeScript regression controls are not executed: this round permits local Cargo,
-Python and Git only. Grammar parsing is not TypeScript type or runtime checking.
-No application build, release, provider, CLI session, benchmark or service is run.
+CPU-only native package builds and regression tests qualify the browser SDK,
+shared compaction formatter, ACP result recording and delivery, and affected
+persistence and presentation boundaries. Python transformer and manifest checks
+verify exact source reconstruction; Cargo checks cover the harness. These checks
+are separate from live provider or session verification. No model serving,
+provider session, release or GPU workload is needed for this qualification.
 
 Compaction reasoning and child reasoning still appear inline in recorded
 content. Persisting these by reference remains open: a complete change needs a
@@ -233,8 +231,12 @@ must coordinate observation admission, per-frame mutation, measurement failure
 and staleness, checked interval arithmetic, and immutable publication. Sampled
 operational readings are distinct from complete session generation accounting.
 That whole lifecycle remains open; the session summary corrections do not close
-it. Ten pure actual-source failures are retained outside the shipping tests; the
-bridge and sampler findings are source-confirmed, without runtime qualification.
+it. Fresh CPU-only tests reproduce all ten ring defects. Source review also
+confirms that UI retention drops closed-session observations, nested observation
+objects remain mutable, and optional telemetry catches can suppress admission
+failures. A whole repair needs source-owned observation retention, acknowledged
+channel publication and explicit resource measurement states. CPU qualification
+is feasible; the unimplemented coordinated protocol is the remaining limit.
 
 Prompt-hook failure policy remains open. Invalid model JSON/schema and operational
 failures currently allow continuation. Cancellation is inferred from message
@@ -262,8 +264,11 @@ can hide an independent cleanup failure. Guards disabled and guards enabled also
 follow different iterator ownership paths. A complete fix must own the stream
 from acquisition through completion, abandonment, cancellation, and pending-read
 settlement, preserving primary and cleanup failures. Strict configuration
-admission does not establish that lifetime contract. These are source-confirmed
-findings; no live stream or cancellation experiment was run for this assessment.
+admission does not establish that lifetime contract. CPU-only tests using the
+installed OpenAI SDK and in-memory SSE/ReadableStream sources reproduce hidden
+cancellation failures, unstarted-generator leaks and unjoined pending reads.
+The whole scoped-consumption migration remains unimplemented; it does not require
+live model access to qualify.
 
 ## Manual compaction ownership and presentation
 
@@ -293,6 +298,7 @@ by flush, preserving completed UI actions and the original recording failure.
 User and hook directives are supplied whole to exact sizing; no reasoning budget,
 output budget, reserve or payload retention rule changes.
 
-These changes have source and delivery checks. Their TypeScript runtime controls
-remain unexecuted under the current operational constraint, so this is not a
-runtime qualification or a general extended-session correctness claim.
+The compaction factory satisfies its shared history type while preserving the
+inferred object shape required by canonical recording. Native CLI compilation,
+all formatter cases and held ACP recording/delivery controls qualify this seam.
+These checks do not establish general extended-session correctness.

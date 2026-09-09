@@ -4126,12 +4126,33 @@ def _validate_served_accounting_after(state: State) -> None:
     )
     _require(
         re.search(
-            r"if\s*\(\s*typeof value !== 'number'\s*\|\|\s*"
-            r"!Number\.isSafeInteger\(value\)\s*\|\|\s*value < 0\s*\)",
+            r"export function isTokenCount\(value: unknown\): value is number\s*\{\s*"
+            r"return Number\.isSafeInteger\(value\) && \(value as number\) >= 0;\s*\}",
             usage,
         )
         is not None,
         "served usage must refuse every non-integer or negative count",
+    )
+    _require_all(
+        state,
+        usage_path,
+        (
+            "const invalidField = SERVED_USAGE_FIELDS.find(",
+            "!isTokenCount(",
+            "usage !== null && typeof usage === 'object' ? counts[field] : undefined",
+            "invalidField !== undefined ||",
+            "invalid served usage (${invalidField ?? 'relationships'})",
+        ),
+        label="complete served usage validation",
+    )
+    _require_all(
+        state,
+        "packages/sdk-typescript/src/daemon/ui/usage.ts",
+        (
+            "import { isTokenCount } from '@qwen-code/qwen-code-core/servedUsage';",
+            "!isTokenCount(usage[key]) || !isTokenCount(sum)",
+        ),
+        label="shared safe count validation for displayed usage",
     )
     logging_path = (
         "packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts"
