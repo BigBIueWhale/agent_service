@@ -481,6 +481,12 @@ enum SessionResolution {
     DiskTerminal,
 }
 
+#[derive(Serialize)]
+pub struct SessionList {
+    pub sessions: Vec<SessionBody>,
+    pub uninterpreted_records: Vec<crate::error::UninterpretedTerminalRecord>,
+}
+
 #[derive(Clone)]
 pub struct Manager {
     cfg: Arc<Config>,
@@ -696,6 +702,15 @@ pub async fn recover_interrupted_acceptances(cfg: &Config) -> ServiceResult<()> 
                 "restart recovery: accepted result directory {} has unsafe type/mode/owner",
                 path.display()
             )));
+        }
+        if path_entry_exists(
+            &path.join("finished.json"),
+            "restart recovery: stat committed evidence",
+        )? && matches!(
+            crate::api::committed_terminal_for_sweep(&path, &name, 1000, 1000)?,
+            Some(TerminalRecord::Uninterpreted(_))
+        ) {
+            continue;
         }
         let accepted = acceptance_path(&cfg.results_dir, &name);
         if !path_entry_exists(
@@ -1525,7 +1540,7 @@ impl Manager {
     /// Pure read of every visible session. Combines in-memory running
     /// entries with on-disk terminal entries (the on-disk records survive
     /// across server restart).
-    pub async fn list(&self) -> ServiceResult<Vec<SessionBody>> {
+    pub async fn list(&self) -> ServiceResult<SessionList> {
         // Freeze only the set of visible resource identities under the short
         // admission fence. Each resource is then read independently after the
         // fence is released, so a large historical collection can never hold
@@ -1592,9 +1607,13 @@ impl Manager {
         };
 
         let mut bodies = Vec::with_capacity(ids.len());
+        let mut uninterpreted_records = Vec::new();
         for id in ids {
             match self.get(&id).await {
                 Ok(body) => bodies.push(body),
+                Err(ServiceError::UninterpretedTerminalRecord(record)) => {
+                    uninterpreted_records.push(record)
+                }
                 // A concurrent explicit DELETE after the identity snapshot
                 // makes omission the accurate later observation.
                 Err(ServiceError::NotFound { .. }) => {}
@@ -1602,7 +1621,10 @@ impl Manager {
             }
         }
         bodies.sort_by_key(|b| b.started_at_unix);
-        Ok(bodies)
+        Ok(SessionList {
+            sessions: bodies,
+            uninterpreted_records,
+        })
     }
 
     /// Durably request cancellation of a running session.  This is a short,
@@ -3775,8 +3797,65 @@ fn validate_delete_state_marker(
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum TerminalRecord {
+    Current(Box<SessionBody>),
+    Uninterpreted(crate::error::UninterpretedTerminalRecord),
+}
+
+impl TerminalRecord {
+    fn into_body(self) -> ServiceResult<SessionBody> {
+        match self {
+            Self::Current(body) => Ok(*body),
+            Self::Uninterpreted(record) => Err(ServiceError::UninterpretedTerminalRecord(record)),
+        }
+    }
+}
+
+/// Syntax and terminal identity establish preserved evidence. Only exact current
+/// deserialization and semantic validation establish resource-operation authority.
+pub(crate) fn interpret_terminal_record(
+    bytes: &[u8],
+    session_id: &str,
+    path: &Path,
+) -> ServiceResult<TerminalRecord> {
+    let json: serde_json::Value = serde_json::from_slice(bytes).map_err(|error| {
+        ServiceError::Internal(format!(
+            "terminal record {} has invalid JSON syntax: {error}",
+            path.display()
+        ))
+    })?;
+    if json.get("session_id").and_then(serde_json::Value::as_str) != Some(session_id)
+        || !matches!(
+            json.get("status").and_then(serde_json::Value::as_str),
+            Some("completed" | "cancelled")
+        )
+    {
+        return Err(ServiceError::Internal(format!(
+            "terminal record {} has identity/status mismatch for {session_id}",
+            path.display()
+        )));
+    }
+    drop(json);
+    // Deserialize the original bytes: a Value would erase duplicate fields.
+    let body = match serde_json::from_slice::<SessionBody>(bytes) {
+        Ok(body) => body,
+        Err(error) => {
+            return Ok(TerminalRecord::Uninterpreted(
+                crate::error::UninterpretedTerminalRecord {
+                    session_id: session_id.to_string(),
+                    detail: error.to_string(),
+                },
+            ))
+        }
+    };
+    body.validate_shape()?;
+    Ok(TerminalRecord::Current(Box::new(body)))
+}
+
 /// Read the on-disk terminal record. `NotFound` if the directory or
-/// finished.json doesn't exist; `Internal` on read or parse failure.
+/// finished.json does not exist. Uninterpreted evidence has its own refusal;
+/// invalid syntax, inconsistent current evidence and storage failures stay errors.
 async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionBody> {
     if !is_safe_session_id(session_id) {
         return Err(ServiceError::InvalidRequest(format!(
@@ -3784,6 +3863,10 @@ async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionB
         )));
     }
     let path = finished_json_path(cfg, session_id);
+    let body = read_terminal_body_file(&path, session_id, "committed terminal");
+    if matches!(&body, Err(ServiceError::UninterpretedTerminalRecord(_))) {
+        return body;
+    }
     let temporary_path = path.with_file_name("finished.json.tmp");
     match std::fs::symlink_metadata(&temporary_path) {
         Ok(_) => {
@@ -3801,7 +3884,7 @@ async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionB
             )));
         }
     }
-    let body = read_terminal_body_file(&path, session_id, "committed terminal")?;
+    let body = body?;
     validate_terminal_resource(cfg, session_id, &body)?;
     crate::api::validate_terminal_storage(&cfg.results_dir.join(session_id), &body, 1000, 1000)?;
     validate_terminal_state_storage(cfg, &body)?;
@@ -3872,20 +3955,7 @@ fn read_terminal_body_file(
             bytes.len()
         )));
     }
-    let body = serde_json::from_slice::<SessionBody>(&bytes).map_err(|error| {
-        ServiceError::Internal(format!(
-            "{role} for {session_id} at {} is malformed JSON or has the wrong shape: {error}",
-            path.display()
-        ))
-    })?;
-    if body.session_id != session_id || body.status == SessionStatus::Running {
-        return Err(ServiceError::Internal(format!(
-            "{role} at {} has terminal identity/status drift for {session_id}",
-            path.display()
-        )));
-    }
-    body.validate_shape()?;
-    Ok(body)
+    interpret_terminal_record(&bytes, session_id, path)?.into_body()
 }
 
 fn validate_terminal_state_storage(cfg: &Config, body: &SessionBody) -> ServiceResult<()> {
@@ -4214,6 +4284,161 @@ mod tests {
             observed_reasoning_tokens: Some(0),
             observed_subagent_scope_count: Some(0),
             observed_unaccounted_records: Some(0),
+        }
+    }
+
+    #[test]
+    fn stored_terminal_interpretation_distinguishes_schema_from_syntax_and_semantics() {
+        let id = "s-11111111111111111111111111111111";
+        let path = Path::new("finished.json");
+        let original = serde_json::to_value(body(id)).unwrap();
+        assert!(matches!(
+            super::interpret_terminal_record(&serde_json::to_vec(&original).unwrap(), id, path)
+                .unwrap(),
+            super::TerminalRecord::Current(_)
+        ));
+        for field in ["preserve_thinking", "unrecognized_measurement"] {
+            let mut unknown = original.clone();
+            unknown[field] = serde_json::json!(true);
+            let bytes = serde_json::to_vec(&unknown).unwrap();
+            assert!(serde_json::from_slice::<SessionBody>(&bytes).is_err());
+            let record = super::interpret_terminal_record(&bytes, id, path).unwrap();
+            let error = record
+                .into_body()
+                .expect_err("schema mismatch cannot produce a current body");
+            assert_eq!(error.kind_str(), "uninterpreted_terminal_record");
+            assert_eq!(error.http_status(), axum::http::StatusCode::CONFLICT);
+            assert_eq!(error.session_id(), id);
+            assert!(error.message().contains(field));
+        }
+        let mut absent = original.clone();
+        absent.as_object_mut().unwrap().remove("terminal");
+        assert!(matches!(
+            super::interpret_terminal_record(&serde_json::to_vec(&absent).unwrap(), id, path)
+                .unwrap(),
+            super::TerminalRecord::Uninterpreted(_)
+        ));
+        let duplicate = serde_json::to_string(&original).unwrap().replacen(
+            '{',
+            "{\"status\":\"completed\",",
+            1,
+        );
+        assert!(matches!(
+            super::interpret_terminal_record(duplicate.as_bytes(), id, path).unwrap(),
+            super::TerminalRecord::Uninterpreted(_)
+        ));
+        let syntax = super::interpret_terminal_record(b"{", id, path).unwrap_err();
+        assert!(syntax.message().contains("invalid JSON syntax"));
+        for field in ["session_id", "status"] {
+            let mut wrong_identity = original.clone();
+            wrong_identity[field] = serde_json::json!("wrong");
+            let error = super::interpret_terminal_record(
+                &serde_json::to_vec(&wrong_identity).unwrap(),
+                id,
+                path,
+            )
+            .unwrap_err();
+            assert!(error.message().contains("identity/status mismatch"));
+        }
+        let mut invalid_counts = original;
+        invalid_counts["observed_output_tokens"] = serde_json::json!(0);
+        invalid_counts["observed_reasoning_tokens"] = serde_json::json!(1);
+        let error = super::interpret_terminal_record(
+            &serde_json::to_vec(&invalid_counts).unwrap(),
+            id,
+            path,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(error, ServiceError::Internal(_)),
+            "current semantic contradiction must remain refused"
+        );
+    }
+
+    #[tokio::test]
+    async fn uninterpreted_history_has_no_recovery_or_mutation_authority_and_remains_listed() {
+        let tree = TestTree::new("uninterpreted-resource");
+        let state = tree.0.join("state");
+        let results = tree.0.join("results");
+        std::fs::create_dir(&state).unwrap();
+        std::fs::create_dir(&results).unwrap();
+        let cfg = Arc::new(test_config(state, results.clone()));
+        let old_id = "s-11111111111111111111111111111111";
+        let current_id = "s-22222222222222222222222222222222";
+        let mut snapshots = Vec::new();
+        for id in [old_id, current_id] {
+            let dir = results.join(id);
+            std::fs::create_dir(&dir).unwrap();
+            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let mut record = serde_json::to_value(body(id)).unwrap();
+            if id == old_id {
+                record["preserve_thinking"] = serde_json::json!(true);
+            }
+            let bytes = serde_json::to_vec_pretty(&record).unwrap();
+            let path = dir.join("finished.json");
+            private_write(&path, &bytes);
+            make_service_owned(&dir);
+            make_service_owned(&path);
+            if id == old_id {
+                for name in [
+                    "accepted.json",
+                    "progress.json",
+                    "cancel-requested.json.next",
+                ] {
+                    let path = dir.join(name);
+                    let bytes = b"historical evidence outside the current schema".to_vec();
+                    private_write(&path, &bytes);
+                    make_service_owned(&path);
+                    snapshots.push((path, bytes));
+                }
+                std::fs::hard_link(&path, dir.join("finished.json.tmp")).unwrap();
+            }
+            snapshots.push((path, bytes));
+        }
+        let identities: Vec<_> = snapshots
+            .iter()
+            .map(|(p, _)| {
+                let m = std::fs::metadata(p).unwrap();
+                (m.ino(), m.mtime_nsec(), m.ctime_nsec(), m.nlink())
+            })
+            .collect();
+        let manager = super::Manager::new(Arc::clone(&cfg));
+        for _ in 0..2 {
+            super::recover_interrupted_acceptances(&cfg)
+                .await
+                .expect("completed uninterpreted history must not reopen its acceptance");
+            for error in [
+                manager.get(old_id).await.unwrap_err(),
+                manager.cancel(old_id).await.unwrap_err(),
+                manager.delete(old_id).await.unwrap_err(),
+            ] {
+                assert_eq!(error.kind_str(), "uninterpreted_terminal_record");
+                assert_eq!(error.session_id(), old_id);
+            }
+            assert_eq!(
+                manager.get(current_id).await.unwrap().session_id,
+                current_id
+            );
+            let listing = manager.list().await.unwrap();
+            assert_eq!(listing.sessions.len(), 1);
+            assert_eq!(listing.sessions[0].session_id, current_id);
+            assert_eq!(listing.uninterpreted_records.len(), 1);
+            assert_eq!(listing.uninterpreted_records[0].session_id, old_id);
+            let json = serde_json::to_value(listing).unwrap();
+            assert!(json["uninterpreted_records"][0].get("terminal").is_none());
+            assert!(json["uninterpreted_records"][0]
+                .get("observed_output_tokens")
+                .is_none());
+            for ((path, bytes), expected) in snapshots.iter().zip(&identities) {
+                assert_eq!(&std::fs::read(path).unwrap(), bytes);
+                let m = std::fs::metadata(path).unwrap();
+                assert_eq!(
+                    (m.ino(), m.mtime_nsec(), m.ctime_nsec(), m.nlink()),
+                    *expected
+                );
+            }
+            assert!(results.join(old_id).join("finished.json.tmp").exists());
+            assert_eq!(std::fs::read_dir(&results).unwrap().count(), 2);
         }
     }
 

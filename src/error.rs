@@ -13,6 +13,14 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Serialize;
 
+/// A JSON record has a matching terminal identity, but its contents
+/// cannot be interpreted by the current resource schema. Its bytes remain evidence.
+#[derive(Debug, Clone, Serialize)]
+pub struct UninterpretedTerminalRecord {
+    pub session_id: String,
+    pub detail: String,
+}
+
 #[derive(Debug, Clone)]
 pub enum ServiceError {
     /// 400 — request body / fields rejected by validation.
@@ -76,6 +84,8 @@ pub enum ServiceError {
     Timeout(String),
     /// 502 — agent ran but produced no result event (or unparseable result file).
     AgentOutputMissing(String),
+    /// 409 — retained evidence cannot authorize a current resource operation.
+    UninterpretedTerminalRecord(UninterpretedTerminalRecord),
     /// 500 — anything else genuinely internal.
     Internal(String),
 }
@@ -93,7 +103,8 @@ impl ServiceError {
             | Self::SessionFinalizing { .. }
             | Self::SessionRunning { .. }
             | Self::SessionDeleting { .. }
-            | Self::SourceChanged(_) => StatusCode::CONFLICT,
+            | Self::SourceChanged(_)
+            | Self::UninterpretedTerminalRecord(_) => StatusCode::CONFLICT,
             Self::DockerUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::ServiceShuttingDown => StatusCode::SERVICE_UNAVAILABLE,
             Self::DockerCommand(_) | Self::AgentOutputMissing(_) => StatusCode::BAD_GATEWAY,
@@ -127,6 +138,7 @@ impl ServiceError {
             Self::Staging(_) => "staging_failed",
             Self::Timeout(_) => "timeout",
             Self::AgentOutputMissing(_) => "agent_output_missing",
+            Self::UninterpretedTerminalRecord(_) => "uninterpreted_terminal_record",
             Self::Internal(_) => "internal",
         }
     }
@@ -147,6 +159,10 @@ impl ServiceError {
             | Self::Internal(m) => m.clone(),
             Self::NotFound { session_id } => format!(
                 "session {session_id} is not known to this server — it was never durably accepted or its terminal resource was explicitly DELETE'd; service restarts recover every accepted handle into an explicit terminal result before listening"
+            ),
+            Self::UninterpretedTerminalRecord(record) => format!(
+                "session {} has preserved terminal evidence that this resource schema cannot interpret: {}; no current result or cleanup authority is inferred",
+                record.session_id, record.detail
             ),
             Self::IdempotencyConflict { detail, .. } => detail.clone(),
             Self::AcceptanceDurabilityFailed { detail, .. } => detail.clone(),
@@ -181,6 +197,7 @@ impl ServiceError {
             | Self::AcceptanceDurabilityFailed { session_id, .. }
             | Self::CancellationDurabilityFailed { session_id, .. }
             | Self::IdempotencyConflict { session_id, .. } => session_id.as_str(),
+            Self::UninterpretedTerminalRecord(record) => &record.session_id,
             _ => "",
         }
     }

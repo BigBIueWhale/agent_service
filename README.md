@@ -899,11 +899,21 @@ All endpoints listen only on `127.0.0.1:8090`:
 |---|---|---|
 | `GET` | `/healthz` | Process and startup preflight succeeded |
 | `POST` | `/v1/agent/sessions` | Stream the workspace archive, prove its commitment, durably accept, return immediately |
-| `GET` | `/v1/agent/sessions` | List running and durable terminal sessions |
+| `GET` | `/v1/agent/sessions` | List current sessions and separately identified uninterpreted terminal records |
 | `GET` | `/v1/agent/sessions/{id}` | Pure state read: status, archive commitment, complete progress history |
 | `GET` | `/v1/agent/sessions/{id}/bundle` | Stream the exact terminal `bundle.tar.zst` with declared length and `X-Bundle-SHA256` |
 | `POST` | `/v1/agent/sessions/{id}/cancel` | Durably record cancellation; teardown continues under the supervisor |
 | `DELETE` | `/v1/agent/sessions/{id}` | Delete one terminal record and bundle |
+
+Committed JSON evidence that the current terminal schema cannot interpret is
+preserved unchanged through startup, together with its result and raw-state trees.
+It grants no recovery or cleanup authority. The list response contains `sessions`
+and `uninterpreted_records`; the latter names each retained session and the schema
+refusal, without inventing current outcomes or counts. Individual resource
+operations return HTTP 409 `uninterpreted_terminal_record`. Current-schema
+validation remains strict; invalid syntax, unsafe metadata and contradictory
+current evidence retain their own refusal semantics. See the
+[session resource contract](docs/session-resource.md).
 
 The creation body is exactly two ordered `multipart/form-data` parts: part 1
 `request` (`application/json` — `{"prompt", "max_session_turns"?,

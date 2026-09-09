@@ -49,7 +49,7 @@ use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::routing::{get, post};
 use axum::Json;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::config::Config;
 use crate::error::{ServiceError, ServiceResult};
@@ -107,11 +107,6 @@ pub struct CreateRequest {
     /// Lowercase-hex SHA-256 of those exact bytes; the streamed upload must
     /// hash to this value or the submission fails without acceptance.
     pub archive_sha256: String,
-}
-
-#[derive(Serialize)]
-struct ListResponse {
-    sessions: Vec<SessionBody>,
 }
 
 async fn healthz() -> (HeaderMap, &'static str) {
@@ -562,12 +557,9 @@ fn require_idempotency_key(headers: &HeaderMap) -> ServiceResult<String> {
 
 async fn list_sessions(
     State(state): State<AppState>,
-) -> Result<(HeaderMap, Json<ListResponse>), ServiceError> {
+) -> Result<(HeaderMap, Json<crate::runtime::SessionList>), ServiceError> {
     let sessions = state.manager.list().await?;
-    Ok((
-        collection_response_headers(),
-        Json(ListResponse { sessions }),
-    ))
+    Ok((collection_response_headers(), Json(sessions)))
 }
 
 async fn get_session(
@@ -2186,7 +2178,12 @@ fn sweep_state_dir(
             )));
         }
         let result_dir = results_dir.join(name);
-        let terminal = committed_terminal_for_sweep(&result_dir, name, service_uid, service_gid)?;
+        let terminal =
+            match committed_terminal_for_sweep(&result_dir, name, service_uid, service_gid)? {
+                Some(crate::runtime::TerminalRecord::Current(body)) => Some(*body),
+                Some(crate::runtime::TerminalRecord::Uninterpreted(_)) => continue,
+                None => None,
+            };
         if let Some(body) = &terminal {
             validate_terminal_storage(&result_dir, body, service_uid, service_gid)?;
         }
@@ -2338,8 +2335,9 @@ fn sweep_state_dir(
 /// forensic record. A complete private terminal draft is finished through the
 /// same no-clobber hard-link publication used during normal operation.
 ///
-/// A directory with `finished.json` is retained only after validating its
-/// name, file type, terminal JSON shape, and session identity.
+/// Current terminal records authorize their validated storage reconciliation.
+/// Uninterpreted committed records and their raw evidence remain untouched;
+/// their presence grants no recovery or deletion authority.
 fn sweep_partial_results(
     results_dir: &std::path::Path,
     state_dir: &std::path::Path,
@@ -2398,10 +2396,14 @@ fn sweep_partial_results(
                 "sweep_partial_results: unexpected result directory name {name:?}"
             )));
         }
-        if let Some(body) = committed_terminal_for_sweep(&path, name, service_uid, service_gid)? {
-            validate_terminal_storage(&path, &body, service_uid, service_gid)?;
-            validate_terminal_state_reconciliation(state_dir, &body, service_uid, service_gid)?;
-            continue;
+        match committed_terminal_for_sweep(&path, name, service_uid, service_gid)? {
+            Some(crate::runtime::TerminalRecord::Current(body)) => {
+                validate_terminal_storage(&path, &body, service_uid, service_gid)?;
+                validate_terminal_state_reconciliation(state_dir, &body, service_uid, service_gid)?;
+                continue;
+            }
+            Some(crate::runtime::TerminalRecord::Uninterpreted(_)) => continue,
+            None => {}
         }
         let mut remaining = std::fs::read_dir(&path).map_err(|error| {
             ServiceError::Internal(format!(
@@ -2522,12 +2524,12 @@ fn validate_terminal_state_reconciliation(
     validate_raw_cause_for_terminal(cause, body, "terminal reconciliation")
 }
 
-fn committed_terminal_for_sweep(
+pub(crate) fn committed_terminal_for_sweep(
     result_dir: &std::path::Path,
     session_id: &str,
     service_uid: u32,
     service_gid: u32,
-) -> ServiceResult<Option<crate::runtime::SessionBody>> {
+) -> ServiceResult<Option<crate::runtime::TerminalRecord>> {
     use std::os::unix::fs::MetadataExt;
 
     let finished = result_dir.join("finished.json");
@@ -2586,18 +2588,16 @@ fn committed_terminal_for_sweep(
         "terminal record",
         128 * 1024 * 1024,
     )?;
-    let body: crate::runtime::SessionBody = serde_json::from_slice(&bytes).map_err(|error| {
-        ServiceError::Internal(format!(
-            "terminal sweep: terminal record {} is malformed: {error}",
-            terminal_path.display()
-        ))
-    })?;
-    body.validate_shape()?;
-    if body.session_id != session_id || body.status == crate::runtime::SessionStatus::Running {
-        return Err(ServiceError::Internal(format!(
-            "terminal sweep: identity/status mismatch in {}",
-            terminal_path.display()
-        )));
+    let record = crate::runtime::interpret_terminal_record(&bytes, session_id, terminal_path)?;
+    if let crate::runtime::TerminalRecord::Uninterpreted(uninterpreted) = &record {
+        if final_meta.is_none() {
+            return Err(ServiceError::UninterpretedTerminalRecord(
+                uninterpreted.clone(),
+            ));
+        }
+        tracing::warn!(session_id, path = %finished.display(), detail = %uninterpreted.detail,
+            "terminal sweep: preserving uninterpreted terminal evidence without recovery or cleanup authority");
+        return Ok(Some(record));
     }
 
     match (&final_meta, &temporary_meta) {
@@ -2642,7 +2642,7 @@ fn committed_terminal_for_sweep(
         (Some(_), None) => {}
         (None, None) => unreachable!("terminal path selection proved one file exists"),
     }
-    Ok(Some(body))
+    Ok(Some(record))
 }
 
 fn read_private_service_file(
@@ -3169,6 +3169,62 @@ mod tests {
     }
 
     #[test]
+    fn terminal_sweeps_preserve_uninterpreted_history_without_blocking_current_records() {
+        let tree = TestTree::new("uninterpreted-history");
+        let (uid, gid) = owner();
+        let results = tree.0.join("results");
+        let state = tree.0.join("state");
+        mkdir_0755(&results);
+        mkdir_0755(&state.join("sessions"));
+        let mut preserved = Vec::new();
+        for index in 0..43 {
+            let id = format!("s-{index:032x}");
+            let directory = results.join(&id);
+            mkdir_0755(&directory);
+            let mut record = serde_json::to_value(terminal(&id, false)).unwrap();
+            if index < 38 {
+                let object = record.as_object_mut().unwrap();
+                let ending = object.remove("terminal").unwrap();
+                object.extend(ending.as_object().unwrap().clone());
+                object.insert("preserve_thinking".into(), serde_json::json!(true));
+            }
+            let path = directory.join("finished.json");
+            let bytes = serde_json::to_vec_pretty(&record).unwrap();
+            private_write(&path, &bytes);
+            let metadata = std::fs::symlink_metadata(&path).unwrap();
+            preserved.push((
+                path,
+                bytes,
+                metadata.ino(),
+                metadata.mtime_nsec(),
+                metadata.ctime_nsec(),
+            ));
+        }
+        let raw = state.join("sessions").join(format!("s-{:032x}", 0));
+        mkdir_0755(&raw);
+        let evidence = raw.join("benchmark-output");
+        private_write(&evidence, b"irreplaceable benchmark evidence");
+        for _ in 0..2 {
+            sweep_state_dir(&state, &results, uid, gid)
+                .expect("preserve uninterpreted raw evidence");
+            sweep_partial_results(&results, &state, uid, gid)
+                .expect("historical schema cannot block startup");
+            assert_eq!(
+                std::fs::read(&evidence).unwrap(),
+                b"irreplaceable benchmark evidence"
+            );
+            assert_eq!(std::fs::read_dir(&results).unwrap().count(), 43);
+            for (path, bytes, inode, modified, changed) in &preserved {
+                let metadata = std::fs::symlink_metadata(path).unwrap();
+                assert_eq!(&std::fs::read(path).unwrap(), bytes);
+                assert_eq!(metadata.ino(), *inode);
+                assert_eq!(metadata.mtime_nsec(), *modified);
+                assert_eq!(metadata.ctime_nsec(), *changed);
+            }
+        }
+    }
+
+    #[test]
     fn runtime_directory_preflight_creates_only_the_fixed_missing_child() {
         let tree = TestTree::new("runtime-directories");
         let (uid, gid) = owner();
@@ -3416,6 +3472,7 @@ mod tests {
         let state_root = state.join("sessions").join(session_id);
         let control = state_root.join("control");
         let result_dir = results.join(session_id);
+        mkdir_0755(&state_root);
         mkdir_0755(&control);
         mkdir_0755(&result_dir);
         let body = terminal(session_id, true);
@@ -3489,6 +3546,7 @@ mod tests {
         let state_root = state.join("sessions").join(session_id);
         let control = state_root.join("control");
         let result_dir = results.join(session_id);
+        mkdir_0755(&state_root);
         mkdir_0755(&control);
         mkdir_0755(&result_dir);
         let archive = result_dir.join("bundle.tar.zst");

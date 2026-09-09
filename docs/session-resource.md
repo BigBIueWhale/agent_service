@@ -1,11 +1,34 @@
 # Session resource
 
-Every session endpoint returns the same `SessionBody` JSON object. `status` is
+Successful session state responses use the same `SessionBody` JSON object. `status` is
 `running`, `completed`, or `cancelled`. A reader uses the explicitly present
 `terminal` value to inspect ending evidence; it never interprets zero, false, an
 empty string, or an empty array as “pending.” Nullable fields must be present and
 spelled `null` when absent. Unknown fields and inconsistent evidence are refused
-when durable records are read or written.
+before a durable record can authorize a current resource operation.
+
+A committed record from a superseded schema is **uninterpreted terminal evidence**.
+The reader first establishes JSON syntax and the matching terminal identity, then
+attempts the exact current schema on the original bytes. A schema refusal does not
+establish corruption or identify a particular past schema. It establishes that the
+reader cannot interpret the record. No old fields are translated, defaulted or
+admitted into a current `SessionBody`; `deny_unknown_fields` remains enforced.
+
+Startup preserves an uninterpreted record, its result directory, publication
+names, acceptance/progress controls and corresponding raw tree without mutation.
+Those bytes authorize neither recovery nor cleanup. Current records still require
+complete semantic, storage and ownership validation. Invalid JSON syntax, an
+identity/status mismatch, unsafe filesystem metadata and contradictory current
+terminal evidence remain explicit refusals; a private draft cannot become a
+committed resource merely because its JSON parses.
+
+Individual reads, bundle requests, cancellation and deletion of uninterpreted
+records return HTTP 409 with `kind: "uninterpreted_terminal_record"`, the session
+identity and the schema refusal detail. The collection response always contains
+both `sessions` (current resources) and `uninterpreted_records` (objects containing
+only `session_id` and `detail`). Neither group is omitted when empty. Listing old
+evidence cannot erase or block current resources, and uninterpreted entries never
+claim status, token counts, outcomes or accepted bundles.
 
 | Location | Fields | Meaning |
 |---|---|---|
