@@ -1,0 +1,621 @@
+{
+  "v": 1,
+  "cases": [
+    {
+      "name": "root category groups reset indices within one turn",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "first",
+              "role": "assistant",
+              "model": "fixture",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "thinking",
+              "thinking": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "thinking_delta",
+              "thinking": "exact delivered content"
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "child groups have no root turn markers",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "absent partial output carries no open lifecycle",
+      "root": true,
+      "actions": [
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "root block requires start",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "precedes message_start"
+      }
+    },
+    {
+      "name": "child cannot open root turn",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "first",
+              "role": "assistant",
+              "model": "fixture",
+              "content": []
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "new root turn"
+      }
+    },
+    {
+      "name": "root cannot open another turn",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "first",
+              "role": "assistant",
+              "model": "fixture",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "first",
+              "role": "assistant",
+              "model": "fixture",
+              "content": []
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "new root turn"
+      }
+    },
+    {
+      "name": "root cannot close unstarted turn",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message_stop requires"
+      }
+    },
+    {
+      "name": "child cannot close root turn",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message_stop requires"
+      }
+    },
+    {
+      "name": "indices cannot skip zero",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 1,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "does not follow"
+      }
+    },
+    {
+      "name": "indices cannot restart before complete record",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "does not follow"
+      }
+    },
+    {
+      "name": "delta must follow issuance",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "not started"
+      }
+    },
+    {
+      "name": "stop must follow issuance",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "not started"
+      }
+    },
+    {
+      "name": "delta must match thinking block",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "thinking",
+              "thinking": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "contradicts"
+      }
+    },
+    {
+      "name": "closed block refuses another delta",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "already closed"
+      }
+    },
+    {
+      "name": "closed block refuses another stop",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "already closed"
+      }
+    },
+    {
+      "name": "complete record requires block closure",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "message_complete"
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "unclosed partial block"
+      }
+    },
+    {
+      "name": "scope result requires complete record",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "unfinished partial output"
+      }
+    },
+    {
+      "name": "root result requires turn closure",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "first",
+              "role": "assistant",
+              "model": "fixture",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "unfinished partial output"
+      }
+    },
+    {
+      "name": "root stop requires complete record",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "first",
+              "role": "assistant",
+              "model": "fixture",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message_stop requires"
+      }
+    }
+  ]
+}

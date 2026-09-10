@@ -19,6 +19,10 @@ const EVENTS_FILE: &str = "/output/events.jsonl";
 const STDERR_FILE: &str = "/output/qwen.stderr";
 const CAPTURE_ID: &str = "unix-stream-capture-v1";
 
+#[cfg(test)]
+#[path = "../../docker/tests/capture_owner.rs"]
+mod capture_owner;
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
     match run().await {
@@ -34,6 +38,10 @@ async fn run() -> Result<(), String> {
     if std::env::args_os().count() != 1 {
         return Err("session_capture accepts no arguments".into());
     }
+    run_body().await
+}
+
+async fn run_body() -> Result<(), String> {
     if unsafe { libc::geteuid() } != 1000 || unsafe { libc::getegid() } != 1000 {
         return Err(format!(
             "capture identity drift: expected 1000:1000, observed {}:{}",
@@ -56,6 +64,8 @@ async fn run() -> Result<(), String> {
         "CAPTURE_READY capture={} events={} stderr={}",
         CAPTURE_ID, EVENTS_SOCKET, STDERR_SOCKET
     );
+    #[cfg(test)]
+    capture_owner::ready()?;
 
     let accepts = async {
         tokio::try_join!(
@@ -100,18 +110,26 @@ async fn run() -> Result<(), String> {
         tokio::select! {
             biased;
             result = &mut copies => Some(result),
-            signal = termination.recv() => {
-                signal?;
-                None
+            signal = termination.recv() => match signal {
+                Ok(()) => None,
+                Err(error) => Some(Err(error)),
             },
         }
     };
-    sync_async_outputs(&mut events_file, &mut stderr_file).await?;
-    let Some(copy_result) = copy_result else {
-        println!("CAPTURE_ABORTED capture={CAPTURE_ID} phase=copy");
-        return Ok(());
+    let sync_result = sync_async_outputs(&mut events_file, &mut stderr_file).await;
+    let (events_bytes, stderr_bytes) = match (copy_result, sync_result) {
+        (Some(Err(copy_error)), Err(sync_error)) => {
+            return Err(format!("{copy_error}; {sync_error}"));
+        }
+        (Some(Err(error)), Ok(())) | (_, Err(error)) => return Err(error),
+        (None, Ok(())) => {
+            println!("CAPTURE_ABORTED capture={CAPTURE_ID} phase=copy");
+            return Ok(());
+        }
+        (Some(Ok(counts)), Ok(())) => counts,
     };
-    let (events_bytes, stderr_bytes) = copy_result?;
+    #[cfg(test)]
+    capture_owner::before_complete(events_bytes, stderr_bytes)?;
     println!(
         "CAPTURE_COMPLETE capture={} events_bytes={} stderr_bytes={}",
         CAPTURE_ID, events_bytes, stderr_bytes
@@ -214,43 +232,81 @@ async fn copy_stream(
     file: &mut tokio::fs::File,
     label: &str,
 ) -> Result<u64, String> {
-    tokio::io::copy(stream, file)
+    let result = tokio::io::copy(stream, file).await;
+    #[cfg(test)]
+    capture_owner::after_copy(label, &result)?;
+    result.map_err(|error| format!("capture {label} stream: {error}"))
+}
+
+async fn flush_output(file: &mut tokio::fs::File, label: &str) -> Result<(), String> {
+    #[cfg(test)]
+    capture_owner::before_io("flush", label)
         .await
-        .map_err(|error| format!("capture {label} stream: {error}"))
+        .map_err(|error| format!("flush captured {label}: {error}"))?;
+    let result = file.flush().await;
+    #[cfg(test)]
+    capture_owner::after_io("flush", label, &result)
+        .map_err(|error| format!("observe flush captured {label}: {error}"))?;
+    result.map_err(|error| format!("flush captured {label}: {error}"))
+}
+
+async fn sync_output(file: &tokio::fs::File, label: &str) -> Result<(), String> {
+    #[cfg(test)]
+    capture_owner::before_io("sync", label)
+        .await
+        .map_err(|error| format!("sync captured {label}: {error}"))?;
+    let result = file.sync_all().await;
+    #[cfg(test)]
+    capture_owner::after_io("sync", label, &result)
+        .map_err(|error| format!("observe sync captured {label}: {error}"))?;
+    result.map_err(|error| format!("sync captured {label}: {error}"))
 }
 
 async fn sync_async_outputs(
     events_file: &mut tokio::fs::File,
     stderr_file: &mut tokio::fs::File,
 ) -> Result<(), String> {
-    events_file
-        .flush()
-        .await
-        .map_err(|error| format!("flush captured events: {error}"))?;
-    stderr_file
-        .flush()
-        .await
-        .map_err(|error| format!("flush captured stderr: {error}"))?;
-    events_file
-        .sync_all()
-        .await
-        .map_err(|error| format!("sync captured events: {error}"))?;
-    stderr_file
-        .sync_all()
-        .await
-        .map_err(|error| format!("sync captured stderr: {error}"))
+    // Both files can own blocking writes even after a copy future is dropped.
+    // Finalize each one, and retain every observed failure before returning.
+    let results = [
+        flush_output(events_file, "events").await,
+        flush_output(stderr_file, "stderr").await,
+        sync_output(events_file, "events").await,
+        sync_output(stderr_file, "stderr").await,
+    ];
+    capture_io_result(results.into_iter().filter_map(Result::err).collect())
 }
 
 fn sync_std_outputs(
     events_file: &std::fs::File,
     stderr_file: &std::fs::File,
 ) -> Result<(), String> {
-    events_file
-        .sync_all()
-        .map_err(|error| format!("sync aborted captured events: {error}"))?;
-    stderr_file
-        .sync_all()
-        .map_err(|error| format!("sync aborted captured stderr: {error}"))
+    let mut failures = Vec::new();
+    retain_io_failure(
+        events_file.sync_all(),
+        "sync aborted captured events",
+        &mut failures,
+    );
+    retain_io_failure(
+        stderr_file.sync_all(),
+        "sync aborted captured stderr",
+        &mut failures,
+    );
+    capture_io_result(failures)
+}
+
+fn retain_io_failure(result: io::Result<()>, context: &str, failures: &mut Vec<String>) {
+    if let Err(error) = result {
+        failures.push(format!("{context}: {error}"));
+    }
+}
+
+fn capture_io_result(failures: Vec<String>) -> Result<(), String> {
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
+    }
 }
 
 fn remove_owned_socket(path: &Path) -> Result<(), String> {
@@ -323,5 +379,34 @@ mod tests {
         create_private_output(&output).expect("create exclusive capture output");
         assert!(create_private_output(&output).is_err());
         std::fs::remove_dir_all(root).expect("remove capture test root");
+    }
+
+    #[tokio::test]
+    async fn finalization_retains_both_outputs_flush_and_sync_failures() {
+        let full = || {
+            tokio::fs::File::from_std(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .open("/dev/full")
+                    .expect("open Linux failing write device"),
+            )
+        };
+        let mut events = full();
+        let mut stderr = full();
+        // Tokio admits each write to its blocking worker before reporting its
+        // I/O outcome at flush. Both output owners must be observed.
+        events.write_all(b"events").await.unwrap();
+        stderr.write_all(b"stderr").await.unwrap();
+        let error = sync_async_outputs(&mut events, &mut stderr)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error,
+            format!(
+                "flush captured events: {space}; flush captured stderr: {space}; sync captured events: {invalid}; sync captured stderr: {invalid}",
+                space = io::Error::from_raw_os_error(libc::ENOSPC),
+                invalid = io::Error::from_raw_os_error(libc::EINVAL),
+            )
+        );
     }
 }

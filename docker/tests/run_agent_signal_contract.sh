@@ -80,7 +80,8 @@ line_of 'readonly AGENT_EXEC=/opt/agent/agent_exec' >/dev/null
 # shellcheck disable=SC2016
 line_of '$(readlink /dev/ptmx)' >/dev/null
 line_of "'character special file:5:2:666:0:0'" >/dev/null
-line_of "kill -TERM -- \"-\${qwen_pgid}\"" >/dev/null
+line_of "kill -TERM -- \"-\${child_pgid}\"" >/dev/null
+line_of 'run_prelaunch flock' >/dev/null
 if grep -Eq -- '/output/(events|qwen|ready|response)|setsid node|tee ' "${WRAPPER}"; then
   printf 'Qwen wrapper must not hold the service output mount or capture files\n' >&2
   exit 1

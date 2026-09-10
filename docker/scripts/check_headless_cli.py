@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify the shipped CLI entry, settings and launcher arguments against a local protocol stub."""
+"""Qualify the shipped CLI through production certification and an owned protocol fixture."""
 from __future__ import annotations
 
 import argparse
@@ -16,6 +16,8 @@ import threading
 
 from verify_runtime_contract import cli_arguments
 
+WORKSPACE = Path("/workspace")
+
 
 class SmokeFailure(RuntimeError):
     pass
@@ -26,9 +28,25 @@ def require(condition: bool, message: str) -> None:
         raise SmokeFailure(message)
 
 
-def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict]) -> dict:
+def certify(stdout: bytes, certifier: Path, events_path: Path) -> dict:
+    with events_path.open("xb") as stream:
+        os.fchmod(stream.fileno(), 0o600)
+        stream.write(stdout)
+        stream.flush()
+        os.fsync(stream.fileno())
+    result = subprocess.run([str(certifier), str(events_path)], capture_output=True, timeout=45)
+    require(result.returncode == 0,
+            f"production stream certification refused: {result.stdout!r}; {result.stderr!r}")
+    certificate = json.loads(result.stdout)
+    require(certificate["certification"]["state"] == "certified",
+            "production reader did not supply a certificate")
+    return certificate
+
+
+def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], certifier: Path) -> dict:
     require(bool(stdout.strip()), "CLI emitted no events")
     require(stdout.endswith(b"\n"), "CLI emitted an unterminated event")
+    certificate = certify(stdout, certifier, runtime / "events.jsonl")
     events = [json.loads(line) for line in stdout.splitlines()]
     init = [e for e in events if e.get("type") == "system" and e.get("subtype") == "init"]
     require(len(init) == 1, "CLI must emit exactly one init event")
@@ -80,10 +98,28 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict]) -> d
     require(records[-1]["type"] == "assistant" and records[-1]["message"]["parts"] ==
             [{"text": "HEADLESS_SMOKE_OK " + nonce}], "final response was not recorded before exit")
     return {"check": "headless_cli", "status": "passed", "events": len(events),
-            "transcript_records": len(records), "served_requests": 2, "real_tool_calls": 1}
+            "transcript_records": len(records), "served_requests": 2, "real_tool_calls": 1,
+            "production_certificate": certificate}
 
 
-def check(entry: Path, settings_path: Path, launcher_source: Path) -> dict:
+def contract_identity(certifier: Path) -> str:
+    result = subprocess.run([str(certifier), "--contract-identity"],
+                            capture_output=True, check=True, timeout=45)
+    identity = result.stdout.decode("ascii").removesuffix("\n")
+    require(len(identity) == 64 and all(c in "0123456789abcdef" for c in identity),
+            "production certifier returned an invalid contract identity")
+    return identity
+
+
+def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Path) -> dict:
+    expected_contract = contract_identity(certifier)
+    manifest_path = entry.parent / "stream-binding-manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_bytes())
+    except (OSError, UnicodeError, ValueError) as cause:
+        raise SmokeFailure(f"CLI contract identity cannot be read before provider admission: {cause}") from cause
+    require(isinstance(manifest, dict) and manifest.get("schema_sha256") == expected_contract,
+            "CLI and native certifier contract identities differ before provider admission")
     arguments = cli_arguments(launcher_source.read_text())
     settings = json.loads(settings_path.read_text())
     model = settings["model"]["name"]
@@ -98,12 +134,15 @@ def check(entry: Path, settings_path: Path, launcher_source: Path) -> dict:
     generation_count = 0
     with tempfile.TemporaryDirectory(prefix="qwen-headless-smoke-") as temporary:
         root = Path(temporary)
-        home, workspace, runtime = [root / name for name in ("home", "workspace", "runtime")]
-        for directory in (home, workspace, runtime, home / ".qwen"):
+        home, runtime = [root / name for name in ("home", "runtime")]
+        workspace = WORKSPACE
+        for directory in (home, runtime, home / ".qwen"):
             directory.mkdir()
         nonce = secrets.token_hex(16)
-        fixture = workspace / "probe.txt"
-        fixture.write_text(nonce + "\n")
+        fixture_fd, fixture_name = tempfile.mkstemp(prefix="headless-probe-", suffix=".txt", dir=workspace)
+        fixture = Path(fixture_name)
+        with os.fdopen(fixture_fd, "w") as contents:
+            contents.write(nonce + "\n")
 
         class Stub(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
@@ -181,6 +220,7 @@ def check(entry: Path, settings_path: Path, launcher_source: Path) -> dict:
             local_settings = root / "settings.json"
             local_settings.write_text(json.dumps(settings))
             env = {"PATH": os.environ["PATH"], "HOME": str(home), "QWEN_HOME": str(home / ".qwen"),
+                "QWEN_STREAM_CONTRACT_SHA256": expected_contract,
                 "QWEN_RUNTIME_DIR": str(runtime), "QWEN_CODE_SYSTEM_SETTINGS_PATH": str(local_settings),
                 "QWEN_CODE_SYSTEM_DEFAULTS_PATH": str(root / "absent-defaults.json"),
                 "QWEN38_AGENT_SERVICE_LOCKED": "1", "QWEN_SYSTEM_MD": "/opt/agent/system.md",
@@ -210,11 +250,12 @@ def check(entry: Path, settings_path: Path, launcher_source: Path) -> dict:
                 ) from error
             require(process.returncode == 0, f"CLI exited {process.returncode}; stdout={stdout!r}; stderr={stderr!r}")
             require(not failures, f"provider protocol failed: {failures}")
-            return qualify(stdout, runtime, nonce, requests)
+            return qualify(stdout, runtime, nonce, requests, certifier)
         finally:
             server.shutdown()
             worker.join()
             server.server_close()
+            fixture.unlink()
 
 
 def main() -> None:
@@ -222,8 +263,9 @@ def main() -> None:
     parser.add_argument("entry", type=Path)
     parser.add_argument("settings", type=Path)
     parser.add_argument("launcher_source", type=Path)
+    parser.add_argument("certifier", type=Path)
     args = parser.parse_args()
-    print(json.dumps(check(args.entry, args.settings, args.launcher_source), sort_keys=True))
+    print(json.dumps(check(args.entry, args.settings, args.launcher_source, args.certifier), sort_keys=True))
 
 
 if __name__ == "__main__":

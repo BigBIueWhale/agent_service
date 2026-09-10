@@ -123,6 +123,58 @@ class SourcePatchTransactionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_new_nested_sources_are_created_only_after_validation_and_are_idempotent(self) -> None:
+        contents = "export const version = 1;\n"
+        relative = "packages/core/generated/schema.ts"
+        stage = _stage(self.artifact, name="generated-source", transformations=((relative, None, contents),))
+        transaction = SourcePatchTransaction(self.source, self.artifact,
+            _patchset((stage,), final_files={relative: sha256_text(contents)}))
+        plan, result = transaction.plan()
+        self.assertFalse((self.source / "packages").exists())
+        transaction.commit(plan, result)
+        self.assertEqual((self.source / relative).read_text(), contents)
+        self.assertEqual(transaction.apply().state, "already-applied")
+
+    def test_nested_source_commit_failure_removes_only_created_directories(self) -> None:
+        existing = self.source / "packages"
+        existing.mkdir()
+        (existing / "sentinel").write_text("preserve\n")
+        paths = ("packages/core/generated/a.ts", "packages/core/fixtures/b.ts")
+        contents = "export const version = 1;\n"
+        stage = _stage(self.artifact, name="nested-source-failure",
+            transformations=tuple((path, None, contents) for path in paths))
+        transaction = SourcePatchTransaction(self.source, self.artifact,
+            _patchset((stage,), final_files={path: sha256_text(contents) for path in paths}))
+        real_replace = os.replace
+        replaced = []
+
+        def fail_second(source, destination):
+            replaced.append(str(destination))
+            if len(replaced) == 2:
+                raise OSError("second nested replacement failed")
+            return real_replace(source, destination)
+
+        with patch.object(framework.os, "replace", fail_second):
+            with self.assertRaisesRegex(PatchWriteError, "second nested replacement failed"):
+                transaction.apply()
+        self.assertEqual(len(replaced), 2)
+        self.assertEqual(list(existing.iterdir()), [existing / "sentinel"])
+        self.assertEqual((existing / "sentinel").read_text(), "preserve\n")
+
+    def test_new_nested_source_refuses_a_parent_symlink_without_outside_writes(self) -> None:
+        outside = Path(self.temporary.name) / "outside"
+        outside.mkdir()
+        (outside / "sentinel").write_text("preserve\n")
+        (self.source / "packages").symlink_to(outside, target_is_directory=True)
+        path, contents = "packages/generated/schema.ts", "export const version = 1;\n"
+        stage = _stage(self.artifact, name="unsafe-parent", transformations=((path, None, contents),))
+        transaction = SourcePatchTransaction(self.source, self.artifact,
+            _patchset((stage,), final_files={path: sha256_text(contents)}))
+        with self.assertRaisesRegex(PatchWriteError, "path escapes source root"):
+            transaction.apply()
+        self.assertEqual(list(outside.iterdir()), [outside / "sentinel"])
+        self.assertTrue((self.source / "packages").is_symlink())
+
     def test_apply_is_exact_idempotent_and_preserves_mode(self) -> None:
         before = "def value():\n    return 1\n"
         after = "def value():\n    return 2\n"
@@ -1103,6 +1155,164 @@ class SourcePatchTransactionTests(unittest.TestCase):
         self.assertEqual(target.stat().st_mtime_ns, prior.st_mtime_ns)
         self.assertEqual(target.stat().st_ino, prior.st_ino)
         self.assertFalse(tuple(self.source.rglob("*.qwen-source-patch.*")))
+
+
+class SourceVectorTransactionTests(unittest.TestCase):
+    """Canonical vectors enter Qwen through the authored source transaction.
+
+    Native bindings are now compiler output, qualified by the actual native
+    publisher. This suite isolates only the unrelated whole-Qwen semantic
+    callback; source-vector byte agreement and transaction refusal stay real.
+    """
+
+    vector_names = ("goal-state-v1", "partial-stream-v1")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from . import apply_qwen_code_patchset
+
+        cls.binding_owner = apply_qwen_code_patchset
+        root = Path(__file__).resolve().parents[2]
+        artifact_paths = tuple(
+            f"protocol/test-vectors/{name}.json" for name in cls.vector_names
+        )
+        cls.artifact_bytes = {
+            path: (root / path).read_bytes() for path in artifact_paths
+        }
+        expected = {
+            f"packages/core/src/utils/__fixtures__/{name}.json"
+            for name in cls.vector_names
+        }
+        cls.generated_outputs = {}
+        for stage in cls.binding_owner.GENERATED_STAGES:
+            for edit in stage["edits"]:
+                if edit["path"] in expected:
+                    if edit["before"] or edit["path"] in cls.generated_outputs:
+                        raise AssertionError(
+                            "vector fixture requires the actual complete new-file edit"
+                        )
+                    contents = edit["after"]
+                    if (
+                        sha256_text(contents)
+                        != cls.binding_owner.FINAL_FILES[edit["path"]]
+                    ):
+                        raise AssertionError("vector fixture differs from final identity")
+                    cls.generated_outputs[edit["path"]] = contents
+        if set(cls.generated_outputs) != expected:
+            raise AssertionError("canonical source vector fixture is incomplete")
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="source-binding-test-")
+        root = Path(self.temporary.name)
+        self.source, self.artifact = root / "source", root / "artifact"
+        self.source.mkdir()
+        self.artifact.mkdir()
+        (self.source / "identity.txt").write_text("pinned-revision\n")
+        for relative, contents in self.artifact_bytes.items():
+            target = self.artifact / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(contents)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _snapshot(self) -> dict[str, tuple[object, ...]]:
+        result = {}
+        for path in (self.source, *self.source.rglob("*")):
+            info = path.lstat()
+            result[str(path.relative_to(self.source))] = (
+                info.st_mode,
+                info.st_ino,
+                info.st_mtime_ns,
+                path.read_bytes() if path.is_file() else None,
+            )
+        return result
+
+    def _transaction(
+        self, changes: dict[str, str] | None = None
+    ) -> SourcePatchTransaction:
+        outputs = self.generated_outputs | (changes or {})
+        # All outer file hashes and review bytes describe the mutated candidate.
+        # A refusal therefore cannot be credited to stale review metadata.
+        stage = _stage(
+            self.artifact,
+            name="canonical-binding-candidate",
+            transformations=tuple(
+                (path, None, contents) for path, contents in outputs.items()
+            ),
+        )
+        binding_validator = self.binding_owner.build_patchset(
+            self.artifact
+        ).validate_final
+        return SourcePatchTransaction(
+            self.source,
+            self.artifact,
+            _patchset(
+                (stage,),
+                final_files={
+                    path: sha256_text(contents) for path, contents in outputs.items()
+                },
+                final_validator=binding_validator,
+            ),
+        )
+
+    def _assert_refused(
+        self, reason: str, changes: dict[str, str] | None = None
+    ) -> None:
+        # An unexpected acceptance must not contaminate a later subtest's source.
+        original_source = self.source
+        with tempfile.TemporaryDirectory(dir=self.temporary.name) as candidate:
+            self.source = Path(candidate)
+            (self.source / "identity.txt").write_text("pinned-revision\n")
+            try:
+                transaction = self._transaction(changes)
+                before = self._snapshot()
+                with (
+                    patch.object(self.binding_owner, "validate_final", return_value=None),
+                    patch.object(transaction, "commit", wraps=transaction.commit) as commit,
+                ):
+                    with self.assertRaisesRegex(PatchRefusedError, reason):
+                        transaction.apply()
+                    commit.assert_not_called()
+                self.assertEqual(self._snapshot(), before)
+            finally:
+                self.source = original_source
+
+    def test_canonical_vectors_commit_and_are_idempotent(self) -> None:
+        transaction = self._transaction()
+        with patch.object(self.binding_owner, "validate_final", return_value=None):
+            result = transaction.apply()
+            self.assertEqual(result.state, "applied")
+            self.assertEqual(set(result.changed_files), set(self.generated_outputs))
+            for path, contents in self.generated_outputs.items():
+                self.assertEqual((self.source / path).read_bytes(), contents.encode())
+            before = self._snapshot()
+            self.assertEqual(transaction.apply().state, "already-applied")
+            self.assertEqual(self._snapshot(), before)
+
+    def test_each_canonical_vector_requires_exact_bytes_before_writes(self) -> None:
+        for name in self.vector_names:
+            target = self.artifact / f"protocol/test-vectors/{name}.json"
+            original = target.read_bytes()
+            for label, mutated in (
+                ("crlf", original.replace(b"\n", b"\r\n")),
+                ("invalid-utf8", original + b"\xff"),
+            ):
+                with self.subTest(vector=name, mutation=label):
+                    self.assertNotEqual(original, mutated)
+                    target.write_bytes(mutated)
+                    self._assert_refused(f"test vectors drifted: {name}")
+            target.write_bytes(original)
+
+    def test_copied_vector_drift_with_coherent_review_refuses_before_writes(self) -> None:
+        for name in self.vector_names:
+            with self.subTest(vector=name):
+                path = f"packages/core/src/utils/__fixtures__/{name}.json"
+                self._assert_refused(
+                    f"test vectors drifted: {name}",
+                    {path: self.generated_outputs[path] + "\n"},
+                )
+
 
 
 if __name__ == "__main__":

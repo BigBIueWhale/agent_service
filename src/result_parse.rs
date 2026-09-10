@@ -1,151 +1,51 @@
-//! Strict parser for pinned Qwen Code 0.21.12 stream-JSON.
-//!
-//! Every event names its scope in `parent_tool_use_id`: null (or absent) is
-//! the main session, a non-empty string is the id of the `tool_use` content
-//! block that spawned that subagent. Correlation is by id and stream order
-//! alone — never by tool name — so a non-null scope must resolve to a
-//! `tool_use` already issued by an assistant message, and one that does not
-//! is rejected rather than pooled into some "unknown subagent" bucket. Every
-//! scope, the main session included, is one row of the same accounting
-//! table: billed turns, plus at most one terminal `result`. A subagent that
-//! stops emits its own `result` under its tool-call id, so `result` alone
-//! does not mean the session ended.
-//!
-//! Exactly one terminal `result` object *for the main session* is required and
-//! it must be the final non-empty line. Every line must be a JSON object with
-//! a supported `type`, a non-empty UUID, and the same non-empty session ID.
-//! This deliberately rejects partial, duplicated, recovered, or post-terminal
-//! output rather than choosing a convenient-looking last result.
-
-use std::collections::{HashMap, HashSet};
+//! Descriptor and LF framing for captured agent output. The shared pure
+//! runtime_contract owner decides record identity, admission and observations.
+use crate::error::{io_msg, ServiceError, ServiceResult};
+pub use runtime_contract::runtime::{AgentResult, AgentScope, ERROR_SUBTYPES, SUCCESS_SUBTYPE};
+use runtime_contract::{
+    json::{Document, Limits},
+    runtime::{RuntimeBindings, RuntimeContract, RuntimeLimits},
+    schema::ValidationLimits,
+};
+use serde::Serialize;
 use std::io::{BufRead, BufReader, Read};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
-
-use crate::error::{io_msg, ServiceError, ServiceResult};
-
-#[derive(Debug, Clone)]
-pub struct AgentResult {
-    pub is_error: bool,
-    /// The terminal record's own name for how the run ended, verbatim.
-    /// `success` is the agent's assertion that the model wrote its final
-    /// message to the end; each `error_*` spelling names a distinct way the
-    /// run stopped instead. The set is closed and checked below, so a reader
-    /// can branch on it without parsing English out of `response`.
-    pub subtype: String,
-    pub response: String,
-    pub duration_ms: u64,
-    /// Wall time the agent spent inside model API calls, as the terminal
-    /// result reports it. Already required and type-checked here; carrying it
-    /// is what separates a run that stalled on the backend from one that
-    /// churned in local tool execution, which `duration_ms` alone cannot.
-    pub api_duration_ms: u64,
-    pub num_turns: u64,
-    /// Generated tokens the backend billed to those turns, summed, and the
-    /// part of them it counted as reasoning. Both are read from the served
-    /// usage every billed turn must carry; nothing here is estimated.
-    pub main_output_tokens: u64,
-    pub main_reasoning_tokens: u64,
-    /// Every subagent scope the stream resolved, in order of first
-    /// appearance. Empty exactly when the run delegated nothing.
-    pub scopes: Vec<AgentScope>,
+fn pinned_contract() -> ServiceResult<RuntimeContract> {
+    // The build validates and embeds only the fixed deployment facts used here.
+    let bytes = env!("CAPTURED_STREAM_BINDINGS_JSON").as_bytes();
+    let document = Document::decode(
+        bytes,
+        Limits {
+            bytes: bytes.len(),
+            nodes: bytes.len(),
+            depth: bytes.len(),
+        },
+    )
+    .map_err(|cause| ServiceError::Internal(format!("runtime bindings: {cause:?}")))?;
+    Ok(RuntimeContract::new(
+        RuntimeBindings::new(document)?,
+        RuntimeLimits {
+            json: Limits {
+                bytes: MAX_EVENT_RECORD_BYTES,
+                nodes: MAX_EVENT_RECORD_BYTES,
+                depth: MAX_EVENT_RECORD_BYTES,
+            },
+            schema: ValidationLimits {
+                operations: u32::MAX as usize,
+            },
+        },
+    ))
 }
 
-/// The terminal state a run ended in, spelled the way the agent's own record
-/// spells it. `SUCCESS_SUBTYPE` is the one name that asserts the model wrote
-/// its final message to the end; `ERROR_SUBTYPES` are the states that stopped
-/// a run instead, one name per state — a failure during execution, each of
-/// the three caller-supplied bounds, a loop the detector halted, a generation
-/// the provider cut short, and a cancellation from outside. The two lists are
-/// this service's whole terminal vocabulary: the parser admits nothing else,
-/// the public `agent_result_subtype` carries exactly what it admits, and the
-/// README names the same lists.
-pub const SUCCESS_SUBTYPE: &str = "success";
-pub const ERROR_SUBTYPES: [&str; 7] = [
-    "error_during_execution",
-    "error_timeout",
-    "error_max_turns",
-    "error_max_tool_calls",
-    "error_loop_detected",
-    "error_incomplete_generation",
-    "error_cancelled",
-];
-
-/// One resolved subagent scope. Identification follows the Claude Code CLI
-/// convention: a scope is the id of the `tool_use` content block that spawned
-/// it, so consumers never need to know which tool performs delegation — and
-/// this parser never assumes one.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentScope {
-    /// Id of the spawning `tool_use` block; the exact value every event in
-    /// the scope carried in `parent_tool_use_id`.
-    pub tool_use_id: String,
-    /// Name of that spawning tool call. Recorded as evidence for the reader,
-    /// never used as a correlation key: resolution is by id alone.
-    pub tool_name: String,
-    /// Assistant events in this scope carrying billed usage, counted by this
-    /// parser: one per model round the subagent completed, since the client
-    /// publishes every round's text, reasoning and served usage under the
-    /// scope's tool-call id. The count a subagent reports for itself is
-    /// `reported_num_turns`.
-    pub billed_turns: u64,
-    /// Generated tokens the backend billed to those rounds, summed, and the
-    /// part of them it counted as reasoning, exactly as for the main scope.
-    pub output_tokens: u64,
-    pub reasoning_tokens: u64,
-    /// What the scope's own terminal record reported, verbatim. All four are
-    /// `None` exactly when the scope never emitted a terminal record (the
-    /// subagent was still running, or was torn down, when the session ended);
-    /// `error_message` is additionally `None` when the record carried no
-    /// error. `reported_num_turns` is deliberately never reconciled against
-    /// `billed_turns` — see `finish_subagent_scope` for why.
-    #[serde(deserialize_with = "crate::runtime::required_nullable")]
-    pub reported_num_turns: Option<u64>,
-    #[serde(deserialize_with = "crate::runtime::required_nullable")]
-    pub is_error: Option<bool>,
-    #[serde(deserialize_with = "crate::runtime::required_nullable")]
-    pub subtype: Option<String>,
-    #[serde(deserialize_with = "crate::runtime::required_nullable")]
-    pub error_message: Option<String>,
-}
-
-/// A `tool_use` content block an assistant message already issued: the only
-/// thing a later `parent_tool_use_id` may legally name. The recorded values
-/// are what a scope needs at assembly (`name`) and what a rejection needs to
-/// point back at the spawning call (`line`, issuing `scope`).
-struct RecordedToolUse {
-    name: String,
-    line: usize,
-    scope: Option<String>,
-}
-
-/// Accounting for one scope. The main session is the row keyed `None`,
-/// created before the first event is read, so "main" is a key in the one
-/// table rather than a parallel code path — there is exactly one accounting
-/// mechanism for every scope in the stream.
-struct ScopeState {
-    tool_use_id: Option<String>,
-    billed_turns: u64,
-    output_tokens: u64,
-    reasoning_tokens: u64,
-    /// The scope's terminal `result` record and its line. At most one may
-    /// exist: a scope that has reported is finished, and any later event in
-    /// it is post-terminal output.
-    terminal: Option<(usize, serde_json::Map<String, serde_json::Value>)>,
-}
-
-// A session may have indefinitely many records, but one JSON event is a
-// bounded protocol object. 128 MiB is also the maximum durable terminal JSON
-// size: a larger single stream event cannot be represented faithfully in the
-// public terminal resource and is rejected before it can exhaust the 2 GiB
-// service container. This is a per-record bound, never a turn/session bound.
+// The captured-record input bound limits raw JSON bytes, independently of
+// tokens or session length. It is not a bound on decoded or retained memory.
 const MAX_EVENT_RECORD_BYTES: usize = 128 * 1024 * 1024;
 
 /// Snapshot observations survive an uncertifiable ending. They sum only complete
 /// records with valid served usage; they are never a complete-result assertion.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
 pub struct OutputProgress {
     pub num_turns: u64,
     pub last_event_at_unix: Option<u64>,
@@ -158,7 +58,30 @@ pub struct OutputProgress {
 
 pub struct EventSnapshot {
     pub observed: OutputProgress,
+    pub replay_completion: ReplayCompletion,
     pub certified: ServiceResult<AgentResult>,
+}
+
+/// Reaching the selected descriptor extent is separate from the capture
+/// owner's proof that no further output can arrive.
+#[derive(Debug, Eq, PartialEq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ReplayCompletion {
+    ReachedBoundary,
+    ReadFailed {
+        bytes_read: u64,
+        cause: String,
+    },
+    SourceShortened {
+        bytes_read: u64,
+        expected_bytes: u64,
+    },
+}
+
+struct EventPrefix<R> {
+    file: R,
+    bytes: u64,
+    last_event_at_unix: u64,
 }
 
 /// Captured JSONL has a named incomplete-tail rule: only LF commits a record.
@@ -168,6 +91,12 @@ pub struct EventSnapshot {
 /// still requires the entire pinned stream and its unique final main result.
 /// Both running reads and terminal finalization consume this one descriptor scan.
 pub fn read_event_snapshot(path: &Path) -> ServiceResult<Option<EventSnapshot>> {
+    open_event_prefix(path)?
+        .map(|prefix| read_opened_event_snapshot(path, prefix))
+        .transpose()
+}
+
+fn open_event_prefix(path: &Path) -> ServiceResult<Option<EventPrefix<std::fs::File>>> {
     let file = match std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
@@ -196,12 +125,8 @@ pub fn read_event_snapshot(path: &Path) -> ServiceResult<Option<EventSnapshot>> 
             path.display()
         )));
     }
-    // Capture has already stopped and supplied an exact byte count, but take
-    // the fstat length as an additional immutable parsing boundary. Any bytes
-    // appended after this descriptor snapshot belong to contradictory state,
-    // not to a moving parse target.
-    let mut reader = BufReader::new(file.take(metadata.len()));
-
+    // This reader also serves live progress. The descriptor length fixes this
+    // observation prefix; only the external capture owner proves finality.
     let modified = metadata.modified().map_err(|error| {
         ServiceError::AgentOutputMissing(io_msg("read event modification time", path, &error))
     })?;
@@ -213,22 +138,41 @@ pub fn read_event_snapshot(path: &Path) -> ServiceResult<Option<EventSnapshot>> 
             ))
         })?
         .as_secs();
-    let mut observed = OutputProgress {
-        output_event_bytes: metadata.len(),
-        last_event_at_unix: Some(last_event_at_unix),
-        ..OutputProgress::default()
-    };
-    let mut certification = StreamCertification::new();
-    let mut refusal = None;
-    let mut scopes = std::collections::BTreeSet::new();
+    Ok(Some(EventPrefix {
+        file,
+        bytes: metadata.len(),
+        last_event_at_unix,
+    }))
+}
+
+fn read_opened_event_snapshot<R: Read>(
+    path: &Path,
+    prefix: EventPrefix<R>,
+) -> ServiceResult<EventSnapshot> {
+    let mut reader = BufReader::new(prefix.file.take(prefix.bytes));
+    let mut replay_completion = ReplayCompletion::ReachedBoundary;
+    let mut contract = pinned_contract()?;
     let mut physical_line = 0usize;
-    let mut event_index = 0usize;
-    let mut stream_session_id: Option<String> = None;
-    let mut seen_uuids = HashSet::new();
     let mut record = Vec::new();
     loop {
         record.clear();
-        let frame = read_bounded_record(&mut reader, &mut record, path, MAX_EVENT_RECORD_BYTES)?;
+        let frame =
+            match read_bounded_record(&mut reader, &mut record, path, MAX_EVENT_RECORD_BYTES) {
+                Ok(frame) => frame,
+                Err(cause) => {
+                    let cause = cause.to_string();
+                    if !record.is_empty() {
+                        contract.observe_gap(
+                            runtime_contract::ContractError::ValidationUnavailable(cause.clone()),
+                        )?;
+                    }
+                    replay_completion = ReplayCompletion::ReadFailed {
+                        bytes_read: prefix.bytes - reader.get_ref().limit(),
+                        cause,
+                    };
+                    break;
+                }
+            };
         if record.is_empty() && !frame.terminated {
             break;
         }
@@ -236,574 +180,62 @@ pub fn read_event_snapshot(path: &Path) -> ServiceResult<Option<EventSnapshot>> 
             ServiceError::AgentOutputMissing("events.jsonl physical line count overflowed".into())
         })?;
         if frame.over_limit {
-            event_index = event_index.checked_add(1).ok_or_else(|| {
-                ServiceError::AgentOutputMissing("events.jsonl event count overflowed".into())
-            })?;
-            observed.observed_unaccounted_records =
-                checked_observation_add(observed.observed_unaccounted_records, 1)?;
-            refusal.get_or_insert_with(|| ServiceError::AgentOutputMissing(format!("events.jsonl line {physical_line} exceeds the {MAX_EVENT_RECORD_BYTES}-byte record bound and is unaccounted")));
+            contract.observe_gap(runtime_contract::ContractError::InvalidRecord(format!("events.jsonl line {physical_line} exceeds the {MAX_EVENT_RECORD_BYTES}-byte record bound and is unaccounted")))?;
             if !frame.terminated {
                 break;
             }
             continue;
         }
         if !frame.terminated {
-            observed.observed_unaccounted_records =
-                checked_observation_add(observed.observed_unaccounted_records, 1)?;
-            refusal.get_or_insert_with(|| ServiceError::AgentOutputMissing(format!("events.jsonl line {physical_line} is not newline-terminated; incomplete trailing record is unaccounted")));
+            contract.observe_gap(runtime_contract::ContractError::InvalidRecord(format!("events.jsonl line {physical_line} is not newline-terminated; incomplete trailing record is unaccounted")))?;
             break;
         }
-        let line = record
-            .strip_suffix(b"\n")
-            .expect("terminated record has LF");
+        let line = record.strip_suffix(b"\n").expect("terminated frame has LF");
         if line.iter().all(|byte| byte.is_ascii_whitespace()) {
             continue;
         }
-        event_index = event_index.checked_add(1).ok_or_else(|| {
-            ServiceError::AgentOutputMissing("events.jsonl event count overflowed".into())
-        })?;
-        let parsed = serde_json::from_slice::<serde_json::Value>(line).map_err(|error| {
-            ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {physical_line} is invalid JSON: {error}; content: {}",
-                truncate_bytes(line, 512)
-            ))
-        });
-        let object = parsed.and_then(|value| match value {
-            serde_json::Value::Object(object) => Ok(object),
-            _ => Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {physical_line} is not a JSON object"
-            ))),
-        });
-        let object = match object {
-            Ok(object) => object,
-            Err(error) => {
-                observed.observed_unaccounted_records =
-                    checked_observation_add(observed.observed_unaccounted_records, 1)?;
-                refusal.get_or_insert(error);
-                continue;
-            }
-        };
-        let identity = (|| {
-            let uuid = required_string(&object, "uuid", physical_line)?;
-            let session_id = required_string(&object, "session_id", physical_line)?;
-            if event_index == 1 {
-                validate_init_event(&object, physical_line)?;
-                stream_session_id = Some(session_id.to_string());
-            }
-            match stream_session_id.as_deref() {
-                Some(expected) if expected == session_id => {},
-                Some(expected) => return Err(ServiceError::AgentOutputMissing(format!("events.jsonl session_id changed from {expected:?} to {session_id:?} at line {physical_line}"))),
-                None => return Err(ServiceError::AgentOutputMissing(format!("events.jsonl line {physical_line} has no validated initial session owner"))),
-            }
-            if !seen_uuids.insert(uuid.to_string()) {
-                return Err(ServiceError::AgentOutputMissing(format!(
-                    "events.jsonl line {physical_line} repeats event uuid {uuid:?}"
-                )));
-            }
-            Ok(())
-        })();
-        if let Err(error) = identity {
-            observed.observed_unaccounted_records =
-                checked_observation_add(observed.observed_unaccounted_records, 1)?;
-            refusal.get_or_insert(error);
-            continue;
-        }
-        let item = observe_record(&object);
-        if item.main_turn {
-            observed.num_turns = checked_observation_add(observed.num_turns, 1)?;
-        }
-        if let Some(scope) = item.subagent_scope {
-            scopes.insert(scope);
-        }
-        if let Some((output, reasoning)) = item.usage {
-            observed.observed_output_tokens =
-                checked_observation_add(observed.observed_output_tokens, output)?;
-            observed.observed_reasoning_tokens =
-                checked_observation_add(observed.observed_reasoning_tokens, reasoning)?;
-        }
-        let unaccounted = item.usage_unreadable;
-        if refusal.is_none() {
-            if let Err(error) = certification.observe(&object, physical_line) {
-                refusal = Some(error);
-            }
-        }
-        if unaccounted {
-            observed.observed_unaccounted_records =
-                checked_observation_add(observed.observed_unaccounted_records, 1)?;
+        // A refusal latches inside the owner. Later records can contribute only
+        // their independently valid observations, never a recovered certificate.
+        if let Ok(mut admission) = contract.prepare_utf8(line, physical_line) {
+            contract.commit(&mut admission)?;
         }
     }
-    observed.observed_subagent_scope_count = scopes.len() as u64;
-    let certified = match refusal {
-        Some(error) => Err(error),
-        None => certification.finish(path),
+    if matches!(replay_completion, ReplayCompletion::ReachedBoundary)
+        && reader.get_ref().limit() != 0
+    {
+        replay_completion = ReplayCompletion::SourceShortened {
+            bytes_read: prefix.bytes - reader.get_ref().limit(),
+            expected_bytes: prefix.bytes,
+        };
+    }
+    let facts = contract.snapshot().observations;
+    let observed = OutputProgress {
+        output_event_bytes: prefix.bytes,
+        last_event_at_unix: Some(prefix.last_event_at_unix),
+        num_turns: facts.num_turns,
+        observed_output_tokens: facts.observed_output_tokens,
+        observed_reasoning_tokens: facts.observed_reasoning_tokens,
+        observed_subagent_scope_count: facts.observed_subagent_scope_count,
+        observed_unaccounted_records: facts.observed_unaccounted_records,
     };
-    Ok(Some(EventSnapshot {
+    let protocol_result = contract.finish().map_err(ServiceError::from);
+    let replay_cause = match &replay_completion {
+        ReplayCompletion::ReachedBoundary => None,
+        ReplayCompletion::ReadFailed { cause, .. } => Some(format!("captured wire replay could not finish reading: {cause}")),
+        ReplayCompletion::SourceShortened { bytes_read, expected_bytes } => Some(format!("events.jsonl became shorter than its opened snapshot: read {bytes_read} of {expected_bytes} bytes")),
+    };
+    let certified = match (protocol_result, replay_cause) {
+        (result, None) => result,
+        (Ok(_), Some(cause)) => Err(ServiceError::AgentOutputMissing(cause)),
+        (Err(protocol), Some(replay)) => Err(ServiceError::AgentOutputMissing(format!(
+            "{protocol}; {replay}"
+        ))),
+    };
+    Ok(EventSnapshot {
         observed,
+        replay_completion,
         certified,
-    }))
-}
-
-fn checked_observation_add(left: u64, right: u64) -> ServiceResult<u64> {
-    left.checked_add(right).ok_or_else(|| {
-        ServiceError::AgentOutputMissing("events.jsonl observation count overflowed".into())
     })
-}
-
-struct StreamCertification {
-    scope_states: Vec<ScopeState>,
-    scope_rows: HashMap<String, usize>,
-    tool_uses: HashMap<String, RecordedToolUse>,
-    event_count: usize,
-}
-
-impl StreamCertification {
-    fn new() -> Self {
-        Self {
-            scope_states: vec![ScopeState {
-                tool_use_id: None,
-                billed_turns: 0,
-                output_tokens: 0,
-                reasoning_tokens: 0,
-                terminal: None,
-            }],
-            scope_rows: HashMap::new(),
-            tool_uses: HashMap::new(),
-            event_count: 0,
-        }
-    }
-    fn observe(
-        &mut self,
-        object: &serde_json::Map<String, serde_json::Value>,
-        physical_line: usize,
-    ) -> ServiceResult<()> {
-        if let Some((terminal_line, _)) = &self.scope_states[0].terminal {
-            return Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl terminal result at line {terminal_line} is followed by another event at line {physical_line}"
-            )));
-        }
-        self.event_count = self.event_count.checked_add(1).ok_or_else(|| {
-            ServiceError::AgentOutputMissing("events.jsonl event count overflowed".into())
-        })?;
-        let event_type = required_string(object, "type", physical_line)?;
-        if !matches!(event_type, "system" | "user" | "assistant" | "result") {
-            return Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {physical_line} has unsupported event type {event_type:?}"
-            )));
-        }
-        let scope = required_scope(object, physical_line)?;
-        // Resolve the event to its scope row. A non-null scope id is only
-        // admissible if the stream has already issued the `tool_use` block it
-        // names: resolution is by id and stream order, never by tool name,
-        // and an id with no earlier issuance is contradictory evidence.
-        // There is deliberately no "unknown scope" bucket to absorb it.
-        let row = match scope {
-            None => 0,
-            Some(id) => match self.scope_rows.get(id) {
-                Some(row) => *row,
-                None => {
-                    if !self.tool_uses.contains_key(id) {
-                        return Err(ServiceError::AgentOutputMissing(format!(
-                            "events.jsonl line {physical_line} names parent_tool_use_id {id:?}, which no earlier assistant message issued as a tool_use id"
-                        )));
-                    }
-                    let row = self.scope_states.len();
-                    self.scope_rows.insert(id.to_string(), row);
-                    self.scope_states.push(ScopeState {
-                        tool_use_id: Some(id.to_string()),
-                        billed_turns: 0,
-                        output_tokens: 0,
-                        reasoning_tokens: 0,
-                        terminal: None,
-                    });
-                    row
-                }
-            },
-        };
-        // A scope that has emitted its terminal record is finished. The main
-        // session's record ends the whole stream (checked above, before the
-        // event is even parsed); a subagent's ends only its own scope, and a
-        // later event still claiming that scope is post-terminal output.
-        if let Some((scope_terminal_line, _)) = &self.scope_states[row].terminal {
-            return Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {physical_line} continues {} after its terminal result at line {scope_terminal_line}",
-                scope_display(scope)
-            )));
-        }
-        if event_type == "assistant" {
-            record_tool_uses(object, physical_line, scope, &mut self.tool_uses)?;
-            if let Some(usage) = billed_usage(object, physical_line, scope)? {
-                let state = &mut self.scope_states[row];
-                let overflow = || {
-                    ServiceError::AgentOutputMissing(format!(
-                        "events.jsonl billed accounting overflowed in {}",
-                        scope_display(scope)
-                    ))
-                };
-                state.billed_turns = state.billed_turns.checked_add(1).ok_or_else(overflow)?;
-                state.output_tokens = state
-                    .output_tokens
-                    .checked_add(usage.output_tokens)
-                    .ok_or_else(overflow)?;
-                state.reasoning_tokens = state
-                    .reasoning_tokens
-                    .checked_add(usage.reasoning_output_tokens)
-                    .ok_or_else(overflow)?;
-            }
-        } else if event_type == "system" && self.event_count > 1 {
-            validate_compaction_event(object, physical_line, scope)?;
-        } else if event_type == "result" {
-            // A subagent's own terminal record is scoped to its spawning tool
-            // call and is not the end of the session. Only the main session's
-            // result terminates the stream.
-            self.scope_states[row].terminal = Some((physical_line, object.clone()));
-        }
-        Ok(())
-    }
-    fn finish(self, path: &Path) -> ServiceResult<AgentResult> {
-        let Self {
-            scope_states,
-            tool_uses,
-            event_count,
-            ..
-        } = self;
-        if event_count == 0 {
-            return Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl at {} contains no events",
-                path.display()
-            )));
-        }
-
-        let mut rows = scope_states.into_iter();
-        let main = rows
-            .next()
-            .expect("the main scope row is created before the first event is read");
-        let billed_main_turns = main.billed_turns;
-        let main_output_tokens = main.output_tokens;
-        let main_reasoning_tokens = main.reasoning_tokens;
-        let (terminal_line, result) = main.terminal.ok_or_else(|| {
-            ServiceError::AgentOutputMissing(format!(
-                "events.jsonl has {event_count} event(s) but no main-session terminal result"
-            ))
-        })?;
-        let scopes = rows
-            .map(|state| finish_subagent_scope(state, &tool_uses))
-            .collect::<ServiceResult<Vec<_>>>()?;
-        let is_error = result
-            .get("is_error")
-            .and_then(serde_json::Value::as_bool)
-            .ok_or_else(|| {
-                ServiceError::AgentOutputMissing("terminal result lacks boolean is_error".into())
-            })?;
-        let subtype = required_string(&result, "subtype", terminal_line)?;
-        let duration_ms = required_u64(&result, "duration_ms")?;
-        let num_turns = required_u64(&result, "num_turns")?;
-        let api_duration_ms = required_u64(&result, "duration_api_ms")?;
-        validate_generation_summary(result.get("usage"))?;
-        if !result
-            .get("permission_denials")
-            .is_some_and(serde_json::Value::is_array)
-        {
-            return Err(ServiceError::AgentOutputMissing(
-                "terminal result lacks array permission_denials".into(),
-            ));
-        }
-        // `num_turns` counts the turns the agent started: the counter advances as
-        // a turn begins, while a billed assistant event — the thing counted above
-        // — is only written once that turn finishes. A run that ends normally has
-        // finished every turn it started, so the two must agree exactly. An error
-        // ends the run wherever it struck: between turns, leaving the counts
-        // equal, or inside the turn already counted, leaving exactly one started
-        // and unbilled turn behind. Anything outside that window means the result
-        // event does not describe this stream, which is what this check exists to
-        // catch.
-        let unbilled = num_turns.checked_sub(billed_main_turns);
-        let consistent = match unbilled {
-            Some(0) => true,
-            Some(1) => is_error,
-            _ => false,
-        };
-        if !consistent {
-            return Err(ServiceError::AgentOutputMissing(format!(
-                "terminal num_turns={num_turns} is not consistent with {billed_main_turns} \
-             main assistant event(s): a run bills every turn it finishes, and only an error \
-             result may leave the one turn it interrupted unbilled"
-            )));
-        }
-
-        let response = if is_error {
-            // Each spelling is a distinct terminal state the agent can prove it
-            // reached. Anything else is a record this parser cannot interpret.
-            if !ERROR_SUBTYPES.contains(&subtype) {
-                return Err(ServiceError::AgentOutputMissing(format!(
-                    "error result has unsupported subtype {subtype:?}"
-                )));
-            }
-            result
-                .get("error")
-                .and_then(serde_json::Value::as_object)
-                .and_then(|error| error.get("message"))
-                .and_then(serde_json::Value::as_str)
-                .filter(|message| !message.is_empty())
-                .ok_or_else(|| {
-                    ServiceError::AgentOutputMissing(
-                        "error result lacks non-empty error.message".into(),
-                    )
-                })?
-                .to_string()
-        } else {
-            if subtype != SUCCESS_SUBTYPE {
-                return Err(ServiceError::AgentOutputMissing(format!(
-                    "successful result has unsupported subtype {subtype:?}"
-                )));
-            }
-            result
-                .get("result")
-                .and_then(serde_json::Value::as_str)
-                .filter(|message| !message.is_empty())
-                .ok_or_else(|| {
-                    ServiceError::AgentOutputMissing(
-                        "successful result lacks a non-empty result string".into(),
-                    )
-                })?
-                .to_string()
-        };
-
-        Ok(AgentResult {
-            is_error,
-            subtype: subtype.to_string(),
-            response,
-            duration_ms,
-            api_duration_ms,
-            num_turns,
-            main_output_tokens,
-            main_reasoning_tokens,
-            scopes,
-        })
-    }
-}
-
-/// The usage a billed assistant event carries: what the backend served for
-/// the generation and the client copied onto the wire, field for field.
-#[derive(Debug, Clone, Copy)]
-struct BilledUsage {
-    output_tokens: u64,
-    reasoning_output_tokens: u64,
-}
-
-/// Read a billed assistant event's usage, or `None` for an unbilled fragment.
-///
-/// A non-null billed usage must carry every count the backend
-/// serves — the generated tokens, the part of them counted as reasoning, and
-/// the prompt tokens read back from the prefix cache — as non-negative
-/// integers, with reasoning no larger than the output it is part of. A count
-/// the stream omitted is not read as zero: the client fails a request whose
-/// usage arrived without these, so an event without them is a stream this
-/// parser does not recognise, and it is refused rather than tallied.
-fn billed_usage(
-    object: &serde_json::Map<String, serde_json::Value>,
-    line: usize,
-    scope: Option<&str>,
-) -> ServiceResult<Option<BilledUsage>> {
-    let usage_value = object
-        .get("message")
-        .and_then(serde_json::Value::as_object)
-        .and_then(|message| message.get("usage"))
-        .ok_or_else(|| {
-            ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {line} assistant message lacks usage (object or null) in {}",
-                scope_display(scope)
-            ))
-        })?;
-    if usage_value.is_null() {
-        return Ok(None);
-    }
-    let usage = usage_value.as_object().ok_or_else(|| {
-        ServiceError::AgentOutputMissing(format!(
-            "events.jsonl line {line} assistant usage is neither an object nor null in {}",
-            scope_display(scope)
-        ))
-    })?;
-    let count = |key: &str| -> ServiceResult<u64> {
-        usage
-            .get(key)
-            .and_then(serde_json::Value::as_u64)
-            .filter(|count| *count <= 9_007_199_254_740_991)
-            .ok_or_else(|| {
-                ServiceError::AgentOutputMissing(format!(
-                    "events.jsonl line {line} bills a turn in {} whose usage lacks non-negative integer {key}",
-                    scope_display(scope)
-                ))
-            })
-    };
-    let input_tokens = count("input_tokens")?;
-    let output_tokens = count("output_tokens")?;
-    let reasoning_output_tokens = count("reasoning_output_tokens")?;
-    let cache_read_input_tokens = count("cache_read_input_tokens")?;
-    if reasoning_output_tokens > output_tokens {
-        return Err(ServiceError::AgentOutputMissing(format!(
-            "events.jsonl line {line} bills {reasoning_output_tokens} reasoning tokens against only {output_tokens} output tokens in {}",
-            scope_display(scope)
-        )));
-    }
-    if cache_read_input_tokens > input_tokens {
-        return Err(ServiceError::AgentOutputMissing(format!(
-            "events.jsonl line {line} reads {cache_read_input_tokens} cached prompt tokens against only {input_tokens} input tokens in {}",
-            scope_display(scope)
-        )));
-    }
-    let total_tokens = count("total_tokens")?;
-    if input_tokens.checked_add(output_tokens) != Some(total_tokens) {
-        return Err(ServiceError::AgentOutputMissing(format!(
-            "events.jsonl line {line} total_tokens disagrees with input_tokens plus output_tokens in {}",
-            scope_display(scope)
-        )));
-    }
-    Ok(Some(BilledUsage {
-        output_tokens,
-        reasoning_output_tokens,
-    }))
-}
-
-/// The session summary accounts for admitted requests, including requests with
-/// no served record. It does not replace the independently billed event totals.
-fn validate_generation_summary(value: Option<&serde_json::Value>) -> ServiceResult<()> {
-    let refuse = |what: &str| {
-        ServiceError::AgentOutputMissing(format!("terminal result generation usage {what}"))
-    };
-    let summary = value
-        .and_then(serde_json::Value::as_object)
-        .ok_or_else(|| refuse("must be an object"))?;
-    let count = |holder: &serde_json::Map<String, serde_json::Value>, key: &str| {
-        holder
-            .get(key)
-            .and_then(serde_json::Value::as_u64)
-            .filter(|count| *count <= 9_007_199_254_740_991)
-            .ok_or_else(|| refuse(&format!("requires non-negative safe integer {key}")))
-    };
-    let requests = count(summary, "requests")?;
-    let reports = count(summary, "usageReports")?;
-    let unfinalized = count(summary, "unfinalizedRequests")?;
-    let unreported = count(summary, "unreportedUsageRequests")?;
-    if requests != reports + unfinalized + unreported {
-        return Err(refuse("has an inconsistent request partition"));
-    }
-    let usage = summary
-        .get("usage")
-        .ok_or_else(|| refuse("requires nullable usage"))?;
-    if reports == 0 {
-        return if usage.is_null() {
-            Ok(())
-        } else {
-            Err(refuse("has served usage without reports"))
-        };
-    }
-    let usage = usage
-        .as_object()
-        .ok_or_else(|| refuse("requires served usage for reported requests"))?;
-    let prompt = count(usage, "promptTokenCount")?;
-    let output = count(usage, "candidatesTokenCount")?;
-    let reasoning = count(usage, "thoughtsTokenCount")?;
-    let cached = count(usage, "cachedContentTokenCount")?;
-    let total = count(usage, "totalTokenCount")?;
-    if prompt + output != total || reasoning > output || cached > prompt {
-        return Err(refuse("has inconsistent served counts"));
-    }
-    Ok(())
-}
-
-/// A compaction record distinguishes preflight refusal (output: null) from
-/// an attempted request whose partial text is retained even without served usage.
-/// Served counts, when present, obey the same five-field contract as the CLI.
-fn validate_compaction_event(
-    object: &serde_json::Map<String, serde_json::Value>,
-    line: usize,
-    scope: Option<&str>,
-) -> ServiceResult<()> {
-    if object.get("subtype").and_then(serde_json::Value::as_str) != Some("compaction") {
-        return Ok(());
-    }
-    let refuse = |what: &str| {
-        ServiceError::AgentOutputMissing(format!(
-            "events.jsonl line {line} carries a compaction record in {} {what}",
-            scope_display(scope)
-        ))
-    };
-    let record = object
-        .get("data")
-        .and_then(serde_json::Value::as_object)
-        .ok_or_else(|| refuse("without an object data field"))?;
-    let count =
-        |holder: &serde_json::Map<String, serde_json::Value>, key: &str| -> ServiceResult<u64> {
-            holder
-                .get(key)
-                .and_then(serde_json::Value::as_u64)
-                .filter(|count| *count <= 9_007_199_254_740_991)
-                .ok_or_else(|| refuse(&format!("whose {key} is not a non-negative integer")))
-        };
-    let string_or_null =
-        |holder: &serde_json::Map<String, serde_json::Value>, key: &str| -> ServiceResult<()> {
-            match holder.get(key) {
-                Some(value) if value.is_null() || value.is_string() => Ok(()),
-                _ => Err(refuse(&format!("whose {key} is neither a string nor null"))),
-            }
-        };
-    if !record
-        .get("status")
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|s| !s.is_empty())
-    {
-        return Err(refuse("without a non-empty status"));
-    }
-    if !record
-        .get("succeeded")
-        .is_some_and(serde_json::Value::is_boolean)
-    {
-        return Err(refuse("without a boolean succeeded"));
-    }
-    count(record, "originalTokenCount")?;
-    count(record, "newTokenCount")?;
-    string_or_null(record, "triggerReason")?;
-    let output = match record.get("output") {
-        Some(value) if value.is_null() => return Ok(()),
-        Some(value) => value
-            .as_object()
-            .ok_or_else(|| refuse("whose output is neither an object nor null"))?,
-        None => return Err(refuse("without an output field")),
-    };
-    let max_output_tokens = count(output, "maxOutputTokens")?;
-    if max_output_tokens == 0 || count(output, "requestAttempts")? == 0 {
-        return Err(refuse(
-            "whose output has no positive budget or request-attempt count",
-        ));
-    }
-    for key in ["reasoning", "summary"] {
-        if !output.get(key).is_some_and(serde_json::Value::is_string) {
-            return Err(refuse(&format!("whose output lacks the {key} string")));
-        }
-    }
-    string_or_null(output, "finishReason")?;
-    let usage = match output.get("usage") {
-        Some(value) if value.is_null() => return Ok(()),
-        Some(value) => value
-            .as_object()
-            .ok_or_else(|| refuse("whose output usage is neither an object nor null"))?,
-        None => return Err(refuse("whose output has no usage field")),
-    };
-    let prompt = count(usage, "promptTokenCount")?;
-    let output_tokens = count(usage, "candidatesTokenCount")?;
-    let thinking = count(usage, "thoughtsTokenCount")?;
-    let cached = count(usage, "cachedContentTokenCount")?;
-    let total = count(usage, "totalTokenCount")?;
-    if thinking > output_tokens
-        || cached > prompt
-        || output_tokens > max_output_tokens
-        || prompt.checked_add(output_tokens) != Some(total)
-    {
-        return Err(refuse(
-            "whose served usage does not nest within its prompt, output, total and budget",
-        ));
-    }
-    Ok(())
 }
 
 struct RecordFrame {
@@ -855,391 +287,34 @@ fn read_bounded_record<R: BufRead>(
     }
 }
 
-fn validate_init_event(
-    object: &serde_json::Map<String, serde_json::Value>,
-    line: usize,
-) -> ServiceResult<()> {
-    let exact_string = |key: &str, expected: &str| -> ServiceResult<()> {
-        let actual = required_string(object, key, line)?;
-        if actual == expected {
-            Ok(())
-        } else {
-            Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl init field {key} must be {expected:?}, got {actual:?}"
-            )))
-        }
-    };
-    exact_string("type", "system")?;
-    exact_string("subtype", "init")?;
-    exact_string("cwd", "/workspace")?;
-    exact_string("model", "qwen3.8-27b-nvfp4-k8v4")?;
-    exact_string("permission_mode", "yolo")?;
-    exact_string("qwen_code_version", "0.21.12")?;
-
-    let exact_string_array = |key: &str, expected: &[&str]| -> ServiceResult<()> {
-        let values = object
-            .get(key)
-            .and_then(serde_json::Value::as_array)
-            .ok_or_else(|| {
-                ServiceError::AgentOutputMissing(format!(
-                    "events.jsonl init field {key} must be an array"
-                ))
-            })?;
-        let mut actual = values
-            .iter()
-            .map(|value| {
-                value
-                    .as_str()
-                    .filter(|value| !value.is_empty())
-                    .ok_or_else(|| {
-                        ServiceError::AgentOutputMissing(format!(
-                            "events.jsonl init field {key} contains a non-string or empty value"
-                        ))
-                    })
-            })
-            .collect::<ServiceResult<Vec<_>>>()?;
-        actual.sort_unstable();
-        let mut wanted = expected.to_vec();
-        wanted.sort_unstable();
-        if actual == wanted {
-            Ok(())
-        } else {
-            Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl init field {key} differs from the pinned contract: expected {wanted:?}, got {actual:?}"
-            )))
-        }
-    };
-    exact_string_array(
-        "tools",
-        &[
-            "agent",
-            "edit",
-            "glob",
-            "grep_search",
-            "list_directory",
-            "notebook_edit",
-            "read_file",
-            "run_shell_command",
-            "todo_write",
-            "write_file",
-        ],
-    )?;
-    exact_string_array("agents", &["Explore", "general-purpose"])?;
-    let mcp_servers = object
-        .get("mcp_servers")
-        .and_then(serde_json::Value::as_array)
-        .ok_or_else(|| {
-            ServiceError::AgentOutputMissing(
-                "events.jsonl init field mcp_servers must be an array".into(),
-            )
-        })?;
-    if !mcp_servers.is_empty() {
-        return Err(ServiceError::AgentOutputMissing(format!(
-            "events.jsonl init advertised unexpected MCP servers: {mcp_servers:?}"
-        )));
-    }
-    exact_string_array("slash_commands", &[])?;
-    Ok(())
-}
-
-/// Every emitted event names its scope: `null` and an absent field both mean
-/// the main session, any other value is the owning `agent` tool-call id. Only
-/// null-or-absent is read as the main session, so a value of any other shape
-/// can only ever exclude an event from the main thread, never admit one to it.
-fn is_main_session_event(object: &serde_json::Map<String, serde_json::Value>) -> bool {
-    object
-        .get("parent_tool_use_id")
-        .is_none_or(serde_json::Value::is_null)
-}
-
-/// Read an event's scope: `None` is the main session, `Some(id)` the
-/// spawning tool-call id. Which record terminates the stream and which row
-/// absorbs the billing are both decided from this field, so a value of an
-/// unexpected shape is contradictory evidence and is rejected here rather
-/// than silently read as "some subagent".
-fn required_scope(
-    object: &serde_json::Map<String, serde_json::Value>,
-    line: usize,
-) -> ServiceResult<Option<&str>> {
-    match object.get("parent_tool_use_id") {
-        None | Some(serde_json::Value::Null) => Ok(None),
-        Some(serde_json::Value::String(id)) if !id.is_empty() => Ok(Some(id)),
-        Some(other) => Err(ServiceError::AgentOutputMissing(format!(
-            "events.jsonl line {line} has parent_tool_use_id {other}, which is neither null nor a non-empty agent tool-call id"
-        ))),
-    }
-}
-
-/// Name a scope the way a rejection message needs to: by what the reader can
-/// find in the stream, not by a row index that exists only in this parser.
-fn scope_display(scope: Option<&str>) -> String {
-    match scope {
-        None => "the main session".into(),
-        Some(id) => format!("subagent scope {id:?}"),
-    }
-}
-
-/// Record every `tool_use` content block an assistant message issues:
-/// id → (tool name, line, issuing scope). This table is the sole resolution
-/// authority for `parent_tool_use_id`, which is why a block that claims to
-/// be a tool_use but lacks a usable id or name is refused instead of
-/// skipped: skipping it would orphan every event of the scope it was about
-/// to spawn. A duplicate id is refused for the same reason — correlation is
-/// by id, and a second issuance would make every later reference ambiguous.
-fn record_tool_uses(
-    object: &serde_json::Map<String, serde_json::Value>,
-    line: usize,
-    scope: Option<&str>,
-    tool_uses: &mut HashMap<String, RecordedToolUse>,
-) -> ServiceResult<()> {
-    let Some(blocks) = object
-        .get("message")
-        .and_then(serde_json::Value::as_object)
-        .and_then(|message| message.get("content"))
-        .and_then(serde_json::Value::as_array)
-    else {
-        return Ok(());
-    };
-    for block in blocks {
-        let Some(block) = block.as_object() else {
-            continue;
-        };
-        if block.get("type").and_then(serde_json::Value::as_str) != Some("tool_use") {
-            continue;
-        }
-        let required = |key: &str| -> ServiceResult<&str> {
-            block
-                .get(key)
-                .and_then(serde_json::Value::as_str)
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    ServiceError::AgentOutputMissing(format!(
-                        "events.jsonl line {line} has a tool_use block lacking non-empty string {key}"
-                    ))
-                })
-        };
-        let id = required("id")?;
-        let name = required("name")?;
-        if let Some(previous) = tool_uses.get(id) {
-            return Err(ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {line} re-issues tool_use id {id:?}, first issued at line {} in {}",
-                previous.line,
-                scope_display(previous.scope.as_deref())
-            )));
-        }
-        tool_uses.insert(
-            id.to_string(),
-            RecordedToolUse {
-                name: name.to_string(),
-                line,
-                scope: scope.map(str::to_string),
-            },
-        );
-    }
-    Ok(())
-}
-
-/// Convert an accumulated subagent row into its public record.
-///
-/// Reported started turns and observed billed turns are separate facts. A child
-/// can emit its own terminal before the parent's capture ends, or can be torn
-/// down without emitting one. Preserve the reported value and the independently
-/// observed usage; absence of a child terminal remains explicit.
-fn finish_subagent_scope(
-    state: ScopeState,
-    tool_uses: &HashMap<String, RecordedToolUse>,
-) -> ServiceResult<AgentScope> {
-    let tool_use_id = state
-        .tool_use_id
-        .expect("only the pre-created main row carries no tool_use id");
-    let tool_name = tool_uses
-        .get(&tool_use_id)
-        .expect("a scope row is created only after its spawning tool_use was recorded")
-        .name
-        .clone();
-    let Some((line, terminal)) = state.terminal else {
-        // The scope never reported: the subagent was still running, or was
-        // torn down, when the main session ended. That is an observable
-        // production state, not corruption — absent is the only honest value
-        // for every terminal-record field, and inventing one would be the
-        // exact fabrication this parser exists to refuse.
-        return Ok(AgentScope {
-            tool_use_id,
-            tool_name,
-            billed_turns: state.billed_turns,
-            output_tokens: state.output_tokens,
-            reasoning_tokens: state.reasoning_tokens,
-            reported_num_turns: None,
-            is_error: None,
-            subtype: None,
-            error_message: None,
-        });
-    };
-    let subtype = required_string(&terminal, "subtype", line)?.to_string();
-    let is_error = terminal
-        .get("is_error")
-        .and_then(serde_json::Value::as_bool)
-        .ok_or_else(|| {
-            ServiceError::AgentOutputMissing(format!(
-                "subagent result at line {line} (scope {tool_use_id:?}) lacks boolean is_error"
-            ))
-        })?;
-    let num_turns = terminal
-        .get("num_turns")
-        .and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| {
-            ServiceError::AgentOutputMissing(format!(
-                "subagent result at line {line} (scope {tool_use_id:?}) lacks non-negative integer num_turns"
-            ))
-        })?;
-    // `error.message` is recorded when present. An absent error object (or an
-    // error object without a message) is a real state on a non-error result;
-    // a present-but-malformed one is contradictory evidence and is refused
-    // rather than read as "no message".
-    let error_message = match terminal.get("error") {
-        None => None,
-        Some(error) => {
-            let error = error.as_object().ok_or_else(|| {
-                ServiceError::AgentOutputMissing(format!(
-                    "subagent result at line {line} (scope {tool_use_id:?}) has a non-object error field"
-                ))
-            })?;
-            match error.get("message") {
-                None => None,
-                Some(message) => Some(
-                    message
-                        .as_str()
-                        .filter(|message| !message.is_empty())
-                        .ok_or_else(|| {
-                            ServiceError::AgentOutputMissing(format!(
-                                "subagent result at line {line} (scope {tool_use_id:?}) has a non-string or empty error.message"
-                            ))
-                        })?
-                        .to_string(),
-                ),
-            }
-        }
-    };
-    Ok(AgentScope {
-        tool_use_id,
-        tool_name,
-        billed_turns: state.billed_turns,
-        output_tokens: state.output_tokens,
-        reasoning_tokens: state.reasoning_tokens,
-        reported_num_turns: Some(num_turns),
-        is_error: Some(is_error),
-        subtype: Some(subtype),
-        error_message,
-    })
-}
-
-/// Independently readable evidence in one complete record. The same observations
-/// survive at terminal when a missing or damaged record prevents certification.
-pub(crate) struct ObservedRecord {
-    /// A completed main-thread model invocation, counted as a turn.
-    pub(crate) main_turn: bool,
-    /// The subagent scope this record belongs to, if it is not the main
-    /// session. Read only for its identity; a shape this reader does not
-    /// recognise names no scope rather than inventing one.
-    pub(crate) subagent_scope: Option<String>,
-    /// Served output and reasoning tokens, when the record bills a turn and
-    /// every count it must carry is present and consistent.
-    pub(crate) usage: Option<(u64, u64)>,
-    /// The record bills a turn but its usage could not be read whole.
-    pub(crate) usage_unreadable: bool,
-}
-
-/// Read a completed record for live progress. Never fails: an unreadable
-/// usage is reported as unreadable, not raised and not ignored.
-pub(crate) fn observe_record(
-    object: &serde_json::Map<String, serde_json::Value>,
-) -> ObservedRecord {
-    if !matches!(
-        object.get("type").and_then(serde_json::Value::as_str),
-        Some("system" | "user" | "assistant" | "result")
-    ) || required_scope(object, 0).is_err()
-    {
-        return ObservedRecord {
-            main_turn: false,
-            subagent_scope: None,
-            usage: None,
-            usage_unreadable: true,
-        };
-    }
-    let subagent_scope = match object.get("parent_tool_use_id") {
-        Some(serde_json::Value::String(id)) if !id.is_empty() => Some(id.clone()),
-        _ => None,
-    };
-    let observed_usage =
-        if object.get("type").and_then(serde_json::Value::as_str) == Some("assistant") {
-            billed_usage(object, 0, subagent_scope.as_deref())
-        } else {
-            Ok(None)
-        };
-    let usage_unreadable = observed_usage.is_err();
-    let usage = observed_usage
-        .ok()
-        .flatten()
-        .map(|usage| (usage.output_tokens, usage.reasoning_output_tokens));
-
-    ObservedRecord {
-        main_turn: usage.is_some() && is_main_session_event(object),
-        subagent_scope,
-        usage,
-        usage_unreadable,
-    }
-}
-
-fn required_string<'a>(
-    object: &'a serde_json::Map<String, serde_json::Value>,
-    key: &str,
-    line: usize,
-) -> ServiceResult<&'a str> {
-    object
-        .get(key)
-        .and_then(serde_json::Value::as_str)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            ServiceError::AgentOutputMissing(format!(
-                "events.jsonl line {line} lacks non-empty string {key}"
-            ))
-        })
-}
-
-fn required_u64(
-    object: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
-) -> ServiceResult<u64> {
-    object
-        .get(key)
-        .and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| {
-            ServiceError::AgentOutputMissing(format!(
-                "terminal result lacks non-negative integer {key}"
-            ))
-        })
-}
-
-fn truncate_bytes(value: &[u8], max: usize) -> String {
-    let lossy = String::from_utf8_lossy(value);
-    if lossy.chars().count() <= max {
-        lossy.into_owned()
-    } else {
-        format!(
-            "{}…(truncated)",
-            lossy.chars().take(max).collect::<String>()
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
 
     use super::*;
+    fn observe_record(
+        object: &serde_json::Map<String, serde_json::Value>,
+    ) -> runtime_contract::runtime::ObservedRecord {
+        let bytes = serde_json::to_vec(object).unwrap();
+        let document = Document::decode(
+            &bytes,
+            Limits {
+                bytes: bytes.len(),
+                nodes: bytes.len(),
+                depth: bytes.len(),
+            },
+        )
+        .unwrap();
+        runtime_contract::runtime::observe_record(
+            document.root(),
+            ValidationLimits {
+                operations: u32::MAX as usize,
+            },
+        )
+    }
 
-    const INIT: &str = "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n";
+    const INIT: &str = concat!("{\"type\":\"system\",\"subtype\":\"init\",\"stream_contract_sha256\":\"", env!("STREAM_CONTRACT_SHA256"), "\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n");
 
     // One completed main turn that issues the delegating tool_use, one
     // completed subagent turn under that tool call, the subagent's own
@@ -1282,6 +357,95 @@ mod tests {
 
     fn parse_text(text: &str) -> ServiceResult<AgentResult> {
         snapshot_text(text)?.certified
+    }
+
+    #[test]
+    fn read_failure_keeps_observed_usage_and_independent_protocol_and_io_causes() {
+        struct FailingRead<'a> {
+            remaining: &'a [u8],
+        }
+        impl Read for FailingRead<'_> {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                if self.remaining.is_empty() {
+                    return Err(std::io::Error::from_raw_os_error(libc::EIO));
+                }
+                self.remaining.read(buffer)
+            }
+        }
+        for earlier_fault in [false, true] {
+            for partial_bytes in [0, 7] {
+                let before = format!(
+                    "{INIT}{MAIN_TURN}{}",
+                    if earlier_fault { "not JSON\n" } else { "" }
+                );
+                let all = format!("{before}{MAIN_RESULT}");
+                let end = before.len() + partial_bytes;
+                let snapshot = read_opened_event_snapshot(
+                    Path::new("faulted-events.jsonl"),
+                    EventPrefix {
+                        file: FailingRead {
+                            remaining: &all.as_bytes()[..end],
+                        },
+                        bytes: all.len() as u64,
+                        last_event_at_unix: 123,
+                    },
+                )
+                .unwrap();
+                assert!(matches!(&snapshot.replay_completion,
+                    ReplayCompletion::ReadFailed { bytes_read, cause }
+                    if *bytes_read == end as u64 && cause.contains("os error 5")));
+                assert_eq!(snapshot.observed.observed_output_tokens, 9);
+                assert_eq!(snapshot.observed.observed_reasoning_tokens, 6);
+                assert_eq!(snapshot.observed.output_event_bytes, all.len() as u64);
+                assert_eq!(
+                    snapshot.observed.observed_unaccounted_records,
+                    u64::from(earlier_fault) + u64::from(partial_bytes != 0)
+                );
+                let cause = snapshot.certified.unwrap_err().to_string();
+                assert!(cause.contains("os error 5"), "{cause}");
+                assert!(!cause.contains("became shorter"), "{cause}");
+                if earlier_fault {
+                    assert!(cause.contains("line 3"), "{cause}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn shortening_opened_source_cannot_certify_even_a_complete_retained_stream() {
+        let path = std::env::temp_dir().join(format!(
+            "agent-service-shortened-{}.jsonl",
+            uuid::Uuid::new_v4()
+        ));
+        let retained = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{MAIN_RESULT}");
+        let all = format!("{retained}not JSON\n");
+        let file = std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .mode(0o600)
+            .open(&path)
+            .unwrap();
+        use std::os::unix::fs::fchown;
+        fchown(&file, Some(1000), Some(1000)).unwrap();
+        (&file).write_all(all.as_bytes()).unwrap();
+        let prefix = open_event_prefix(&path).unwrap().unwrap();
+        file.set_len(retained.len() as u64).unwrap();
+        let snapshot = read_opened_event_snapshot(&path, prefix).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(
+            snapshot.replay_completion,
+            ReplayCompletion::SourceShortened {
+                bytes_read: retained.len() as u64,
+                expected_bytes: all.len() as u64,
+            }
+        );
+        assert_eq!(snapshot.observed.observed_output_tokens, 18);
+        assert_eq!(snapshot.observed.observed_unaccounted_records, 0);
+        assert!(snapshot
+            .certified
+            .unwrap_err()
+            .to_string()
+            .contains("became shorter"));
     }
 
     #[test]
@@ -1377,6 +541,7 @@ mod tests {
     fn served_zero_and_unavailable_usage_have_distinct_shared_meanings() {
         let mut record = serde_json::json!({
             "type": "assistant", "parent_tool_use_id": null,
+            "uuid": "observed", "session_id": "a",
             "message": { "usage": {
                 "input_tokens": 0, "output_tokens": 0,
                 "cache_read_input_tokens": 0, "reasoning_output_tokens": 0,
@@ -1387,17 +552,11 @@ mod tests {
         assert!(observed.main_turn);
         assert_eq!(observed.usage, Some((0, 0)));
         assert!(!observed.usage_unreadable);
-        assert!(billed_usage(record.as_object().unwrap(), 1, None)
-            .unwrap()
-            .is_some());
         record["message"]["usage"] = serde_json::Value::Null;
         let observed = observe_record(record.as_object().unwrap());
         assert!(!observed.main_turn);
         assert_eq!(observed.usage, None);
         assert!(!observed.usage_unreadable);
-        assert!(billed_usage(record.as_object().unwrap(), 1, None)
-            .unwrap()
-            .is_none());
         for malformed in [
             serde_json::json!({}),
             serde_json::json!("0"),
@@ -1407,7 +566,6 @@ mod tests {
             }),
         ] {
             record["message"]["usage"] = malformed;
-            assert!(billed_usage(record.as_object().unwrap(), 1, None).is_err());
             assert!(observe_record(record.as_object().unwrap()).usage_unreadable);
         }
     }
@@ -1516,18 +674,10 @@ mod tests {
         }
 
         // Negative control: the set is closed in both directions.
-        for (is_error, subtype, expected) in [
-            (
-                true,
-                "error_incomplete",
-                "error result has unsupported subtype",
-            ),
-            (true, "success", "error result has unsupported subtype"),
-            (
-                false,
-                "error_incomplete_generation",
-                "successful result has unsupported subtype",
-            ),
+        for (is_error, subtype) in [
+            (true, "error_incomplete"),
+            (true, "success"),
+            (false, "error_incomplete_generation"),
         ] {
             let tail = if is_error {
                 "\"error\":{\"message\":\"boom\"}"
@@ -1540,7 +690,7 @@ mod tests {
             let error = parse_text(&format!("{INIT}{MAIN_TURN}{terminal}"))
                 .expect_err("an undefined terminal state is not interpretable");
             assert!(
-                error.to_string().contains(expected),
+                error.to_string().contains("at /subtype (schema rule "),
                 "unexpected refusal for {subtype:?}: {error}"
             );
         }
@@ -1558,12 +708,18 @@ mod tests {
             let terminal = format!(
                 "{{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,{bad},\"num_turns\":1,\"result\":\"ok\",\"usage\":{{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}}}},\"permission_denials\":[]}}\n"
             );
+            let valid = terminal.replace(bad, "\"duration_api_ms\":1");
+            parse_text(&format!("{INIT}{MAIN_TURN}{valid}"))
+                .expect("the identical stream with a valid duration is certified");
             let text = format!("{INIT}{MAIN_TURN}{terminal}");
             let error =
                 parse_text(&text).expect_err("duration_api_ms must be a non-negative integer");
-            assert!(error
-                .to_string()
-                .contains("terminal result lacks non-negative integer duration_api_ms"));
+            let expected = if bad.ends_with(":null") {
+                "terminal result lacks non-negative integer duration_api_ms"
+            } else {
+                "at /duration_api_ms (schema rule "
+            };
+            assert!(error.to_string().contains(expected), "{error}");
         }
     }
 
@@ -1794,6 +950,7 @@ mod tests {
     fn observes_a_billed_main_turn_without_borrowing_the_strict_verdict() {
         let record = serde_json::json!({
             "type": "assistant",
+            "uuid": "observed", "session_id": "a",
             "message": {"usage": {
                 "input_tokens": 100, "output_tokens": 40,
                 "reasoning_output_tokens": 30, "cache_read_input_tokens": 0, "total_tokens": 140}}
@@ -1809,6 +966,7 @@ mod tests {
     fn observes_a_subagent_scope_without_counting_it_as_a_main_turn() {
         let record = serde_json::json!({
             "type": "assistant",
+            "uuid": "observed", "session_id": "a",
             "parent_tool_use_id": "call_abc",
             "message": {"usage": {
                 "input_tokens": 10, "output_tokens": 5,
@@ -1827,6 +985,7 @@ mod tests {
         // not quietly drop it either: it says the tally is short instead.
         let record = serde_json::json!({
             "type": "assistant",
+            "uuid": "observed", "session_id": "a",
             "message": {"usage": {
                 "input_tokens": 10, "output_tokens": 5,
                 "reasoning_output_tokens": 9, "cache_read_input_tokens": 0, "total_tokens": 15}}

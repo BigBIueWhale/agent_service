@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 
+use agent_service::container_image::{read_container_image, require_container_image};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -28,6 +29,10 @@ const REQUEST_LIMIT: u64 = 65_536;
 const OUTPUT_LIMIT: usize = 4 * 1024 * 1024;
 const RESPONSE_LIMIT: usize = 4 * 1024 * 1024;
 const DOCKER_TIMEOUT: Duration = Duration::from_secs(120);
+
+#[cfg(test)]
+#[path = "../../docker/tests/composition_broker.rs"]
+mod composition_gate;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -296,8 +301,8 @@ fn validate_policy(policy: &Policy) -> Result<(), String> {
         );
     }
     if policy.broker.image_tag != "qwen38-docker-broker:1.1.0"
-        || policy.broker.memory != "64m"
-        || policy.broker.memory_swap != "64m"
+        || policy.broker.memory != "128m"
+        || policy.broker.memory_swap != "128m"
         || policy.broker.pids_limit != 64
         || policy.broker.uid != 1000
         || policy.broker.gid != 984
@@ -927,19 +932,7 @@ async fn verify_self(policy: &Policy) -> Result<(), String> {
     .await?;
     let value = inspect_single(&policy.broker_container_name, "broker_self").await?;
     require_bool(&value, "/State/Running", true, "broker running state")?;
-    let image_id = value
-        .get("Image")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "broker inspect lacks image ID".to_string())?;
-    if !is_image_id(image_id) {
-        return Err(format!("broker image ID is not immutable: {image_id:?}"));
-    }
-    require_string(
-        &value,
-        "/Config/Image",
-        image_id,
-        "broker configured image ID",
-    )?;
+    read_container_image(&value, "broker self")?;
     require_string(
         &value,
         "/Config/User",
@@ -1461,13 +1454,7 @@ async fn verify_agent(policy: &Policy, session_id: &str) -> Result<(), String> {
     )
     .await?;
     require_bool(&value, "/State/Running", true, "agent running state")?;
-    require_string(&value, "/Image", &policy.agent.image_id, "agent image ID")?;
-    require_string(
-        &value,
-        "/Config/Image",
-        &policy.agent.image_id,
-        "agent configured image ID",
-    )?;
+    require_container_image(&value, &policy.agent.image_id, "agent")?;
     require_string(&value, "/Config/User", "1000:1000", "agent user")?;
     require_string(
         &value,
@@ -1646,18 +1633,7 @@ async fn verify_capture(policy: &Policy, session_id: &str, agent_id: &str) -> Re
         true,
         "session capture running state",
     )?;
-    require_string(
-        &value,
-        "/Image",
-        &policy.capture.image_id,
-        "capture image ID",
-    )?;
-    require_string(
-        &value,
-        "/Config/Image",
-        &policy.capture.image_id,
-        "capture configured image ID",
-    )?;
+    require_container_image(&value, &policy.capture.image_id, "capture")?;
     require_string(&value, "/Config/User", "1000:1000", "capture user")?;
     require_exact_command(
         &value,
@@ -1740,13 +1716,7 @@ async fn verify_relay(policy: &Policy, session_id: &str, agent_id: &str) -> Resu
         true,
         "session relay running state",
     )?;
-    require_string(&value, "/Image", &policy.relay.image_id, "relay image ID")?;
-    require_string(
-        &value,
-        "/Config/Image",
-        &policy.relay.image_id,
-        "relay configured image ID",
-    )?;
+    require_container_image(&value, &policy.relay.image_id, "relay")?;
     require_string(&value, "/Config/User", "1000:1000", "relay user")?;
     require_exact_command(
         &value,
@@ -1865,6 +1835,13 @@ async fn inspect_optional(
     ] {
         require_string(&value, pointer, expected, label)?;
     }
+    require_string(&value, "/Name", &format!("/{name}"), "owned container name")?;
+    let expected_image = match component {
+        Component::Agent => &policy.agent.image_id,
+        Component::SessionRelay => &policy.relay.image_id,
+        Component::SessionCapture => &policy.capture.image_id,
+    };
+    require_container_image(&value, expected_image, "owned container")?;
     Ok(Some(value))
 }
 
@@ -1959,6 +1936,8 @@ async fn remove_stopped_owned(
         false,
         "owned container stopped state before removal",
     )?;
+    #[cfg(test)]
+    composition_gate::before_owned_remove(name, policy, session_id, component, &value)?;
     docker(
         ["container", "rm", name],
         "remove_owned",
@@ -2036,13 +2015,7 @@ async fn sweep_orphans(policy: &Policy) -> Result<(), String> {
                 "refusing orphan sweep for name drift on {id}: expected {expected_name:?}, observed {observed_name:?}"
             ));
         }
-        require_string(&value, "/Image", expected_image, "orphan image ID")?;
-        require_string(
-            &value,
-            "/Config/Image",
-            expected_image,
-            "orphan configured image ID",
-        )?;
+        require_container_image(&value, expected_image, "orphan")?;
         target.push(id.to_string());
     }
 

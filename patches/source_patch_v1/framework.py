@@ -383,7 +383,7 @@ class SourcePatchTransaction:
     def _path(self, relative: str, *, existing: bool) -> Path:
         safe = _safe_relative_path(relative)
         candidate = self.source_root.joinpath(*safe.parts)
-        parent = candidate.parent.resolve(strict=True)
+        parent = candidate.parent.resolve(strict=existing)
         _require(
             parent == self.source_root or self.source_root in parent.parents,
             f"{self.patchset.name}: path escapes source root: {relative}",
@@ -402,6 +402,24 @@ class SourcePatchTransaction:
                 f"{relative} unexpectedly exists",
             )
         return candidate
+
+    def _prepare_parent(self, relative: str, created: list[Path]) -> None:
+        parent = self.source_root
+        for part in _safe_relative_path(relative).parts[:-1]:
+            parent = parent / part
+            try:
+                info = parent.lstat()
+            except FileNotFoundError:
+                parent.mkdir(mode=0o755)
+                created.append(parent)
+                info = parent.lstat()
+                directory_fd = os.open(parent.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            _require(stat.S_ISDIR(info.st_mode) and not parent.is_symlink(),
+                     f"{self.patchset.name}: source parent is not a real directory: {parent}")
 
     def _artifact_path(self, relative: str) -> Path:
         safe = _safe_relative_path(relative)
@@ -648,6 +666,7 @@ class SourcePatchTransaction:
         temporary: dict[str, Path] = {}
         backups: dict[str, _Backup] = {}
         replaced: list[str] = []
+        created_directories: list[Path] = []
         try:
             # Capture every original before creating any temporary output. The
             # bytes and permission bits form the optimistic-concurrency guard
@@ -673,6 +692,7 @@ class SourcePatchTransaction:
                 backup = backups[relative]
                 if relative not in planned:
                     continue
+                self._prepare_parent(relative, created_directories)
                 descriptor, raw_temp = tempfile.mkstemp(
                     prefix=f".{destination.name}.qwen-source-patch.",
                     dir=destination.parent,
@@ -766,6 +786,21 @@ class SourcePatchTransaction:
                         os.close(directory_fd)
                 except BaseException as rollback_exc:
                     rollback_errors.append(f"{relative}: {rollback_exc!r}")
+            for temp_path in temporary.values():
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except BaseException as rollback_exc:
+                    rollback_errors.append(f"{temp_path}: {rollback_exc!r}")
+            for directory in reversed(created_directories):
+                try:
+                    directory.rmdir()
+                    directory_fd = os.open(directory.parent, os.O_RDONLY)
+                    try:
+                        os.fsync(directory_fd)
+                    finally:
+                        os.close(directory_fd)
+                except BaseException as rollback_exc:
+                    rollback_errors.append(f"{directory}: {rollback_exc!r}")
             detail = ""
             if rollback_errors:
                 detail = f"; rollback errors: {rollback_errors!r}"

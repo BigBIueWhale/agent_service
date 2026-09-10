@@ -57,6 +57,7 @@ use crate::runtime::{Manager, SessionBody};
 use crate::session;
 use crate::staging::SessionPaths;
 use crate::validation::SpooledArchive;
+use agent_service::container_image::{read_container_image, require_container_image};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -688,6 +689,12 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
     // request can land while a half-cleaned-up prior session exists.
     crate::runtime::recover_interrupted_deletions(cfg).await?;
     session::sweep_orphans(cfg).await?;
+    recover_local_state(cfg).await
+}
+
+/// The filesystem recovery protocol follows producer containment and precedes
+/// listener admission. Test bootstraps use their registered actor containment.
+pub(crate) async fn recover_local_state(cfg: &Config) -> ServiceResult<()> {
     crate::runtime::recover_interrupted_acceptances(cfg).await?;
     sweep_upload_spool(&cfg.state_dir.join("spool"))?;
     // Reconcile state before result-only leftovers. This ordering preserves
@@ -783,25 +790,7 @@ async fn verify_service_container(cfg: &Config, value: &serde_json::Value) -> Se
             "service container is not running during self-preflight".into(),
         ));
     }
-    let image = value
-        .pointer("/Image")
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| ServiceError::Internal("service inspect lacks Image".into()))?;
-    let configured_image = value
-        .pointer("/Config/Image")
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| ServiceError::Internal("service inspect lacks Config.Image".into()))?;
-    if image.len() != 71
-        || !image.starts_with("sha256:")
-        || configured_image != image
-        || image[7..]
-            .bytes()
-            .any(|byte| !(byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')))
-    {
-        return Err(ServiceError::Internal(format!(
-            "service was not created from one immutable image ID: Image={image:?} Config.Image={configured_image:?}"
-        )));
-    }
+    read_container_image(value, "service self").map_err(ServiceError::Internal)?;
     require_equal(
         "service configured user",
         value
@@ -1238,22 +1227,8 @@ fn verify_broker_container(cfg: &Config, value: &serde_json::Value) -> ServiceRe
             "Docker broker is not running".into(),
         ));
     }
-    require_equal(
-        "broker image ID",
-        value
-            .get("Image")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("<missing>"),
-        &cfg.lock.broker.image_id,
-    )?;
-    require_equal(
-        "broker configured image ID",
-        value
-            .pointer("/Config/Image")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("<missing>"),
-        &cfg.lock.broker.image_id,
-    )?;
+    require_container_image(value, &cfg.lock.broker.image_id, "broker")
+        .map_err(ServiceError::Internal)?;
     require_equal(
         "broker network mode",
         value
@@ -1366,13 +1341,9 @@ fn verify_fixed_relay_container(
             value.pointer("/Config/Entrypoint")
         )));
     }
+    require_container_image(value, &cfg.lock.relay.image_id, label)
+        .map_err(ServiceError::Internal)?;
     for (pointer, expected, property) in [
-        ("/Image", cfg.lock.relay.image_id.as_str(), "image ID"),
-        (
-            "/Config/Image",
-            cfg.lock.relay.image_id.as_str(),
-            "configured image ID",
-        ),
         ("/Config/User", "1000:1000", "user"),
         ("/HostConfig/NetworkMode", network_mode, "network mode"),
     ] {
@@ -1639,16 +1610,8 @@ fn verify_backend_container(cfg: &Config, value: &serde_json::Value) -> ServiceR
         string("/AppArmorProfile")?,
         &cfg.lock.host.container_apparmor_profile,
     )?;
-    require_equal(
-        "backend image ID",
-        string("/Image")?,
-        &cfg.lock.backend.image_id,
-    )?;
-    require_equal(
-        "backend configured immutable image ID",
-        string("/Config/Image")?,
-        &cfg.lock.backend.image_id,
-    )?;
+    require_container_image(value, &cfg.lock.backend.image_id, "backend")
+        .map_err(ServiceError::Internal)?;
     require_equal(
         "backend non-root user",
         string("/Config/User")?,
@@ -2317,11 +2280,13 @@ fn sweep_state_dir(
         removed += 1;
         tracing::info!(dir = %path.display(), "sweep_state_dir: removed leftover");
     }
+    // Absence can follow an earlier removal whose parent sync failed.
+    // Reconcile that namespace before readiness even without a new removal.
+    sync_directory(
+        &sessions_dir,
+        "sweep_state_dir: sync removed session entries",
+    )?;
     if removed > 0 {
-        sync_directory(
-            &sessions_dir,
-            "sweep_state_dir: sync removed session entries",
-        )?;
         tracing::info!(count = removed, "sweep_state_dir: complete");
     }
     Ok(())
@@ -2439,11 +2404,11 @@ fn sweep_partial_results(
             "sweep_partial_results: removed crash-interrupted session dir"
         );
     }
+    sync_directory(
+        results_dir,
+        "sweep_partial_results: sync removed result entries",
+    )?;
     if removed > 0 {
-        sync_directory(
-            results_dir,
-            "sweep_partial_results: sync removed result entries",
-        )?;
         tracing::info!(
             count = removed,
             "sweep_partial_results: complete (these sessions were interrupted by a server crash)"
@@ -2580,7 +2545,7 @@ pub(crate) fn committed_terminal_for_sweep(
     } else {
         return Ok(None);
     };
-    let bytes = read_private_service_file(
+    let (bytes, terminal_file) = read_private_service_file(
         terminal_path,
         terminal_metadata,
         service_uid,
@@ -2610,21 +2575,6 @@ pub(crate) fn committed_terminal_for_sweep(
                     finished.display()
                 )));
             }
-            std::fs::remove_file(&temporary).map_err(|error| {
-                ServiceError::Internal(format!(
-                    "terminal sweep: remove safely recoverable publication marker {}: {error}",
-                    temporary.display()
-                ))
-            })?;
-            sync_directory(
-                result_dir,
-                "terminal sweep after linked-publication recovery",
-            )?;
-            tracing::warn!(
-                session_id,
-                marker = %temporary.display(),
-                "terminal sweep: recovered completed no-clobber publication after crash"
-            );
         }
         (None, Some(_)) => {
             // A parseable `.tmp` is only the durable prepare phase. It is not
@@ -2642,6 +2592,26 @@ pub(crate) fn committed_terminal_for_sweep(
         (Some(_), None) => {}
         (None, None) => unreachable!("terminal path selection proved one file exists"),
     }
+    // Final-only and linked-pair visibility cannot distinguish an earlier
+    // successful publication sync from a failed one. Re-establish the exact
+    // validated file and its final name before granting publication authority.
+    crate::runtime::terminal_io(&finished, "terminal sweep: sync committed file", || {
+        terminal_file.sync_all()
+    })?;
+    sync_directory(result_dir, "terminal sweep: sync committed publication")?;
+    if temporary_meta.is_some() {
+        crate::runtime::terminal_io(
+            &temporary,
+            "terminal sweep: remove publication marker",
+            || std::fs::remove_file(&temporary),
+        )?;
+        sync_directory(
+            result_dir,
+            "terminal sweep after linked-publication recovery",
+        )?;
+        tracing::warn!(session_id, marker = %temporary.display(),
+            "terminal sweep: recovered completed no-clobber publication after crash");
+    }
     Ok(Some(record))
 }
 
@@ -2652,7 +2622,7 @@ fn read_private_service_file(
     service_gid: u32,
     role: &str,
     maximum_bytes: u64,
-) -> ServiceResult<Vec<u8>> {
+) -> ServiceResult<(Vec<u8>, std::fs::File)> {
     use std::io::Read;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 
@@ -2710,7 +2680,7 @@ fn read_private_service_file(
             bytes.len()
         )));
     }
-    Ok(bytes)
+    Ok((bytes, file))
 }
 
 fn validate_private_service_file(
@@ -2760,7 +2730,7 @@ fn validate_raw_evidence_marker(
     service_uid: u32,
     service_gid: u32,
 ) -> ServiceResult<RawEvidenceCause> {
-    let bytes = read_private_service_file(
+    let (bytes, _) = read_private_service_file(
         marker,
         expected_metadata,
         service_uid,
@@ -2917,14 +2887,9 @@ fn require_owned_runtime_directory(
 }
 
 fn sync_directory(path: &std::path::Path, context: &str) -> ServiceResult<()> {
-    std::fs::File::open(path)
-        .and_then(|directory| directory.sync_all())
-        .map_err(|error| {
-            ServiceError::Internal(format!(
-                "{context}: cannot sync directory {}: {error}",
-                path.display()
-            ))
-        })
+    crate::runtime::terminal_io(path, context, || {
+        std::fs::File::open(path).and_then(|directory| directory.sync_all())
+    })
 }
 
 pub(crate) fn validate_terminal_storage(

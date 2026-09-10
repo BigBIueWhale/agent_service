@@ -23,20 +23,81 @@ readonly MODEL_BASE=http://127.0.0.1:18000
 readonly EXPECTED_INTERFACE=lo
 readonly EXPECTED_IPV4_ADDRESS=127.0.0.1/8
 
-qwen_pid=""
-qwen_pgid=""
-qwen_status=255
+child_pid=""
+child_pgid=""
+child_status=255
 termination_exit=0
 termination_forward_failed=0
+
+wait_for_child() {
+  local waited_pid="$1" status_target="$2" wait_status
+  while true; do
+    set +e
+    wait "${waited_pid}"
+    wait_status="$?"
+    set -e
+    if ! kill -0 "${waited_pid}" 2>/dev/null; then
+      printf -v "${status_target}" '%s' "${wait_status}"
+      return 0
+    fi
+  done
+}
+
 
 fatal() {
   local code="$1"
   shift
   printf 'FATAL[%s]: %s\n' "${code}" "$*" >&2
-  if [[ -n "${qwen_pgid}" ]] && kill -0 -- "-${qwen_pgid}" 2>/dev/null; then
-    kill -TERM -- "-${qwen_pgid}" 2>/dev/null || true
+  if [[ -n "${child_pgid}" ]] && kill -0 -- "-${child_pgid}" 2>/dev/null; then
+    kill -TERM -- "-${child_pgid}" 2>/dev/null || true
+  fi
+  if [[ -n "${child_pid}" ]]; then
+    kill -TERM -- "${child_pid}" 2>/dev/null || true
+    wait_for_child "${child_pid}" child_status
   fi
   exit "${code}"
+}
+
+forward_termination() {
+  local exit_code="$1"
+  termination_exit="${exit_code}"
+  # The signal may arrive before setsid has installed the child's group.
+  # Address the directly owned PID as well as any established descendants.
+  if [[ -n "${child_pid}" ]] && kill -0 -- "${child_pid}" 2>/dev/null; then
+    if ! kill -TERM -- "${child_pid}" 2>/dev/null && \
+       kill -0 -- "${child_pid}" 2>/dev/null; then
+      termination_forward_failed=1
+      printf 'AGENT_ERROR code=101 message=failed to forward termination to owned process %s\n' \
+        "${child_pid}" >&2
+    fi
+  fi
+  if [[ -n "${child_pgid}" ]] && kill -0 -- "-${child_pgid}" 2>/dev/null; then
+    if ! kill -TERM -- "-${child_pgid}" 2>/dev/null && \
+       kill -0 -- "-${child_pgid}" 2>/dev/null; then
+      termination_forward_failed=1
+      printf 'AGENT_ERROR code=101 message=failed to forward termination to owned process group %s\n' \
+        "${child_pgid}" >&2
+    fi
+  fi
+}
+trap 'forward_termination 143' TERM
+trap 'forward_termination 130' INT
+
+run_prelaunch() {
+  local prelaunch_status
+  (( termination_exit == 0 )) || exit "${termination_exit}"
+  setsid "$@" < /dev/null &
+  child_pid="$!"
+  child_pgid="${child_pid}"
+  if (( termination_exit != 0 )); then
+    forward_termination "${termination_exit}"
+  fi
+  wait_for_child "${child_pid}" prelaunch_status
+  child_pid=""
+  child_pgid=""
+  (( termination_forward_failed == 0 )) || fatal 101 "failed to forward a requested termination signal"
+  (( termination_exit == 0 )) || exit "${termination_exit}"
+  return "${prelaunch_status}"
 }
 
 umask 077
@@ -107,7 +168,7 @@ mkdir --mode=0700 /tmp/qwen-subagents
 [[ "$(stat -c '%a' /qwen-runtime/effects)" == 700 && \
    "$(stat -c '%a' /tmp/qwen-subagents)" == 700 ]] || \
   fatal 105 "effect-journal and subagent-scratch roots must have mode 0700"
-python3 "${RUNTIME_CONTRACT_VERIFIER_SOURCE}" \
+run_prelaunch python3 "${RUNTIME_CONTRACT_VERIFIER_SOURCE}" \
   "${RUNTIME_CONTRACT_SOURCE}" \
   "${SETTINGS_SOURCE}" \
   "${INSTRUCTIONS_SOURCE}" \
@@ -117,7 +178,7 @@ python3 "${RUNTIME_CONTRACT_VERIFIER_SOURCE}" \
   /opt/agent/run_agent.sh "${AGENT_EXEC_SOURCE}" || \
   fatal 107 "canonical runtime contract validation failed"
 
-python3 "${TOOLCHAIN_VERIFIER_SOURCE}" \
+run_prelaunch python3 "${TOOLCHAIN_VERIFIER_SOURCE}" \
   "${TOOLCHAIN_MANIFEST_SOURCE}" "${AGENT_APT_LOCK_SOURCE}" || \
   fatal 106 "immutable offline toolchain contract validation failed"
 
@@ -161,28 +222,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-forward_termination() {
-  local exit_code="$1"
-  termination_exit="${exit_code}"
-  if [[ -n "${qwen_pgid}" ]] && kill -0 -- "-${qwen_pgid}" 2>/dev/null; then
-    if ! kill -TERM -- "-${qwen_pgid}" 2>/dev/null && \
-       kill -0 -- "-${qwen_pgid}" 2>/dev/null; then
-      termination_forward_failed=1
-      printf 'AGENT_ERROR code=101 message=failed to forward termination to Qwen process group %s\n' \
-        "${qwen_pgid}" >&2
-    fi
-  fi
-}
-trap 'forward_termination 143' TERM
-trap 'forward_termination 130' INT
-
 # The service locks this file before Docker creates the agent. The typed broker
-# releases us only after the agent-namespace relay has emitted its exact bound
-# listener event. This is an event-backed gate, not a retry loop or a fallback.
-flock --exclusive "${START_GATE_FILE}" true || \
+# proves the agent-namespace relay has bound its listener before the service
+# releases the lock. A builtin wait lets TERM interrupt this owned child while
+# the service retains the lock until cancellation teardown finishes.
+run_prelaunch flock --exclusive "${START_GATE_FILE}" true || \
   fatal 109 "the broker-verified model-relay start gate failed"
 
-curl --fail --silent --show-error \
+run_prelaunch curl --fail --silent --show-error \
   --connect-timeout 2 --max-time 10 \
   "${MODEL_BASE}/v1/models" >"${models_tmp}" || \
   fatal 95 "the broker-ready sole loopback model endpoint failed its one preflight request"
@@ -192,7 +239,7 @@ jq -e --arg model "${MODEL_ID}" \
   "${models_tmp}" >/dev/null || \
   fatal 96 "model identity or context length does not match the locked contract: $(tr -d '\n' <"${models_tmp}")"
 
-curl --fail --silent --show-error \
+run_prelaunch curl --fail --silent --show-error \
   --connect-timeout 2 --max-time 30 \
   -H 'content-type: application/json' \
   --data '{"model":"qwen3.8-27b-nvfp4-k8v4","prompt":"agent-service-tokenizer-preflight"}' \
@@ -202,19 +249,6 @@ jq -e '.count > 0 and .max_model_len == 262144 and (.tokens | type == "array")' 
   "${tokenize_tmp}" >/dev/null || \
   fatal 98 "vLLM tokenizer response violates the locked contract: $(tr -d '\n' <"${tokenize_tmp}")"
 
-wait_for_child() {
-  local child_pid="$1" result_name="$2" child_status
-  while true; do
-    set +e
-    wait "${child_pid}"
-    child_status="$?"
-    set -e
-    if ! kill -0 "${child_pid}" 2>/dev/null; then
-      printf -v "${result_name}" '%s' "${child_status}"
-      return 0
-    fi
-  done
-}
 
 set +e
 exec {attestation_fd}<>"${attestation_fifo}"
@@ -224,8 +258,8 @@ setsid "${AGENT_EXEC}" \
   4<&"${release_fd}" \
   <"${PROMPT_FILE}" \
   &
-qwen_pid="$!"
-qwen_pgid="${qwen_pid}"
+child_pid="$!"
+child_pgid="${child_pid}"
 if (( termination_exit != 0 )); then
   forward_termination "${termination_exit}"
 fi
@@ -253,8 +287,8 @@ exec {release_fd}>&-
 rm -f -- "${attestation_fifo}" "${release_fifo}"
 rmdir -- "${launcher_control_dir}"
 
-wait_for_child "${qwen_pid}" qwen_status
+wait_for_child "${child_pid}" child_status
 set -e
 
 (( termination_forward_failed == 0 )) || fatal 101 "failed to forward a requested termination signal"
-exit "${qwen_status}"
+exit "${child_status}"

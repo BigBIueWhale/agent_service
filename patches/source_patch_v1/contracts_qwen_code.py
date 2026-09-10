@@ -4297,8 +4297,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "telemetry/generation-usage.ts",
         (
-            "export interface GenerationUsageSummary",
-            "usage: ServedUsage | null;",
+            "export type { GenerationUsageSummary } from './generation-usage-types.js';",
             "unfinalizedRequests",
             "unreportedUsageRequests",
             "usageReports",
@@ -4306,6 +4305,12 @@ def _validate_served_accounting_after(state: State) -> None:
             "requireGenerationUsage",
             "requireServedUsage(summary.usage",
         ),
+        label=label,
+    )
+    _require_all(
+        state,
+        core + "telemetry/generation-usage-types.ts",
+        ("export interface GenerationUsageSummary", "usage: GenerationUsageCounts | null;"),
         label=label,
     )
     _require_all(
@@ -4509,7 +4514,70 @@ def _validate_manual_compaction_after(state: State) -> None:
     forbid_text(state, core + "services/chatCompressionService.ts", "MAX_HOOK_INSTRUCTIONS_CHARS", label=label)
 
 
+def _validate_stream_admission_before(state: State) -> None:
+    forbid_text(
+        state, "packages/core/src/config/config.ts", "RuntimeContractAdmission",
+        label="shared stream admission precondition",
+    )
+
+
+def _validate_stream_admission_after(state: State) -> None:
+    label = "shared stream admission and public usage types"
+    core = "packages/core/src/"
+    _require_all(state, core + "config/config.ts", (
+        "private readonly runtimeContractAdmission = new RuntimeContractAdmission();",
+        "admitRuntimeStreamRecord(record: unknown)",
+        "admitRuntimeControlRecord(record: unknown)",
+        "this.assertRuntimeContractAvailable();",
+    ), label=label)
+    goal = _require_all(state, core + "goals/goal-runtime.ts", (
+        "admission: RuntimeContractAdmission;",
+        "options.admission.admitGoalSnapshot(payload.snapshot);",
+        "return options.journal.recordGoalState(uuid, payload);",
+    ), label=label)
+    _require(goal.count("options.journal.recordGoalState(") == 1,
+             f"{label}: Goal journal admission can be bypassed")
+    _require_ordered(goal, (
+        "options.admission.admitGoalSnapshot(payload.snapshot);",
+        "return options.journal.recordGoalState(uuid, payload);",
+    ), label=label, location="Goal journal admission")
+    for name in ("StreamJsonOutputAdapter", "JsonOutputAdapter"):
+        _require_all(state, f"packages/cli/src/nonInteractive/io/{name}.ts", (
+            "this.config.admitRuntimeStreamRecord(message)",
+        ), label=label)
+    _require_all(state, core + "utils/runtime-stream-contract.ts", (
+        "../generated/stream-record-validator.js",
+        "../generated/goal-snapshot-validator.js",
+        "../generated/outbound-control-validator.js",
+    ), label=label)
+    logging = _source(state, core + "core/loggingContentGenerator/loggingContentGenerator.ts", label=label)
+    _require(logging.count("this.config.assertRuntimeContractAvailable();") == 4,
+             f"{label}: both generation entrypoints must refuse retained contract failure before and after intent admission")
+    for path in (core + "telemetry/generation-usage-types.ts",
+                 "packages/acp-bridge/src/context-usage-types.ts"):
+        contents = _source(state, path, label=label)
+        _require("@google/genai" not in contents and "../core/" not in contents,
+                 f"{label}: public wire types leak provider request internals")
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
+    SemanticConcern(
+        name="shared-stream-admission",
+        rationale=(
+            "Core Goal state and serialized CLI records enter one required admission owner. "
+            "A retained violation blocks further provider admission. The generated validators "
+            "are compiled from the paired canonical schema with pinned dependencies and "
+            "verified with their output receipt before build. Pure public usage "
+            "types keep required SDK declaration bundles independent of provider internals. "
+            "These source checks do not replace final-image certification and lifecycle tests."
+        ),
+        removal_condition=(
+            "Upstream provides the same shared contract, mandatory common admission, "
+            "failure retention and independently consumable public declarations."
+        ),
+        validate_before=_validate_stream_admission_before,
+        validate_after=_validate_stream_admission_after,
+    ),
     SemanticConcern(
         name="manual-compaction-ownership-and-outcome",
         rationale=(

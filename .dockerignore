@@ -4,3 +4,6 @@ artifacts
 target
 README.md
 docs
+**/__pycache__
+**/*.pyc
+**/*.pyo

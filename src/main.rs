@@ -8,15 +8,19 @@ mod api;
 mod bundle;
 mod config;
 mod docker_ops;
-mod error;
 mod progress;
-mod result_parse;
 mod runtime;
 mod session;
 mod staging;
 mod validation;
 
+#[cfg(test)]
+#[path = "../docker/tests/composition_service.rs"]
+mod composition_gate;
+
 use std::sync::Arc;
+
+use agent_service::{error, result_parse};
 
 use crate::api::{pre_flight, AppState};
 use crate::config::Config;

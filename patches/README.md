@@ -12,14 +12,14 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `e4a2b2d0211e8a673f21a2c3b674231de2f5cc330568fba8c727ab447ff27dc1`
+- Review-diff SHA-256: `bbd410066a27e0dd377ece30b93603d53674ba118870b5957aa299afafc31972`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `f8f211ec592e09bfad7607bc5cf8ce6b353bf9a0dc00160e18f793d8eb08e4f4`
+- Transformer-manifest SHA-256: `27cfe81e41641c3320041c52c8e9c548bb8340ddbfdbb7856f4af660df28fae6`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 29 semantic concerns before changing the private source tree.
+identities, and 30 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
@@ -205,9 +205,18 @@ protocol fixture. The smoke consumes the same fixed Rust launcher argument vecto
 substitutes only provider endpoints in shipping settings, and requires a fresh file
 nonce to pass through read_file and the following response. Successful exit, nonempty
 structured events, served fixture usage and the owned canonical transcript are all
-required. Empty and failing processes are negative controls; communication failure,
+required. Every emitted record passes through the production Rust reader and captured-stream
+certifier, including the initial idle goal state. Producer structural admission and native
+certification derive their accepted variants from the same versioned wire definition.
+Empty and failing processes are negative controls; communication failure,
 timeout and interruption controls prove child termination, join and pipe cleanup.
 No program or settings installation follows the gate.
+
+The build also qualifies the final images together through the launcher, relay, trusted
+capture and service publication. Owned protocol fixtures exercise a complete tool cycle,
+cancellation, incomplete provider output, capture failures and durable terminal publication
+faults. These observations establish the tested local composition; they do not establish
+provider settlement, compaction recovery or semantic preservation.
 
 ## Verification scope and remaining limits
 

@@ -109,6 +109,10 @@ COPY patches/qwen-code-0.21.12-agent-service.patch \
   /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch
 COPY patches/source_patch_v1 \
   /opt/agent-artifacts/patches/source_patch_v1
+COPY protocol/stream-contract-v1.json /opt/agent-artifacts/protocol/stream-contract-v1.json
+COPY protocol/test-vectors /opt/agent-artifacts/protocol/test-vectors
+COPY scripts/generate-protocol-bindings.mjs \
+  /opt/agent-artifacts/scripts/generate-protocol-bindings.mjs
 RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
       "${QWEN_SOURCE_ARCHIVE_SHA256}" \
  && test "$(sha256sum /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch | cut -d' ' -f1)" = \
@@ -126,6 +130,10 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && cd /src \
  && npm ci --ignore-scripts \
  && npx --no-install patch-package \
+ && node /opt/agent-artifacts/scripts/generate-protocol-bindings.mjs \
+      /src \
+ && node /opt/agent-artifacts/scripts/generate-protocol-bindings.mjs \
+      /src --check \
  && npm run build -- --cli-only \
  && npm run build --workspace=packages/webui \
  && grep -Fx "export const GIT_COMMIT_INFO = 'b965d5f8c24f';" \
@@ -136,6 +144,9 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
       packages/core/src/generated/git-commit.ts \
  && DEV=true node esbuild.config.js \
  && node scripts/copy_bundle_assets.js \
+ && npx --no-install vitest run --config scripts/tests/vitest.config.ts \
+      scripts/tests/package-assets.test.js \
+      scripts/tests/stream-contract-assets.test.js \
  && PYTHONPATH=/opt/agent-artifacts python3 -c \
       'from patches.source_patch_v1.generated_qwen_code_stage import FINAL_FILES; print("\n".join(sorted(path for path, digest in FINAL_FILES.items() if digest is not None)))' \
       > /tmp/patched-files.txt \
@@ -165,15 +176,21 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && rm -rf node_modules/.vite /tmp/node-compile-cache
 
 FROM ${RUST_IMAGE} AS agent-runtime-build
-ARG AGENT_EXEC_SOURCE_SHA256
 WORKDIR /build
-COPY Cargo.toml Cargo.lock ./
+ARG AGENT_EXEC_SOURCE_SHA256
+COPY Cargo.toml Cargo.lock build.rs ./
+COPY protocol protocol
 COPY src/bin/agent_exec.rs src/bin/agent_exec.rs
+COPY src/lib.rs src/error.rs src/result_parse.rs src/serde_contract.rs src/stream_contract.rs src/
+COPY src/container_image.rs src/container_image.rs
+COPY src/bin/event_certifier.rs src/bin/event_certifier.rs
+COPY config/stack.lock.json config/agent-runtime-contract-v1.json config/
+COPY docker/config/settings.json docker/config/settings.json
 RUN test "$(rustc --version)" = 'rustc 1.95.0 (59807616e 2026-04-14)' \
- && test "$(sha256sum src/bin/agent_exec.rs | cut -d' ' -f1)" = \
-      "${AGENT_EXEC_SOURCE_SHA256}" \
- && cargo test --locked --bin agent_exec \
- && cargo build --locked --release --bin agent_exec
+ && test "$(sha256sum src/bin/agent_exec.rs | cut -d' ' -f1)" = "${AGENT_EXEC_SOURCE_SHA256}" \
+ && cargo test --locked --package runtime_contract \
+ && cargo test --locked --lib --bin agent_exec --bin event_certifier \
+ && cargo build --locked --release --bin agent_exec --bin event_certifier
 
 FROM agent-os AS agent
 ARG AGENT_EXEC_SOURCE_SHA256
@@ -216,6 +233,7 @@ COPY --from=qwen-build /src/node_modules /opt/qwen-code/node_modules
 COPY --from=qwen-build /src/package.json /opt/qwen-code/package.json
 COPY --from=qwen-build /src/LICENSE /opt/qwen-code/LICENSE
 COPY --from=agent-runtime-build /build/target/release/agent_exec /opt/agent/agent_exec
+COPY --from=agent-runtime-build /build/target/release/event_certifier /opt/agent/event_certifier
 RUN test "$(node /opt/qwen-code/dist/cli.js --version)" = '0.21.12' \
  && test -n "${AGENT_EXEC_SOURCE_SHA256}" \
  && test "${AGENT_EXEC_SANDBOX}" = \
@@ -293,10 +311,11 @@ RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_S
  && chmod -R a-w /opt/agent
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 COPY --chown=1000:1000 docker/scripts/check_headless_cli.py /tmp/check_headless_cli.py
+RUN install -d -o 1000 -g 1000 -m 0700 /workspace
 USER 1000:1000
 RUN PYTHONPATH=/opt/agent python3 /tmp/check_headless_cli.py \
       /opt/qwen-code/dist/cli.js /opt/agent/settings.json \
-      /usr/share/agent-service/agent_exec.rs \
+      /usr/share/agent-service/agent_exec.rs /opt/agent/event_certifier \
  && rm /tmp/check_headless_cli.py
 WORKDIR /workspace
 ENTRYPOINT ["/opt/agent/run_agent.sh"]
@@ -308,16 +327,33 @@ ARG CAPTURE_SOURCE_SHA256
 ARG RELAY_SOURCE_SHA256
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
+COPY .dockerignore ./
+COPY build.rs ./
+COPY protocol protocol
+COPY docker/Dockerfile docker/Dockerfile
+COPY scripts/generate-protocol-bindings.mjs scripts/generate-protocol-bindings.mjs
 COPY config/stack.lock.json config/stack.lock.json
+COPY config/agent-runtime-contract-v1.json config/agent-runtime-contract-v1.json
+COPY docker/config/settings.json docker/config/settings.json
 COPY config/broker-policy-v1.json config/broker-policy-v1.json
 COPY src src
+COPY docker/tests docker/tests
 RUN test "$(rustc --version)" = 'rustc 1.95.0 (59807616e 2026-04-14)' \
  && test "$(sha256sum config/broker-policy-v1.json | cut -d' ' -f1)" = "${BROKER_POLICY_SHA256}" \
  && test "$(sha256sum src/bin/docker_broker.rs | cut -d' ' -f1)" = "${BROKER_SOURCE_SHA256}" \
  && test "$(sha256sum src/bin/session_capture.rs | cut -d' ' -f1)" = "${CAPTURE_SOURCE_SHA256}" \
  && test "$(sha256sum src/bin/fixed_relay.rs | cut -d' ' -f1)" = "${RELAY_SOURCE_SHA256}" \
- && cargo test --locked \
+ && cargo test --locked --workspace \
  && cargo build --locked --release
+
+FROM service-build AS composition-gate-build
+COPY --from=node-pin /usr/local/bin/node /node
+RUN cargo test --locked --release --no-run --message-format=json \
+      --bin agent_service --bin docker_broker --bin session_capture > /gate-compiler.jsonl \
+ && /node /build/docker/tests/export_composition_artifacts.mjs
+
+FROM scratch AS composition-gate-artifacts
+COPY --from=composition-gate-build /gate-artifacts/ /
 
 FROM scratch AS relay
 ARG RELAY_SOURCE_SHA256

@@ -31,7 +31,23 @@ from .generated_qwen_code_stage import (
 )
 
 
-def build_patchset() -> PatchSet:
+def build_patchset(artifact_root: Path) -> PatchSet:
+    # Reviewed transformations contain authored Qwen source. Derived validators
+    # are generated from the canonical protocol using the pinned dependencies
+    # before the Qwen build; the publisher checks the complete output.
+    vectors = {
+        name: (artifact_root / f"protocol/test-vectors/{name}.json").read_bytes()
+        for name in ("goal-state-v1", "partial-stream-v1")
+    }
+
+    def validate_bound_final(state: dict[str, str]) -> None:
+        validate_final(state)
+        try:
+            for name, contents in vectors.items():
+                if state[f"packages/core/src/utils/__fixtures__/{name}.json"].encode("utf-8") != contents:
+                    raise PatchRefusedError(f"shared stream test vectors drifted: {name}")
+        except (KeyError, TypeError, ValueError) as error:
+            raise PatchRefusedError(f"shared stream test vectors are invalid: {error}") from error
     generated_names = tuple(stage["name"] for stage in GENERATED_STAGES)
     contract_names = tuple(CONTRACTS)
     if set(generated_names) != set(contract_names):
@@ -65,7 +81,7 @@ def build_patchset() -> PatchSet:
         identity_files=IDENTITY_FILES,
         stages=tuple(stages),
         final_files=FINAL_FILES,
-        validate_final=validate_final,
+        validate_final=validate_bound_final,
     )
 
 
@@ -92,7 +108,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        patchset = build_patchset()
+        patchset = build_patchset(args.artifact_root)
         result = SourcePatchTransaction(
             args.source_root,
             args.artifact_root,

@@ -212,13 +212,7 @@ pub struct AgentResult {
     pub subagent_error_count: u64,
 }
 
-pub(crate) fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<T>::deserialize(deserializer)
-}
+pub(crate) use agent_service::serde_contract::required_nullable;
 
 impl SessionBody {
     /// Enforce the same evidence contract before publication and after every
@@ -963,13 +957,18 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
             })
             .collect()
     };
-    let expected_root = BTreeSet::from([
+    let archive_present =
+        path_entry_exists(&paths.input_archive(), "stat uncommitted input archive")?;
+    let mut expected_root = BTreeSet::from([
         "artifacts".to_string(),
         "control".to_string(),
         "output".to_string(),
         "staged".to_string(),
         "streams".to_string(),
     ]);
+    if archive_present {
+        expected_root.insert("input-archive.zip".into());
+    }
     if names(&paths.root)? != expected_root {
         return Err(ServiceError::Internal(format!(
             "uncommitted state root {} contains entries outside the exact pre-commit layout",
@@ -1023,6 +1022,77 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
                 acceptance.session_id
             )));
         }
+    }
+    match acceptance {
+        Some(record) => validate_uncommitted_archive(
+            &paths.input_archive(),
+            record.archive_bytes,
+            &record.archive_sha256,
+        )?,
+        None if archive_present => {
+            return Err(ServiceError::Internal(
+                "uncommitted archive has no retained commitment; refusing destructive cleanup"
+                    .into(),
+            ))
+        }
+        None => {}
+    }
+    Ok(())
+}
+
+fn validate_uncommitted_archive(path: &Path, length: u64, sha256: &str) -> ServiceResult<()> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|cause| {
+            ServiceError::Internal(io_msg("open committed unaccepted archive", path, &cause))
+        })?;
+    let metadata = file.metadata().map_err(|cause| {
+        ServiceError::Internal(io_msg("fstat unaccepted archive", path, &cause))
+    })?;
+    if !metadata.is_file()
+        || metadata.uid() != 1000
+        || metadata.gid() != 1000
+        || metadata.mode() & 0o777 != 0o600
+        || metadata.len() != length
+        || length > crate::config::MAX_ARCHIVE_BYTES
+    {
+        return Err(ServiceError::Internal(format!("uncommitted archive {} has unsafe type/owner/mode/size or differs from its committed length", path.display())));
+    }
+    let mut digest = Sha256::new();
+    let mut block = [0u8; 65536];
+    let mut observed = 0u64;
+    loop {
+        let count = file.read(&mut block).map_err(|cause| {
+            ServiceError::Internal(io_msg("hash unaccepted archive", path, &cause))
+        })?;
+        if count == 0 {
+            break;
+        }
+        observed = observed.checked_add(count as u64).ok_or_else(|| {
+            ServiceError::Internal("unaccepted archive byte count overflowed".into())
+        })?;
+        if observed > length {
+            return Err(ServiceError::Internal(
+                "uncommitted archive grew beyond its committed length".into(),
+            ));
+        }
+        digest.update(&block[..count]);
+    }
+    let actual = digest
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    if observed != length || actual != sha256 {
+        return Err(ServiceError::Internal(format!(
+            "uncommitted archive {} differs from its retained byte/hash commitment",
+            path.display()
+        )));
     }
     Ok(())
 }
@@ -3161,9 +3231,19 @@ pub(crate) async fn resume_prepared_terminal_transaction(
         )));
     }
     let temporary = result_dir.join("finished.json.tmp");
-    let mut body = read_terminal_body_file(&temporary, session_id, "prepared terminal draft")?;
+    let (mut body, draft) =
+        open_terminal_body_file(&temporary, session_id, "prepared terminal draft")?;
     validate_terminal_resource(cfg, session_id, &body)?;
     crate::api::validate_terminal_storage(&result_dir, &body, 1000, 1000)?;
+    // A parseable crash-left file may precede either prepare durability
+    // barrier. Re-establish both on the exact validated file before cleanup.
+    terminal_io(&temporary, "resume terminal: sync prepared draft", || {
+        draft.sync_all()
+    })?;
+    sync_directory(
+        &result_dir,
+        "resume terminal: sync prepared result directory",
+    )?;
     finish_prepared_terminal_transaction(cfg, &mut body).await
 }
 
@@ -3414,15 +3494,10 @@ async fn prepare_terminal(results_dir: &Path, body: &SessionBody) -> ServiceResu
         .map_err(|error| {
             ServiceError::Internal(io_msg("prepare_terminal: create tmp", &tmp_path, &error))
         })?;
-    file.write_all(&bytes)
-        .and_then(|_| file.sync_all())
-        .map_err(|error| {
-            ServiceError::Internal(io_msg(
-                "prepare_terminal: write/sync tmp",
-                &tmp_path,
-                &error,
-            ))
-        })?;
+    terminal_io(&tmp_path, "prepare_terminal: write tmp", || {
+        file.write_all(&bytes)
+    })?;
+    terminal_io(&tmp_path, "prepare_terminal: sync tmp", || file.sync_all())?;
     sync_directory(&dir, "prepare_terminal: sync result directory")?;
     Ok(())
 }
@@ -3554,21 +3629,17 @@ async fn commit_prepared_terminal(results_dir: &Path, session_id: &str) -> Servi
             )));
         }
     }
-    std::fs::hard_link(&tmp_path, &final_path).map_err(|error| {
-        ServiceError::Internal(format!(
-            "commit_prepared_terminal({session_id}): no-clobber publish {} -> {}: {error}",
-            tmp_path.display(),
-            final_path.display()
-        ))
-    })?;
+    terminal_io(
+        &final_path,
+        "commit_prepared_terminal: no-clobber publish",
+        || std::fs::hard_link(&tmp_path, &final_path),
+    )?;
     sync_directory(&dir, "commit_prepared_terminal: sync published final")?;
-    std::fs::remove_file(&tmp_path).map_err(|error| {
-        ServiceError::Internal(io_msg(
-            "commit_prepared_terminal: remove published tmp link",
-            &tmp_path,
-            &error,
-        ))
-    })?;
+    terminal_io(
+        &tmp_path,
+        "commit_prepared_terminal: remove published tmp link",
+        || std::fs::remove_file(&tmp_path),
+    )?;
     sync_directory(&dir, "commit_prepared_terminal: sync tmp-link removal")
 }
 
@@ -3627,7 +3698,14 @@ fn remove_terminalized_state(
     let parent = state_dir.join("sessions");
     let metadata = match std::fs::symlink_metadata(&path) {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // A previous removal may have become visible before its parent
+            // sync failed. Visible absence does not settle that barrier.
+            return match sync_directory(&parent, "terminalization: sync absent raw session tree") {
+                Ok(()) => Vec::new(),
+                Err(error) => vec![error.to_string()],
+            };
+        }
         Err(error) => {
             return vec![io_msg(
                 "terminalization: stat raw session tree",
@@ -3652,12 +3730,10 @@ fn remove_terminalized_state(
     // this exact, validated, service-owned tree owner-writable so the recursive
     // removal below can unlink their contents instead of stranding the tree.
     grant_owner_write_recursively(&path);
-    if let Err(error) = std::fs::remove_dir_all(&path) {
-        return vec![io_msg(
-            "terminalization: remove raw session tree",
-            &path,
-            &error,
-        )];
+    if let Err(error) = terminal_io(&path, "terminalization: remove raw session tree", || {
+        std::fs::remove_dir_all(&path)
+    }) {
+        return vec![error.to_string()];
     }
     if let Err(error) = sync_directory(&parent, "terminalization: sync sessions directory") {
         return vec![error.to_string()];
@@ -3666,10 +3742,30 @@ fn remove_terminalized_state(
 }
 
 fn sync_directory(path: &std::path::Path, context: &str) -> ServiceResult<()> {
-    std::fs::File::open(path)
-        .and_then(|directory| directory.sync_all())
-        .map_err(|error| ServiceError::Internal(io_msg(context, path, &error)))
+    terminal_io(path, context, || {
+        std::fs::File::open(path).and_then(|directory| directory.sync_all())
+    })
 }
+
+pub(crate) fn terminal_io<T>(
+    path: &Path,
+    context: &str,
+    operation: impl FnOnce() -> std::io::Result<T>,
+) -> ServiceResult<T> {
+    #[cfg(test)]
+    terminal_io_test::point(path, context, terminal_io_test::Phase::Before)
+        .map_err(|error| ServiceError::Internal(io_msg(context, path, &error)))?;
+    let value =
+        operation().map_err(|error| ServiceError::Internal(io_msg(context, path, &error)))?;
+    #[cfg(test)]
+    terminal_io_test::point(path, context, terminal_io_test::Phase::After)
+        .map_err(|error| ServiceError::Internal(io_msg(context, path, &error)))?;
+    Ok(value)
+}
+
+#[cfg(test)]
+#[path = "../docker/tests/terminal_io_faults.rs"]
+pub(crate) mod terminal_io_test;
 
 fn validate_delete_state_marker(
     state_root: &std::path::Path,
@@ -3863,7 +3959,8 @@ async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionB
         )));
     }
     let path = finished_json_path(cfg, session_id);
-    let body = read_terminal_body_file(&path, session_id, "committed terminal");
+    let body =
+        open_terminal_body_file(&path, session_id, "committed terminal").map(|(body, _file)| body);
     if matches!(&body, Err(ServiceError::UninterpretedTerminalRecord(_))) {
         return body;
     }
@@ -3891,11 +3988,11 @@ async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionB
     Ok(body)
 }
 
-fn read_terminal_body_file(
+fn open_terminal_body_file(
     path: &Path,
     session_id: &str,
     role: &str,
-) -> ServiceResult<SessionBody> {
+) -> ServiceResult<(SessionBody, std::fs::File)> {
     use std::io::Read;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
@@ -3955,7 +4052,10 @@ fn read_terminal_body_file(
             bytes.len()
         )));
     }
-    interpret_terminal_record(&bytes, session_id, path)?.into_body()
+    Ok((
+        interpret_terminal_record(&bytes, session_id, path)?.into_body()?,
+        file,
+    ))
 }
 
 fn validate_terminal_state_storage(cfg: &Config, body: &SessionBody) -> ServiceResult<()> {
@@ -4218,6 +4318,108 @@ mod tests {
         );
     }
 
+    #[test]
+    fn recovery_disposes_only_archives_matching_retained_acceptance() {
+        use sha2::{Digest, Sha256};
+        for (case, expected) in [
+            ("valid", None),
+            ("changed", Some("byte/hash commitment")),
+            ("short", Some("committed length")),
+            ("missing", Some("open committed unaccepted archive")),
+            ("symlink", Some("open committed unaccepted archive")),
+            ("mode", Some("unsafe type/owner/mode/size")),
+            ("no_commitment", Some("no retained commitment")),
+            ("effect", Some("nonempty; refusing destructive cleanup")),
+        ] {
+            let tree = TestTree::new("uncommitted-archive");
+            let state = tree.0.join("state");
+            let results = tree.0.join("results");
+            std::fs::create_dir_all(state.join("sessions")).unwrap();
+            std::fs::create_dir(&results).unwrap();
+            let cfg = test_config(state.clone(), results.clone());
+            let session_id = "s-3434343434343434343434343434343434343434343434343434343434343434";
+            let paths = SessionPaths::new(&state, session_id);
+            let archive = b"original archive";
+            let acceptance = AcceptanceRecord {
+                schema_version: 2,
+                session_id: session_id.into(),
+                accepted_at_unix: 1,
+                archive_bytes: archive.len() as u64,
+                archive_sha256: Sha256::digest(archive)
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect(),
+                prompt: "retained request".into(),
+                max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            };
+            paths.create_dirs().unwrap();
+            paths.write_prompt(&acceptance.prompt).unwrap();
+            paths
+                .write_turn_budget(acceptance.max_session_turns)
+                .unwrap();
+            let input = paths.input_archive();
+            private_write(&input, archive);
+            let result_dir = results.join(session_id);
+            std::fs::create_dir(&result_dir).unwrap();
+            std::fs::set_permissions(&result_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let progress = result_dir.join("progress.json");
+            crate::progress::ProgressReporter::create(
+                &progress,
+                session_id,
+                "fixture before acceptance publication",
+            )
+            .unwrap();
+            let draft = result_dir.join("accepted.json.next");
+            if case != "no_commitment" {
+                private_write(&draft, &serde_json::to_vec(&acceptance).unwrap());
+                make_service_owned(&draft);
+            }
+            for path in [
+                &paths.root,
+                &paths.staged,
+                &paths.artifacts,
+                &paths.control,
+                &paths.streams,
+                &paths.output,
+                &result_dir,
+                &input,
+                &paths.control.join("prompt.txt"),
+                &paths.control.join("turn-budget.json"),
+            ] {
+                make_service_owned(path);
+            }
+            match case {
+                "changed" => std::fs::write(&input, b"modified archive").unwrap(),
+                "short" => std::fs::write(&input, b"short").unwrap(),
+                "missing" => std::fs::remove_file(&input).unwrap(),
+                "symlink" => {
+                    std::fs::remove_file(&input).unwrap();
+                    std::os::unix::fs::symlink(&progress, &input).unwrap();
+                }
+                "mode" => std::fs::set_permissions(&input, std::fs::Permissions::from_mode(0o644))
+                    .unwrap(),
+                "effect" => private_write(&paths.staged.join("retained-effect"), b"must survive"),
+                _ => {}
+            }
+            assert!(super::is_exact_uncommitted_acceptance(&result_dir, session_id).unwrap());
+            let progress_bytes = std::fs::read(&progress).unwrap();
+            let outcome = super::remove_exact_uncommitted_acceptance(&cfg, &result_dir, session_id);
+            if let Some(expected) = expected {
+                let error = outcome.unwrap_err();
+                assert!(error.to_string().contains(expected), "{case}: {error}");
+                assert!(paths.root.exists(), "{case}");
+                assert_eq!(std::fs::read(&progress).unwrap(), progress_bytes, "{case}");
+                if case != "missing" {
+                    assert!(std::fs::symlink_metadata(&input).is_ok(), "{case}");
+                }
+            } else {
+                outcome.unwrap();
+                assert!(!paths.root.exists());
+                assert!(!result_dir.exists());
+            }
+        }
+    }
+
     fn encoded_cancel_intent(session_id: &str, requested_at_unix_ms: u64) -> Vec<u8> {
         let mut bytes = serde_json::to_vec_pretty(&CancelIntent {
             schema_version: 1,
@@ -4232,6 +4434,7 @@ mod tests {
     fn event_init() -> String {
         serde_json::json!({
             "type": "system", "subtype": "init", "uuid": "init", "session_id": "a",
+            "stream_contract_sha256": agent_service::stream_contract::STREAM_CONTRACT_SHA256,
             "cwd": "/workspace", "tools": ["agent", "edit", "glob", "grep_search", "list_directory", "notebook_edit", "read_file", "run_shell_command", "todo_write", "write_file"],
             "mcp_servers": [], "model": "qwen3.8-27b-nvfp4-k8v4", "permission_mode": "yolo", "slash_commands": [], "qwen_code_version": "0.21.12", "agents": ["Explore", "general-purpose"]
         }).to_string() + "\n"
@@ -5032,87 +5235,315 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn restart_resumes_prepared_terminal_cleanup_before_publication() {
-        let tree = TestTree::new("resume-prepared-terminal");
-        let state = tree.0.join("state");
-        let sessions = state.join("sessions");
-        let results = tree.0.join("results");
-        std::fs::create_dir_all(&sessions).expect("create sessions parent");
-        std::fs::create_dir(&results).expect("create results root");
-        let session_id = "s-67676767676767676767676767676767";
-        let paths = SessionPaths::new(&state, session_id);
-        let acceptance = AcceptanceRecord {
-            schema_version: 2,
-            session_id: session_id.to_string(),
-            accepted_at_unix: 1,
-            archive_bytes: 24,
-            archive_sha256: "2".repeat(64),
-            prompt: "restart terminal fixture".to_string(),
-            max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
-        };
-        let spool_dir = tree.0.join("spool-fixture");
-        std::fs::create_dir(&spool_dir).expect("create spool fixture dir");
-        let spool_file = spool_dir.join("archive.zip");
-        std::fs::write(&spool_file, b"fixture-archive-payload!").expect("write spool fixture");
-        let preparation = prepare_durable_acceptance(&results, &paths, &acceptance, &spool_file)
-            .expect("prepare durable accepted fixture");
-        let terminal_event = preparation
-            .progress
-            .publish(
-                ProgressPhase::Terminal,
-                "terminal fixture is prepared for ordered restart publication",
-                Default::default(),
-            )
-            .expect("publish terminal progress fixture");
-        let mut terminal = body(session_id);
-        terminal.prompt_preview = super::preview(&acceptance.prompt);
-        apply_progress(&mut terminal, &terminal_event);
-        terminal.progress_events = preparation
-            .progress
-            .events()
-            .expect("read exact progress fixture");
-        let archive = results.join(session_id).join("bundle.tar.zst");
-        private_write(&archive, b"accepted restart bundle");
-        terminal.terminal_mut().bundle = Some(crate::bundle::BundleStats {
-            sha256: crate::bundle::hash_file_sha256(&archive).expect("hash restart bundle fixture"),
-            compressed_bytes: b"accepted restart bundle".len() as u64,
-            uncompressed_bytes: 100,
-            file_count: 2,
-            artifacts_file_count: 0,
-        });
-        prepare_terminal(&results, &terminal)
-            .await
-            .expect("prepare private terminal fixture");
-
-        for path in [
-            &paths.root,
-            &paths.staged,
-            &paths.artifacts,
-            &paths.control,
-            &paths.streams,
-            &paths.output,
-            &paths.control.join("prompt.txt"),
-            &paths.control.join("turn-budget.json"),
-            &results.join(session_id),
-            &results.join(session_id).join("accepted.json"),
-            &results.join(session_id).join("progress.json"),
-            &archive,
-            &results.join(session_id).join("finished.json.tmp"),
+    async fn linked_publication_reconciliation_requires_durability_after_every_failed_restart() {
+        use super::terminal_io_test::Site;
+        for initial in [
+            Site::PublishedDirectorySync,
+            Site::TemporaryUnlinkDirectorySync,
         ] {
-            make_service_owned(path);
+            let tree = TestTree::new("linked-publication-sync");
+            let results = tree.0.join("results");
+            std::fs::create_dir(&results).unwrap();
+            let control = tree.0.join("control");
+            std::fs::create_dir(&control).unwrap();
+            let session_id = "s-78787878787878787878787878787878";
+            let terminal = body(session_id);
+            let arm = |site: Option<Site>| {
+                let points: Vec<_> = site
+                    .into_iter()
+                    .map(|site| {
+                        serde_json::json!({
+                            "site": site, "phase": "before",
+                        })
+                    })
+                    .collect();
+                std::fs::write(
+                    control.join("terminal-io-plan.json"),
+                    serde_json::to_vec(&serde_json::json!({
+                        "v": 1, "id": uuid::Uuid::new_v4(), "points": points,
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+            };
+            arm(None);
+            let _hooks = super::terminal_io_test::install(&tree.0, &control);
+            prepare_terminal(&results, &terminal).await.unwrap();
+            let directory = results.join(session_id);
+            let temporary = directory.join("finished.json.tmp");
+            let finished = directory.join("finished.json");
+            let original = std::fs::read(&temporary).unwrap();
+            let reconcile = || {
+                crate::api::committed_terminal_for_sweep(
+                    &directory,
+                    session_id,
+                    unsafe { libc::geteuid() },
+                    unsafe { libc::getegid() },
+                )
+            };
+            arm(Some(initial));
+            assert!(commit_prepared_terminal(&results, session_id)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("sync"));
+            assert_eq!(temporary.exists(), initial == Site::PublishedDirectorySync);
+            if temporary.exists() {
+                arm(Some(Site::ReconcileDirectorySync));
+                assert!(reconcile()
+                    .unwrap_err()
+                    .to_string()
+                    .contains("sync committed publication"));
+                assert!(
+                    temporary.exists(),
+                    "failed publication sync must preserve the prepare link"
+                );
+                arm(Some(Site::ReconcileUnlinkDirectorySync));
+                assert!(reconcile()
+                    .unwrap_err()
+                    .to_string()
+                    .contains("linked-publication recovery"));
+                assert!(
+                    !temporary.exists(),
+                    "actual unlink must precede its injected sync failure"
+                );
+            }
+            for site in [Site::ReconcileFileSync, Site::ReconcileDirectorySync] {
+                arm(Some(site));
+                assert!(reconcile()
+                    .unwrap_err()
+                    .to_string()
+                    .contains("terminal sweep: sync committed"));
+                assert_eq!(std::fs::read(&finished).unwrap(), original);
+                assert!(!temporary.exists());
+            }
+            arm(None);
+            assert!(matches!(
+                reconcile().unwrap(),
+                Some(super::TerminalRecord::Current(_))
+            ));
+            assert_eq!(std::fs::read(&finished).unwrap(), original);
         }
+    }
 
-        let cfg = test_config(state, results.clone());
-        resume_prepared_terminal_transaction(&cfg, session_id)
-            .await
-            .expect("resume cleanup before publishing the terminal");
-        assert!(!paths.root.exists());
-        assert!(results.join(session_id).join("finished.json").is_file());
-        assert!(!results.join(session_id).join("finished.json.tmp").exists());
-        let recovered = read_terminal(&cfg, session_id)
-            .await
-            .expect("read exact recovered terminal");
-        assert_eq!(recovered.progress_events, terminal.progress_events);
+    #[tokio::test]
+    async fn terminal_restart_reestablishes_durability_before_disposal() {
+        for case in [
+            "ordinary",
+            "draft_sync",
+            "draft_directory_sync",
+            "absent_raw_sync",
+        ] {
+            let tree = TestTree::new("resume-prepared-terminal");
+            let state = tree.0.join("state");
+            let sessions = state.join("sessions");
+            let results = tree.0.join("results");
+            std::fs::create_dir_all(&sessions).expect("create sessions parent");
+            std::fs::create_dir(&results).expect("create results root");
+            let session_id = "s-6767676767676767676767676767676767676767676767676767676767676767";
+            let paths = SessionPaths::new(&state, session_id);
+            let acceptance = AcceptanceRecord {
+                schema_version: 2,
+                session_id: session_id.to_string(),
+                accepted_at_unix: 1,
+                archive_bytes: 24,
+                archive_sha256: "2".repeat(64),
+                prompt: "restart terminal fixture".to_string(),
+                max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            };
+            let spool_dir = tree.0.join("spool-fixture");
+            std::fs::create_dir(&spool_dir).expect("create spool fixture dir");
+            let spool_file = spool_dir.join("archive.zip");
+            std::fs::write(&spool_file, b"fixture-archive-payload!").expect("write spool fixture");
+            let preparation =
+                prepare_durable_acceptance(&results, &paths, &acceptance, &spool_file)
+                    .expect("prepare durable accepted fixture");
+            let terminal_event = preparation
+                .progress
+                .publish(
+                    ProgressPhase::Terminal,
+                    "terminal fixture is prepared for ordered restart publication",
+                    Default::default(),
+                )
+                .expect("publish terminal progress fixture");
+            let mut terminal = body(session_id);
+            terminal.prompt_preview = super::preview(&acceptance.prompt);
+            apply_progress(&mut terminal, &terminal_event);
+            terminal.progress_events = preparation
+                .progress
+                .events()
+                .expect("read exact progress fixture");
+            let archive = results.join(session_id).join("bundle.tar.zst");
+            private_write(&archive, b"accepted restart bundle");
+            terminal.terminal_mut().bundle = Some(crate::bundle::BundleStats {
+                sha256: crate::bundle::hash_file_sha256(&archive)
+                    .expect("hash restart bundle fixture"),
+                compressed_bytes: b"accepted restart bundle".len() as u64,
+                uncompressed_bytes: 100,
+                file_count: 2,
+                artifacts_file_count: 0,
+            });
+            let hook_control = tree.0.join("io-control");
+            std::fs::create_dir(&hook_control).unwrap();
+            let plan_path = hook_control.join("terminal-io-plan.json");
+            let set_fault =
+                |context: Option<&str>| {
+                    let points: Vec<_> = context
+                    .into_iter()
+                    .map(|context| serde_json::json!({
+                        "site": super::terminal_io_test::Site::from_context(context).unwrap(),
+                        "phase": "before",
+                    }))
+                    .collect();
+                    std::fs::write(
+                        &plan_path,
+                        serde_json::to_vec(&serde_json::json!({
+                            "v": 1, "id": uuid::Uuid::new_v4(), "points": points,
+                        }))
+                        .unwrap(),
+                    )
+                    .unwrap();
+                };
+            let initial_fault = match case {
+                "draft_sync" => Some("prepare_terminal: sync tmp"),
+                "draft_directory_sync" => Some("prepare_terminal: sync result directory"),
+                _ => None,
+            };
+            set_fault(initial_fault);
+            let _hooks = super::terminal_io_test::install(&tree.0, &hook_control);
+            let prepared = prepare_terminal(&results, &terminal).await;
+            if let Some(context) = initial_fault {
+                assert!(prepared.unwrap_err().to_string().contains(context));
+                let draft =
+                    std::fs::read(results.join(session_id).join("finished.json.tmp")).unwrap();
+                serde_json::from_slice::<SessionBody>(&draft)
+                    .expect("complete parseable draft after failed prepare sync");
+                assert!(paths.root.is_dir());
+                assert!(!results.join(session_id).join("finished.json").exists());
+            } else {
+                prepared.expect("prepare private terminal fixture");
+            }
+
+            for path in [
+                &paths.root,
+                &paths.staged,
+                &paths.artifacts,
+                &paths.control,
+                &paths.streams,
+                &paths.output,
+                &paths.control.join("prompt.txt"),
+                &paths.control.join("turn-budget.json"),
+                &results.join(session_id),
+                &results.join(session_id).join("accepted.json"),
+                &archive,
+                &results.join(session_id).join("finished.json.tmp"),
+            ] {
+                make_service_owned(path);
+            }
+            // Progress validates its creating process identity, unlike the
+            // service-owned acceptance/artifact readers. Keep that identity
+            // when this unit fixture runs as root in the build stage.
+
+            let cfg = test_config(state, results.clone());
+            if case == "absent_raw_sync" {
+                set_fault(Some("terminalization: sync sessions directory"));
+                let error = super::finish_prepared_terminal_transaction(&cfg, &mut terminal)
+                    .await
+                    .expect_err("visible removal without durable parent must stay private");
+                assert!(error.to_string().contains("not durably proved"));
+                assert!(!paths.root.exists());
+                assert!(results.join(session_id).join("finished.json.tmp").is_file());
+                assert!(!results.join(session_id).join("finished.json").exists());
+            }
+            let resumed_fault = match case {
+                "draft_sync" => Some("resume terminal: sync prepared draft"),
+                "draft_directory_sync" => Some("resume terminal: sync prepared result directory"),
+                "absent_raw_sync" => Some("terminalization: sync absent raw session tree"),
+                _ => None,
+            };
+            if let Some(context) = resumed_fault {
+                set_fault(Some(context));
+                let error = resume_prepared_terminal_transaction(&cfg, session_id)
+                    .await
+                    .expect_err("recovery must establish its missing durability barrier");
+                assert!(
+                    error.to_string().contains(context)
+                        || (case == "absent_raw_sync"
+                            && error.to_string().contains("not durably proved"))
+                );
+                assert_eq!(paths.root.is_dir(), case != "absent_raw_sync");
+                assert!(results.join(session_id).join("finished.json.tmp").is_file());
+                assert!(!results.join(session_id).join("finished.json").exists());
+            }
+            set_fault(None);
+            resume_prepared_terminal_transaction(&cfg, session_id)
+                .await
+                .expect("resume cleanup before publishing the terminal");
+            assert!(!paths.root.exists());
+            assert!(results.join(session_id).join("finished.json").is_file());
+            assert!(!results.join(session_id).join("finished.json.tmp").exists());
+            let recovered = read_terminal(&cfg, session_id)
+                .await
+                .expect("read exact recovered terminal");
+            assert_eq!(recovered.progress_events, terminal.progress_events);
+            let mut events: Vec<serde_json::Value> = std::fs::read_dir(&hook_control)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .filter(|path| path.file_name().unwrap() != "terminal-io-plan.json")
+                .map(|path| serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap())
+                .collect();
+            events.sort_by_key(|event| event["sequence"].as_u64().unwrap());
+            let injected: Vec<_> = events
+                .iter()
+                .filter(|event| !event["injected_errno"].is_null())
+                .collect();
+            assert_eq!(injected.len(), if case == "ordinary" { 0 } else { 2 });
+            let plans: std::collections::BTreeSet<_> = injected
+                .iter()
+                .map(|event| event["plan_id"].as_str().unwrap())
+                .collect();
+            assert_eq!(
+                plans.len(),
+                injected.len(),
+                "each expected fault plan must be consumed exactly once"
+            );
+            let last_success = |context: &str| {
+                events
+                    .iter()
+                    .rposition(|event| {
+                        event["context"] == context
+                            && event["phase"] == "after"
+                            && event["injected_errno"].is_null()
+                    })
+                    .unwrap()
+            };
+            let publication = events
+                .iter()
+                .position(|event| {
+                    event["context"] == "commit_prepared_terminal: no-clobber publish"
+                        && event["phase"] == "before"
+                })
+                .unwrap();
+            if case == "absent_raw_sync" {
+                assert!(
+                    last_success("terminalization: sync absent raw session tree") < publication
+                );
+            } else {
+                let removal = events
+                    .iter()
+                    .position(|event| {
+                        event["context"] == "terminalization: remove raw session tree"
+                            && event["phase"] == "before"
+                    })
+                    .unwrap();
+                assert!(
+                    last_success("resume terminal: sync prepared draft")
+                        < last_success("resume terminal: sync prepared result directory")
+                );
+                assert!(last_success("resume terminal: sync prepared result directory") < removal);
+                assert!(last_success("terminalization: sync sessions directory") < publication);
+            }
+        }
     }
 
     #[test]

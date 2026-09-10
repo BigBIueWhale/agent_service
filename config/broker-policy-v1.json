@@ -5,8 +5,8 @@
   "broker_container_name": "qwen38-docker-broker",
   "broker": {
     "image_tag": "qwen38-docker-broker:1.1.0",
-    "memory": "64m",
-    "memory_swap": "64m",
+    "memory": "128m",
+    "memory_swap": "128m",
     "pids_limit": 64,
     "uid": 1000,
     "gid": 984,
@@ -25,7 +25,7 @@
   "model_ingress_container_name": "qwen38-model-ingress",
   "agent": {
     "image_tag": "qwen38-agent:0.21.12-b965d5f8-v9",
-    "image_id": "sha256:72638cb26c58ec265eb3cb80403df82ec70335db344a7c272a09c2736d21300d",
+    "image_id": "sha256:08c200e3ef12a4df4c283a32eca9604b57c3cf94bea7a94b52f515c0da78bfe8",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
@@ -36,7 +36,7 @@
   },
   "relay": {
     "image_tag": "qwen38-fixed-relay:1.0.0",
-    "image_id": "sha256:5153a46bc03fa920b0d09000eca1848af255010bda99cc50e8a6110ebcd02690",
+    "image_id": "sha256:0e1c8be9644e7a5e09b1fbdf697be22c11b6c106b9cd167d3f046f78f9aa3657",
     "sandbox": "landlock-net-v4+seccomp-socket-v2",
     "memory": "32m",
     "memory_swap": "32m",
@@ -45,7 +45,7 @@
   },
   "capture": {
     "image_tag": "qwen38-session-capture:1.0.0",
-    "image_id": "sha256:2d38ea4ae0f33894740a1a067c7fa8e3e3d864ff58ef439d6d432fd4739b9aef",
+    "image_id": "sha256:b4dc02670833c08f61196495c88f229c9ea20ac1d3f28c2b6cc4d5d0718a7f89",
     "capture_id": "unix-stream-capture-v1",
     "memory": "32m",
     "memory_swap": "32m",

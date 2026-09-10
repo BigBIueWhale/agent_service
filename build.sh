@@ -241,6 +241,30 @@ docker load --input "${SERVICE_ARCHIVE}"
 rm -f -- "${SERVICE_ARCHIVE}"
 
 require_service_image_contract
+printf 'Qualifying final-image execution, capture, and durable service publication...\n'
+docker buildx build \
+  --builder default \
+  --platform linux/amd64 \
+  --provenance=false \
+  --pull=false \
+  --target composition-gate-artifacts \
+  --output "type=local,dest=${BUILD_EXPORT_DIR}/composition-gate" \
+  --build-arg "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" \
+  --build-arg "NODE_IMAGE=${NODE_IMAGE}" \
+  --build-arg "RUST_IMAGE=${RUST_IMAGE}" \
+  --build-arg "RELAY_SOURCE_SHA256=${RELAY_SOURCE_SHA256}" \
+  --build-arg "CAPTURE_SOURCE_SHA256=${CAPTURE_SOURCE_SHA256}" \
+  --build-arg "BROKER_POLICY_SHA256=${BROKER_POLICY_SHA256}" \
+  --build-arg "BROKER_SOURCE_SHA256=${BROKER_SOURCE_SHA256}" \
+  --file "${PROJECT_DIR}/docker/Dockerfile" \
+  "${PROJECT_DIR}"
+python3 "${PROJECT_DIR}/docker/tests/check_composition.py" \
+  --artifacts "${BUILD_EXPORT_DIR}/composition-gate" \
+  --agent-image "$(image_id "${AGENT_IMAGE}")" \
+  --relay-image "$(image_id "${RELAY_IMAGE}")" \
+  --capture-image "$(image_id "${CAPTURE_IMAGE}")" \
+  --broker-image "$(image_id "${BROKER_IMAGE}")" \
+  --service-image "$(image_id "${SERVICE_IMAGE}")"
 printf 'Build complete. Agent=%s Relay=%s Capture=%s Broker=%s Service=%s\n' \
   "$(image_id "${AGENT_IMAGE}")" "$(image_id "${RELAY_IMAGE}")" \
   "$(image_id "${CAPTURE_IMAGE}")" \

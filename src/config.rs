@@ -595,8 +595,8 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     if lock.broker.policy_id != "qwen38-docker-broker-v1"
         || lock.broker.container_name != "qwen38-docker-broker"
         || lock.broker.image_tag != "qwen38-docker-broker:1.1.0"
-        || lock.broker.memory != "64m"
-        || lock.broker.memory_swap != "64m"
+        || lock.broker.memory != "128m"
+        || lock.broker.memory_swap != "128m"
         || lock.broker.pids_limit != 64
         || !lock.broker.image_id.starts_with("sha256:")
         || lock.broker.image_id.len() != 71

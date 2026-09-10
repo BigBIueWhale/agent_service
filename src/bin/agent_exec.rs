@@ -10,10 +10,10 @@
 //! is not mounted in this container at all.
 
 use std::ffi::CString;
-use std::io;
+use std::io::{self, Read};
 use std::mem;
 use std::os::fd::{AsRawFd, RawFd};
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::process::{Command, ExitCode};
 
@@ -58,6 +58,7 @@ const _: () = assert!(
 );
 const NODE: &str = "/usr/local/bin/node";
 const CLI: &str = "/opt/qwen-code/dist/cli.js";
+const STREAM_BINDING_MANIFEST: &str = "/opt/qwen-code/dist/stream-binding-manifest.json";
 const CONTROL_ATTEST_FD: RawFd = 3;
 const CONTROL_RELEASE_FD: RawFd = 4;
 
@@ -149,6 +150,7 @@ fn run() -> Result<std::convert::Infallible, String> {
     // Read the session's budget before anything else is set up: a session that
     // cannot be given an exact bound must not reach the model at all.
     let max_session_turns = read_session_turn_budget()?;
+    require_stream_contract(std::path::Path::new(STREAM_BINDING_MANIFEST))?;
 
     let events = UnixStream::connect(EVENTS_SOCKET)
         .map_err(|error| format!("connect fixed event capture socket {EVENTS_SOCKET}: {error}"))?;
@@ -191,12 +193,62 @@ fn run() -> Result<std::convert::Infallible, String> {
 
     let error = std::os::unix::process::CommandExt::exec(
         Command::new(NODE)
+            .env(
+                "QWEN_STREAM_CONTRACT_SHA256",
+                runtime_contract::STREAM_CONTRACT_SHA256,
+            )
             .arg("--expose-gc")
             .arg(CLI)
             .args(CLI_ARGS)
             .arg(format!("--max-session-turns={max_session_turns}")),
     );
     Err(format!("exec pinned Qwen Code entrypoint: {error}"))
+}
+
+fn require_stream_contract(path: &std::path::Path) -> Result<(), String> {
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|cause| format!("open CLI stream binding manifest: {cause}"))?;
+    let metadata = file
+        .metadata()
+        .map_err(|cause| format!("stat CLI stream binding manifest: {cause}"))?;
+    if !metadata.is_file()
+        || metadata.uid() != 0
+        || metadata.gid() != 0
+        || metadata.mode() & 0o022 != 0
+    {
+        return Err("CLI stream binding manifest must be a root-owned regular file without group/other write access".into());
+    }
+    let mut bytes = Vec::new();
+    file.take(16_385)
+        .read_to_end(&mut bytes)
+        .map_err(|cause| format!("read CLI stream binding manifest: {cause}"))?;
+    validate_stream_contract_identity(&bytes)
+}
+
+fn validate_stream_contract_identity(bytes: &[u8]) -> Result<(), String> {
+    let document = runtime_contract::json::Document::decode(
+        bytes,
+        runtime_contract::json::Limits {
+            bytes: 16_384,
+            nodes: 16_384,
+            depth: 32,
+        },
+    )
+    .map_err(|cause| format!("invalid CLI stream binding manifest: {cause:?}"))?;
+    if document
+        .root()
+        .get("schema_sha256")
+        .and_then(|value| value.as_str())
+        != Some(runtime_contract::STREAM_CONTRACT_SHA256)
+    {
+        return Err(
+            "CLI and native stream contract identities differ before provider admission".into(),
+        );
+    }
+    Ok(())
 }
 
 /// Read the accepted per-session turn budget from the sealed control mount.
@@ -549,6 +601,63 @@ mod tests {
                 "refusal does not name the record it read: {error}"
             );
         }
+    }
+
+    #[test]
+    fn stream_contract_pairing_rejects_incompatible_or_ambiguous_identity_before_exec() {
+        let valid = format!(
+            "{{\"schema_sha256\":\"{}\"}}",
+            runtime_contract::STREAM_CONTRACT_SHA256
+        );
+        validate_stream_contract_identity(valid.as_bytes()).unwrap();
+        for bytes in [
+            b"{}".as_slice(),
+            b"{\"schema_sha256\":null}",
+            b"{\"schema_sha256\":\"unsupported\"}",
+        ] {
+            assert!(validate_stream_contract_identity(bytes)
+                .unwrap_err()
+                .contains("identities differ"));
+        }
+        let duplicate = format!(
+            "{{\"schema_sha256\":\"wrong\",\"schema_sha256\":\"{}\"}}",
+            runtime_contract::STREAM_CONTRACT_SHA256
+        );
+        assert!(validate_stream_contract_identity(duplicate.as_bytes())
+            .unwrap_err()
+            .contains("invalid CLI"));
+        assert!(validate_stream_contract_identity(&vec![b' '; 16_385])
+            .unwrap_err()
+            .contains("invalid CLI"));
+    }
+
+    #[test]
+    fn stream_contract_pairing_refuses_missing_linked_or_writable_artifact() {
+        let root =
+            std::env::temp_dir().join(format!("agent-exec-contract-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("manifest.json");
+        assert!(require_stream_contract(&path)
+            .unwrap_err()
+            .contains("open CLI"));
+        std::fs::write(
+            &path,
+            format!(
+                "{{\"schema_sha256\":\"{}\"}}",
+                runtime_contract::STREAM_CONTRACT_SHA256
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666)).unwrap();
+        assert!(require_stream_contract(&path)
+            .unwrap_err()
+            .contains("write access"));
+        let link = root.join("link.json");
+        std::os::unix::fs::symlink(&path, &link).unwrap();
+        assert!(require_stream_contract(&link)
+            .unwrap_err()
+            .contains("open CLI"));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

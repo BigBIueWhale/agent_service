@@ -90,6 +90,21 @@ pub enum ServiceError {
     Internal(String),
 }
 
+impl From<runtime_contract::ContractError> for ServiceError {
+    fn from(error: runtime_contract::ContractError) -> Self {
+        match error {
+            runtime_contract::ContractError::InvalidRecord(cause) => {
+                Self::AgentOutputMissing(cause)
+            }
+            runtime_contract::ContractError::InvalidDefinition(cause)
+            | runtime_contract::ContractError::InvalidConfiguration(cause) => Self::Internal(cause),
+            runtime_contract::ContractError::ValidationUnavailable(cause) => {
+                Self::Internal(format!("contract validation unavailable: {cause}"))
+            }
+        }
+    }
+}
+
 impl ServiceError {
     pub fn http_status(&self) -> StatusCode {
         match self {
