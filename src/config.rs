@@ -209,6 +209,28 @@ pub struct BuildLock {
     pub jks_normalizer_sha256: String,
     pub jks_normalizer_test_sha256: String,
     pub service_apt_lock_sha256: String,
+    pub npm_lock_package_set_sha256: String,
+    pub npm_lock_package_set_test_sha256: String,
+    pub base: BaseImagesLock,
+}
+
+/// The two generic base images our own images are built from. They carry the
+/// pinned third-party package sets, the toolchains and the Node dependency
+/// bytes, and nothing of ours, so they are named for what they are. Each is
+/// identified by ID rather than by its tag: a tag is mutable, and accepting one
+/// would let a differently-built base be substituted without anything noticing.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BaseImagesLock {
+    pub toolchain: BaseImageLock,
+    pub runtime: BaseImageLock,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BaseImageLock {
+    pub image_tag: String,
+    pub image_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -583,11 +605,36 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || !is_sha256(&lock.build.jks_normalizer_sha256)
         || !is_sha256(&lock.build.jks_normalizer_test_sha256)
         || !is_sha256(&lock.build.service_apt_lock_sha256)
+        || !is_sha256(&lock.build.npm_lock_package_set_sha256)
+        || !is_sha256(&lock.build.npm_lock_package_set_test_sha256)
     {
         return fail(
             "source-date epoch, Docker CLI archive, apt locks, or JKS normalizer hashes are not exact"
                 .into(),
         );
+    }
+    // A base is trusted by ID, so an unpinned or malformed one is refused here
+    // rather than at the point a build would otherwise proceed against it. The
+    // tag carries the Ubuntu snapshot the packages came from, and must not name
+    // this agent: a base holding only third-party bytes that is named for our
+    // agent invites being rebuilt on our release cadence instead of when a
+    // dependency pin actually moves.
+    for (name, base) in [
+        ("toolchain", &lock.build.base.toolchain),
+        ("runtime", &lock.build.base.runtime),
+    ] {
+        if !base.image_id.starts_with("sha256:") || base.image_id.len() != 71 {
+            return fail(format!(
+                "build.base.{name}.image_id is not an exact built Docker image ID; \
+                 build it with ./scripts/build-base-images.sh and pin what it reports"
+            ));
+        }
+        if base.image_tag != format!("noble-{name}:{}", lock.build.ubuntu_snapshot) {
+            return fail(format!(
+                "build.base.{name}.image_tag must be noble-{name}:<ubuntu_snapshot>, got {}",
+                base.image_tag
+            ));
+        }
     }
     if lock.service.request_body_limit_bytes != 2 * 1024 * 1024 {
         return fail("service.request_body_limit_bytes must be exactly 2097152".into());
@@ -1291,6 +1338,61 @@ mod tests {
             ),
             "unexpected validation error: {error}"
         );
+
+        let mut lock = checked_in_lock();
+        lock.build.npm_lock_package_set_sha256 = "G".repeat(64);
+        let error = validate_lock(&lock).expect_err("lock-reducer hash drift must fail closed");
+        assert!(
+            error.to_string().contains(
+                "source-date epoch, Docker CLI archive, apt locks, or JKS normalizer hashes are not exact"
+            ),
+            "unexpected validation error: {error}"
+        );
+    }
+
+    /// A base image is trusted by ID. An unpinned or malformed ID, or a tag
+    /// that does not name the Ubuntu snapshot its packages came from, is
+    /// refused before anything is built against it -- there is no mode in
+    /// which a base is rebuilt or pulled to repair the difference.
+    #[test]
+    fn base_images_must_be_pinned_by_exact_id_under_a_generic_tag() {
+        for name in ["toolchain", "runtime"] {
+            for mutation in ["", "sha256:", &"f".repeat(71)] {
+                let mut lock = checked_in_lock();
+                let base = if name == "toolchain" {
+                    &mut lock.build.base.toolchain
+                } else {
+                    &mut lock.build.base.runtime
+                };
+                base.image_id = mutation.to_string();
+                let error =
+                    validate_lock(&lock).expect_err("an unpinned base must fail closed");
+                assert!(
+                    error
+                        .to_string()
+                        .contains(&format!("build.base.{name}.image_id")),
+                    "unexpected validation error: {error}"
+                );
+            }
+
+            let mut lock = checked_in_lock();
+            let base = if name == "toolchain" {
+                &mut lock.build.base.toolchain
+            } else {
+                &mut lock.build.base.runtime
+            };
+            // A base holding only third-party bytes must not be named for our
+            // agent: that is what invites rebuilding it on our release cadence
+            // rather than when a dependency pin moves.
+            base.image_tag = format!("qwen38-agent-{name}:0.21.12");
+            let error = validate_lock(&lock).expect_err("a base named for our agent must fail");
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("build.base.{name}.image_tag must be noble-{name}")),
+                "unexpected validation error: {error}"
+            );
+        }
     }
 
     #[test]

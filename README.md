@@ -737,13 +737,55 @@ depend on pretending that RAM versus SSD determines whether state is temporary.
 
 ## Reproducibility and real version pinning
 
-[`docker/Dockerfile`](docker/Dockerfile) has digest-pinned linux/amd64 Ubuntu, Node,
-and Rust stages. Ubuntu packages come from the timestamped
-`20260814T120000Z` snapshot, and every requested package has an exact version. The
-initial TLS bootstrap still authenticates repository metadata by Ubuntu's signed
-`InRelease`; after the exact CA package is installed, the snapshot is fetched again
-with ordinary certificate verification. Qwen and Docker CLI remote archives use
-BuildKit `ADD --checksum=sha256:...` and are hashed again inside the build.
+The build is split by ownership. Everything globally known — the pinned Ubuntu
+package sets, the language toolchains and the Node dependency bytes — lives in two
+generic base images built by
+[`docker/Dockerfile.base`](docker/Dockerfile.base), and everything that is ours —
+the patched Qwen source, our logic, configuration and contracts — is built from
+them by [`docker/Dockerfile`](docker/Dockerfile). The split is not a convenience:
+the two concerns were previously one `RUN`, so a layer of pinned third-party
+packages could not be separated from the account our code runs as.
+
+[`scripts/build-base-images.sh`](scripts/build-base-images.sh) is the only thing in
+this repository that fetches from the network, and it runs only when a pin moves.
+`./build.sh` reaches the network for nothing. Ubuntu packages come from the
+timestamped `20260814T120000Z` snapshot with an exact version for every requested
+package; the initial TLS bootstrap authenticates repository metadata by Ubuntu's
+signed `InRelease`, and after the exact CA package is installed the snapshot is
+fetched again with ordinary certificate verification. Qwen, Go and Docker CLI
+remote archives use BuildKit `ADD --checksum=sha256:...` and are hashed again
+inside the build. The base images are digest-pinned linux/amd64 Ubuntu; our own
+Rust stages are digest-pinned Rust.
+
+Both bases are pinned by image ID under `.build.base` in
+[`config/stack.lock.json`](config/stack.lock.json), and `./build.sh` refuses to
+build against any other — no mutable tag is accepted and nothing is pulled. That
+makes reproducibility stronger rather than weaker: our images' inputs are now a
+pinned base ID plus our own sources, instead of a base plus several hundred
+package fetches trusted to keep returning the same bytes. The bases travel to
+another machine inside the release archive, never by a rebuild, because images do
+not reproduce across hosts.
+
+There are two bases rather than one because the two package sets are not one
+thing: the toolchain set has 65 packages and the runtime set has 5, all 5 of which
+the toolchain set also contains. Merging them would put 60 agent-only packages
+into the service image — the component that holds the Docker socket path and
+serves the API — to save a single artifact. They are siblings of the same pinned
+Ubuntu rather than a chain, because they set up uid 1000 incompatibly: a login
+shell for the agent, none plus Docker group membership for the service.
+
+The Node dependency bytes are cached in the toolchain base, resolved from the
+unmodified upstream lockfile, and our image installs offline against them. Our
+patch does rewrite `package-lock.json`, but only its classification — both
+lockfiles resolve the same 2348 packages at the same versions — so the cache is an
+exact match for what an install of the patched tree needs rather than a superset
+hoping to cover it. The installed `node_modules` tree is not cached: our patch and
+`patch-package` both rewrite it, so it is rebuilt every time.
+[`docker/scripts/npm_lock_package_set.py`](docker/scripts/npm_lock_package_set.py)
+reduces a lockfile to the set of tarballs it requires, and the build compares the
+patched lockfile's set against the set the base recorded. A lockfile that asks for
+a package the base does not carry is refused by name; nothing is fetched to make up
+the difference.
 The Dockerfile frontend itself is digest-pinned. The stack lock records
 `SOURCE_DATE_EPOCH=1786725153`, the exact upstream Qwen commit timestamp, and the
 build passes it to BuildKit. Images are exported through a temporary Docker archive
@@ -832,9 +874,22 @@ cd /home/user/Desktop/agent_service
 ./build.sh
 ```
 
-`./build.sh` verifies; it never advances a pin. It rebuilds every image from the
-committed tree and refuses if any image ID is not the one the lock records, so
-any checkout can be proved to produce exactly the images it claims.
+`./build.sh` verifies; it never advances a pin. It rebuilds every image of ours
+from the committed tree and refuses if any image ID is not the one the lock
+records, so any checkout can be proved to produce exactly the images it claims.
+Every layer still rebuilds on every run — `--no-cache` is unchanged, because
+avoiding rebuilds was never the point — but no layer fetches.
+
+The two generic base images are a separate, rare operation, needed only when a
+pin in the stack lock moves:
+
+```bash
+./scripts/build-base-images.sh
+```
+
+It reports the image IDs it produced; record them under `.build.base` in
+[`config/stack.lock.json`](config/stack.lock.json). Nothing is adopted
+automatically, and `./build.sh` refuses any base but the pinned one.
 
 Cutting a new release — changing anything the images are built from — is
 `./release.sh`, with the stack stopped:

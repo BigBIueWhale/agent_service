@@ -1,0 +1,188 @@
+# syntax=docker/dockerfile:1.15@sha256:9857836c9ee4268391bb5b09f9f157f3c91bb15821bb77969642813b0d00518d
+
+# The generic layers of this stack: pinned third-party packages, toolchains and
+# dependency bytes. Nothing here is ours. Both targets are siblings of the same
+# pinned Ubuntu rather than a chain, because the five packages the runtime set
+# shares with the toolchain set are a coincidence of overlap, not a dependency:
+# chaining them would rebuild the toolchain whenever a runtime package moved.
+#
+# This file is the only place in the repository that fetches from the network.
+# `docker/Dockerfile` builds from the images produced here and fetches nothing.
+
+ARG UBUNTU_IMAGE=ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467
+ARG NODE_IMAGE=node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
+ARG SOURCE_DATE_EPOCH=1786725153
+
+FROM ${NODE_IMAGE} AS node-pin
+
+# ---------------------------------------------------------------------------
+# noble-toolchain — the polyglot build and run dependencies.
+#
+# The JKS normalizer is ours, and it is here as a build-time TOOL rather than
+# as content: Java's keystore is written by the JDK's own package and carries a
+# timestamp, so the only place it can be made byte-reproducible is the layer
+# that installs the JDK. The tool is run and then removed, so this image's
+# content stays entirely third-party. The cost of that choice, stated rather
+# than left for a reader to discover: this image rebuilds when our normalizer
+# changes, not only when a third-party pin moves.
+# ---------------------------------------------------------------------------
+FROM ${UBUNTU_IMAGE} AS noble-toolchain
+ARG DEBIAN_FRONTEND=noninteractive
+ARG SOURCE_DATE_EPOCH
+ARG UBUNTU_SNAPSHOT
+ARG AGENT_APT_LOCK_SHA256
+ARG JKS_NORMALIZER_SHA256
+ARG JKS_NORMALIZER_TEST_SHA256
+COPY config/agent-apt-packages.lock /opt/locks/agent-apt-packages.lock
+COPY docker/scripts/normalize_jks.py /tmp/build/normalize_jks.py
+COPY docker/tests/test_normalize_jks.py /tmp/build/test_normalize_jks.py
+RUN test "$(sha256sum /opt/locks/agent-apt-packages.lock | cut -d' ' -f1)" = \
+      "${AGENT_APT_LOCK_SHA256}" \
+ && test "$(sha256sum /tmp/build/normalize_jks.py | cut -d' ' -f1)" = \
+      "${JKS_NORMALIZER_SHA256}" \
+ && test "$(sha256sum /tmp/build/test_normalize_jks.py | cut -d' ' -f1)" = \
+      "${JKS_NORMALIZER_TEST_SHA256}" \
+ && case "${UBUNTU_SNAPSHOT}" in \
+      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z) ;; \
+      *) printf 'invalid Ubuntu snapshot: %s\n' "${UBUNTU_SNAPSHOT}" >&2; exit 69 ;; \
+    esac \
+ && printf '%s\n' \
+      'Types: deb' \
+      "URIs: https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}" \
+      'Suites: noble noble-updates noble-security' \
+      'Components: main universe restricted multiverse' \
+      'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' \
+      > /etc/apt/sources.list.d/ubuntu.sources \
+ && apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false update \
+ && apt-get -o Acquire::https::Verify-Peer=false install -y --no-install-recommends \
+      ca-certificates=20260601~24.04.1 \
+ && apt-get -o Acquire::Check-Valid-Until=false update \
+ && xargs -r -a /opt/locks/agent-apt-packages.lock \
+      apt-get install -y --no-install-recommends \
+ && while IFS= read -r specification; do \
+      package="${specification%%=*}"; expected="${specification#*=}"; \
+      actual="$(dpkg-query -W -f='${Version}' "${package}")"; \
+      test "${actual}" = "${expected}" || { \
+        printf 'package drift: %s expected=%s actual=%s\n' "${package}" "${expected}" "${actual}" >&2; \
+        exit 70; \
+      }; \
+    done < /opt/locks/agent-apt-packages.lock \
+ && test "$(git config --system --get filter.lfs.process)" = 'git-lfs filter-process' \
+ && git config --system --remove-section filter.lfs \
+ && git config --system filter.lfs.process 'git-lfs filter-process' \
+ && git config --system filter.lfs.required true \
+ && git config --system filter.lfs.clean 'git-lfs clean -- %f' \
+ && git config --system filter.lfs.smudge 'git-lfs smudge -- %f' \
+ && python3 /tmp/build/test_normalize_jks.py -v \
+ && python3 /tmp/build/normalize_jks.py \
+      /etc/ssl/certs/java/cacerts "${SOURCE_DATE_EPOCH}" changeit \
+ && python3 /tmp/build/normalize_jks.py \
+      /etc/ssl/certs/java/cacerts "${SOURCE_DATE_EPOCH}" changeit \
+ && keytool -list -keystore /etc/ssl/certs/java/cacerts -storepass changeit >/dev/null \
+ && rm -rf /tmp/build \
+ && find /usr/share/fonts /usr/local/share/fonts -xdev \
+      -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" {} + \
+ && fc-cache --force \
+ && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log \
+      /var/log/alternatives.log /var/cache/ldconfig/aux-cache
+ARG GO_ARCHIVE
+ARG GO_ARCHIVE_SHA256
+# Telemetry is pointless in a network-none runtime and its dated counter
+# files are the one nondeterministic byte source a `go` invocation adds
+# to an otherwise reproducible layer.
+ENV GOTELEMETRY=off
+ADD --checksum=sha256:${GO_ARCHIVE_SHA256} ${GO_ARCHIVE} /tmp/go.tar.gz
+RUN test "$(sha256sum /tmp/go.tar.gz | cut -d' ' -f1)" = "${GO_ARCHIVE_SHA256}" \
+ && tar -C /usr/local -xzf /tmp/go.tar.gz \
+ && rm /tmp/go.tar.gz \
+ && ln -s /usr/local/go/bin/go /usr/local/bin/go \
+ && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
+ && test "$(/usr/local/bin/go version)" = 'go version go1.25.13 linux/amd64' \
+ && mvn -version >/dev/null \
+ && python3 -m pytest --version >/dev/null \
+ && rm -rf /root/.config/go /root/.m2 /tmp/hsperfdata_*
+COPY --from=node-pin /usr/local/ /usr/local/
+RUN test "$(node --version)" = 'v22.23.2' \
+ && test "$(npm --version)" = '10.9.8' \
+ && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+ && ln -s /usr/bin/batcat /usr/local/bin/bat \
+ && rm -rf /tmp/node-compile-cache
+
+# The Node dependency bytes, resolved from the UNMODIFIED upstream lock. Those
+# are a dependency we merely pin, so they are generic and belong here; the
+# installed tree is not, because our patch and patch-package both rewrite it,
+# so `node_modules` is built in our image every time and never cached.
+#
+# Our patch does change `package-lock.json`, but only its classification: both
+# locks resolve the same 2348 packages at the same versions, so the tarballs
+# this cache holds are exactly the ones an install of the patched tree needs --
+# an exact match on package identity, not a cache hoping to be a superset. The
+# recorded digest below is what lets our image prove that rather than assume it.
+ARG QWEN_SOURCE_ARCHIVE
+ARG QWEN_SOURCE_ARCHIVE_SHA256
+#
+# The tarball itself stays, at a stable path beside the cache it produced. It is
+# the definition of generic -- unmodified upstream at a pinned commit, fetched
+# at an exact digest -- and deleting it after use is what made every one of our
+# builds re-fetch 30 MB from a third party to arrive at bytes this image
+# already had. `docker/Dockerfile` copies it from here and verifies its digest
+# again, so a base carrying the wrong tarball is still refused.
+ADD --checksum=sha256:${QWEN_SOURCE_ARCHIVE_SHA256} \
+  ${QWEN_SOURCE_ARCHIVE} /opt/upstream/qwen-code.tar.gz
+COPY docker/scripts/npm_lock_package_set.py /tmp/build/npm_lock_package_set.py
+ARG NPM_LOCK_PACKAGE_SET_SHA256
+RUN test "$(sha256sum /tmp/build/npm_lock_package_set.py | cut -d' ' -f1)" = \
+      "${NPM_LOCK_PACKAGE_SET_SHA256}" \
+ && test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
+      "${QWEN_SOURCE_ARCHIVE_SHA256}" \
+ && mkdir -p /tmp/upstream \
+ && tar -xzf /opt/upstream/qwen-code.tar.gz --strip-components=1 -C /tmp/upstream \
+ && cd /tmp/upstream \
+ && npm ci --ignore-scripts \
+ && mkdir -p /opt/locks \
+ && python3 /tmp/build/npm_lock_package_set.py package-lock.json \
+      > /opt/locks/npm-package-set.sha256 \
+ && test -s /opt/locks/npm-package-set.sha256 \
+ && cd / \
+ && rm -rf /tmp/upstream /tmp/build /tmp/node-compile-cache \
+ && test -d /root/.npm/_cacache
+
+# ---------------------------------------------------------------------------
+# noble-runtime — the minimal utility set the service and broker need.
+#
+# Five packages, and worth an image of its own for a reason the count hides:
+# `apt-get update` pulls the full main/universe/restricted/multiverse indices
+# for three suites before it installs anything, so the index fetch, not the
+# five debs, is most of what this layer costs.
+# ---------------------------------------------------------------------------
+FROM ${UBUNTU_IMAGE} AS noble-runtime
+ARG DEBIAN_FRONTEND=noninteractive
+ARG UBUNTU_SNAPSHOT
+ARG SERVICE_APT_LOCK_SHA256
+COPY config/service-apt-packages.lock /opt/locks/service-apt-packages.lock
+RUN test "$(sha256sum /opt/locks/service-apt-packages.lock | cut -d' ' -f1)" = \
+      "${SERVICE_APT_LOCK_SHA256}" \
+ && case "${UBUNTU_SNAPSHOT}" in \
+      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z) ;; \
+      *) printf 'invalid Ubuntu snapshot: %s\n' "${UBUNTU_SNAPSHOT}" >&2; exit 72 ;; \
+    esac \
+ && printf '%s\n' \
+      'Types: deb' \
+      "URIs: https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}" \
+      'Suites: noble noble-updates noble-security' \
+      'Components: main universe restricted multiverse' \
+      'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' \
+      > /etc/apt/sources.list.d/ubuntu.sources \
+ && apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false update \
+ && apt-get -o Acquire::https::Verify-Peer=false install -y --no-install-recommends \
+      ca-certificates=20260601~24.04.1 \
+ && apt-get -o Acquire::Check-Valid-Until=false update \
+ && xargs -r -a /opt/locks/service-apt-packages.lock \
+      apt-get install -y --no-install-recommends \
+ && while IFS= read -r specification; do \
+      package="${specification%%=*}"; expected="${specification#*=}"; \
+      actual="$(dpkg-query -W -f='${Version}' "${package}")"; \
+      test "${actual}" = "${expected}" || exit 71; \
+    done < /opt/locks/service-apt-packages.lock \
+ && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log \
+      /var/cache/ldconfig/aux-cache

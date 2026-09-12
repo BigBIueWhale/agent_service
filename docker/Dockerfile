@@ -1,110 +1,47 @@
 # syntax=docker/dockerfile:1.15@sha256:9857836c9ee4268391bb5b09f9f157f3c91bb15821bb77969642813b0d00518d
 
-ARG UBUNTU_IMAGE=ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467
-ARG NODE_IMAGE=node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
+# Our images. Everything generic -- the pinned apt sets, the toolchains and the
+# Node dependency bytes -- is in the two base images `docker/Dockerfile.base`
+# builds, and this file reaches the network for nothing. The bases are pinned by
+# image ID in `config/stack.lock.json` and `./build.sh` refuses any other, so a
+# missing or drifted base is a named failure rather than a silent rebuild.
+# Both are required of every build of this file, whichever target it asks for:
+# a stage's base name is resolved when the file is parsed, not when the stage is
+# reached, so a build that named only the base it needs would fail on the other.
+# Neither has a default, because a default is how a build silently proceeds
+# against an image nobody pinned.
+ARG TOOLCHAIN_BASE_IMAGE
+ARG RUNTIME_BASE_IMAGE
 ARG RUST_IMAGE=rust@sha256:4c2fd73ef19c5ef9d54bee03b06b2839a392604fbfcd578ed948b71b37c1d7fb
 ARG SOURCE_DATE_EPOCH=1786725153
 
-FROM ${NODE_IMAGE} AS node-pin
+# `COPY --from` resolves a stage name and does not expand build arguments, so
+# the base is aliased here to be referable by name from stages that need a file
+# out of it without being built on it.
+FROM ${TOOLCHAIN_BASE_IMAGE} AS toolchain-base
 
-FROM ${UBUNTU_IMAGE} AS agent-os
-ARG DEBIAN_FRONTEND=noninteractive
-ARG SOURCE_DATE_EPOCH
-ARG UBUNTU_SNAPSHOT
-ARG AGENT_APT_LOCK_SHA256
-ARG JKS_NORMALIZER_SHA256
-ARG JKS_NORMALIZER_TEST_SHA256
-COPY config/agent-apt-packages.lock /opt/locks/agent-apt-packages.lock
-COPY docker/scripts/normalize_jks.py /usr/local/libexec/agent-service/normalize_jks.py
-COPY docker/tests/test_normalize_jks.py /usr/local/libexec/agent-service/test_normalize_jks.py
-RUN test "$(sha256sum /opt/locks/agent-apt-packages.lock | cut -d' ' -f1)" = \
-      "${AGENT_APT_LOCK_SHA256}" \
- && test "$(sha256sum /usr/local/libexec/agent-service/normalize_jks.py | cut -d' ' -f1)" = \
-      "${JKS_NORMALIZER_SHA256}" \
- && test "$(sha256sum /usr/local/libexec/agent-service/test_normalize_jks.py | cut -d' ' -f1)" = \
-      "${JKS_NORMALIZER_TEST_SHA256}" \
- && case "${UBUNTU_SNAPSHOT}" in \
-      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z) ;; \
-      *) printf 'invalid Ubuntu snapshot: %s\n' "${UBUNTU_SNAPSHOT}" >&2; exit 69 ;; \
-    esac \
- && printf '%s\n' \
-      'Types: deb' \
-      "URIs: https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}" \
-      'Suites: noble noble-updates noble-security' \
-      'Components: main universe restricted multiverse' \
-      'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' \
-      > /etc/apt/sources.list.d/ubuntu.sources \
- && apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false update \
- && apt-get -o Acquire::https::Verify-Peer=false install -y --no-install-recommends \
-      ca-certificates=20260601~24.04.1 \
- && apt-get -o Acquire::Check-Valid-Until=false update \
- && xargs -r -a /opt/locks/agent-apt-packages.lock \
-      apt-get install -y --no-install-recommends \
- && while IFS= read -r specification; do \
-      package="${specification%%=*}"; expected="${specification#*=}"; \
-      actual="$(dpkg-query -W -f='${Version}' "${package}")"; \
-      test "${actual}" = "${expected}" || { \
-        printf 'package drift: %s expected=%s actual=%s\n' "${package}" "${expected}" "${actual}" >&2; \
-        exit 70; \
-      }; \
-    done < /opt/locks/agent-apt-packages.lock \
- && test "$(git config --system --get filter.lfs.process)" = 'git-lfs filter-process' \
- && git config --system --remove-section filter.lfs \
- && git config --system filter.lfs.process 'git-lfs filter-process' \
- && git config --system filter.lfs.required true \
- && git config --system filter.lfs.clean 'git-lfs clean -- %f' \
- && git config --system filter.lfs.smudge 'git-lfs smudge -- %f' \
- && python3 /usr/local/libexec/agent-service/test_normalize_jks.py -v \
- && python3 /usr/local/libexec/agent-service/normalize_jks.py \
-      /etc/ssl/certs/java/cacerts "${SOURCE_DATE_EPOCH}" changeit \
- && python3 /usr/local/libexec/agent-service/normalize_jks.py \
-      /etc/ssl/certs/java/cacerts "${SOURCE_DATE_EPOCH}" changeit \
- && keytool -list -keystore /etc/ssl/certs/java/cacerts -storepass changeit >/dev/null \
- && find /usr/share/fonts /usr/local/share/fonts -xdev \
-      -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" {} + \
- && fc-cache --force \
- && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log \
-      /var/log/alternatives.log /var/cache/ldconfig/aux-cache
-ARG GO_ARCHIVE
-ARG GO_ARCHIVE_SHA256
-# Telemetry is pointless in a network-none runtime and its dated counter
-# files are the one nondeterministic byte source a `go` invocation adds
-# to an otherwise reproducible layer.
-ENV GOTELEMETRY=off
-ADD --checksum=sha256:${GO_ARCHIVE_SHA256} ${GO_ARCHIVE} /tmp/go.tar.gz
-RUN test "$(sha256sum /tmp/go.tar.gz | cut -d' ' -f1)" = "${GO_ARCHIVE_SHA256}" \
- && tar -C /usr/local -xzf /tmp/go.tar.gz \
- && rm /tmp/go.tar.gz \
- && ln -s /usr/local/go/bin/go /usr/local/bin/go \
- && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
- && test "$(/usr/local/bin/go version)" = 'go version go1.25.13 linux/amd64' \
- && mvn -version >/dev/null \
- && python3 -m pytest --version >/dev/null \
- && rm -rf /root/.config/go /root/.m2 /tmp/hsperfdata_*
-COPY --from=node-pin /usr/local/ /usr/local/
-RUN test "$(node --version)" = 'v22.23.2' \
- && test "$(npm --version)" = '10.9.8' \
- && ln -s /usr/bin/fdfind /usr/local/bin/fd \
- && ln -s /usr/bin/batcat /usr/local/bin/bat \
- && test "$(getent passwd 1000)" = 'ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash' \
+FROM ${TOOLCHAIN_BASE_IMAGE} AS agent-os
+# The identity this stack runs as. The base image carries pinned third-party
+# dependencies and nothing of ours, so the account those dependencies will run
+# under is established here instead -- the two were one `RUN` before, which is
+# what made a generic layer impossible to separate from our own.
+RUN test "$(getent passwd 1000)" = 'ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash' \
  && test "$(getent group 1000)" = 'ubuntu:x:1000:' \
  && groupmod --new-name agent ubuntu \
  && usermod --login agent --comment Agent --home /home/agent --move-home --shell /bin/bash ubuntu \
  && test "$(getent passwd 1000)" = 'agent:x:1000:1000:Agent:/home/agent:/bin/bash' \
  && test "$(getent group 1000)" = 'agent:x:1000:' \
- && chage --lastday 0 agent \
- && rm -rf /tmp/node-compile-cache
+ && chage --lastday 0 agent
 
 FROM agent-os AS qwen-build
-ARG QWEN_SOURCE_ARCHIVE
 ARG QWEN_SOURCE_ARCHIVE_SHA256
 ARG QWEN_PATCH_SHA256
 ARG QWEN_SOURCE_PATCH_MANIFEST_SHA256
+ARG NPM_LOCK_PACKAGE_SET_SHA256
+ARG NPM_LOCK_PACKAGE_SET_TEST_SHA256
 ENV QWEN_SKIP_PREPARE=1
 ENV SOURCE_DATE_EPOCH=1786725153
 WORKDIR /src
-ADD --checksum=sha256:${QWEN_SOURCE_ARCHIVE_SHA256} \
-  ${QWEN_SOURCE_ARCHIVE} /tmp/qwen-code.tar.gz
 COPY patches/qwen-code-0.21.12-agent-service.patch \
   /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch
 COPY patches/source_patch_v1 \
@@ -113,7 +50,14 @@ COPY protocol/stream-contract-v1.json /opt/agent-artifacts/protocol/stream-contr
 COPY protocol/test-vectors /opt/agent-artifacts/protocol/test-vectors
 COPY scripts/generate-protocol-bindings.mjs \
   /opt/agent-artifacts/scripts/generate-protocol-bindings.mjs
-RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
+COPY docker/scripts/npm_lock_package_set.py \
+  /opt/agent-artifacts/scripts/npm_lock_package_set.py
+COPY docker/tests/test_npm_lock_package_set.py \
+  /opt/agent-artifacts/scripts/test_npm_lock_package_set.py
+# The pinned upstream tarball comes from the base image, which fetched it once
+# at an exact digest; its digest is proved again here, so this build trusts the
+# base's bytes no further than it trusts anything else it is given.
+RUN test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
       "${QWEN_SOURCE_ARCHIVE_SHA256}" \
  && test "$(sha256sum /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch | cut -d' ' -f1)" = \
       "${QWEN_PATCH_SHA256}" \
@@ -122,13 +66,27 @@ RUN test "$(sha256sum /tmp/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && cd /opt/agent-artifacts \
  && sha256sum --check --strict patches/source_patch_v1/manifest.sha256 \
  && cd /src \
- && tar -xzf /tmp/qwen-code.tar.gz --strip-components=1 -C /src \
+ && tar -xzf /opt/upstream/qwen-code.tar.gz --strip-components=1 -C /src \
  && cd /opt/agent-artifacts \
  && python3 -m unittest -v patches.source_patch_v1.test_framework \
  && python3 -m patches.source_patch_v1.apply_qwen_code_patchset \
       /src /opt/agent-artifacts \
  && cd /src \
- && npm ci --ignore-scripts \
+ && test "$(sha256sum /opt/agent-artifacts/scripts/npm_lock_package_set.py | cut -d' ' -f1)" = \
+      "${NPM_LOCK_PACKAGE_SET_SHA256}" \
+ && test "$(sha256sum /opt/agent-artifacts/scripts/test_npm_lock_package_set.py | cut -d' ' -f1)" = \
+      "${NPM_LOCK_PACKAGE_SET_TEST_SHA256}" \
+ && python3 /opt/agent-artifacts/scripts/test_npm_lock_package_set.py \
+ && if [ "$(python3 /opt/agent-artifacts/scripts/npm_lock_package_set.py \
+      /src/package-lock.json)" != "$(cat /opt/locks/npm-package-set.sha256)" ]; then \
+      echo 'The base image does not carry the packages this lock resolves.' >&2; \
+      echo 'The patched lockfile asks for a tarball set the base image was not' >&2; \
+      echo 'built with, so no offline install of it can be complete. Rebuild the' >&2; \
+      echo 'base with ./scripts/build-base-images.sh and adopt its new ID.' >&2; \
+      echo 'Nothing is fetched to make up the difference.' >&2; \
+      exit 73; \
+    fi \
+ && npm ci --ignore-scripts --offline \
  && npx --no-install patch-package \
  && node /opt/agent-artifacts/scripts/generate-protocol-bindings.mjs \
       /src \
@@ -347,7 +305,9 @@ RUN test "$(rustc --version)" = 'rustc 1.95.0 (59807616e 2026-04-14)' \
  && cargo build --locked --release
 
 FROM service-build AS composition-gate-build
-COPY --from=node-pin /usr/local/bin/node /node
+# The gate exporter is a Node script and this is a Rust stage, so it borrows the
+# one pinned Node the toolchain base already carries rather than pulling another.
+COPY --from=toolchain-base /usr/local/bin/node /node
 RUN cargo test --locked --release --no-run --message-format=json \
       --bin agent_service --bin docker_broker --bin session_capture > /gate-compiler.jsonl \
  && /node /build/docker/tests/export_composition_artifacts.mjs
@@ -386,38 +346,11 @@ COPY --from=service-build /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 /lib64/ld-l
 USER 1000:1000
 ENTRYPOINT ["/session_capture"]
 
-FROM ${UBUNTU_IMAGE} AS service-os
-ARG DEBIAN_FRONTEND=noninteractive
-ARG UBUNTU_SNAPSHOT
-ARG SERVICE_APT_LOCK_SHA256
-COPY config/service-apt-packages.lock /opt/locks/service-apt-packages.lock
-RUN test "$(sha256sum /opt/locks/service-apt-packages.lock | cut -d' ' -f1)" = \
-      "${SERVICE_APT_LOCK_SHA256}" \
- && case "${UBUNTU_SNAPSHOT}" in \
-      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z) ;; \
-      *) printf 'invalid Ubuntu snapshot: %s\n' "${UBUNTU_SNAPSHOT}" >&2; exit 72 ;; \
-    esac \
- && printf '%s\n' \
-      'Types: deb' \
-      "URIs: https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}" \
-      'Suites: noble noble-updates noble-security' \
-      'Components: main universe restricted multiverse' \
-      'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' \
-      > /etc/apt/sources.list.d/ubuntu.sources \
- && apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false update \
- && apt-get -o Acquire::https::Verify-Peer=false install -y --no-install-recommends \
-      ca-certificates=20260601~24.04.1 \
- && apt-get -o Acquire::Check-Valid-Until=false update \
- && xargs -r -a /opt/locks/service-apt-packages.lock \
-      apt-get install -y --no-install-recommends \
- && while IFS= read -r specification; do \
-      package="${specification%%=*}"; expected="${specification#*=}"; \
-      actual="$(dpkg-query -W -f='${Version}' "${package}")"; \
-      test "${actual}" = "${expected}" || exit 71; \
-    done < /opt/locks/service-apt-packages.lock \
- && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log \
-      /var/cache/ldconfig/aux-cache \
- && test "$(getent passwd 1000)" = 'ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash' \
+FROM ${RUNTIME_BASE_IMAGE} AS service-os
+# As in `agent-os`: the base is generic, so our account -- here with no login
+# shell and a membership in the Docker group the broker needs -- is ours to set
+# up on top of it.
+RUN test "$(getent passwd 1000)" = 'ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash' \
  && test "$(getent group 1000)" = 'ubuntu:x:1000:' \
  && groupmod --new-name agent ubuntu \
  && usermod --login agent --comment Agent --home /home/agent --move-home --shell /usr/sbin/nologin ubuntu \
@@ -427,6 +360,7 @@ RUN test "$(sha256sum /opt/locks/service-apt-packages.lock | cut -d' ' -f1)" = \
  && groupadd --gid 984 docker \
  && usermod --append --groups 984 agent \
  && chage --lastday 0 agent
+
 FROM service-os AS broker-os
 ARG DOCKER_CLI_ARCHIVE
 ARG DOCKER_CLI_ARCHIVE_SHA256

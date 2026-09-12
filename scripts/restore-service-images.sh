@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Restore the exact pinned agent_service component images from the offline
-# archive the release bundled — the only cross-host transport for this stack,
+# Restore the exact pinned agent_service images from the offline archive the
+# release bundled — the only cross-host transport for this stack,
 # because the component builds are not bit-reproducible across hosts (layer
 # timestamps are normalised, but toolchain byte differences still move the
 # IDs). The archive carries the one set of bytes the release lock pins, so a
@@ -28,7 +28,14 @@ docker load --input "${SERVICE_ARCHIVE_PATH}"
 # Loading proves nothing by itself; every image the archive claims to carry
 # must now be present under its pinned tag with its pinned ID. Any mismatch
 # is a wrong archive, and nothing is silently substituted.
+# The two generic bases are restored beside the five images this release built.
+# Our images are built FROM them, so a host without the exact base cannot run
+# what this release pins; and since images do not reproduce across hosts, the
+# base can only arrive as bytes. Their IDs are read from the stack lock, where
+# they are pinned as build inputs, rather than duplicated into the release lock.
 declare -A expected=(
+  [base-toolchain]="$(lock_value '.build.base.toolchain.image_id')"
+  [base-runtime]="$(lock_value '.build.base.runtime.image_id')"
   [agent]="$(release_value '.images.agent')"
   [relay]="$(release_value '.images.relay')"
   [capture]="$(release_value '.images.capture')"
@@ -37,6 +44,8 @@ declare -A expected=(
 )
 component_tag() {
   case "$1" in
+    base-toolchain) lock_value '.build.base.toolchain.image_tag' ;;
+    base-runtime) lock_value '.build.base.runtime.image_tag' ;;
     agent) lock_value '.agent.image_tag' ;;
     relay) lock_value '.relay.image_tag' ;;
     capture) lock_value '.capture.image_tag' ;;
@@ -46,7 +55,7 @@ component_tag() {
   esac
 }
 failures=()
-for component in agent relay capture broker service; do
+for component in base-toolchain base-runtime agent relay capture broker service; do
   tag="$(component_tag "${component}")"
   loaded="$(docker image inspect --format '{{.Id}}' "${tag}" 2>/dev/null || true)"
   if [[ "${loaded}" != "${expected[${component}]}" ]]; then
@@ -58,7 +67,7 @@ if ((${#failures[@]})); then
     "${failures[@]}"
 fi
 
-printf '\nRESTORED — exact pinned component images are available without a rebuild.\n'
-for component in agent relay capture broker service; do
-  printf '  %-8s %s\n' "${component}" "${expected[${component}]}"
+printf '\nRESTORED — exact pinned images are available without a rebuild.\n'
+for component in base-toolchain base-runtime agent relay capture broker service; do
+  printf '  %-14s %s\n' "${component}" "${expected[${component}]}"
 done

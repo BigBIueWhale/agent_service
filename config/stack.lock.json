@@ -19,7 +19,19 @@
     "jks_normalizer_test_sha256": "9e9060b44eee4132a78a9a523d8525a0b53c8665f61b16f4b5cc5e3d2e03fcb1",
     "service_apt_lock_sha256": "faf20a1900aebde3893b4b5e28025aeb83f23620fce6f729979c0a4607d5dd4f",
     "go_archive": "https://dl.google.com/go/go1.25.13.linux-amd64.tar.gz",
-    "go_archive_sha256": "39042a078ea9ceebe3ecda4a7188f0f5b96e14a071d27923ba7f40b456e85ae3"
+    "go_archive_sha256": "39042a078ea9ceebe3ecda4a7188f0f5b96e14a071d27923ba7f40b456e85ae3",
+    "npm_lock_package_set_sha256": "60a6e92ef59d7ea775e7e1ab0c9cfd2c56f97e0adda8bd3d45f60c7114717fc3",
+    "npm_lock_package_set_test_sha256": "cdcdf23a9d007076c74e253965daf896dc03d3a401c186c724026ac4faedcfea",
+    "base": {
+      "toolchain": {
+        "image_tag": "noble-toolchain:20260814T120000Z",
+        "image_id": "sha256:4a6de2f8e3d94e5addcffdc0c57305b124f61c566da6ff9c27b624c36047e569"
+      },
+      "runtime": {
+        "image_tag": "noble-runtime:20260814T120000Z",
+        "image_id": "sha256:253d66d02ff67c7d50416db5d7f0831f2e839e90bad5a4b9af8a0c5cb008dd32"
+      }
+    }
   },
   "service": {
     "listen": "127.0.0.1:8090",
@@ -39,9 +51,9 @@
     "policy_id": "qwen38-docker-broker-v1",
     "container_name": "qwen38-docker-broker",
     "image_tag": "qwen38-docker-broker:1.1.0",
-    "image_id": "sha256:2bb133c28df7e99b0017576307ca4d70c558d3e6cc5e3ce84a8b0a0b434d3488",
+    "image_id": "sha256:c83efdfbc45d048ee2a7ed448a5336ca0c9e7458a4c12ca42e1ca873ad24357d",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
-    "policy_sha256": "cb9e92405dd7a055548d4eb5ed45788e096d0664b97e803e5a288f564db07033",
+    "policy_sha256": "649636426504b2851884d5f7b6c5a164d45d0afdf92561916d01b852c36559a6",
     "source_sha256": "67ffd1d165a977403bcc05b571e4adb20fff47c3e846b05e1731e4de240e084d",
     "memory": "128m",
     "memory_swap": "128m",
@@ -73,7 +85,7 @@
   },
   "agent": {
     "image_tag": "qwen38-agent:0.21.12-b965d5f8-v9",
-    "image_id": "sha256:85eb149beb8284b789e07a492ff5b727ad6402885df5eaca4f63fa3370d55d8f",
+    "image_id": "sha256:d5b83c3348478de9cbbdc23e8d754946e82c396c4183e3f182b732656bf0959c",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,

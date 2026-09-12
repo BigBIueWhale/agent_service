@@ -6,6 +6,7 @@ source "${SCRIPT_DIR}/scripts/common.sh"
 require_no_arguments "./build.sh" "$@"
 check_host_tools_and_versions
 check_pinned_inputs
+require_pinned_base_images
 require_release_commit
 require_clean_committed_repository
 "${PROJECT_DIR}/scripts/check-documented-identifiers.sh"
@@ -43,23 +44,17 @@ AGENT_EXEC_SOURCE_SHA256="$(lock_value '.agent.agent_exec_source_sha256')"
 AGENT_EXEC_SANDBOX="$(lock_value '.agent.agent_exec_sandbox')"
 STACK_LOCK_SHA256="$(sha256_file "${STACK_LOCK}")"
 CARGO_LOCK_SHA256="$(sha256_file "${PROJECT_DIR}/Cargo.lock")"
-UBUNTU_IMAGE="$(lock_value '.build.ubuntu_amd64_image')"
-NODE_IMAGE="$(lock_value '.build.node_amd64_image')"
 RUST_IMAGE="$(lock_value '.build.rust_amd64_image')"
-UBUNTU_SNAPSHOT="$(lock_value '.build.ubuntu_snapshot')"
-AGENT_APT_LOCK_SHA256="$(lock_value '.build.agent_apt_lock_sha256')"
-JKS_NORMALIZER_SHA256="$(lock_value '.build.jks_normalizer_sha256')"
-JKS_NORMALIZER_TEST_SHA256="$(lock_value '.build.jks_normalizer_test_sha256')"
-SERVICE_APT_LOCK_SHA256="$(lock_value '.build.service_apt_lock_sha256')"
+TOOLCHAIN_BASE_IMAGE="$(lock_value '.build.base.toolchain.image_tag')"
+RUNTIME_BASE_IMAGE="$(lock_value '.build.base.runtime.image_tag')"
+NPM_LOCK_PACKAGE_SET_SHA256="$(lock_value '.build.npm_lock_package_set_sha256')"
+NPM_LOCK_PACKAGE_SET_TEST_SHA256="$(lock_value '.build.npm_lock_package_set_test_sha256')"
 QWEN_COMMIT="$(lock_value '.agent.qwen_code.commit')"
-QWEN_SOURCE_ARCHIVE="$(lock_value '.agent.qwen_code.source_archive')"
 QWEN_SOURCE_ARCHIVE_SHA256="$(lock_value '.agent.qwen_code.source_archive_sha256')"
 QWEN_PATCH_SHA256="$(lock_value '.agent.qwen_code.patch_sha256')"
 QWEN_SOURCE_PATCH_MANIFEST_SHA256="$(lock_value '.agent.qwen_code.source_patch_manifest_sha256')"
 DOCKER_CLI_ARCHIVE="$(lock_value '.build.docker_cli_archive')"
 DOCKER_CLI_ARCHIVE_SHA256="$(lock_value '.build.docker_cli_archive_sha256')"
-GO_ARCHIVE="$(lock_value '.build.go_archive')"
-GO_ARCHIVE_SHA256="$(lock_value '.build.go_archive_sha256')"
 readonly AGENT_IMAGE RELAY_IMAGE CAPTURE_IMAGE BROKER_IMAGE SERVICE_IMAGE SOURCE_COMMIT
 readonly BUILD_INPUTS_MANIFEST_SHA256 RELAY_SOURCE_SHA256 RELAY_SANDBOX CAPTURE_SOURCE_SHA256 CAPTURE_ID
 readonly BROKER_POLICY_SHA256 BROKER_SOURCE_SHA256
@@ -69,13 +64,12 @@ readonly TOOLCHAIN_VERIFIER_SHA256 TOOLCHAIN_VERIFIER_TEST_SHA256
 readonly RUNTIME_CONTRACT_SHA256 RUNTIME_CONTRACT_VERIFIER_SHA256
 readonly RUNTIME_CONTRACT_VERIFIER_TEST_SHA256 WRAPPER_CONTRACT_TEST_SHA256
 readonly WRAPPER_SHA256 AGENT_EXEC_SOURCE_SHA256 AGENT_EXEC_SANDBOX
-readonly STACK_LOCK_SHA256 CARGO_LOCK_SHA256 UBUNTU_IMAGE NODE_IMAGE
-readonly RUST_IMAGE UBUNTU_SNAPSHOT AGENT_APT_LOCK_SHA256 SERVICE_APT_LOCK_SHA256
-readonly JKS_NORMALIZER_SHA256 JKS_NORMALIZER_TEST_SHA256
-readonly QWEN_COMMIT QWEN_SOURCE_ARCHIVE QWEN_SOURCE_ARCHIVE_SHA256 QWEN_PATCH_SHA256
+readonly STACK_LOCK_SHA256 CARGO_LOCK_SHA256
+readonly RUST_IMAGE TOOLCHAIN_BASE_IMAGE RUNTIME_BASE_IMAGE
+readonly NPM_LOCK_PACKAGE_SET_SHA256 NPM_LOCK_PACKAGE_SET_TEST_SHA256
+readonly QWEN_COMMIT QWEN_SOURCE_ARCHIVE_SHA256 QWEN_PATCH_SHA256
 readonly QWEN_SOURCE_PATCH_MANIFEST_SHA256
 readonly DOCKER_CLI_ARCHIVE DOCKER_CLI_ARCHIVE_SHA256
-readonly GO_ARCHIVE GO_ARCHIVE_SHA256
 SOURCE_DATE_EPOCH="$(lock_value '.build.source_date_epoch')"
 readonly SOURCE_DATE_EPOCH
 
@@ -101,25 +95,20 @@ docker buildx build \
   --builder default \
   --platform linux/amd64 \
   --provenance=false \
+  --build-arg "TOOLCHAIN_BASE_IMAGE=${TOOLCHAIN_BASE_IMAGE}" \
+  --build-arg "RUNTIME_BASE_IMAGE=${RUNTIME_BASE_IMAGE}" \
   --pull=false \
   --no-cache \
   --target agent \
   --output "type=docker,dest=${AGENT_ARCHIVE},name=${AGENT_IMAGE},rewrite-timestamp=true" \
   --build-arg "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" \
-  --build-arg "UBUNTU_IMAGE=${UBUNTU_IMAGE}" \
-  --build-arg "NODE_IMAGE=${NODE_IMAGE}" \
   --build-arg "RUST_IMAGE=${RUST_IMAGE}" \
-  --build-arg "UBUNTU_SNAPSHOT=${UBUNTU_SNAPSHOT}" \
-  --build-arg "AGENT_APT_LOCK_SHA256=${AGENT_APT_LOCK_SHA256}" \
-  --build-arg "JKS_NORMALIZER_SHA256=${JKS_NORMALIZER_SHA256}" \
-  --build-arg "JKS_NORMALIZER_TEST_SHA256=${JKS_NORMALIZER_TEST_SHA256}" \
+  --build-arg "NPM_LOCK_PACKAGE_SET_SHA256=${NPM_LOCK_PACKAGE_SET_SHA256}" \
+  --build-arg "NPM_LOCK_PACKAGE_SET_TEST_SHA256=${NPM_LOCK_PACKAGE_SET_TEST_SHA256}" \
   --build-arg "QWEN_COMMIT=${QWEN_COMMIT}" \
-  --build-arg "QWEN_SOURCE_ARCHIVE=${QWEN_SOURCE_ARCHIVE}" \
   --build-arg "QWEN_SOURCE_ARCHIVE_SHA256=${QWEN_SOURCE_ARCHIVE_SHA256}" \
   --build-arg "QWEN_PATCH_SHA256=${QWEN_PATCH_SHA256}" \
   --build-arg "QWEN_SOURCE_PATCH_MANIFEST_SHA256=${QWEN_SOURCE_PATCH_MANIFEST_SHA256}" \
-  --build-arg "GO_ARCHIVE=${GO_ARCHIVE}" \
-  --build-arg "GO_ARCHIVE_SHA256=${GO_ARCHIVE_SHA256}" \
   --build-arg "SETTINGS_SHA256=${SETTINGS_SHA256}" \
   --build-arg "INSTRUCTIONS_SHA256=${INSTRUCTIONS_SHA256}" \
   --build-arg "SYSTEM_PROMPT_SHA256=${SYSTEM_PROMPT_SHA256}" \
@@ -146,6 +135,8 @@ docker buildx build \
   --builder default \
   --platform linux/amd64 \
   --provenance=false \
+  --build-arg "TOOLCHAIN_BASE_IMAGE=${TOOLCHAIN_BASE_IMAGE}" \
+  --build-arg "RUNTIME_BASE_IMAGE=${RUNTIME_BASE_IMAGE}" \
   --pull=false \
   --no-cache \
   --target relay \
@@ -168,6 +159,8 @@ docker buildx build \
   --builder default \
   --platform linux/amd64 \
   --provenance=false \
+  --build-arg "TOOLCHAIN_BASE_IMAGE=${TOOLCHAIN_BASE_IMAGE}" \
+  --build-arg "RUNTIME_BASE_IMAGE=${RUNTIME_BASE_IMAGE}" \
   --pull=false \
   --no-cache \
   --target session-capture \
@@ -190,15 +183,14 @@ docker buildx build \
   --builder default \
   --platform linux/amd64 \
   --provenance=false \
+  --build-arg "TOOLCHAIN_BASE_IMAGE=${TOOLCHAIN_BASE_IMAGE}" \
+  --build-arg "RUNTIME_BASE_IMAGE=${RUNTIME_BASE_IMAGE}" \
   --pull=false \
   --no-cache \
   --target broker \
   --output "type=docker,dest=${BROKER_ARCHIVE},name=${BROKER_IMAGE},rewrite-timestamp=true" \
   --build-arg "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" \
-  --build-arg "UBUNTU_IMAGE=${UBUNTU_IMAGE}" \
   --build-arg "RUST_IMAGE=${RUST_IMAGE}" \
-  --build-arg "UBUNTU_SNAPSHOT=${UBUNTU_SNAPSHOT}" \
-  --build-arg "SERVICE_APT_LOCK_SHA256=${SERVICE_APT_LOCK_SHA256}" \
   --build-arg "DOCKER_CLI_ARCHIVE=${DOCKER_CLI_ARCHIVE}" \
   --build-arg "DOCKER_CLI_ARCHIVE_SHA256=${DOCKER_CLI_ARCHIVE_SHA256}" \
   --build-arg "BROKER_POLICY_SHA256=${BROKER_POLICY_SHA256}" \
@@ -216,15 +208,14 @@ docker buildx build \
   --builder default \
   --platform linux/amd64 \
   --provenance=false \
+  --build-arg "TOOLCHAIN_BASE_IMAGE=${TOOLCHAIN_BASE_IMAGE}" \
+  --build-arg "RUNTIME_BASE_IMAGE=${RUNTIME_BASE_IMAGE}" \
   --pull=false \
   --no-cache \
   --target service \
   --output "type=docker,dest=${SERVICE_ARCHIVE},name=${SERVICE_IMAGE},rewrite-timestamp=true" \
   --build-arg "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" \
-  --build-arg "UBUNTU_IMAGE=${UBUNTU_IMAGE}" \
   --build-arg "RUST_IMAGE=${RUST_IMAGE}" \
-  --build-arg "UBUNTU_SNAPSHOT=${UBUNTU_SNAPSHOT}" \
-  --build-arg "SERVICE_APT_LOCK_SHA256=${SERVICE_APT_LOCK_SHA256}" \
   --build-arg "DOCKER_CLI_ARCHIVE=${DOCKER_CLI_ARCHIVE}" \
   --build-arg "DOCKER_CLI_ARCHIVE_SHA256=${DOCKER_CLI_ARCHIVE_SHA256}" \
   --build-arg "SOURCE_COMMIT=${SOURCE_COMMIT}" \
@@ -246,11 +237,12 @@ docker buildx build \
   --builder default \
   --platform linux/amd64 \
   --provenance=false \
+  --build-arg "TOOLCHAIN_BASE_IMAGE=${TOOLCHAIN_BASE_IMAGE}" \
+  --build-arg "RUNTIME_BASE_IMAGE=${RUNTIME_BASE_IMAGE}" \
   --pull=false \
   --target composition-gate-artifacts \
   --output "type=local,dest=${BUILD_EXPORT_DIR}/composition-gate" \
   --build-arg "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" \
-  --build-arg "NODE_IMAGE=${NODE_IMAGE}" \
   --build-arg "RUST_IMAGE=${RUST_IMAGE}" \
   --build-arg "RELAY_SOURCE_SHA256=${RELAY_SOURCE_SHA256}" \
   --build-arg "CAPTURE_SOURCE_SHA256=${CAPTURE_SOURCE_SHA256}" \

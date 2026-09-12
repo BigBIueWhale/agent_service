@@ -121,9 +121,20 @@ verify_service_archive() {
 # format and is refused rather than half-trusted: one archive form, checked
 # exactly. A release whose bundle disagrees with the pins it just wrote must
 # fail at the bundling step, not at some later restore.
+# The archive carries the two generic base images beside the five this release
+# built, because that is how a base reaches the other machine: images do not
+# reproduce across hosts, so a base can only travel as bytes. Their expected
+# IDs come from the stack lock, where they are already pinned as build inputs,
+# rather than being copied into the release lock as well -- one fact, one
+# place. The release lock pins the stack lock's own hash, so naming them there
+# is still covered by the release's identity.
 verify_service_archive_contents() {
   local archive="$1"
   python3 - "${archive}" \
+    "$(lock_value '.build.base.toolchain.image_tag')" \
+    "$(lock_value '.build.base.toolchain.image_id')" \
+    "$(lock_value '.build.base.runtime.image_tag')" \
+    "$(lock_value '.build.base.runtime.image_id')" \
     "$(lock_value '.agent.image_tag')" "$(release_value '.images.agent')" \
     "$(lock_value '.relay.image_tag')" "$(release_value '.images.relay')" \
     "$(lock_value '.capture.image_tag')" "$(release_value '.images.capture')" \
@@ -195,6 +206,40 @@ check_host_tools_and_versions() {
   require_equal "Docker security options" \
     "$(docker info --format '{{json .SecurityOptions}}')" \
     "$(jq -c '.host.docker_security_options' "${STACK_LOCK}")"
+}
+
+# The generic layers of this stack live in two base images that
+# `docker/Dockerfile.base` builds and `./scripts/build-base-images.sh` is the
+# only thing that fetches for. Our images are built FROM them and fetch
+# nothing, so the bases are build inputs like any other and are pinned by ID
+# rather than by tag: a tag is mutable and would let a differently-built base
+# be substituted silently, which is the whole failure this replaces.
+#
+# There is one behaviour here. A base that is absent, unpinned or drifted is
+# refused by name; nothing is rebuilt to repair it and nothing is pulled. The
+# bases travel to another machine inside the release archive, never by a
+# rebuild, because images do not reproduce across hosts.
+require_pinned_base_images() {
+  local name tag pinned observed
+  for name in toolchain runtime; do
+    tag="$(lock_value ".build.base.${name}.image_tag")"
+    pinned="$(jq -r ".build.base.${name}.image_id" "${STACK_LOCK}")"
+    if [[ "${pinned}" == "null" ]]; then
+      die "The ${name} base image is not pinned in the stack lock." \
+        "Build it with ./scripts/build-base-images.sh and record the ID it" \
+        "reports under .build.base.${name}.image_id."
+    fi
+    observed="$(docker image inspect --format '{{.Id}}' "${tag}" 2>/dev/null || true)"
+    if [[ "${observed}" != "${pinned}" ]]; then
+      die "The required ${name} base image is missing or incorrect." \
+        "Tag:      ${tag}" \
+        "Expected: ${pinned}" \
+        "Found:    ${observed:-nothing}" \
+        "No mutable tag or network pull will be substituted." \
+        "Restore the pinned bytes with: ./scripts/restore-service-images.sh" \
+        "or rebuild them with: ./scripts/build-base-images.sh"
+    fi
+  done
 }
 
 check_pinned_inputs() {

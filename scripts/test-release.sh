@@ -237,8 +237,15 @@ with tarfile.open(out, "w") as tar:
     tar.addfile(info, io.BytesIO(data))
 PY
 }
+# The bundle carries the two generic bases beside the five images the release
+# built, and their expected IDs come from the stack lock, where they are pinned
+# as build inputs, rather than being copied into the release lock as well.
 agreeing_index="$(jq -c '
   {manifests: [
+    {digest: $stack_docs[0].build.base.toolchain.image_id,
+     annotations: {"io.containerd.image.name": ("docker.io/library/" + $stack_docs[0].build.base.toolchain.image_tag)}},
+    {digest: $stack_docs[0].build.base.runtime.image_id,
+     annotations: {"io.containerd.image.name": ("docker.io/library/" + $stack_docs[0].build.base.runtime.image_tag)}},
     {digest: .images.agent,
      annotations: {"io.containerd.image.name": ("docker.io/library/" + $stack_docs[0].agent.image_tag)}},
     {digest: .images.relay,

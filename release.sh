@@ -263,17 +263,17 @@ seal() {
   fi
 }
 
-# Commit the staged seal. Every commit this loop makes ends with the same
-# trailers the operator's own commits carry: the authorship trailer, then
-# whatever the checkout's git configuration lists under the multi-valued key
-# `qwen38.commitTrailer` (a session link, for one). The trailers live in the
-# checkout's local git configuration, not here, so the script names no
-# session and no session is ever recorded by a script that outlives it.
+# Commit the staged seal. Every commit this loop makes ends with the trailers
+# the checkout's git configuration lists under the multi-valued key
+# `qwen38.commitTrailer`, in insertion order -- authorship first, then a
+# session link. They live in the configuration and not here: a script must not
+# mandate whose name appears on work it did not author, and a script outlives
+# both the session and the author it would otherwise hardcode. A checkout that
+# configures nothing gets a commit with no trailers, which is the right answer
+# for an operator this script knows nothing about.
 commit_sealed() {
   local subject="$1" trailer
-  local -a trailer_args=(
-    --trailer "Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-  )
+  local -a trailer_args=()
   while IFS= read -r trailer; do
     [[ -n "${trailer}" ]] || continue
     trailer_args+=(--trailer "${trailer}")
@@ -304,9 +304,16 @@ commit_sealed() {
 # The release-test harness proves the exclusions and that ordering so they
 # cannot rot silently.
 bundle_release_archive() {
-  local staging component tag
+  local staging component tag base
   local -a save_tags=()
   install --directory --mode=0755 "${PROJECT_DIR}/artifacts"
+  # The generic bases travel with the release. They are not components -- this
+  # release did not build them and does not re-pin them -- but our images are
+  # built FROM them, and an image does not reproduce on another host, so the
+  # only way the other machine gets the exact base is as bytes in this bundle.
+  for base in toolchain runtime; do
+    save_tags+=("$(lock_value ".build.base.${base}.image_tag")")
+  done
   for component in "${COMPONENTS[@]}"; do
     tag="$(lock_value "$(component_tag_path "${component}")")"
     save_tags+=("${tag}")
