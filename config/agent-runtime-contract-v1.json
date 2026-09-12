@@ -71,6 +71,7 @@
   },
   "generation": {
     "thinking_enabled": true,
+  "thinking_preserved": false,
     "reasoning_effort": "xhigh",
     "temperature": 1.0,
     "top_p": 0.95,
@@ -166,7 +167,7 @@
     ]
   },
   "components": {
-    "settings_sha256": "5be5eb3e2287654acea147942aca944fed5c90656e98850f55fb5c6d25731e03",
+    "settings_sha256": "6a469b264aa245ffb07c073cea869857d3bf066a09f5617bafeb3ec959e6df1f",
     "instructions_sha256": "1f7ed3adadae34d9d319091230ef55a6c3853224db40fac5da9e252d68e05a58",
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "35294a010ce77498a5cceffdd416a0e5cac1d327ac1842280f39615b1b7cc5d4",
