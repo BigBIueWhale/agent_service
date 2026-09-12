@@ -1,0 +1,16 @@
+The workspace holds the complete Keeper of the Lost Cities series as plain text
+under `txt/`: eleven files, about 1.55 million words in total.
+
+Read the entire series in full, first page to last, in publication order, and
+then write a single continuous summary of the whole series to
+`/artifacts/series-summary.md`.
+
+Do all of this yourself. Do not start a subagent for any part of it.
+
+Read every file to its end. Do not sample, skim, spot-check, or infer the
+contents of a file you have not read. The series is far larger than your context
+window; how you organise the work to cope with that is your decision.
+
+The summary itself should cover, for the series as a whole: the main plot arc
+from beginning to end, the principal characters and how they change, and the
+major reveals in the order they land.

@@ -1,0 +1,17 @@
+The workspace holds a single continuous narrative split across 26 plain-text
+files under `txt/`, named `chunk_00.txt` through `chunk_25.txt`. Read in that
+order they form one unbroken text of roughly 1.3 million characters.
+
+Read every chunk, in order, from `chunk_00.txt` to `chunk_25.txt`, each one to
+its end. Then write a single continuous summary of the whole narrative to
+`/artifacts/summary.md`.
+
+Do all of this yourself. Do not start a subagent for any part of it.
+
+Do not sample, skim, or infer the contents of a chunk you have not read. The
+text is larger than your context window; how you organise the work to cope with
+that is your decision.
+
+The summary should cover the main plot arc from beginning to end, the principal
+characters and how they change, and the major turning points in the order they
+land.
