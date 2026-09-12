@@ -149,38 +149,25 @@ high and max to the canonical xhigh rendering and rejects medium, low, or disabl
 thinking in this profile. A client cannot accidentally obtain the old Qwen3.6
 repetition intervention or a weaker fast path.
 
-Thinking from prior assistant turns is shed rather than carried. The sealed
-client settings send `chat_template_kwargs.preserve_thinking: false`, and the
-backend serves the same value as a default, so the policy holds at both layers
-and for any caller. It is stated rather than omitted because the chat template
-gates on `preserve_thinking is undefined or preserve_thinking is true or
-loop.index0 > ns.last_query_index`: an absent value satisfies the first clause,
-so omitting the field does not defer the choice to the engine, it selects
-retention. Measured against the deployed engine on a four-message history, an
-omitted value and an explicit `true` render the same 303 tokens while `false`
-renders 198.
+Every assistant turn already in the conversation is rendered with its reasoning,
+and a request that asks otherwise is refused. That is a property of the model
+this deployment serves, not of what this client happens to send: the served chat
+template is derived from the model's own by `scripts/derive-chat-template.py`,
+and one of its stages makes historical reasoning unconditional and raises on any
+`preserve_thinking` other than `true`. A caller writing their own client against
+the same backend gets the same guarantee, because it is enforced in the artifact
+rather than asserted by a launch argument or a sealed setting — which is why the
+sealed settings here send no retention field at all.
 
-The third clause is what decides how much is shed. `ns.last_query_index` is the
-index of the most recent `role: "user"` message whose rendered content is not
-wrapped in `<tool_response>`, and thinking is dropped from every assistant turn
-at or before it. That wrapper test never matches in an agent loop: tool results
-travel as `role: "tool"` messages and vLLM's chat parser keeps that role, so the
-template wraps them in `<tool_response>` only while rendering, after the
-backwards scan has already run. What does match is the client's own active-todo
-reminder — Qwen Code re-injects it every third tool turn
-(`ACTIVE_TODO_REMINDER_REFRESH_TURNS = 3`), its text opens with
-`<system-reminder>`, and the OpenAI converter emits it as a separate
-`role: "user"` message following the tool messages. Each injection becomes the
-new `ns.last_query_index` and moves the cut forward.
-
-How much reasoning survives is therefore a property of the trajectory, not of
-the request: it is decided by where the model last called `todo_write`. Across
-the 132 recorded full-suite runs under
-`artifacts/swe-rebench-2026-07-production-service/`, `todo_write` is called in
-100 and never called in the other 32; where it is never called the cut never
-leaves the opening prompt and nothing is shed. That dependence is a fact about
-this gate, and a run that measures retention has to record where its cut fell
-rather than assume it.
+The rule it replaces was not a policy. The model's own template keeps thinking
+since the most recent `role: "user"` message not wrapped in `<tool_response>`,
+and an agent task has exactly one user message — except that Qwen Code
+re-injects its active-todo reminder as its own user message every third tool turn
+(`ACTIVE_TODO_REMINDER_REFRESH_TURNS = 3`), and each injection moved the cut. How
+much reasoning survived therefore tracked where the model last called
+`todo_write`. Measured against the deployed engine, a pure tool loop of one
+prompt and four tool turns rendered identically whether the field was omitted or
+set to `false`, and the two diverged only once a reminder was injected.
 
 The served context window is divided into five shares that spend it exactly, and
 every context budget is one of them:

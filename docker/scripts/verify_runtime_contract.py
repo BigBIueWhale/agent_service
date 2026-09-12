@@ -199,10 +199,6 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
             "final_response_token_budget": generation["final_response_token_budget"],
             "chat_template_kwargs": {
                 "enable_thinking": generation["thinking_enabled"],
-                # Stated, not omitted: the chat template reads an absent
-                # value as true, so leaving it out selects retention rather
-                # than deferring the choice to the engine.
-                "preserve_thinking": generation["thinking_preserved"],
                 "reasoning_effort": generation["reasoning_effort"],
                 "add_vision_id": False,
             },
