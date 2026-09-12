@@ -2947,9 +2947,15 @@ def _validate_compaction_budget_after(state: State) -> None:
         for absent in ("autoCompactThreshold", "getAutoCompactThreshold"):
             forbid_text(state, path, absent, label=label)
 
-    # The compaction request is an ordinary one. Nothing splits the output
-    # budget into phases, nothing shrinks or splits the input, and nothing
-    # converges a failed attempt into a smaller retry.
+    # The compaction request is an ordinary one, and it is the same request on
+    # every attempt. A compaction may draw more than one candidate, because a
+    # candidate the model itself malformed says nothing about the request that
+    # produced it and an independently drawn sample is judged by the same rule.
+    # What is forbidden is a second attempt that asks for less than the first:
+    # a smaller budget, a split output, a shrunken input, a converging backoff.
+    # Those accept through a weaker route, which is a fallback wearing a
+    # retry's name, and the terms below are how that has been reintroduced
+    # before.
     for absent in (
         "COMPACT_THINKING_TOKEN_BUDGET",
         "COMPACT_FINAL_RESPONSE_TOKEN_BUDGET",
@@ -2965,6 +2971,54 @@ def _validate_compaction_budget_after(state: State) -> None:
             absent not in service_source,
             f"{label}: {service} splits or converges the compaction budget via '{absent}'",
         )
+    # Redrawing is bounded, and the bound is counted in candidates rather than
+    # in elapsed time or consecutive faults, so the cost of a transition is
+    # knowable before it runs.
+    _require_all(
+        state,
+        service,
+        (
+            "export const MAX_COMPACTION_CANDIDATE_ATTEMPTS = 4;",
+            "      outcome.kind === 'resampleable' &&",
+            "      rejectedAttempts.length + 1 < MAX_COMPACTION_CANDIDATE_ATTEMPTS",
+            "      outcome = await drawCandidate();",
+        ),
+        label=label,
+    )
+    # Only the model's own output earns another draw. A cause that is fixed
+    # given the frozen request -- an unsupported configuration, a transport or
+    # protocol fault, a workspace read, a counter -- refuses identically however
+    # often it is asked, so it is named rather than retried. The distinction is
+    # carried in the outcome's shape, not recovered from its status.
+    _require_all(
+        state,
+        service,
+        (
+            "          kind: 'accepted';",
+            "          kind: 'resampleable';",
+            "          kind: 'terminal';",
+        ),
+        label=label,
+    )
+    # Every draw is billed, so every draw is reported. The candidates a
+    # transition refused are retained beside the one that settled it, and the
+    # list is always present: "nothing was refused" and "refusals were not
+    # recorded" are different facts and must not share a representation.
+    _require_all(
+        state,
+        service,
+        ("    const rejectedAttempts: CompactionRejectedAttempt[] = [];",),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/turn.ts",
+        (
+            "  rejectedAttempts: CompactionRejectedAttempt[];",
+            "  rejectedAttempts: CompactionRejectedAttemptRecord[];",
+        ),
+        label=label,
+    )
     # The per-request phase-budget apparatus is gone from the layers that
     # carried it, so no caller can reintroduce a split budget.
     for path in (pipeline, generator):
@@ -3103,33 +3157,44 @@ def _validate_compaction_accounting_after(state: State) -> None:
         label=label,
     )
     service = "packages/core/src/services/chatCompressionService.ts"
+    # A request that was issued and then failed still spent the budget, and its
+    # prefix is the only evidence of where. `GenerationTextFailure` does not by
+    # itself prove a request left -- generateText wraps every error it caught in
+    # one, including failures from before the call -- so the attempt count is
+    # what separates a draw that spent something from one that never started.
     source = _require_all(
         state,
         service,
         (
             "error instanceof GenerationTextFailure",
             "error.partial.requestAttempts > 0",
-            "summary: error.partial.text",
-            "reasoning: error.partial.thoughtText",
-            "finishReason: error.partial.finishReason ?? null",
-            "requestAttempts: error.partial.requestAttempts",
-            "const outputAccounting: CompactionOutputAccounting = {",
+            "summary: partial.text",
+            "reasoning: partial.thoughtText",
+            "finishReason: partial.finishReason ?? null",
+            "requestAttempts: partial.requestAttempts",
+            "    ): CompactionOutputAccounting => ({",
             "usage: summaryUsage",
             "reasoning: summaryResult.thoughtText",
             "requestAttempts: summaryResult.requestAttempts",
         ),
         label=label,
     )
+    # One builder assembles the accounting, and every outcome reached after a
+    # draw carries what that draw spent: the terminal one carries it exactly
+    # when a request was issued, and each post-acceptance outcome carries the
+    # accepted draw's. None of them may report an attempt without its cost.
     _require(
-        source.count("const outputAccounting") == 1
-        and source.count("output: outputAccounting,") == 11,
+        source.count("const accountingFor = (") == 1
+        and source.count("const outputAccounting = accountingFor(outcome.accounting);") == 1
+        and source.count("? { output: accountingFor(outcome.accounting) }") == 1
+        and source.count("output: outputAccounting,") == 3,
         f"{label}: all post-generation outcomes must retain the same served evidence",
     )
     _require_all(
         state,
         "packages/core/src/services/chatCompressionService.test.ts",
         (
-            "[compaction-event] records where a truncated attempt spent its output budget",
+            "[compaction-event] records where every truncated draw spent its output budget",
             "[compaction-event] leaves the accounting null when no generation ran",
         ),
         label=label,

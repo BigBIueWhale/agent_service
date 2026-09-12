@@ -68,10 +68,12 @@ if "${PROJECT_DIR}/scripts/list-build-inputs.sh" | tr '\0' '\n' |
   grep -q '^artifacts/'; then
   fail 'artifacts/ entries are build inputs; bundling the archive would unsettle the release loop'
 fi
-archive_pin="$(jq -er '.archive.sha256' "${PROJECT_DIR}/config/release.lock.json")"
-archive_pin_mentions="$(grep -rl "${archive_pin}" "${PROJECT_DIR}/config" 2>/dev/null | sort || true)"
-[[ "${archive_pin_mentions}" == "${PROJECT_DIR}/config/release.lock.json" ]] ||
-  fail "the archive pin leaked outside the release lock: ${archive_pin_mentions}"
+if [[ "$(jq -er '.archive | type' "${PROJECT_DIR}/config/release.lock.json")" != "null" ]]; then
+  archive_pin="$(jq -er '.archive.sha256' "${PROJECT_DIR}/config/release.lock.json")"
+  archive_pin_mentions="$(grep -rl "${archive_pin}" "${PROJECT_DIR}/config" 2>/dev/null | sort || true)"
+  [[ "${archive_pin_mentions}" == "${PROJECT_DIR}/config/release.lock.json" ]] ||
+    fail "the archive pin leaked outside the release lock: ${archive_pin_mentions}"
+fi
 
 # ---------------------------------------------------------------------------
 # replace_exact_value rewrites one value and nothing else, and refuses when the
@@ -154,22 +156,41 @@ jq '.archive.sha256 = "not-a-hash"'   "${PROJECT_DIR}/config/release.lock.json" 
 if (validate_release_lock "${lock_copy}") >/dev/null 2>&1; then
   fail 'a release lock with a malformed archive hash was accepted'
 fi
+# "No bundle carries these images yet" is a fact the lock must be able to
+# state, and it is not the same fact as naming a bundle. Absence still is not
+# a way to say it: a reader must never have to infer which one was meant.
+jq '.archive = null' "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
+validate_release_lock "${lock_copy}" >/dev/null ||
+  fail 'a release lock stating that no archive has been bundled yet was refused'
+if (require_pinned_archive "${lock_copy}") >/dev/null 2>&1; then
+  fail 'an unpinned archive was accepted by the gate every consumer goes through'
+fi
+jq --arg sha "$(printf 'a%.0s' {1..64})" '.archive = {"sha256": $sha}' \
+  "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
+(require_pinned_archive "${lock_copy}") >/dev/null ||
+  fail 'a bundled archive was refused by the gate every consumer goes through'
 
 # ---------------------------------------------------------------------------
 # A release that changes any build input advances implementation_commit at
 # its FIRST seal — before the loop's next build, and rounds before the
 # converged images can be bundled and the archive pin adopted. Every build
-# inside the loop therefore runs against a lock whose archive pin still
-# names the PREVIOUS release's bundle, and every gate the build applies to
-# the lock must accept exactly that shape. A gate that tied the archive pin
-# to implementation_commit shipped once: it failed inside the loop, was not
-# an image-ID disagreement, so adoption could not repair it, and the
-# bundling step that would have satisfied it sat unreachable behind the
-# failing build — no input-changing release could be cut. Exercised on a
-# copy with the release's own edit primitive: first the seal-step commit
-# advance with the archive pin left behind (mid-loop shape), then the
-# bundle-step hash adoption (converged shape); the lock gate must accept
-# both.
+# inside the loop therefore runs against a lock that names images no bundle
+# carries yet, and every gate the build applies to the lock must accept
+# exactly that shape. A gate that tied the archive pin to
+# implementation_commit shipped once: it failed inside the loop, was not an
+# image-ID disagreement, so adoption could not repair it, and the bundling
+# step that would have satisfied it sat unreachable behind the failing build
+# — no input-changing release could be cut.
+#
+# The mid-loop shape is the archive unpinned, not the previous release's hash
+# left in place. Both let the loop converge, but only one of them is true:
+# the previous bundle carries the previous implementation's images, so a lock
+# naming it beside freshly pinned image IDs asserts a pairing that does not
+# hold, and nothing downstream can tell that lock from a converged one.
+# Exercised on a copy with the release's own primitives: the seal-step commit
+# advance and unpinning (mid-loop shape), then the bundle-step hash adoption
+# (converged shape); the lock gate must accept both, and the consumer gate
+# must accept only the second.
 # ---------------------------------------------------------------------------
 advancing_lock="${TEST_DIR}/advancing.lock.json"
 cp -- "${PROJECT_DIR}/config/release.lock.json" "${advancing_lock}"
@@ -177,15 +198,25 @@ sealed_commit="$(jq -er '.implementation_commit' "${advancing_lock}")"
 advanced_commit="0000000000000000000000000000000000000000"
 [[ "${advanced_commit}" != "${sealed_commit}" ]] ||
   fail 'the advanced-commit probe collided with the recorded implementation commit'
-replace_exact_value "${advancing_lock}" '.implementation_commit' \
-  "${sealed_commit}" "${advanced_commit}" >/dev/null
+write_sealed_release_identity "${advancing_lock}" "${advanced_commit}" \
+  "$(printf 'b%.0s' {1..64})" "$(printf 'c%.0s' {1..64})" >/dev/null ||
+  fail 'the seal step could not write this release identity'
+[[ "$(jq -er '.implementation_commit' "${advancing_lock}")" == "${advanced_commit}" ]] ||
+  fail 'the seal step did not advance implementation_commit'
+[[ "$(jq -er '.build_inputs_manifest_sha256' "${advancing_lock}")" == "$(printf 'b%.0s' {1..64})" ]] ||
+  fail 'the seal step did not record the moved build-input manifest'
+[[ "$(jq -er '.stack_lock_sha256' "${advancing_lock}")" == "$(printf 'c%.0s' {1..64})" ]] ||
+  fail 'the seal step did not record the stack lock it sealed'
+[[ "$(jq -er '.archive | type' "${advancing_lock}")" == "null" ]] ||
+  fail 'the seal step left an archive pin naming the previous release bundle'
 validate_release_lock "${advancing_lock}" >/dev/null ||
-  fail 'a mid-release lock (implementation_commit advanced, archive pin not yet re-adopted) was refused; no input-changing release could be cut'
-replace_exact_value "${advancing_lock}" '.archive.sha256' \
-  "$(jq -er '.archive.sha256' "${advancing_lock}")" \
-  "$(printf 'a%.0s' {1..64})" >/dev/null
+  fail 'a mid-release lock (implementation_commit advanced, no archive bundled yet) was refused; no input-changing release could be cut'
+write_release_archive_pin "${advancing_lock}" "$(printf 'a%.0s' {1..64})" >/dev/null ||
+  fail 'adopting a freshly bundled archive hash failed'
 validate_release_lock "${advancing_lock}" >/dev/null ||
   fail 'adopting a freshly bundled archive hash was refused by the lock gate'
+[[ "$(jq -er '.archive.sha256' "${advancing_lock}")" == "$(printf 'a%.0s' {1..64})" ]] ||
+  fail 'the adopted archive hash is not the one that was bundled'
 
 # ---------------------------------------------------------------------------
 # verify_service_archive_contents proves a bundle carries exactly the pinned

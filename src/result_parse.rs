@@ -1069,6 +1069,13 @@ mod tests {
     }
 
     fn compaction_record(output: serde_json::Value) -> String {
+        compaction_record_with(output, serde_json::json!([]))
+    }
+
+    fn compaction_record_with(
+        output: serde_json::Value,
+        rejected: serde_json::Value,
+    ) -> String {
         format!(
             "{}\n",
             serde_json::json!({
@@ -1076,9 +1083,24 @@ mod tests {
                 "session_id": "a", "parent_tool_use_id": null,
                 "data": {"status": "COMPRESSION_FAILED_OUTPUT_TRUNCATED", "succeeded": false,
                     "originalTokenCount": 233926, "newTokenCount": 233926,
-                    "triggerReason": "token_limit", "output": output}
+                    "triggerReason": "token_limit", "output": output,
+                    "rejectedAttempts": rejected}
             })
         )
+    }
+
+    /// A candidate the acceptance rule refused before another was drawn. It
+    /// carries what `output` carries, minus the transition-wide budget, plus
+    /// the rule it failed.
+    fn refused_compaction_candidate() -> serde_json::Value {
+        serde_json::json!({
+            "status": "COMPRESSION_FAILED_EMPTY_SUMMARY", "requestAttempts": 1,
+            "summary": "", "reasoning": "Reasoning that produced nothing.",
+            "finishReason": "STOP",
+            "usage": {"promptTokenCount": 233926, "candidatesTokenCount": 40,
+                "thoughtsTokenCount": 40, "cachedContentTokenCount": 100,
+                "totalTokenCount": 233966}
+        })
     }
 
     fn observed_compaction_output() -> serde_json::Value {
@@ -1107,6 +1129,74 @@ mod tests {
     }
 
     #[test]
+    fn retains_every_refused_candidate_beside_the_one_that_settled_the_transition() {
+        let refused = refused_compaction_candidate();
+        // A transition that drew three candidates, and one whose last draw
+        // never generated: the refusals are evidence of spend either way, so
+        // neither the presence nor the absence of `output` may discard them.
+        for output in [observed_compaction_output(), serde_json::Value::Null] {
+            let record = compaction_record_with(
+                output,
+                serde_json::json!([refused.clone(), refused.clone()]),
+            );
+            let result = MAIN_RESULT.replace("\"num_turns\":1", "\"num_turns\":0");
+            parse_text(&format!("{INIT}{record}{result}"))
+                .expect("refused candidates are retained beside the settling one");
+        }
+    }
+
+    #[test]
+    fn refuses_a_compaction_whose_refused_candidates_are_missing_or_malformed() {
+        let refused = refused_compaction_candidate();
+        let mut without_status = refused.clone();
+        without_status["status"] = serde_json::Value::Null;
+        let mut unattempted = refused.clone();
+        unattempted["requestAttempts"] = serde_json::json!(0);
+        // A refused candidate was drawn under the same frozen ceiling as the
+        // one that settled the transition, so it cannot have outspent it.
+        let mut past_budget = refused.clone();
+        past_budget["usage"] = serde_json::json!({"promptTokenCount": 233926,
+            "candidatesTokenCount": 49153, "thoughtsTokenCount": 40,
+            "cachedContentTokenCount": 100, "totalTokenCount": 283079});
+        let cases = [
+            (
+                serde_json::json!([without_status]),
+                "no non-empty status naming the rule it failed",
+            ),
+            (
+                serde_json::json!([unattempted]),
+                "reports no request attempt for a candidate that was drawn",
+            ),
+            (
+                serde_json::json!([past_budget]),
+                "does not nest within its prompt, output, total and budget",
+            ),
+            (serde_json::json!([7]), "is not an object"),
+            (serde_json::json!({}), "is not an array"),
+        ];
+        for (rejected, expected) in cases {
+            let record = compaction_record_with(observed_compaction_output(), rejected);
+            let error =
+                parse_text(&format!("{INIT}{record}{MAIN_RESULT}")).expect_err(expected);
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+        // Absent is not the same answer as empty, and only one of them is
+        // something this producer can mean.
+        let mut record: serde_json::Value =
+            serde_json::from_str(&compaction_record(observed_compaction_output())).unwrap();
+        record["data"]
+            .as_object_mut()
+            .unwrap()
+            .remove("rejectedAttempts");
+        let error = parse_text(&format!("{INIT}{record}\n{MAIN_RESULT}"))
+            .expect_err("a record without the field");
+        assert!(
+            error.to_string().contains("without a rejectedAttempts field"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn refuses_incomplete_or_inconsistent_compaction_observations() {
         let output = observed_compaction_output();
         let cases = [
@@ -1123,7 +1213,12 @@ mod tests {
             (
                 "requestAttempts",
                 serde_json::json!(0),
-                "positive budget or request-attempt count",
+                "reports no request attempt for a candidate that was drawn",
+            ),
+            (
+                "maxOutputTokens",
+                serde_json::json!(0),
+                "has no positive budget",
             ),
             ("usage", serde_json::json!(7), "neither an object nor null"),
         ];

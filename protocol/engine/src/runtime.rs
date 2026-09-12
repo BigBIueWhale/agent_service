@@ -212,6 +212,13 @@ fn validate_generation_summary(value: Option<Value<'_>>) -> ContractResult<()> {
 /// A compaction record distinguishes preflight refusal (output: null) from
 /// an attempted request whose partial text is retained even without served usage.
 /// Served counts, when present, obey the same five-field contract as the CLI.
+///
+/// A transition may draw more than one candidate when the model's own output
+/// fails the acceptance rule. `rejectedAttempts` holds the ones refused before
+/// the candidate `output` describes, oldest first, and is present whatever
+/// `output` is: a draw that was refused and billed must not disappear behind a
+/// later draw that never generated. Each carries the accounting `output`
+/// carries, minus the transition-wide budget, plus the rule it failed.
 fn validate_compaction_event(
     object: Value<'_>,
     line: usize,
@@ -253,45 +260,86 @@ fn validate_compaction_event(
     count(record, "originalTokenCount")?;
     count(record, "newTokenCount")?;
     string_or_null(record, "triggerReason")?;
-    let output = match record.get("output") {
-        Some(value) if value.is_null() => return Ok(()),
-        Some(value) => value
-            .as_object()
-            .ok_or_else(|| refuse("whose output is neither an object nor null"))?,
+
+    // What one drawn candidate spent. `budget` is the transition's frozen
+    // output ceiling when the record reports it; every candidate was issued
+    // under that same ceiling, so none of them may exceed it.
+    let candidate = |holder: Value<'_>, whose: &str, budget: Option<u64>| -> ContractResult<()> {
+        if count(holder, "requestAttempts")? == 0 {
+            return Err(refuse(&format!(
+                "whose {whose} reports no request attempt for a candidate that was drawn"
+            )));
+        }
+        for key in ["reasoning", "summary"] {
+            if !holder.get(key).is_some_and(Value::is_string) {
+                return Err(refuse(&format!("whose {whose} lacks the {key} string")));
+            }
+        }
+        string_or_null(holder, "finishReason")?;
+        let usage = match holder.get("usage") {
+            Some(value) if value.is_null() => return Ok(()),
+            Some(value) => value.as_object().ok_or_else(|| {
+                refuse(&format!(
+                    "whose {whose} usage is neither an object nor null"
+                ))
+            })?,
+            None => return Err(refuse(&format!("whose {whose} has no usage field"))),
+        };
+        let prompt = count(usage, "promptTokenCount")?;
+        let output_tokens = count(usage, "candidatesTokenCount")?;
+        let thinking = count(usage, "thoughtsTokenCount")?;
+        let cached = count(usage, "cachedContentTokenCount")?;
+        let total = count(usage, "totalTokenCount")?;
+        if thinking > output_tokens
+            || cached > prompt
+            || budget.is_some_and(|ceiling| output_tokens > ceiling)
+            || prompt.checked_add(output_tokens) != Some(total)
+        {
+            return Err(refuse(&format!(
+                "whose {whose} served usage does not nest within its prompt, output, total and budget"
+            )));
+        }
+        Ok(())
+    };
+
+    let budget = match record.get("output") {
+        Some(value) if value.is_null() => None,
+        Some(value) => {
+            let output = value
+                .as_object()
+                .ok_or_else(|| refuse("whose output is neither an object nor null"))?;
+            let max_output_tokens = count(output, "maxOutputTokens")?;
+            if max_output_tokens == 0 {
+                return Err(refuse("whose output has no positive budget"));
+            }
+            candidate(output, "output", Some(max_output_tokens))?;
+            Some(max_output_tokens)
+        }
         None => return Err(refuse("without an output field")),
     };
-    let max_output_tokens = count(output, "maxOutputTokens")?;
-    if max_output_tokens == 0 || count(output, "requestAttempts")? == 0 {
-        return Err(refuse(
-            "whose output has no positive budget or request-attempt count",
-        ));
-    }
-    for key in ["reasoning", "summary"] {
-        if !output.get(key).is_some_and(Value::is_string) {
-            return Err(refuse(&format!("whose output lacks the {key} string")));
-        }
-    }
-    string_or_null(output, "finishReason")?;
-    let usage = match output.get("usage") {
-        Some(value) if value.is_null() => return Ok(()),
-        Some(value) => value
+
+    // Always present, so "nothing was refused" cannot be read as "refusals
+    // were not recorded" — including when no candidate reached `output`.
+    let rejected = record
+        .get("rejectedAttempts")
+        .ok_or_else(|| refuse("without a rejectedAttempts field"))?
+        .elements()
+        .ok_or_else(|| refuse("whose rejectedAttempts is not an array"))?;
+    for (index, attempt) in rejected.enumerate() {
+        let whose = format!("rejected attempt {index}");
+        let attempt = attempt
             .as_object()
-            .ok_or_else(|| refuse("whose output usage is neither an object nor null"))?,
-        None => return Err(refuse("whose output has no usage field")),
-    };
-    let prompt = count(usage, "promptTokenCount")?;
-    let output_tokens = count(usage, "candidatesTokenCount")?;
-    let thinking = count(usage, "thoughtsTokenCount")?;
-    let cached = count(usage, "cachedContentTokenCount")?;
-    let total = count(usage, "totalTokenCount")?;
-    if thinking > output_tokens
-        || cached > prompt
-        || output_tokens > max_output_tokens
-        || prompt.checked_add(output_tokens) != Some(total)
-    {
-        return Err(refuse(
-            "whose served usage does not nest within its prompt, output, total and budget",
-        ));
+            .ok_or_else(|| refuse(&format!("whose {whose} is not an object")))?;
+        if !attempt
+            .get("status")
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.is_empty())
+        {
+            return Err(refuse(&format!(
+                "whose {whose} has no non-empty status naming the rule it failed"
+            )));
+        }
+        candidate(attempt, &whose, budget)?;
     }
     Ok(())
 }

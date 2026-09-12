@@ -55,8 +55,9 @@ validate_release_lock() {
     (.stack_lock_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.images | type == "object" and (keys == ["agent", "broker", "capture", "relay", "service"])) and
     ([.images[] | type == "string" and test("^sha256:[0-9a-f]{64}$")] | all) and
-    (.archive | type == "object" and (keys == ["sha256"])) and
-    (.archive.sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+    (.archive | type == "null" or
+      ((type == "object") and (keys == ["sha256"]) and
+       (.sha256 | type == "string" and test("^[0-9a-f]{64}$"))))
   ' "${lock_path}" >/dev/null || die "Release lock violates its exact schema or one-mode identity contract"
 }
 
@@ -73,13 +74,34 @@ validate_release_lock() {
 # wrong restore to reach.
 readonly SERVICE_ARCHIVE_PATH="${PROJECT_DIR}/artifacts/agent-service-images.tar"
 
-# Fail closed on a missing or byte-drifted archive before anything consumes
-# it. The pinned SHA256 is the archive's only trust anchor: a stale bundle
-# from an earlier release and a corrupt copy die identically on their hash,
-# and a bundle that hashes correctly cannot carry the wrong images, because
-# the hash is adopted only after the bundle's own OCI index is proved against
-# the pins.
+# Fail closed on an unpinned, missing or byte-drifted archive before anything
+# consumes it. The pinned SHA256 is the archive's only trust anchor: a stale
+# bundle from an earlier release and a corrupt copy die identically on their
+# hash, and a bundle that hashes correctly cannot carry the wrong images,
+# because the hash is adopted only after the bundle's own OCI index is proved
+# against the pins.
+#
+# `archive: null` is that adoption not having happened yet. A lock names the
+# images this release built the moment they are pinned, and rounds may pass
+# before a bundle carrying exactly those images exists; for that whole window
+# there is no archive to name. Saying so is not the same statement as naming
+# the previous release's bundle, and the lock must not be able to make the
+# second statement when the first is what is true -- a reader cannot tell a
+# stale hash from a current one, which is how a lock comes to assert a pairing
+# that is false. The two facts therefore get two values, and the one that
+# means "not yet" cannot be mistaken for a digest by anything that consumes it.
+# Accepts an optional path on the same terms as validate_release_lock, so the
+# release test harness can prove this refusal against a copy.
+require_pinned_archive() {
+  local lock_path="${1:-${RELEASE_LOCK}}"
+  [[ "$(jq -er '.archive | type' "${lock_path}")" != "null" ]] || \
+    die "This release lock pins no archive for the images it names." \
+      "The images were pinned by a build; bundling them is a later step." \
+      "Cut the archive with ./release.sh on the machine that built them."
+}
+
 verify_service_archive() {
+  require_pinned_archive
   [[ -f "${SERVICE_ARCHIVE_PATH}" && ! -L "${SERVICE_ARCHIVE_PATH}" ]] || \
     die "The pinned release image archive is missing or not a regular file." \
       "Expected: ${SERVICE_ARCHIVE_PATH}" \

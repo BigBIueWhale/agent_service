@@ -120,6 +120,64 @@ PY
     "$(json_value "${file}" "${path}")" "${new}"
 }
 
+# Setting and clearing the archive pin change the value's shape, so they are
+# not repins and do not go through replace_exact_value: that primitive swaps
+# one scalar for another and proves the swap by reading the scalar back, which
+# is exactly what a value that may be absent cannot offer. This edits the one
+# `"archive": ...` member in place, leaving every other byte of the lock alone,
+# and reads the result back through the lock's own gate. It takes its target
+# explicitly, on the same terms as validate_release_lock, so the release test
+# harness proves both edits against a copy rather than against the real lock.
+write_release_archive_pin() {
+  local lock_path="$1" digest="${2:-}"
+  if ! python3 - "${lock_path}" "${digest}" <<'PY'
+import re, sys
+file, digest = sys.argv[1:3]
+with open(file, encoding="utf-8") as handle:
+    raw = handle.read()
+replacement = (
+    '"archive": null'
+    if not digest
+    else '"archive": {\n    "sha256": "%s"\n  }' % digest
+)
+pattern = re.compile(r'"archive":\s*(?:null|\{[^{}]*\})')
+if len(pattern.findall(raw)) != 1:
+    sys.exit(f"refusing to rewrite the archive pin in {file}: it is not unique")
+with open(file, "w", encoding="utf-8") as handle:
+    handle.write(pattern.sub(lambda _: replacement, raw, count=1))
+PY
+  then
+    die "refusing to rewrite the archive pin in ${lock_path}"
+  fi
+  validate_release_lock "${lock_path}" ||
+    die "the rewritten archive pin does not satisfy the release lock schema"
+  require_equal "archive pin in $(basename "${lock_path}")" \
+    "$(json_value "${lock_path}" '.archive | if type == "null" then "none" else .sha256 end')" \
+    "${digest:-none}"
+}
+
+# One seal's worth of release identity, written together because it is one
+# fact: these inputs, at this commit, built into images no bundle carries yet.
+# Splitting the archive off from the three hashes is what let a lock keep a
+# pin that had stopped being true, so unpinning happens here, beside the
+# values whose change is exactly what invalidated it. Takes its target
+# explicitly so the release test harness proves all four effects on a copy.
+write_sealed_release_identity() {
+  local lock_path="$1" commit="$2" manifest="$3" stack_sha="$4"
+  replace_exact_value "${lock_path}" '.implementation_commit' \
+    "$(json_value "${lock_path}" '.implementation_commit')" "${commit}"
+  replace_exact_value "${lock_path}" '.build_inputs_manifest_sha256' \
+    "$(json_value "${lock_path}" '.build_inputs_manifest_sha256')" "${manifest}"
+  replace_exact_value "${lock_path}" '.stack_lock_sha256' \
+    "$(json_value "${lock_path}" '.stack_lock_sha256')" "${stack_sha}"
+  # The build inputs moved, so whatever bundle this lock named was built from
+  # a different implementation and carries different images. It is no longer
+  # this release's archive, and no bundle is until the loop converges and the
+  # bundling step cuts one, so the lock says that instead of keeping a hash
+  # that has silently stopped being true.
+  write_release_archive_pin "${lock_path}"
+}
+
 # The typed broker policy is itself hashed into the stack lock, so any repin
 # that touched it must carry that hash forward in the same step.
 resync_broker_policy_hash() {
@@ -191,14 +249,9 @@ seal() {
     fi
     commit="$(git -C "${PROJECT_DIR}" rev-parse HEAD)"
     stack_sha="$(sha256_file "${STACK_LOCK_PATH}")"
-    replace_exact_value "${RELEASE_LOCK_PATH}" '.implementation_commit' \
-      "$(json_value "${RELEASE_LOCK_PATH}" '.implementation_commit')" "${commit}"
-    replace_exact_value "${RELEASE_LOCK_PATH}" '.build_inputs_manifest_sha256' \
-      "$(json_value "${RELEASE_LOCK_PATH}" '.build_inputs_manifest_sha256')" \
-      "${manifest_after}"
-    replace_exact_value "${RELEASE_LOCK_PATH}" '.stack_lock_sha256' \
-      "$(json_value "${RELEASE_LOCK_PATH}" '.stack_lock_sha256')" "${stack_sha}"
-    printf '  release lock -> commit %s manifest %s\n' \
+    write_sealed_release_identity "${RELEASE_LOCK_PATH}" "${commit}" \
+      "${manifest_after}" "${stack_sha}"
+    printf '  release lock -> commit %s manifest %s, archive unpinned\n' \
       "${commit:0:12}" "${manifest_after:0:12}"
   fi
 
@@ -269,8 +322,7 @@ bundle_release_archive() {
   verify_service_archive_contents "${staging}" ||
     die "the freshly bundled archive disagrees with the pins this release wrote"
   mv -- "${staging}" "${SERVICE_ARCHIVE_PATH}"
-  replace_exact_value "${RELEASE_LOCK_PATH}" '.archive.sha256' \
-    "$(json_value "${RELEASE_LOCK_PATH}" '.archive.sha256')" \
+  write_release_archive_pin "${RELEASE_LOCK_PATH}" \
     "$(sha256_file "${SERVICE_ARCHIVE_PATH}")"
   # Re-read the adopted pin through the same gate every consumer uses, so a
   # release cannot end with an archive its own verifier would refuse.
