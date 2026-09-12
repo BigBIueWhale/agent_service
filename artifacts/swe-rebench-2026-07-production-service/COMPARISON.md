@@ -22,19 +22,30 @@ than chance, which is the exact binomial (McNemar) test on `b + c` trials. State
 and the two-sided exact p, not a bare accuracy difference over all tasks — that difference
 is dominated by the concordant pairs and will look small however large the effect is.
 
-**Secondary — cost, which is the reason the default is what it is.** Per run: turns,
-prompt and completion tokens, cached-prompt tokens, wall clock, and the number of
-compactions with the token position of each. The last of those is already in the
-evidence and already checked: every compaction writes a
-`{"type":"system","subtype":"compaction"}` record whose shape the runtime contract
-enforces — `status`, `succeeded`, `originalTokenCount`, `newTokenCount`,
-`triggerReason`, each drawn candidate's accounting and the transition's frozen budget
-(`protocol/engine/src/runtime.rs:212-265`). `originalTokenCount` is the token position
-the count alone would not give. What is missing is only the summary: no field of the
-session record carries the count, so it is read from the run's own events. Preserved thinking spends window on history;
-the claim that retention off "allows the single thread to continue for longer" is a
-prediction about compaction count and tokens per turn, and it is either visible in these
-numbers or it is not true.
+**Secondary — compaction, which is where the mechanism bites.** Not throughput: how
+soon and how often a run is forced to destroy its own history. Compaction is lossy
+summarisation and succeeds about 83% of the time, so reaching it sooner costs both detail
+and survival. Per run, record the number of compactions and the token position of each,
+with turns and token totals beside them. That evidence already exists and is already
+checked: every compaction writes a `{"type":"system","subtype":"compaction"}` record
+whose shape the runtime contract enforces — `status`, `succeeded`, `originalTokenCount`,
+`newTokenCount`, `triggerReason`, each drawn candidate's accounting and the transition's
+frozen budget (`protocol/engine/src/runtime.rs:212-265`). `originalTokenCount` is the
+position the count alone would not give. What is missing is only the summary: no field of
+the session record carries the count, so it is read from the run's own events.
+
+Measured on twelve synthetic agent turns against the live backend, preserved history
+grows monotonically at ~1,660 tokens per turn while unpreserved resets at each injected
+reminder — 21,717 tokens against 7,245 by turn 12. So the arms differ in *when* they
+reach the 161,792-token trigger, by roughly threefold on the same trajectory.
+
+**The stratum that answers the question.** Averaging the two arms over all tasks hides
+the mechanism. The informative stratum is the set of pairs where the **preserved arm
+compacted and the unpreserved arm did not**: there, and only there, the trade is actually
+exercised — the model's own reasoning in view, against a history that was never
+summarised away. If preserved wins that stratum, continuity is worth more than an intact
+history; if it loses, compaction is doing more damage than the reasoning trace is worth.
+Report that stratum separately, with its size, alongside the whole-plan result.
 
 **The covariate — how much thinking each unpreserved run actually shed.** Retention under
 `preserve_thinking: false` drops thinking from assistant turns at or before
