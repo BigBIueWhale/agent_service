@@ -227,3 +227,197 @@ stream. Pass v5 corrects each at its proper layer, still on Qwen Code:
 Passes v3 and v4 are retained as historical evidence; v5 runs all 41
 pairs fresh under the corrected conditions with composed-prompt and
 task-env hashes recorded per run (result schema 3).
+
+---
+
+Incidents 6 onward were found after pass v5, both under the suite and under the
+pre-suite harness tests (the probe and Test A/B/C, which exercise the same
+production service on a long single-thread workload). Each says plainly whether
+it is closed.
+
+## Incident 6 — a transport failure was delivered as a completed answer
+
+- **Observed**: six sessions across v3, v6 and v7, on both machines, finished
+  with `subtype: success`, `is_error: false`, exit 0, and a `num_turns` one
+  lower than the number of model calls in `events.jsonl`. The first theory — an
+  off-by-one in the service's turn counter — was wrong and is retracted.
+- **Forensics**: `num_turns` equals the count of `thinking` assistant events in
+  every case, and the unbilled turn is always the last one. The service counts
+  assistant events with nonzero `input_tokens`, and usage attaches only to
+  whichever assistant message is open when `GeminiEventType.Finished` arrives,
+  so a turn that starts and then dies reports no usage.
+- **Root cause**, two independent defects:
+  1. `nonInteractiveCli.ts` raised `GeminiEventType.Error` only under
+     `outputFormat === OutputFormat.TEXT`. Under `json` / `stream-json` — how
+     the service always runs — the error text was appended to the assistant
+     message as ordinary content and the session completed successfully. A hard
+     transport failure reached the caller as an answer. This affected **every
+     JSON-mode caller of this service**, not only the benchmark.
+  2. `DEFAULT_STREAM_MAX_LIFETIME_MS = 900000`, upstream's remote-gateway
+     default, is shorter than a legitimate maximum-length generation here:
+     262,144 tokens at the measured ~30 tok/s is ~2.4 h. It killed a healthy
+     stream delivering 30 chunks/s
+     (`full-suite-v3/runs/apache__hugegraph-3037/01-unpreserved`, 27,364 chunks
+     in 904 s).
+- **Fix** (`330b1c0`): the format condition is gone — the JSON error-result path
+  already existed — and both stream guards are pinned in the runtime
+  contract, exported by `docker/config/run_agent.sh` and asserted at build time by
+  `docker/scripts/verify_runtime_contract.py:324-335`,
+  which also exports them into the agent's environment (`:382-383`):
+  `stream_idle_timeout_ms` 240,000 and `stream_max_lifetime_ms` 21,600,000 —
+  four minutes idle, six hours of life — with the lifetime required to exceed
+  the idle bound, since the idle watchdog is the stall detector and the lifetime
+  cap is only the drip-feed backstop.
+- **Deliberately not changed**: the service's `num_turns` cross-check. It was
+  never the defect; it was the only thing that caught defect 1.
+- **Closed.**
+
+## Incident 7 — a subagent exhausting its turn budget voided the whole session
+
+- **Observed** (2026-08-27): a session in which a subagent hit `MAX_TURNS` was
+  discarded in its entirety, with no result for the main thread's completed
+  work.
+- **Root cause**: the subagent's terminal `result` event carried no owning
+  tool-call id, so the reader accepted it as the session's own terminal result.
+  Everything after it was then "after the terminal", and the stream failed
+  certification.
+- **Fix (service half)**: a subagent `result` no longer terminates a session;
+  the error is "no main-session terminal result", and nothing may follow the
+  session's own. Pinned by `rejects_a_stream_that_ends_at_a_subagent_result` and
+  `rejects_a_subagent_result_after_the_session_result`, with many tests running
+  a `MAX_TURNS` subagent result followed by a main result and certifying
+  normally. The convention is one-way by design: null-or-absent
+  `parent_tool_use_id` means the main session, so any other shape can only
+  exclude an event from the main thread, never admit one to it.
+- **Still open (emitter half)**: that the patched client *stamps* a subagent's
+  terminal `result` with its owning tool-call id, or does not emit it. This must
+  not be repaired service-side with a heuristic (`num_turns == 0`, zero usage,
+  last-result-wins): such a rule would also swallow genuine stream corruption,
+  which is the invariant the check exists to protect. This is the open lead for
+  **Test B**, which hands an entire corpus to exactly one subagent and has never
+  once succeeded.
+
+## Incident 8 — a pass cannot be resumed across a record-schema generation
+
+- **Observed**: after the turn budget became a per-session creation field
+  (`6830863`), pass v8's committed result directories were no longer
+  interpretable by the service that wrote them, so the pass could only be
+  restarted under a new root, not resumed.
+- **Root cause**: a terminal record is parsed strictly, and a record written by
+  a superseded schema is indistinguishable — to a strict parser — from a
+  corrupt one. Startup treated both as a reason to refuse.
+- **Fix** (`78f669c`): a well-formed record from a superseded schema is now its
+  own named fact — `uninterpreted_terminal_record`, HTTP 409 — and the session
+  list reports `sessions` and `uninterpreted_records` separately. Such a record
+  is preserved, carries no recovery or mutation authority, and does not block
+  startup.
+- **Closed**, with the operational consequence recorded: a pass root is
+  per-release evidence, and the driver's `PASS_ROOT` (`full-suite-run.sh:73`) is
+  the only authority for which root is current.
+
+## Incident 9 — serial compaction, not any single bug, was the dominant failure mode
+
+- **Observed**: Test A (the main agent reads an 11-book, 1,554,654-word corpus
+  itself, subagents forbidden) failed three times, each on a different defect:
+  a compaction reasoning runaway; a torn 219 KB record voiding the whole
+  stream; then a malformed snapshot — five of six sections, `<intent>` closed by
+  `</environment>`, `<environment>` absent altogether — alongside an
+  uncertifiable `stream_event`.
+- **Arithmetic**: a full Test A run needs ~427 reads, ~970 turns, ~18 h and
+  **~28 serial compactions**. At the observed per-compaction success of 15/18
+  (83.3%), single-attempt survival is 0.6%. Retrying a failed compaction lifts
+  the *base*, not the exponent: k=2 gives 45.4%, k=3 gives 87.8%, k=4 gives
+  97.9%, for 17–20% more attempts because the geometric sum is bounded. No
+  single fix could have saved these runs; the exponent was the problem.
+- **Fixes**: bounded resampling of a malformed compaction candidate
+  (`d588713`), and the compaction output budget derived rather than clamped —
+  `contextLimit - summaryRequestTokenCount` instead of a flat reserve, so a
+  request lighter than the bounded worst case buys the snapshot more room, and
+  one that would leave less than the reserve is refused rather than quietly
+  shrunk.
+- **Closed for the mechanism, open for the evidence**: no Test A run has yet
+  completed under the resampling build.
+
+## Incident 10 — the retention comparison silently became a repeated run
+
+- **Observed** (2026-09-12): the suite still produces two attempts per task and
+  a `pair-summary.json` that calls them a pair, but both attempts now run the
+  same configuration. The dimension the pair was named for is gone, and nothing
+  fails.
+- **Forensics**: `full-suite-v8` and `full-suite-v9` hold `01-unpreserved` and
+  `02-preserved` per task, with `"variant": {"preserve_thinking": false|true}`
+  in both the pair summary and the session record. The current driver
+  (`full-suite-run.sh:690-697`) names attempts by `printf '%02d'` alone, and
+  `grep -c variant` over the driver returns 0. `full-suite-v10` — the only pass
+  opened since — holds a bare `01-unpreserved` and no pair summary, under the
+  older naming, so nothing has ever run under the current driver.
+- **Root cause**, two edits with one shape:
+  1. `58b1ec7` deleted the per-session retention surface, including the sealed
+     settings file for the preserved arm, on the premise that "the inference
+     engine's own template governs thinking retention". The template
+     (`chat_template.jinja:117`) gates on `preserve_thinking is undefined or ...
+     is true`, so **absence is the enabled state**. Removing the entry did not
+     delegate the choice; it flipped the production default to preserved-ON,
+     which is the mode the requirements exclude ("preserved thinking off ... by
+     default in our deployment").
+  2. The driver then lost the arm from its ordinals, leaving the pairing
+     structure with nothing to compare.
+- **Why this is the worst shape a regression can take**: every other defect this
+  week announced itself — a build refused, a gate failed, a lock disagreed. This
+  one changed what a recorded number *means* while every name, schema version
+  and directory layout stayed identical.
+- **Open.** The fix spans all three layers: the engine default
+  (`config/runtime-v1.sh` gains `"preserve_thinking":false` in
+  `--default-chat-template-kwargs`), the service (the sealed entry stated at
+  `false`, one optional creation field, two pinned settings artifacts, the arm
+  recorded in every session record), and the driver (the ordinal carries the arm
+  again). Because retention under `false` sheds at `ns.last_query_index`, which
+  the client's active-todo reminder advances every third tool turn, each run
+  will also record how much thinking actually survived — the covariate that
+  makes the comparison readable instead of merely available.
+
+## Incident 11 — the workstation hard-crashes under serving load
+
+- **Observed**: repeated whole-machine crashes on the primary workstation while
+  serving the model under benchmark load, ending sessions with no terminal
+  record and leaving pass v10's single run with `created.json` and nothing else.
+- **Disposition** (2026-09-06): all GPU work moved to a second machine and runs
+  there exclusively. Images are **not** reproducible across hosts, so a release
+  reaches the second machine only through its pinned offline image archive,
+  never a rebuild.
+- **Closed as an operating decision**, not as a repair: the crash itself was not
+  root-caused, and the workstation is no longer asked to serve.
+
+## Incident 12 — a container-runtime upgrade mid-release faked an image-ID drift
+
+- **Observed** (2026-09-02): `release.sh` chased an image ID that had not really
+  moved, and an in-flight build was cancelled.
+- **Root cause**: a `containerd.io` upgrade and service restart underneath the
+  build truncated BuildKit's timestamp rewrite, leaving orphaned
+  `containerd-shim` processes. `docker.service` was never restarted, so
+  `journalctl -u docker` shows nothing and the cause is easy to misattribute —
+  it was first blamed on concurrent Docker work of our own.
+- **Disposition**: recorded rather than guarded. A release must not span a
+  runtime upgrade; if one happens, the round is void and is re-run rather than
+  adopted.
+
+## Incident 13 — every build re-fetched its dependencies from third-party mirrors
+
+- **Observed**: each `./build.sh` fetched ~500 Ubuntu packages from
+  `snapshot.ubuntu.com` and 2,060 npm tarballs from `registry.npmjs`, and the
+  host's root filesystem reached 100% with **359.7 GB** of BuildKit cache that
+  could not be attributed to this project by name.
+- **Root cause**: generic third-party layers — the pinned apt set, the
+  toolchains and the Node dependency bytes — were rebuilt on our own release
+  cadence, which moves many times a day, rather than on the cadence of the pins
+  that actually change.
+- **Fix**: those layers now live in two base images built by one script
+  (`scripts/build-base-images.sh`), pinned by exact ID in the stack lock,
+  verified before every build and transported inside the release archive.
+  Measured after the split: `snapshot.ubuntu.com` 0 lines,
+  `registry.npmjs` 0 lines, 2,060 packages installed offline in 7 s, all 337
+  in-image test files still executed. Cost: a 4.98 GB toolchain base and a
+  147 MB runtime base, on our own disk and removable by name.
+- **Closed**, with one leftover being finished: the pinned upstream client
+  tarball is still fetched from `codeload.github.com` twice per build, and moves
+  into the toolchain base so the common path fetches nothing at all.
