@@ -36239,7 +36239,48 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      });
  
      it('should throw error if message not started', () => {
-@@ -457,24 +605,30 @@
+@@ -310,12 +458,40 @@
+         type: 'text',
+         text: 'Hello world',
+       });
+       expect(message.message.stop_reason).toBeNull();
+     });
+ 
++    it('never renders a transport error as something the model said', () => {
++      adapter.startAssistantMessage();
++      adapter.processEvent({
++        type: GeminiEventType.Content,
++        value: 'partial answer',
++      });
++      adapter.processEvent({
++        type: GeminiEventType.Error,
++        value: { error: { message: 'terminated by remote host' } },
++      });
++
++      const message = adapter.exposeBuildMessage(null);
++      const rendered = JSON.stringify(message.message.content);
++
++      // The failure belongs to the transport, not to the model. Appending it
++      // here made it indistinguishable from model output to anything that
++      // reads assistant text -- a transcript reader, an eval harness, or a
++      // parent agent reading a subagent's report. It is carried instead by the
++      // caller's stderr line and by the terminal record, whose subtype and
++      // is_error cannot be separated from it.
++      expect(rendered).not.toContain('terminated by remote host');
++      expect(message.message.content).toHaveLength(1);
++      expect(message.message.content[0]).toMatchObject({
++        type: 'text',
++        text: 'partial answer',
++      });
++    });
++
+     it('should set stop_reason to tool_use when message contains only tool_use blocks', () => {
+       adapter.startAssistantMessage();
+       adapter.processEvent({
+         type: GeminiEventType.ToolCallRequest,
+         value: {
+           callId: 'tool-1',
+@@ -457,24 +633,30 @@
    describe('startAssistantMessageInternal', () => {
      it('should reset message state', () => {
        const state = adapter.exposeCreateMessageState();
@@ -36272,7 +36313,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      });
    });
  
-@@ -864,22 +1018,28 @@
+@@ -864,22 +1046,28 @@
      it('should process Finished events with usage metadata', () => {
        adapter.processEvent({
          type: GeminiEventType.Finished,
@@ -36301,7 +36342,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should ignore events after finalization', () => {
        adapter.processEvent({
          type: GeminiEventType.Content,
-@@ -895,12 +1055,123 @@
+@@ -895,12 +1083,123 @@
        const state = adapter['mainAgentMessageState'];
        expect(state.blocks[0]).toMatchObject({
          type: 'text',
@@ -36425,7 +36466,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      beforeEach(() => {
        adapter.startAssistantMessage();
      });
-@@ -1244,12 +1515,32 @@
+@@ -1244,12 +1543,32 @@
  
        const message = adapter.emittedMessages[0];
        if (message.type === 'system') {
@@ -36458,7 +36499,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should be a no-op in base class (does not emit any message)', () => {
        const request: ToolCallRequestInfo = {
          callId: 'tool-call-1',
-@@ -1280,13 +1571,14 @@
+@@ -1280,13 +1599,14 @@
        // Update lastAssistantMessage manually since test adapter doesn't do it automatically
        adapter['lastAssistantMessage'] = message;
      });
@@ -36474,7 +36515,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1301,13 +1593,14 @@
+@@ -1301,13 +1621,14 @@
          expect(result.num_turns).toBe(1);
        }
      });
@@ -36490,7 +36531,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1320,13 +1613,14 @@
+@@ -1320,13 +1641,14 @@
          expect(result.error?.message).toBe('Test error');
        }
      });
@@ -36506,7 +36547,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1335,19 +1629,27 @@
+@@ -1335,19 +1657,27 @@
        if (!result.is_error) {
          expect(result.result).toBe('Custom summary');
        }
@@ -36539,7 +36580,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1355,12 +1657,13 @@
+@@ -1355,12 +1685,13 @@
  
        expect(result.usage).toEqual(usage);
      });
@@ -36553,7 +36594,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            totalSuccess: 4,
            totalFail: 1,
            totalDurationMs: 1000,
-@@ -1375,13 +1678,14 @@
+@@ -1375,13 +1706,14 @@
          files: {
            totalLinesAdded: 10,
            totalLinesRemoved: 5,
@@ -36569,7 +36610,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1392,13 +1696,14 @@
+@@ -1392,13 +1724,14 @@
        }
      });
  
@@ -36585,7 +36626,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1408,13 +1713,14 @@
+@@ -1408,13 +1741,14 @@
        }
      });
  
@@ -36601,7 +36642,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: payload,
        };
  
-@@ -1426,15 +1732,16 @@
+@@ -1426,15 +1760,16 @@
            (result as unknown as { structured_result?: unknown })
              .structured_result,
          ).toEqual(payload);
@@ -36620,7 +36661,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1451,13 +1758,14 @@
+@@ -1451,13 +1786,14 @@
        // schema (`{}`). The previous `!== undefined` guard collapsed
        // "absent" with "submitted-as-undefined", silently dropping the
        // field and falling back to the free-text result. Track presence
@@ -36636,7 +36677,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: undefined,
        };
  
-@@ -1502,13 +1810,18 @@
+@@ -1502,13 +1838,18 @@
  
    describe('emitSubagentErrorResult', () => {
      it('should emit subagent error result', () => {
@@ -36656,7 +36697,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          (msg) => msg.type === 'result' && msg.is_error === true,
        );
        expect(errorResult).toBeDefined();
-@@ -1525,13 +1838,18 @@
+@@ -1525,13 +1866,18 @@
      it('should finalize pending assistant message before emitting error', () => {
        const parentToolUseId = 'parent-tool-1';
        adapter.startSubagentAssistantMessage(parentToolUseId);
@@ -36676,7 +36717,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        );
        expect(assistantMessage).toBeDefined();
      });
-@@ -1619,28 +1937,246 @@
+@@ -1619,26 +1965,244 @@
      });
    });
  
@@ -36750,8 +36791,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        parent_tool_use_id: parentToolUseId,
 +        num_turns: 3,
 +        error: { message: 'MAX_TURNS' },
-+      });
-+    });
+       });
+     });
 +
 +    it('[subagent-scope] leaves the session terminal result unscoped', () => {
 +      adapter.emitResult({
@@ -36795,10 +36836,10 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        subtype: 'error_during_execution',
 +        is_error: true,
 +        parent_tool_use_id: null,
-       });
-     });
-   });
- 
++      });
++    });
++  });
++
 +  describe('root usage provenance', () => {
 +    it.each([AgentTerminateMode.GOAL, AgentTerminateMode.ERROR])(
 +      'keeps the supplied session observation summary separate from assistant and child records on %s',
@@ -36918,15 +36959,13 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        expect(results[1].usage).toEqual(usage);
 +      },
 +    );
-+  });
-+
+   });
+ 
    describe('getSessionId and getModel', () => {
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
        expect(mockConfig.getSessionId).toHaveBeenCalled();
-     });
- 
-@@ -1764,12 +2300,46 @@
+@@ -1764,12 +2328,46 @@
  
          const result = toolResultContent(response);
  
@@ -36973,7 +37012,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            resultDisplay: {
              type: 'vision_bridge_notice' as const,
              summary: 'Transcribed PDF pages 20-23; remaining pages 24-25',
-@@ -1810,13 +2380,13 @@
+@@ -1810,13 +2408,13 @@
            error: undefined,
            errorType: undefined,
          };
@@ -36988,7 +37027,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        it('prefers a top-level tool error over content with a vision bridge disclosure', () => {
          const response = {
            callId: 'pdf-failure',
-@@ -1992,19 +2562,8 @@
+@@ -1992,19 +2590,8 @@
  
          const result = extractTextFromBlocks(blocks);
  
@@ -37011,14 +37050,13 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
-@@ -1,79 +1,88 @@
+@@ -1,79 +1,87 @@
 +import {
 +  requireServedUsage,
 +  formatVisionBridgeNoticeDisplay,
 +  GeminiEventType,
 +  isVisionBridgeNoticeDisplay,
 +  ToolErrorType,
-+  parseAndFormatApiError,
 +} from '@qwen-code/qwen-code-core';
  /**
   * @license
@@ -37038,14 +37076,14 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +  SubagentRoundRecord,
    McpToolProgressData,
    ShellProgressData,
--} from '@qwen-code/qwen-code-core';
+ } from '@qwen-code/qwen-code-core';
 -import {
 -  formatVisionBridgeNoticeDisplay,
 -  GeminiEventType,
 -  isVisionBridgeNoticeDisplay,
 -  ToolErrorType,
 -  parseAndFormatApiError,
- } from '@qwen-code/qwen-code-core';
+-} from '@qwen-code/qwen-code-core';
  import type { Part, GenerateContentResponseUsageMetadata } from '@google/genai';
  import type {
    CLIAssistantMessage,
@@ -37112,7 +37150,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * top-level `structured_result` field is added to the result message.
     */
    readonly structuredResult?: unknown;
-@@ -91,13 +100,17 @@
+@@ -91,13 +99,17 @@
    emitUserMessage(parts: Part[], parentToolUseId?: string | null): void;
    emitToolResult(
      request: ToolCallRequestInfo,
@@ -37131,7 +37169,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * In non-streaming mode, this is a no-op.
     *
     * @param request - Tool call request info
-@@ -116,22 +129,25 @@
+@@ -116,22 +128,25 @@
   */
  export interface JsonOutputAdapterInterface extends MessageEmitter {
    startAssistantMessage(): void;
@@ -37157,7 +37195,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    ): void;
  
    getSessionId(): string;
-@@ -193,44 +209,25 @@
+@@ -193,44 +208,25 @@
        state = this.createMessageState();
        this.subagentMessageStates.set(parentToolUseId, state);
      }
@@ -37212,13 +37250,33 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * Builds a CLIAssistantMessage from the current message state.
     *
     * @param parentToolUseId - null for main agent, string for subagent
-@@ -647,22 +644,21 @@
-           event.value.error,
-           this.config.getContentGeneratorConfig()?.authType,
-         );
-         this.appendText(state, errorText, null);
+@@ -637,32 +633,32 @@
+       case GeminiEventType.Finished:
+         if (event.value?.usageMetadata) {
+           state.usage = this.createUsage(event.value.usageMetadata);
+         }
+         this.finalizePendingBlocks(state, null);
          break;
-       }
+-      case GeminiEventType.Error: {
+-        // Format the error message using parseAndFormatApiError for consistency
+-        // with interactive mode error display
+-        const errorText = parseAndFormatApiError(
+-          event.value.error,
+-          this.config.getContentGeneratorConfig()?.authType,
+-        );
+-        this.appendText(state, errorText, null);
++      case GeminiEventType.Error:
++        // Deliberately not rendered. A transport or API failure is not
++        // something the model said, and appending it here put the provider's
++        // error string into the assistant message's content blocks, where it
++        // is indistinguishable from model output to anything that reads
++        // assistant text -- a transcript reader, an eval harness, or a parent
++        // agent reading a subagent's report. The failure is already carried
++        // twice, in the places that can say what it is: the caller writes the
++        // same text to stderr and ends the run with a terminal record whose
++        // subtype and is_error are structurally inseparable from it.
+         break;
+-      }
 -      case GeminiEventType.ModelFallback:
 -        // Surface model fallback transitions so non-interactive consumers
 -        // (CI pipelines, SDK clients) can observe capacity-driven model
@@ -37281,17 +37339,13 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    /**
     * Processes a subagent tool call.
     * This is a shared implementation used by both streaming and non-streaming adapters.
-@@ -756,12 +759,43 @@
- 
-     // Process tool use block creation and closure
-     // Subclasses can override hook methods to emit stream events
-     this.processSubagentToolUseBlock(state, index, toolCall, parentToolUseId);
+@@ -760,12 +763,43 @@
  
      // Finalize tool_use message immediately
-+    this.finalizeSubagentAssistantMessage(parentToolUseId);
-+    this.startSubagentAssistantMessage(parentToolUseId);
-+  }
-+
+     this.finalizeSubagentAssistantMessage(parentToolUseId);
+     this.startSubagentAssistantMessage(parentToolUseId);
+   }
+ 
 +  /**
 +   * Emits one completed subagent model round as the assistant messages it
 +   * produced: its reasoning as a thinking block, its visible text as a text
@@ -37319,12 +37373,16 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +    this.ensureMessageStarted(state, parentToolUseId);
 +    state.usage = this.createUsage(round.usageMetadata);
 +
-     this.finalizeSubagentAssistantMessage(parentToolUseId);
-     this.startSubagentAssistantMessage(parentToolUseId);
-   }
- 
++    this.finalizeSubagentAssistantMessage(parentToolUseId);
++    this.startSubagentAssistantMessage(parentToolUseId);
++  }
++
    /**
     * Processes a tool use block for subagent.
+    * This method is called by processSubagentToolCall to handle tool use block creation,
+    * input setting, and closure. Subclasses can override this to customize behavior.
+    *
+    * @param state - Message state
 @@ -1077,20 +1111,28 @@
    }
  
@@ -37332,13 +37390,12 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * Emits a system message.
     * @param subtype - System message subtype
     * @param data - Optional data payload
--   */
--  emitSystemMessage(subtype: string, data?: unknown): void {
 +   * @param parentToolUseId - Owning agent tool-call id when the event belongs
 +   *   to a subagent; null (the default) for the main session. Same convention
 +   *   as every assistant/user message, so one consumer rule separates the
 +   *   parent thread from each subagent.
-+   */
+    */
+-  emitSystemMessage(subtype: string, data?: unknown): void {
 +  emitSystemMessage(
 +    subtype: string,
 +    data?: unknown,
@@ -37374,10 +37431,9 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
      const baseUuid = randomUUID();
      const baseSessionId = this.getSessionId();
--
--    if (options.isError) {
 +    const terminal = TERMINAL_RESULT_BY_STATE[options.terminateMode];
-+
+ 
+-    if (options.isError) {
 +    if (terminal.isError) {
        const errorMessage = options.errorMessage ?? 'Unknown error';
        return {
@@ -37465,7 +37521,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        error: { message: errorMessage },
      };
    }
-@@ -1436,22 +1488,28 @@
+@@ -1436,23 +1488,29 @@
    if (responsePartsError) {
      return responsePartsError;
    }
@@ -37488,17 +37544,18 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      response.resultDisplay.trim().length > 0
    ) {
      return response.resultDisplay;
--  }
+   }
 -  if (response.responseParts && response.responseParts.length > 0) {
 -    // Always use functionResponsePartsToString to properly handle
 -    // functionResponse parts that contain output content
 -    return functionResponsePartsToString(response.responseParts);
-   }
+-  }
    return undefined;
  }
  
  /**
   * Extracts text from content blocks.
+  *
 @@ -1462,18 +1520,6 @@
  export function extractTextFromBlocks(blocks: ContentBlock[]): string {
    return blocks
@@ -99485,7 +99542,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    getRuntimeContentGenerator,
    runWithAgentContext,
    runWithRuntimeContentGenerator,
-@@ -46,40 +58,495 @@
+@@ -46,40 +58,621 @@
  } from '../../core/contentGenerator.js';
  import {
    getInvocationContext,
@@ -99533,9 +99590,6 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
  
 -    const interactiveChat = await core.createChat(new ContextState(), {
 -      interactive: true,
--    });
--    expect(interactiveChat).toBeDefined();
--    expect(enableSpy).toHaveBeenCalledTimes(1);
 +    const directory = fs.mkdtempSync(
 +      path.join(os.tmpdir(), 'core-owned-writer-'),
 +    );
@@ -99597,10 +99651,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +      }
 +    },
 +  );
- 
--    const headlessChat = await core.createChat(new ContextState());
--    expect(headlessChat).toBeDefined();
--    expect(enableSpy).toHaveBeenCalledTimes(1);
++
 +  it.each(['durable append', 'sync refusal'] as const)(
 +    'publishes tool calls only after the actual child writer: %s',
 +    async (kind) => {
@@ -99710,8 +99761,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +    },
 +  );
 +});
- 
--    enableSpy.mockRestore();
++
 +describe('AgentCore round terminal reason', () => {
 +  // A round that requests no tools is the agent's report only when the model
 +  // wrote it to the end. These drive the reasoning loop over one round whose
@@ -99795,6 +99845,138 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +
 +    expect(result.terminateMode).toBeNull();
 +    expect(result.text).toBe('Writing note_18:');
++  });
++
++  // What a stopped agent has to show for itself. Every abnormal exit -- the
++  // turn budget, a detected loop, cancellation -- used to return an empty
++  // report, so a parent reading a subagent that had worked for a hundred turns
++  // was told it "produced no report". The text is banked on the way out of a
++  // round rather than at each exit, so a new exit path cannot discard it by
++  // saying nothing.
++  describe('banked work on an abnormal exit', () => {
++    function makeToolCallingChat(): GeminiChat {
++      return {
++        getHistoryFunctionResponseIds: () => [],
++        sendMessageStream: async () =>
++          (async function* () {
++            yield {
++              type: StreamEventType.CHUNK,
++              value: {
++                candidates: [
++                  {
++                    content: {
++                      parts: [
++                        { text: 'banked progress: read lines 3416-3727' },
++                      ],
++                    },
++                    finishReason: FinishReason.STOP,
++                  },
++                ],
++                functionCalls: [
++                  {
++                    id: 'call-1',
++                    name: 'read_file',
++                    args: { file_path: '/b.txt', limit: 420 },
++                  },
++                ],
++              },
++            };
++          })(),
++      } as unknown as GeminiChat;
++    }
++
++    async function runUntilTurnBudget(): Promise<ReasoningLoopResult> {
++      const core = makeTruncationCore();
++      // The tool never resolves into another round: one round is enough for the
++      // budget check at the top of the next one to fire.
++      (
++        core as unknown as {
++          processFunctionCalls: () => Promise<unknown>;
++        }
++      ).processFunctionCalls = async () => ({
++        messages: [{ role: 'user', parts: [{ text: 'tool result' }] }],
++        repeatedDuplicateProviderToolCall: false,
++      });
++      return await (
++        core as unknown as {
++          _runReasoningLoopInner: (
++            chat: GeminiChat,
++            initialMessages: unknown[],
++            toolsList: FunctionDeclaration[],
++            abortController: AbortController,
++            options?: { maxTurns?: number },
++          ) => Promise<ReasoningLoopResult>;
++        }
++      )._runReasoningLoopInner(
++        makeToolCallingChat(),
++        [{ role: 'user', parts: [{ text: 'summarize' }] }],
++        [],
++        new AbortController(),
++        { maxTurns: 1 },
++      );
++    }
++
++    it('reports what the agent said when its turn budget ended the run', async () => {
++      const result = await runUntilTurnBudget();
++
++      expect(result.terminateMode).toBe(AgentTerminateMode.MAX_TURNS);
++      // The round that spent the budget called a tool and said this first. An
++      // empty report here is the incident: a caller cannot tell a subagent that
++      // did nothing from one whose work was thrown away on the way out.
++      expect(result.text).toBe('banked progress: read lines 3416-3727');
+     });
+-    expect(interactiveChat).toBeDefined();
+-    expect(enableSpy).toHaveBeenCalledTimes(1);
+ 
+-    const headlessChat = await core.createChat(new ContextState());
+-    expect(headlessChat).toBeDefined();
+-    expect(enableSpy).toHaveBeenCalledTimes(1);
++    it('reports what the agent said when the run was cancelled mid-stream', async () => {
++      const core = makeTruncationCore();
++      const abortController = new AbortController();
++      const chat = {
++        getHistoryFunctionResponseIds: () => [],
++        sendMessageStream: async () =>
++          (async function* () {
++            yield {
++              type: StreamEventType.CHUNK,
++              value: {
++                candidates: [
++                  {
++                    content: { parts: [{ text: 'banked before cancel' }] },
++                    finishReason: undefined,
++                  },
++                ],
++              },
++            };
++            abortController.abort();
++            yield {
++              type: StreamEventType.CHUNK,
++              value: { candidates: [{ content: { parts: [] } }] },
++            };
++          })(),
++      } as unknown as GeminiChat;
++
++      const result = await (
++        core as unknown as {
++          _runReasoningLoopInner: (
++            chat: GeminiChat,
++            initialMessages: unknown[],
++            toolsList: FunctionDeclaration[],
++            abortController: AbortController,
++          ) => Promise<ReasoningLoopResult>;
++        }
++      )._runReasoningLoopInner(
++        chat,
++        [{ role: 'user', parts: [{ text: 'summarize' }] }],
++        [],
++        abortController,
++      );
+ 
+-    enableSpy.mockRestore();
++      expect(result.terminateMode).toBe(AgentTerminateMode.CANCELLED);
++      expect(result.text).toBe('banked before cancel');
++    });
 +  });
 +  describe('attempt evidence', () => {
 +    const usage = {
@@ -99993,7 +100175,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
  describe('AgentCore.runInAgentFrames', () => {
    // The deferred-approval `respond` callback that AgentCore hands to the
    // UI must restore both ALS frames the agent normally runs under, so any
-@@ -92,14 +559,15 @@
+@@ -92,14 +685,15 @@
  
    function makeCore(name: string, runtimeView?: RuntimeContentGeneratorView) {
      const promptConfig: PromptConfig = { systemPrompt: '' };
@@ -100010,7 +100192,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        undefined,
        undefined,
        undefined,
-@@ -207,13 +675,13 @@
+@@ -207,13 +801,13 @@
        core as unknown as {
          _runReasoningLoopInner: () => Promise<ReasoningLoopResult>;
        },
@@ -100025,7 +100207,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        core.runReasoningLoop({} as never, [], [], new AbortController()),
      );
  
-@@ -270,21 +738,25 @@
+@@ -270,21 +864,25 @@
      let inheritedAgentId: string | null = null;
      let observedAgentId: string | null = null;
      const onConfirm = async () => {
@@ -100060,7 +100242,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
  
      await respondClosure!();
  
-@@ -304,28 +776,38 @@
+@@ -304,28 +902,38 @@
      const onConfirm = async () => {
        observedDepth = getCurrentAgentDepth();
      };
@@ -100115,7 +100297,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(getCurrentAgentId()).toBeNull();
      await new Promise((resolve) => setImmediate(resolve));
  
-@@ -416,37 +898,36 @@
+@@ -416,37 +1024,36 @@
    // includes MCP / lsp / cron_* tools would silently lose them once
    // ToolSearch was introduced.
    function buildAgentForTools(
@@ -100155,7 +100337,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        { model: 'test-model' },
        { max_turns: 1 },
        toolConfig,
-@@ -701,106 +1182,41 @@
+@@ -701,106 +1308,41 @@
  
    it.each([ToolNames.ENTER_PLAN_MODE, ToolNames.EXIT_PLAN_MODE])(
      'returns a dedicated message when filtered %s is called directly',
@@ -100280,7 +100462,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    // sub-agent's own 0-based depth from getCurrentAgentDepth(); a child sits
    // at level (depth + 2), which must not exceed the cap.
    const nestingDecls = (): FunctionDeclaration[] => [
-@@ -811,30 +1227,45 @@
+@@ -811,30 +1353,45 @@
      } as FunctionDeclaration,
    ];
  
@@ -100330,7 +100512,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    it('nesting: frameless prepareTools fails closed — AgentTool excluded', async () => {
      // prepareTools() only ever serves agents, never the top-level session.
      // A missing agent frame means the launch path forgot runWithAgentContext
-@@ -849,13 +1280,17 @@
+@@ -849,13 +1406,17 @@
  
    it('nesting: fork execution contexts never receive the AgentTool', async () => {
      // The fork contract is context-sharing, not isolation — forks must not
@@ -100349,7 +100531,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(names).toContain('read_file');
    });
  
-@@ -865,35 +1300,43 @@
+@@ -865,35 +1426,43 @@
        agentId: 'scribe@demo',
        agentName: 'scribe',
        teamName: 'demo',
@@ -100398,7 +100580,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(deniedNames).toContain('read_file');
    });
  });
-@@ -969,6 +1412,205 @@
+@@ -969,6 +1538,205 @@
      expect(extractParentToolNames(undefined)).toEqual([]);
      expect(extractParentToolNames({} as GenerateContentConfig)).toEqual([]);
      expect(extractParentToolNames(configWithTools([]))).toEqual([]);
@@ -100728,25 +100910,26 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
   * Options for configuring a reasoning loop invocation.
   */
  export interface ReasoningLoopOptions {
-@@ -322,37 +339,17 @@
+@@ -321,40 +338,20 @@
+ }
  
  /**
   * Options for chat creation.
   */
  export interface CreateChatOptions {
-   /**
+-  /**
 -   * When true, omits the "non-interactive mode" system prompt suffix.
 -   * Used by AgentInteractive for persistent interactive agents.
 -   */
 -  interactive?: boolean;
--  /**
+   /**
     * Optional conversation history from a parent session. When provided,
     * this history is prepended to the chat so the agent has prior
     * conversational context (e.g., from AgentInteractive.start()).
     */
    extraHistory?: Content[];
--}
--
+ }
+ 
 -/**
 - * Legacy execution stats maintained for backward compatibility.
 - */
@@ -100760,12 +100943,14 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 -  inputTokens?: number;
 -  outputTokens?: number;
 -  totalTokens?: number;
- }
- 
+-}
+-
  /**
   * AgentCore — shared execution engine for model reasoning and tool scheduling.
   *
   * This class encapsulates:
+  * - Chat/model session creation (`createChat`)
+  * - Tool list preparation (`prepareTools`)
 @@ -364,12 +361,41 @@
   *
   * It does NOT manage lifecycle (start/stop/terminate), abort signals,
@@ -100808,7 +100993,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    readonly promptConfig: PromptConfig;
    readonly modelConfig: ModelConfig;
    readonly runConfig: RunConfig;
-@@ -382,21 +408,22 @@
+@@ -382,66 +408,42 @@
     * Event emitter for this agent. Always present — if the caller doesn't
     * pass one, AgentCore allocates its own so the observable state below
     * is populated regardless of who constructs the agent.
@@ -100832,13 +101017,13 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    // interactive ones. Populated by listeners set up in the constructor.
    private readonly messages: AgentMessage[] = [];
    private readonly pendingApprovals = new Map<
-@@ -404,44 +431,19 @@
+     string,
      ToolCallConfirmationDetails
    >();
    private readonly liveOutputs = new Map<string, ToolResultDisplay>();
    private readonly shellPids = new Map<string, number>();
  
-   /**
+-  /**
 -   * Legacy execution stats maintained for aggregate tracking.
 -   */
 -  executionStats: ExecutionStats = {
@@ -100852,7 +101037,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 -    outputTokens: 0,
 -    totalTokens: 0,
 -  };
--  /**
+   /**
     * The prompt token count from the most recent model response.
     * Exposed so UI hooks can seed initial state without waiting for events.
     */
@@ -101042,7 +101227,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
  
        let durationMin = (Date.now() - startTime) / (1000 * 60);
        if (options?.maxTimeMinutes && durationMin >= options.maxTimeMinutes) {
-@@ -901,24 +897,43 @@
+@@ -901,24 +897,54 @@
        // Per-round child controller so model-SDK retry layers don't accumulate
        // listeners on the long-lived parent. createChildAbortController handles
        // parent propagation; the try/finally below guarantees reverse-cleanup
@@ -101055,6 +101240,17 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +      let roundFinishReason: FinishReason | undefined;
 +      let attempt = 1;
 +      let pendingEvidence = false;
++      // What the agent most recently said about where it got to. Banked on
++      // every path out of a round rather than at each exit: `finalText` was
++      // assigned only where a round ended normally, so every abnormal exit --
++      // the turn budget, a detected loop, a timeout, cancellation -- reported
++      // an empty result for a run that had produced work, and each new exit
++      // path inherited that by omission. A round that only called tools said
++      // nothing and does not erase what the previous round said.
++      const bankRoundText = () => {
++        const banked = roundText.trim();
++        if (banked) finalText = banked;
++      };
 +      const publishAttempt = () => {
 +        if (!pendingEvidence) return;
 +        pendingEvidence = false;
@@ -101090,7 +101286,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
          const roundStreamStart = Date.now();
          const responseStream = await chat.sendMessageStream(
            this.modelConfig.model ||
-@@ -926,101 +941,130 @@
+@@ -926,101 +952,132 @@
              DEFAULT_QWEN_MODEL,
            messageParams,
            promptId,
@@ -101120,6 +101316,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +            streamEvent.type !== 'compaction' &&
 +            streamEvent.type !== 'chunk'
 +          ) {
++            bankRoundText();
              return {
                text: finalText,
                terminateMode: AgentTerminateMode.CANCELLED,
@@ -101140,10 +101337,10 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
                terminateMode = AgentTerminateMode.LOOP_DETECTED;
                loopDetectedInStream = true;
                break;
--            }
+             }
 -            if (streamEvent.maxOutputTokensEscalated !== undefined) {
 -              stickyMaxOutputTokens = streamEvent.maxOutputTokensEscalated;
-             }
+-            }
              functionCalls.length = 0;
              roundText = '';
              roundThoughtText = '';
@@ -101177,29 +101374,29 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +                  `status=${streamEvent.record.status} tokens ` +
 +                  `${streamEvent.record.originalTokenCount} -> ${streamEvent.record.newTokenCount}`,
                );
-+            continue;
-+          }
-+
-+          // GeminiChat already mutated its own history; nothing further is
-+          // required here — the compaction event above is the record.
-+          if (streamEvent.type === 'compressed') {
              continue;
            }
  
++          // GeminiChat already mutated its own history; nothing further is
++          // required here — the compaction event above is the record.
++          if (streamEvent.type === 'compressed') {
++            continue;
++          }
++
            // Handle chunk events
            if (streamEvent.type === 'chunk') {
              const resp = streamEvent.value;
              // Track the response ID for tool call correlation
              if (resp.responseId) {
                currentResponseId = resp.responseId;
--            }
+             }
 -            const chunkFunctionCalls = resp.functionCalls ?? [];
 -            functionCalls.push(...chunkFunctionCalls);
 -            if (
 -              resp.candidates?.[0]?.finishReason === FinishReason.MAX_TOKENS
 -            ) {
 -              wasOutputTruncated = true;
-             }
+-            }
              const content = resp.candidates?.[0]?.content;
              const parts = content?.parts || [];
              for (const p of parts) {
@@ -101221,6 +101418,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
              if (resp.usageMetadata) lastUsage = resp.usageMetadata;
  
 +            if (roundAbortController.signal.aborted) {
++              bankRoundText();
 +              return {
 +                text: finalText,
 +                terminateMode: AgentTerminateMode.CANCELLED,
@@ -101244,7 +101442,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
                checkSubagentLoop({
                  type: GeminiEventType.Thought,
                  value: thoughtSummary,
-@@ -1089,45 +1133,39 @@
+@@ -1089,45 +1146,39 @@
          }
  
          if (loopDetectedInStream) {
@@ -101262,11 +101460,10 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 -            timestamp: Date.now(),
 -          } as AgentRoundTextEvent);
 -        }
--
++        publishAttempt();
+ 
 -        const cumulativeRounds = (options?.roundOffset ?? 0) + turnCounter;
 -        this.executionStats.rounds = cumulativeRounds;
-+        publishAttempt();
-+
 +        const cumulativeRounds =
 +          (options?.roundOffset ?? 0) + this.reasoningTurnsUsed;
          this.stats.setRounds(cumulativeRounds);
@@ -101300,7 +101497,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
              handledProviderToolCallIds,
              duplicateProviderToolCallResponseIds,
            );
-@@ -1143,51 +1181,59 @@
+@@ -1143,56 +1194,61 @@
              // alongside the tool results the model is about to see.
              // processFunctionCalls always returns exactly one user-role entry.
              const last = currentMessages[currentMessages.length - 1];
@@ -101329,7 +101526,6 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +              this.reasoningTurnsUsed,
 +            )
 +          ) {
-+            finalText = roundText.trim();
 +            terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;
 +            break;
 +          }
@@ -101356,7 +101552,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +              this.reasoningTurnsUsed,
              );
              if (waitResult.terminateMode) {
-               finalText = roundText.trim();
+-              finalText = roundText.trim();
                terminateMode = waitResult.terminateMode;
                break;
              }
@@ -101367,9 +101563,14 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
              }
  
              if (roundText && roundText.trim().length > 0) {
-               finalText = roundText.trim();
+-              finalText = roundText.trim();
                break;
-@@ -1201,21 +1247,22 @@
+             }
+             currentMessages = [
+               {
+                 role: 'user',
+                 parts: [
+@@ -1201,21 +1257,21 @@
                    },
                  ],
                },
@@ -101380,7 +101581,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +            // No tool calls and a self-ended generation — this is the
 +            // model's final answer.
              if (roundText && roundText.trim().length > 0) {
-               finalText = roundText.trim();
+-              finalText = roundText.trim();
                // Emit ROUND_END for the final round so all consumers see it.
                // Previously this was skipped, requiring AgentInteractive to
                // compensate with an explicit flushStreamBuffers() call.
@@ -101394,7 +101595,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
                // null terminateMode = normal text completion
                break;
              }
-@@ -1232,29 +1279,37 @@
+@@ -1232,29 +1288,38 @@
              ];
            }
          }
@@ -101407,6 +101608,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
            timestamp: Date.now(),
          } as AgentRoundEvent);
        } finally {
++        bankRoundText();
 +        try {
 +          publishAttempt();
 +        } finally {
@@ -101435,7 +101637,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    private drainExternalInputs(
      options?: ReasoningLoopOptions,
    ): AgentExternalInput[] {
-@@ -1269,46 +1324,49 @@
+@@ -1269,46 +1334,49 @@
        typeof input === 'string'
          ? `${EXTERNAL_MESSAGE_PREFIX} ${input}`
          : input.text;
@@ -101502,7 +101704,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
      options: ReasoningLoopOptions | undefined,
      startTime: number,
    ): number | undefined {
-@@ -1317,13 +1375,13 @@
+@@ -1317,13 +1385,13 @@
    }
  
    private async waitForExternalInputs(
@@ -101517,7 +101719,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    }> {
      while (true) {
        const immediate = this.drainExternalInputs(options);
-@@ -1332,13 +1390,13 @@
+@@ -1332,13 +1400,13 @@
        }
  
        if (abortController.signal.aborted) {
@@ -101532,7 +101734,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
        const remainingTimeMs = this.getRemainingTimeMs(options, startTime);
        if (remainingTimeMs !== undefined && remainingTimeMs <= 0) {
          return { inputs: [], terminateMode: AgentTerminateMode.TIMEOUT };
-@@ -1956,49 +2014,49 @@
+@@ -1956,49 +2024,49 @@
          // TOOL_RESULT events for every un-emitted callId (corrupting the
          // transcript and misleading the model on the next round).
          abortController.signal.removeEventListener('abort', onAbort);
@@ -101602,7 +101804,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
            responseParts: response.responseParts,
            ...(collected?.durationMs !== undefined
              ? { durationMs: collected.durationMs }
-@@ -2072,62 +2130,21 @@
+@@ -2072,64 +2140,23 @@
      this.pendingApprovals.clear();
    }
  
@@ -101630,8 +101832,8 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
  
    getExecutionSummary(): AgentStatsSummary {
      return this.stats.getSummary();
--  }
--
+   }
+ 
 -  /**
 -   * Returns legacy execution statistics and per-tool usage.
 -   * Returns legacy execution statistics and per-tool usage.
@@ -101659,13 +101861,15 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 -        ...v,
 -      })),
 -    };
-   }
- 
+-  }
+-
    /**
     * Safely retrieves the description of a tool by attempting to build it.
     * Returns an empty string if any error occurs during the process.
     * Note: Assumes tools are warmed via warmAll() before the reasoning loop.
-@@ -2162,46 +2179,13 @@
+    */
+   getToolDescription(toolName: string, args: Record<string, unknown>): string {
+@@ -2162,46 +2189,13 @@
    recordToolCallStats(
      toolName: string,
      success: boolean,
@@ -101713,14 +101917,13 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
  
    /**
     * TOOL_WAITING_APPROVAL is deliberately NOT listened to here because
-@@ -2209,12 +2193,26 @@
-    * (needs to wrap onConfirm with cancel-round behavior) or headless
+@@ -2210,12 +2204,26 @@
     * (approvals never fire). AgentInteractive owns that listener and
     * writes into `pendingApprovals` via the public mutator API.
     */
    private setupStateListeners(): void {
      const emitter = this.eventEmitter;
-+
+ 
 +    emitter.on(AgentEventType.COMPACTION, (event: AgentCompactionEvent) => {
 +      const output = event.compaction.output;
 +      const usage = output?.usage;
@@ -101734,13 +101937,14 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +              : ': refused before generation.'),
 +      );
 +    });
- 
++
      emitter.on(AgentEventType.ROUND_TEXT, (event: AgentRoundTextEvent) => {
        if (event.thoughtText) {
          this.pushMessage('assistant', event.thoughtText, { thought: true });
        }
        if (event.text) {
-@@ -2276,91 +2274,55 @@
+         this.pushMessage('assistant', event.text);
+@@ -2276,91 +2284,55 @@
          this.pushMessage('user', event.text);
        },
      );
@@ -101765,14 +101969,13 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 -    // Only add non-interactive instructions when NOT in interactive mode
 -    if (!options?.interactive) {
 -      finalPrompt += `
--
++    finalPrompt += `
+ 
 -Important Rules:
 - - You operate in non-interactive mode: do not ask the user questions; proceed with available context.
 - - Use tools only when necessary to obtain facts or make changes.
 - - When the task is complete, return the final result as a normal model response (not a tool call) and stop.`;
 -    }
-+    finalPrompt += `
-+
 +Task rules:
 + - Use tools when needed to obtain facts or make changes.
 + - When the task is complete, return the result as a normal model response and stop.`;
