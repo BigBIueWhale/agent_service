@@ -56,13 +56,17 @@ across it are not comparable with anything recorded here.
 
 - **probe: passes** (2026-09-08) — all 26 chunks read in order, 3 successful compactions,
   a 4,935-word summary written.
-- **Test A: three failures, three different defects** — a compaction reasoning runaway; a
+- **Test A: four failures, four different defects** — a compaction reasoning runaway; a
   torn 219 KB record that voided the whole stream; then a malformed snapshot (five of six
   sections, `<intent>` closed by `</environment>`, `<environment>` absent) alongside an
-  uncertifiable `stream_event`. The arithmetic behind all three is in
+  uncertifiable `stream_event`. The arithmetic behind those three is in
   `../swe-rebench-2026-07-production-service/INCIDENTS.md`, incident 9: ~28 serial
   compactions at an observed 15/18 each is 0.6% survival, so the exponent was the problem
-  rather than any one bug.
+  rather than any one bug. The fourth (session `s-c1009b44`, turn 37 of 1,500) was
+  compaction refusing its own snapshots: all four drawn candidates were discarded as
+  malformed markup over ordinary content — a bare ampersand between two names among them —
+  so it reclaimed nothing. The snapshot is now a forced tool call whose sections are its
+  arguments (`88f0896`).
 - **Test B: never succeeded.** Its recorded death (2026-08-31) is precise: the single
   subagent read book 3 in a disciplined `read_file(offset=N, limit=420)` cycle, banked ten
   chunks of notes, then emitted four identical `read_file` calls with `offset` **omitted**,
