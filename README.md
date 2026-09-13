@@ -344,6 +344,14 @@ A terminal conversation and a headless conversation share the same obligations:
   window share. Compaction receives the room left by its exact input, requires at
   least the summary reserve, and accepts only a normally terminated six-section
   snapshot that leaves an issuable turn.
+- A tool result declares whether it is complete. The one notice in
+  `packages/core/src/tools/tools.ts` states what was asked for, what came back,
+  the bound and its unit, the true total or an explicit reason the tool cannot
+  know it, and the exact next call. Tools do not word their own: a tool that
+  cuts a result to a named cap without it refuses the build, so a bound cannot
+  become invisible by a tool forgetting to mention it. A cap applied inside a
+  service is returned with the items, because the layer asked to declare a
+  limit has to be told one was hit.
 - The snapshot is a declared tool call, not hand-written markup. The compaction
   request advertises one function whose closed parameter schema is the six
   sections, and forces it, so the structure is constrained where the tokens are

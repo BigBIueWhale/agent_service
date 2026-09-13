@@ -171050,6 +171050,1082 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
 +  RuntimeContractAdmission,
 +  RuntimeContractViolation,
 +} from './utils/runtime-contract-admission.js';
+diff --git a/packages/core/src/lsp/NativeLspClient.ts b/packages/core/src/lsp/NativeLspClient.ts
+--- a/packages/core/src/lsp/NativeLspClient.ts
++++ b/packages/core/src/lsp/NativeLspClient.ts
+@@ -28,12 +28,13 @@
+   LspReference,
+   LspStatusSnapshot,
+   LspSymbolInformation,
+   LspWorkspaceEdit,
+   LspServerStatusInfo,
+   LspServiceReinitializeResult,
++  LspBounded,
+ } from './types.js';
+ 
+ import type { NativeLspService } from './NativeLspService.js';
+ 
+ function getErrorMessage(error: unknown): string | undefined {
+   if (error === undefined || error === null) {
+@@ -88,52 +89,52 @@
+ 
+   /**
+    * Search for symbols across the workspace.
+    *
+    * @param query - The search query string
+    * @param limit - Maximum number of results to return
+-   * @returns Promise resolving to array of symbol information
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of symbol information
+    */
+   workspaceSymbols(
+     query: string,
+     limit?: number,
+-  ): Promise<LspSymbolInformation[]> {
++  ): Promise<LspBounded<LspSymbolInformation>> {
+     return this.service.workspaceSymbols(query, limit);
+   }
+ 
+   /**
+    * Find where a symbol is defined.
+    *
+    * @param location - The source location to find definitions for
+    * @param serverName - Optional specific LSP server to query
+    * @param limit - Maximum number of results to return
+-   * @returns Promise resolving to array of definition locations
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of definition locations
+    */
+   definitions(
+     location: LspLocation,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspDefinition[]> {
++  ): Promise<LspBounded<LspDefinition>> {
+     return this.service.definitions(location, serverName, limit);
+   }
+ 
+   /**
+    * Find all references to a symbol.
+    *
+    * @param location - The source location to find references for
+    * @param serverName - Optional specific LSP server to query
+    * @param includeDeclaration - Whether to include the declaration in results
+    * @param limit - Maximum number of results to return
+-   * @returns Promise resolving to array of reference locations
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of reference locations
+    */
+   references(
+     location: LspLocation,
+     serverName?: string,
+     includeDeclaration?: boolean,
+     limit?: number,
+-  ): Promise<LspReference[]> {
++  ): Promise<LspBounded<LspReference>> {
+     return this.service.references(
+       location,
+       serverName,
+       includeDeclaration,
+       limit,
+     );
+@@ -156,128 +157,128 @@
+   /**
+    * Get all symbols in a document.
+    *
+    * @param uri - The document URI to get symbols for
+    * @param serverName - Optional specific LSP server to query
+    * @param limit - Maximum number of results to return
+-   * @returns Promise resolving to array of symbol information
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of symbol information
+    */
+   documentSymbols(
+     uri: string,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspSymbolInformation[]> {
++  ): Promise<LspBounded<LspSymbolInformation>> {
+     return this.service.documentSymbols(uri, serverName, limit);
+   }
+ 
+   /**
+    * Find implementations of an interface or abstract method.
+    *
+    * @param location - The source location to find implementations for
+    * @param serverName - Optional specific LSP server to query
+    * @param limit - Maximum number of results to return
+-   * @returns Promise resolving to array of implementation locations
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of implementation locations
+    */
+   implementations(
+     location: LspLocation,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspDefinition[]> {
++  ): Promise<LspBounded<LspDefinition>> {
+     return this.service.implementations(location, serverName, limit);
+   }
+ 
+   /**
+    * Prepare call hierarchy item at a position (functions/methods).
+    *
+    * @param location - The source location to prepare call hierarchy for
+    * @param serverName - Optional specific LSP server to query
+    * @param limit - Maximum number of results to return
+-   * @returns Promise resolving to array of call hierarchy items
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of call hierarchy items
+    */
+   prepareCallHierarchy(
+     location: LspLocation,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspCallHierarchyItem[]> {
++  ): Promise<LspBounded<LspCallHierarchyItem>> {
+     return this.service.prepareCallHierarchy(location, serverName, limit);
+   }
+ 
+   /**
+    * Find all functions/methods that call the given function.
+    *
+    * @param item - The call hierarchy item to find callers for
+    * @param serverName - Optional specific LSP server to query
+    * @param limit - Maximum number of results to return
+-   * @returns Promise resolving to array of incoming calls
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of incoming calls
+    */
+   incomingCalls(
+     item: LspCallHierarchyItem,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspCallHierarchyIncomingCall[]> {
++  ): Promise<LspBounded<LspCallHierarchyIncomingCall>> {
+     return this.service.incomingCalls(item, serverName, limit);
+   }
+ 
+   /**
+    * Find all functions/methods called by the given function.
+    *
+    * @param item - The call hierarchy item to find callees for
+    * @param serverName - Optional specific LSP server to query
+    * @param limit - Maximum number of results to return
+-   * @returns Promise resolving to array of outgoing calls
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of outgoing calls
+    */
+   outgoingCalls(
+     item: LspCallHierarchyItem,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspCallHierarchyOutgoingCall[]> {
++  ): Promise<LspBounded<LspCallHierarchyOutgoingCall>> {
+     return this.service.outgoingCalls(item, serverName, limit);
+   }
+ 
+   /**
+    * Get diagnostics for a specific document.
+    *
+    * @param uri - The document URI to get diagnostics for
+    * @param serverName - Optional specific LSP server to query
+-   * @returns Promise resolving to array of diagnostics
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of diagnostics
+    */
+   diagnostics(uri: string, serverName?: string): Promise<LspDiagnostic[]> {
+     return this.service.diagnostics(uri, serverName);
+   }
+ 
+   /**
+    * Get diagnostics for all open documents in the workspace.
+    *
+    * @param serverName - Optional specific LSP server to query
+    * @param limit - Maximum number of file diagnostics to return
+-   * @returns Promise resolving to array of file diagnostics
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of file diagnostics
+    */
+   workspaceDiagnostics(
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspFileDiagnostics[]> {
++  ): Promise<LspBounded<LspFileDiagnostics>> {
+     return this.service.workspaceDiagnostics(serverName, limit);
+   }
+ 
+   /**
+    * Get code actions available at a specific location.
+    *
+    * @param uri - The document URI
+    * @param range - The range to get code actions for
+    * @param context - The code action context including diagnostics
+    * @param serverName - Optional specific LSP server to query
+    * @param limit - Maximum number of code actions to return
+-   * @returns Promise resolving to array of code actions
++   * @returns Promise resolving to the capped list and whether the cap hid anything; array of code actions
+    */
+   codeActions(
+     uri: string,
+     range: LspRange,
+     context: LspCodeActionContext,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspCodeAction[]> {
++  ): Promise<LspBounded<LspCodeAction>> {
+     return this.service.codeActions(uri, range, context, serverName, limit);
+   }
+ 
+   /**
+    * Apply a workspace edit (from code action or other sources).
+    *
+diff --git a/packages/core/src/lsp/NativeLspService.integration.test.ts b/packages/core/src/lsp/NativeLspService.integration.test.ts
+--- a/packages/core/src/lsp/NativeLspService.integration.test.ts
++++ b/packages/core/src/lsp/NativeLspService.integration.test.ts
+@@ -652,13 +652,13 @@
+       await expect(service.discoverAndPrepare()).resolves.not.toThrow();
+     });
+ 
+     it('should return empty results when no server is ready', async () => {
+       // Before starting any servers, operations should return empty
+       const results = await lspService.workspaceSymbols('test');
+-      expect(results).toEqual([]);
++      expect(results).toEqual({ items: [], hadMore: false });
+     });
+ 
+     it('should return empty diagnostics when no server is ready', async () => {
+       const uri = 'file:///test/workspace/src/app.ts';
+       const results = await lspService.diagnostics(uri);
+       expect(results).toEqual([]);
+@@ -674,13 +674,13 @@
+         diagnostics: [],
+         only: undefined,
+         triggerKind: 'invoked' as const,
+       };
+ 
+       const results = await lspService.codeActions(uri, range, context);
+-      expect(results).toEqual([]);
++      expect(results).toEqual({ items: [], hadMore: false });
+     });
+   });
+ 
+   describe('Security Controls', () => {
+     it('should respect trust requirements', async () => {
+       mockConfig.setTrusted(false);
+diff --git a/packages/core/src/lsp/NativeLspService.test.ts b/packages/core/src/lsp/NativeLspService.test.ts
+--- a/packages/core/src/lsp/NativeLspService.test.ts
++++ b/packages/core/src/lsp/NativeLspService.test.ts
+@@ -1372,13 +1372,13 @@
+       expect(connection.send).toHaveBeenCalledWith(
+         expect.objectContaining({
+           method: 'textDocument/didOpen',
+         }),
+       );
+       expect(events[0]).toBe('send:textDocument/didOpen');
+-      expect(results.length).toBe(1);
++      expect(results.items.length).toBe(1);
+     } finally {
+       vi.useRealTimers();
+       fs.rmSync(tempDir, { recursive: true, force: true });
+     }
+   });
+ 
+@@ -1475,13 +1475,13 @@
+     try {
+       const promise = tempService.workspaceSymbols('Calculator');
+       await vi.runAllTimersAsync();
+       const results = await promise;
+ 
+       expect(symbolCalls).toBe(2);
+-      expect(results.length).toBe(1);
++      expect(results.items.length).toBe(1);
+       expect(events[0]).toBe('send:textDocument/didOpen');
+     } finally {
+       vi.useRealTimers();
+       fs.rmSync(tempDir, { recursive: true, force: true });
+     }
+   });
+@@ -1729,13 +1729,13 @@
+       // Verify didOpen fires before the definition request
+       expect(timeline.length).toBe(2);
+       expect(timeline[0]!.event).toBe('didOpen');
+       expect(timeline[1]!.event).toBe('definition');
+       // The delay should have elapsed between the two events (200ms)
+       expect(timeline[1]!.time - timeline[0]!.time).toBeGreaterThanOrEqual(200);
+-      expect(results.length).toBe(1);
++      expect(results.items.length).toBe(1);
+     } finally {
+       vi.useRealTimers();
+       fs.rmSync(tempDir, { recursive: true, force: true });
+     }
+   });
+ 
+@@ -1986,14 +1986,14 @@
+       const promise = tempService.documentSymbols(uri);
+       await vi.runAllTimersAsync();
+       const results = await promise;
+ 
+       // Should have retried: 2 requests total
+       expect(requestCount).toBe(2);
+-      expect(results.length).toBe(1);
+-      expect(results[0]?.name).toBe('Main');
++      expect(results.items.length).toBe(1);
++      expect(results.items[0]?.name).toBe('Main');
+     } finally {
+       vi.useRealTimers();
+       fs.rmSync(tempDir, { recursive: true, force: true });
+     }
+   });
+ 
+diff --git a/packages/core/src/lsp/NativeLspService.ts b/packages/core/src/lsp/NativeLspService.ts
+--- a/packages/core/src/lsp/NativeLspService.ts
++++ b/packages/core/src/lsp/NativeLspService.ts
+@@ -22,12 +22,13 @@
+   LspLocation,
+   LspRange,
+   LspReference,
+   LspSymbolInformation,
+   LspTextEdit,
+   LspWorkspaceEdit,
++  LspBounded,
+ } from './types.js';
+ import type { EventEmitter } from 'events';
+ import {
+   DEFAULT_LSP_DOCUMENT_OPEN_DELAY_MS,
+   DEFAULT_LSP_DOCUMENT_RETRY_DELAY_MS,
+   DEFAULT_LSP_WORKSPACE_SYMBOL_WARMUP_DELAY_MS,
+@@ -763,13 +764,13 @@
+   /**
+    * Workspace symbol search across all ready LSP servers.
+    */
+   async workspaceSymbols(
+     query: string,
+     limit = 50,
+-  ): Promise<LspSymbolInformation[]> {
++  ): Promise<LspBounded<LspSymbolInformation>> {
+     const results: LspSymbolInformation[] = [];
+ 
+     for (const [serverName, handle] of Array.from(
+       this.serverManager.getHandles(),
+     )) {
+       if (handle.status !== 'READY' || !handle.connection) {
+@@ -811,35 +812,32 @@
+             item,
+             serverName,
+           );
+           if (symbol) {
+             results.push(symbol);
+           }
+-          if (results.length >= limit) {
+-            return results.slice(0, limit);
+-          }
+         }
+       } catch (error) {
+         debugLogger.warn(
+           `LSP workspace/symbol failed for ${serverName}:`,
+           error,
+         );
+       }
+     }
+ 
+-    return results.slice(0, limit);
++    return { items: results.slice(0, limit), hadMore: results.length > limit };
+   }
+ 
+   /**
+    * Go to definition
+    */
+   async definitions(
+     location: LspLocation,
+     serverName?: string,
+     limit = 50,
+-  ): Promise<LspDefinition[]> {
++  ): Promise<LspBounded<LspDefinition>> {
+     const handles = this.getReadyHandles(serverName);
+     const requestParams = {
+       textDocument: { uri: location.uri },
+       position: location.range.start,
+     };
+ 
+@@ -875,40 +873,37 @@
+             : [];
+         const definitions: LspDefinition[] = [];
+         for (const def of candidates) {
+           const normalized = this.normalizer.normalizeLocationResult(def, name);
+           if (normalized) {
+             definitions.push(normalized);
+-            if (definitions.length >= limit) {
+-              return definitions.slice(0, limit);
+-            }
+           }
+         }
+         if (definitions.length > 0) {
+-          return definitions.slice(0, limit);
++          return { items: definitions.slice(0, limit), hadMore: definitions.length > limit };
+         }
+       } catch (error) {
+         debugLogger.warn(
+           `LSP textDocument/definition failed for ${name}:`,
+           error,
+         );
+       }
+     }
+ 
+-    return [];
++    return { items: [], hadMore: false };
+   }
+ 
+   /**
+    * Find references
+    */
+   async references(
+     location: LspLocation,
+     serverName?: string,
+     includeDeclaration = false,
+     limit = 200,
+-  ): Promise<LspReference[]> {
++  ): Promise<LspBounded<LspReference>> {
+     const handles = this.getReadyHandles(serverName);
+     const requestParams = {
+       textDocument: { uri: location.uri },
+       position: location.range.start,
+       context: { includeDeclaration },
+     };
+@@ -944,28 +939,25 @@
+         const refs: LspReference[] = [];
+         for (const ref of response) {
+           const normalized = this.normalizer.normalizeLocationResult(ref, name);
+           if (normalized) {
+             refs.push(normalized);
+           }
+-          if (refs.length >= limit) {
+-            return refs.slice(0, limit);
+-          }
+         }
+         if (refs.length > 0) {
+-          return refs.slice(0, limit);
++          return { items: refs.slice(0, limit), hadMore: refs.length > limit };
+         }
+       } catch (error) {
+         debugLogger.warn(
+           `LSP textDocument/references failed for ${name}:`,
+           error,
+         );
+       }
+     }
+ 
+-    return [];
++    return { items: [], hadMore: false };
+   }
+ 
+   /**
+    * Get hover information
+    */
+   async hover(
+@@ -1019,13 +1011,13 @@
+    * Get document symbols
+    */
+   async documentSymbols(
+     uri: string,
+     serverName?: string,
+     limit = 200,
+-  ): Promise<LspSymbolInformation[]> {
++  ): Promise<LspBounded<LspSymbolInformation>> {
+     const handles = this.getReadyHandles(serverName);
+     const requestParams = { textDocument: { uri } };
+ 
+     for (const [name, handle] of handles) {
+       try {
+         const justOpened = await this.ensureDocumentOpen(name, handle, uri);
+@@ -1070,38 +1062,35 @@
+               name,
+             );
+             if (normalized) {
+               symbols.push(normalized);
+             }
+           }
+-          if (symbols.length >= limit) {
+-            return symbols.slice(0, limit);
+-          }
+         }
+         if (symbols.length > 0) {
+-          return symbols.slice(0, limit);
++          return { items: symbols.slice(0, limit), hadMore: symbols.length > limit };
+         }
+       } catch (error) {
+         debugLogger.warn(
+           `LSP textDocument/documentSymbol failed for ${name}:`,
+           error,
+         );
+       }
+     }
+ 
+-    return [];
++    return { items: [], hadMore: false };
+   }
+ 
+   /**
+    * Find implementations
+    */
+   async implementations(
+     location: LspLocation,
+     serverName?: string,
+     limit = 50,
+-  ): Promise<LspDefinition[]> {
++  ): Promise<LspBounded<LspDefinition>> {
+     const handles = this.getReadyHandles(serverName);
+     const requestParams = {
+       textDocument: { uri: location.uri },
+       position: location.range.start,
+     };
+ 
+@@ -1140,39 +1129,36 @@
+           const normalized = this.normalizer.normalizeLocationResult(
+             item,
+             name,
+           );
+           if (normalized) {
+             implementations.push(normalized);
+-            if (implementations.length >= limit) {
+-              return implementations.slice(0, limit);
+-            }
+           }
+         }
+         if (implementations.length > 0) {
+-          return implementations.slice(0, limit);
++          return { items: implementations.slice(0, limit), hadMore: implementations.length > limit };
+         }
+       } catch (error) {
+         debugLogger.warn(
+           `LSP textDocument/implementation failed for ${name}:`,
+           error,
+         );
+       }
+     }
+ 
+-    return [];
++    return { items: [], hadMore: false };
+   }
+ 
+   /**
+    * Prepare call hierarchy
+    */
+   async prepareCallHierarchy(
+     location: LspLocation,
+     serverName?: string,
+     limit = 50,
+-  ): Promise<LspCallHierarchyItem[]> {
++  ): Promise<LspBounded<LspCallHierarchyItem>> {
+     const handles = this.getReadyHandles(serverName);
+     const requestParams = {
+       textDocument: { uri: location.uri },
+       position: location.range.start,
+     };
+ 
+@@ -1211,39 +1197,36 @@
+           const normalized = this.normalizer.normalizeCallHierarchyItem(
+             item,
+             name,
+           );
+           if (normalized) {
+             items.push(normalized);
+-            if (items.length >= limit) {
+-              return items.slice(0, limit);
+-            }
+           }
+         }
+         if (items.length > 0) {
+-          return items.slice(0, limit);
++          return { items: items.slice(0, limit), hadMore: items.length > limit };
+         }
+       } catch (error) {
+         debugLogger.warn(
+           `LSP textDocument/prepareCallHierarchy failed for ${name}:`,
+           error,
+         );
+       }
+     }
+ 
+-    return [];
++    return { items: [], hadMore: false };
+   }
+ 
+   /**
+    * Find callers of the current function
+    */
+   async incomingCalls(
+     item: LspCallHierarchyItem,
+     serverName?: string,
+     limit = 50,
+-  ): Promise<LspCallHierarchyIncomingCall[]> {
++  ): Promise<LspBounded<LspCallHierarchyIncomingCall>> {
+     const targetServer = serverName ?? item.serverName;
+     const handles = this.getReadyHandles(targetServer);
+ 
+     for (const [name, handle] of handles) {
+       try {
+         await this.warmupAndTrack(name, handle);
+@@ -1258,39 +1241,36 @@
+         }
+         const calls: LspCallHierarchyIncomingCall[] = [];
+         for (const call of response) {
+           const normalized = this.normalizer.normalizeIncomingCall(call, name);
+           if (normalized) {
+             calls.push(normalized);
+-            if (calls.length >= limit) {
+-              return calls.slice(0, limit);
+-            }
+           }
+         }
+         if (calls.length > 0) {
+-          return calls.slice(0, limit);
++          return { items: calls.slice(0, limit), hadMore: calls.length > limit };
+         }
+       } catch (error) {
+         debugLogger.warn(
+           `LSP callHierarchy/incomingCalls failed for ${name}:`,
+           error,
+         );
+       }
+     }
+ 
+-    return [];
++    return { items: [], hadMore: false };
+   }
+ 
+   /**
+    * Find functions called by the current function
+    */
+   async outgoingCalls(
+     item: LspCallHierarchyItem,
+     serverName?: string,
+     limit = 50,
+-  ): Promise<LspCallHierarchyOutgoingCall[]> {
++  ): Promise<LspBounded<LspCallHierarchyOutgoingCall>> {
+     const targetServer = serverName ?? item.serverName;
+     const handles = this.getReadyHandles(targetServer);
+ 
+     for (const [name, handle] of handles) {
+       try {
+         await this.warmupAndTrack(name, handle);
+@@ -1305,29 +1285,26 @@
+         }
+         const calls: LspCallHierarchyOutgoingCall[] = [];
+         for (const call of response) {
+           const normalized = this.normalizer.normalizeOutgoingCall(call, name);
+           if (normalized) {
+             calls.push(normalized);
+-            if (calls.length >= limit) {
+-              return calls.slice(0, limit);
+-            }
+           }
+         }
+         if (calls.length > 0) {
+-          return calls.slice(0, limit);
++          return { items: calls.slice(0, limit), hadMore: calls.length > limit };
+         }
+       } catch (error) {
+         debugLogger.warn(
+           `LSP callHierarchy/outgoingCalls failed for ${name}:`,
+           error,
+         );
+       }
+     }
+ 
+-    return [];
++    return { items: [], hadMore: false };
+   }
+ 
+   /**
+    * Get diagnostics for a document
+    */
+   async diagnostics(
+@@ -1381,13 +1358,13 @@
+   /**
+    * Get diagnostics for all documents in the workspace
+    */
+   async workspaceDiagnostics(
+     serverName?: string,
+     limit = 100,
+-  ): Promise<LspFileDiagnostics[]> {
++  ): Promise<LspBounded<LspFileDiagnostics>> {
+     const handles = this.getReadyHandles(serverName);
+     const results: LspFileDiagnostics[] = [];
+ 
+     for (const [name, handle] of handles) {
+       try {
+         await this.warmupAndTrack(name, handle);
+@@ -1402,13 +1379,13 @@
+ 
+         if (response && typeof response === 'object') {
+           const responseObj = response as Record<string, unknown>;
+           const items = responseObj['items'];
+           if (Array.isArray(items)) {
+             for (const item of items) {
+-              if (results.length >= limit) {
++              if (results.length > limit) {
+                 break;
+               }
+               const normalized = this.normalizer.normalizeFileDiagnostics(
+                 item,
+                 name,
+               );
+@@ -1419,30 +1396,30 @@
+           }
+         }
+       } catch (error) {
+         debugLogger.warn(`LSP workspace/diagnostic failed for ${name}:`, error);
+       }
+ 
+-      if (results.length >= limit) {
++      if (results.length > limit) {
+         break;
+       }
+     }
+ 
+-    return results.slice(0, limit);
++    return { items: results.slice(0, limit), hadMore: results.length > limit };
+   }
+ 
+   /**
+    * Get code actions at the specified position
+    */
+   async codeActions(
+     uri: string,
+     range: LspRange,
+     context: LspCodeActionContext,
+     serverName?: string,
+     limit = 20,
+-  ): Promise<LspCodeAction[]> {
++  ): Promise<LspBounded<LspCodeAction>> {
+     const handles = this.getReadyHandles(serverName);
+ 
+     for (const [name, handle] of handles) {
+       try {
+         await this.ensureDocumentOpen(name, handle, uri);
+         await this.warmupAndTrack(name, handle);
+@@ -1474,30 +1451,30 @@
+ 
+         const actions: LspCodeAction[] = [];
+         for (const item of response) {
+           const normalized = this.normalizer.normalizeCodeAction(item, name);
+           if (normalized) {
+             actions.push(normalized);
+-            if (actions.length >= limit) {
++            if (actions.length > limit) {
+               break;
+             }
+           }
+         }
+ 
+         if (actions.length > 0) {
+-          return actions.slice(0, limit);
++          return { items: actions.slice(0, limit), hadMore: actions.length > limit };
+         }
+       } catch (error) {
+         debugLogger.warn(
+           `LSP textDocument/codeAction failed for ${name}:`,
+           error,
+         );
+       }
+     }
+ 
+-    return [];
++    return { items: [], hadMore: false };
+   }
+ 
+   /**
+    * Apply workspace edit
+    */
+   async applyWorkspaceEdit(
+diff --git a/packages/core/src/lsp/__e2e__/lsp-e2e-test.ts b/packages/core/src/lsp/__e2e__/lsp-e2e-test.ts
+--- a/packages/core/src/lsp/__e2e__/lsp-e2e-test.ts
++++ b/packages/core/src/lsp/__e2e__/lsp-e2e-test.ts
+@@ -232,13 +232,13 @@
+     try {
+       const defLoc = loc(
+         positions.definitions.file,
+         positions.definitions.line,
+         positions.definitions.char,
+       );
+-      const defs = await service.definitions(defLoc);
++      const defs = (await service.definitions(defLoc)).items;
+       record(
+         'definitions',
+         langName,
+         defs.length > 0,
+         defs.length > 0 ? `${defs.length} def(s)` : 'Empty result',
+       );
+@@ -250,13 +250,13 @@
+     try {
+       const refLoc = loc(
+         positions.references.file,
+         positions.references.line,
+         positions.references.char,
+       );
+-      const refs = await service.references(refLoc, undefined, true);
++      const refs = (await service.references(refLoc, undefined, true)).items;
+       record(
+         'references',
+         langName,
+         refs.length > 0,
+         refs.length > 0 ? `${refs.length} ref(s)` : 'Empty result',
+       );
+@@ -264,13 +264,13 @@
+       record('references', langName, false, `Error: ${e.message}`);
+     }
+ 
+     /* ---------- 4. documentSymbols ---------- */
+     try {
+       const docSymUri = pathToFileURL(positions.documentSymbolsFile).toString();
+-      const symbols = await service.documentSymbols(docSymUri);
++      const symbols = (await service.documentSymbols(docSymUri)).items;
+       if (symbols.length > 0) {
+         const names = symbols
+           .slice(0, 5)
+           .map((s) => s.name)
+           .join(', ');
+         record(
+@@ -285,13 +285,13 @@
+     } catch (e: any) {
+       record('documentSymbols', langName, false, `Error: ${e.message}`);
+     }
+ 
+     /* ---------- 5. workspaceSymbols ---------- */
+     try {
+-      const wsSymbols = await service.workspaceSymbols(positions.symbolQuery);
++      const wsSymbols = (await service.workspaceSymbols(positions.symbolQuery)).items;
+       if (wsSymbols.length > 0) {
+         const names = wsSymbols
+           .slice(0, 5)
+           .map((s) => s.name)
+           .join(', ');
+         record(
+@@ -311,13 +311,13 @@
+     try {
+       const implLoc = loc(
+         positions.implementations.file,
+         positions.implementations.line,
+         positions.implementations.char,
+       );
+-      const impls = await service.implementations(implLoc);
++      const impls = (await service.implementations(implLoc)).items;
+       record(
+         'implementations',
+         langName,
+         impls.length > 0,
+         impls.length > 0 ? `${impls.length} impl(s)` : 'Empty result',
+       );
+@@ -329,23 +329,23 @@
+     try {
+       const callLoc = loc(
+         positions.callHierarchy.file,
+         positions.callHierarchy.line,
+         positions.callHierarchy.char,
+       );
+-      const callItems = await service.prepareCallHierarchy(callLoc);
++      const callItems = (await service.prepareCallHierarchy(callLoc)).items;
+       if (callItems.length > 0) {
+         record(
+           'prepareCallHierarchy',
+           langName,
+           true,
+           `${callItems.length} item(s): ${callItems[0]!.name}`,
+         );
+ 
+         try {
+-          const incoming = await service.incomingCalls(callItems[0]!);
++          const incoming = (await service.incomingCalls(callItems[0]!)).items;
+           record(
+             'incomingCalls',
+             langName,
+             incoming.length > 0,
+             incoming.length > 0
+               ? `${incoming.length} caller(s)`
+@@ -353,13 +353,13 @@
+           );
+         } catch (e: any) {
+           record('incomingCalls', langName, false, `Error: ${e.message}`);
+         }
+ 
+         try {
+-          const outgoing = await service.outgoingCalls(callItems[0]!);
++          const outgoing = (await service.outgoingCalls(callItems[0]!)).items;
+           if (outgoing.length > 0) {
+             record(
+               'outgoingCalls',
+               langName,
+               true,
+               `${outgoing.length} callee(s)`,
+@@ -403,26 +403,26 @@
+       record('diagnostics', langName, false, `Error: ${e.message}`);
+     }
+ 
+     /* ---------- 11. codeActions ---------- */
+     try {
+       const caUri = pathToFileURL(positions.diagnosticsFile).toString();
+-      const actions = await service.codeActions(
++      const actions = (await service.codeActions(
+         caUri,
+         { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+         { diagnostics: [], triggerKind: 'invoked' as const },
+-      );
++      )).items;
+       // 0 actions is fine when there are no diagnostics
+       record('codeActions', langName, true, `${actions.length} action(s)`);
+     } catch (e: any) {
+       record('codeActions', langName, false, `Error: ${e.message}`);
+     }
+ 
+     /* ---------- 12. workspaceDiagnostics ---------- */
+     try {
+-      const wsDiags = await service.workspaceDiagnostics();
++      const wsDiags = (await service.workspaceDiagnostics()).items;
+       record(
+         'workspaceDiagnostics',
+         langName,
+         true,
+         `${wsDiags.length} file(s) with diagnostics`,
+       );
+diff --git a/packages/core/src/lsp/types.ts b/packages/core/src/lsp/types.ts
+--- a/packages/core/src/lsp/types.ts
++++ b/packages/core/src/lsp/types.ts
+@@ -1,12 +1,27 @@
+ /**
+  * @license
+  * Copyright 2025 Qwen Team
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
++/**
++ * A capped list, and whether the cap hid anything.
++ *
++ * A server can return more results than the caller asked to see. Returning
++ * only the first `limit` of them says nothing about whether that was all of
++ * them, and a caller that cannot tell "twenty results" from "the first twenty
++ * of many" reports the former — which is how a truncated search came to render
++ * as a complete one. `hadMore` is the fact the cap would otherwise destroy, so
++ * it travels with the items rather than being recoverable from them.
++ */
++export interface LspBounded<T> {
++  readonly items: T[];
++  readonly hadMore: boolean;
++}
++
+ export interface LspPosition {
+   line: number;
+   character: number;
+ }
+ 
+ export interface LspRange {
+@@ -283,13 +298,13 @@
+   /**
+    * Search for symbols across the workspace.
+    */
+   workspaceSymbols(
+     query: string,
+     limit?: number,
+-  ): Promise<LspSymbolInformation[]>;
++  ): Promise<LspBounded<LspSymbolInformation>>;
+ 
+   /**
+    * Get hover information (documentation, type info) for a symbol.
+    */
+   hover(
+     location: LspLocation,
+@@ -300,92 +315,92 @@
+    * Get all symbols in a document.
+    */
+   documentSymbols(
+     uri: string,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspSymbolInformation[]>;
++  ): Promise<LspBounded<LspSymbolInformation>>;
+ 
+   /**
+    * Find where a symbol is defined.
+    */
+   definitions(
+     location: LspLocation,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspDefinition[]>;
++  ): Promise<LspBounded<LspDefinition>>;
+ 
+   /**
+    * Find implementations of an interface or abstract method.
+    */
+   implementations(
+     location: LspLocation,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspDefinition[]>;
++  ): Promise<LspBounded<LspDefinition>>;
+ 
+   /**
+    * Find all references to a symbol.
+    */
+   references(
+     location: LspLocation,
+     serverName?: string,
+     includeDeclaration?: boolean,
+     limit?: number,
+-  ): Promise<LspReference[]>;
++  ): Promise<LspBounded<LspReference>>;
+ 
+   /**
+    * Prepare call hierarchy item at a position (functions/methods).
+    */
+   prepareCallHierarchy(
+     location: LspLocation,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspCallHierarchyItem[]>;
++  ): Promise<LspBounded<LspCallHierarchyItem>>;
+ 
+   /**
+    * Find all functions/methods that call the given function.
+    */
+   incomingCalls(
+     item: LspCallHierarchyItem,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspCallHierarchyIncomingCall[]>;
++  ): Promise<LspBounded<LspCallHierarchyIncomingCall>>;
+ 
+   /**
+    * Find all functions/methods called by the given function.
+    */
+   outgoingCalls(
+     item: LspCallHierarchyItem,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspCallHierarchyOutgoingCall[]>;
++  ): Promise<LspBounded<LspCallHierarchyOutgoingCall>>;
+ 
+   /**
+    * Get diagnostics for a specific document.
+    */
+   diagnostics(uri: string, serverName?: string): Promise<LspDiagnostic[]>;
+ 
+   /**
+    * Get diagnostics for all open documents in the workspace.
+    */
+   workspaceDiagnostics(
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspFileDiagnostics[]>;
++  ): Promise<LspBounded<LspFileDiagnostics>>;
+ 
+   /**
+    * Get code actions available at a specific location.
+    */
+   codeActions(
+     uri: string,
+     range: LspRange,
+     context: LspCodeActionContext,
+     serverName?: string,
+     limit?: number,
+-  ): Promise<LspCodeAction[]>;
++  ): Promise<LspBounded<LspCodeAction>>;
+ 
+   /**
+    * Apply a workspace edit (from code action or other sources).
+    */
+   applyWorkspaceEdit(
+     edit: LspWorkspaceEdit,
 diff --git a/packages/core/src/memory/extractionAgentPlanner.ts b/packages/core/src/memory/extractionAgentPlanner.ts
 --- a/packages/core/src/memory/extractionAgentPlanner.ts
 +++ b/packages/core/src/memory/extractionAgentPlanner.ts
@@ -214337,6 +215413,36 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
  import { applyReplacement, EditTool } from './edit.js';
  import type { FileDiff, ToolInvocation, ToolResult } from './tools.js';
  import { ToolErrorType } from './tool-error.js';
+@@ -593,13 +594,13 @@
+       const writeSpy = vi.spyOn(fsService, 'writeTextFile');
+ 
+       const invocation = tool.build(params);
+       const result = await invocation.execute(new AbortController().signal);
+ 
+       expect(result.llmContent).toMatch(
+-        /Showing lines \d+-\d+ of \d+ from the edited file:/,
++        /Bounded result: \d+ of \d+ lines in total/,
+       );
+       expect(fs.readFileSync(filePath, 'utf8')).toBe(newContent);
+       expect(mockFileHistoryService.trackEdit).toHaveBeenCalledWith(filePath);
+       const display = result.returnDisplay as FileDiff;
+       expect(display.fileDiff).toMatch(initialContent);
+       expect(display.fileDiff).toMatch(newContent);
+@@ -629,13 +630,13 @@
+       const invocation = tool.build(params);
+       const result = await invocation.execute(new AbortController().signal);
+ 
+       expect(mockFileHistoryService.trackEdit).toHaveBeenCalledWith(filePath);
+       expect(fs.readFileSync(filePath, 'utf8')).toBe(newContent);
+       expect(result.llmContent).toMatch(
+-        /Showing lines \d+-\d+ of \d+ from the edited file:/,
++        /Bounded result: \d+ of \d+ lines in total/,
+       );
+     });
+ 
+     // Pin the upstream-aligned ordering: trackEdit MUST run before the
+     // pre-write checkPriorRead. The upstream `claude-code/src/tools/
+     // FileEditTool` comment on the equivalent block says:
 @@ -727,21 +728,26 @@
          // with a positive contribution.
          expect(attribution!.aiContribution).toBeGreaterThan(0);
@@ -214371,6 +215477,36 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
          expect(
            CommitAttributionService.getInstance().getFileAttribution(filePath),
          ).toBeUndefined();
+@@ -764,13 +770,13 @@
+       const writeSpy = vi.spyOn(fsService, 'writeTextFile');
+       const invocation = tool.build(params);
+       const result = await invocation.execute(new AbortController().signal);
+ 
+       expect(result.llmContent).toMatch(/Created new file/);
+       expect(result.llmContent).toMatch(
+-        /Showing lines \d+-\d+ of \d+ from the edited file:/,
++        /Bounded result: \d+ of \d+ lines in total/,
+       );
+       expect(fs.existsSync(newFilePath)).toBe(true);
+       expect(fs.readFileSync(newFilePath, 'utf8')).toBe(fileContent);
+       expect(writeSpy).toHaveBeenCalledWith(
+         expect.objectContaining({ toolWriteOrigin: 'edit' }),
+       );
+@@ -910,13 +916,13 @@
+       };
+ 
+       const invocation = tool.build(params);
+       const result = await invocation.execute(new AbortController().signal);
+ 
+       expect(result.llmContent).toMatch(
+-        /Showing lines \d+-\d+ of \d+ from the edited file/,
++        /Bounded result: \d+ of \d+ lines in total/,
+       );
+       expect(fs.readFileSync(filePath, 'utf8')).toBe(
+         'new text\nnew text\nnew text',
+       );
+       const display = result.returnDisplay as FileDiff;
+ 
 @@ -955,13 +961,12 @@
        const initialContent = 'This is some old text.';
        fs.writeFileSync(filePath, initialContent, 'utf8');
@@ -214400,10 +215536,25 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
          file_path: filePath,
          old_string: 'old',
          new_string: 'new',
+@@ -1727,13 +1732,13 @@
+         );
+ 
+         const invocation = tool.build(params);
+         const result = await invocation.execute(new AbortController().signal);
+ 
+         // Should succeed — not fail with file-not-found
+-        expect(result.llmContent).toMatch(/Showing lines \d+-\d+ of \d+/);
++        expect(result.llmContent).toMatch(/Bounded result: \d+ of \d+ lines in total/);
+         expect(fs.readFileSync(realPath, 'utf8')).toBe('Hello new world!');
+       });
+ 
+       it('should fail gracefully when escaped path points to nonexistent file', async () => {
+         const escapedPath = path.join(rootDir, 'nonexistent\\ file.txt');
+         const params: EditToolParams = {
 diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
 --- a/packages/core/src/tools/edit.ts
 +++ b/packages/core/src/tools/edit.ts
-@@ -1,12 +1,16 @@
+@@ -1,23 +1,32 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -214420,7 +215571,24 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
    ToolCallConfirmationDetails,
    ToolEditConfirmationDetails,
    ToolInvocation,
-@@ -98,22 +102,12 @@
+   ToolLocation,
+   ToolResult,
+ } from './tools.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+-import { BaseDeclarativeTool, Kind, ToolConfirmationOutcome } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  boundedContent,
++  Kind,
++  ToolConfirmationOutcome,
++} from './tools.js';
+ import { ToolErrorType } from './tool-error.js';
+ import { makeRelative, shortenPath, unescapePath } from '../utils/paths.js';
+ import { getErrorMessage, isNodeError } from '../utils/errors.js';
+ import type { Config } from '../config/config.js';
+ import { ApprovalMode } from '../config/config.js';
+ import { isAnyAutoMemPath, isTeamAutoMemPath } from '../memory/paths.js';
+@@ -98,22 +107,12 @@
    new_string: string;
  
    /**
@@ -214443,7 +215611,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
    currentContent: string | null;
    newContent: string;
    occurrences: number;
-@@ -627,13 +621,13 @@
+@@ -627,13 +626,13 @@
              lineEnding: editData.lineEnding,
            },
          });
@@ -214458,7 +215626,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
            editData.newContent,
          );
        }
-@@ -656,13 +650,14 @@
+@@ -656,13 +655,14 @@
          // post-write, so the next ReadFile will report stale and
          // refresh the entry.
        }
@@ -214474,7 +215642,34 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
          originallyProposedContent,
          editData.newContent,
        );
-@@ -792,12 +787,13 @@
+@@ -712,13 +712,25 @@
+ 
+       const snippetResult = extractEditSnippet(
+         editData.currentContent,
+         editData.newContent,
+       );
+       if (snippetResult) {
+-        const snippetText = `Showing lines ${snippetResult.startLine}-${snippetResult.endLine} of ${snippetResult.totalLines} from the edited file:\n\n---\n\n${snippetResult.content}`;
++        // An excerpt around the edit, not the file. It takes the shared
++        // notice so a reader is told what it is holding before reading it.
++        const shown = snippetResult.endLine - snippetResult.startLine + 1;
++        const snippetText = boundedContent(snippetResult.content, {
++          returned: shown,
++          unit: 'lines',
++          limit: shown,
++          limitUnit: 'lines around the edit',
++          total: snippetResult.totalLines,
++          continuation: `read_file with file_path: ${JSON.stringify(
++            this.params.file_path,
++          )}, offset: 0`,
++        });
+         llmSuccessMessageParts.push(snippetText);
+       }
+ 
+       return {
+         llmContent: llmSuccessMessageParts.join(' '),
+         returnDisplay: displayResult,
+@@ -792,12 +804,13 @@
              type: 'boolean',
              description:
                'Replace all occurrences of old_string (default false).',
@@ -214488,7 +215683,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
    }
  
    /**
-@@ -891,26 +887,39 @@
+@@ -891,26 +904,39 @@
                params.old_string,
                params.new_string,
                params.old_string === '' && currentContent === '',
@@ -214663,10 +215858,140 @@ diff --git a/packages/core/src/tools/exitPlanMode.test.ts b/packages/core/src/to
      expect(config.setApprovalMode).not.toHaveBeenCalled();
    });
  
+diff --git a/packages/core/src/tools/glob.test.ts b/packages/core/src/tools/glob.test.ts
+--- a/packages/core/src/tools/glob.test.ts
++++ b/packages/core/src/tools/glob.test.ts
+@@ -515,13 +515,13 @@
+ 
+         expect(vi.mocked(glob.globStream).mock.calls.length).toBe(
+           globStreamCallsBefore + 1,
+         );
+         expect(stream.getYielded()).toBeLessThan(10_005);
+         expect(llmContent).toContain('Found at least');
+-        expect(llmContent).toContain('Narrow the pattern or path');
++        expect(llmContent).toContain('narrow the pattern or path');
+       } finally {
+         await fs.rm(secondDir, { recursive: true, force: true });
+       }
+     });
+ 
+     it('should use single directory description when only one workspace dir', async () => {
+@@ -874,13 +874,13 @@
+       const result = await invocation.execute(abortSignal);
+       const llmContent = partListUnionToString(result.llmContent);
+ 
+       expect(stream.getYielded()).toBeLessThan(totalResults);
+       expect(stream.destroy).toHaveBeenCalled();
+       expect(llmContent).toContain('Found at least');
+-      expect(llmContent).toContain('Narrow the pattern or path');
++      expect(llmContent).toContain('narrow the pattern or path');
+       expect(result.returnDisplay).toContain('(truncated)');
+     });
+ 
+     it('should truncate results when more than 100 files are found', async () => {
+       mockTruncationGlobResults('file', 150);
+ 
+@@ -890,13 +890,13 @@
+       const llmContent = partListUnionToString(result.llmContent);
+ 
+       // Should report all 150 files found
+       expect(llmContent).toContain('Found 150 file(s)');
+ 
+       // Should include truncation notice
+-      expect(llmContent).toContain('[50 files truncated] ...');
++      expect(llmContent).toContain('Bounded result: 100 of 150 files in total');
+ 
+       // Count the number of .trunctest files mentioned in the output
+       const fileMatches = llmContent.match(/file\d+\.trunctest/g);
+       expect(fileMatches).toBeDefined();
+       expect(fileMatches?.length).toBe(100);
+ 
+@@ -949,25 +949,25 @@
+ 
+       const params: GlobToolParams = { pattern: '*.trunctest' };
+       const invocation = globTool.build(params);
+       const result = await invocation.execute(abortSignal);
+ 
+       // Should use singular "file" for 1 truncated file
+-      expect(result.llmContent).toContain('[1 file truncated] ...');
++      expect(result.llmContent).toContain('Bounded result: 100 of 101 files in total');
+       expect(result.llmContent).not.toContain('[1 files truncated]');
+     });
+ 
+     it('should use correct plural in truncation message for multiple files truncated', async () => {
+       mockTruncationGlobResults('plural', 105);
+ 
+       const params: GlobToolParams = { pattern: '*.trunctest' };
+       const invocation = globTool.build(params);
+       const result = await invocation.execute(abortSignal);
+ 
+       // Should use plural "files" for multiple truncated files
+-      expect(result.llmContent).toContain('[5 files truncated] ...');
++      expect(result.llmContent).toContain('Bounded result: 100 of 105 files in total');
+     });
+   });
+ 
+   describe('getDescription', () => {
+     it('should generate correct description with pattern only', () => {
+       const params: GlobToolParams = { pattern: '*.ts' };
 diff --git a/packages/core/src/tools/glob.ts b/packages/core/src/tools/glob.ts
 --- a/packages/core/src/tools/glob.ts
 +++ b/packages/core/src/tools/glob.ts
-@@ -388,13 +388,13 @@
+@@ -5,13 +5,18 @@
+  */
+ 
+ import fs from 'node:fs';
+ import path from 'node:path';
+ import { globStream, escape } from 'glob';
+ import type { ToolInvocation, ToolResult } from './tools.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  Kind,
++} from './tools.js';
+ import { ToolNames, ToolDisplayNames } from './tool-names.js';
+ import {
+   resolveAndValidatePath,
+   formatDisplayPath,
+   resolvePath,
+   isSubpath,
+@@ -332,19 +337,26 @@
+ 
+       let resultMessage = hitCollectionLimit
+         ? `Found at least ${totalFileCount} file(s) matching "${this.params.pattern}" ${searchLocationDescription}`
+         : `Found ${totalFileCount} file(s) matching "${this.params.pattern}" ${searchLocationDescription}`;
+       resultMessage += `, sorted by modification time (newest first):\n---\n${fileListDescription}`;
+ 
+-      // Add truncation notice if needed
+-      if (hitCollectionLimit) {
+-        resultMessage += `\n---\n[Results truncated after scanning ${totalFileCount} matching files. Narrow the pattern or path.]`;
+-      } else if (truncated) {
+-        const omittedFiles = totalFileCount - fileLimit;
+-        const fileTerm = omittedFiles === 1 ? 'file' : 'files';
+-        resultMessage += `\n---\n[${omittedFiles} ${fileTerm} truncated] ...`;
++      if (hitCollectionLimit || truncated) {
++        resultMessage = boundedContent(resultMessage, {
++          returned: entriesToShow.length,
++          unit: 'files',
++          limit: hitCollectionLimit ? MAX_GLOB_COLLECTED_ENTRIES : fileLimit,
++          limitUnit: hitCollectionLimit ? 'scanned entries' : 'files',
++          total: hitCollectionLimit
++            ? {
++                unknown:
++                  'the scan stopped at its collection ceiling before it had seen every match; narrow the pattern or path',
++              }
++            : totalFileCount,
++          ...(hitCollectionLimit ? { coverageUnknown: true } : {}),
++        });
+       }
+ 
+       return {
+         llmContent: resultMessage,
+         returnDisplay: `${hitCollectionLimit ? 'Found at least' : 'Found'} ${totalFileCount} matching file(s)${truncated ? ' (truncated)' : ''}`,
+         resultFilePaths: sortedAbsolutePaths,
+@@ -388,13 +400,13 @@
    static readonly Name = ToolNames.GLOB;
  
    constructor(private config: Config) {
@@ -214681,7 +216006,7 @@ diff --git a/packages/core/src/tools/glob.ts b/packages/core/src/tools/glob.ts
            pattern: {
              description: 'The glob pattern to match files against',
              type: 'string',
-@@ -403,12 +403,13 @@
+@@ -403,12 +415,13 @@
              description:
                'The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter "undefined" or "null" - simply omit it for the default behavior. Must be a valid directory path if provided.',
              type: 'string',
@@ -214815,12 +216140,118 @@ diff --git a/packages/core/src/tools/grep.test.ts b/packages/core/src/tools/grep
        const multiDirGrepTool = new GrepTool(multiDirConfig);
        // 'sub dir' exists only in sub/fileC.txt — a file that lives under both
        // tempRootDir and subDir, so without deduplication it would appear twice.
+@@ -1043,13 +995,13 @@
+       const params: GrepToolParams = { pattern: 'testword', limit: 5 };
+       const invocation = grepTool.build(params);
+       const result = await invocation.execute(abortSignal);
+ 
+       // Should find 30 total but limit to 5
+       expect(result.llmContent).toContain('Found 30 matches');
+-      expect(result.llmContent).toContain('25 lines truncated');
++      expect(result.llmContent).toContain('Bounded result: 5 of 30 matches in total');
+       expect(result.returnDisplay).toContain('Found 30 matches (truncated)');
+     });
+ 
+     it('should not show truncation warning when all results fit', async () => {
+       const params: GrepToolParams = { pattern: 'testword', limit: 50 };
+       const invocation = grepTool.build(params);
 diff --git a/packages/core/src/tools/grep.ts b/packages/core/src/tools/grep.ts
 --- a/packages/core/src/tools/grep.ts
 +++ b/packages/core/src/tools/grep.ts
-@@ -173,13 +173,12 @@
+@@ -6,13 +6,19 @@
+ 
+ import fsPromises from 'node:fs/promises';
+ import path from 'node:path';
+ import { spawn } from 'node:child_process';
+ import { globStream } from 'glob';
+ import type { ToolInvocation, ToolResult } from './tools.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  formatOutputBound,
++  Kind,
++} from './tools.js';
+ import { ToolNames, ToolDisplayNames } from './tool-names.js';
+ import { createDebugLogger } from '../utils/debugLogger.js';
+ import {
+   resolveAndValidatePath,
+   formatDisplayPath,
+   resolvePath,
+@@ -29,12 +35,18 @@
+ import { ToolErrorType } from './tool-error.js';
+ import { isCommandAvailable } from '../utils/shell-utils.js';
+ import { recordGrepResultFileReads } from './grepReadTracking.js';
+ 
+ const debugLogger = createDebugLogger('GREP');
+ 
++/** Matches found, and whether the search covered everything it was asked to. */
++interface GrepSearchResult {
++  matches: GrepMatch[];
++  incomplete: boolean;
++}
++
+ // --- Interfaces ---
+ 
+ /**
+  * Parameters for the GrepTool
+  */
+ export interface GrepToolParams {
+@@ -131,19 +143,23 @@
+             ? `across ${workspaceDirs.length} workspace directories`
+             : `in the workspace directory`;
+       }
+ 
+       // Perform grep search across all directories
+       let rawMatches: GrepMatch[] = [];
++      // True once any directory reported that it could not cover everything.
++      let coverageIncomplete = false;
+       for (const searchDir of searchDirs) {
+-        const matches = await this.performGrepSearch({
+-          pattern: this.params.pattern,
+-          path: searchDir,
+-          glob: this.params.glob,
+-          signal,
+-        });
++        const { matches, incomplete: dirIncomplete } =
++          await this.performGrepSearch({
++            pattern: this.params.pattern,
++            path: searchDir,
++            glob: this.params.glob,
++            signal,
++          });
++        if (dirIncomplete) coverageIncomplete = true;
+         // When searching multiple directories, convert relative file paths
+         // to absolute paths so results from different directories are
+         // unambiguous.
+         if (searchDirs.length > 1) {
+           for (const match of matches) {
+             if (!path.isAbsolute(match.filePath)) {
+@@ -169,17 +185,33 @@
+       const filterDescription = this.params.glob
+         ? ` (filter: "${this.params.glob}")`
+         : '';
+ 
        // Check if we have any matches
        if (rawMatches.length === 0) {
++        if (coverageIncomplete) {
++          const bound = formatOutputBound({
++            returned: 0,
++            unit: 'matches',
++            limit: this.config.getTruncateToolOutputLines(),
++            limitUnit: 'matches',
++            total: {
++              unknown:
++                'paths this search could not read were not searched',
++            },
++            coverageUnknown: true,
++          });
++          return {
++            llmContent: `Search for pattern "${this.params.pattern}" ${searchLocationDescription}${filterDescription}. ${bound}`,
++            returnDisplay: `No matches found (incomplete)`,
++          };
++        }
          const noMatchMsg = `No matches found for pattern "${this.params.pattern}" ${searchLocationDescription}${filterDescription}.`;
          return { llmContent: noMatchMsg, returnDisplay: `No matches found` };
        }
@@ -214832,7 +216263,7 @@ diff --git a/packages/core/src/tools/grep.ts b/packages/core/src/tools/grep.ts
        );
  
        // Apply line limit if specified
-@@ -210,66 +209,33 @@
+@@ -210,66 +242,46 @@
          {} as Record<string, GrepMatch[]>,
        );
  
@@ -214869,10 +216300,13 @@ diff --git a/packages/core/src/tools/grep.ts b/packages/core/src/tools/grep.ts
 -            stopRendering = true;
 -            break;
 -          }
--        }
++          grepOutput += `L${match.lineNumber}: ${match.line.trim()}\n`;
++          visibleMatches.push(match);
+         }
 -        if (stopRendering || !appendChunk('---\n')) break;
--      }
--
++        grepOutput += '---\n';
+       }
+ 
 -      // Count how many lines we actually included after character truncation
 -      const finalLines = grepOutput
 -        .split('\n')
@@ -214881,21 +216315,31 @@ diff --git a/packages/core/src/tools/grep.ts b/packages/core/src/tools/grep.ts
 -            line.trim() && !line.startsWith('File:') && !line.startsWith('---'),
 -        );
 -      const includedLines = finalLines.length;
-+          grepOutput += `L${match.lineNumber}: ${match.line.trim()}\n`;
-+          visibleMatches.push(match);
-+        }
-+        grepOutput += '---\n';
-+      }
- 
+-
        // Build result
        let llmContent = header + grepOutput;
  
-       // Add truncation notice if needed
+-      // Add truncation notice if needed
 -      if (truncatedByLineLimit || truncatedByCharLimit) {
 -        const omittedMatches = totalMatches - includedLines;
-+      if (truncatedByLineLimit) {
-+        const omittedMatches = totalMatches - visibleMatches.length;
-         llmContent += ` [${omittedMatches} ${omittedMatches === 1 ? 'line' : 'lines'} truncated] ...`;
+-        llmContent += ` [${omittedMatches} ${omittedMatches === 1 ? 'line' : 'lines'} truncated] ...`;
++      if (truncatedByLineLimit || coverageIncomplete) {
++        llmContent = boundedContent(llmContent, {
++          ...(this.params.limit === undefined
++            ? {}
++            : { requested: this.params.limit }),
++          returned: visibleMatches.length,
++          unit: 'matches',
++          limit: lineLimit,
++          limitUnit: 'matches',
++          total: coverageIncomplete
++            ? {
++                unknown:
++                  'paths this search could not read were not searched',
++              }
++            : totalMatches,
++          ...(coverageIncomplete ? { coverageUnknown: true } : {}),
++        });
        }
  
        // Build display message
@@ -214908,7 +216352,139 @@ diff --git a/packages/core/src/tools/grep.ts b/packages/core/src/tools/grep.ts
        const resultFilePaths = Array.from(
          new Set(
            visibleMatches
-@@ -669,16 +635,12 @@
+@@ -427,15 +439,17 @@
+    */
+   private async performGrepSearch(options: {
+     pattern: string;
+     path: string; // Expects absolute path
+     glob?: string;
+     signal: AbortSignal;
+-  }): Promise<GrepMatch[]> {
++  }): Promise<GrepSearchResult> {
+     const { pattern, path: absolutePath, glob } = options;
+     let strategyUsed = 'none';
++    // Set by any path that knowingly skipped something.
++    let incomplete = false;
+ 
+     try {
+       // --- Strategy 1: git grep ---
+       const isGit = isGitRepository(absolutePath);
+       const gitAvailable = isGit && isCommandAvailable('git').available;
+ 
+@@ -483,13 +497,16 @@
+               else
+                 reject(
+                   new Error(`git grep exited with code ${code}: ${stderrData}`),
+                 );
+             });
+           });
+-          return this.parseGrepOutput(output, absolutePath);
++          return {
++            matches: this.parseGrepOutput(output, absolutePath),
++            incomplete,
++          };
+         } catch (gitError: unknown) {
+           debugLogger.debug(
+             `GrepLogic: git grep failed: ${getErrorMessage(
+               gitError,
+             )}. Falling back...`,
+           );
+@@ -543,18 +560,23 @@
+             const stdoutChunks: Buffer[] = [];
+             const stderrChunks: Buffer[] = [];
+ 
+             const onData = (chunk: Buffer) => stdoutChunks.push(chunk);
+             const onStderr = (chunk: Buffer) => {
+               const stderrStr = chunk.toString();
+-              // Suppress common harmless stderr messages
++              // These are not harmless: a path grep could not read is a
++              // path it did not search. They stay out of the error so the
++              // search still returns its matches, but they are recorded so
++              // the result can say its coverage was partial.
+               if (
+                 !stderrStr.includes('Permission denied') &&
+                 !/grep:.*: Is a directory/i.test(stderrStr)
+               ) {
+                 stderrChunks.push(chunk);
++              } else {
++                incomplete = true;
+               }
+             };
+             const onError = (err: Error) => {
+               cleanup();
+               reject(new Error(`Failed to start system grep: ${err.message}`));
+             };
+@@ -571,13 +593,21 @@
+                 if (stderrData)
+                   reject(
+                     new Error(
+                       `System grep exited with code ${code}: ${stderrData}`,
+                     ),
+                   );
+-                else resolve(''); // Exit code > 1 but no stderr, likely just suppressed errors
++                else {
++                  // An abnormal exit with no diagnostic. Whatever it had
++                  // already written is real and is kept; what it had not
++                  // reached is unknown, which is what makes this partial
++                  // rather than empty. Discarding stdout here turned a
++                  // scan that found matches into "No matches found".
++                  incomplete = true;
++                  resolve(stdoutData);
++                }
+               }
+             };
+ 
+             const cleanup = () => {
+               child.stdout.removeListener('data', onData);
+               child.stderr.removeListener('data', onStderr);
+@@ -590,13 +620,16 @@
+ 
+             child.stdout.on('data', onData);
+             child.stderr.on('data', onStderr);
+             child.on('error', onError);
+             child.on('close', onClose);
+           });
+-          return this.parseGrepOutput(output, absolutePath);
++          return {
++            matches: this.parseGrepOutput(output, absolutePath),
++            incomplete,
++          };
+         } catch (grepError: unknown) {
+           debugLogger.debug(
+             `GrepLogic: System grep failed: ${getErrorMessage(
+               grepError,
+             )}. Falling back...`,
+           );
+@@ -638,24 +671,26 @@
+                 lineNumber: index + 1,
+                 line,
+               });
+             }
+           });
+         } catch (readError: unknown) {
+-          // Ignore errors like permission denied or file gone during read
++          // A file that could not be read was not searched. ENOENT means it
++          // stopped existing mid-scan, which is equally a gap in coverage.
++          incomplete = true;
+           if (!isNodeError(readError) || readError.code !== 'ENOENT') {
+             debugLogger.debug(
+               `GrepLogic: Could not read/process ${fileAbsolutePath}: ${getErrorMessage(
+                 readError,
+               )}`,
+             );
+           }
+         }
+       }
+ 
+-      return allMatches;
++      return { matches: allMatches, incomplete };
+     } catch (error: unknown) {
+       debugLogger.error(
+         `GrepLogic: Error in performGrepSearch (Strategy: ${strategyUsed}): ${getErrorMessage(
+           error,
+         )}`,
+       );
+@@ -669,16 +704,12 @@
  /**
   * Implementation of the Grep tool logic (moved from CLI)
   */
@@ -214925,10 +216501,150 @@ diff --git a/packages/core/src/tools/grep.ts b/packages/core/src/tools/grep.ts
        ToolDisplayNames.GREP,
        'A powerful search tool for finding patterns in files\n\n  Usage:\n  - ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access.\n  - Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")\n  - Filter files with glob parameter (e.g., "*.js", "**/*.tsx")\n  - Case-insensitive by default\n  - Use Agent tool for open-ended searches requiring multiple rounds\n',
        Kind.Search,
+diff --git a/packages/core/src/tools/ls.test.ts b/packages/core/src/tools/ls.test.ts
+--- a/packages/core/src/tools/ls.test.ts
++++ b/packages/core/src/tools/ls.test.ts
+@@ -326,14 +326,18 @@
+ 
+       const invocation = lsTool.build({ path: tempRootDir });
+       const result = await invocation.execute(abortSignal);
+ 
+       // Should still list the other files
+       expect(result.llmContent).toContain('file1.txt');
+-      expect(result.llmContent).not.toContain('problematic.txt');
+-      expect(result.returnDisplay).toBe('Listed 1 item(s)');
++      // An entry that could not be stat'd is not listed as an entry — but its
++      // omission is disclosed, because a count that silently excludes it
++      // describes the listing rather than the directory.
++      expect(result.llmContent).toContain('1 unreadable entry omitted');
++      expect(result.llmContent).toContain('problematic.txt');
++      expect(result.returnDisplay).toContain('Listed 1 item(s)');
+ 
+       statSpy.mockRestore();
+     });
+   });
+ 
+   describe('truncation', () => {
+@@ -351,13 +355,13 @@
+         );
+       }
+ 
+       const invocation = lowLimitTool.build({ path: tempRootDir });
+       const result = await invocation.execute(abortSignal);
+ 
+-      expect(result.llmContent).toContain('[5 items truncated]');
++      expect(result.llmContent).toContain('Bounded result: 5 of 10 entries in total');
+       expect(result.returnDisplay).toBe('Listed 10 item(s) (truncated)');
+     });
+ 
+     it('should not truncate when entries are within limit', async () => {
+       for (let i = 0; i < 3; i++) {
+         await fs.writeFile(
+@@ -387,13 +391,13 @@
+         );
+       }
+ 
+       const invocation = lowLimitTool.build({ path: tempRootDir });
+       const result = await invocation.execute(abortSignal);
+ 
+-      expect(result.llmContent).toContain('[1 item truncated]');
++      expect(result.llmContent).toContain('Bounded result: 2 of 3 entries in total');
+     });
+   });
+ 
+   describe('getDescription', () => {
+     it('should return shortened relative path', () => {
+       const deeplyNestedDir = path.join(tempRootDir, 'deeply', 'nested');
 diff --git a/packages/core/src/tools/ls.ts b/packages/core/src/tools/ls.ts
 --- a/packages/core/src/tools/ls.ts
 +++ b/packages/core/src/tools/ls.ts
-@@ -341,15 +341,17 @@
+@@ -4,13 +4,18 @@
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import fs from 'node:fs/promises';
+ import path from 'node:path';
+ import type { ToolInvocation, ToolResult } from './tools.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  Kind,
++} from './tools.js';
+ import {
+   makeRelative,
+   shortenPath,
+   unescapePath,
+   isSubpaths,
+   isSubpath,
+@@ -214,12 +219,17 @@
+             this.params.file_filtering_options?.respect_qwen_ignore ??
+             this.config.getFileFilteringOptions().respectQwenIgnore ??
+             DEFAULT_FILE_FILTERING_OPTIONS.respectQwenIgnore,
+         });
+ 
+       const entries = [];
++      // An entry the listing could not stat is an entry it did not list.
++      // Dropping it silently makes the count below describe the listing
++      // rather than the directory, so a caller cannot tell a directory of
++      // ten from a directory of ten plus two it could not read.
++      const unreadable: string[] = [];
+       for (const relativePath of filteredPaths) {
+         const fullPath = path.resolve(this.config.getTargetDir(), relativePath);
+ 
+         if (this.shouldIgnore(path.basename(fullPath), this.params.ignore)) {
+           continue;
+         }
+@@ -234,12 +244,13 @@
+             size: isDir ? 0 : stats.size,
+             modifiedTime: stats.mtime,
+           });
+         } catch (error) {
+           // Log error internally but don't fail the whole listing
+           debugLogger.warn(`Error accessing ${fullPath}: ${error}`);
++          unreadable.push(path.basename(fullPath));
+         }
+       }
+ 
+       // Sort entries (directories first, then alphabetically)
+       entries.sort((a, b) => {
+         if (a.isDirectory && !b.isDirectory) return -1;
+@@ -260,18 +271,30 @@
+         .map((entry) => `${entry.isDirectory ? '[DIR] ' : ''}${entry.name}`)
+         .join('\n');
+ 
+       let resultMessage = `Listed ${totalEntryCount} item(s) in ${this.params.path}:\n---\n${directoryContent}`;
+ 
+       if (truncated) {
+-        const omittedEntries = totalEntryCount - entryLimit;
+-        const entryTerm = omittedEntries === 1 ? 'item' : 'items';
+-        resultMessage += `\n---\n[${omittedEntries} ${entryTerm} truncated] ...`;
++        resultMessage = boundedContent(resultMessage, {
++          returned: entriesToShow.length,
++          unit: 'entries',
++          limit: entryLimit,
++          limitUnit: 'entries',
++          total: totalEntryCount,
++        });
+       }
+ 
+       const ignoredMessages = [];
++      if (unreadable.length > 0) {
++        const entryTerm = unreadable.length === 1 ? 'entry' : 'entries';
++        ignoredMessages.push(
++          `${unreadable.length} unreadable ${entryTerm} omitted ` +
++            `(${unreadable.slice(0, 10).join(', ')}` +
++            `${unreadable.length > 10 ? ', …' : ''})`,
++        );
++      }
+       if (gitIgnoredCount > 0) {
+         ignoredMessages.push(`${gitIgnoredCount} git-ignored`);
+       }
+       if (qwenIgnoredCount > 0) {
+         ignoredMessages.push(`${qwenIgnoredCount} qwen-ignored`);
+       }
+@@ -341,15 +364,17 @@
                respect_qwen_ignore: {
                  description:
                    'Optional: Whether to respect .qwenignore and configured custom Qwen ignore file patterns when listing files. Defaults to true.',
@@ -214946,6 +216662,848 @@ diff --git a/packages/core/src/tools/ls.ts b/packages/core/src/tools/ls.ts
    }
  
    /**
+diff --git a/packages/core/src/tools/lsp.test.ts b/packages/core/src/tools/lsp.test.ts
+--- a/packages/core/src/tools/lsp.test.ts
++++ b/packages/core/src/tools/lsp.test.ts
+@@ -52,21 +52,21 @@
+ 
+ /**
+  * Create a mock LspClient with all methods mocked.
+  */
+ const createMockClient = (): LspClient =>
+   ({
+-    workspaceSymbols: vi.fn().mockResolvedValue([]),
++    workspaceSymbols: vi.fn().mockResolvedValue({ items: [], hadMore: false }),
+     hover: vi.fn().mockResolvedValue(null),
+-    documentSymbols: vi.fn().mockResolvedValue([]),
+-    definitions: vi.fn().mockResolvedValue([]),
+-    implementations: vi.fn().mockResolvedValue([]),
+-    references: vi.fn().mockResolvedValue([]),
+-    prepareCallHierarchy: vi.fn().mockResolvedValue([]),
+-    incomingCalls: vi.fn().mockResolvedValue([]),
+-    outgoingCalls: vi.fn().mockResolvedValue([]),
++    documentSymbols: vi.fn().mockResolvedValue({ items: [], hadMore: false }),
++    definitions: vi.fn().mockResolvedValue({ items: [], hadMore: false }),
++    implementations: vi.fn().mockResolvedValue({ items: [], hadMore: false }),
++    references: vi.fn().mockResolvedValue({ items: [], hadMore: false }),
++    prepareCallHierarchy: vi.fn().mockResolvedValue({ items: [], hadMore: false }),
++    incomingCalls: vi.fn().mockResolvedValue({ items: [], hadMore: false }),
++    outgoingCalls: vi.fn().mockResolvedValue({ items: [], hadMore: false }),
+   }) as unknown as LspClient;
+ 
+ /**
+  * Create a mock Config for testing.
+  */
+ const createMockConfig = (client?: LspClient, enabled = true): Config =>
+@@ -350,13 +350,13 @@
+         const tool = createTool(client);
+         const filePath = resolvePath('src', 'app.ts');
+         const definition: LspDefinition = {
+           ...createLocation(filePath, 10, 5),
+           serverName: 'tsserver',
+         };
+-        (client.definitions as Mock).mockResolvedValue([definition]);
++        (client.definitions as Mock).mockResolvedValue({ items: [definition], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'goToDefinition',
+           filePath: 'src/app.ts',
+           line: 5,
+           character: 10,
+@@ -377,13 +377,13 @@
+         expect(result.llmContent).toContain('1.');
+       });
+ 
+       it('handles empty results', async () => {
+         const client = createMockClient();
+         const tool = createTool(client);
+-        (client.definitions as Mock).mockResolvedValue([]);
++        (client.definitions as Mock).mockResolvedValue({ items: [], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'goToDefinition',
+           filePath: 'src/app.ts',
+           line: 5,
+           character: 10,
+@@ -400,13 +400,16 @@
+         const tool = createTool(client);
+         const filePath = resolvePath('src', 'app.ts');
+         const refs: LspReference[] = [
+           { ...createLocation(filePath, 10, 5), serverName: 'tsserver' },
+           { ...createLocation(filePath, 20, 8) },
+         ];
+-        (client.references as Mock).mockResolvedValue(refs);
++        (client.references as Mock).mockResolvedValue({
++          items: refs,
++          hadMore: false,
++        });
+ 
+         const invocation = tool.build({
+           operation: 'findReferences',
+           filePath: 'src/app.ts',
+           line: 5,
+           character: 10,
+@@ -482,13 +485,16 @@
+           {
+             name: 'myFunction',
+             kind: 'Function',
+             location: createLocation(filePath, 20, 0),
+           },
+         ];
+-        (client.documentSymbols as Mock).mockResolvedValue(symbols);
++        (client.documentSymbols as Mock).mockResolvedValue({
++          items: symbols,
++          hadMore: false,
++        });
+ 
+         const invocation = tool.build({
+           operation: 'documentSymbol',
+           filePath: 'src/app.ts',
+         });
+         const result = await invocation.execute(abortSignal);
+@@ -514,24 +520,31 @@
+           {
+             name: 'Widget',
+             kind: 'Class',
+             location: createLocation(filePath, 10, 0),
+           },
+         ];
+-        (client.workspaceSymbols as Mock).mockResolvedValue(symbols);
+-        (client.references as Mock).mockResolvedValue([]);
++        (client.workspaceSymbols as Mock).mockResolvedValue({
++          items: symbols,
++          hadMore: false,
++        });
++        (client.references as Mock).mockResolvedValue({ items: [], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'workspaceSymbol',
+           query: 'Widget',
+           limit: 10,
+         });
+         const result = await invocation.execute(abortSignal);
+ 
+         expect(client.workspaceSymbols).toHaveBeenCalledWith('Widget', 10);
+-        expect(result.llmContent).toContain('symbols for query "Widget"');
++        expect(result.llmContent).toContain('Symbols for query "Widget"');
++        // The heading used to read "Found 20 of 20 symbols" on a capped
++        // search, because the list it counted had already been clamped to
++        // the cap. A heading may not claim a total the tool does not have.
++        expect(result.llmContent).not.toMatch(/Found \d+ of \d+ symbols/);
+         expect(result.llmContent).toContain('Widget');
+       });
+     });
+ 
+     describe('goToImplementation operation', () => {
+       it('dispatches to implementations and formats results', async () => {
+@@ -539,13 +552,13 @@
+         const tool = createTool(client);
+         const filePath = resolvePath('src', 'impl.ts');
+         const impl: LspDefinition = {
+           ...createLocation(filePath, 15, 2),
+           serverName: 'tsserver',
+         };
+-        (client.implementations as Mock).mockResolvedValue([impl]);
++        (client.implementations as Mock).mockResolvedValue({ items: [impl], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'goToImplementation',
+           filePath: 'src/interface.ts',
+           line: 5,
+           character: 10,
+@@ -574,13 +587,13 @@
+           selectionRange: {
+             start: { line: 10, character: 9 },
+             end: { line: 10, character: 19 },
+           },
+           serverName: 'tsserver',
+         };
+-        (client.prepareCallHierarchy as Mock).mockResolvedValue([item]);
++        (client.prepareCallHierarchy as Mock).mockResolvedValue({ items: [item], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'prepareCallHierarchy',
+           filePath: 'src/app.ts',
+           line: 11,
+           character: 15,
+@@ -636,13 +649,13 @@
+             {
+               start: { line: 25, character: 4 },
+               end: { line: 25, character: 14 },
+             },
+           ],
+         };
+-        (client.incomingCalls as Mock).mockResolvedValue([incomingCall]);
++        (client.incomingCalls as Mock).mockResolvedValue({ items: [incomingCall], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'incomingCalls',
+           callHierarchyItem: targetItem,
+         });
+         const result = await invocation.execute(abortSignal);
+@@ -699,13 +712,13 @@
+             {
+               start: { line: 10, character: 4 },
+               end: { line: 10, character: 14 },
+             },
+           ],
+         };
+-        (client.outgoingCalls as Mock).mockResolvedValue([outgoingCall]);
++        (client.outgoingCalls as Mock).mockResolvedValue({ items: [outgoingCall], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'outgoingCalls',
+           callHierarchyItem: sourceItem,
+         });
+         const result = await invocation.execute(abortSignal);
+@@ -789,14 +802,20 @@
+           },
+         ];
+         const references: LspReference[] = [
+           { ...createLocation(refPath, 5, 10), serverName: 'tsserver' },
+           { ...createLocation(refPath, 20, 5) },
+         ];
+-        (client.workspaceSymbols as Mock).mockResolvedValue(symbols);
+-        (client.references as Mock).mockResolvedValue(references);
++        (client.workspaceSymbols as Mock).mockResolvedValue({
++          items: symbols,
++          hadMore: false,
++        });
++        (client.references as Mock).mockResolvedValue({
++          items: references,
++          hadMore: false,
++        });
+ 
+         const invocation = tool.build({
+           operation: 'workspaceSymbol',
+           query: 'TopWidget',
+         });
+         const result = await invocation.execute(abortSignal);
+@@ -820,13 +839,16 @@
+           {
+             name: 'Widget',
+             kind: 'Class',
+             location: createLocation(filePath, 10, 0),
+           },
+         ];
+-        (client.workspaceSymbols as Mock).mockResolvedValue(symbols);
++        (client.workspaceSymbols as Mock).mockResolvedValue({
++          items: symbols,
++          hadMore: false,
++        });
+         (client.references as Mock).mockRejectedValue(
+           new Error('References not supported'),
+         );
+ 
+         const invocation = tool.build({
+           operation: 'workspaceSymbol',
+@@ -846,13 +868,13 @@
+         const tool = createTool(client);
+         const filePath = resolvePath('src', 'app.ts');
+         const definition: LspDefinition = {
+           ...createLocation(filePath, 10, 5),
+           serverName: 'tsserver',
+         };
+-        (client.definitions as Mock).mockResolvedValue([definition]);
++        (client.definitions as Mock).mockResolvedValue({ items: [definition], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'goToDefinition',
+           filePath: 'src/app.ts',
+           line: 5,
+           character: 10,
+@@ -887,13 +909,13 @@
+     });
+ 
+     describe('serverName and limit parameter passing', () => {
+       it('passes serverName to client methods', async () => {
+         const client = createMockClient();
+         const tool = createTool(client);
+-        (client.definitions as Mock).mockResolvedValue([]);
++        (client.definitions as Mock).mockResolvedValue({ items: [], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'goToDefinition',
+           filePath: 'src/app.ts',
+           line: 5,
+           character: 10,
+@@ -908,13 +930,13 @@
+         );
+       });
+ 
+       it('passes custom limit to client methods', async () => {
+         const client = createMockClient();
+         const tool = createTool(client);
+-        (client.definitions as Mock).mockResolvedValue([]);
++        (client.definitions as Mock).mockResolvedValue({ items: [], hadMore: false });
+ 
+         const invocation = tool.build({
+           operation: 'goToDefinition',
+           filePath: 'src/app.ts',
+           line: 5,
+           character: 10,
+diff --git a/packages/core/src/tools/lsp.ts b/packages/core/src/tools/lsp.ts
+--- a/packages/core/src/tools/lsp.ts
++++ b/packages/core/src/tools/lsp.ts
+@@ -4,13 +4,18 @@
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import path from 'node:path';
+ import { fileURLToPath, pathToFileURL } from 'node:url';
+ import type { ToolInvocation, ToolResult } from './tools.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  Kind,
++} from './tools.js';
+ import { ToolDisplayNames, ToolNames } from './tool-names.js';
+ import { unescapePath } from '../utils/paths.js';
+ import type { Config } from '../config/config.js';
+ import type {
+   LspCallHierarchyIncomingCall,
+   LspCallHierarchyItem,
+@@ -23,12 +28,13 @@
+   LspDiagnostic,
+   LspFileDiagnostics,
+   LspLocation,
+   LspRange,
+   LspReference,
+   LspSymbolInformation,
++  LspBounded,
+ } from '../lsp/types.js';
+ 
+ /**
+  * Supported LSP operations.
+  */
+ export type LspOperation =
+@@ -180,32 +186,58 @@
+         const message = `Unsupported LSP operation: ${this.params.operation}`;
+         return { llmContent: message, returnDisplay: message };
+       }
+     }
+   }
+ 
++
++  /**
++   * A list the language server capped. The server reports only that more
++   * existed, not how many, so the total is stated as unknown rather than
++   * guessed — the heading used to say "Found 20 of 20" on exactly this case.
++   */
++  private withServerCap<T>(
++    body: string,
++    bound: LspBounded<T>,
++    unit: string,
++    limit: number,
++    shown: number,
++  ): string {
++    if (!bound.hadMore) return body;
++    return boundedContent(body, {
++      returned: shown,
++      unit,
++      limit,
++      limitUnit: unit,
++      total: {
++        unknown: 'the language server returned only what this limit allowed',
++      },
++    });
++  }
++
+   private async executeDefinitions(client: LspClient): Promise<ToolResult> {
+     const target = this.resolveLocationTarget();
+     if ('error' in target) {
+       return { llmContent: target.error, returnDisplay: target.error };
+     }
+ 
+     const limit = this.params.limit ?? 20;
+-    let definitions: LspDefinition[] = [];
++    let definitionsBound: LspBounded<LspDefinition> = { items: [], hadMore: false };
+     try {
+-      definitions = await client.definitions(
++      definitionsBound = await client.definitions(
+         target.location,
+         this.params.serverName,
+         limit,
+       );
+     } catch (error) {
+       const message = `LSP go-to-definition failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const definitions = definitionsBound.items;
+ 
+     if (!definitions.length) {
+       const message = `No definitions found for ${target.description}.`;
+       return { llmContent: message, returnDisplay: message };
+     }
+ 
+@@ -216,37 +248,44 @@
+         (definition, index) =>
+           `${index + 1}. ${this.formatLocationWithServer(definition, workspaceRoot)}`,
+       );
+ 
+     const heading = `Definitions for ${target.description}:`;
+     return {
+-      llmContent: [heading, ...lines].join('\n'),
++      llmContent: this.withServerCap(
++        [heading, ...lines].join('\n'),
++        definitionsBound,
++        'definitions',
++        limit,
++        lines.length,
++      ),
+       returnDisplay: lines.join('\n'),
+     };
+   }
+ 
+   private async executeImplementations(client: LspClient): Promise<ToolResult> {
+     const target = this.resolveLocationTarget();
+     if ('error' in target) {
+       return { llmContent: target.error, returnDisplay: target.error };
+     }
+ 
+     const limit = this.params.limit ?? 20;
+-    let implementations: LspDefinition[] = [];
++    let implementationsBound: LspBounded<LspDefinition> = { items: [], hadMore: false };
+     try {
+-      implementations = await client.implementations(
++      implementationsBound = await client.implementations(
+         target.location,
+         this.params.serverName,
+         limit,
+       );
+     } catch (error) {
+       const message = `LSP go-to-implementation failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const implementations = implementationsBound.items;
+ 
+     if (!implementations.length) {
+       const message = `No implementations found for ${target.description}.`;
+       return { llmContent: message, returnDisplay: message };
+     }
+ 
+@@ -257,38 +296,45 @@
+         (implementation, index) =>
+           `${index + 1}. ${this.formatLocationWithServer(implementation, workspaceRoot)}`,
+       );
+ 
+     const heading = `Implementations for ${target.description}:`;
+     return {
+-      llmContent: [heading, ...lines].join('\n'),
++      llmContent: this.withServerCap(
++        [heading, ...lines].join('\n'),
++        implementationsBound,
++        'implementations',
++        limit,
++        lines.length,
++      ),
+       returnDisplay: lines.join('\n'),
+     };
+   }
+ 
+   private async executeReferences(client: LspClient): Promise<ToolResult> {
+     const target = this.resolveLocationTarget();
+     if ('error' in target) {
+       return { llmContent: target.error, returnDisplay: target.error };
+     }
+ 
+     const limit = this.params.limit ?? 50;
+-    let references: LspReference[] = [];
++    let referencesBound: LspBounded<LspReference> = { items: [], hadMore: false };
+     try {
+-      references = await client.references(
++      referencesBound = await client.references(
+         target.location,
+         this.params.serverName,
+         this.params.includeDeclaration ?? false,
+         limit,
+       );
+     } catch (error) {
+       const message = `LSP find-references failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const references = referencesBound.items;
+ 
+     if (!references.length) {
+       const message = `No references found for ${target.description}.`;
+       return { llmContent: message, returnDisplay: message };
+     }
+ 
+@@ -299,13 +345,19 @@
+         (reference, index) =>
+           `${index + 1}. ${this.formatLocationWithServer(reference, workspaceRoot)}`,
+       );
+ 
+     const heading = `References for ${target.description}:`;
+     return {
+-      llmContent: [heading, ...lines].join('\n'),
++      llmContent: this.withServerCap(
++        [heading, ...lines].join('\n'),
++        referencesBound,
++        'references',
++        limit,
++        lines.length,
++      ),
+       returnDisplay: lines.join('\n'),
+     };
+   }
+ 
+   private async executeHover(client: LspClient): Promise<ToolResult> {
+     const target = this.resolveLocationTarget();
+@@ -349,25 +401,26 @@
+     if (!uri) {
+       const message = 'A valid filePath is required for document symbols.';
+       return { llmContent: message, returnDisplay: message };
+     }
+ 
+     const limit = this.params.limit ?? 50;
+-    let symbols: LspSymbolInformation[] = [];
++    let symbolsBound: LspBounded<LspSymbolInformation> = { items: [], hadMore: false };
+     try {
+-      symbols = await client.documentSymbols(
++      symbolsBound = await client.documentSymbols(
+         uri,
+         this.params.serverName,
+         limit,
+       );
+     } catch (error) {
+       const message = `LSP document symbols failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const symbols = symbolsBound.items;
+ 
+     if (!symbols.length) {
+       const fileLabel = this.formatUriForDisplay(uri, workspaceRoot);
+       const message = `No document symbols found for ${fileLabel}.`;
+       return { llmContent: message, returnDisplay: message };
+     }
+@@ -385,31 +438,38 @@
+       return `${index + 1}. ${symbol.name}${kind}${container} - ${location}${serverSuffix}`;
+     });
+ 
+     const fileLabel = this.formatUriForDisplay(uri, workspaceRoot);
+     const heading = `Document symbols for ${fileLabel}:`;
+     return {
+-      llmContent: [heading, ...lines].join('\n'),
++      llmContent: this.withServerCap(
++        [heading, ...lines].join('\n'),
++        symbolsBound,
++        'symbols',
++        limit,
++        lines.length,
++      ),
+       returnDisplay: lines.join('\n'),
+     };
+   }
+ 
+   private async executeWorkspaceSymbols(
+     client: LspClient,
+   ): Promise<ToolResult> {
+     const limit = this.params.limit ?? 20;
+     const query = this.params.query ?? '';
+-    let symbols: LspSymbolInformation[] = [];
++    let symbolsBound: LspBounded<LspSymbolInformation> = { items: [], hadMore: false };
+     try {
+-      symbols = await client.workspaceSymbols(query, limit);
++      symbolsBound = await client.workspaceSymbols(query, limit);
+     } catch (error) {
+       const message = `LSP workspace symbol search failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const symbols = symbolsBound.items;
+ 
+     if (!symbols.length) {
+       const message = `No symbols found for query "${query}".`;
+       return { llmContent: message, returnDisplay: message };
+     }
+ 
+@@ -424,28 +484,27 @@
+       const container = symbol.containerName
+         ? ` in ${symbol.containerName}`
+         : '';
+       return `${index + 1}. ${symbol.name}${kind}${container} - ${location}${serverSuffix}`;
+     });
+ 
+-    const heading = `Found ${Math.min(symbols.length, limit)} of ${
+-      symbols.length
+-    } symbols for query "${query}":`;
++    const heading = `Symbols for query "${query}":`;
+ 
+     // Also fetch references for the top match to provide additional context.
+     let referenceSection = '';
+     const topSymbol = symbols[0];
+     if (topSymbol) {
+       try {
+         const referenceLimit = Math.min(20, Math.max(limit, 5));
+-        const references = await client.references(
++        const referencesBound = await client.references(
+           topSymbol.location,
+           topSymbol.serverName,
+           false,
+           referenceLimit,
+         );
++        const references = referencesBound.items;
+         if (references.length > 0) {
+           const refLines = references.map((ref, index) => {
+             const location = this.formatLocationWithoutServer(
+               ref,
+               workspaceRoot,
+             );
+@@ -484,25 +543,26 @@
+     const target = this.resolveLocationTarget();
+     if ('error' in target) {
+       return { llmContent: target.error, returnDisplay: target.error };
+     }
+ 
+     const limit = this.params.limit ?? 20;
+-    let items: LspCallHierarchyItem[] = [];
++    let itemsBound: LspBounded<LspCallHierarchyItem> = { items: [], hadMore: false };
+     try {
+-      items = await client.prepareCallHierarchy(
++      itemsBound = await client.prepareCallHierarchy(
+         target.location,
+         this.params.serverName,
+         limit,
+       );
+     } catch (error) {
+       const message = `LSP call hierarchy prepare failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const items = itemsBound.items;
+ 
+     if (!items.length) {
+       const message = `No call hierarchy items found for ${target.description}.`;
+       return { llmContent: message, returnDisplay: message };
+     }
+ 
+@@ -515,13 +575,19 @@
+     const heading = `Call hierarchy items for ${target.description}:`;
+     const jsonSection = this.formatJsonSection(
+       'Call hierarchy items (JSON)',
+       slicedItems,
+     );
+     return {
+-      llmContent: [heading, ...lines].join('\n') + jsonSection,
++      llmContent: this.withServerCap(
++        [heading, ...lines].join('\n') + jsonSection,
++        itemsBound,
++        'call hierarchy items',
++        limit,
++        lines.length,
++      ),
+       returnDisplay: lines.join('\n'),
+     };
+   }
+ 
+   private async executeIncomingCalls(client: LspClient): Promise<ToolResult> {
+     const item = this.params.callHierarchyItem;
+@@ -529,21 +595,22 @@
+       const message = 'callHierarchyItem is required for incomingCalls.';
+       return { llmContent: message, returnDisplay: message };
+     }
+ 
+     const limit = this.params.limit ?? 20;
+     const serverName = this.params.serverName ?? item.serverName;
+-    let calls: LspCallHierarchyIncomingCall[] = [];
++    let callsBound: LspBounded<LspCallHierarchyIncomingCall> = { items: [], hadMore: false };
+     try {
+-      calls = await client.incomingCalls(item, serverName, limit);
++      callsBound = await client.incomingCalls(item, serverName, limit);
+     } catch (error) {
+       const message = `LSP incoming calls failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const calls = callsBound.items;
+ 
+     if (!calls.length) {
+       const message = `No incoming calls found for ${this.describeCallHierarchyItemFull(
+         item,
+       )}.`;
+       return { llmContent: message, returnDisplay: message };
+@@ -572,13 +639,19 @@
+     )}:`;
+     const jsonSection = this.formatJsonSection(
+       'Incoming calls (JSON)',
+       slicedCalls,
+     );
+     return {
+-      llmContent: [heading, ...lines].join('\n') + jsonSection,
++      llmContent: this.withServerCap(
++        [heading, ...lines].join('\n') + jsonSection,
++        callsBound,
++        'calls',
++        limit,
++        lines.length,
++      ),
+       returnDisplay: lines.join('\n'),
+     };
+   }
+ 
+   private async executeOutgoingCalls(client: LspClient): Promise<ToolResult> {
+     const item = this.params.callHierarchyItem;
+@@ -586,21 +659,22 @@
+       const message = 'callHierarchyItem is required for outgoingCalls.';
+       return { llmContent: message, returnDisplay: message };
+     }
+ 
+     const limit = this.params.limit ?? 20;
+     const serverName = this.params.serverName ?? item.serverName;
+-    let calls: LspCallHierarchyOutgoingCall[] = [];
++    let callsBound: LspBounded<LspCallHierarchyOutgoingCall> = { items: [], hadMore: false };
+     try {
+-      calls = await client.outgoingCalls(item, serverName, limit);
++      callsBound = await client.outgoingCalls(item, serverName, limit);
+     } catch (error) {
+       const message = `LSP outgoing calls failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const calls = callsBound.items;
+ 
+     if (!calls.length) {
+       const message = `No outgoing calls found for ${this.describeCallHierarchyItemFull(
+         item,
+       )}.`;
+       return { llmContent: message, returnDisplay: message };
+@@ -629,13 +703,19 @@
+     )}:`;
+     const jsonSection = this.formatJsonSection(
+       'Outgoing calls (JSON)',
+       slicedCalls,
+     );
+     return {
+-      llmContent: [heading, ...lines].join('\n') + jsonSection,
++      llmContent: this.withServerCap(
++        [heading, ...lines].join('\n') + jsonSection,
++        callsBound,
++        'calls',
++        limit,
++        lines.length,
++      ),
+       returnDisplay: lines.join('\n'),
+     };
+   }
+ 
+   private async executeDiagnostics(client: LspClient): Promise<ToolResult> {
+     const workspaceRoot = this.config.getProjectRoot();
+@@ -679,24 +759,25 @@
+   }
+ 
+   private async executeWorkspaceDiagnostics(
+     client: LspClient,
+   ): Promise<ToolResult> {
+     const limit = this.params.limit ?? 50;
+-    let fileDiagnostics: LspFileDiagnostics[] = [];
++    let fileDiagnosticsBound: LspBounded<LspFileDiagnostics> = { items: [], hadMore: false };
+     try {
+-      fileDiagnostics = await client.workspaceDiagnostics(
++      fileDiagnosticsBound = await client.workspaceDiagnostics(
+         this.params.serverName,
+         limit,
+       );
+     } catch (error) {
+       const message = `LSP workspace diagnostics failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const fileDiagnostics = fileDiagnosticsBound.items;
+ 
+     if (!fileDiagnostics.length) {
+       const message = 'No diagnostics found in the workspace.';
+       return { llmContent: message, returnDisplay: message };
+     }
+ 
+@@ -721,13 +802,19 @@
+         totalIssues++;
+       }
+     }
+ 
+     const heading = `Workspace diagnostics (${totalIssues} issues in ${fileDiagnostics.length} files):`;
+     return {
+-      llmContent: [heading, ...lines].join('\n'),
++      llmContent: this.withServerCap(
++        [heading, ...lines].join('\n'),
++        fileDiagnosticsBound,
++        'files with diagnostics',
++        limit,
++        lines.length,
++      ),
+       returnDisplay: lines.join('\n'),
+     };
+   }
+ 
+   private async executeCodeActions(client: LspClient): Promise<ToolResult> {
+     const workspaceRoot = this.config.getProjectRoot();
+@@ -760,27 +847,28 @@
+       diagnostics: this.params.diagnostics ?? [],
+       only: this.params.codeActionKinds,
+       triggerKind: 'invoked',
+     };
+ 
+     const limit = this.params.limit ?? 20;
+-    let actions: LspCodeAction[] = [];
++    let actionsBound: LspBounded<LspCodeAction> = { items: [], hadMore: false };
+     try {
+-      actions = await client.codeActions(
++      actionsBound = await client.codeActions(
+         uri,
+         range,
+         context,
+         this.params.serverName,
+         limit,
+       );
+     } catch (error) {
+       const message = `LSP code actions failed: ${
+         (error as Error)?.message || String(error)
+       }`;
+       return { llmContent: message, returnDisplay: message };
+     }
++    const actions = actionsBound.items;
+ 
+     if (!actions.length) {
+       const fileLabel = this.formatUriForDisplay(uri, workspaceRoot);
+       const message = `No code actions available at ${fileLabel}:${startLine + 1}:${startChar + 1}.`;
+       return { llmContent: message, returnDisplay: message };
+     }
+@@ -798,13 +886,19 @@
+     const heading = `Code actions at ${fileLabel}:${startLine + 1}:${startChar + 1}:`;
+     const jsonSection = this.formatJsonSection(
+       'Code actions (JSON)',
+       actions.slice(0, limit),
+     );
+     return {
+-      llmContent: [heading, ...lines].join('\n') + jsonSection,
++      llmContent: this.withServerCap(
++        [heading, ...lines].join('\n') + jsonSection,
++        actionsBound,
++        'code actions',
++        limit,
++        lines.length,
++      ),
+       returnDisplay: lines.join('\n'),
+     };
+   }
+ 
+   private resolveLocationTarget(): ResolvedTarget {
+     const filePath = this.params.filePath;
 diff --git a/packages/core/src/tools/mcp-resource-content.test.ts b/packages/core/src/tools/mcp-resource-content.test.ts
 --- a/packages/core/src/tools/mcp-resource-content.test.ts
 +++ b/packages/core/src/tools/mcp-resource-content.test.ts
@@ -215907,6 +218465,69 @@ diff --git a/packages/core/src/tools/monitor.test.ts b/packages/core/src/tools/m
        expect(running).toHaveLength(1);
        expect(running[0].ownerAgentId).toBe('agent-123');
      });
+diff --git a/packages/core/src/tools/monitor.ts b/packages/core/src/tools/monitor.ts
+--- a/packages/core/src/tools/monitor.ts
++++ b/packages/core/src/tools/monitor.ts
+@@ -64,12 +64,25 @@
+ const MAX_MAX_EVENTS = 10000;
+ const DEFAULT_IDLE_TIMEOUT_MS = 300_000; // 5 minutes
+ const MAX_IDLE_TIMEOUT_MS = 600_000; // 10 minutes
+ const MAX_DISPLAY_DESCRIPTION_LENGTH = 80;
+ const PARTIAL_LINE_BUFFER_CAP = 4096;
+ 
++/**
++ * A line wider than the buffer cap is emitted cut. A bare ellipsis is
++ * indistinguishable from an ellipsis the program itself printed, so the
++ * marker carries the measurements instead: how long the line actually was
++ * and the cap that applied to it.
++ */
++function cutLine(line: string): string {
++  return (
++    line.slice(0, PARTIAL_LINE_BUFFER_CAP) +
++    `… [line cut: ${line.length} chars, ${PARTIAL_LINE_BUFFER_CAP}-char cap]`
++  );
++}
++
+ // Throttling constants (token bucket)
+ const THROTTLE_BURST_SIZE = 5;
+ const THROTTLE_REFILL_INTERVAL_MS = 1000; // 1 token per second
+ 
+ function truncateDisplayDescription(description: string): string {
+   return description.length > MAX_DISPLAY_DESCRIPTION_LENGTH
+@@ -547,29 +560,27 @@
+       if (
+         !buffer.value.includes('\n') &&
+         buffer.value.length > PARTIAL_LINE_BUFFER_CAP
+       ) {
+         const trimmed = buffer.value.trim();
+         if (trimmed.length > 0) {
+-          throttledEmit(trimmed.slice(0, PARTIAL_LINE_BUFFER_CAP) + '...');
++          throttledEmit(cutLine(trimmed));
+         }
+         buffer.value = '';
+         return;
+       }
+ 
+       const lines = buffer.value.split('\n');
+       buffer.value = lines.pop() ?? '';
+ 
+       for (const line of lines) {
+         const trimmed = line.trim();
+         if (trimmed.length === 0) continue;
+-        const truncated =
+-          trimmed.length > PARTIAL_LINE_BUFFER_CAP
+-            ? trimmed.slice(0, PARTIAL_LINE_BUFFER_CAP) + '...'
+-            : trimmed;
+-        throttledEmit(truncated);
++        throttledEmit(
++          trimmed.length > PARTIAL_LINE_BUFFER_CAP ? cutLine(trimmed) : trimmed,
++        );
+       }
+     };
+ 
+     child.stdout?.on('data', (data: Buffer) => processLines(stdoutBuf, data));
+     child.stderr?.on('data', (data: Buffer) => processLines(stderrBuf, data));
+ 
 diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/tools/notebook-edit.test.ts
 --- a/packages/core/src/tools/notebook-edit.test.ts
 +++ b/packages/core/src/tools/notebook-edit.test.ts
@@ -216252,7 +218873,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  vi.mock('../telemetry/loggers.js', () => ({
    logFileOperation: vi.fn(),
  }));
--
+ 
 -vi.mock(
 -  '../services/visionBridge/vision-bridge-service.js',
 -  async (importOriginal) => {
@@ -216267,7 +218888,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -    };
 -  },
 -);
- 
+-
  vi.mock('../utils/pdf.js', async (importOriginal) => {
    const actual = await importOriginal<typeof import('../utils/pdf.js')>();
    return {
@@ -216441,6 +219062,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
 -    it('should reject offset or limit for notebook files', () => {
 -      const params: ReadFileToolParams = {
+-        file_path: path.join(tempRootDir, 'test.ipynb'),
 +    it('[param-contract] refuses offset or limit on a notebook at the layer that knows the file type', async () => {
 +      // This used to be the only non-text type that refused a line range,
 +      // and it refused by guessing from the extension before the read. The
@@ -216486,15 +219108,18 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      // `limit` still is, and the refusal names only the offending key.
 +      const limited = tool.build({
 +        file_path: nbPath,
-+        offset: 0,
-+        limit: 10,
+         offset: 0,
+         limit: 10,
+-      };
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
-+
+ 
+-      expect(() => tool.build(params)).toThrow(
+-        'offset and limit are not supported for Jupyter notebook (.ipynb) files',
 +      const limitedResult = await limited.execute(abortSignal);
 +      expect(limitedResult.error?.type).toBe(ToolErrorType.INVALID_TOOL_PARAMS);
 +      expect(limitedResult.error?.message).toContain(
 +        "'limit' selects a range of lines, and a line range applies to text files only",
-+      );
+       );
 +      expect(limitedResult.error?.message).not.toContain("'offset' and");
 +
 +      const whole = tool.build({
@@ -216505,29 +219130,19 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      const wholeResult = await whole.execute(abortSignal);
 +      expect(wholeResult.error).toBeUndefined();
 +      expect(JSON.stringify(wholeResult.llmContent)).toContain('print(1)');
-+    });
-+
+     });
+ 
+-    it('should reject pages for notebook files', () => {
+-      const params: ReadFileToolParams = {
 +    it('[pages-contract] refuses pages on a notebook by the closed-schema rule', () => {
 +      const params = {
          file_path: path.join(tempRootDir, 'test.ipynb'),
-         offset: 0,
--        limit: 10,
++        offset: 0,
+         pages: '1',
 -      };
-+        pages: '1',
 +      } as ReadFileToolParams;
  
        expect(() => tool.build(params)).toThrow(
--        'offset and limit are not supported for Jupyter notebook (.ipynb) files',
--      );
--    });
--
--    it('should reject pages for notebook files', () => {
--      const params: ReadFileToolParams = {
--        file_path: path.join(tempRootDir, 'test.ipynb'),
--        pages: '1',
--      };
--
--      expect(() => tool.build(params)).toThrow(
 -        'pages is not supported for Jupyter notebook (.ipynb) files',
 +        "read_file has no parameter 'pages'",
        );
@@ -216737,7 +219352,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -488,62 +536,164 @@
+@@ -488,62 +536,163 @@
            message: `Path is a directory, not a file: ${dirPath}`,
            type: ToolErrorType.TARGET_IS_DIRECTORY,
          },
@@ -216764,58 +219379,32 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      // says where to resume.
        expect(result.returnDisplay).toBe(
 -        'Read lines 1-1 of at least 1 from largefile.txt (truncated)',
--      );
--      expect(result.llmContent).toContain(
--        'Showing lines 1-1 of at least 1 total lines',
--      );
--      expect(result.llmContent).toContain('... [truncated]');
--    });
--
--    it('should propagate an aborted signal before reading', async () => {
--      const filePath = path.join(tempRootDir, 'abort.txt');
--      await fsp.writeFile(filePath, 'content', 'utf-8');
--      const invocation = tool.build({ file_path: filePath }) as ToolInvocation<
--        ReadFileToolParams,
--        ToolResult
--      >;
--      const controller = new AbortController();
--      controller.abort();
--
--      await expect(invocation.execute(controller.signal)).rejects.toThrow(
--        /abort/i,
--      );
--    });
--
--    it('should handle text file with lines exceeding maximum length', async () => {
--      const filePath = path.join(tempRootDir, 'longlines.txt');
--      const longLine = 'a'.repeat(2500); // Exceeds MAX_LINE_LENGTH_TEXT_FILE (2000)
--      const fileContent = `Short line\n${longLine}\nAnother short line`;
--      await fsp.writeFile(filePath, fileContent, 'utf-8');
--      const params: ReadFileToolParams = { file_path: filePath };
 +        'Read lines 1-25 of at least 27 from largefile.txt',
 +      );
 +      const llmContent = result.llmContent as string;
 +      expect(llmContent).toContain(
-+        'Showing lines 1-25 of at least 27 total lines',
-+      );
++        'Bounded result: 25 of an unknown total',
+       );
 +      expect(llmContent.endsWith(line.repeat(25))).toBe(true);
-+      expect(llmContent).toContain('offset: 25, limit: 25.');
++      expect(llmContent).toContain('offset: 25, limit: 25');
 +    });
 +
 +    it('[read-contract] refuses a file whose single line is wider than one page', async () => {
 +      const filePath = path.join(tempRootDir, 'oneline.txt');
 +      await fsp.writeFile(filePath, 'x'.repeat(11 * 1024 * 1024), 'utf-8');
 +      const params: ReadFileToolParams = { file_path: filePath, offset: 0 };
-       const invocation = tool.build(params) as ToolInvocation<
-         ReadFileToolParams,
-         ToolResult
-       >;
- 
-       const result = await invocation.execute(abortSignal);
++      const invocation = tool.build(params) as ToolInvocation<
++        ReadFileToolParams,
++        ToolResult
++      >;
++
++      const result = await invocation.execute(abortSignal);
 +      expect(result.error?.type).toBe(ToolErrorType.FILE_TOO_LARGE);
-+      expect(result.llmContent).toContain(
+       expect(result.llmContent).toContain(
+-        'Showing lines 1-1 of at least 1 total lines',
 +        'Line 1 of oneline.txt is longer than one page can carry',
-+      );
+       );
+-      expect(result.llmContent).toContain('... [truncated]');
 +      // The refusal is what the model receives; no prefix of the line is
 +      // returned alongside it.
 +      expect(result.llmContent).not.toContain('xxxxxxxxxx');
@@ -216833,8 +219422,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      }).join('\n')}\n`;
 +      await fsp.writeFile(filePath, fileContent, 'utf-8');
 +
-+      const notice =
-+        /^Showing lines \d+-\d+ of (?:at least )?\d+ total lines\.(.*?)\n\n---\n\n/s;
++      const notice = /^Bounded result: .*?\n\n---\n\n/s;
 +      let params: ReadFileToolParams = { file_path: filePath, offset: 0 };
 +      let assembled = '';
 +      let pages = 0;
@@ -216855,7 +219443,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +          break;
 +        }
 +        assembled += text.slice(header[0].length);
-+        const next = /offset: (\d+), limit: (\d+)\./.exec(header[1]!);
++        const next = /offset: (\d+), limit: (\d+)/.exec(header[0]!);
 +        if (next === null) break;
 +        params = {
 +          file_path: filePath,
@@ -216895,48 +219483,55 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      expect(llmContent).not.toContain('â€œ');
 +      expect(llmContent).not.toContain('the quotation opens');
 +      expect(llmContent).not.toContain('\uFFFD');
-+    });
-+
-+    it('should propagate an aborted signal before reading', async () => {
-+      const filePath = path.join(tempRootDir, 'abort.txt');
-+      await fsp.writeFile(filePath, 'content', 'utf-8');
+     });
+ 
+     it('should propagate an aborted signal before reading', async () => {
+       const filePath = path.join(tempRootDir, 'abort.txt');
+       await fsp.writeFile(filePath, 'content', 'utf-8');
+-      const invocation = tool.build({ file_path: filePath }) as ToolInvocation<
+-        ReadFileToolParams,
+-        ToolResult
+-      >;
 +      const invocation = tool.build({
 +        file_path: filePath,
 +        offset: 0,
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
-+      const controller = new AbortController();
-+      controller.abort();
-+
-+      await expect(invocation.execute(controller.signal)).rejects.toThrow(
-+        /abort/i,
-+      );
-+    });
-+
+       const controller = new AbortController();
+       controller.abort();
+ 
+       await expect(invocation.execute(controller.signal)).rejects.toThrow(
+         /abort/i,
+       );
+     });
+ 
+-    it('should handle text file with lines exceeding maximum length', async () => {
 +    it('stops before a line the page cannot hold and resumes at it', async () => {
-+      const filePath = path.join(tempRootDir, 'longlines.txt');
+       const filePath = path.join(tempRootDir, 'longlines.txt');
+-      const longLine = 'a'.repeat(2500); // Exceeds MAX_LINE_LENGTH_TEXT_FILE (2000)
 +      const longLine = 'a'.repeat(DEFAULT_RANGE_READ_BYTES);
-+      const fileContent = `Short line\n${longLine}\nAnother short line`;
-+      await fsp.writeFile(filePath, fileContent, 'utf-8');
+       const fileContent = `Short line\n${longLine}\nAnother short line`;
+       await fsp.writeFile(filePath, fileContent, 'utf-8');
+-      const params: ReadFileToolParams = { file_path: filePath };
 +      const params: ReadFileToolParams = { file_path: filePath, offset: 0 };
-+      const invocation = tool.build(params) as ToolInvocation<
-+        ReadFileToolParams,
-+        ToolResult
-+      >;
-+
-+      const result = await invocation.execute(abortSignal);
+       const invocation = tool.build(params) as ToolInvocation<
+         ReadFileToolParams,
+         ToolResult
+       >;
+ 
+       const result = await invocation.execute(abortSignal);
        expect(result.returnDisplay).toContain(
 -        'Read lines 1-2 of 3 from longlines.txt (truncated)',
 +        'Read lines 1-1 of 3 from longlines.txt',
 +      );
 +      expect(result.llmContent).toContain(
-+        `call read_file with file_path: ${JSON.stringify(filePath)}, offset: 1, limit: 1.`,
++        `Continue with: read_file with file_path: ${JSON.stringify(filePath)}, offset: 1, limit: 1`,
        );
      });
  
      it('should handle image file and return appropriate content', async () => {
        const imagePath = path.join(tempRootDir, 'image.png');
        await sharp({
-@@ -553,42 +703,44 @@
+@@ -553,42 +702,44 @@
            channels: 3,
            background: '#306090',
          },
@@ -216986,7 +219581,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -599,340 +751,18 @@
+@@ -599,340 +750,18 @@
            displayName: 'document.pdf',
          },
        });
@@ -217328,7 +219923,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -943,13 +773,13 @@
+@@ -943,13 +772,13 @@
      });
  
      it('should handle SVG file as text', async () => {
@@ -217343,7 +219938,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -959,13 +789,13 @@
+@@ -959,13 +788,13 @@
  
      it('should handle large SVG file', async () => {
        const svgPath = path.join(tempRootDir, 'large.svg');
@@ -217358,7 +219953,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -977,13 +807,13 @@
+@@ -977,13 +806,13 @@
        );
      });
  
@@ -217373,7 +219968,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1003,13 +833,13 @@
+@@ -1003,13 +832,13 @@
              metadata: {},
            },
          ],
@@ -217388,7 +219983,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1032,12 +862,13 @@
+@@ -1032,12 +861,13 @@
          })),
          metadata: { language_info: { name: 'python' } },
        };
@@ -217402,7 +219997,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(typeof result.llmContent).toBe('string');
        expect(result.llmContent).toContain('remaining cells truncated');
        expect(result.llmContent).not.toContain('Showing lines');
-@@ -1047,54 +878,149 @@
+@@ -1047,54 +877,149 @@
        if (status.state === 'fresh') {
          expect(status.entry.lastReadWasFull).toBe(false);
          expect(status.entry.lastReadCacheable).toBe(false);
@@ -217415,13 +220010,6 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -        pages: 'abc',
 -      };
 -      expect(() => tool.build(params)).toThrow('Invalid pages parameter');
--    });
--
--    it('should reject pages range exceeding 20', () => {
--      const params: ReadFileToolParams = {
--        file_path: '/tmp/test.pdf',
--        pages: '1-25',
--      };
 +    it('[pages-contract] advertises exactly one range mechanism and no pages parameter', () => {
 +      const schema = tool.schema.parametersJsonSchema as {
 +        properties: Record<string, unknown>;
@@ -217432,8 +220020,13 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        'offset',
 +      ]);
 +      expect(tool.schema.description).toContain('pdftotext -layout');
-+    });
-+
+     });
+ 
+-    it('should reject pages range exceeding 20', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: '/tmp/test.pdf',
+-        pages: '1-25',
+-      };
 +    it('[param-contract] requires offset so an omitted range cannot execute as line 1', () => {
 +      // Omitting `offset` used to be a legal serialization of a wrong call:
 +      // the read silently restarted from line 1 and nothing downstream could
@@ -217517,22 +220110,16 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      } as unknown as ReadFileToolParams;
        expect(() => tool.build(params)).toThrow(
 -        'Pages range exceeds maximum of 20',
--      );
--    });
--
++        `read_file has no parameter '${key}'`,
+       );
+     });
+ 
 -    it('should reject open-ended pages range', () => {
 -      const params: ReadFileToolParams = {
 -        file_path: '/tmp/test.pdf',
 -        pages: '3-',
 -      };
 -      expect(() => tool.build(params)).toThrow('Open-ended page ranges');
--    });
--
--    it('should accept valid pages parameter', () => {
-+        `read_file has no parameter '${key}'`,
-+      );
-+    });
-+
 +    it('[param-contract] a truncated read carries the exact call that continues it', async () => {
 +      const filePath = path.join(tempRootDir, 'continuation.txt');
 +      const lines = Array.from({ length: 40 }, (_, i) => `Line ${i + 1}`);
@@ -217549,12 +220136,18 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      // line from a 1-based display range. The values are known here, so the
 +      // notice carries them.
 +      expect(result.llmContent).toContain(
-+        `To continue from where this read stopped, call read_file with file_path: ${JSON.stringify(
++        `Continue with: read_file with file_path: ${JSON.stringify(
 +          filePath,
-+        )}, offset: 10, limit: 10.`,
++        )}, offset: 10, limit: 10`,
 +      );
-+    });
-+
+     });
+ 
+-    it('should accept valid pages parameter', () => {
+-      const params: ReadFileToolParams = {
+-        file_path: path.join(tempRootDir, 'test.pdf'),
+-        pages: '1-5',
+-      };
+-      expect(() => tool.build(params)).not.toThrow();
 +    it('[param-contract] a complete read carries no continuation', async () => {
 +      const filePath = path.join(tempRootDir, 'whole.txt');
 +      await fsp.writeFile(filePath, 'only line\n', 'utf-8');
@@ -217564,32 +220157,42 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
 +      const result = await invocation.execute(abortSignal);
 +      expect(String(result.llmContent)).not.toContain('To continue');
-+    });
-+
+     });
+ 
+-    it('should treat empty pages parameter as unset', () => {
 +    it('[pages-contract] reads a PDF whole, with no page parameter to supply', () => {
        const params: ReadFileToolParams = {
-         file_path: path.join(tempRootDir, 'test.pdf'),
--        pages: '1-5',
-+        offset: 0,
-       };
-       expect(() => tool.build(params)).not.toThrow();
--    });
--
--    it('should treat empty pages parameter as unset', () => {
--      const params: ReadFileToolParams = {
 -        file_path: path.join(tempRootDir, 'test.txt'),
 -        pages: '',
--      };
++        file_path: path.join(tempRootDir, 'test.pdf'),
++        offset: 0,
+       };
 -      const invocation = tool.build(params);
 -
 -      expect(invocation.params.pages).toBeUndefined();
++      expect(() => tool.build(params)).not.toThrow();
      });
  
      it('should support offset and limit for text files', async () => {
        const filePath = path.join(tempRootDir, 'paginated.txt');
        const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
        const fileContent = lines.join('\n');
-@@ -1126,13 +1052,13 @@
+@@ -1109,13 +1034,13 @@
+         ReadFileToolParams,
+         ToolResult
+       >;
+ 
+       const result = await invocation.execute(abortSignal);
+       expect(result.llmContent).toContain(
+-        'Showing lines 6-8 of 20 total lines',
++        'Bounded result: 3 of 20 lines in total',
+       );
+       expect(result.llmContent).toContain('Line 6');
+       expect(result.llmContent).toContain('Line 7');
+       expect(result.llmContent).toContain('Line 8');
+       expect(result.returnDisplay).toBe(
+         'Read lines 6-8 of 20 from paginated.txt',
+@@ -1126,13 +1051,13 @@
        const tempDir = path.join(tempRootDir, '.temp');
        await fsp.mkdir(tempDir, { recursive: true });
        const tempFilePath = path.join(tempDir, 'temp-output.txt');
@@ -217604,7 +220207,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1146,13 +1072,16 @@
+@@ -1146,13 +1071,16 @@
        );
        const tempFilePath = path.join(osTempFile, 'pr-review-context.md');
        const tempFileContent = '## PR #123\nFix encoding issues';
@@ -217622,7 +220225,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          >;
  
          const result = await invocation.execute(abortSignal);
-@@ -1187,36 +1116,38 @@
+@@ -1187,36 +1115,38 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -217666,7 +220269,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          );
          // Placeholder must not echo the original content.
          expect(second.llmContent).not.toContain('hello world');
-@@ -1224,89 +1155,93 @@
+@@ -1224,89 +1154,93 @@
        });
  
        it('re-emits bytes (no placeholder) after the read was evicted from history by microcompaction (issue #4239)', async () => {
@@ -217771,7 +220374,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            offset: 1,
            limit: 2,
          });
-@@ -1326,20 +1261,20 @@
+@@ -1326,20 +1260,20 @@
          const bigContent = Array.from(
            { length: 700 },
            (_, i) => `line ${i + 1}`,
@@ -217794,7 +220397,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        });
  
        it('does not arm the placeholder if the first Read was ranged', async () => {
-@@ -1348,26 +1283,26 @@
+@@ -1348,26 +1282,26 @@
          // pipeline, since the cache cannot prove the model has already
          // seen the entire file.
          const filePath = path.join(tempRootDir, 'big.txt');
@@ -217824,7 +220427,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('records an auto-memory read in the cache so a follow-up Edit can pass enforcement', async () => {
          // Auto-memory files skip the file_unchanged fast-path (they
-@@ -1386,13 +1321,13 @@
+@@ -1386,13 +1320,13 @@
            clearAutoMemoryRootCache();
            const memRoot = getAutoMemoryRoot(tempRootDir);
            await fsp.mkdir(memRoot, { recursive: true });
@@ -217839,7 +220442,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            // The cache must contain the auto-memory file's entry, AND
            // the entry must be in a shape that satisfies prior-read
            // enforcement on Edit / WriteFile (fresh + lastReadAt set +
-@@ -1428,13 +1363,13 @@
+@@ -1428,13 +1362,13 @@
          await fsp.writeFile(
            svgPath,
            '<svg xmlns="http://www.w3.org/2000/svg"></svg>\n',
@@ -217854,7 +220457,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          // The cache must record this as a full, cacheable read so
          // that prior-read enforcement on Edit / WriteFile would
          // recognise it as the model having seen the bytes.
-@@ -1492,13 +1427,13 @@
+@@ -1492,13 +1426,13 @@
          const bigContent = Array.from(
            { length: 700 },
            (_, i) => `line ${i + 1}`,
@@ -217869,7 +220472,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
            // Truncated → model has not seen every byte.
-@@ -1527,13 +1462,13 @@
+@@ -1527,13 +1461,13 @@
          // content to a `.cpp` file. The test relies on the
          // extension override winning over any future content-side
          // heuristic — there is no isBinaryFile mocking in scope.
@@ -217884,7 +220487,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          const status = fileReadCache.check(fs.statSync(filePath));
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
-@@ -1551,17 +1486,17 @@
+@@ -1551,17 +1485,17 @@
              background: '#306090',
            },
          })
@@ -217904,7 +220507,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('completely bypasses the cache when getFileReadCacheDisabled() is true', async () => {
          // Build a fresh ReadFileTool with a Config whose cache is
-@@ -1579,27 +1514,32 @@
+@@ -1579,27 +1513,32 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -217940,7 +220543,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          expect(second.llmContent).not.toMatch(/unchanged since/);
          expect(isolatedCache.size()).toBe(0);
        });
-@@ -1615,12 +1555,13 @@
+@@ -1615,12 +1554,13 @@
  
        it('should throw error if path is ignored by a .qwenignore pattern', async () => {
          const ignoredFilePath = path.join(tempRootDir, 'foo.bar');
@@ -217954,7 +220557,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        });
  
        it('should throw error if path is ignored by .agentignore or .aiignore', async () => {
-@@ -1634,18 +1575,18 @@
+@@ -1634,18 +1574,18 @@
          );
          const agentIgnoredFilePath = path.join(tempRootDir, 'agent-secret.txt');
          const aiIgnoredFilePath = path.join(tempRootDir, 'ai-secret.txt');
@@ -217979,7 +220582,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          await fsp.writeFile(
            path.join(tempRootDir, '.cursorignore'),
            'cursor-secret.txt\n',
-@@ -1660,46 +1601,47 @@
+@@ -1660,46 +1600,47 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -218034,7 +220637,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read-file.ts
 --- a/packages/core/src/tools/read-file.ts
 +++ b/packages/core/src/tools/read-file.ts
-@@ -5,52 +5,33 @@
+@@ -5,52 +5,35 @@
   */
  
  import path from 'node:path';
@@ -218049,6 +220652,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -} from './tools.js';
 +import type { ToolInvocation, ToolLocation, ToolResult } from './tools.js';
  import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import { boundedContent } from './tools.js';
  import { ToolNames, ToolDisplayNames } from './tool-names.js';
  
  import type { PartListUnion } from '@google/genai';
@@ -218062,6 +220666,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
  } from '../utils/fileUtils.js';
 -import { parsePDFPageRange, PDF_MAX_PAGES_PER_READ } from '../utils/pdf.js';
 +import { PDF_PAGE_RANGE_REMEDY_TEMPLATE } from '../utils/pdf.js';
++import { DEFAULT_RANGE_READ_BYTES } from '../utils/text-range-constants.js';
  import type { Config } from '../config/config.js';
  import { FileOperation } from '../telemetry/metrics.js';
  import { getProgrammingLanguage } from '../telemetry/telemetry-utils.js';
@@ -218089,7 +220694,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
  /**
   * Parameters for the ReadFile tool
   */
-@@ -58,26 +39,20 @@
+@@ -58,26 +41,20 @@
    /**
     * The absolute path to the file to read
     */
@@ -218118,7 +220723,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    ReadFileToolParams,
    ToolResult
  > {
-@@ -92,23 +67,17 @@
+@@ -92,23 +69,17 @@
      const relativePath = makeRelative(
        this.params.file_path,
        this.config.getTargetDir(),
@@ -218144,7 +220749,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    }
  
    override toolLocations(): ToolLocation[] {
-@@ -148,19 +117,17 @@
+@@ -148,19 +119,17 @@
      // never serve the file_unchanged placeholder — those files own a
      // per-read freshness `<system-reminder>` that must be re-emitted
      // on every read.
@@ -218168,7 +220773,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      // here is microseconds. If stat fails we fall through to the normal
      // pipeline so its error handling stays the single source of truth.
      let stats: Stats | undefined;
-@@ -189,34 +156,26 @@
+@@ -189,34 +158,26 @@
          debugLogger.debug('hit', { path: absPath });
          return this.unchangedResult(absPath);
        }
@@ -218189,11 +220794,11 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
          signal,
        },
      );
--
+ 
 -    if (result.pdfVisionBridgeCandidate) {
 -      result = await this.transcribePdfCandidate(result, signal);
 -    }
- 
+-
      if (result.error) {
        return {
          llmContent: result.llmContent,
@@ -218205,7 +220810,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
          },
        };
      }
-@@ -241,14 +200,14 @@
+@@ -241,14 +202,14 @@
      //
      //  - `full` — whether the model has seen every byte of the
      //    current file. This now gates ONLY the file_unchanged
@@ -218222,33 +220827,49 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      //    everything". NotebookEdit also requires this flag so a
      //    truncated notebook render does not authorize structured writes
      //    against unseen cells.
-@@ -284,13 +243,24 @@
+@@ -282,15 +243,38 @@
+       result.isTruncated &&
+       result.linesShown &&
        result.originalLineCount !== undefined
      ) {
        const [start, end] = result.linesShown!;
        const total = result.originalLineCount!;
-       const totalLabel =
-         result.originalLineCountExact === false ? `at least ${total}` : total;
+-      const totalLabel =
+-        result.originalLineCountExact === false ? `at least ${total}` : total;
 -      llmContent = `Showing lines ${start}-${end} of ${totalLabel} total lines.\n\n---\n\n${result.llmContent}`;
-+      // The tool description promises that a truncated read explains how to
-+      // continue. Naming the parameters is not that: the caller still has to
-+      // derive the resume line from a 1-based display range, and getting it
-+      // wrong silently skips or repeats content. The values are known here,
-+      // so the notice carries the actual next call rather than a template.
++      // Naming the parameters would not be enough: the caller would still
++      // have to derive the resume line from a 1-based display range, and
++      // getting it wrong silently skips or repeats content. The values are
++      // known here, so the continuation carries the actual next call.
 +      const nextRead = result.nextRead;
-+      const continuation = nextRead
-+        ? ` To continue from where this read stopped, call read_file with file_path: ${JSON.stringify(
-+            this.params.file_path,
-+          )}, offset: ${nextRead.offset}, limit: ${nextRead.limit}.`
-+        : '';
-+      llmContent = `Showing lines ${start}-${end} of ${totalLabel} total lines.${continuation}\n\n---\n\n${result.llmContent}`;
++      llmContent = boundedContent(String(result.llmContent), {
++        requested: this.params.limit,
++        returned: end - start + 1,
++        limit: DEFAULT_RANGE_READ_BYTES,
++        limitUnit: 'bytes of content',
++        unit: 'lines',
++        total:
++          result.originalLineCountExact === false
++            ? {
++                unknown:
++                  'the file is still being counted; at least ' + `${total}`,
++              }
++            : total,
++        ...(nextRead
++          ? {
++              continuation: `read_file with file_path: ${JSON.stringify(
++                this.params.file_path,
++              )}, offset: ${nextRead.offset}, limit: ${nextRead.limit}`,
++            }
++          : {}),
++      });
      } else {
        llmContent = result.llmContent || '';
      }
  
      // For memory files, prepend a per-file staleness caveat so the model knows
      // the content is a point-in-time snapshot and may be stale.
-@@ -328,158 +298,14 @@
+@@ -328,158 +312,14 @@
          programming_language,
        ),
      );
@@ -218256,8 +220877,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      return {
        llmContent,
 -      returnDisplay: this.toToolResultDisplay(result),
-+      returnDisplay: result.returnDisplay,
-     };
+-    };
 -  }
 -
 -  private async transcribePdfCandidate(
@@ -218400,7 +221020,8 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -      type: 'vision_bridge_notice',
 -      summary,
 -      notice: result.pdfVisionBridgeNotice,
--    };
++      returnDisplay: result.returnDisplay,
+     };
 -    return display;
    }
  
@@ -218408,7 +221029,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
     * Build the placeholder ToolResult returned when the cache indicates
     * the file has not changed since the model last fully read it. The
     * placeholder is intentionally explicit about its assumptions so the
-@@ -525,49 +351,38 @@
+@@ -525,49 +365,38 @@
  export class ReadFileTool extends BaseDeclarativeTool<
    ReadFileToolParams,
    ToolResult
@@ -218428,7 +221049,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
        ReadFileTool.Name,
        ToolDisplayNames.READ_FILE,
 -      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. If the file is large, the content will be truncated. The tool's response will clearly indicate if truncation has occurred and will provide details on how to read more of the file using the 'offset' and 'limit' parameters. Handles text, images (PNG, JPG, GIF, WEBP, SVG, BMP), PDF files, and Jupyter notebooks (.ipynb). For text files, it can read specific line ranges. For PDF files, use the 'pages' parameter to extract specific page ranges as text (e.g. '1-5'). Max ${PDF_MAX_PAGES_PER_READ} pages per request. Large PDFs cannot be read all at once when the model does not support native PDF input; retry with narrower page ranges if the tool reports a PDF is too large. With a configured vision bridge, failed PDF text extraction or an irreducibly large single page may be transcribed automatically, at most four pages per call; this transcription is lossy and marked as untrusted. This tool can read Jupyter notebooks (.ipynb) and returns structured cell content with outputs.`,
-+      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. If a text file is large, the content will be truncated and the response will explain how to continue with 'offset' and 'limit'. Image input has one fail-closed full-quality contract: a static PNG with 8-bit RGB or RGBA source pixels, at most 16,777,216 pixels, aspect ratio at most 30:1, and at most 100 MB on disk. The exact original PNG bytes are sent losslessly with no resize, crop, orientation, JPEG transcode, or decoder fallback. JPEG, WebP, GIF/APNG, BMP, grayscale, palette, 16-bit, RGB tRNS, over-limit, and corrupt image inputs are rejected. PDF input is text extraction only; PDF pages are never silently rendered into lossy image substitutes. This tool has exactly one range mechanism, 'offset'/'limit', and every read states where it starts: 'offset' is required, and 0 means the beginning of the file. A line range applies to text files only: a nonzero 'offset' or any 'limit' for a PDF, image, audio, video, notebook, SVG, or binary file is refused, not ignored — those files are read whole, with offset 0 and no limit. A PDF too large to return in one read fails with explicit guidance: ${PDF_PAGE_RANGE_REMEDY_TEMPLATE} Jupyter notebooks (.ipynb) return structured cell content with outputs.`,
++      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. A text read returns whole lines within a page budget of ${DEFAULT_RANGE_READ_BYTES} bytes of content, so 'limit' is an upper bound rather than a promise: a read of long lines returns fewer lines than requested, and a single line wider than the budget is refused rather than returned in part. Every truncated read states the lines it returned, the file's total line count, and the exact next call to make. Image input has one fail-closed full-quality contract: a static PNG with 8-bit RGB or RGBA source pixels, at most 16,777,216 pixels, aspect ratio at most 30:1, and at most 100 MB on disk. The exact original PNG bytes are sent losslessly with no resize, crop, orientation, JPEG transcode, or decoder fallback. JPEG, WebP, GIF/APNG, BMP, grayscale, palette, 16-bit, RGB tRNS, over-limit, and corrupt image inputs are rejected. PDF input is text extraction only; PDF pages are never silently rendered into lossy image substitutes. This tool has exactly one range mechanism, 'offset'/'limit', and every read states where it starts: 'offset' is required, and 0 means the beginning of the file. A line range applies to text files only: a nonzero 'offset' or any 'limit' for a PDF, image, audio, video, notebook, SVG, or binary file is refused, not ignored — those files are read whole, with offset 0 and no limit. A PDF too large to return in one read fails with explicit guidance: ${PDF_PAGE_RANGE_REMEDY_TEMPLATE} Jupyter notebooks (.ipynb) return structured cell content with outputs.`,
        Kind.Read,
        {
          properties: {
@@ -218463,7 +221084,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    }
  
    protected override validateToolParamValues(
-@@ -583,55 +398,27 @@
+@@ -583,55 +412,27 @@
      }
  
      if (!path.isAbsolute(filePath)) {
@@ -218761,9 +221382,30 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
      };
      fileReadCache = new FileReadCache();
      Object.assign(mockConfig, {
-@@ -409,16 +405,13 @@
+@@ -311,13 +307,13 @@
+ 
+       const invocation = grepTool.build({ pattern: 'hello' });
+       const result = await invocation.execute(abortSignal);
+ 
+       expect(result.returnDisplay).toBe('Found 1 match (incomplete)');
        expect(result.llmContent).toContain(
-         'No valid matches were returned; do not treat this as no matches.',
+-        '[Search did not complete: the results above may not include all matches.]',
++        'Coverage is incomplete',
+       );
+       expect(result.llmContent).not.toContain('lines truncated');
+     });
+ 
+     it('logs runtime recovery telemetry after a successful EAGAIN retry', async () => {
+       (runRipgrep as Mock).mockResolvedValue({
+@@ -404,21 +400,18 @@
+ 
+       const invocation = grepTool.build({ pattern: 'hello' });
+       const result = await invocation.execute(abortSignal);
+ 
+       expect(result.returnDisplay).toBe('Error: Search incomplete');
+       expect(result.llmContent).toContain(
+-        'No valid matches were returned; do not treat this as no matches.',
++        'do not read this as proof that nothing else matches',
        );
        expect(result.llmContent).not.toContain('No matches found');
      });
@@ -218779,7 +221421,7 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
          incomplete: true,
          error,
          recovery: {
-@@ -428,16 +421,13 @@
+@@ -428,18 +421,15 @@
          },
        });
  
@@ -218792,20 +221434,21 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
 -      expect(result.llmContent).toContain('line truncated');
 +      expect(result.returnDisplay).toBe('Found 2 matches (incomplete)');
        expect(result.llmContent).toContain(
-         '[Search did not complete: the results above may not include all matches.]',
+-        '[Search did not complete: the results above may not include all matches.]',
++        'Coverage is incomplete',
        );
      });
  
      it('should preserve absolute result paths reported by ripgrep', async () => {
-@@ -474,55 +464,12 @@
-         pattern: 'CORE_HELPER_TARGET_MARKER',
-         glob: '**/*.ts',
+       const absoluteMatchPath = path.join(
+         tempRootDir,
+@@ -476,55 +466,12 @@
        });
        const result = await invocation.execute(abortSignal);
  
        expect(result.resultFilePaths).toEqual([absoluteMatchPath]);
--    });
--
+     });
+ 
 -    it('includes result paths for partially rendered long file paths', async () => {
 -      Object.assign(mockConfig, {
 -        getTruncateToolOutputThreshold: () => 30,
@@ -218847,21 +221490,21 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
 -        path.join(tempRootDir, visiblePath),
 -        path.join(tempRootDir, hiddenPath),
 -      ]);
-     });
- 
+-    });
+-
      it('should find matches in a specific path', async () => {
        // Setup specific mock for this test - searching in 'sub' should only return matches from that directory
        (runRipgrep as Mock).mockResolvedValue({
          stdout: `fileC.txt:1:another world in sub dir${EOL}`,
-@@ -666,30 +613,12 @@
+         truncated: false,
          error: undefined,
-       });
+@@ -668,30 +615,12 @@
  
        const params: RipGrepToolParams = { pattern: 'ignored' };
        const invocation = grepTool.build(params);
        await invocation.execute(abortSignal);
--    });
--
+     });
+ 
 -    it('should truncate llm content when exceeding maximum length', async () => {
 -      const longMatch = 'fileA.txt:1:' + 'a'.repeat(30_000);
 -
@@ -218878,16 +221521,55 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
 -      expect(String(result.llmContent).length).toBeLessThanOrEqual(26_000);
 -      expect(result.llmContent).toMatch(/\[\d+ lines? truncated\] \.\.\./);
 -      expect(result.returnDisplay).toContain('truncated');
-     });
- 
+-    });
+-
      it('should return "No matches found" when pattern does not exist', async () => {
        // Setup specific mock for no matches
        (runRipgrep as Mock).mockResolvedValue({
          stdout: '',
+         truncated: false,
+         error: undefined,
 diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGrep.ts
 --- a/packages/core/src/tools/ripGrep.ts
 +++ b/packages/core/src/tools/ripGrep.ts
-@@ -351,13 +351,12 @@
+@@ -4,13 +4,19 @@
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import fs from 'node:fs';
+ import path from 'node:path';
+ import type { ToolInvocation, ToolResult } from './tools.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  formatOutputBound,
++  Kind,
++} from './tools.js';
+ import { ToolNames } from './tool-names.js';
+ import {
+   resolveAndValidatePath,
+   formatDisplayPath,
+   resolvePath,
+   unescapePath,
+@@ -30,15 +36,12 @@
+ import { recordGrepResultFileReads } from './grepReadTracking.js';
+ import { logRipgrepRuntimeRecovery } from '../telemetry/loggers.js';
+ import { RipgrepRuntimeRecoveryEvent } from '../telemetry/types.js';
+ 
+ const debugLogger = createDebugLogger('RIPGREP');
+ const RIPGREP_FIELD_SEPARATOR = '';
+-const RIPGREP_INCOMPLETE_NOTICE =
+-  'Search did not complete: the results above may not include all matches.';
+-
+ interface RipgrepJsonMatch {
+   type: 'match';
+   data: {
+     path: { text?: string; bytes?: string };
+     lines?: { text?: string };
+     line_number: number;
+@@ -351,13 +354,12 @@
        }
        const matchTerm = totalMatches === 1 ? 'match' : 'matches';
  
@@ -218901,7 +221583,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
        );
  
        // Apply line limit first (if specified)
-@@ -365,63 +364,32 @@
+@@ -365,63 +367,41 @@
        let linesToInclude = allLines;
        if (allLines.length > lineLimit) {
          linesToInclude = allLines.slice(0, lineLimit);
@@ -218947,16 +221629,31 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
        // Build result
        let llmContent = header + grepOutput;
  
-       // Add truncation notice if needed
+-      // Add truncation notice if needed
 -      if (truncatedByLineLimit || truncatedByCharLimit) {
 -        const omittedMatches = totalMatches - includedLines;
-+      if (truncatedByLineLimit) {
-+        const omittedMatches = totalMatches - visibleLines.length;
-         llmContent += `\n---\n[${omittedMatches} ${omittedMatches === 1 ? 'line' : 'lines'} truncated] ...`;
-       }
- 
-       if (searchResult.incomplete) {
-         llmContent += `\n---\n[${RIPGREP_INCOMPLETE_NOTICE}]`;
+-        llmContent += `\n---\n[${omittedMatches} ${omittedMatches === 1 ? 'line' : 'lines'} truncated] ...`;
+-      }
+-
+-      if (searchResult.incomplete) {
+-        llmContent += `\n---\n[${RIPGREP_INCOMPLETE_NOTICE}]`;
++      if (truncatedByLineLimit || searchResult.incomplete) {
++        llmContent = boundedContent(llmContent, {
++          ...(this.params.limit === undefined
++            ? {}
++            : { requested: this.params.limit }),
++          returned: visibleLines.length,
++          unit: 'matches',
++          limit: lineLimit,
++          limitUnit: 'matches',
++          total: searchResult.incomplete
++            ? {
++                unknown:
++                  'the scan ended before it had covered everything it was asked to',
++              }
++            : totalMatches,
++          ...(searchResult.incomplete ? { coverageUnknown: true } : {}),
++        });
        }
  
        // Build display message (show real count, not truncated)
@@ -218970,7 +221667,39 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
          displayTags.push('incomplete');
        }
        if (displayTags.length > 0) {
-@@ -674,16 +642,12 @@
+@@ -573,16 +553,28 @@
+ 
+   private buildIncompleteSearchMessage(
+     searchLocationDescription: string,
+     filterDescription: string,
+     error?: Error,
+   ): string {
+-    // Keep the instruction explicit: an incomplete scan with zero valid matches
+-    // is unknown coverage, not negative proof that no matches exist.
++    // An incomplete scan with zero valid matches is unknown coverage, not
++    // negative proof that no matches exist. Same fact as a cut result, with
++    // nothing to lead, so it takes the same sentence.
+     const errorDetail = error ? ` Error: ${getErrorMessage(error)}` : '';
+-    return `Search did not complete for pattern "${this.params.pattern}" ${searchLocationDescription}${filterDescription}. No valid matches were returned; do not treat this as no matches.${errorDetail}`;
++    const bound = formatOutputBound({
++      returned: 0,
++      unit: 'matches',
++      limit: this.config.getTruncateToolOutputLines(),
++      limitUnit: 'matches',
++      total: {
++        unknown:
++          'the scan ended before it had covered everything it was asked to',
++      },
++      coverageUnknown: true,
++    });
++    return `Search for pattern "${this.params.pattern}" ${searchLocationDescription}${filterDescription}. ${bound}${errorDetail}`;
+   }
+ 
+   private logRipgrepRuntimeRecovery(result: RipgrepRunResult): void {
+     const { recovery } = result;
+     if (recovery === undefined) {
+       return;
+@@ -674,16 +666,12 @@
  export class RipGrepTool extends BaseDeclarativeTool<
    RipGrepToolParams,
    ToolResult
@@ -218987,7 +221716,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
        'Grep',
        'A powerful search tool built on ripgrep\n\n  Usage:\n  - ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access.\n  - Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")\n  - Filter files with glob parameter (e.g., "*.js", "**/*.tsx")\n  - Use Agent tool for open-ended searches requiring multiple rounds\n  - Pattern syntax: Uses ripgrep (not grep) - special regex characters need escaping (use `interface\\{\\}` to find `interface{}` in Go code)\n',
        Kind.Search,
-@@ -709,12 +673,13 @@
+@@ -709,12 +697,13 @@
              minimum: 1,
              description:
                'Limit output to first N lines/entries. Must be a positive integer. Optional - shows all matches if not specified.',
@@ -219996,7 +222725,35 @@ diff --git a/packages/core/src/tools/tool-search.test.ts b/packages/core/src/too
  import { Config, ApprovalMode } from '../config/config.js';
  import { ToolRegistry } from './tool-registry.js';
  import { DiscoveredMCPTool } from './mcp-tool.js';
-@@ -649,13 +650,18 @@
+@@ -424,19 +425,22 @@
+     const result = await invocation.execute(new AbortController().signal);
+ 
+     const content = String(result.llmContent);
+     const blocks = (content.match(/<function>/g) ?? []).length;
+     expect(blocks).toBe(3);
+     // Truncation note tells the model exactly what was dropped.
+-    expect(content).toContain('Truncated by max_results');
++    expect(content).toContain('Bounded result:');
+     expect(content).toContain('tool_3');
+     expect(content).toContain('tool_6');
+-    // The first three were loaded — they should NOT appear in the
+-    // truncated list.
+-    const truncatedSection = content.split('Truncated by max_results')[1] ?? '';
+-    expect(truncatedSection).not.toContain('tool_0');
++    // The first three were loaded, so the call that continues must ask for
++    // the rest and not for them. The notice leads the content, so the
++    // continuation is the part to read, not everything after the marker.
++    const continuation = /Continue with: ([^\n]*)/.exec(content)?.[1] ?? '';
++    expect(continuation).toContain('tool_3');
++    expect(continuation).toContain('tool_6');
++    expect(continuation).not.toContain('tool_0');
+   });
+ 
+   it('revealed tools show up in subsequent getFunctionDeclarations', async () => {
+     registry.registerTool(new MockTool({ name: 'visible' }));
+     registry.registerTool(new MockTool({ name: 'hidden', shouldDefer: true }));
+ 
+@@ -649,13 +653,18 @@
  
        const tool = new ToolSearchTool(config);
        const contextCases: Array<{
@@ -220016,7 +222773,7 @@ diff --git a/packages/core/src/tools/tool-search.test.ts b/packages/core/src/too
              runWithTeammateIdentity(
                {
                  agentId: 'agent@test',
-@@ -703,18 +709,21 @@
+@@ -703,18 +712,21 @@
          name: ToolNames.ENTER_PLAN_MODE,
          shouldDefer: false,
        }),
@@ -220044,6 +222801,102 @@ diff --git a/packages/core/src/tools/tool-search.test.ts b/packages/core/src/too
        `"name":"${ToolNames.READ_FILE}"`,
      );
      expect(String(result.llmContent)).not.toContain(
+diff --git a/packages/core/src/tools/tool-search.ts b/packages/core/src/tools/tool-search.ts
+--- a/packages/core/src/tools/tool-search.ts
++++ b/packages/core/src/tools/tool-search.ts
+@@ -22,13 +22,18 @@
+ 
+ import type {
+   AnyDeclarativeTool,
+   ToolInvocation,
+   ToolResult,
+ } from './tools.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  Kind,
++} from './tools.js';
+ import { ToolNames, ToolDisplayNames } from './tool-names.js';
+ import type { Config } from '../config/config.js';
+ import { DiscoveredMCPTool } from './mcp-tool.js';
+ import { createDebugLogger } from '../utils/debugLogger.js';
+ import {
+   getLeaderOnlyToolUnavailableMessage,
+@@ -182,13 +187,13 @@
+         if (names.length >= maxResults) {
+           truncated.push(stripped);
+           continue;
+         }
+         names.push(stripped);
+       }
+-      return this.loadAndReturnSchemas(names, truncated);
++      return this.loadAndReturnSchemas(names, truncated, maxResults);
+     }
+ 
+     // Mode 2: keyword search. Require-word prefix with "+" boosts mandatory
+     // terms; any tool missing a required term is excluded before scoring.
+     const terms = tokenize(query);
+     const requiredTerms = terms
+@@ -225,13 +230,19 @@
+     if (matches.length === 0) {
+       return {
+         llmContent: `No tools found matching '${query}'. Try broader keywords or use \`select:ToolName\`.`,
+         returnDisplay: `No matches for '${query}'`,
+       };
+     }
+-    return this.loadAndReturnSchemas(matches);
++    // A ranked list cut at the budget is still a partial answer, and the
++    // names beyond the cut are the only thing that lets the model ask for
++    // the rest.  mode already reports them; keyword mode dropped
++    // them, so a search that matched thirty tools looked exactly like one
++    // that matched five.
++    const truncated = scored.slice(maxResults).map((s) => s.tool.name);
++    return this.loadAndReturnSchemas(matches, truncated, maxResults);
+   }
+ 
+   /**
+    * Candidates for keyword search: only deferred tools that have NOT yet
+    * been revealed this session. Already-loaded (core) tools are in the
+    * model's tool-declaration list already, so surfacing them here would
+@@ -251,12 +262,13 @@
+       .filter((t) => registry.isDeferredAndHidden(t.name));
+   }
+ 
+   private async loadAndReturnSchemas(
+     names: string[],
+     truncated: string[] = [],
++    maxResults: number = names.length,
+   ): Promise<ToolResult> {
+     if (names.length === 0) {
+       return {
+         llmContent: 'Error: no tool names provided.',
+         returnDisplay: 'No tool names',
+         error: { message: 'No tool names' },
+@@ -432,14 +444,20 @@
+     }
+     if (truncated.length > 0) {
+       // Surface the dropped names so the model knows it must re-issue
+       // another ToolSearch for them — without this, the model would
+       // assume every requested name was loaded and later receive an
+       // "unknown tool" API error.
+-      const header = llmContent ? '\n\n' : '';
+-      llmContent += `${header}Truncated by max_results — request these in a follow-up call: ${truncated.join(', ')}`;
++      llmContent = boundedContent(llmContent, {
++        returned: loaded.length,
++        unit: 'tools',
++        limit: maxResults,
++        limitUnit: 'tools',
++        total: loaded.length + truncated.length,
++        continuation: `ToolSearch with query "select:${truncated.join(',')}"`,
++      });
+     }
+ 
+     const displayParts: string[] = [];
+     if (loaded.length > 0) displayParts.push(`Loaded ${loaded.length} tool(s)`);
+     if (missing.length > 0) displayParts.push(`${missing.length} missing`);
+     if (blocked.length > 0) displayParts.push(`${blocked.length} unavailable`);
 diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 --- a/packages/core/src/tools/tools.ts
 +++ b/packages/core/src/tools/tools.ts
@@ -220200,7 +223053,99 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
      );
  
      if (errors) {
-@@ -630,28 +681,81 @@
+@@ -482,12 +533,91 @@
+   url?: string;
+   mimeType?: string;
+   sizeBytes?: number;
+   metadata?: Record<string, string | number | boolean | null>;
+ }
+ 
++/**
++ * A bound that cut model-facing content, and the facts a reader needs to act
++ * on it. Every tool that returns less than it was asked for states these, in
++ * one place, because a result that is quietly short is a result the model
++ * cannot tell from a complete one — it spends the context and misleads about
++ * coverage at the same time.
++ *
++ * `total` is either the real total or an explicit statement that the tool
++ * cannot know it and why; there is no third option, because an absent total
++ * reads as "small" and that is the error this exists to prevent.
++ */
++export interface OutputBound {
++  /** What the caller asked for, in `unit`. Omitted when it named no size. */
++  requested?: number;
++  /** What this result carries, in `unit`. */
++  returned: number;
++  /** The ceiling that applied, counted in `limitUnit`. */
++  limit: number;
++  /** What `requested`, `returned` and `total` count: lines, matches, entries… */
++  unit: string;
++  /**
++   * What `limit` counts. Often the same as `unit`, but a tool may cut by one
++   * measure and return another — a read capped in bytes still returns lines —
++   * and saying "limit of 25000 lines" when the cap is bytes is exactly the
++   * kind of plausible-looking wrong number this notice exists to prevent.
++   */
++  limitUnit: string;
++  /** The real total, or why this tool cannot establish it. */
++  total: number | { readonly unknown: string };
++  /**
++   * The exact next call, argument values included, so the caller continues by
++   * copying rather than deriving. Omitted only when there is nothing to
++   * continue with, which `exhausted` then has to explain.
++   */
++  continuation?: string;
++  /**
++   * Set when the bound means coverage is unknown rather than merely partial —
++   * a scan that ended abnormally, a source that could not be read. A caller
++   * must not read an empty or short result as proof of absence.
++   */
++  coverageUnknown?: boolean;
++}
++
++/**
++ * The one truncation notice in this codebase. Tools do not phrase their own:
++ * divergent wording is how a bound becomes invisible, and `src/tools` is held
++ * to using this by a build-time concern rather than by convention.
++ *
++ * The notice leads the content. A reader that meets it first knows what it is
++ * holding before it spends attention on it, which is the property that makes
++ * a partial result safe to hand to a model at all.
++ */
++export function formatOutputBound(bound: OutputBound): string {
++  const total =
++    typeof bound.total === 'number'
++      ? `${bound.total} ${bound.unit} in total`
++      : `an unknown total (${bound.total.unknown})`;
++  const asked =
++    bound.requested === undefined
++      ? ''
++      : ` You asked for ${bound.requested} ${bound.unit}.`;
++  const coverage = bound.coverageUnknown
++    ? ' Coverage is incomplete: do not read this as proof that nothing else matches.'
++    : '';
++  const next = bound.continuation
++    ? ` Continue with: ${bound.continuation}`
++    : '';
++  return (
++    `Bounded result: ${bound.returned} of ${total}, ` +
++    `cut at this tool's limit of ${bound.limit} ${bound.limitUnit}.` +
++    `${asked}${coverage}${next}`
++  );
++}
++
++/** Lead `content` with the notice for `bound`. The only way to return cut content. */
++export function boundedContent(content: string, bound: OutputBound): string {
++  return `${formatOutputBound(bound)}\n\n---\n\n${content}`;
++}
++
+ export interface ToolResult {
+   /**
+    * Content meant to be included in LLM history.
+    * This should represent the factual outcome of the tool execution.
+    */
+   llmContent: PartListUnion;
+@@ -630,29 +760,82 @@
      return false;
    }
  
@@ -220264,7 +223209,7 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
    // If the subagent is awaiting approval for a tool call,
    // this contains the confirmation details for inline UI rendering.
    pendingConfirmation?: ToolCallConfirmationDetails;
-+
+ 
 +  /**
 +   * Append-only log of the compaction attempts this subagent's own chat has
 +   * completed, oldest first. Entries are never rewritten, so a consumer can
@@ -220278,12 +223223,13 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 +   * first, under the same never-rewritten discipline as `compactions`.
 +   */
 +  rounds?: SubagentRoundRecord[];
- 
++
    toolCalls?: Array<{
      callId: string;
      name: string;
      status: 'executing' | 'awaiting_approval' | 'success' | 'failed';
      error?: string;
+     args?: Record<string, unknown>;
 diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools/web-fetch.test.ts
 --- a/packages/core/src/tools/web-fetch.test.ts
 +++ b/packages/core/src/tools/web-fetch.test.ts

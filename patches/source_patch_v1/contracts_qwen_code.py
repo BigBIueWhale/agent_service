@@ -1802,11 +1802,12 @@ def _validate_param_contract_after(state: State) -> None:
 
     # A truncated read carries the call that continues it, with the caller's
     # own path and the exact resume line, rather than naming two parameters
-    # and leaving the arithmetic to the reader.
+    # and leaving the arithmetic to the reader. The sentence around it is the
+    # shared one in tools.ts; what this tool owes is the values.
     require_text(
         state,
         read_file,
-        "To continue from where this read stopped, call read_file with file_path: ",
+        "continuation: `read_file with file_path: ${JSON.stringify(",
         label=label,
     )
     require_text(
@@ -4756,6 +4757,144 @@ def _validate_stream_admission_after(state: State) -> None:
                  f"{label}: public wire types leak provider request internals")
 
 
+# The unit a result is cut by, spelled the way a tool spells it. A cap named
+# for what it bounds is the only thing that distinguishes cutting a result
+# from slicing a display label, and the difference is what this concern is
+# about: one is a fact withheld from the model, the other is cosmetics.
+_OUTPUT_CAP = re.compile(
+    r"\.slice\(\s*0,\s*[\w$.]*(?:[Ll]imit|[Mm]axResults|[Mm]axShown|[Cc]ap)\b"
+)
+_BOUND_HELPER = re.compile(r"\b(?:boundedContent|formatOutputBound)\(")
+
+# Phrasings the tools used before there was one notice. They are forbidden by
+# name so a tool cannot quietly grow its own vocabulary again: to say a result
+# was cut you must call the helper, and the helper is the only thing that
+# knows to state the bound, its unit, the total or why it is unknown, and the
+# call that continues.
+_RETIRED_NOTICES = (
+    "truncated] ...",
+    "Truncated by max_results",
+    "Search did not complete",
+    "No valid matches were returned",
+    "Showing lines ",
+)
+
+
+def _tool_sources(state: State) -> dict[str, str]:
+    prefix = "packages/core/src/tools/"
+    return {
+        path: text
+        for path, text in state.items()
+        if path.startswith(prefix)
+        and path.endswith(".ts")
+        and not path.endswith(".test.ts")
+        and "/" not in path[len(prefix):]
+    }
+
+
+def _validate_bounded_output_before(state: State) -> None:
+    label = "bounded tool output precondition"
+    # Before this concern each tool phrased its own notice, so the retired
+    # wordings are exactly what the tree should still contain.
+    forbid_text(
+        state, "packages/core/src/tools/tools.ts", "formatOutputBound", label=label
+    )
+    forbid_text(
+        state, "packages/core/src/tools/tools.ts", "OutputBound", label=label
+    )
+    forbid_text(
+        state, "packages/core/src/lsp/types.ts", "LspBounded", label=label
+    )
+
+
+def _validate_bounded_output_after(state: State) -> None:
+    label = "bounded tool output result"
+    tools_ts = "packages/core/src/tools/tools.ts"
+    # One notice, and it carries every fact a cut result owes its reader.
+    _require_all(
+        state,
+        tools_ts,
+        (
+            "export interface OutputBound {",
+            "requested?: number;",
+            "returned: number;",
+            "limit: number;",
+            "limitUnit: string;",
+            "total: number | { readonly unknown: string };",
+            "continuation?: string;",
+            "coverageUnknown?: boolean;",
+            "export function formatOutputBound(bound: OutputBound): string {",
+            "export function boundedContent(content: string, bound: OutputBound): string {",
+        ),
+        label=label,
+    )
+
+    sources = _tool_sources(state)
+    _require(
+        len(sources) > 20,
+        f"{label}: expected the tool directory in the final state, found {len(sources)} files",
+    )
+
+    # A tool that cuts a result must say so through the one notice.
+    offenders = sorted(
+        path
+        for path, text in sources.items()
+        if _OUTPUT_CAP.search(text) and not _BOUND_HELPER.search(text)
+    )
+    _require(
+        not offenders,
+        f"{label}: these tools cut a result to a cap without declaring it: "
+        f"{', '.join(offenders)}. A result that is quietly short is one the "
+        f"model cannot tell from a complete one, so it spends the context and "
+        f"misreports coverage at the same time. Return the cut content through "
+        f"boundedContent() in packages/core/src/tools/tools.ts, which states "
+        f"what was asked for, what came back, the bound and its unit, the true "
+        f"total or why the tool cannot know it, and the exact call that "
+        f"continues. Do not phrase a notice here: there is one, so that every "
+        f"tool says it the same way and a reader learns the shape once.",
+    )
+
+    # Nothing may re-grow a private notice beside it.
+    for path, text in sources.items():
+        if path == tools_ts:
+            continue
+        for retired in _RETIRED_NOTICES:
+            _require(
+                retired not in text,
+                f"{label}: {path} contains the retired truncation wording "
+                f"{retired!r}. These were replaced by the single notice in "
+                f"{tools_ts}; a tool that phrases its own is how a bound "
+                f"became invisible in the first place.",
+            )
+
+    # The known capping tools are named so the detector cannot be satisfied by
+    # a tree that simply stopped capping anything.
+    for path in (
+        "packages/core/src/tools/glob.ts",
+        "packages/core/src/tools/grep.ts",
+        "packages/core/src/tools/ls.ts",
+        "packages/core/src/tools/lsp.ts",
+        "packages/core/src/tools/ripGrep.ts",
+        "packages/core/src/tools/tool-search.ts",
+    ):
+        require_text(state, path, "boundedContent(", count=1, label=label)
+
+    # A cap the service applied and then forgot cannot be declared by anyone,
+    # so the fact travels with the items.
+    _require_all(
+        state,
+        "packages/core/src/lsp/types.ts",
+        ("export interface LspBounded<T> {", "readonly hadMore: boolean;"),
+        label=label,
+    )
+    forbid_text(
+        state,
+        "packages/core/src/tools/lsp.ts",
+        "Found ${Math.min(symbols.length, limit)}",
+        label=label,
+    )
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="shared-stream-admission",
@@ -5170,6 +5309,23 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         validate_after=_validate_incomplete_generation_after,
     ),
     SemanticConcern(
+        name="bounded-tool-output",
+        rationale=(
+            "A tool result says whether it is complete. One notice states what was asked for, what "
+            "came back, the bound and its unit, the real total or why the tool cannot know it, and "
+            "the call that continues; tools do not phrase their own. A tool that cuts a result to a "
+            "cap without declaring it refuses the build, and a cap a service applied is reported "
+            "with the items rather than discarded, because a layer cannot declare what it was never "
+            "told."
+        ),
+        removal_condition=(
+            "Upstream makes a truncating tool result state its bound, its unit, its total and its "
+            "continuation through one shared implementation, and refuses a tool that cuts silently."
+        ),
+        validate_before=_validate_bounded_output_before,
+        validate_after=_validate_bounded_output_after,
+    ),
+    SemanticConcern(
         name="terminal-state-is-a-value",
         rationale=(
             "A closed terminal-state value maps once to wire name, error classification, and exit code. "
@@ -5217,6 +5373,7 @@ def validate_final(state: State) -> None:
     """Re-run every independent concern against the complete final tree."""
 
     _validate_after(state)
+
 
 
 CONTRACTS: Mapping[str, SemanticContract] = {

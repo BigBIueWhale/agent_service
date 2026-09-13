@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `4d626a315d06254867a22b443ea701eb1a7fce44d4341c04c9bec0338610cc4d`
+- Review-diff SHA-256: `ce6535e081b6bc24ffd9b0345a99acefd029acefd85bd66fd88e85731004ec54`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `6684903f1081391992eac625edebe333de5e3948e27a52346b7e5c19b187006d`
+- Transformer-manifest SHA-256: `3871ae2f34e7fe5dd8020e40e82a1b00b0f5606bfc01f504130bcac508d9e153`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -57,6 +57,14 @@ remainder is the trigger. At a 262,144-token window these shares are 49,152,
 32,768, 16,384, 2,048, and 161,792 tokens. Independent floors leave rounding to
 the trigger. Input, directive, displaced results, and candidate histories are
 counted using the actual rendered request.
+
+A tool result says whether it is complete. One notice states what was asked
+for, what came back, the bound and its unit, the real total or why the tool
+cannot establish it, and the exact call that continues; tools do not phrase
+their own, and a tool under `src/tools` that cuts a result to a named cap
+without going through `boundedContent` refuses the build. A cap a service
+applied travels back with its items rather than being discarded, because a
+layer cannot declare a limit it was never told about.
 
 Compaction requests the room left by its exact input and refuses insufficient
 space. A candidate must end normally, carry the required six-part snapshot,
