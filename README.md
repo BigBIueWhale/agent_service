@@ -195,6 +195,13 @@ required to issue that request. A request lighter than the bounded worst case
 therefore buys the snapshot more room than the reserve. A request that would
 leave less than the reserve is refused instead of quietly shrinking the snapshot.
 
+The compaction request replaces the turn's tool declarations with that single
+function rather than extending them, so the model has exactly one thing it can
+emit. The conversation it carries is unchanged, but the declared tool block is
+not, so the request does not reuse the turn's prompt-cache prefix: it re-reads
+the history it shares. That is the price of having the snapshot constrained as
+it is generated, and it is paid once per compaction rather than once per turn.
+
 Every main-turn context-boundary decision uses the real vLLM tokenizer on the
 fully rendered request. Before compaction and again before generation, Qwen Code
 sends the exact messages, typed tool history, image parts, tool schemas, and
@@ -335,11 +342,21 @@ A terminal conversation and a headless conversation share the same obligations:
 - The fully rendered next request determines admission and the five context
   shares. Ordinary output uses the smaller of its configured ceiling and its
   window share. Compaction receives the room left by its exact input, requires at
-  least the summary reserve, and accepts only a normally terminated, structurally
-  valid six-section snapshot that leaves an issuable turn.
+  least the summary reserve, and accepts only a normally terminated six-section
+  snapshot that leaves an issuable turn.
+- The snapshot is a declared tool call, not hand-written markup. The compaction
+  request advertises one function whose closed parameter schema is the six
+  sections, and forces it, so the structure is constrained where the tokens are
+  produced rather than judged after the model has typed it. Section text is
+  carried as string arguments, so ordinary prose that once collided with the
+  markup — an ampersand between two names, a filename template in angle
+  brackets, a fragment of XML quoted as evidence — is just text. The client
+  re-checks the arguments against the schema it declared, because it cannot
+  observe whether the engine applied the constraint.
 - Original authored inputs and ordered corrections survive outside generated
-  summaries, including across repeated compaction and resume. Structural snapshot
-  validation does not establish the factual correctness of the model's summary.
+  summaries, including across repeated compaction and resume. An accepted
+  snapshot is structurally complete; that does not establish the factual
+  correctness of the model's summary.
 - A complete structured call becomes executable only after the response and its
   canonical assistant record are accepted. Literal text remains intact. Missing
   terminal evidence remains incomplete. Retrying the same confirmed request is

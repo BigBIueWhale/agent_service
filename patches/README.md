@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `46715e868a6c9e3d9750dd7e19db399b81618e7b03abbd4ac19a13d219232aed`
+- Review-diff SHA-256: `4d626a315d06254867a22b443ea701eb1a7fce44d4341c04c9bec0338610cc4d`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `47514cb12979329e8e2104812c15056cc7d9aa7b6c0755fe0e3135b0bffd3c76`
+- Transformer-manifest SHA-256: `6684903f1081391992eac625edebe333de5e3948e27a52346b7e5c19b187006d`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -59,10 +59,21 @@ the trigger. Input, directive, displaced results, and candidate histories are
 counted using the actual rendered request.
 
 Compaction requests the room left by its exact input and refuses insufficient
-space. A candidate must end normally, contain the required six-part snapshot,
+space. A candidate must end normally, carry the required six-part snapshot,
 reduce the request, and leave an issuable turn. Failure retains the previous
 history and reports that retained count. There is no separate reasoning-phase
 limit or forced reasoning-end marker.
+
+The snapshot is declared, not described. The compaction request replaces the
+turn's tools with one function whose closed parameter schema is the six ordered
+sections, and forces that call, so presence, uniqueness and ordering are
+properties of the declaration rather than of markup the model types. Section
+text travels as string arguments, so prose that collides with markup carries
+through unchanged and nothing has to be escaped. `acceptStateSnapshot` judges
+one drawn candidate against the same declaration, because a client cannot
+observe whether the engine applied a constraint it declared. Swapping the tool
+block does not reuse the turn's prompt-cache prefix; the conversation it carries
+is otherwise unchanged.
 
 Authored instructions and corrections have explicit provenance captured before
 hooks or input transformation. Their original parts survive repeated compaction,

@@ -946,7 +946,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         "packages/core/src/services/chatCompressionService.test.ts": (
             "sends the ENTIRE history to one cache-preserving main-model request",
             "rejects unusable summary output",
-            "summaryResult({ hadToolCall: true })",
+            "name: STATE_SNAPSHOT_FUNCTION_NAME,",
             "requires an exact shrinking candidate that leaves a turn issuable",
         ),
         "packages/core/src/core/baseLlmClient.test.ts": (
@@ -2791,7 +2791,9 @@ def _validate_compaction_budget_after(state: State) -> None:
     )
     snapshot_path = "packages/core/src/services/state-snapshot.ts"
     snapshot = _source(state, snapshot_path, label="complete state snapshot")
-    section_match = re.search(r"const SECTIONS = \[(.*?)\] as const;", snapshot, re.S)
+    section_match = re.search(
+        r"export const STATE_SNAPSHOT_SECTIONS = \[(.*?)\] as const;", snapshot, re.S
+    )
     _require(section_match is not None, "state snapshot section declaration missing")
     _require(
         re.findall(r"'([^']+)'", section_match[1])
@@ -2805,16 +2807,23 @@ def _validate_compaction_budget_after(state: State) -> None:
         ],
         "state snapshot requires exactly the ordered six sections",
     )
+    # The sections are a declared closed schema, not a shape the model is
+    # asked to type. Presence, uniqueness and ordering are properties of the
+    # declaration; the client re-checks the answer against the question it
+    # asked, because it cannot observe whether the engine applied it.
     _require_all(
         state,
         snapshot_path,
         (
-            "if (!text.trim()) refuse();",
-            "if (section !== SECTIONS.length) refuse();",
-            "return complete && depth === 0;",
+            "required: [...STATE_SNAPSHOT_SECTIONS],",
+            "additionalProperties: false,",
+            "export const STATE_SNAPSHOT_TOOL: Tool = {",
+            "SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args)",
+            "(section) => !String(record[section]).trim(),",
         ),
         label="complete state snapshot",
     )
+    forbid_text(state, snapshot_path, "SaxesParser", label="complete state snapshot")
     label = "context-partition result"
     limits = "packages/core/src/core/tokenLimits.ts"
     limits_test = "packages/core/src/core/tokenLimits.test.ts"
@@ -3048,7 +3057,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "if (summaryResult.finishReason === FinishReason.MAX_TOKENS) {",
             "COMPRESSION_FAILED_OUTPUT_TRUNCATED",
-            "if (!processedSummary) {",
+            "if (!acceptance.snapshot) {",
         ),
         label=label,
         location=service,
@@ -3060,27 +3069,39 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
     # The snapshot schema gives each kind of fact one home; the retired
-    # nine-section schema gave one code snippet four.
+    # nine-section schema gave one code snippet four. The sections are
+    # described where they are declared, so the prompt shows no skeleton and
+    # spends its instructions on faithfulness, which is the only part of this
+    # the model can be held to.
     _require_all(
         state,
         prompts,
         (
-            "<intent>",
-            "<environment>",
-            "<completed>",
-            "<in_progress>",
-            "<learnings>",
-            "<next_step>",
+            "record the snapshot by calling the one function this request declares",
+            "there is no markup to produce and nothing to escape",
             "exactly once",
         ),
         label=label,
     )
-    forbid_text(state, prompts, "<all_user_messages>", label=label)
-    forbid_text(state, prompts, "<files_and_code_sections>", label=label)
+    for retired in (
+        "<state_snapshot>",
+        "<intent>",
+        "<all_user_messages>",
+        "<files_and_code_sections>",
+        "CDATA",
+        "<analysis>",
+    ):
+        forbid_text(state, prompts, retired, label=label)
     require_text(
         state,
         prompts_test,
         "states the writing contract: dense, deduplicated by structure",
+        label=label,
+    )
+    require_text(
+        state,
+        prompts_test,
+        "asks for the declared call and describes no markup at all",
         label=label,
     )
 
@@ -3106,19 +3127,21 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
     )
+    # The compaction request declares the snapshot function and forces the
+    # call, so the artifact is constrained where it is generated rather than
+    # judged after the model has hand-written it.
     _require_all(
         state,
-        "packages/core/src/services/state-snapshot.ts",
+        service,
         (
-            "new SaxesParser",
-            "parser.on('doctype', refuse)",
-            "parser.on('comment', refuse)",
-            "tag.name !== SECTIONS[section]",
-            "section !== SECTIONS.length",
+            "tools: [STATE_SNAPSHOT_TOOL],",
+            "mode: FunctionCallingConfigMode.ANY,",
+            "acceptStateSnapshot(summaryResult.functionCalls)",
+            "if (!acceptance.snapshot) {",
         ),
         label=label,
     )
-    require_text(state, service, "!isValidStateSnapshot(processedSummary)", label=label)
+    forbid_text(state, service, "isValidStateSnapshot", label=label)
 
 
 def _validate_compaction_accounting_before(state: State) -> None:
