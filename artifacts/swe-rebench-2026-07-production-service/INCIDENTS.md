@@ -369,13 +369,17 @@ it is closed.
 - **Closed as superseded** (2026-09-13). Of the three-layer remedy first planned
   here, only the sealed `false` entry was built (`1afc4ca`), and `fde2f72`
   removed it again: there is no `false` engine default, optional creation field,
-  second settings artifact or arm. Preserved history is the one mode instead,
-  held by the served artifact rather than by any setting: backend `8a1444e`
-  derives the chat template so that every historical assistant turn renders its
-  reasoning and any `preserve_thinking` other than `true` is refused. The flip
-  described above was also intended when it landed: `6cbd7ab`, the backend
-  commit paired with `58b1ec7`, restored the preserved default on purpose. Two
-  attempts of one task are two samples of one configuration, not a comparison.
+  second settings artifact or arm. The requirement quoted above assumed a working
+  off switch, and Qwen3.8-27B has none: its `false` drops reasoning only before
+  the latest user message, so what survives depends on when the client injects
+  one, not on any rule (see "Thinking, sampling, and context lifetime" in the
+  service README). Preserved history is the one mode instead, held by the served
+  artifact rather than by any setting: backend `8a1444e` derives the chat
+  template so that every historical assistant turn renders its reasoning and any
+  `preserve_thinking` other than `true` is refused. The flip described above was
+  also intended when it landed: `6cbd7ab`, the backend commit paired with
+  `58b1ec7`, restored the preserved default on purpose. Two attempts of one task
+  are two samples of one configuration, not a comparison.
 
 ## Incident 11 — the workstation hard-crashes under serving load
 
