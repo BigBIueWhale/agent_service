@@ -22,6 +22,12 @@ const REQUEST_LIMIT: usize = 65_536;
 const RESPONSE_LIMIT: u64 = 4 * 1024 * 1024;
 const BROKER_OP_TIMEOUT: Duration = Duration::from_secs(120);
 const BROKER_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// A stop is bounded inside the broker by its own Docker subprocess
+/// deadline, so this call has to outlast that deadline plus the time
+/// allowed to reach the broker at all. A shorter deadline would give up
+/// on work the broker is still doing, and still holding its lock for.
+const STOP_CALL_TIMEOUT: Duration =
+    Duration::from_secs(BROKER_OP_TIMEOUT.as_secs() + BROKER_CONNECT_TIMEOUT.as_secs());
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -199,17 +205,32 @@ pub async fn wait_capture_complete(
     })
 }
 
-pub async fn stop_session(cfg: &Config, session_id: &str) -> ServiceResult<()> {
+/// The outcome of stopping a session's agent container.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SessionStopOutcome {
+    /// The container did not exit within the grace below and had to be
+    /// killed. Its transcript may be truncated, so a caller records this
+    /// rather than reporting a stop the agent answered.
+    pub escalated: bool,
+    /// The grace the broker applied, carried rather than restated here so the
+    /// number a diagnostic quotes is the number the stop actually used.
+    pub grace_seconds: u64,
+}
+
+pub async fn stop_session(cfg: &Config, session_id: &str) -> ServiceResult<SessionStopOutcome> {
     validate_session_id(session_id)?;
-    expect_empty(
-        call(
-            cfg,
-            json!({"op": "stop_session", "session_id": session_id}),
-            None,
-        )
-        .await?,
-        "stop_session",
+    let value = call(
+        cfg,
+        json!({"op": "stop_session", "session_id": session_id}),
+        Some(STOP_CALL_TIMEOUT),
     )
+    .await?;
+    serde_json::from_value(value).map_err(|error| {
+        ServiceError::DockerCommand(format!(
+            "broker stop_session response violates its exact schema: {error}"
+        ))
+    })
 }
 
 pub async fn remove_session(cfg: &Config, session_id: &str) -> ServiceResult<()> {
@@ -403,7 +424,38 @@ fn parse_response(bytes: &[u8]) -> ServiceResult<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_response, validate_session_id};
+    use super::{
+        parse_response, validate_session_id, SessionStopOutcome, BROKER_OP_TIMEOUT,
+        STOP_CALL_TIMEOUT,
+    };
+
+    #[test]
+    fn a_stop_outcome_is_read_fail_closed() {
+        let outcome: SessionStopOutcome =
+            serde_json::from_str(r#"{"escalated":true,"grace_seconds":60}"#)
+                .expect("canonical stop outcome");
+        assert!(outcome.escalated);
+        assert_eq!(outcome.grace_seconds, 60);
+        for invalid in [
+            r#"{}"#,
+            r#"{"escalated":true}"#,
+            r#"{"grace_seconds":60}"#,
+            r#"{"escalated":true,"grace_seconds":60,"extra":1}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<SessionStopOutcome>(invalid).is_err(),
+                "accepted {invalid}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_call_outlasts_the_brokers_own_bound() {
+        // The broker bounds the stop by its own Docker subprocess deadline.
+        // Giving up sooner would abandon work the broker is still doing, and
+        // still holding its mutation lock for.
+        assert!(STOP_CALL_TIMEOUT > BROKER_OP_TIMEOUT);
+    }
 
     #[test]
     fn response_envelope_is_fail_closed() {

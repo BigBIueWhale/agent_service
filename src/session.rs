@@ -952,6 +952,21 @@ async fn wait_for_agent_ready(
     Ok(ready)
 }
 
+/// Record a stop that ran out of grace. The agent was killed rather than
+/// asked, so whatever it had not yet written is gone, and a terminal record
+/// that said nothing would report a clean stop for a truncated transcript.
+/// Every path that stops a session goes through here, so no caller can omit
+/// it by forgetting.
+fn record_escalated_stop(diagnostics: &mut Vec<String>, outcome: docker_ops::SessionStopOutcome) {
+    if !outcome.escalated {
+        return;
+    }
+    diagnostics.push(format!(
+        "agent did not exit within {}s of SIGTERM and was killed; its transcript may be truncated",
+        outcome.grace_seconds
+    ));
+}
+
 async fn wait_for_completion_or_cancel(
     cfg: &Config,
     session_id: &str,
@@ -966,7 +981,10 @@ async fn wait_for_completion_or_cancel(
             Err(error) => {
                 diagnostics.push(format!("docker wait failed: {error}"));
                 let producer_stopped = match docker_ops::stop_session(cfg, session_id).await {
-                    Ok(()) => true,
+                    Ok(outcome) => {
+                        record_escalated_stop(&mut diagnostics, outcome);
+                        true
+                    }
                     Err(stop_error) => {
                         diagnostics.push(format!(
                             "stop agent after failed Docker wait also failed: {stop_error}"
@@ -979,13 +997,18 @@ async fn wait_for_completion_or_cancel(
         },
         () = cancel.cancelled() => {
             let mut producer_stopped = true;
-            if let Err(error) = docker_ops::stop_session(cfg, session_id).await {
-                diagnostics.push(format!("graceful cancellation stop failed: {error}"));
-                if let Err(remove_error) = docker_ops::remove_session(cfg, session_id).await {
-                    diagnostics.push(format!(
-                        "ownership-checked cancellation cleanup also failed: {remove_error}"
-                    ));
-                    producer_stopped = false;
+            match docker_ops::stop_session(cfg, session_id).await {
+                Ok(outcome) => record_escalated_stop(&mut diagnostics, outcome),
+                Err(error) => {
+                    diagnostics.push(format!("graceful cancellation stop failed: {error}"));
+                    if let Err(remove_error) =
+                        docker_ops::remove_session(cfg, session_id).await
+                    {
+                        diagnostics.push(format!(
+                            "ownership-checked cancellation cleanup also failed: {remove_error}"
+                        ));
+                        producer_stopped = false;
+                    }
                 }
             }
             let code = match wait.await {
@@ -1032,7 +1055,10 @@ pub async fn recover_after_execution_panic(
     )];
 
     let producer_stopped = match docker_ops::stop_session(cfg, session_id).await {
-        Ok(()) => true,
+        Ok(outcome) => {
+            record_escalated_stop(&mut diagnostics, outcome);
+            true
+        }
         Err(error) => {
             diagnostics.push(format!(
                 "stop session after execution-task failure: {error}"
@@ -2101,6 +2127,40 @@ pub async fn sweep_orphans(cfg: &Config) -> ServiceResult<()> {
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::{symlink, PermissionsExt};
+
+    #[test]
+    fn an_escalated_stop_is_named_in_the_diagnostics() {
+        let mut diagnostics = Vec::new();
+        super::record_escalated_stop(
+            &mut diagnostics,
+            crate::docker_ops::SessionStopOutcome {
+                escalated: false,
+                grace_seconds: 60,
+            },
+        );
+        assert!(
+            diagnostics.is_empty(),
+            "a stop the agent answered says nothing"
+        );
+
+        super::record_escalated_stop(
+            &mut diagnostics,
+            crate::docker_ops::SessionStopOutcome {
+                escalated: true,
+                grace_seconds: 60,
+            },
+        );
+        assert_eq!(diagnostics.len(), 1);
+        // The number comes from the stop that was actually performed, not
+        // from a second copy of the constant kept on this side.
+        assert_eq!(
+            diagnostics[0],
+            concat!(
+                "agent did not exit within 60s of SIGTERM and was killed; ",
+                "its transcript may be truncated"
+            )
+        );
+    }
 
     use super::{
         ensure_private_forensic_file, ensure_prompt_record, raw_retention_decision,

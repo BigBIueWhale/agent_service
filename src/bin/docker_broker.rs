@@ -9,7 +9,7 @@ use std::ffi::OsStr;
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Stdio};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use agent_service::container_image::{read_container_image, require_container_image};
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,19 @@ const REQUEST_LIMIT: u64 = 65_536;
 const OUTPUT_LIMIT: usize = 4 * 1024 * 1024;
 const RESPONSE_LIMIT: usize = 4 * 1024 * 1024;
 const DOCKER_TIMEOUT: Duration = Duration::from_secs(120);
+// How long a container gets to answer SIGTERM before `docker stop`
+// escalates to SIGKILL. Derived rather than picked: a removal is already
+// bounded end to end at BROKER_OP_TIMEOUT, and it is an inspect, this
+// stop, a second inspect and a removal, so the stop takes half that
+// budget and leaves the rest to the three operations around it.
+//
+// The bound itself is the correctness property. `--timeout -1` means
+// SIGTERM and then wait forever, and a stop holds this process's single
+// mutation lock: one container that ignores SIGTERM used to hold every
+// other session's create, stop, remove and orphan sweep behind it, and
+// the broker could not shut down either, because its own shutdown sweep
+// takes the same lock.
+const STOP_GRACE: Duration = Duration::from_secs(60);
 
 #[cfg(test)]
 #[path = "../../docker/tests/composition_broker.rs"]
@@ -726,13 +739,12 @@ async fn execute(request: Request, policy: &Policy) -> Result<Value, String> {
                 Component::Agent,
             )
             .await?;
-            docker(
-                ["stop", "--timeout", "-1", agent_name(&session_id).as_str()],
-                "stop_session",
-                None,
-            )
-            .await?;
-            Ok(json!({}))
+            let escalated =
+                stop_within_grace(agent_name(&session_id).as_str(), "stop_session").await?;
+            Ok(json!({
+                "escalated": escalated,
+                "grace_seconds": STOP_GRACE.as_secs(),
+            }))
         }
         Request::RemoveSession { session_id } => {
             validate_session_id(&session_id)?;
@@ -1910,7 +1922,7 @@ async fn stop_owned_if_running(
         return Ok(());
     };
     if value.pointer("/State/Running").and_then(Value::as_bool) == Some(true) {
-        docker(["stop", "--timeout", "-1", name], "stop_owned", None).await?;
+        stop_within_grace(name, "stop_owned").await?;
     }
     let stopped = require_owned(name, policy, session_id, component).await?;
     require_bool(
@@ -2045,7 +2057,7 @@ async fn sweep_orphans(policy: &Policy) -> Result<(), String> {
 async fn stop_orphan_if_running(id: &str, label: &str) -> Result<(), String> {
     let value = inspect_single(id, label).await?;
     if value.pointer("/State/Running").and_then(Value::as_bool) == Some(true) {
-        docker(["stop", "--timeout", "-1", id], "stop_orphan", None).await?;
+        stop_within_grace(id, "stop_orphan").await?;
     }
     let stopped = inspect_single(id, label).await?;
     require_bool(
@@ -2323,6 +2335,40 @@ struct CommandResult {
     stderr: String,
 }
 
+/// Stop a container within the stated grace, and report whether the grace
+/// expired.
+///
+/// `docker stop --timeout N` sends SIGTERM, waits N seconds, then sends
+/// SIGKILL, and reports success whichever happened -- so the only evidence of
+/// which one it was is this process's own clock. A stop that returns inside
+/// the grace is one the container answered; a stop that takes the whole grace
+/// is one Docker had to kill, and a killed agent may not have finished
+/// writing its transcript.
+///
+/// The subprocess deadline is the one every other Docker call here already
+/// carries, and it bounds something the grace cannot: a wedged Docker CLI or
+/// daemon, which would otherwise hold the mutation lock for as long as it
+/// hangs. Only the session stop reports the escalation, because it is the
+/// only one of the three whose caller has a terminal record to write it into;
+/// the other two state their outcome by re-inspecting the container and
+/// requiring State.Running to be false.
+async fn stop_within_grace(name: &str, label: &str) -> Result<bool, String> {
+    let started = Instant::now();
+    docker(stop_args(name), label, Some(DOCKER_TIMEOUT)).await?;
+    Ok(started.elapsed() >= STOP_GRACE)
+}
+
+/// The argv of a bounded stop. Separate so the grace it carries is one
+/// derived value rather than a literal repeated at each call site.
+fn stop_args(name: &str) -> [String; 4] {
+    [
+        "stop".to_string(),
+        "--timeout".to_string(),
+        STOP_GRACE.as_secs().to_string(),
+        name.to_string(),
+    ]
+}
+
 async fn docker<I, S>(args: I, label: &str, timeout: Option<Duration>) -> Result<String, String>
 where
     I: IntoIterator<Item = S>,
@@ -2492,9 +2538,41 @@ mod tests {
 
     use super::{
         docker_log_follow_args, drain_bounded, load_policy, optional_running, parse_agent_ready,
-        parse_capture_complete, parse_request, validate_empty_ipv4_route_table,
-        validate_empty_ipv6_route_table, validate_session_id, Request,
+        parse_capture_complete, parse_request, stop_args, validate_empty_ipv4_route_table,
+        validate_empty_ipv6_route_table, validate_session_id, Request, DOCKER_TIMEOUT, STOP_GRACE,
     };
+
+    #[test]
+    fn a_stop_is_bounded_and_escalates() {
+        // `--timeout -1` is SIGTERM and then wait forever. It is the value
+        // this argv exists to keep out: a stop holds the single mutation
+        // lock, so one container that ignores SIGTERM used to hold every
+        // other session behind it and the broker could not even shut down.
+        let args = stop_args("agent-s-0123456789abcdef0123456789abcdef");
+        assert_eq!(
+            args,
+            [
+                "stop",
+                "--timeout",
+                STOP_GRACE.as_secs().to_string().as_str(),
+                "agent-s-0123456789abcdef0123456789abcdef",
+            ]
+        );
+        assert_ne!(args[2], "-1");
+    }
+
+    #[test]
+    fn the_grace_expires_before_the_subprocess_deadline() {
+        // The grace has to fit strictly inside the deadline that bounds the
+        // Docker process itself. Were it the other way round, the deadline
+        // would fire first and the container would never be killed -- the
+        // stop would report a failure while the agent kept running, which is
+        // the state the unbounded stop already left behind.
+        assert!(
+            STOP_GRACE < DOCKER_TIMEOUT,
+            "the stop grace must expire before the Docker subprocess deadline"
+        );
+    }
 
     #[test]
     fn compiled_policy_is_exact() {
