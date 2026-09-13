@@ -100337,7 +100337,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        { model: 'test-model' },
        { max_turns: 1 },
        toolConfig,
-@@ -701,106 +1308,41 @@
+@@ -701,104 +1308,81 @@
  
    it.each([ToolNames.ENTER_PLAN_MODE, ToolNames.EXIT_PLAN_MODE])(
      'returns a dedicated message when filtered %s is called directly',
@@ -100404,7 +100404,20 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 -        version: 'test',
 -      },
 -    );
--
++  it('carries a repetition refusal from the stream to the call that is refused', async () => {
++    // The guard raises its refusal while the round is still streaming, and
++    // the call it refers to is only turned into a scheduled request later.
++    // This is the join between the two, and it is keyed by the FunctionCall
++    // object because the scheduler's call id does not exist yet.
++    const { core } = buildAgentForTools({ tools: ['*'] }, [
++      { name: ToolNames.READ_FILE, description: 'read' } as FunctionDeclaration,
++    ]);
++    const repeated = {
++      name: ToolNames.READ_FILE,
++      args: { file_path: 'book.txt', limit: 420 },
++      id: 'call-repeat-5',
++    };
+ 
 -    try {
 -      const result = await core.processFunctionCalls(
 -        [
@@ -100416,7 +100429,28 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 -        1,
 -        [],
 -      );
--
++    const result = await runWithAgentContext(
++      'test-subagent',
++      new GenerationContext('test-owned-invocation'),
++      () =>
++        core.runInAgentFrames(() =>
++          core.processFunctionCalls(
++            [repeated],
++            new AbortController(),
++            'prompt-repetition',
++            1,
++            [{ name: ToolNames.READ_FILE } as FunctionDeclaration],
++            undefined,
++            false,
++            new Set<string>(),
++            new Set<string>(),
++            new Map([
++              [repeated, { repetitionCount: 5, droppedArgumentNames: ['offset'] }],
++            ]),
++          ),
++        ),
++    );
+ 
 -      const parts = result.messages[0].parts ?? [];
 -      const total = parts.reduce((sum, part) => {
 -        const response = part.functionResponse?.response;
@@ -100454,15 +100488,17 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 -      writer.cleanup();
 -      fs.rmSync(tempDir, { recursive: true, force: true });
 -    }
--  });
--
++    const response = result.messages[0]?.parts?.[0]?.functionResponse
++      ?.response as { error?: string } | undefined;
++    expect(response?.error).toContain('call 5 of `read_file`');
++    expect(response?.error).toContain('`offset`');
+   });
+ 
    // ─── Nested sub-agents ──────────────────────────────────────────
    // The AgentTool is depth-gated: available to a sub-agent only while
    // maxSubagentDepth still permits another level. prepareTools() reads the
    // sub-agent's own 0-based depth from getCurrentAgentDepth(); a child sits
-   // at level (depth + 2), which must not exceed the cap.
-   const nestingDecls = (): FunctionDeclaration[] => [
-@@ -811,30 +1353,45 @@
+@@ -811,30 +1395,45 @@
      } as FunctionDeclaration,
    ];
  
@@ -100512,7 +100548,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    it('nesting: frameless prepareTools fails closed — AgentTool excluded', async () => {
      // prepareTools() only ever serves agents, never the top-level session.
      // A missing agent frame means the launch path forgot runWithAgentContext
-@@ -849,13 +1406,17 @@
+@@ -849,13 +1448,17 @@
  
    it('nesting: fork execution contexts never receive the AgentTool', async () => {
      // The fork contract is context-sharing, not isolation — forks must not
@@ -100531,7 +100567,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(names).toContain('read_file');
    });
  
-@@ -865,35 +1426,43 @@
+@@ -865,35 +1468,43 @@
        agentId: 'scribe@demo',
        agentName: 'scribe',
        teamName: 'demo',
@@ -100580,7 +100616,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(deniedNames).toContain('read_file');
    });
  });
-@@ -969,6 +1538,205 @@
+@@ -969,6 +1580,205 @@
      expect(extractParentToolNames(undefined)).toEqual([]);
      expect(extractParentToolNames({} as GenerateContentConfig)).toEqual([]);
      expect(extractParentToolNames(configWithTools([]))).toEqual([]);
@@ -100800,7 +100836,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -13,37 +17,41 @@
+@@ -13,37 +17,42 @@
   *
   * AgentCore is stateless per-call: it does not own lifecycle or termination
   * logic. The caller (executor/collaborator) controls when to start, stop,
@@ -100833,6 +100869,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    GeminiEventType,
    markDuplicateProviderToolCallResponseSent,
    type ServerGeminiStreamEvent,
++  type ToolCallRepetitionRefusal,
    type ToolCallRequestInfo,
  } from '../../core/turn.js';
  import { LoopDetectionService } from '../../services/loopDetectionService.js';
@@ -100843,7 +100880,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    type ExecutingToolCall,
    type WaitingToolCall,
  } from '../../core/coreToolScheduler.js';
-@@ -51,27 +59,28 @@
+@@ -51,27 +60,28 @@
    ToolConfirmationOutcome,
    ToolCallConfirmationDetails,
    ToolResultDisplay,
@@ -100876,7 +100913,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
  } from '../../core/toolCallIdUtils.js';
  import type {
    PromptConfig,
-@@ -80,12 +89,13 @@
+@@ -80,12 +90,13 @@
    ToolConfig,
    AgentMessage,
    AgentExternalInput,
@@ -100890,7 +100927,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    AgentToolResultEvent,
    AgentToolOutputUpdateEvent,
    AgentUsageEvent,
-@@ -282,12 +292,19 @@
+@@ -282,12 +293,19 @@
    /** The final model text response (empty if terminated by abort/limits). */
    text: string;
    /** Why the loop ended. null = normal text completion (no tool calls). */
@@ -100910,7 +100947,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
   * Options for configuring a reasoning loop invocation.
   */
  export interface ReasoningLoopOptions {
-@@ -321,40 +338,20 @@
+@@ -321,40 +339,20 @@
  }
  
  /**
@@ -100951,7 +100988,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
   * This class encapsulates:
   * - Chat/model session creation (`createChat`)
   * - Tool list preparation (`prepareTools`)
-@@ -364,12 +361,41 @@
+@@ -364,12 +362,41 @@
   *
   * It does NOT manage lifecycle (start/stop/terminate), abort signals,
   * or final result interpretation — those are the caller's responsibility.
@@ -100993,7 +101030,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    readonly promptConfig: PromptConfig;
    readonly modelConfig: ModelConfig;
    readonly runConfig: RunConfig;
-@@ -382,66 +408,42 @@
+@@ -382,66 +409,42 @@
     * Event emitter for this agent. Always present — if the caller doesn't
     * pass one, AgentCore allocates its own so the observable state below
     * is populated regardless of who constructs the agent.
@@ -101064,7 +101101,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
      modelConfig: ModelConfig,
      runConfig: RunConfig,
      toolConfig?: ToolConfig,
-@@ -449,12 +451,20 @@
+@@ -449,12 +452,20 @@
      hooks?: AgentHooks,
      runtimeView?: RuntimeContentGeneratorView,
    ) {
@@ -101085,7 +101122,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
      this.runConfig = runConfig;
      this.toolConfig = toolConfig;
      if (toolConfig?.executionAllowedTools !== undefined) {
-@@ -483,19 +493,18 @@
+@@ -483,19 +494,18 @@
  
    /**
     * Creates a GeminiChat instance configured for this agent.
@@ -101107,7 +101144,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
        !this.promptConfig.initialMessages
      ) {
        throw new Error(
-@@ -538,42 +547,27 @@
+@@ -538,42 +548,27 @@
        systemInstruction?: string | Content;
      } = {};
      if (this.promptConfig.renderedSystemPrompt !== undefined) {
@@ -101160,7 +101197,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
  
    /**
     * Returns true if this agent's effective tool surface will include the Skill
-@@ -819,12 +813,13 @@
+@@ -819,12 +814,13 @@
          // Without it the frame recomputes from the UI's frame-less async
          // chain to depth 0, and an approved `agent` tool call from a
          // leaf-depth sub-agent would bypass maxSubagentDepth.
@@ -101174,7 +101211,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
            : runWithView();
        });
      return inheritedTeammateIdentity
-@@ -840,33 +835,34 @@
+@@ -840,39 +836,58 @@
     */
    private withRuntimeView<T>(
      fn: () => Promise<T>,
@@ -101210,9 +101247,35 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
      loopDetector.reset(
        `${this.runtimeContext.getSessionId()}#${this.subagentId}`,
      );
-     const checkSubagentLoop = (event: ServerGeminiStreamEvent): boolean => {
-       if (loopDetector.checkAlwaysOnSafeties(event)) {
-@@ -884,13 +880,13 @@
+-    const checkSubagentLoop = (event: ServerGeminiStreamEvent): boolean => {
+-      if (loopDetector.checkAlwaysOnSafeties(event)) {
++    // Refusals the consecutive-identical guard raised while the round was
++    // streaming, against the FunctionCall they were raised for. Keyed by the
++    // call object because that is the only exact key at this point: the call
++    // id the scheduler will use is assigned later, in processFunctionCalls,
++    // and a provider that sends no id leaves nothing else to match on. The
++    // same objects reach processFunctionCalls -- dedupeToolCallsById filters
++    // the array, it does not rebuild its entries.
++    const repetitionRefusals = new Map<FunctionCall, ToolCallRepetitionRefusal>();
++    const checkSubagentLoop = (
++      event: ServerGeminiStreamEvent,
++      functionCall?: FunctionCall,
++    ): boolean => {
++      const halt = loopDetector.checkAlwaysOnSafeties(event);
++      if (!halt && functionCall) {
++        const refusal = loopDetector.takeToolCallRefusal();
++        if (refusal) {
++          repetitionRefusals.set(functionCall, refusal);
++        }
++      }
++      if (halt) {
+         return true;
+       }
+       return (
+         !this.runtimeContext.getSkipLoopDetection() &&
+         loopDetector.addAndCheckHeuristicLoops(event)
+       );
+@@ -884,13 +899,13 @@
        if (abortController.signal.aborted) {
          terminateMode = AgentTerminateMode.CANCELLED;
          break;
@@ -101227,7 +101290,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
  
        let durationMin = (Date.now() - startTime) / (1000 * 60);
        if (options?.maxTimeMinutes && durationMin >= options.maxTimeMinutes) {
-@@ -901,24 +897,54 @@
+@@ -901,24 +916,54 @@
        // Per-round child controller so model-SDK retry layers don't accumulate
        // listeners on the long-lived parent. createChildAbortController handles
        // parent propagation; the try/finally below guarantees reverse-cleanup
@@ -101286,7 +101349,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
          const roundStreamStart = Date.now();
          const responseStream = await chat.sendMessageStream(
            this.modelConfig.model ||
-@@ -926,101 +952,132 @@
+@@ -926,101 +971,132 @@
              DEFAULT_QWEN_MODEL,
            messageParams,
            promptId,
@@ -101442,7 +101505,48 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
                checkSubagentLoop({
                  type: GeminiEventType.Thought,
                  value: thoughtSummary,
-@@ -1089,45 +1146,39 @@
+@@ -1044,25 +1120,28 @@
+               break;
+             }
+ 
+             for (const fc of chunkFunctionCalls) {
+               const toolName = String(fc.name);
+               if (
+-                checkSubagentLoop({
+-                  type: GeminiEventType.ToolCallRequest,
+-                  value: {
+-                    callId: fc.id ?? `${toolName}-${Date.now()}`,
+-                    providerCallId: getProviderToolCallId(fc),
+-                    name: toolName,
+-                    args: (fc.args ?? {}) as Record<string, unknown>,
+-                    isClientInitiated: false,
+-                    prompt_id: promptId,
+-                    response_id: currentResponseId,
+-                    wasOutputTruncated,
++                checkSubagentLoop(
++                  {
++                    type: GeminiEventType.ToolCallRequest,
++                    value: {
++                      callId: fc.id ?? `${toolName}-${Date.now()}`,
++                      providerCallId: getProviderToolCallId(fc),
++                      name: toolName,
++                      args: (fc.args ?? {}) as Record<string, unknown>,
++                      isClientInitiated: false,
++                      prompt_id: promptId,
++                      response_id: currentResponseId,
++                      wasOutputTruncated,
++                    },
+                   },
+-                })
++                  fc,
++                )
+               ) {
+                 terminateMode = AgentTerminateMode.LOOP_DETECTED;
+                 loopDetectedInStream = true;
+                 break;
+               }
+             }
+@@ -1089,50 +1168,45 @@
          }
  
          if (loopDetectedInStream) {
@@ -101496,8 +101600,14 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
              wasOutputTruncated,
              handledProviderToolCallIds,
              duplicateProviderToolCallResponseIds,
++            repetitionRefusals,
            );
-@@ -1143,56 +1194,61 @@
+           if (toolCallResult.repeatedDuplicateProviderToolCall) {
+             terminateMode = AgentTerminateMode.LOOP_DETECTED;
+             break;
+           }
+           currentMessages = toolCallResult.messages;
+@@ -1143,56 +1217,61 @@
              // alongside the tool results the model is about to see.
              // processFunctionCalls always returns exactly one user-role entry.
              const last = currentMessages[currentMessages.length - 1];
@@ -101570,7 +101680,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
                {
                  role: 'user',
                  parts: [
-@@ -1201,21 +1257,21 @@
+@@ -1201,21 +1280,21 @@
                    },
                  ],
                },
@@ -101595,7 +101705,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
                // null terminateMode = normal text completion
                break;
              }
-@@ -1232,29 +1288,38 @@
+@@ -1232,29 +1311,38 @@
              ];
            }
          }
@@ -101637,7 +101747,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    private drainExternalInputs(
      options?: ReasoningLoopOptions,
    ): AgentExternalInput[] {
-@@ -1269,46 +1334,49 @@
+@@ -1269,46 +1357,49 @@
        typeof input === 'string'
          ? `${EXTERNAL_MESSAGE_PREFIX} ${input}`
          : input.text;
@@ -101704,7 +101814,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
      options: ReasoningLoopOptions | undefined,
      startTime: number,
    ): number | undefined {
-@@ -1317,13 +1385,13 @@
+@@ -1317,13 +1408,13 @@
    }
  
    private async waitForExternalInputs(
@@ -101719,7 +101829,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    }> {
      while (true) {
        const immediate = this.drainExternalInputs(options);
-@@ -1332,13 +1400,13 @@
+@@ -1332,13 +1423,13 @@
        }
  
        if (abortController.signal.aborted) {
@@ -101734,7 +101844,45 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
        const remainingTimeMs = this.getRemainingTimeMs(options, startTime);
        if (remainingTimeMs !== undefined && remainingTimeMs <= 0) {
          return { inputs: [], terminateMode: AgentTerminateMode.TIMEOUT };
-@@ -1956,49 +2024,49 @@
+@@ -1511,12 +1602,13 @@
+     currentRound: number,
+     toolsList: FunctionDeclaration[],
+     responseId?: string,
+     wasOutputTruncated = false,
+     handledProviderToolCallIds = new Set<string>(),
+     duplicateProviderToolCallResponseIds = new Set<string>(),
++    repetitionRefusals = new Map<FunctionCall, ToolCallRepetitionRefusal>(),
+   ): Promise<{
+     messages: Content[];
+     repeatedDuplicateProviderToolCall: boolean;
+   }> {
+     const responseByCallId = new Map<
+       string,
+@@ -1852,21 +1944,23 @@
+     // Prepare requests and emit TOOL_CALL events
+     const requests: ToolCallRequestInfo[] = authorizedCalls.map((fc) => {
+       const toolName = String(fc.name || 'unknown');
+       const callId = callIdByFunctionCall.get(fc)!;
+       const providerCallId = getProviderToolCallId(fc) ?? fc.id;
+       const args = (fc.args ?? {}) as Record<string, unknown>;
++      const repetitionRefusal = repetitionRefusals.get(fc);
+       const request: ToolCallRequestInfo = {
+         callId,
+         ...(providerCallId ? { providerCallId } : {}),
+         name: toolName,
+         args,
+         isClientInitiated: true,
+         prompt_id: promptId,
+         response_id: responseId,
+         wasOutputTruncated,
++        ...(repetitionRefusal ? { repetitionRefusal } : {}),
+       };
+ 
+       const description = this.getToolDescription(toolName, args);
+       const isOutputMarkdown = this.getToolIsOutputMarkdown(toolName);
+       this.eventEmitter?.emit(AgentEventType.TOOL_CALL, {
+         subagentId: this.subagentId,
+@@ -1956,49 +2050,49 @@
          // TOOL_RESULT events for every un-emitted callId (corrupting the
          // transcript and misleading the model on the next round).
          abortController.signal.removeEventListener('abort', onAbort);
@@ -101804,7 +101952,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
            responseParts: response.responseParts,
            ...(collected?.durationMs !== undefined
              ? { durationMs: collected.durationMs }
-@@ -2072,64 +2140,23 @@
+@@ -2072,64 +2166,23 @@
      this.pendingApprovals.clear();
    }
  
@@ -101869,7 +102017,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
     * Note: Assumes tools are warmed via warmAll() before the reasoning loop.
     */
    getToolDescription(toolName: string, args: Record<string, unknown>): string {
-@@ -2162,46 +2189,13 @@
+@@ -2162,46 +2215,13 @@
    recordToolCallStats(
      toolName: string,
      success: boolean,
@@ -101917,7 +102065,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
  
    /**
     * TOOL_WAITING_APPROVAL is deliberately NOT listened to here because
-@@ -2210,12 +2204,26 @@
+@@ -2210,12 +2230,26 @@
     * (approvals never fire). AgentInteractive owns that listener and
     * writes into `pendingApprovals` via the public mutator API.
     */
@@ -101944,7 +102092,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
        }
        if (event.text) {
          this.pushMessage('assistant', event.text);
-@@ -2276,91 +2284,55 @@
+@@ -2276,91 +2310,55 @@
          this.pushMessage('user', event.text);
        },
      );
@@ -102790,10 +102938,9 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
  
          scope.getCore().recordToolCallStats('stale_tool', true, 25);
 -        scope.getCore().stats.recordTokens(100, 50);
--
--        const followUpContext = new ContextState();
 +        const ownerUsage = recordOwnerUsage(config);
-+
+ 
+-        const followUpContext = new ContextState();
 +        const followUpContext = createTaskContext();
          followUpContext.set('task_prompt', 'Follow-up task');
          await scope.execute(followUpContext);
@@ -102874,7 +103021,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          expect(externalEvents).toEqual([
            { kind: 'message', text: 'late correction' },
            { kind: 'notification', text: 'monitor fired' },
-@@ -653,56 +874,144 @@
+@@ -653,58 +874,146 @@
        it('should preserve statistics for continuation work in the same logical turn', async () => {
          const { config } = await createMockConfig();
          mockSendMessageStream.mockImplementation(
@@ -102915,12 +103062,11 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
            successfulToolCalls: 1,
 -          inputTokens: 100,
 -          outputTokens: 50,
--        });
++          ownerUsage,
+         });
 -        expect(scope.getCore().executionStats.startTimeMs).toBe(
 -          logicalTurnStart,
 -        );
-+          ownerUsage,
-+        });
 +        expect(scope.getCore().stats.startedAt).toBe(logicalTurnStart);
          expect(
 -          scope.getCore().executionStats.totalDurationMs,
@@ -102995,11 +103141,10 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
 -          successfulToolCalls: 1,
 -          inputTokens: 100,
 -          outputTokens: 50,
--        });
 +          totalDurationMs: 4000,
-+        });
-+      });
-+
+         });
+       });
+ 
 +      it('publishes finalized owner accounting in the terminal summary independently of chunk diagnostics', async () => {
 +        const { config } = await createMockConfig();
 +        const scope = await createRecordedAgent(
@@ -103035,12 +103180,14 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
 +        expect(terminal).toHaveBeenCalledOnce();
 +        expect(terminal.mock.calls[0][0]).toMatchObject({ ownerUsage });
 +        expect(scope.getExecutionSummary().ownerUsage).toEqual(ownerUsage);
-       });
- 
++      });
++
        it('should reject concurrent execute calls', async () => {
          const { config } = await createMockConfig();
          let releaseResponse: (() => void) | undefined;
          const responseGate = new Promise<void>((resolve) => {
+           releaseResponse = resolve;
+         });
 @@ -723,25 +1032,26 @@
                  ],
                },
@@ -103338,10 +103485,9 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
            renderedSystemPrompt: 'Rendered',
          };
 -        const context = new ContextState();
--
--        const agent = await AgentHeadless.create(
 +        const context = createTaskContext();
-+
+ 
+-        const agent = await AgentHeadless.create(
 +        const agent = await createRecordedAgent(
 +          new GenerationContext('test-owned-invocation'),
            'TestAgent',
@@ -103388,23 +103534,16 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          mockSendMessageStream.mockImplementation(createMockStream(['stop']));
  
 -        const scope = await AgentHeadless.create(
--          'test-agent',
--          config,
--          promptConfig,
--          defaultModelConfig,
--          defaultRunConfig,
--        );
--
--        await scope.execute(new ContextState());
 +        const scope = await createRecordedAgent(
 +          new GenerationContext('test-owned-invocation'),
-+          'test-agent',
-+          config,
-+          promptConfig,
-+          defaultModelConfig,
-+          defaultRunConfig,
-+        );
-+
+           'test-agent',
+           config,
+           promptConfig,
+           defaultModelConfig,
+           defaultRunConfig,
+         );
+ 
+-        await scope.execute(new ContextState());
 +        await scope.execute(createTaskContext());
  
          expect(scope.getTerminateMode()).toBe(AgentTerminateMode.GOAL);
@@ -103825,7 +103964,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          expect(toolResultEvents).toHaveLength(2);
          expect(toolResultEvents[1].error).toContain(
            'Duplicate provider tool call id "call_1"',
-@@ -2212,22 +2545,23 @@
+@@ -2212,25 +2545,30 @@
          vi.mocked(
            (config.getToolRegistry() as unknown as ToolRegistry).getTool,
          ).mockImplementation((name: string) =>
@@ -103847,11 +103986,19 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
 +        await scope.execute(createTaskContext());
  
          expect(mockSendMessageStream).toHaveBeenCalledTimes(5);
-         expect(listDirectoryInvocation.execute).toHaveBeenCalledTimes(4);
+-        expect(listDirectoryInvocation.execute).toHaveBeenCalledTimes(4);
++        // Three executions, not four: the fourth identical call is answered
++        // with the reason instead of being run a fourth time, and the fifth --
++        // the same call again, after being told -- ends the run where the
++        // guard always ended it.
++        expect(listDirectoryInvocation.execute).toHaveBeenCalledTimes(3);
          expect(scope.getTerminateMode()).toBe(AgentTerminateMode.LOOP_DETECTED);
        });
  
-@@ -2297,23 +2631,24 @@
+       it('should ignore duplicate provider tool-call ids already present in chat history', async () => {
+         const listFilesToolDef: FunctionDeclaration = {
+           name: 'list_files',
+@@ -2297,23 +2635,24 @@
            toolCallEvents.push(event as AgentToolCallEvent);
          });
          eventEmitter.on(AgentEventType.TOOL_RESULT, (event: unknown) => {
@@ -103878,7 +104025,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          expect(toolResultEvents).toHaveLength(1);
          expect(toolCallEvents[0].callId).toMatch(
            /^call_1__qwen_dup_2:duplicate:/,
-@@ -2388,22 +2723,23 @@
+@@ -2388,22 +2727,23 @@
          vi.mocked(
            (config.getToolRegistry() as unknown as ToolRegistry).getTool,
          ).mockImplementation((name: string) =>
@@ -103904,7 +104051,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          const parts = secondCallArgs.message as Part[];
          expect(
            parts
-@@ -2470,22 +2806,23 @@
+@@ -2470,22 +2810,23 @@
          vi.mocked(
            (config.getToolRegistry() as unknown as ToolRegistry).getTool,
          ).mockImplementation((name: string) =>
@@ -103930,7 +104077,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          const parts = thirdCallArgs.message as Part[];
          expect(parts[0].functionResponse?.id).toBe('call_reused');
          expect(parts[0].functionResponse?.name).toBe('write_file');
-@@ -2528,21 +2865,22 @@
+@@ -2528,21 +2869,22 @@
                  args: { path: '/test3' },
                },
              ],
@@ -103955,7 +104102,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
        });
  
        it('should treat max_turns 0 as an unlimited turn budget', async () => {
-@@ -2554,21 +2892,22 @@
+@@ -2554,21 +2896,22 @@
              [{ name: 'list_files', args: { path: '/test' } }],
              [{ name: 'list_files', args: { path: '/test2' } }],
              'stop',
@@ -103980,7 +104127,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
        });
  
        it('should terminate with TIMEOUT if the time limit is reached during an LLM call', async () => {
-@@ -2590,21 +2929,22 @@
+@@ -2590,21 +2933,22 @@
              resolveStream = resolve as any;
            });
  
@@ -104005,7 +104152,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
  
            // Now resolve the stream. The model returns 'stop'.
            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-@@ -2620,24 +2960,62 @@
+@@ -2620,24 +2964,62 @@
        });
  
        it('should terminate with ERROR if the model call throws', async () => {
@@ -104013,23 +104160,16 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          mockSendMessageStream.mockRejectedValue(new Error('API Failure'));
  
 -        const scope = await AgentHeadless.create(
--          'test-agent',
--          config,
--          promptConfig,
--          defaultModelConfig,
--          defaultRunConfig,
--        );
--
--        await expect(scope.execute(new ContextState())).rejects.toThrow(
 +        const scope = await createRecordedAgent(
 +          new GenerationContext('test-owned-invocation'),
-+          'test-agent',
-+          config,
-+          promptConfig,
-+          defaultModelConfig,
-+          defaultRunConfig,
-+        );
-+
+           'test-agent',
+           config,
+           promptConfig,
+           defaultModelConfig,
+           defaultRunConfig,
+         );
+ 
+-        await expect(scope.execute(new ContextState())).rejects.toThrow(
 +        await expect(scope.execute(createTaskContext())).rejects.toThrow(
            'API Failure',
          );
@@ -104077,7 +104217,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
      describe('execute - Streaming and Thought Handling', () => {
        const promptConfig: PromptConfig = { systemPrompt: 'Execute task.' };
  
-@@ -2647,12 +3025,13 @@
+@@ -2647,12 +3029,13 @@
            (async function* () {
              yield {
                type: 'chunk',
@@ -104091,7 +104231,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
                },
              };
            })(),
-@@ -2666,34 +3045,36 @@
+@@ -2666,34 +3049,36 @@
            { text: 'Here is the answer.' as string },
          ]);
          vi.mocked(GeminiChat).mockImplementation(
@@ -104131,7 +104271,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          expect(events[0]!.thought).toBe(true);
          expect(events[1]!.text).toBe('Here is the answer.');
          expect(events[1]!.thought).toBe(false);
-@@ -2702,12 +3083,13 @@
+@@ -2702,12 +3087,13 @@
        it('should emit usage for a tool-call-only model round', async () => {
          const { config } = await createMockConfig();
          const usageMetadata = {
@@ -104145,7 +104285,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
            (async function* () {
              yield {
                type: 'chunk',
-@@ -2727,23 +3109,24 @@
+@@ -2727,23 +3113,24 @@
  
          const eventEmitter = new AgentEventEmitter();
          const events: AgentRoundTextEvent[] = [];
@@ -104172,7 +104312,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
              round: 1,
              text: '',
              thoughtText: '',
-@@ -2760,26 +3143,28 @@
+@@ -2760,26 +3147,28 @@
            { text: 'The final answer.' as string },
          ]);
          vi.mocked(GeminiChat).mockImplementation(
@@ -104187,23 +104327,16 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          );
  
 -        const scope = await AgentHeadless.create(
--          'test-agent',
--          config,
--          promptConfig,
--          defaultModelConfig,
--          defaultRunConfig,
--        );
--
--        await scope.execute(new ContextState());
 +        const scope = await createRecordedAgent(
 +          new GenerationContext('test-owned-invocation'),
-+          'test-agent',
-+          config,
-+          promptConfig,
-+          defaultModelConfig,
-+          defaultRunConfig,
-+        );
-+
+           'test-agent',
+           config,
+           promptConfig,
+           defaultModelConfig,
+           defaultRunConfig,
+         );
+ 
+-        await scope.execute(new ContextState());
 +        await scope.execute(createTaskContext());
  
          expect(scope.getTerminateMode()).toBe(AgentTerminateMode.GOAL);
@@ -104211,7 +104344,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
        });
  
        it('should not set finalText from thought-only response', async () => {
-@@ -2794,12 +3179,13 @@
+@@ -2794,12 +3183,13 @@
              if (idx === 0) {
                yield {
                  type: 'chunk',
@@ -104225,7 +104358,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
                              text: 'Just thinking...' as string,
                              thought: true,
                            },
-@@ -2812,12 +3198,13 @@
+@@ -2812,12 +3202,13 @@
              } else {
                yield {
                  type: 'chunk',
@@ -104239,7 +104372,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
                      },
                    ],
                  },
-@@ -2826,26 +3213,28 @@
+@@ -2826,26 +3217,28 @@
            })();
          });
          vi.mocked(GeminiChat).mockImplementation(
@@ -104254,23 +104387,16 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          );
  
 -        const scope = await AgentHeadless.create(
--          'test-agent',
--          config,
--          promptConfig,
--          defaultModelConfig,
--          defaultRunConfig,
--        );
--
--        await scope.execute(new ContextState());
 +        const scope = await createRecordedAgent(
 +          new GenerationContext('test-owned-invocation'),
-+          'test-agent',
-+          config,
-+          promptConfig,
-+          defaultModelConfig,
-+          defaultRunConfig,
-+        );
-+
+           'test-agent',
+           config,
+           promptConfig,
+           defaultModelConfig,
+           defaultRunConfig,
+         );
+ 
+-        await scope.execute(new ContextState());
 +        await scope.execute(createTaskContext());
  
          expect(scope.getTerminateMode()).toBe(AgentTerminateMode.GOAL);
@@ -104278,7 +104404,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          // Should have been called twice: first with thought-only, then nudged
          expect(mockSendMessageStream).toHaveBeenCalledTimes(2);
        });
-@@ -2969,23 +3358,24 @@
+@@ -2969,23 +3362,24 @@
            toolCallEvents.push(event as AgentToolCallEvent);
          });
          eventEmitter.on(AgentEventType.TOOL_RESULT, (event: unknown) => {
@@ -104305,7 +104431,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          expect(executedTools).not.toContain('edit_file');
          expect(editFileInvocation.execute).not.toHaveBeenCalled();
  
-@@ -3073,23 +3463,24 @@
+@@ -3073,23 +3467,24 @@
                  ],
                },
              };
@@ -104332,7 +104458,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          );
          expect(writeResult).toBeDefined();
          expect(writeResult!.success).toBe(false);
-@@ -3193,23 +3584,24 @@
+@@ -3193,23 +3588,24 @@
                  ],
                },
              };
@@ -104359,7 +104485,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          );
          expect(writeResult).toBeDefined();
          // After retry the wasOutputTruncated flag must have been cleared, so
-@@ -3220,13 +3612,13 @@
+@@ -3220,13 +3616,13 @@
          );
          expect(writeResult!.error).not.toContain(
            'rejected to prevent writing truncated content',
@@ -104374,7 +104500,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
            parameters: { type: Type.OBJECT, properties: {} },
          };
  
-@@ -3247,23 +3639,22 @@
+@@ -3247,23 +3643,22 @@
          mockSendMessageStream.mockImplementation(async () => {
            callCount++;
            if (callCount === 1) {
@@ -104399,7 +104525,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
                    ],
                  },
                };
-@@ -3290,28 +3681,29 @@
+@@ -3290,28 +3685,29 @@
                  ],
                },
              };
@@ -126347,12 +126473,12 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            counts.promptTokenCount,
 -          counts.outputTokenCount,
 -          counts.isEstimated,
-+          sessionId,
-         );
+-        );
 -      } else {
 -        chat.setLastPromptTokenCount(
 -          uiTelemetryService.getLastPromptTokenCount(),
--        );
++          sessionId,
+         );
 +        chat.setLastServedPromptTokenCount(counts.promptTokenCount);
        }
      } else if (resumedSessionData) {
@@ -126437,15 +126563,13 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      return this.chat;
    }
  
-@@ -557,24 +564,12 @@
-   getHistoryForForkWindow(): Content[] {
-     return this.getChat().getHistoryForForkWindow();
+@@ -559,24 +566,12 @@
    }
  
    getHistoryTail(count: number, curated: boolean = false): Content[] {
      return this.getChat().getHistoryTail(count, curated);
--  }
--
+   }
+ 
 -  private getHistoryTailShallow(
 -    count: number,
 -    curated: boolean = false,
@@ -126456,12 +126580,14 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 -      chat.getHistoryTail?.(count, curated) ??
 -      chat.getHistory(curated).slice(-count)
 -    );
-   }
- 
+-  }
+-
    private peekLastHistoryEntry(): Content | undefined {
      const chat = this.getChat();
      return chat.peekLastHistoryEntry?.() ?? chat.getHistory().at(-1);
    }
+ 
+   private getHistoryLength(): number {
 @@ -891,48 +886,62 @@
          'no_relevant_results',
        );
@@ -126480,12 +126606,11 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 -          `rss=${(memBefore.rss / 1024 / 1024).toFixed(1)}MB`,
 -      );
 -    }
--
 +  async restoreSession(sessionStartSource?: SessionStartSource): Promise<void> {
 +    this.resetSessionState();
 +    await this.initialize(sessionStartSource);
 +  }
-+
+ 
 +  private resetSessionState(): void {
      this.initializedSessionId = undefined;
 +    this.sessionTurnCount = 0;
@@ -126643,7 +126768,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      const attachedSteerPushCount = currentPushCount();
  
      const restoreStrippedRetryEntries = () => {
-@@ -2396,20 +2399,36 @@
+@@ -2396,22 +2399,38 @@
        }
        strippedRetryEntries = [];
      };
@@ -126659,8 +126784,8 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        // `functionResponse` before we synthesize an error one. Doing the
        // repair here would happen pre-push and race against the user
        // content's own pairing.
-+    }
-+
+     }
+ 
 +    if (messageType === SendMessageType.UserQuery) {
 +      const original =
 +        options?.submittedPrompt === undefined
@@ -126674,12 +126799,14 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 +      request = retainUserInput(request, original);
 +    } else if (messageType === SendMessageType.Cron) {
 +      request = retainDelegatedTask(request);
-     }
- 
++    }
++
      // Fire UserPromptSubmit hook through MessageBus (only if hooks are enabled)
      const preHookUserPromptText =
        messageType === SendMessageType.UserQuery
          ? partToString(request)
+         : undefined;
+     if (startsInteraction) {
 @@ -2494,13 +2513,13 @@
              }
              bindGoalStateEvents(runtime);
@@ -126812,7 +126939,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          this.sessionTurnCount++;
  
          if (messageType === SendMessageType.UserQuery) {
-@@ -2867,34 +2905,20 @@
+@@ -2867,35 +2905,21 @@
                  .getFileHistoryService()
                  .getSnapshots()
                  .at(-1);
@@ -126828,7 +126955,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            } catch (e) {
              debugLogger.error(`FileHistory: makeSnapshot failed: ${e}`);
            }
--        }
+         }
 -
 -        if (
 -          this.config.getMaxSessionTurns() > 0 &&
@@ -126842,12 +126969,13 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 -            'max_session_turns',
 -          );
 -          return new Turn(this.getChat(), prompt_id);
-         }
+-        }
        }
  
        // Ensure turns never exceeds MAX_TURNS to prevent infinite loops
        const boundedTurns =
          messageType === SendMessageType.Goal
+           ? MAX_TURNS
 @@ -2914,17 +2938,17 @@
            !signal ||
            signal.aborted ||
@@ -126938,7 +127066,33 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            } else if (event.type === GeminiEventType.Finished) {
              agentOutput.observeFinishReason(event.value?.reason);
            }
-@@ -3469,13 +3462,13 @@
+@@ -3313,12 +3306,25 @@
+             endCurrentInteraction('error', 'loop detected', 'loop_detected');
+             this.cancelPendingMemoryPrefetch('no_safe_delivery_point');
+             this.fireLoopDetectedStopFailure(loopType);
+             return turn;
+           }
+ 
++          // The consecutive-identical guard refuses a repeated call once
++          // before it ends anything. Mark the request so the scheduler
++          // answers it with the reason instead of running it again; the
++          // request object is the one the stream consumer schedules, and
++          // turn.pendingToolCalls holds the same object, so both see the
++          // same decision. Only a further identical call halts, above.
++          if (event.type === GeminiEventType.ToolCallRequest) {
++            const repetitionRefusal = this.loopDetector.takeToolCallRefusal();
++            if (repetitionRefusal) {
++              event.value.repetitionRefusal = repetitionRefusal;
++            }
++          }
++
+           // Heuristic loop detection is opt-in: `model.skipLoopDetection`
+           // defaults to true (see settingsSchema) to avoid false-positive
+           // interruptions. Only the historically false-positive-prone heuristics
+           // (content/thought repetition, read-file and action stagnation,
+           // global-duplicate and alternating tool-call patterns) sit behind this
+           // flag. The precise consecutive-identical guard, shell inspection
+@@ -3469,13 +3475,13 @@
                  submittedPrompt: undefined,
                  steerInput,
                },
@@ -126953,7 +127107,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
            }
            normalCompletion = true;
-@@ -3494,15 +3487,14 @@
+@@ -3494,15 +3500,14 @@
          this.config.hasHooksForEvent('Stop')
        ) {
          const responseText =
@@ -126971,7 +127125,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            HookExecutionRequest,
            HookExecutionResponse
          >(
-@@ -3633,13 +3625,13 @@
+@@ -3633,13 +3638,13 @@
                      reasons: currentReasons,
                    },
                  },
@@ -126986,7 +127140,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
                endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
              }
              normalCompletion = true;
-@@ -3804,13 +3796,13 @@
+@@ -3804,13 +3809,13 @@
                            : currentReasons,
                      },
                },
@@ -127001,7 +127155,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
            }
            // Preserve the pending prefetch: the inner Hook turn we just
-@@ -3834,13 +3826,13 @@
+@@ -3834,13 +3839,13 @@
        if (
          goalPermit &&
          goalRuntime &&
@@ -127016,7 +127170,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          }
          await goalRuntime.finishTurn(goalPermit);
          goalPermitReleased = true;
-@@ -3850,34 +3842,19 @@
+@@ -3850,34 +3855,19 @@
          endCurrentInteraction('ok');
          normalCompletion = true;
          return turn;
@@ -127058,7 +127212,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              this.runManagedAutoMemoryBackgroundTasks(messageType);
            }
            if (arenaAgentClient) {
-@@ -3922,13 +3899,13 @@
+@@ -3922,13 +3912,13 @@
                  submittedPrompt: undefined,
                  steerInput: pendingSteer,
                },
@@ -127073,7 +127227,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
            }
            // Preserve the pending prefetch: same reasoning as the
-@@ -3984,13 +3961,13 @@
+@@ -3984,13 +3974,13 @@
          this.config.endAutomaticActiveTodoWorkChain(prompt_id);
        }
        if (!goalPermitReleased && (callerSignal.aborted || !normalCompletion)) {
@@ -127088,7 +127242,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        // exception thrown out of the streaming loop still ends the message,
        // and buffering hook consumers need the is_final signal). finish() is
        // idempotent, so on the normal paths this resolves immediately.
-@@ -4117,64 +4094,85 @@
+@@ -4117,64 +4107,85 @@
        throw new Error(
          `Failed to generate content with model ${currentAttemptModel}: ${getErrorMessage(error)}`,
        );
@@ -127214,7 +127368,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
     * Surgically disarm FileReadCache entries for files evicted by
     * microcompaction. Falls back to a blanket clear() only when a blanked read
     * cannot be linked to any path; path-level resolution failures are targeted
-@@ -4231,23 +4229,26 @@
+@@ -4231,23 +4242,26 @@
    /**
     * Fast, rule-based compression without any LLM side-query.
     * Delegates to {@link GeminiChat.compressFast} and handles post-compression
@@ -128453,13 +128607,12 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          storage: {
            getProjectTempDir: () => '/tmp',
 -          getToolResultsDir: () => '/tmp/tool-results',
--        },
+         },
 -        getToolResultBytesWritten: () => 0,
 -        trackToolResultBytes: vi.fn(),
 -        getTruncateToolOutputThreshold: () =>
 -          options.truncateToolOutputThreshold ??
 -          DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD,
-+        },
          getTruncateToolOutputLines: () =>
            options.truncateToolOutputLines ?? DEFAULT_TRUNCATE_TOOL_OUTPUT_LINES,
 -        getToolOutputBatchBudget: () =>
@@ -128645,7 +128798,77 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        sessionId: 'session-context',
        promptId: 'prompt-context',
      };
-@@ -1028,13 +1186,12 @@
+@@ -993,12 +1151,69 @@
+ 
+     expect(observedContext).toEqual(invocationContext);
+     expect(observedPromptId).toBe(invocationContext.promptId);
+     expect(observedTodoWorkChainId).toBe('mapped-work-chain');
+   });
+ 
++  it('answers a repeated tool call instead of running it again', async () => {
++    // The consecutive-identical guard marked this call. Every consumer -- the
++    // interactive UI, the headless runner and a subagent's own loop --
++    // schedules through this method, so refusing here is what makes them
++    // answer it identically, and each already feeds an error response back to
++    // the model as that call's result.
++    const readExecute = vi.fn().mockResolvedValue({
++      llmContent: 'read',
++      returnDisplay: 'read',
++    });
++    const toolsByName = new Map<string, MockTool>([
++      [
++        ToolNames.READ_FILE,
++        new MockTool({ name: ToolNames.READ_FILE, execute: readExecute }),
++      ],
++    ]);
++    const { scheduler, onAllToolCallsComplete } =
++      createSchedulerForLegacyToolTests({ toolsByName });
++
++    await scheduler.schedule(
++      [
++        {
++          callId: 'repeat-5',
++          name: ToolNames.READ_FILE,
++          args: { file_path: 'book.txt', limit: 420 },
++          isClientInitiated: false,
++          prompt_id: 'prompt-repetition',
++          repetitionRefusal: {
++            repetitionCount: 5,
++            droppedArgumentNames: ['offset'],
++          },
++        },
++      ],
++      new AbortController().signal,
++    );
++
++    expect(readExecute).not.toHaveBeenCalled();
++    await vi.waitFor(() => {
++      expect(onAllToolCallsComplete).toHaveBeenCalledOnce();
++    });
++    const [call] = onAllToolCallsComplete.mock.calls[0][0] as CompletedToolCall[];
++    expect(call.status).toBe('error');
++    expect(call.response.errorType).toBe(ToolErrorType.EXECUTION_DENIED);
++    const message = call.response.error?.message ?? '';
++    // The model is told the three things it needs to correct the slip: that
++    // the call repeated, that its result cannot differ, and which argument
++    // used to tell one call from the next.
++    expect(message).toContain('call 5 of `read_file`');
++    expect(message).toContain('the same arguments as the call before it');
++    expect(message).toContain('`offset`');
++    expect(message).toContain('Issuing this exact call again ends the run.');
++    // And it reaches the model as that call's result, not as prose.
++    expect(
++      call.response.responseParts[0]?.functionResponse?.response?.['error'],
++    ).toBe(message);
++  });
++
+   it('isolates enter_plan_mode as a batch boundary and preserves its full reminder', async () => {
+     const reminder = getPlanModeSystemReminder(false);
+     const writeExecute = vi.fn().mockResolvedValue({
+       llmContent: 'wrote',
+       returnDisplay: 'wrote',
+     });
+@@ -1028,13 +1243,12 @@
          new MockTool({ name: ToolNames.WRITE_FILE, execute: writeExecute }),
        ],
        [
@@ -128659,7 +128882,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        [
          ToolNames.READ_FILE,
          new MockTool({ name: ToolNames.READ_FILE, execute: readExecute }),
-@@ -1042,15 +1199,13 @@
+@@ -1042,15 +1256,13 @@
      ]);
      const { scheduler, ensureTool, onAllToolCallsComplete } =
        createSchedulerForLegacyToolTests({
@@ -128675,7 +128898,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        contentGeneratorConfig: { model: 'vision-agent' },
      } as RuntimeContentGeneratorView;
  
-@@ -1289,28 +1444,39 @@
+@@ -1289,28 +1501,39 @@
      );
      await vi.waitFor(() => expect(onAllToolCallsComplete).toHaveBeenCalled());
      expect(execute).toHaveBeenCalledWith({ plan: 'Original plan' });
@@ -128684,6 +128907,15 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
    function createChatWithPlanCall(callId: string, plan: string): GeminiChat {
 -    return new GeminiChat({} as unknown as Config, {}, [
 -      { role: 'user', parts: [{ text: 'please plan this' }] },
+-      {
+-        role: 'model',
+-        parts: [
+-          { text: 'Here is my plan.' },
+-          {
+-            functionCall: {
+-              id: callId,
+-              name: ToolNames.EXIT_PLAN_MODE,
+-              args: { plan, originalRequest: 'please plan this' },
 +    return new GeminiChat(
 +      {} as unknown as Config,
 +      new GenerationContext('test-owned-invocation'),
@@ -128700,22 +128932,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 +                name: ToolNames.EXIT_PLAN_MODE,
 +                args: { plan, originalRequest: 'please plan this' },
 +              },
-+            },
+             },
+-          },
+-        ],
 +          ],
 +        },
 +      ],
-       {
--        role: 'model',
--        parts: [
--          { text: 'Here is my plan.' },
--          {
--            functionCall: {
--              id: callId,
--              name: ToolNames.EXIT_PLAN_MODE,
--              args: { plan, originalRequest: 'please plan this' },
--            },
--          },
--        ],
++      {
 +        recordAssistantTurn: vi.fn().mockResolvedValue(undefined),
 +        recordChatCompression: vi.fn().mockResolvedValue(undefined),
 +        recordGenerationFailure: vi.fn().mockResolvedValue(undefined),
@@ -128729,7 +128952,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const bigPlan = '## Plan\n\n1. huge section\n2. code blocks\n3. tables';
      const planFile = path.join(
        os.tmpdir(),
-@@ -2423,43 +2589,12 @@
+@@ -2423,43 +2646,12 @@
        ? ((call.response.responseParts[0]?.functionResponse?.response?.[
            'output'
          ] as string) ?? '')
@@ -128773,15 +128996,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        returnDisplay: 'small',
      });
      const toolsByName = new Map<string, MockTool>([
-@@ -2533,671 +2668,12 @@
-             },
-           },
+@@ -2535,671 +2727,12 @@
          },
        ]);
        expect(completedCall.response.resultDisplay).toBe('completed');
      }
--  });
--
+   });
+ 
 -  it('applies the per-tool budget for a tool invoked via a legacy alias', async () => {
 -    // Regression (C1): limitsTool read getTool(request.name) with the raw alias
 -    // ('task'), which the registry stores only under the canonical name
@@ -129439,13 +129660,15 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 -      'Tool output was too large and has been truncated',
 -    );
 -    expect(output).toBe(content);
-   });
- 
+-  });
+-
    it('schedules a memory pressure check after tool execution', async () => {
      const execute = vi.fn().mockResolvedValue({
        llmContent: 'ok',
        returnDisplay: 'ok',
-@@ -5626,12 +5102,13 @@
+     });
+     const toolsByName = new Map<string, MockTool>([
+@@ -5626,12 +5159,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129459,7 +129682,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -5642,14 +5119,12 @@
+@@ -5642,14 +5176,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -129474,7 +129697,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null, // No client needed for these tests
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -5709,12 +5184,13 @@
+@@ -5709,12 +5241,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129488,7 +129711,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -5725,14 +5201,12 @@
+@@ -5725,14 +5258,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -129503,7 +129726,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -5796,12 +5270,13 @@
+@@ -5796,12 +5327,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129517,7 +129740,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -5812,14 +5287,12 @@
+@@ -5812,14 +5344,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -129532,7 +129755,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -6238,12 +5711,13 @@
+@@ -6238,12 +5768,13 @@
          discoverTools: async () => {},
          getAllTools: () => [],
          getToolsByServer: () => [],
@@ -129546,7 +129769,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.DEFAULT,
          getPermissionsAllow: () => [],
          getPermissionsDeny: () => ['write_file', 'edit', 'run_shell_command'],
-@@ -6254,18 +5728,13 @@
+@@ -6254,18 +5785,13 @@
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
            terminalHeight: 30,
@@ -129554,19 +129777,18 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          storage: {
            getProjectTempDir: () => '/tmp',
 -          getToolResultsDir: () => '/tmp/tool-results',
--        },
+         },
 -        getToolResultBytesWritten: () => 0,
 -        trackToolResultBytes: vi.fn(),
 -        getTruncateToolOutputThreshold: () =>
 -          DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD,
-+        },
          getTruncateToolOutputLines: () => DEFAULT_TRUNCATE_TOOL_OUTPUT_LINES,
          getToolRegistry: () => mockToolRegistry,
          getUseModelRouter: () => false,
          getGeminiClient: () => null,
          getChatRecordingService: () => undefined,
          getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -6330,12 +5799,13 @@
+@@ -6330,12 +5856,13 @@
          discoverTools: async () => {},
          getAllTools: () => [],
          getToolsByServer: () => [],
@@ -129580,7 +129802,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.DEFAULT,
          getPermissionsAllow: () => [],
          getPermissionsDeny: () => ['write_file', 'edit'], // Different excluded tools
-@@ -6346,18 +5816,13 @@
+@@ -6346,18 +5873,13 @@
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
            terminalHeight: 30,
@@ -129588,19 +129810,18 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          storage: {
            getProjectTempDir: () => '/tmp',
 -          getToolResultsDir: () => '/tmp/tool-results',
--        },
+         },
 -        getToolResultBytesWritten: () => 0,
 -        trackToolResultBytes: vi.fn(),
 -        getTruncateToolOutputThreshold: () =>
 -          DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD,
-+        },
          getTruncateToolOutputLines: () => DEFAULT_TRUNCATE_TOOL_OUTPUT_LINES,
          getToolRegistry: () => mockToolRegistry,
          getUseModelRouter: () => false,
          getGeminiClient: () => null,
          getChatRecordingService: () => undefined,
          getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -6426,12 +5891,13 @@
+@@ -6426,12 +5948,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129614,7 +129835,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -6442,14 +5908,12 @@
+@@ -6442,14 +5965,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -129629,7 +129850,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null, // No client needed for these tests
        isInteractive: () => true, // Required to prevent auto-denial of tool calls
        getIdeMode: () => false,
-@@ -6856,12 +6320,13 @@
+@@ -6856,12 +6377,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129643,7 +129864,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -6965,12 +6430,13 @@
+@@ -6965,12 +6487,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
  
@@ -129657,7 +129878,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -6979,13 +6445,12 @@
+@@ -6979,13 +6502,12 @@
        }),
        getToolRegistry: () => mockToolRegistry,
        getShellExecutionConfig: () => ({
@@ -129671,7 +129892,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        isInteractive: () => isInteractive,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
-@@ -7082,12 +6547,13 @@
+@@ -7082,12 +6604,13 @@
  
      const onAllToolCallsComplete = vi.fn();
      const onToolCallsUpdate = vi.fn();
@@ -129685,7 +129906,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -7099,14 +6565,12 @@
+@@ -7099,14 +6622,12 @@
          terminalHeight: 30,
        }),
        storage: {
@@ -129700,7 +129921,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
-@@ -7235,12 +6699,13 @@
+@@ -7235,12 +6756,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129714,21 +129935,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -7389,12 +6854,13 @@
-     } as unknown as ToolRegistry;
- 
-     const onAllToolCallsComplete = vi.fn();
-     const onToolCallsUpdate = vi.fn();
-     const outputUpdateHandler = vi.fn();
-     const mockConfig = {
-+      assertRuntimeContractAvailable: () => {},
-       getSessionId: () => 'test-session-id',
-       getUsageStatisticsEnabled: () => true,
-       getDebugMode: () => false,
-       getApprovalMode: () => ApprovalMode.DEFAULT,
-       getContentGeneratorConfig: () => ({
-         model: 'test-model',
-@@ -7526,12 +6992,13 @@
+@@ -7389,12 +6911,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129742,7 +129949,21 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -7641,12 +7108,13 @@
+@@ -7526,12 +7049,13 @@
+     } as unknown as ToolRegistry;
+ 
+     const onAllToolCallsComplete = vi.fn();
+     const onToolCallsUpdate = vi.fn();
+     const outputUpdateHandler = vi.fn();
+     const mockConfig = {
++      assertRuntimeContractAvailable: () => {},
+       getSessionId: () => 'test-session-id',
+       getUsageStatisticsEnabled: () => true,
+       getDebugMode: () => false,
+       getApprovalMode: () => ApprovalMode.DEFAULT,
+       getContentGeneratorConfig: () => ({
+         model: 'test-model',
+@@ -7641,12 +7165,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129756,7 +129977,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO, // Use YOLO to avoid confirmation prompts
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -7657,14 +7125,12 @@
+@@ -7657,14 +7182,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -129771,7 +129992,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null, // No client needed for these tests
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -7767,12 +7233,13 @@
+@@ -7767,12 +7290,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
      const onAllToolCallsComplete = vi.fn();
@@ -129785,7 +130006,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -7783,14 +7250,12 @@
+@@ -7783,14 +7307,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -129800,7 +130021,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null, // No client needed for these tests
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -7843,12 +7308,13 @@
+@@ -7843,12 +7365,13 @@
      expect(onAllToolCallsComplete).toHaveBeenCalledTimes(2);
    });
  
@@ -129814,7 +130035,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => approvalMode,
        getPermissionsAllow: () => [],
        setApprovalMode: (mode: ApprovalMode) => {
-@@ -7858,14 +7324,12 @@
+@@ -7858,14 +7381,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -129829,7 +130050,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        isInteractive: () => true, // Required to prevent auto-denial of tool calls
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
-@@ -8052,12 +7516,13 @@
+@@ -8052,12 +7573,13 @@
        findMatchingDenyRule: vi.fn(),
      };
      const toolRegistry = {
@@ -129843,7 +130064,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO,
        getTargetDir: () => cwd,
        getCwd: () => cwd,
-@@ -8322,12 +7787,13 @@
+@@ -8322,12 +7844,13 @@
        getAllToolNames: () => toolNames,
        getFunctionDeclarations: () => [],
        tools: new Map(),
@@ -129857,7 +130078,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getPermissionsDeny: () => undefined,
-@@ -8339,14 +7805,12 @@
+@@ -8339,14 +7862,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -129872,7 +130093,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        isInteractive: () => true,
-@@ -8631,12 +8095,13 @@
+@@ -8631,12 +8152,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129886,7 +130107,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO, // Use YOLO to avoid confirmation prompts
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -8648,14 +8113,12 @@
+@@ -8648,14 +8170,12 @@
          terminalHeight: 30,
        }),
        storage: {
@@ -129901,7 +130122,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
-@@ -8754,12 +8217,13 @@
+@@ -8754,12 +8274,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -129915,7 +130136,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -8771,14 +8235,12 @@
+@@ -8771,14 +8292,12 @@
          terminalHeight: 30,
        }),
        storage: {
@@ -129930,7 +130151,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
-@@ -8940,12 +8402,13 @@
+@@ -8940,12 +8459,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -129944,7 +130165,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.PLAN,
        getSdkMode: () => options.sdkMode ?? false,
        getPermissionsAllow: () => [],
-@@ -8957,14 +8420,12 @@
+@@ -8957,14 +8477,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -129959,7 +130180,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getConditionalRulesRegistry: () => undefined,
        getSkillManager: () => undefined,
        getUseModelRouter: () => false,
-@@ -9144,13 +8605,17 @@
+@@ -9144,13 +8662,17 @@
  
    it.each([
      {
@@ -129978,7 +130199,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        promptId: 'prompt-plan-teammate-blocked',
        run: (schedule: () => Promise<void>) =>
          runWithTeammateIdentity(
-@@ -9764,12 +9229,13 @@
+@@ -9764,12 +9286,13 @@
        getAllTools: () => [...tools.values()],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -129992,7 +130213,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: options.mode ?? (() => ApprovalMode.PLAN),
        getApprovalModeRevision: options.revision ?? (() => 0),
        getSdkMode: () => false,
-@@ -9780,14 +9246,12 @@
+@@ -9780,14 +9303,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130007,7 +130228,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getTargetDir: options.targetDir ?? (() => '/tmp'),
        getConditionalRulesRegistry: () => undefined,
        getSkillManager: () => undefined,
-@@ -10602,12 +10066,13 @@
+@@ -10602,12 +10123,13 @@
        discoverTools: async () => {},
        getAllTools: () => tools,
        getToolsByServer: () => [],
@@ -130021,7 +130242,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -10616,14 +10081,12 @@
+@@ -10616,14 +10138,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130036,7 +130257,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(options.messageBus),
-@@ -11058,18 +10521,29 @@
+@@ -11058,18 +10578,29 @@
        }),
      });
  
@@ -130067,7 +130288,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        },
      });
    });
-@@ -11620,18 +11094,17 @@
+@@ -11620,18 +11151,17 @@
        executionStatus: 'error',
        errorType: ToolErrorType.EXECUTION_TIMEOUT,
        cancelled: false,
@@ -130078,12 +130299,11 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 -  // happened. Saying "already completed" for a tool interrupted mid-flight
 -  // makes the model skip work that never ran; saying "cancelled" for a tool
 -  // that finished makes it redo work whose side effects already landed.
--
--  it('tells the model a mid-flight cancellation never completed', async () => {
 +  // Cancellation is not rollback. Once execute() starts, the scheduler must
 +  // report an uncertain outcome unless it knows execution returned; either
 +  // state requires inspection before a non-idempotent operation is repeated.
-+
+ 
+-  it('tells the model a mid-flight cancellation never completed', async () => {
 +  it('tells the model a mid-flight cancellation has an unknown outcome', async () => {
      const abortController = new AbortController();
      const { completedCalls } = await runSingleTool({
@@ -130091,7 +130311,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        execute: vi.fn().mockImplementation(
          () =>
            new Promise<ToolResult>((_resolve, reject) => {
-@@ -11646,17 +11119,19 @@
+@@ -11646,17 +11176,19 @@
      });
  
      const completedCall = completedCalls[0] as CompletedToolCall;
@@ -130100,15 +130320,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const responseText = JSON.stringify(completedCall.response.responseParts);
 -    expect(responseText).toContain('User cancelled tool execution.');
 -    expect(responseText).not.toContain('had already completed');
--  });
--
--  it('tells the model a post-completion cancellation discarded finished work', async () => {
 +    expect(responseText).toContain(
 +      'outcome may be partial, complete, or unknown',
 +    );
 +    expect(responseText).toContain('do not assume rollback');
-+  });
-+
+   });
+ 
+-  it('tells the model a post-completion cancellation discarded finished work', async () => {
 +  it('tells the model a post-completion result that effects may exist', async () => {
      const abortController = new AbortController();
      const { completedCalls } = await runSingleTool({
@@ -130116,7 +130334,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        execute: vi.fn().mockImplementation(async () => {
          abortController.abort();
          return { llmContent: 'done', returnDisplay: 'done' };
-@@ -11664,14 +11139,14 @@
+@@ -11664,14 +11196,14 @@
      });
  
      const completedCall = completedCalls[0] as CompletedToolCall;
@@ -130133,7 +130351,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
    // references to files the tool already spilled to disk must survive —
    // otherwise nothing points at them and they are orphaned (#8180 review).
  
-@@ -12794,12 +12269,13 @@
+@@ -12794,12 +12326,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -130147,7 +130365,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -13279,12 +12755,13 @@
+@@ -13279,12 +12812,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -130161,7 +130379,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -13382,12 +12859,13 @@
+@@ -13382,12 +12916,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -130175,7 +130393,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -13396,14 +12874,12 @@
+@@ -13396,14 +12931,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130190,7 +130408,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        isInteractive: () => true,
-@@ -13602,21 +13078,21 @@
+@@ -13602,21 +13135,21 @@
      expect(completedCalls[0].status).toBe('error');
      expect(
        (completedCalls[0] as CompletedToolCall).response.executionStatus,
@@ -130214,7 +130432,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      expect(toolSpan?.spanAttributes['tool.failure_kind']).toBe(
        'tool_exception',
      );
-@@ -13665,12 +13141,13 @@
+@@ -13665,12 +13198,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -130228,7 +130446,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13736,12 +13213,13 @@
+@@ -13736,12 +13270,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -130242,7 +130460,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13822,12 +13300,13 @@
+@@ -13822,12 +13357,13 @@
              decision: { behavior: 'deny', message: 'policy says no' },
            },
          },
@@ -130256,7 +130474,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13895,12 +13374,13 @@
+@@ -13895,12 +13431,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -130270,7 +130488,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -14026,12 +13506,13 @@
+@@ -14026,12 +13563,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -130284,7 +130502,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -14133,25 +13614,24 @@
+@@ -14133,25 +13671,24 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
      // The auto-approve YOLO path doesn't call _schedule's getMessageBus
@@ -130311,7 +130529,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn(() => {
-@@ -14298,12 +13778,13 @@
+@@ -14298,12 +13835,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -130325,7 +130543,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.PLAN,
        getSdkMode: () => false,
        getPermissionsAllow: () => [],
-@@ -14485,20 +13966,20 @@
+@@ -14485,20 +14023,20 @@
          throwingOnConfirm,
          ToolConfirmationOutcome.ProceedOnce,
          abortController.signal,
@@ -130348,7 +130566,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        code: SpanStatusCode.UNSET,
      });
      expect(toolSpan?.spanAttributes['tool.failure_kind']).toBe('cancelled');
-@@ -14535,12 +14016,13 @@
+@@ -14535,12 +14073,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -130362,7 +130580,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -15173,12 +14655,13 @@
+@@ -15173,12 +14712,13 @@
          discoverTools: async () => {},
          getAllTools: () => [...tools.values()],
          getToolsByServer: () => [],
@@ -130376,7 +130594,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.AUTO_EDIT,
          getAllowedTools: () => [],
          getContentGeneratorConfig: () => ({
-@@ -15188,18 +14671,13 @@
+@@ -15188,18 +14728,13 @@
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
            terminalHeight: 30,
@@ -130384,19 +130602,18 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          storage: {
            getProjectTempDir: () => '/tmp',
 -          getToolResultsDir: () => '/tmp/tool-results',
--        },
+         },
 -        getToolResultBytesWritten: () => 0,
 -        trackToolResultBytes: vi.fn(),
 -        getTruncateToolOutputThreshold: () =>
 -          DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD,
-+        },
          getTruncateToolOutputLines: () => DEFAULT_TRUNCATE_TOOL_OUTPUT_LINES,
          getToolRegistry: () => mockToolRegistry,
          getUseModelRouter: () => false,
          getGeminiClient: () => null,
          getChatRecordingService: () => undefined,
          getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -15852,12 +15330,13 @@
+@@ -15852,12 +15387,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -130410,7 +130627,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => overrides.approvalMode ?? ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -15868,14 +15347,12 @@
+@@ -15868,14 +15404,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -130425,7 +130642,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        isInteractive: () => true,
        getIdeMode: () => overrides.ideMode ?? true,
-@@ -16288,12 +15765,13 @@
+@@ -16288,12 +15822,13 @@
        getAllTools: () => [],
        getAllToolNames: () => [StrictStringTool.Name],
        getToolsByServer: () => [],
@@ -130439,7 +130656,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -16302,13 +15780,12 @@
+@@ -16302,13 +15837,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130453,7 +130670,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        isInteractive: () => true,
        getIdeMode: () => false,
-@@ -16370,13 +15847,13 @@
+@@ -16370,13 +15904,13 @@
    }
  
    it('should inject RETRY LOOP DETECTED directive after 3 consecutive validation failures', async () => {
@@ -130468,7 +130685,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      );
      let msg = getLastErrorMessage(onToolCallsUpdate);
      expect(msg).toBeDefined();
-@@ -16632,12 +16109,13 @@
+@@ -16632,12 +16166,13 @@
        getAllTools: () => [],
        getAllToolNames: () => [StrictStringTool.Name, StrictToolAlt.Name],
        getToolsByServer: () => [],
@@ -130482,7 +130699,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -16646,13 +16124,12 @@
+@@ -16646,13 +16181,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130496,7 +130713,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        isInteractive: () => true,
        getIdeMode: () => false,
-@@ -17040,12 +16517,13 @@
+@@ -17040,12 +16574,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -130510,7 +130727,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17054,14 +16532,12 @@
+@@ -17054,14 +16589,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130525,7 +130742,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17251,12 +16727,13 @@
+@@ -17251,12 +16784,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -130539,7 +130756,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.YOLO,
          getPermissionsAllow: () => [],
          getContentGeneratorConfig: () => ({
-@@ -17265,14 +16742,12 @@
+@@ -17265,14 +16799,12 @@
          }),
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
@@ -130554,7 +130771,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getGeminiClient: () => null,
          getChatRecordingService: () => undefined,
          getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17368,12 +16843,13 @@
+@@ -17368,12 +16900,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -130568,7 +130785,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17382,14 +16858,12 @@
+@@ -17382,14 +16915,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130583,7 +130800,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17488,12 +16962,13 @@
+@@ -17488,12 +17019,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -130597,7 +130814,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17502,14 +16977,12 @@
+@@ -17502,14 +17034,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130612,7 +130829,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17583,12 +17056,13 @@
+@@ -17583,12 +17113,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -130626,7 +130843,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17597,14 +17071,12 @@
+@@ -17597,14 +17128,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130641,7 +130858,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17679,12 +17151,13 @@
+@@ -17679,12 +17208,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -130655,7 +130872,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17693,14 +17166,12 @@
+@@ -17693,14 +17223,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -130670,7 +130887,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17920,12 +17391,13 @@
+@@ -17920,12 +17448,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
  
@@ -130684,7 +130901,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -18062,12 +17534,13 @@
+@@ -18062,12 +17591,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -130698,7 +130915,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18144,12 +17617,13 @@
+@@ -18144,12 +17674,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -130712,7 +130929,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18217,12 +17691,13 @@
+@@ -18217,12 +17748,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -130726,7 +130943,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18291,12 +17766,13 @@
+@@ -18291,12 +17823,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -130740,7 +130957,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18348,6 +17824,64 @@
+@@ -18348,6 +17881,64 @@
  
      await vi.waitFor(() => {
        expect(onAllToolCallsComplete).toHaveBeenCalled();
@@ -130822,7 +131039,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    ToolExecutionStatus,
    ToolCallConfirmationDetails,
    ToolResult,
-@@ -33,22 +34,12 @@
+@@ -33,30 +34,21 @@
    firePermissionRequestHook,
    appendAdditionalContext,
  } from './toolHookTriggers.js';
@@ -130845,7 +131062,16 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    logToolCall,
    ToolErrorType,
    ToolCallEvent,
-@@ -78,16 +69,12 @@
+   InputFormat,
+   Kind,
++  repeatedToolCallMessage,
+ } from '../index.js';
+ import type {
+   FunctionResponse,
+   FunctionResponsePart,
+   Part,
+   PartListUnion,
+@@ -78,16 +70,12 @@
  } from '../utils/promptIdContext.js';
  import { unescapePath, PATH_ARG_KEYS } from '../utils/paths.js';
  import type { MemoryPressureMonitor } from '../services/memoryPressureMonitor.js';
@@ -130862,7 +131088,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  } from './permission-helpers.js';
  import {
    evaluatePermissionFlow,
-@@ -127,12 +114,17 @@
+@@ -127,12 +115,17 @@
  } from '../permissions/denialTracking.js';
  import {
    getResponseTextFromParts,
@@ -130880,7 +131106,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  } from '../tools/modifiable-tool.js';
  import * as Diff from 'diff';
  import levenshtein from 'fast-levenshtein';
-@@ -226,27 +218,12 @@
+@@ -226,27 +219,12 @@
  ): T {
    return request.goalContext
      ? goalTurnContext.run(request.goalContext, callback)
@@ -130908,7 +131134,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      const parts = toParts(c);
      return parts.map((p) => p.text ?? '').join('\n');
    }
-@@ -295,15 +272,15 @@
+@@ -295,15 +273,15 @@
  // The cancellation notice handed to the model depends on whether the tool's
  // work actually finished. Claiming a tool "already completed" when it was
  // interrupted mid-flight makes the model skip work that never happened; the
@@ -130926,7 +131152,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
   * execution timeout. Reported as a normal tool error so the model can adapt
   * (narrow scope, retry, etc.) instead of the session hanging.
   */
-@@ -849,12 +826,51 @@
+@@ -849,12 +827,51 @@
    }
  
    // Default case for other kinds of parts.
@@ -130978,7 +131204,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    llmContent: PartListUnion,
    fallbackError: string,
  ): Part[] {
-@@ -920,30 +936,39 @@
+@@ -920,30 +937,39 @@
    request: ToolCallRequestInfo,
    error: Error,
    errorType: ToolErrorType,
@@ -131035,7 +131261,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    reason: string,
    executionStatus: ToolExecutionStatus,
    artifacts?: ToolArtifact[],
-@@ -1738,13 +1763,13 @@
+@@ -1738,13 +1764,13 @@
      toolSpan = this.toolSpans.get(callId),
    ): boolean {
      if (!signal.aborted) return false;
@@ -131050,7 +131276,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      if (toolSpan) {
        setToolSpanCancelled(toolSpan);
      }
-@@ -1920,49 +1945,26 @@
+@@ -1920,49 +1946,26 @@
        ? { success: false, error: r.hookError }
        : {
            success: true,
@@ -131102,7 +131328,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        };
        throw err;
      } finally {
-@@ -1986,13 +1988,13 @@
+@@ -1986,13 +1989,13 @@
      tool: AnyDeclarativeTool,
      args: object,
      callId?: string,
@@ -131117,7 +131343,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            maybeAware.setCallId(callId);
          }
        }
-@@ -2307,13 +2309,13 @@
+@@ -2307,23 +2310,48 @@
            if (!signal.aborted) return false;
            newToolCalls.push({
              status: 'cancelled',
@@ -131132,7 +131358,42 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              ...(resolvedInvocation ? { invocation: resolvedInvocation } : {}),
              durationMs: 0,
            });
-@@ -3510,12 +3512,13 @@
+           return true;
+         };
+         try {
+           if (recordPrevalidationCancellation()) continue;
++          // The consecutive-identical guard already decided this call must be
++          // answered rather than run. Refusing here, rather than in each
++          // caller, is what makes the answer the same for the interactive UI,
++          // the headless runner and a subagent's own loop: all three schedule
++          // through this one method, and all three already feed an error
++          // response back to the model as that call's result.
++          if (reqInfo.repetitionRefusal) {
++            newToolCalls.push({
++              status: 'error',
++              request: reqInfo,
++              response: createErrorResponse(
++                reqInfo,
++                new Error(
++                  repeatedToolCallMessage(
++                    reqInfo.name,
++                    reqInfo.repetitionRefusal,
++                  ),
++                ),
++                ToolErrorType.EXECUTION_DENIED,
++                'not_started',
++              ),
++              durationMs: 0,
++            });
++            continue;
++          }
+           if (
+             planModeEntryBoundaryIndex !== undefined &&
+             requestIndex !== planModeEntryBoundaryIndex
+           ) {
+             newToolCalls.push({
+               status: 'error',
+@@ -3510,12 +3538,13 @@
                call_id: reqInfo.callId,
              });
              this.blockedSpans.set(reqInfo.callId, blockedSpan);
@@ -131146,7 +131407,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                  NotificationType.PermissionPrompt,
                  'Permission needed',
                ).catch((error) => {
-@@ -3671,12 +3674,28 @@
+@@ -3671,12 +3700,28 @@
        // Branch on signal.aborted so a throw caused by the abort signal
        // (e.g. ModifyWithEditor child interrupted by Ctrl+C) lands as
        // 'aborted'/'system' + UNSET status — matching the sister catch
@@ -131175,7 +131436,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            'cancelled',
            'Tool call cancelled by user.',
            'not_started',
-@@ -3691,24 +3710,12 @@
+@@ -3691,24 +3736,12 @@
              ToolErrorType.UNHANDLED_EXCEPTION,
              'not_started',
            ),
@@ -131200,7 +131461,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        // grepping logs by callId would otherwise see nothing if the
        // caller doesn't log the rejection itself (#4321 review-5
        // wenshao Suggestion).
-@@ -3834,15 +3841,13 @@
+@@ -3834,15 +3867,13 @@
          // filesystem paths (request.args may still hold escaped values
          // since buildInvocation normalizes a structuredClone) — UNLESS this
          // tool was bounced by a PreToolUse 'ask', in which case
@@ -131217,7 +131478,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                (normalizedArgs as Record<string, unknown>)[key] = unescapePath(
                  String(normalizedArgs[key]).trim(),
                );
-@@ -3864,13 +3869,13 @@
+@@ -3864,13 +3895,13 @@
            fileDiff: updatedDiff,
            isModifying: false,
          } as ToolCallConfirmationDetails);
@@ -131232,7 +131493,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              payload,
              signal,
            ))
-@@ -4010,13 +4015,13 @@
+@@ -4010,13 +4041,13 @@
      signal: AbortSignal,
    ): Promise<boolean> {
      const confirmDetails = toolCall.confirmationDetails;
@@ -131247,7 +131508,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  
      const currentContent = confirmDetails.originalContent ?? '';
      const modifyContext = toolCall.tool.getModifyContext(signal);
-@@ -4311,12 +4316,13 @@
+@@ -4311,12 +4342,13 @@
      });
      this.blockedSpans.set(callId, blockedSpan);
  
@@ -131261,7 +131522,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          NotificationType.PermissionPrompt,
          'Permission needed',
        ).catch((error) => {
-@@ -4348,12 +4354,13 @@
+@@ -4348,12 +4380,13 @@
  
    private async _executeToolCallBody(
      scheduledCall: ScheduledToolCall,
@@ -131275,7 +131536,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      const toolInput = scheduledCall.request.args as Record<string, unknown>;
  
      // Re-execution after the user approved a PreToolUse 'ask' bounce: the
-@@ -4469,12 +4476,13 @@
+@@ -4469,12 +4502,13 @@
            TOOL_SPAN_STATUS_PRE_HOOK_BLOCKED,
          );
          return;
@@ -131289,7 +131550,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        const guardDecision = await evaluateToolInvocationGuard(
          toolInvocationGuard,
          {
-@@ -4490,13 +4498,13 @@
+@@ -4490,13 +4524,13 @@
        if (signal.aborted) {
          this.setStatusInternal(
            callId,
@@ -131304,7 +131565,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          if (this.toolSpans.has(callId)) {
            setToolSpanCancelled(span);
          }
-@@ -4531,13 +4539,13 @@
+@@ -4531,13 +4565,13 @@
        ) {
          this.setStatusInternal(
            callId,
@@ -131319,7 +131580,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          if (this.toolSpans.has(callId)) {
            setToolSpanCancelled(span);
          }
-@@ -4674,12 +4682,13 @@
+@@ -4674,12 +4708,13 @@
              // boundary so setup failures remain not_started.
              this.setStatusInternal(callId, 'executing');
              execSpan = startToolExecutionSpan({
@@ -131333,7 +131594,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                liveOutputCallback,
                shellExecutionConfig,
                setPidCallback,
-@@ -4696,12 +4705,13 @@
+@@ -4696,12 +4731,13 @@
              // boundary so setup failures remain not_started.
              this.setStatusInternal(callId, 'executing');
              execSpan = startToolExecutionSpan({
@@ -131347,7 +131608,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                liveOutputCallback,
                shellExecutionConfig,
              );
-@@ -4861,23 +4871,15 @@
+@@ -4861,23 +4897,15 @@
          setToolSpanCancelled(span);
          return true;
        };
@@ -131372,14 +131633,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          // Deferred metadata: PostToolUse hook context and skill/rule reminders
          // are captured here and appended AFTER the model-facing truncation
          // below, so the head/tail truncator never bisects a <system-reminder>
-@@ -4961,22 +4963,12 @@
-               TOOL_FAILURE_KIND_POST_HOOK_STOPPED,
+@@ -4962,22 +4990,12 @@
                TOOL_SPAN_STATUS_POST_HOOK_STOPPED,
              );
              return;
            }
          }
--
+ 
 -        // Universal post-execution truncation gate — persists oversized
 -        // tool results to disk before system-reminders are appended.
 -        const persisted = await this.maybePersistLargeToolResult(
@@ -131389,13 +131649,14 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
 -        );
 -        content = persisted.content;
 -        mergePersistedOutputFiles(persisted.persistedOutputFiles);
- 
+-
          // Collect filesystem paths the tool just touched. Different tools
          // use different parameter names: `file_path` (read/edit/write),
          // `path` (ls, glob), `filePath` (grep, lsp), and `paths`
          // (ripGrep array form). Conditional rules and skill activation
          // both key off the same path set, so inspect the union — and
-@@ -5086,125 +5078,31 @@
+         // gate the inspection on a tool-name allowlist (see
+@@ -5086,125 +5104,31 @@
              const body = escapeSystemReminderTags(reminderBlocks.join('\n\n'));
              // Capture; appended after the model-facing truncation below.
              reminderEnvelope = `<system-reminder>\n${body}\n</system-reminder>`;
@@ -131528,7 +131789,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          const convertedResponse = convertToFunctionResponse(
            toolName,
            callId,
-@@ -5330,13 +5228,13 @@
+@@ -5330,13 +5254,13 @@
          }
        } else {
          // It is a failure
@@ -131543,7 +131804,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          let failureHookArtifacts: ToolArtifact[] | undefined;
          if (hooksEnabled && messageBus) {
            const failureHookResult = await this.withHookSpan(
-@@ -5370,21 +5268,16 @@
+@@ -5370,21 +5294,16 @@
              }
            }
            failureHookArtifacts = failureHookResult.artifacts;
@@ -131566,7 +131827,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              const lastIndex = responseParts.length - 1;
              responseParts = [...responseParts];
              responseParts[lastIndex] = appendContextToResponsePart(
-@@ -5404,21 +5297,15 @@
+@@ -5404,21 +5323,15 @@
            }, 0);
            const artifacts = [
              ...(toolResult.artifacts ?? []),
@@ -131590,7 +131851,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                visionBridgeNotice: processedImages.visionBridgeNotice,
              })
            ) {
-@@ -5450,33 +5337,20 @@
+@@ -5450,33 +5363,20 @@
              TOOL_FAILURE_KIND_TIMEOUT,
              TOOL_SPAN_STATUS_TOOL_TIMEOUT,
            );
@@ -131632,7 +131893,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            scheduledCall.request,
            error,
            executionErrorType ?? ToolErrorType.UNKNOWN,
-@@ -5484,12 +5358,13 @@
+@@ -5484,12 +5384,13 @@
            failureHookArtifacts,
            typeof toolResult.returnDisplay === 'string'
              ? undefined
@@ -131646,7 +131907,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              new Set(errorPersistedOutputFiles),
            );
          }
-@@ -5557,23 +5432,52 @@
+@@ -5557,23 +5458,52 @@
            span,
            TOOL_FAILURE_KIND_TOOL_ERROR,
            TOOL_SPAN_STATUS_TOOL_ERROR,
@@ -131701,7 +131962,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        const executionTimedOut =
          executionThrew && explicitErrorType === ToolErrorType.EXECUTION_TIMEOUT;
        const aborted = signal.aborted && !executionTimedOut;
-@@ -5682,12 +5586,13 @@
+@@ -5682,12 +5612,13 @@
            if (failureHookResult.additionalContext) {
              exceptionErrorMessage += `\n\n${failureHookResult.additionalContext}`;
            }
@@ -131715,7 +131976,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              createCancelledResponse(
                scheduledCall.request,
                // The abort landed while the failure hook was running; the
-@@ -5696,15 +5601,19 @@
+@@ -5696,15 +5627,19 @@
                  ? TOOL_CANCELLED_BEFORE_COMPLETION_MESSAGE
                  : TOOL_CANCELLED_AFTER_COMPLETION_MESSAGE,
                executionStatus,
@@ -131736,7 +131997,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            createErrorResponse(
              scheduledCall.request,
              executionError instanceof Error
-@@ -5712,17 +5621,12 @@
+@@ -5712,17 +5647,12 @@
                : new Error(String(executionError)),
              exceptionErrorType,
              executionStatus,
@@ -131754,7 +132015,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        sleepInhibitorHandle.release();
      }
    }
-@@ -5757,19 +5661,20 @@
+@@ -5757,19 +5687,20 @@
          debugLogger.warn(
            `PostToolBatch hook setup failed: ${
              error instanceof Error ? error.message : String(error)
@@ -131781,7 +132042,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              this.withHookSpan(
                { hookEvent: 'PostToolBatch', toolName: 'batch' },
                () =>
-@@ -5845,16 +5750,12 @@
+@@ -5845,16 +5776,12 @@
            completedCalls = withPostToolBatchArtifacts(
              completedCalls,
              batchHookResult.artifacts,
@@ -131798,7 +132059,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  
          for (const call of completedCalls) {
            this.runtimeContentGeneratorViews.delete(call.request.callId);
-@@ -5863,12 +5764,13 @@
+@@ -5863,12 +5790,13 @@
  
          this.recordToolResults(completedCalls);
  
@@ -131812,15 +132073,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            // failure points. Never leave the one span deliberately deferred
            // for PostToolBatch open when one of them throws.
            for (const call of completedCalls) {
-@@ -5880,90 +5782,12 @@
-         } finally {
-           this.isFinalizingToolCalls = false;
+@@ -5882,90 +5810,12 @@
            this.drainRequestQueueIfIdle();
          }
        }
      }
--  }
--
+   }
+ 
 -  private async maybePersistLargeToolResult(
 -    callId: string,
 -    toolName: string,
@@ -131897,12 +132156,14 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
 -        contentLength: toolResponseTextLength(finalized[index].responseParts),
 -      },
 -    }));
-   }
- 
+-  }
+-
    private recordToolResults(completedCalls: CompletedToolCall[]): void {
      if (!this.chatRecordingService) return;
  
      for (const call of completedCalls) {
+       const result = {
+         callId: call.request.callId,
 diff --git a/packages/core/src/core/exact-request-tokenizer.ts b/packages/core/src/core/exact-request-tokenizer.ts
 --- /dev/null
 +++ b/packages/core/src/core/exact-request-tokenizer.ts
@@ -165084,7 +165345,98 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
     * Original tool-call id emitted by the provider/model. When present, this is
     * the idempotency key for suppressing duplicate provider tool calls.
     */
-@@ -345,58 +359,210 @@
+@@ -133,15 +147,43 @@
+   args: Record<string, unknown>;
+   isClientInitiated: boolean;
+   prompt_id: string;
+   response_id?: string;
+   /** Set to true when the LLM response was truncated due to max_tokens. */
+   wasOutputTruncated?: boolean;
++  /**
++   * Set when the consecutive-identical tool-call guard decided this call must
++   * be answered rather than run. Absent means no guard refused it, which is
++   * the whole of what absence means here. It rides on the request for the
++   * same reason `wasOutputTruncated` does: the layer that decides and the
++   * layer that executes are different, and the scheduler is the one point
++   * every consumer -- the interactive UI, the headless runner and a
++   * subagent's own loop -- already shares.
++   */
++  repetitionRefusal?: ToolCallRepetitionRefusal;
+   goalContext?: GoalTurnPermit;
+ }
+ 
++/**
++ * Why a repeated tool call was refused, in the terms the model needs to
++ * correct it. Carries counted facts only: how many times this exact call has
++ * been issued in a row, and which top-level arguments an earlier, differing
++ * call to the same tool passed that this one omits.
++ */
++export interface ToolCallRepetitionRefusal {
++  /** How many times in a row this exact (tool, arguments) call was issued. */
++  repetitionCount: number;
++  /**
++   * Top-level argument names the call immediately preceding this streak gave
++   * to the same tool and this one leaves out. Empty when no earlier call to
++   * this tool differed, because then there is no dropped argument to name and
++   * naming one would be inventing a fact.
++   */
++  droppedArgumentNames: string[];
++}
++
+ export type ToolExecutionStatus =
+   | 'not_started'
+   | 'success'
+   | 'error'
+   | 'cancelled';
+ 
+@@ -218,12 +260,46 @@
+ }
+ 
+ function duplicateProviderToolCallMessage(providerCallId: string): string {
+   return `Duplicate provider tool call id "${providerCallId}" was already handled. The duplicate tool call was ignored and not executed again.`;
+ }
+ 
++function formatArgumentNames(names: readonly string[]): string {
++  const quoted = names.map((name) => `\`${name}\``);
++  if (quoted.length === 1) return quoted[0];
++  return `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
++}
++
++/**
++ * What a model is told when the consecutive-identical guard refuses a call.
++ * It states the three facts that make the slip correctable: that this call is
++ * a repeat, that its result cannot differ, and -- when an earlier call to the
++ * same tool proves it -- which argument used to distinguish one call from the
++ * next. The last sentence is the bound: the guard tells once, and a further
++ * identical call ends the run.
++ */
++export function repeatedToolCallMessage(
++  toolName: string,
++  refusal: ToolCallRepetitionRefusal,
++): string {
++  const distinguishing =
++    refusal.droppedArgumentNames.length > 0
++      ? ` The last call to \`${toolName}\` that differed passed ` +
++        `${formatArgumentNames(refusal.droppedArgumentNames)}, which this one ` +
++        `omits; if the intent was to advance, that is the argument that ` +
++        `distinguishes one call from the next.`
++      : '';
++  return (
++    `This is call ${refusal.repetitionCount} of \`${toolName}\` with exactly ` +
++    `the same arguments as the call before it, so it was not run again: the ` +
++    `previous result has not changed and running it again returns the same ` +
++    `thing.${distinguishing} Issue a call that differs, or stop and report ` +
++    `what you have. Issuing this exact call again ends the run.`
++  );
++}
++
+ export function createDuplicateProviderToolCallResponse(
+   request: ToolCallRequestInfo,
+ ): ToolCallResponseInfo {
+   const providerCallId = request.providerCallId ?? request.callId;
+   const message = duplicateProviderToolCallMessage(providerCallId);
+   return {
+@@ -345,58 +421,210 @@
    COMPRESSION_FAILED_EMPTY_SUMMARY,
  
    /** The compression was not necessary and no action was taken */
@@ -165306,7 +165658,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    type: GeminiEventType.Finished;
    value: GeminiFinishedEventValue;
  };
-@@ -450,29 +616,28 @@
+@@ -450,29 +678,28 @@
  };
  
  // The original union type, now composed of the individual types
@@ -165337,7 +165689,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    response: GenerateContentResponse,
  ): ServerGeminiContentPart[] {
    const parts = response.candidates?.[0]?.content?.parts ?? [];
-@@ -525,14 +690,12 @@
+@@ -525,14 +752,12 @@
    async *run(
      model: string,
      req: PartListUnion,
@@ -165352,7 +165704,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
            message: req,
            config: {
              abortSignal: signal,
-@@ -540,46 +703,47 @@
+@@ -540,46 +765,47 @@
          },
          this.prompt_id,
          this.goalContext,
@@ -184929,18 +185281,205 @@ diff --git a/packages/core/src/services/image-payload-references.ts b/packages/c
  ): Part[] {
    if (maxRecentImages <= 0 || replaced.length === 0) return [];
    const recent: StoredImagePayload[] = [];
+diff --git a/packages/core/src/services/loopDetectionService.test.ts b/packages/core/src/services/loopDetectionService.test.ts
+--- a/packages/core/src/services/loopDetectionService.test.ts
++++ b/packages/core/src/services/loopDetectionService.test.ts
+@@ -102,18 +102,30 @@
+       for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD - 1; i++) {
+         expect(service.addAndCheck(event)).toBe(false);
+       }
+       expect(loggers.logLoopDetected).not.toHaveBeenCalled();
+     });
+ 
+-    it(`should detect a loop on the TOOL_CALL_LOOP_THRESHOLD-th identical call`, () => {
++    it(`refuses the call before the threshold and halts on the threshold-th`, () => {
+       const event = createToolCallRequestEvent('testTool', { param: 'value' });
+-      for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD - 1; i++) {
+-        service.addAndCheck(event);
++      for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD - 2; i++) {
++        expect(service.addAndCheck(event)).toBe(false);
++        expect(service.takeToolCallRefusal()).toBeNull();
+       }
++      // The correction is delivered inside the existing tolerance, so the run
++      // still never issues more than TOOL_CALL_LOOP_THRESHOLD identical calls.
++      expect(service.addAndCheck(event)).toBe(false);
++      expect(service.takeToolCallRefusal()).toEqual({
++        repetitionCount: TOOL_CALL_LOOP_THRESHOLD - 1,
++        droppedArgumentNames: [],
++      });
++      expect(loggers.logLoopDetected).not.toHaveBeenCalled();
++
++      // Repeated after being told: the halt is exactly where it always was.
+       expect(service.addAndCheck(event)).toBe(true);
++      expect(service.takeToolCallRefusal()).toBeNull();
+       expect(loggers.logLoopDetected).toHaveBeenCalledTimes(1);
+     });
+ 
+     it('should detect a loop on subsequent identical calls', () => {
+       const event = createToolCallRequestEvent('testTool', { param: 'value' });
+       for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD; i++) {
+@@ -253,12 +265,102 @@
+         expect(service.addAndCheck(event)).toBe(false);
+       }
+       expect(loggers.logLoopDetected).not.toHaveBeenCalled();
+     });
+   });
+ 
++  describe('A repeated tool call is refused before it is fatal', () => {
++    // Replays the shape of the Aug 31 Test B subagent run, which is the
++    // evidence this behaviour exists for. That run read a book in a
++    // disciplined read_file(offset=N, limit=420) cycle, banked ten chunks,
++    // then issued the same call with `offset` dropped, four times over. The
++    // guard was right that the repetition was degenerate; ending the run
++    // threw away 139 turns of banked work over one missing argument that
++    // nothing ever told the model about.
++    const BOOK = '/w/books/book_03_everblaze.txt';
++    const readWithOffset = (offset: number) =>
++      createToolCallRequestEvent('read_file', {
++        file_path: BOOK,
++        offset,
++        limit: 420,
++      });
++    const readWithoutOffset = () =>
++      createToolCallRequestEvent('read_file', { file_path: BOOK, limit: 420 });
++
++    it('names the argument that the last differing call passed and this one drops', () => {
++      for (let chunk = 0; chunk < 10; chunk++) {
++        expect(
++          service.checkAlwaysOnSafeties(readWithOffset(1 + chunk * 420)),
++        ).toBe(false);
++      }
++
++      for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD - 2; i++) {
++        expect(service.checkAlwaysOnSafeties(readWithoutOffset())).toBe(false);
++        expect(service.takeToolCallRefusal()).toBeNull();
++      }
++
++      expect(service.checkAlwaysOnSafeties(readWithoutOffset())).toBe(false);
++      expect(service.takeToolCallRefusal()).toEqual({
++        repetitionCount: TOOL_CALL_LOOP_THRESHOLD - 1,
++        droppedArgumentNames: ['offset'],
++      });
++      expect(loggers.logLoopDetected).not.toHaveBeenCalled();
++    });
++
++    it('ends the run only when the same call comes back after being told', () => {
++      for (let chunk = 0; chunk < 10; chunk++) {
++        service.checkAlwaysOnSafeties(readWithOffset(1 + chunk * 420));
++      }
++      for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD - 1; i++) {
++        service.checkAlwaysOnSafeties(readWithoutOffset());
++      }
++      expect(service.takeToolCallRefusal()).not.toBeNull();
++
++      expect(service.checkAlwaysOnSafeties(readWithoutOffset())).toBe(true);
++      expect(service.getLastLoopType()).toBe(
++        LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,
++      );
++      expect(service.takeToolCallRefusal()).toBeNull();
++    });
++
++    it('a corrected call clears the streak, so the run continues', () => {
++      for (let chunk = 0; chunk < 10; chunk++) {
++        service.checkAlwaysOnSafeties(readWithOffset(1 + chunk * 420));
++      }
++      for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD - 1; i++) {
++        service.checkAlwaysOnSafeties(readWithoutOffset());
++      }
++      expect(service.takeToolCallRefusal()).not.toBeNull();
++
++      // The model acts on what it was told and passes `offset` again.
++      expect(service.checkAlwaysOnSafeties(readWithOffset(4201))).toBe(false);
++      expect(service.checkAlwaysOnSafeties(readWithOffset(4621))).toBe(false);
++      expect(loggers.logLoopDetected).not.toHaveBeenCalled();
++    });
++
++    it('claims no dropped argument when no earlier call to the tool differed', () => {
++      // The preceding distinct call was to a different tool, so there is
++      // nothing to compare against and nothing is asserted about arguments.
++      service.checkAlwaysOnSafeties(
++        createToolCallRequestEvent('list_directory', { path: '/w' }),
++      );
++      for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD - 1; i++) {
++        expect(service.checkAlwaysOnSafeties(readWithoutOffset())).toBe(false);
++      }
++      expect(service.takeToolCallRefusal()).toEqual({
++        repetitionCount: TOOL_CALL_LOOP_THRESHOLD - 1,
++        droppedArgumentNames: [],
++      });
++    });
++
++    it('raises no refusal for a call the guard did not act on', () => {
++      service.checkAlwaysOnSafeties(readWithOffset(1));
++      expect(service.takeToolCallRefusal()).toBeNull();
++    });
++  });
++
+   describe('Shell Command Stagnation (Always-On Circuit Breaker)', () => {
+     it('halts repeated git inspection command variants via the always-on guard', () => {
+       const commands = [
+         'git status --short',
+         'git status --short && git diff --stat',
+         'git diff --name-only HEAD',
 diff --git a/packages/core/src/services/loopDetectionService.ts b/packages/core/src/services/loopDetectionService.ts
 --- a/packages/core/src/services/loopDetectionService.ts
 +++ b/packages/core/src/services/loopDetectionService.ts
-@@ -150,12 +150,55 @@
-   isExplicitCap: boolean,
- ): boolean {
+@@ -2,13 +2,16 @@
+  * @license
+  * Copyright 2025 Google LLC
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import { createHash } from 'node:crypto';
+-import type { ServerGeminiStreamEvent } from '../core/turn.js';
++import type {
++  ServerGeminiStreamEvent,
++  ToolCallRepetitionRefusal,
++} from '../core/turn.js';
+ import { GeminiEventType } from '../core/turn.js';
+ import type { ThoughtSummary } from '../utils/thoughtUtils.js';
+ import {
+   logLoopDetected,
+   logLoopDetectionDisabled,
+ } from '../telemetry/loggers.js';
+@@ -18,18 +21,25 @@
+   LoopType,
+ } from '../telemetry/types.js';
+ import type { Config } from '../config/config.js';
+ import { canonicalToolName } from '../tools/tool-names.js';
+ 
+ // Consecutive identical tool calls (same name + identical args) tolerated
+-// before the always-on guard halts the turn. Repeating an identical call
+-// yields an identical result, so this is never a productive pattern. Kept
+-// below the DashScope server-side "Repetitive tool calls detected" threshold
+-// so the client breaks the loop before the server rejects the whole
+-// conversation with a 400 (issue #5019).
++// before the always-on guard refuses the call and tells the model why.
++// Repeating an identical call yields an identical result, so this is never a
++// productive pattern. Kept below the DashScope server-side "Repetitive tool
++// calls detected" threshold so the client breaks the loop before the server
++// rejects the whole conversation with a 400 (issue #5019).
+ const TOOL_CALL_LOOP_THRESHOLD = 5;
++// The call the guard answers instead of running, one before the last one it
++// tolerates. Putting the correction inside the existing tolerance rather than
++// after it keeps the ceiling at TOOL_CALL_LOOP_THRESHOLD identical calls,
++// which is what holds the client below the DashScope server-side repetition
++// threshold (issue #5019). Telling the model later would have spent that
++// margin to buy the correction, and the two protections are not exchangeable.
++const TOOL_CALL_LOOP_CORRECTION_POINT = TOOL_CALL_LOOP_THRESHOLD - 1;
+ const CONTENT_LOOP_THRESHOLD = 10;
+ const CONTENT_CHUNK_SIZE = 50;
+ const MAX_HISTORY_LENGTH = 1000;
+ 
+ // Thought tracking
+ const THOUGHT_REPEAT_THRESHOLD = 3;
+@@ -152,23 +162,82 @@
    if (totalCalls <= cap) return false;
    const hardCap = cap * ADAPTIVE_CAP_HARD_MULTIPLIER;
    const stuck = maxKeyRepeat >= GLOBAL_DUPLICATE_THRESHOLD;
    return isExplicitCap || totalCalls > hardCap || stuck;
-+}
-+
+ }
+ 
 +/**
 + * Human-readable explanation of each rule this service can fire, kept beside
 + * the rules themselves so every surface that reports a halt names the same
@@ -184982,12 +185521,160 @@ diff --git a/packages/core/src/services/loopDetectionService.ts b/packages/core/
 +  loopType: LoopType | null | undefined,
 +): string | undefined {
 +  return loopType ? `${loopType}: ${LOOP_TYPE_LABELS[loopType]}` : undefined;
- }
- 
++}
++
  /**
   * Service for detecting and preventing infinite loops in AI responses.
   * Monitors tool call repetitions and content sentence repetitions.
   */
+ export class LoopDetectionService {
+   private readonly config: Config;
+   private promptId = '';
+ 
+   // Tool call tracking
+   private lastToolCallKey: string | null = null;
+   private toolCallRepetitionCount: number = 0;
++  // The tool and the top-level argument names of the streak currently being
++  // counted, and of the one the last key change ended. The corrective message
++  // names what an earlier, differing call to the same tool passed and the
++  // repeat omits, and this is the only place that fact survives: the
++  // repetition key is a SHA-256 of the arguments, so the arguments themselves
++  // are not kept.
++  private toolCallStreakName: string | null = null;
++  private toolCallStreakArgNames: readonly string[] = [];
++  private precedingDistinctToolCall: {
++    name: string;
++    argNames: readonly string[];
++  } | null = null;
++  // Set by the guard when it refuses a call instead of halting the run, and
++  // taken by the caller that owns the request. It never outlives the event it
++  // was raised for: the caller takes it immediately after the check.
++  private pendingToolCallRefusal: ToolCallRepetitionRefusal | null = null;
+ 
+   // Content streaming tracking
+   private streamContentHistory = '';
+   private contentStats = new Map<string, number[]>();
+   private lastContentIndex = 0;
+   private loopDetected = false;
+@@ -405,14 +474,15 @@
+     // Consecutive identical tool calls (same name AND identical args) are the
+     // one repetition signal precise enough to halt unconditionally — an
+     // identical call returns an identical result, so it is never productive.
+     // Promoted here from the opt-in tier so it protects every user regardless
+     // of the `skipLoopDetection` config default: the DashScope server rejects
+     // this pattern with a 400 (issue #5019) far below the per-turn cap, so
+-    // the gated default left users unprotected.
+-    if (this.checkToolCallLoop(key)) {
++    // the gated default left users unprotected. The first time it fires the
++    // call is refused and answered rather than run; see checkToolCallLoop.
++    if (this.checkToolCallLoop(key, event.value)) {
+       this.loopDetected = true;
+       return true;
+     }
+ 
+     if (this.checkShellCommandStagnation(event.value)) {
+       this.loopDetected = true;
+@@ -423,33 +493,82 @@
+       this.loopDetected = true;
+       return true;
+     }
+     return false;
+   }
+ 
+-  private checkToolCallLoop(key: string): boolean {
++  /**
++   * The consecutive-identical guard. The threshold is unchanged, the halt
++   * fires exactly where it always did, and so does what counts as degenerate:
++   * an identical call returns an identical result, so it is never productive.
++   * What is new is the call before it. That one is refused and the model is
++   * told why, which is information it can act on; a terminated session is not.
++   * The run then ends only if the next call is identical again -- a repeat
++   * after being told.
++   *
++   * The bound is one telling, and it is the same bound the duplicate
++   * provider tool-call guard already uses in this codebase: answer the
++   * duplicate once, drop the batch if it comes back. Telling twice would be
++   * the same message a second time, which is the non-adaptive retry this rule
++   * exists to catch.
++   */
++  private checkToolCallLoop(
++    key: string,
++    toolCall: { name: string; args: object },
++  ): boolean {
++    const argNames = Object.keys(toolCall.args ?? {}).sort();
+     if (this.lastToolCallKey === key) {
+       this.toolCallRepetitionCount++;
+     } else {
++      if (this.toolCallStreakName !== null) {
++        this.precedingDistinctToolCall = {
++          name: this.toolCallStreakName,
++          argNames: this.toolCallStreakArgNames,
++        };
++      }
+       this.lastToolCallKey = key;
+       this.toolCallRepetitionCount = 1;
++      this.toolCallStreakName = toolCall.name;
++      this.toolCallStreakArgNames = argNames;
+     }
+     if (this.toolCallRepetitionCount >= TOOL_CALL_LOOP_THRESHOLD) {
+       this.lastLoopType = LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS;
+       logLoopDetected(
+         this.config,
+         new LoopDetectedEvent(
+           LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS,
+           this.promptId,
+         ),
+       );
+       return true;
+     }
++    if (this.toolCallRepetitionCount === TOOL_CALL_LOOP_CORRECTION_POINT) {
++      this.pendingToolCallRefusal = {
++        repetitionCount: this.toolCallRepetitionCount,
++        droppedArgumentNames:
++          this.precedingDistinctToolCall?.name === toolCall.name
++            ? this.precedingDistinctToolCall.argNames.filter(
++                (name) => !argNames.includes(name),
++              )
++            : [],
++      };
++    }
+     return false;
+   }
+ 
++  /**
++   * The refusal raised for the tool call just checked, if the guard raised
++   * one. Taking it clears it: it belongs to that one call, and the caller that
++   * owns the request is the only thing that can deliver it.
++   */
++  takeToolCallRefusal(): ToolCallRepetitionRefusal | null {
++    const refusal = this.pendingToolCallRefusal;
++    this.pendingToolCallRefusal = null;
++    return refusal;
++  }
++
+   private checkShellCommandStagnation(toolCall: {
+     name: string;
+     args: object;
+   }): boolean {
+     const key = this.getShellInspectionKey(toolCall);
+     if (!key) {
+@@ -1030,12 +1149,16 @@
+     this.capMaxKeyRepeat = 0;
+   }
+ 
+   private resetToolCallCount(): void {
+     this.lastToolCallKey = null;
+     this.toolCallRepetitionCount = 0;
++    this.toolCallStreakName = null;
++    this.toolCallStreakArgNames = [];
++    this.precedingDistinctToolCall = null;
++    this.pendingToolCallRefusal = null;
+     this.lastShellInspectionKey = null;
+     this.shellInspectionStreak = 0;
+   }
+ 
+   private resetContentTracking(resetHistory = true): void {
+     if (resetHistory) {
 diff --git a/packages/core/src/services/microcompaction/microcompact.ts b/packages/core/src/services/microcompaction/microcompact.ts
 --- a/packages/core/src/services/microcompaction/microcompact.ts
 +++ b/packages/core/src/services/microcompaction/microcompact.ts

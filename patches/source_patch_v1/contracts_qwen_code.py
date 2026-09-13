@@ -4579,6 +4579,114 @@ def _validate_manual_compaction_after(state: State) -> None:
     forbid_text(state, core + "services/chatCompressionService.ts", "MAX_HOOK_INSTRUCTIONS_CHARS", label=label)
 
 
+def _validate_correctable_repetition_before(state: State) -> None:
+    label = "repetition-halt precondition"
+    detector = "packages/core/src/services/loopDetectionService.ts"
+    # The guard has one answer: the streak reaches the threshold and the run
+    # ends. Nothing goes back to the model, so a slip that is one wrong
+    # argument away from correct is indistinguishable from a model that cannot
+    # be told anything.
+    require_text(
+        state,
+        detector,
+        "    if (this.toolCallRepetitionCount >= TOOL_CALL_LOOP_THRESHOLD) {\n"
+        "      this.lastLoopType = LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS;",
+        label=label,
+    )
+    forbid_text(state, detector, "takeToolCallRefusal", label=label)
+    forbid_text(state, "packages/core/src/core/turn.ts",
+                "ToolCallRepetitionRefusal", label=label)
+    forbid_text(state, "packages/core/src/core/coreToolScheduler.ts",
+                "repetitionRefusal", label=label)
+
+
+def _validate_correctable_repetition_after(state: State) -> None:
+    label = "a fired repetition rule is correctable"
+    core = "packages/core/src/"
+    detector = core + "services/loopDetectionService.ts"
+
+    # The halt fires exactly where it always did, on the same comparison, and
+    # the correction is delivered on the call before it -- inside the existing
+    # tolerance, so the ceiling of identical calls does not move. Only the halt
+    # logs a detected loop; a refusal did not end the run and must not be
+    # recorded as though it had.
+    require_text(
+        state,
+        detector,
+        "const TOOL_CALL_LOOP_CORRECTION_POINT = TOOL_CALL_LOOP_THRESHOLD - 1;",
+        label=label,
+    )
+    rule = _source(state, detector, label=label)
+    body = rule.split("private checkToolCallLoop(", 1)[1].split(
+        "takeToolCallRefusal(", 1
+    )[0]
+    _require_ordered(body, (
+        "if (this.toolCallRepetitionCount >= TOOL_CALL_LOOP_THRESHOLD) {",
+        "this.lastLoopType = LoopType.CONSECUTIVE_IDENTICAL_TOOL_CALLS;",
+        "logLoopDetected(",
+        "return true;",
+        "if (this.toolCallRepetitionCount === TOOL_CALL_LOOP_CORRECTION_POINT) {",
+        "this.pendingToolCallRefusal = {",
+        "repetitionCount: this.toolCallRepetitionCount,",
+        "droppedArgumentNames:",
+    ), label=label, location="consecutive-identical guard")
+    _require(
+        "logLoopDetected(" not in body.split(
+            "if (this.toolCallRepetitionCount === TOOL_CALL_LOOP_CORRECTION_POINT) {",
+            1,
+        )[1],
+        label + ": the refusal is logged as a detected loop",
+    )
+    # Refusals are taken by the one caller that owns the request, never left
+    # to expire silently.
+    _require_all(state, detector, (
+        "takeToolCallRefusal(): ToolCallRepetitionRefusal | null {",
+        "this.pendingToolCallRefusal = null;",
+    ), label=label)
+
+    # The refusal states counted facts only: how many times, and which
+    # arguments an earlier differing call to the same tool proved were
+    # dropped. With no such call it claims nothing.
+    _require_all(state, core + "core/turn.ts", (
+        "export interface ToolCallRepetitionRefusal {",
+        "  repetitionCount: number;",
+        "  droppedArgumentNames: string[];",
+        "  repetitionRefusal?: ToolCallRepetitionRefusal;",
+        "export function repeatedToolCallMessage(",
+    ), label=label)
+    message = _source(state, core + "core/turn.ts", label=label)
+    message = message.split("export function repeatedToolCallMessage(", 1)[1]
+    _require_ordered(message, (
+        "refusal.droppedArgumentNames.length > 0",
+        "that differed passed",
+        "Issuing this exact call again ends the run.",
+    ), label=label, location="corrective message")
+
+    # One delivery point. The interactive UI, the headless runner and a
+    # subagent's own loop all schedule through it, so none of them carries a
+    # policy of its own.
+    scheduler = _source(state, core + "core/coreToolScheduler.ts", label=label)
+    _require_ordered(scheduler, (
+        "if (reqInfo.repetitionRefusal) {",
+        "repeatedToolCallMessage(",
+        "ToolErrorType.EXECUTION_DENIED,",
+    ), label=label, location="scheduler refusal")
+
+    # Both reasoning loops attach it to the request they are about to have
+    # executed: the main session before it yields the call to its consumer,
+    # the subagent when it turns the round's calls into scheduled requests.
+    _require_all(state, core + "core/client.ts", (
+        "const repetitionRefusal = this.loopDetector.takeToolCallRefusal();",
+        "event.value.repetitionRefusal = repetitionRefusal;",
+    ), label=label)
+    _require_all(state, core + "agents/runtime/agent-core.ts", (
+        "const repetitionRefusals = new Map<FunctionCall, ToolCallRepetitionRefusal>();",
+        "repetitionRefusals.set(functionCall, refusal);",
+        "const repetitionRefusal = repetitionRefusals.get(fc);",
+        "...(repetitionRefusal ? { repetitionRefusal } : {}),",
+    ), label=label)
+
+
 def _validate_stream_admission_before(state: State) -> None:
     forbid_text(
         state, "packages/core/src/config/config.ts", "RuntimeContractAdmission",
@@ -4894,6 +5002,23 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_compaction_event_before,
         validate_after=_validate_compaction_event_after,
+    ),
+    SemanticConcern(
+        name="correctable-tool-call-repetition",
+        rationale=(
+            "A repeated identical tool call is refused and answered before it is fatal. The model is "
+            "told the repetition count, that the previous result cannot have changed, and which "
+            "argument an earlier differing call to the same tool proved was dropped. Only a repeat "
+            "after being told ends the run, on the same comparison and at the same count as before: "
+            "the correction is delivered inside the existing tolerance, so the ceiling of "
+            "identical calls does not move and the other rules are untouched."
+        ),
+        removal_condition=(
+            "Upstream answers a detected repetition with a tool result the model can act on before it "
+            "terminates the run."
+        ),
+        validate_before=_validate_correctable_repetition_before,
+        validate_after=_validate_correctable_repetition_after,
     ),
     SemanticConcern(
         name="subagent-result-scope-and-turn-count",
