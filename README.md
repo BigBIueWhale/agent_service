@@ -44,7 +44,7 @@ The fixed stack is:
 | Thinking | Required, `xhigh` |
 | Qwen Code | `0.21.12`, commit `b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38` |
 | Agent image | Pinned by [`config/release.lock.json`](config/release.lock.json) (`.images.agent`) |
-| Service | Rust, one session at a time, Docker-only |
+| Service | Rust, concurrent isolated sessions, Docker-only |
 | Release lock | [`config/release.lock.json`](config/release.lock.json), which pins the implementation commit and all five image IDs |
 | Service image | Pinned by [`config/release.lock.json`](config/release.lock.json) (`.images.service`) |
 | Docker broker image | Pinned by [`config/release.lock.json`](config/release.lock.json) (`.images.broker`) |
@@ -947,7 +947,8 @@ Check every live invariant:
 ./status.sh
 ```
 
-Run one task and wait through a server-side notification, without client polling:
+Submit one task. `run.sh` returns as soon as the service has durably accepted it;
+the session does not belong to the connection, and `./session.sh <session-id>` reads it later:
 
 ```bash
 ./run.sh /home/user/Desktop/my_project /home/user/Desktop/task-prompt.txt
