@@ -2714,14 +2714,19 @@ def _partition(window: int, shares: dict[str, int]) -> dict[str, int]:
 
 
 def _validate_context_partition(state: State, *, label: str) -> None:
-    """Every context budget is a share of the served window, and the shares
-    spend the window exactly.
+    """Every context budget is a share of the served window, and the division
+    of it leaves the compaction trigger the largest budget.
 
-    This is the whole safety argument, checked here rather than at run time:
-    a turn issued below the compaction trigger, given the turn-output share,
-    appending at most the tool-result share, produces a history no larger
-    than the window less the summary reserve — the largest history a
-    whole-history summary request can still be issued for.
+    The safety argument — a turn issued below the compaction trigger, given
+    the turn-output share, appending at most the tool-result share, produces
+    a history no larger than the window less the summary reserve, the largest
+    history a whole-history summary request can still be issued for — holds
+    by construction: the trigger is defined as the remainder, so the five
+    terms sum to the window whatever the shares say. Asserting that sum here
+    would assert nothing about this tree, and a check that cannot fail reads
+    as protection that is not there. What the construction leaves open is how
+    the window is divided between the four reserved shares, so that is what
+    is checked here.
     """
 
     limits = "packages/core/src/core/tokenLimits.ts"
@@ -2753,17 +2758,19 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             all(value > 0 for value in part.values()),
             f"{label}: a {window}-token window yields a non-positive budget {part!r}",
         )
-        _require(
-            sum(part.values()) == window,
-            f"{label}: the budgets do not spend a {window}-token window exactly",
+        trigger = part["compactionTrigger"]
+        largest_reserve = max(
+            (name for name in part if name != "compactionTrigger"),
+            key=lambda name: part[name],
         )
         _require(
-            part["compactionTrigger"]
-            + part["turnOutput"]
-            + part["toolResult"]
-            + part["directiveReserve"]
-            == window - part["summaryReserve"],
-            f"{label}: a turn at a {window}-token window can outgrow its own summary",
+            trigger > part[largest_reserve],
+            f"{label}: at a {window}-token window {largest_reserve} is "
+            f"{part[largest_reserve]} and the compaction trigger is {trigger}. "
+            f"The trigger is whatever the four reserved shares leave, so a "
+            f"reserve that reaches it is either a snapshot allowed to be larger "
+            f"than the history that triggered taking it, or a single turn "
+            f"budgeted more room than the history it is issued against",
         )
     served = _partition(_SERVED_WINDOW, shares)
     _require(

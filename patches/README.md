@@ -14,7 +14,7 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Patch: `qwen-code-0.21.12-agent-service.patch`
 - Review-diff SHA-256: `156b099fb5331b2604925f63464db59c798eb721fa285dc799f38303e1afbf73`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `afb97e57ceb1c168d1ff1d39d4af3c621196f663e1dd4d783e366f47fd1a7db9`
+- Transformer-manifest SHA-256: `4868356d63fbfd5b9b1736d648ff8a036c112194d70c5431ee2b7ba907d701be`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
