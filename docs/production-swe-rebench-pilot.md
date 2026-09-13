@@ -3,7 +3,10 @@
 This is the record of a run against release `7a329f6` on 2026-08-17. The API it used —
 a creation body naming a host folder, and the `/wait` endpoint — was removed on
 2026-08-18 (`c56cfcb`), so the harness described here is frozen evidence and cannot be
-rerun against the current service.
+rerun against the current service. The harness also sent `preserve_thinking` and ran the
+task once with each value: the table below is the `false` session, and the tracked result
+holds both. Qwen3.8-27B's `false` is not a working off switch, so this deployment has no
+such setting (see "Thinking, sampling, and context lifetime" in the README).
 
 ## Result
 
