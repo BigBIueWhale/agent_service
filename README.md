@@ -1120,8 +1120,11 @@ and an independent evaluator pass — not a benchmark-suite score.
 The first two attempts are retained and classified as infrastructure failures, not
 model scores. The second is the run that exposed the `--since 0s` capture race above.
 The accepted pilot's release commit and agent, broker, and service image IDs,
-with exact methodology, limitations, hashes, results, and replay instructions, are in
+with exact methodology, limitations, hashes, and results, are in
 [`docs/production-swe-rebench-pilot.md`](docs/production-swe-rebench-pilot.md).
+That harness spoke the API of its own release, `7a329f6`: the folder-path creation
+body and the `/wait` endpoint were removed on 2026-08-18 (`c56cfcb`), so it is kept
+as frozen evidence and cannot be rerun against this service.
 
 Any future changed input must rerun the affected gates. There is no fallback
 declaration of success.

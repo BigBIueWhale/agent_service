@@ -1,5 +1,10 @@
 # Production agent-service SWE-rebench pilot
 
+This is the record of a run against release `7a329f6` on 2026-08-17. The API it used —
+a creation body naming a host folder, and the `/wait` endpoint — was removed on
+2026-08-18 (`c56cfcb`), so the harness described here is frozen evidence and cannot be
+rerun against the current service.
+
 ## Result
 
 The accepted `agent_service` release solved the pinned SWE-rebench pilot task.
@@ -79,14 +84,15 @@ accepted environment as strongly as loading the preserved, hashed image archive.
 
 ## Execution and evidence boundary
 
-The executed harness performs these steps and fails on any mismatch:
+The executed harness performed these steps against that release and failed on any
+mismatch:
 
 1. Require the clean, exact release commit and validate the release lock, stack
    lock, image IDs, live production status, task hashes, and absence of a running
    session.
 2. Copy the exact base-commit checkout into a fresh source directory for the run.
-3. Submit `{folder, prompt}` to production `POST /v1/agent/sessions` and verify
-   the returned model and context.
+3. Submit a JSON body naming that source folder and the prompt to production
+   `POST /v1/agent/sessions` and verify the returned model and context.
 4. Wait through production `/v1/agent/sessions/{id}/wait`. A transport deadline may
    request production cancellation, but it cannot reinterpret a partial run as a
    model result.
@@ -136,9 +142,9 @@ the benchmark was accepted.
 
 The exact harness that ran, its benchmark lock, and its structured result are
 tracked under `artifacts/swe-rebench-2026-07-production-service/`. Large production
-bundles, evaluator archives, materialized workspaces, logs, and older failure bundles
-remain in that ignored local evidence root and in `.runtime/results/`; they are not
-silently deleted or added to Git.
+bundles, evaluator archives, materialized workspaces, and logs remain in that ignored
+local evidence root; they are not silently deleted or added to Git. The older failure
+bundles and the copies under `.runtime/results/` are no longer present.
 
 - Executed harness SHA-256:
   `eae987cf91a7ddd37a170d6caea88b9121e55d753811ed981aab74b6e6478ba6`
@@ -147,14 +153,7 @@ silently deleted or added to Git.
 - Result file SHA-256:
   `0bb5d56b4b6e0e33f3b790c56c9fccb255c21b1111126a838f1be63f30cf49b1`
 
-To rerun on this exact workstation after verifying the live release:
-
-```bash
-cd /home/user/Desktop/agent_service
-./status.sh
-./artifacts/swe-rebench-2026-07-production-service/pilot-production-service.sh
-```
-
-The harness intentionally refuses existing final run directories. Preserving the
-accepted result and rerunning therefore requires an explicitly named new run or
-an operator-authorized archival decision; it never overwrites evidence.
+The harness cannot be rerun. It refuses any checkout other than release `7a329f6`, and
+the service no longer offers the folder-path creation body or the `/wait` endpoint it
+depends on. It is kept unchanged, with its benchmark lock and result, as the record of
+exactly what ran; the hashes above identify those bytes.
