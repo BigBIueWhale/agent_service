@@ -106,8 +106,8 @@
   capacity.
 - Auto-compaction is due when the exactly-tokenized request reaches the
   compaction trigger, and uses the same model. It must terminate normally
-  without tool calls; a failed compact preserves the original history and is
-  reported.
+  and carry exactly one state_snapshot call with every section filled in; a
+  failed compact preserves the original history and is reported.
 
 ## Full-quality vision and document work
 

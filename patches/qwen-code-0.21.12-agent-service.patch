@@ -180002,11 +180002,11 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(harness.generateText).toHaveBeenCalledTimes(1);
 +  });
 +
-+  it('discards a truncated response even when its text parses as a complete snapshot', async () => {
-+    // Truncation can land after the closing tag (inside trailing whitespace
-+    // or a dropped epilogue), so superficial completeness proves nothing.
-+    // The finishReason check must dominate content validation or a clipped
-+    // memory gets committed as if whole.
++  it('discards a truncated response even when it carries a complete snapshot', async () => {
++    // A generation severed at the output ceiling can still leave a call whose
++    // sections are all present, so a whole-looking snapshot says nothing about
++    // whether the model finished. The finishReason check must dominate
++    // snapshot acceptance or a clipped memory is committed as if whole.
 +    const harness = makeHarness();
 +    harness.generateText.mockResolvedValue(
 +      summaryResult({

@@ -3066,7 +3066,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     require_text(
         state,
         service_test,
-        "discards a truncated response even when its text parses as a complete snapshot",
+        "discards a truncated response even when it carries a complete snapshot",
         label=label,
     )
     # The snapshot schema gives each kind of fact one home; the retired
