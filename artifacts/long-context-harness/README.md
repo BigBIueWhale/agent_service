@@ -75,9 +75,9 @@ across it are not comparable with anything recorded here.
 
 Each run is a session submitted to the production service with the corpus as its
 workspace and the matching prompt file. The service accepts submissions on loopback only,
-so a run is launched on the machine where the service is deployed, and its session record
-carries the release identity, the turn budget and the thinking-retention arm it ran under
-— the same identity a suite run records, for the same reason: a result whose conditions
+so a run is launched on the machine where the service is deployed. Its session record
+carries the turn budget it ran under, and the release identity is recorded beside it —
+the same identity a suite run records, for the same reason: a result whose conditions
 are not recorded cannot be compared with another.
 
 ## How a run is judged
@@ -103,5 +103,4 @@ this order, because the first three decide whether the fourth means anything:
    fluent prose drifting off the source under compaction pressure.
 
 The judgement is written down per run, beside the run's evidence, with the version of the
-service and the retention arm it ran under, so two runs can be compared rather than
-remembered.
+service it ran under, so two runs can be compared rather than remembered.
