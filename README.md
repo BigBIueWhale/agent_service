@@ -159,15 +159,23 @@ the same backend gets the same guarantee, because it is enforced in the artifact
 rather than asserted by a launch argument or a sealed setting — which is why the
 sealed settings here send no retention field at all.
 
-The rule it replaces was not a policy. The model's own template keeps thinking
-since the most recent `role: "user"` message not wrapped in `<tool_response>`,
-and an agent task has exactly one user message — except that Qwen Code
-re-injects its active-todo reminder as its own user message every third tool turn
-(`ACTIVE_TODO_REMINDER_REFRESH_TURNS = 3`), and each injection moved the cut. How
-much reasoning survived therefore tracked where the model last called
-`todo_write`. Measured against the deployed engine, a pure tool loop of one
-prompt and four tool turns rendered identically whether the field was omitted or
-set to `false`, and the two diverged only once a reminder was injected.
+Dropping reasoning from earlier turns is a good idea when it is correctly
+implemented: it trades compute for slower context growth and stability. For
+Qwen3.8-27B it is not correctly implemented, even though the model card documents
+`preserve_thinking: false` as supported. The model's own template keeps thinking
+only for assistant turns after the most recent `role: "user"` message not wrapped
+in `<tool_response>`. A one-prompt agent task therefore sheds nothing, and a
+client that injects reminders as user messages moves the cut into the middle of
+the current task: Qwen Code re-injects its active-todo reminder as its own user
+message every third tool turn (`ACTIVE_TODO_REMINDER_REFRESH_TURNS = 3`). What
+survives depends on when the client injects a message, not on any rule. Measured
+on the engine before its template refused `false`, one prompt and four tool turns
+rendered identically with the field omitted or `false`, and diverged only once a
+reminder was injected. An invented rule, such as keeping the last K assistant
+turns, is no fix either: it renders a history the model was never trained on.
+Qwen3.8-27B was trained with preserved thinking, as nearly all current models
+are, and there is no correct off switch for it, which is why the served template
+offers none.
 
 The served context window is divided into five shares that spend it exactly, and
 every context budget is one of them:
