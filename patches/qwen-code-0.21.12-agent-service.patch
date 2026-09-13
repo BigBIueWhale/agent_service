@@ -164675,7 +164675,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
-@@ -8,88 +8,134 @@
+@@ -8,88 +8,140 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -164748,12 +164748,18 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * not anyone accounts for it. The remainder is the history a turn may be
 + * issued against.
 + *
-+ * The shares answer the questions the window has to settle at once. A summary
-+ * must be able to restate a whole conversation, so it gets the largest share;
-+ * a turn has to be able to think and then act, and two sixteenths is three
-+ * times the largest single turn observed in production; a tool result is
-+ * re-readable from disk, so it gets the smallest working share and the
-+ * trigger keeps the rest.
++ * A cap on one turn is necessary: a turn issued just under the trigger, with
++ * its output and the tool result it appends, must still leave the summary
++ * reserve free, or the compaction it forces cannot be issued. That fixes only
++ * the sum of the four reserved shares — every division of that sum satisfies
++ * it identically — so this division is inherited rather than derived here:
++ * 32,768 was read once off a Qwen3.6 model card for a 152,000-token window,
++ * and it reappears here only because 32/256 of 262,144 is the same number.
++ * Across 15,473 recorded turns one turn's output is 264 tokens at the median
++ * and 8,071 at p99, and the largest well-formed turn in the benchmark
++ * artifacts is 32,621 — a margin of 1.004. The trigger takes what these four
++ * leave, so tokens added to this share come out of the history a turn may be
++ * issued against, one for one.
 + *
 + * `summaryReserve + turnOutput + toolResult + directiveReserve +
 + * compactionTrigger === window`, and therefore `compactionTrigger +
