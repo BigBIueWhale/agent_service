@@ -293,13 +293,13 @@ fn validate_session_id(value: &str) -> ServiceResult<()> {
     let suffix = value.strip_prefix("s-").ok_or_else(|| {
         ServiceError::Internal(format!("broker session ID lacks s- prefix: {value:?}"))
     })?;
-    if !matches!(suffix.len(), 32 | 64)
+    if suffix.len() != 64
         || !suffix
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
     {
         return Err(ServiceError::Internal(format!(
-            "broker session ID is not s- plus 64 lowercase hexadecimal characters (or the readable historical 32-character shape): {value:?}"
+            "broker session ID is not s- plus 64 lowercase hexadecimal characters: {value:?}"
         )));
     }
     Ok(())
@@ -479,8 +479,14 @@ mod tests {
 
     #[test]
     fn session_ids_are_canonical() {
-        validate_session_id("s-0123456789abcdef0123456789abcdef").expect("canonical ID");
+        validate_session_id("s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+            .expect("canonical ID");
         assert!(validate_session_id("s-0123").is_err());
-        assert!(validate_session_id("s-0123456789ABCDEF0123456789ABCDEF").is_err());
+        // The retired 128-bit shape is no longer a session ID.
+        assert!(validate_session_id("s-0123456789abcdef0123456789abcdef").is_err());
+        assert!(validate_session_id(
+            "s-0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"
+        )
+        .is_err());
     }
 }

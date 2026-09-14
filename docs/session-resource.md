@@ -13,7 +13,8 @@ Startup first completes interrupted deletions. Before acceptance recovery or any
 startup sweep acts on the results directory, startup reads every result
 directory's committed terminal, acceptance, progress and cancellation records
 with the service's strict readers. A directory whose name is not a session
-handle, or whose records do not read, makes startup refuse. One error names
+handle (`s-` followed by 64 lowercase hexadecimal characters), or whose records
+do not read, makes startup refuse. One error names
 every such directory, the reason, and any raw state tree beside it. The operator
 removes those paths from the runtime directories (moving them elsewhere keeps
 them) and starts again. After startup, a record that does not read is an

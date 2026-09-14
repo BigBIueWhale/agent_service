@@ -553,7 +553,7 @@ fn require_idempotency_key(headers: &HeaderMap) -> ServiceResult<String> {
     let value = value
         .to_str()
         .map_err(|_| ServiceError::InvalidRequest("Idempotency-Key is not visible ASCII".into()))?;
-    if !crate::runtime::is_current_session_id(value) {
+    if !crate::runtime::is_safe_session_id(value) {
         return Err(ServiceError::InvalidRequest(format!(
             "Idempotency-Key {value:?} is not `s-` plus exactly 64 lowercase hexadecimal characters"
         )));
@@ -3374,9 +3374,9 @@ mod tests {
     #[test]
     fn private_terminal_draft_without_ordered_acceptance_recovery_is_preserved() {
         let tree = TestTree::new("prepared-terminal");
-        let result_dir = tree.0.join("s-11111111111111111111111111111111");
+        let result_dir = tree.0.join("s-1111111111111111111111111111111111111111111111111111111111111111");
         mkdir_0755(&result_dir);
-        let body = terminal("s-11111111111111111111111111111111", false);
+        let body = terminal("s-1111111111111111111111111111111111111111111111111111111111111111", false);
         write_terminal(&result_dir.join("finished.json.tmp"), &body);
         let (uid, gid) = owner();
 
@@ -3390,9 +3390,9 @@ mod tests {
     #[test]
     fn ambiguous_dual_terminal_publication_is_preserved_and_refused() {
         let tree = TestTree::new("ambiguous-terminal");
-        let result_dir = tree.0.join("s-22222222222222222222222222222222");
+        let result_dir = tree.0.join("s-2222222222222222222222222222222222222222222222222222222222222222");
         mkdir_0755(&result_dir);
-        let body = terminal("s-22222222222222222222222222222222", false);
+        let body = terminal("s-2222222222222222222222222222222222222222222222222222222222222222", false);
         write_terminal(&result_dir.join("finished.json"), &body);
         write_terminal(&result_dir.join("finished.json.tmp"), &body);
         let (uid, gid) = owner();
@@ -3411,7 +3411,7 @@ mod tests {
         let tree = TestTree::new("retained-raw");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
-        let session_id = "s-33333333333333333333333333333333";
+        let session_id = "s-3333333333333333333333333333333333333333333333333333333333333333";
         let state_root = state.join("sessions").join(session_id);
         let control = state_root.join("control");
         let result_dir = results.join(session_id);
@@ -3465,7 +3465,7 @@ mod tests {
         let tree = TestTree::new("missing-retained-raw");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
-        let session_id = "s-88888888888888888888888888888888";
+        let session_id = "s-8888888888888888888888888888888888888888888888888888888888888888";
         let result_dir = results.join(session_id);
         mkdir_0755(&result_dir);
         write_terminal(
@@ -3485,7 +3485,7 @@ mod tests {
         let tree = TestTree::new("cleanup-retained-raw");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
-        let session_id = "s-99999999999999999999999999999999";
+        let session_id = "s-9999999999999999999999999999999999999999999999999999999999999999";
         let state_root = state.join("sessions").join(session_id);
         let control = state_root.join("control");
         let result_dir = results.join(session_id);
@@ -3534,7 +3534,7 @@ mod tests {
     fn nonempty_partial_results_are_preserved_not_swept() {
         let tree = TestTree::new("partial-result");
         let results = tree.0.join("results");
-        let result_dir = results.join("s-44444444444444444444444444444444");
+        let result_dir = results.join("s-4444444444444444444444444444444444444444444444444444444444444444");
         mkdir_0755(&result_dir);
         private_write(&result_dir.join("bundle.tar.zst.partial"), b"evidence");
         let (uid, gid) = owner();
@@ -3550,7 +3550,7 @@ mod tests {
         let tree = TestTree::new("exact-uncommitted-state");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
-        let session_id = "s-55555555555555555555555555555555";
+        let session_id = "s-5555555555555555555555555555555555555555555555555555555555555555";
         let paths = SessionPaths::new(&state, session_id);
         mkdir_0755(&state.join("sessions"));
         paths.create_dirs().expect("create exact session layout");
@@ -3585,7 +3585,7 @@ mod tests {
         let results = tree.0.join("results");
         let state_root = state
             .join("sessions")
-            .join("s-12121212121212121212121212121212");
+            .join("s-1212121212121212121212121212121212121212121212121212121212121212");
         mkdir_0755(&state_root);
         mkdir_0755(&results);
         let (uid, gid) = owner();
@@ -3599,11 +3599,11 @@ mod tests {
     #[test]
     fn terminal_bundle_metadata_is_exact_and_owner_checked() {
         let tree = TestTree::new("bundle-metadata");
-        let result_dir = tree.0.join("s-66666666666666666666666666666666");
+        let result_dir = tree.0.join("s-6666666666666666666666666666666666666666666666666666666666666666");
         mkdir_0755(&result_dir);
         let archive = result_dir.join("bundle.tar.zst");
         private_write(&archive, b"bundle-bytes");
-        let mut body = terminal("s-66666666666666666666666666666666", false);
+        let mut body = terminal("s-6666666666666666666666666666666666666666666666666666666666666666", false);
         body.terminal_mut().bundle = Some(crate::bundle::BundleStats {
             sha256: crate::bundle::hash_file_sha256(&archive).expect("hash bundle-bytes fixture"),
             compressed_bytes: b"bundle-bytes".len() as u64,
@@ -3633,7 +3633,7 @@ mod tests {
     fn terminal_storage_rejects_incomplete_observation_groups_and_endings() {
         let tree = TestTree::new("terminal-evidence");
         let (uid, gid) = owner();
-        let mut body = terminal("s-77777777777777777777777777777777", false);
+        let mut body = terminal("s-7777777777777777777777777777777777777777777777777777777777777777", false);
         body.observed_output_tokens = Some(0);
         assert!(validate_terminal_storage(&tree.0, &body, uid, gid).is_err());
         body.observed_output_tokens = None;

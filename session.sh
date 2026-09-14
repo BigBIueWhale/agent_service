@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-if [[ "$#" != 1 || ! "$1" =~ ^s-([0-9a-f]{64}|[0-9a-f]{32})$ ]]; then
+if [[ "$#" != 1 || ! "$1" =~ ^s-[0-9a-f]{64}$ ]]; then
   printf 'Usage: ./session.sh s-<64-lowercase-hex>\n' >&2
-  printf 'Historical committed 32-hex session IDs remain readable.\n' >&2
   exit 2
 fi
 readonly SESSION_ID="$1"

@@ -7,9 +7,8 @@ umask 077
 # resource before publishing it at the requested path. Nothing is read from
 # the service's private filesystem.
 
-if [[ "$#" != 2 || ! "$1" =~ ^s-([0-9a-f]{64}|[0-9a-f]{32})$ || "$2" != /* ]]; then
+if [[ "$#" != 2 || ! "$1" =~ ^s-[0-9a-f]{64}$ || "$2" != /* ]]; then
   printf 'Usage: ./bundle.sh s-<64-lowercase-hex> /absolute/output/bundle.tar.zst\n' >&2
-  printf 'Historical committed 32-hex session IDs remain readable.\n' >&2
   exit 2
 fi
 readonly SESSION_ID="$1"

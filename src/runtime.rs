@@ -791,7 +791,10 @@ pub(crate) fn require_readable_result_records(cfg: &Config) -> ServiceResult<()>
                 Ok(()) => continue,
                 Err(error) => error.message(),
             },
-            Some(_) | None => "not a session result directory".to_string(),
+            Some(_) | None => {
+                "not a session result directory: a session handle is `s-` followed by 64 lowercase hexadecimal characters"
+                    .to_string()
+            }
         };
         let state_root = cfg.state_dir.join("sessions").join(&file_name);
         let state = match std::fs::symlink_metadata(&state_root) {
@@ -1277,7 +1280,7 @@ impl Manager {
         max_session_turns: u32,
         archive: crate::validation::SpooledArchive,
     ) -> ServiceResult<SubmitOutcome> {
-        if !is_current_session_id(&session_id) {
+        if !is_safe_session_id(&session_id) {
             return Err(ServiceError::InvalidRequest(format!(
                 "Idempotency-Key {session_id:?} is not the required `s-` plus 64 lowercase hexadecimal characters generated from 32 CSPRNG bytes"
             )));
@@ -1727,6 +1730,14 @@ impl Manager {
                     })?;
                     deleting.insert(session_id.to_string());
                     continue;
+                }
+                if !is_safe_session_id(&name) {
+                    // Startup refuses such an entry, so one here violates the
+                    // service's own invariant; it is not a caller's bad handle.
+                    return Err(ServiceError::Internal(format!(
+                        "list: {} is not a session result directory",
+                        path.display()
+                    )));
                 }
                 ids.insert(name);
             }
@@ -3188,18 +3199,6 @@ pub async fn recover_interrupted_deletions(cfg: &Config) -> ServiceResult<()> {
     Ok(())
 }
 
-pub(crate) fn is_current_session_id(s: &str) -> bool {
-    canonical_hex_session_id(s, 64)
-}
-
-fn canonical_hex_session_id(s: &str, hex_len: usize) -> bool {
-    s.len() == hex_len + 2
-        && s.starts_with("s-")
-        && s[2..]
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
-}
-
 fn unix_now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -4147,73 +4146,72 @@ fn validate_terminal_resource(
         )));
     }
 
-    // Current caller-generated resources always have the acceptance and full
-    // progress documents introduced with the 256-bit handle protocol.
-    // Historical 128-bit terminals remain readable without fabricating a
-    // migration for records that genuinely predate those documents.
-    if is_current_session_id(session_id) {
-        let acceptance = read_acceptance(&cfg.results_dir, session_id)?;
-        if acceptance.accepted_at_unix != body.started_at_unix
-            || acceptance.max_session_turns != body.max_session_turns
-            || preview(&acceptance.prompt) != body.prompt_preview
-        {
+    // Every resource keeps its acceptance and full progress documents for its
+    // whole lifetime, so every terminal read cross-checks both.
+    let acceptance = read_acceptance(&cfg.results_dir, session_id)?;
+    if acceptance.accepted_at_unix != body.started_at_unix
+        || acceptance.max_session_turns != body.max_session_turns
+        || preview(&acceptance.prompt) != body.prompt_preview
+    {
+        return Err(ServiceError::Internal(format!(
+            "read_terminal({session_id}): terminal fields contradict the durable acceptance record"
+        )));
+    }
+    let progress = progress_path(&cfg.results_dir, session_id);
+    let progress_next = progress.with_file_name("progress.json.next");
+    match std::fs::symlink_metadata(&progress_next) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Ok(_) => {
             return Err(ServiceError::Internal(format!(
-                "read_terminal({session_id}): terminal fields contradict the durable acceptance record"
+                "read_terminal({session_id}): unpublished progress replacement remains at {}",
+                progress_next.display()
             )));
         }
-        let progress = progress_path(&cfg.results_dir, session_id);
-        let progress_next = progress.with_file_name("progress.json.next");
-        match std::fs::symlink_metadata(&progress_next) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Ok(_) => {
-                return Err(ServiceError::Internal(format!(
-                    "read_terminal({session_id}): unpublished progress replacement remains at {}",
-                    progress_next.display()
-                )));
-            }
-            Err(error) => {
-                return Err(ServiceError::Internal(io_msg(
-                    "read_terminal: stat unpublished progress replacement",
-                    &progress_next,
-                    &error,
-                )));
-            }
-        }
-        let events = crate::progress::read_progress_events(&progress, session_id)?;
-        if events != body.progress_events {
-            return Err(ServiceError::Internal(format!(
-                "read_terminal({session_id}): embedded progress history differs from progress.json"
+        Err(error) => {
+            return Err(ServiceError::Internal(io_msg(
+                "read_terminal: stat unpublished progress replacement",
+                &progress_next,
+                &error,
             )));
         }
-        let latest = events.last().ok_or_else(|| {
-            ServiceError::Internal(format!(
-                "read_terminal({session_id}): durable progress history is empty"
-            ))
-        })?;
-        if body.progress_revision != latest.revision
-            || body.progress_at_unix_ms != latest.at_unix_ms
-            || body.progress_phase != latest.phase
-            || body.progress_message != latest.message
-            || body.staged_bytes < latest.counters.staged_bytes
-            || body.staged_entries < latest.counters.staged_entries
-            || body.staged_regular_files < latest.counters.staged_regular_files
-            || body.output_event_bytes < latest.counters.output_event_bytes
-            || body.num_turns < latest.counters.num_turns
-        {
-            return Err(ServiceError::Internal(format!(
-                "read_terminal({session_id}): terminal progress summary contradicts its latest durable event"
-            )));
-        }
+    }
+    let events = crate::progress::read_progress_events(&progress, session_id)?;
+    if events != body.progress_events {
+        return Err(ServiceError::Internal(format!(
+            "read_terminal({session_id}): embedded progress history differs from progress.json"
+        )));
+    }
+    let latest = events.last().ok_or_else(|| {
+        ServiceError::Internal(format!(
+            "read_terminal({session_id}): durable progress history is empty"
+        ))
+    })?;
+    if body.progress_revision != latest.revision
+        || body.progress_at_unix_ms != latest.at_unix_ms
+        || body.progress_phase != latest.phase
+        || body.progress_message != latest.message
+        || body.staged_bytes < latest.counters.staged_bytes
+        || body.staged_entries < latest.counters.staged_entries
+        || body.staged_regular_files < latest.counters.staged_regular_files
+        || body.output_event_bytes < latest.counters.output_event_bytes
+        || body.num_turns < latest.counters.num_turns
+    {
+        return Err(ServiceError::Internal(format!(
+            "read_terminal({session_id}): terminal progress summary contradicts its latest durable event"
+        )));
     }
     Ok(())
 }
 
-/// Cheap defensive check before joining a session handle onto a path.  New
-/// connection-independent handles carry 256 random bits (64 hex).  The
-/// historical 128-bit/UUID-width shape remains readable and deletable so an
-/// upgrade never strands already committed terminal evidence.
+/// The one session handle shape, checked before a handle is accepted or joined
+/// onto a path: `s-` followed by 64 lowercase hexadecimal characters, the 256
+/// random bits a caller generates for its connection-independent handle.
 pub(crate) fn is_safe_session_id(s: &str) -> bool {
-    canonical_hex_session_id(s, 32) || canonical_hex_session_id(s, 64)
+    s.len() == 66
+        && s.starts_with("s-")
+        && s[2..]
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
 #[cfg(test)]
@@ -4227,8 +4225,8 @@ mod tests {
     use super::{
         apply_progress, await_connection_independent, cancel_intent_next_path, cancel_intent_path,
         commit_prepared_terminal, delete_intent_next_path, delete_intent_path,
-        finish_delete_intent, grant_owner_write_recursively, is_current_session_id,
-        is_safe_session_id, persist_cancel_intent, persist_delete_intent,
+        finish_delete_intent, grant_owner_write_recursively, is_safe_session_id,
+        persist_cancel_intent, persist_delete_intent,
         persist_terminal_transaction, prepare_durable_acceptance, prepare_terminal,
         read_cancel_intent, read_delete_intent, read_output_progress, read_terminal,
         reconcile_unpublished_cancel_intent, reconcile_unpublished_delete_intent,
@@ -4732,6 +4730,17 @@ mod tests {
             b"irreplaceable raw evidence",
         );
 
+        // A result directory named by the retired 128-bit handle shape.
+        let historical_id = "s-0123456789abcdef0123456789abcdef";
+        let historical_dir = results.join(historical_id);
+        std::fs::create_dir(&historical_dir).expect("create historical result directory");
+        std::fs::set_permissions(&historical_dir, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod historical result directory");
+        private_write(
+            &historical_dir.join("finished.json"),
+            &serde_json::to_vec_pretty(&body(historical_id)).unwrap(),
+        );
+
         let files = [
             current_dir.join("accepted.json"),
             current_dir.join("finished.json"),
@@ -4739,6 +4748,7 @@ mod tests {
             legacy_dir.join("accepted.json"),
             legacy_dir.join("finished.json"),
             legacy_state.join("raw-evidence"),
+            historical_dir.join("finished.json"),
         ];
         let snapshot = || {
             files
@@ -4768,8 +4778,12 @@ mod tests {
                     legacy_dir.display(),
                     legacy_state.display()
                 ),
+                format!(
+                    "{}: not a session result directory",
+                    historical_dir.display()
+                ),
                 "unknown field".to_string(),
-                "1 result directory cannot be read".to_string(),
+                "2 result directories cannot be read".to_string(),
                 "remove these paths".to_string(),
             ] {
                 assert!(message.contains(&expected), "missing {expected:?}: {message}");
@@ -4785,6 +4799,8 @@ mod tests {
         // directories; startup then adopts the results directory it can read.
         std::fs::rename(&legacy_dir, tree.0.join("kept-result")).expect("move legacy result");
         std::fs::rename(&legacy_state, tree.0.join("kept-state")).expect("move legacy state");
+        std::fs::rename(&historical_dir, tree.0.join("kept-historical"))
+            .expect("move historical result");
         crate::api::recover_local_state(&cfg)
             .await
             .expect("startup adopts a results directory it can read");
@@ -4851,12 +4867,27 @@ mod tests {
             names(results.as_path()),
             vec![std::ffi::OsString::from(session_id)]
         );
+
+        // A directory named by the retired 128-bit shape is no session: listing
+        // it violates the invariant, and requesting it is a caller's bad handle.
+        let historical_id = "s-0123456789abcdef0123456789abcdef";
+        std::fs::create_dir(results.join(historical_id)).unwrap();
+        let error = manager.list().await.unwrap_err();
+        assert!(matches!(error, ServiceError::Internal(_)), "{error}");
+        assert!(
+            error
+                .to_string()
+                .contains("is not a session result directory"),
+            "{error}"
+        );
+        let error = manager.get(historical_id).await.unwrap_err();
+        assert!(matches!(error, ServiceError::InvalidRequest(_)), "{error}");
     }
 
     #[test]
     fn running_snapshot_publishes_observations_without_terminal_answers() {
         let snapshot = super::RunningSnapshot {
-            session_id: "s-11111111111111111111111111111111".into(),
+            session_id: "s-1111111111111111111111111111111111111111111111111111111111111111".into(),
             started_at_unix: 1,
             prompt_preview: "fixture".into(),
             model: "fixture".into(),
@@ -4901,7 +4932,7 @@ mod tests {
 
     #[test]
     fn terminal_evidence_distinguishes_unavailable_from_measured_empty() {
-        let mut terminal = body("s-22222222222222222222222222222222");
+        let mut terminal = body("s-2222222222222222222222222222222222222222222222222222222222222222");
         let result = terminal
             .terminal_mut()
             .agent_result
@@ -4959,7 +4990,7 @@ mod tests {
         for subtype in std::iter::once(crate::result_parse::SUCCESS_SUBTYPE)
             .chain(crate::result_parse::ERROR_SUBTYPES)
         {
-            let mut terminal = body("s-33333333333333333333333333333333");
+            let mut terminal = body("s-3333333333333333333333333333333333333333333333333333333333333333");
             terminal
                 .terminal_mut()
                 .agent_result
@@ -4984,7 +5015,7 @@ mod tests {
 
     #[test]
     fn nullable_evidence_keys_are_required_even_when_their_value_is_absent() {
-        let mut terminal = body("s-33333333333333333333333333333333");
+        let mut terminal = body("s-3333333333333333333333333333333333333333333333333333333333333333");
         terminal.last_event_at_unix = None;
         let ending = terminal.terminal_mut();
         ending.agent_result = None;
@@ -5028,7 +5059,7 @@ mod tests {
 
     #[test]
     fn terminal_retains_partial_observations_without_certifying_a_result() {
-        let mut terminal = body("s-44444444444444444444444444444444");
+        let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
         terminal.terminal_mut().agent_result = None;
         terminal.observed_output_tokens = Some(123);
         terminal.observed_reasoning_tokens = Some(90);
@@ -5046,7 +5077,7 @@ mod tests {
     async fn terminal_prepare_rejects_incomplete_observation_groups_before_creating_files() {
         let directory = std::env::temp_dir().join(format!("qwen38-shape-{}", uuid::Uuid::new_v4()));
         for index in 0..4 {
-            let mut terminal = body("s-44444444444444444444444444444444");
+            let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
             terminal.observed_output_tokens = None;
             terminal.observed_reasoning_tokens = None;
             terminal.observed_subagent_scope_count = None;
@@ -5063,7 +5094,7 @@ mod tests {
             assert!(error.to_string().contains("output-observation"));
             assert!(!directory.exists());
         }
-        let mut terminal = body("s-55555555555555555555555555555555");
+        let mut terminal = body("s-5555555555555555555555555555555555555555555555555555555555555555");
         terminal.terminal = None;
         assert!(super::prepare_terminal(&directory, &terminal)
             .await
@@ -5346,7 +5377,7 @@ mod tests {
         let tree = TestTree::new("terminal-transaction");
         let results = tree.0.join("results");
         std::fs::create_dir(&results).expect("create results root");
-        let session_id = "s-99999999999999999999999999999999";
+        let session_id = "s-9999999999999999999999999999999999999999999999999999999999999999";
         let mut terminal = body(session_id);
 
         prepare_terminal(&results, &terminal)
@@ -5393,7 +5424,7 @@ mod tests {
         let tree = TestTree::new("retained-terminal-marker");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
-        let session_id = "s-89898989898989898989898989898989";
+        let session_id = "s-8989898989898989898989898989898989898989898989898989898989898989";
         let state_root = state.join("sessions").join(session_id);
         let control = state_root.join("control");
         std::fs::create_dir_all(&control).expect("create retained state control tree");
@@ -5423,7 +5454,7 @@ mod tests {
         let tree = TestTree::new("bundleless-terminal-raw-state");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
-        let session_id = "s-78787878787878787878787878787878";
+        let session_id = "s-7878787878787878787878787878787878787878787878787878787878787878";
         let state_root = state.join("sessions").join(session_id);
         std::fs::create_dir_all(&state_root).expect("create contradictory raw state");
         std::fs::create_dir(&results).expect("create results root");
@@ -5454,7 +5485,7 @@ mod tests {
             std::fs::create_dir(&results).unwrap();
             let control = tree.0.join("control");
             std::fs::create_dir(&control).unwrap();
-            let session_id = "s-78787878787878787878787878787878";
+            let session_id = "s-7878787878787878787878787878787878787878787878787878787878787878";
             let terminal = body(session_id);
             let arm = |site: Option<Site>| {
                 let points: Vec<_> = site
@@ -5752,22 +5783,20 @@ mod tests {
     }
 
     #[test]
-    fn session_handle_shapes_keep_current_writes_and_historical_reads_distinct() {
-        let historical = "s-0123456789abcdef0123456789abcdef";
-        let current = "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        assert!(is_safe_session_id(historical));
-        assert!(!is_current_session_id(historical));
-        assert!(is_safe_session_id(current));
-        assert!(is_current_session_id(current));
+    fn session_handles_have_exactly_one_shape() {
+        assert!(is_safe_session_id(
+            "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        ));
         for unsafe_id in [
+            // The retired 128-bit shape is no longer a session handle.
+            "s-0123456789abcdef0123456789abcdef",
             "s-../../etc/passwd",
-            "s-0123456789ABCDEF0123456789ABCDEF",
-            "s-0123456789abcdef0123456789abcdeg",
-            "s-0123456789abcdef0123456789abcdef0",
-            "x-0123456789abcdef0123456789abcdef",
+            "s-0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+            "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+            "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
+            "x-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         ] {
             assert!(!is_safe_session_id(unsafe_id), "accepted {unsafe_id:?}");
-            assert!(!is_current_session_id(unsafe_id), "accepted {unsafe_id:?}");
         }
     }
 
@@ -5984,7 +6013,7 @@ mod tests {
         let state = tree.0.join("state");
         let sessions = state.join("sessions");
         std::fs::create_dir_all(&sessions).expect("create sessions root");
-        let session_id = "s-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let session_id = "s-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let session = sessions.join(session_id);
         std::fs::create_dir(&session).expect("create owned session tree");
         std::fs::set_permissions(&session, std::fs::Permissions::from_mode(0o755))
@@ -6007,7 +6036,7 @@ mod tests {
     }
     #[test]
     fn terminal_cannot_publish_a_certified_result_with_unaccounted_records() {
-        let mut terminal = body("s-44444444444444444444444444444444");
+        let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
         terminal.observed_output_tokens = Some(0);
         terminal.observed_reasoning_tokens = Some(0);
         terminal.observed_subagent_scope_count = Some(0);
@@ -6045,7 +6074,7 @@ mod tests {
     #[test]
     fn certified_terminal_requires_matching_complete_observations() {
         for field in ["output", "reasoning", "scopes", "absent"] {
-            let mut terminal = body("s-44444444444444444444444444444444");
+            let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
             match field {
                 "output" => terminal.observed_output_tokens = Some(1),
                 "reasoning" => terminal.observed_reasoning_tokens = Some(1),
@@ -6063,7 +6092,7 @@ mod tests {
 
     #[test]
     fn partial_terminal_observation_counts_must_preserve_reasoning_nesting() {
-        let mut terminal = body("s-44444444444444444444444444444444");
+        let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
         terminal.terminal_mut().agent_result = None;
         terminal.observed_output_tokens = Some(1);
         terminal.observed_reasoning_tokens = Some(2);
@@ -6076,7 +6105,7 @@ mod tests {
 
     #[test]
     fn persisted_child_usage_cannot_default_missing_counts_to_certified_zero() {
-        let terminal = body("s-44444444444444444444444444444444");
+        let terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
         let mut encoded = serde_json::to_value(&terminal).unwrap();
         encoded["observed_subagent_scope_count"] = serde_json::json!(1);
         encoded["terminal"]["agent_result"]["subagent_scope_count"] = serde_json::json!(1);
@@ -6091,7 +6120,7 @@ mod tests {
     }
     #[test]
     fn persisted_child_terminal_absence_requires_explicit_nullable_fields() {
-        let terminal = body("s-44444444444444444444444444444444");
+        let terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
         let mut encoded = serde_json::to_value(&terminal).unwrap();
         encoded["observed_subagent_scope_count"] = serde_json::json!(1);
         encoded["terminal"]["agent_result"]["subagent_scope_count"] = serde_json::json!(1);

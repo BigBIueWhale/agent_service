@@ -367,13 +367,13 @@ fn validate_session_id(value: &str) -> Result<(), String> {
     let suffix = value
         .strip_prefix("s-")
         .ok_or_else(|| "session ID must start with s-".to_string())?;
-    if !matches!(suffix.len(), 32 | 64)
+    if suffix.len() != 64
         || !suffix
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
     {
         return Err(format!(
-            "session ID must be s- followed by 64 lowercase hexadecimal characters (or the historical 32-character shape): {value:?}"
+            "session ID must be s- followed by 64 lowercase hexadecimal characters: {value:?}"
         ));
     }
     Ok(())
@@ -2618,13 +2618,15 @@ mod tests {
 
     #[test]
     fn accepts_only_canonical_session_ids() {
-        validate_session_id("s-0123456789abcdef0123456789abcdef")
+        validate_session_id("s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
             .expect("canonical session ID must pass");
         for invalid in [
-            "0123456789abcdef0123456789abcdef",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "s-0123",
-            "s-0123456789ABCDEF0123456789ABCDEF",
-            "s-../../var/run/docker.sock0000000",
+            // The retired 128-bit shape is no longer a session ID.
+            "s-0123456789abcdef0123456789abcdef",
+            "s-0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+            "s-../../var/run/docker.sock000000000000000000000000000000000000000",
         ] {
             assert!(
                 validate_session_id(invalid).is_err(),

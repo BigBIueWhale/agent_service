@@ -973,7 +973,7 @@ the deployment default rather than sending it explicitly:
 Cancel a known session:
 
 ```bash
-./cancel.sh s-0123456789abcdef0123456789abcdef
+./cancel.sh s-<64-lowercase-hex>
 ```
 
 Tear the service and backend down. `docker stop --timeout -1` allows the Rust service
