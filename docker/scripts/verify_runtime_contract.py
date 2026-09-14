@@ -270,11 +270,7 @@ def verify_prompts(
         "QWEN instructions",
         instructions,
         [
-            "Explore is investigative in purpose, not mechanically read-only.",
-            "There is no character estimate, byte division, padding margin, or token-count fallback.",
             "A turn's tool results are held inside their share of the window",
-            "PDF is handled with deliberate offline computation, not direct PDF transport.",
-            "Journal failure makes the tool call fail; useful changes are not",
         ],
     )
 

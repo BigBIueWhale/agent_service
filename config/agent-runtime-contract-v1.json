@@ -167,7 +167,7 @@
   },
   "components": {
     "settings_sha256": "5be5eb3e2287654acea147942aca944fed5c90656e98850f55fb5c6d25731e03",
-    "instructions_sha256": "1f7ed3adadae34d9d319091230ef55a6c3853224db40fac5da9e252d68e05a58",
+    "instructions_sha256": "bbc9822bf00df48e4240167a33173b70406c66cfbca1f53a0e00fc7a1f4910e7",
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "05053fe98ce3870f33e79c89fd655677ad8c8d2a79603d467c80c2c26cfab809",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
