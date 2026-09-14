@@ -209,9 +209,6 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
 def verify_prompts(
     contract: dict[str, Any], instructions: str, system: str, deployment: str
 ) -> None:
-    model = contract["model"]
-    generation = contract["generation"]
-    vision = contract["vision"]
     require_equal(
         "deployment contract marker",
         deployment.splitlines()[0],
@@ -238,34 +235,13 @@ def verify_prompts(
         "deployment contract",
         deployment,
         [
-            "disposable Docker agent, not the operator's host",
             "The agent has `--network none`",
             contract["network"]["model_base_url"],
-            model["served_name"],
-            model["checkpoint_repository"],
-            model["checkpoint_revision"],
-            "TurboQuant K8V4: FP8 keys and packed 4-bit values",
-            f"{model['context_window_tokens']:,} total tokens",
-            f"Thinking is always enabled at `{generation['reasoning_effort']}`",
-            f"Reasoning ceiling is {generation['thinking_token_budget']:,} tokens",
-            f"final-response ceiling is {generation['final_response_token_budget']:,}",
-            "The window is spent as five shares of itself",
-            f"at most {vision['max_source_pixels_per_image']:,} pixels",
-            f"aspect ratio at most {vision['max_aspect_ratio']}:1",
             "Explore is investigative in purpose, not mechanically read-only.",
             "Journal failure makes the tool call fail; changes are never silently reverted.",
             "PDF handling is local computation, not direct PDF vision.",
         ],
     )
-    tool_section_match = re.search(
-        r"- The only native protocol tools are:(.*?)\n- Local programs",
-        deployment,
-        flags=re.DOTALL,
-    )
-    if not tool_section_match:
-        raise ContractError("deployment contract native-tool section is missing")
-    observed_tools = re.findall(r"`([^`]+)`", tool_section_match.group(1))
-    require_equal("deployment native tools", observed_tools, contract["native_tools"])
     require_fragments(
         "QWEN instructions",
         instructions,

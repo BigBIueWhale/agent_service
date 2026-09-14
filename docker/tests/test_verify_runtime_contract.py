@@ -186,7 +186,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             paths = self.mutated_contract(
                 root, lambda value: value["native_tools"].append("web_search")
             )
-            with self.assertRaisesRegex(MODULE.ContractError, "deployment native tools drift"):
+            with self.assertRaisesRegex(MODULE.ContractError, "agent_exec strict tools drift"):
                 MODULE.verify(paths)
 
     def test_rejects_broader_devpts_write_authority(self) -> None:
