@@ -1439,6 +1439,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
         "          terminateMode,\n"
         "          subagent.getTurnsUsed(),\n"
         "          subagent.getLoopType(),\n"
+        "          subagent.getFinalMessageSlip(),\n"
         "        ),",
         label=label,
     )
@@ -1450,6 +1451,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
         "                terminateMode,\n"
         "                subagent.getTurnsUsed(),\n"
         "                subagent.getLoopType(),\n"
+        "                subagent.getFinalMessageSlip(),\n"
         "              ),",
         label=label,
     )
@@ -2540,7 +2542,7 @@ def _validate_subagent_progress_after(state: State) -> None:
         agent_tool,
         "          terminateReason: describeSubagentTerminateReason(\n"
         "            event.terminateReason as AgentTerminateMode,\n"
-        "            event.loopType,\n          ),\n"
+        "            event.loopType,\n            event.finalMessageSlip,\n          ),\n"
         "          turnsUsed: event.turnsUsed,",
         label=label,
     )
@@ -2549,7 +2551,8 @@ def _validate_subagent_progress_after(state: State) -> None:
         state,
         agent_tool,
         "            terminateReason: describeSubagentTerminateReason(\n"
-        "              terminateMode,\n              loopType,\n            ),",
+        "              terminateMode,\n              loopType,\n"
+        "              finalMessageSlip,\n            ),",
         label=label,
     )
     require_text(
@@ -2559,17 +2562,20 @@ def _validate_subagent_progress_after(state: State) -> None:
         count=2,
         label=label,
     )
-    # Both model-visible constructions carry the count and the rule.
+    # Both model-visible constructions carry the count, the rule and the
+    # shape of a slipped final message.
     require_text(
         state,
         agent_tool,
-        "          subagent.getTurnsUsed(),\n          subagent.getLoopType(),\n        ),",
+        "          subagent.getTurnsUsed(),\n          subagent.getLoopType(),\n"
+        "          subagent.getFinalMessageSlip(),\n        ),",
         label=label,
     )
     require_text(
         state,
         agent_tool,
-        "                subagent.getTurnsUsed(),\n                subagent.getLoopType(),\n              ),",
+        "                subagent.getTurnsUsed(),\n                subagent.getLoopType(),\n"
+        "                subagent.getFinalMessageSlip(),\n              ),",
         label=label,
     )
     # One vocabulary for the rules, beside the detector, used by the headless
@@ -3568,6 +3574,331 @@ def _validate_incomplete_generation_after(state: State) -> None:
     forbid_text(state, cli_test, "reason: undefined", label=label)
 
 
+_FINAL_MESSAGE_SLIP_MODULE = "packages/core/src/core/final-message-slip.ts"
+_FINAL_MESSAGE_SLIP_MARKUP = (
+    "'<tool_call>',",
+    "'</tool_call>',",
+    "'<function=',",
+    "'</function>',",
+    "'<parameter=',",
+    "'</parameter>',",
+)
+_OLD_FINAL_RESULT_NUDGE = "'Please provide the final result now and stop calling tools.'"
+
+
+def _validate_final_message_slip_before(state: State) -> None:
+    label = "final-message-slip precondition"
+    cli = "packages/cli/src/nonInteractiveCli.ts"
+    types = "packages/cli/src/nonInteractive/types.ts"
+    agent_core = "packages/core/src/agents/runtime/agent-core.ts"
+    agent_types = "packages/core/src/agents/runtime/agent-types.ts"
+
+    # No shared rule exists: the session takes any self-ended turn without a
+    # tool call as its answer, and a subagent nudges once on empty text with
+    # a request the model may keep ignoring.
+    _require(
+        _FINAL_MESSAGE_SLIP_MODULE not in state,
+        f"{label}: {_FINAL_MESSAGE_SLIP_MODULE} already exists",
+    )
+    require_text(state, agent_core, _OLD_FINAL_RESULT_NUDGE, count=2, label=label)
+    for path in (cli, agent_core):
+        forbid_text(state, path, "describeFinalMessageSlip", label=label)
+        forbid_text(state, path, "finalMessageSlip", label=label)
+    forbid_text(state, agent_types, "SLIPPED_FINAL_MESSAGE", label=label)
+    forbid_text(state, types, "error_slipped_final_message", label=label)
+
+
+def _validate_final_message_slip_after(state: State) -> None:
+    label = "final-message-slip result"
+    module = _FINAL_MESSAGE_SLIP_MODULE
+    module_test = "packages/core/src/core/final-message-slip.test.ts"
+    index = "packages/core/src/index.ts"
+    cli = "packages/cli/src/nonInteractiveCli.ts"
+    cli_test = "packages/cli/src/nonInteractiveCli.test.ts"
+    types = "packages/cli/src/nonInteractive/types.ts"
+    adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
+    agent_core = "packages/core/src/agents/runtime/agent-core.ts"
+    agent_core_test = "packages/core/src/agents/runtime/agent-core.test.ts"
+    agent_types = "packages/core/src/agents/runtime/agent-types.ts"
+    events = "packages/core/src/agents/runtime/agent-events.ts"
+    headless = "packages/core/src/agents/runtime/agent-headless.ts"
+    interactive = "packages/core/src/agents/runtime/agent-interactive.ts"
+    agent_tool = "packages/core/src/tools/agent/agent.ts"
+    subagent_result = "packages/core/src/agents/subagent-result.ts"
+    subagent_result_test = "packages/core/src/agents/subagent-result.test.ts"
+    recording = "packages/core/src/services/chatRecordingService.ts"
+    branches = "packages/core/src/utils/conversation-branches.ts"
+    sdk_ts = "packages/sdk-typescript/src/types/protocol.ts"
+    sdk_python = "packages/sdk-python/src/qwen_code_sdk/protocol.py"
+
+    # ── One rule, in core, used by both loops ────────────────────────────
+    #
+    # Detection is an exact string test on the turn's visible text: empty or
+    # whitespace-only, or any of the served template's six tool-call markers.
+    # It judges nothing about whether the task is done, and the next-speaker
+    # judgment this deployment removed does not return through it.
+    module_source = _require_all(
+        state,
+        module,
+        (
+            "export const FINAL_MESSAGE_SLIP_MARKUP = [",
+            *_FINAL_MESSAGE_SLIP_MARKUP,
+            "export type FinalMessageSlipKind = 'markup' | 'empty';",
+            "export const FINAL_MESSAGE_SLIP_LIMIT = 3;",
+            "export function describeFinalMessageSlip(",
+            "export function finalMessageSlipNotice(",
+            "export function describeFinalMessageSlipKind(",
+            "export function describeFinalMessageSlipRun(",
+            "export function describeSlippedFinalMessage(",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        module_source,
+        (
+            "export function describeFinalMessageSlip(",
+            "if (text.trim().length === 0) {",
+            "return 'empty';",
+            "FINAL_MESSAGE_SLIP_MARKUP.some((markup) => text.includes(markup))",
+            "return 'markup';",
+            "return null;",
+        ),
+        label=label,
+        location=module,
+    )
+    _require(
+        module_source.count("'<") == len(_FINAL_MESSAGE_SLIP_MARKUP),
+        f"{label}: {module} tests markers other than the six",
+    )
+    for needle in (
+        "Your previous message ended the turn without a tool call, and it ",
+        "'contained tool-call markup outside a structured call. Nothing was '",
+        "'executed and nothing changed. If you meant to call a tool, emit it '",
+        "'as a proper tool call; if you were quoting the syntax, restate your '",
+        "'answer without the literal markup; otherwise give your final answer '",
+        "'Your previous message ended the turn without a tool call and without '",
+        "'any visible text. Nothing was executed and nothing changed. If you '",
+        "'meant to call a tool, emit it as a proper tool call; otherwise give '",
+        "a third message like it ends the run.",
+        "'tool-call markup outside a structured call'",
+        "'no visible text'",
+        "three consecutive turns with a message that was not a final ",
+        "after being told twice",
+        "this run carries no final answer.",
+    ):
+        require_text(state, module, needle, label=label)
+    for path in (module, cli, agent_core):
+        forbid_text(state, path, "nextSpeaker", label=label)
+        forbid_text(state, path, "checkNextSpeaker", label=label)
+    require_text(state, index, "} from './core/final-message-slip.js';", label=label)
+
+    # ── The session: notice, continuation, and the third slip's terminal ─
+    #
+    # Only a turn the model ended itself is read for a slip; a severed
+    # generation keeps its own terminal. Both reasoning loops share one
+    # counter and one answer, the notice goes to the model as the next turn
+    # and to the stream and the recording as the user-role content it is,
+    # and the third consecutive slip is raised as the one terminal shape.
+    cli_source = _require_all(
+        state,
+        cli,
+        (
+            "let consecutiveFinalMessageSlips = 0;",
+            "const noticeForFinalMessageSlip = async (",
+            "if (consecutiveFinalMessageSlips >= FINAL_MESSAGE_SLIP_LIMIT) {",
+            "terminateMode: AgentTerminateMode.SLIPPED_FINAL_MESSAGE,",
+            "message: describeSlippedFinalMessage(kind),",
+            "adapter.emitUserMessage(notice);",
+            "recordMidTurnUserMessage(notice)",
+            "? describeFinalMessageSlip(turnText)",
+            "? describeFinalMessageSlip(itemText)",
+        ),
+        label=label,
+    )
+    _require(
+        cli_source.count("lastGenerationFinishReason === FinishReason.STOP") == 2,
+        f"{label}: both reasoning loops must read a slip only from a turn the "
+        "model ended itself",
+    )
+    _require(
+        cli_source.count("await noticeForFinalMessageSlip(") == 2,
+        f"{label}: both reasoning loops must answer a slip through the one notice",
+    )
+    _require(
+        cli_source.count("let consecutiveFinalMessageSlips = 0;") == 1
+        and cli_source.count("consecutiveFinalMessageSlips = 0;") == 3,
+        f"{label}: one count, declared once and reset by both reasoning loops "
+        "on a turn that did not slip",
+    )
+    _require_ordered(
+        cli_source,
+        (
+            "return emitLoopDetectedResult();",
+            "lastGenerationFinishReason === FinishReason.STOP",
+            "? describeFinalMessageSlip(turnText)",
+            "await noticeForFinalMessageSlip(",
+            "hasUnsentContinuation = true;",
+            "continue;",
+            "consecutiveFinalMessageSlips = 0;",
+            "let shouldFinalizeTurn = toolCallRequests.length === 0;",
+        ),
+        label=label,
+        location=cli,
+    )
+    forbid_text(state, cli, _OLD_FINAL_RESULT_NUDGE, label=label)
+    require_text(state, types, "| 'error_slipped_final_message'", label=label)
+    require_text(
+        state,
+        types,
+        "    subtype: 'error_slipped_final_message',",
+        label=label,
+    )
+    require_text(
+        state,
+        agent_types,
+        "SLIPPED_FINAL_MESSAGE = 'SLIPPED_FINAL_MESSAGE',",
+        label=label,
+    )
+
+    # ── The subagent: the same rule, after the incomplete check ──────────
+    #
+    # The nudge is gone. A slip is answered with the same notice, recorded
+    # in the child transcript under its own kind, and the third in a row is
+    # the same terminal state, carried to the parent with its shape.
+    agent_core_source = _require_all(
+        state,
+        agent_core,
+        (
+            "let consecutiveFinalMessageSlips = 0;",
+            "let finalMessageSlip: FinalMessageSlipKind | null = null;",
+            "  private finalMessageSlipNotices = 0;",
+            "  getFinalMessageSlipNotices(): number {",
+            "const slip = describeFinalMessageSlip(roundText);",
+            "if (consecutiveFinalMessageSlips >= FINAL_MESSAGE_SLIP_LIMIT) {",
+            "terminateMode = AgentTerminateMode.SLIPPED_FINAL_MESSAGE;",
+            "finalMessageSlip = slip;",
+            "this.finalMessageSlipNotices += 1;",
+            "kind: 'final_message_slip',",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        agent_core_source,
+        (
+            "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
+            "const slip = describeFinalMessageSlip(roundText);",
+            "terminateMode = AgentTerminateMode.SLIPPED_FINAL_MESSAGE;",
+            "finalMessageSlipNotice(",
+            "kind: 'final_message_slip',",
+            "consecutiveFinalMessageSlips = 0;",
+            "// No tool calls and a self-ended generation — this is the",
+        ),
+        label=label,
+        location=agent_core,
+    )
+    _require(
+        agent_core_source.count("finalMessageSlipNotices: this.finalMessageSlipNotices,") == 3,
+        f"{label}: every exit of the subagent loop must report its notices",
+    )
+    forbid_text(state, agent_core, _OLD_FINAL_RESULT_NUDGE, label=label)
+    forbid_text(state, agent_core, "Please provide the final result", label=label)
+    _require_all(
+        state,
+        events,
+        (
+            "  finalMessageSlip: FinalMessageSlipKind | null;",
+            "  finalMessageSlipNotices: number;",
+            "kind?: 'message' | 'notification' | 'final_message_slip';",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        headless,
+        (
+            "  getFinalMessageSlip(): FinalMessageSlipKind | null {",
+            "          finalMessageSlip: this.finalMessageSlip,\n"
+            "          finalMessageSlipNotices: this.core.getFinalMessageSlipNotices(),",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        interactive,
+        "case AgentTerminateMode.SLIPPED_FINAL_MESSAGE:",
+        label=label,
+    )
+    _require_all(
+        state,
+        subagent_result,
+        (
+            "finalMessageSlip?: FinalMessageSlipKind | null,",
+            "terminateMode === AgentTerminateMode.SLIPPED_FINAL_MESSAGE",
+            "having ended ${describeFinalMessageSlipRun(finalMessageSlip)}",
+        ),
+        label=label,
+    )
+    _require(
+        _source(state, agent_tool, label=label).count("subagent.getFinalMessageSlip()") == 3,
+        f"{label}: {agent_tool} does not carry the shape of the slip to the "
+        "parent and the terminal display",
+    )
+    require_text(state, agent_tool, "event.finalMessageSlip,", label=label)
+    require_text(
+        state,
+        recording,
+        "externalInputKind?: 'message' | 'notification' | 'final_message_slip';",
+        label=label,
+    )
+    require_text(
+        state,
+        branches,
+        "record.externalInputKind === 'final_message_slip' ||",
+        label=label,
+    )
+    require_text(state, sdk_ts, "| 'error_slipped_final_message'", label=label)
+    require_text(state, sdk_python, '"error_slipped_final_message",', label=label)
+
+    # ── Executed in the build ────────────────────────────────────────────
+    require_text(state, module_test, "describe('describeFinalMessageSlip'", label=label)
+    require_text(
+        state,
+        module_test,
+        "is an exact string test on the six markers, not a judgment of the text",
+        label=label,
+    )
+    for name in (
+        "puts the first notice to the model as the next user message and continues the run",
+        "numbers the second consecutive notice by the slip it answers",
+        "ends the run on the third consecutive slip as error_slipped_final_message",
+        "reads a turn with no visible text the same way, in the empty wording",
+        "takes a clean message as the final answer without a notice, whatever it says",
+        "starts the count again after a turn that called a tool",
+        "reads the whole message, so markup split across streamed chunks is the same slip as markup delivered in one piece",
+        "does not read a generation stopped from outside for a slip: the cut is the terminal",
+    ):
+        require_text(state, cli_test, name, label=label)
+    for name in (
+        "puts the first notice to the model and takes the next clean round as the report",
+        "ends the run on the third consecutive slip, and the parent is told what happened",
+        "treats three silent rounds the same way, and says the subagent produced no report",
+        "starts the count again after a round that called a tool",
+    ):
+        require_text(state, agent_core_test, name, label=label)
+    require_text(
+        state,
+        subagent_result_test,
+        "[final-message-slip] tells the parent a subagent ended three turns without a final answer, naming the shape",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "[AgentTerminateMode.SLIPPED_FINAL_MESSAGE, 'error_slipped_final_message'],",
+        label=label,
+    )
+
+
 def _validate_terminal_state_before(state: State) -> None:
     label = "terminal-state precondition"
     types = "packages/cli/src/nonInteractive/types.ts"
@@ -3710,7 +4041,7 @@ def _validate_terminal_state_after(state: State) -> None:
     # deployment's argv can reach a producing statement is a path-sensitive
     # property of a call graph that no text-level check can decide, and the
     # state set is instead kept equal to the states this build can reach, so
-    # the two coincide -- a property a reader checks by eye on an eight-member
+    # the two coincide -- a property a reader checks by eye on a nine-member
     # enum.
     enum_source = _source(state, agent_types, label=label)
     enum_body = enum_source.split("export enum AgentTerminateMode {", 1)[1].split(
@@ -5457,6 +5788,26 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_incomplete_generation_before,
         validate_after=_validate_incomplete_generation_after,
+    ),
+    SemanticConcern(
+        name="final-message-slip-notice",
+        rationale=(
+            "A turn the model ended itself with no tool call is its final answer only when its "
+            "visible text is one. The model is a stochastic entity: a message with no visible text, "
+            "or with the served template's tool-call markup outside a structured call, is a slip "
+            "that is represented to the model as a user-role notice, never executed, and never used "
+            "to end the run until it repeats. The third consecutive slip is the SLIPPED_FINAL_MESSAGE "
+            "state, error_slipped_final_message on the wire, in the headless session and every "
+            "subagent alike, after the incomplete-generation check and never in its place. Detection "
+            "is an exact string test on the turn's visible text; no next-speaker judgment returns."
+        ),
+        removal_condition=(
+            "Upstream answers an empty or markup-carrying self-ended turn with the same notice in "
+            "both reasoning loops, bounds it at three consecutive slips, and names the ending as its "
+            "own terminal state carried to the parent with its shape."
+        ),
+        validate_before=_validate_final_message_slip_before,
+        validate_after=_validate_final_message_slip_after,
     ),
     SemanticConcern(
         name="bounded-tool-output",

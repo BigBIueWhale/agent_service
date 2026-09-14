@@ -12,14 +12,14 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `42849a31eaa8995484956b317c40fb2943658f421635b3315f439bb75731eb0c`
+- Review-diff SHA-256: `eb1ac9c2d26c4006971183420e7743649826e5cff7f8866a5239c428a9f760c7`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `182c5ce24bea4969332e00d43e9c109f2bafeb4a6867cbd7e49369b0e159a130`
+- Transformer-manifest SHA-256: `63369524e15aca3c3f9de823fb1f628197fc1c22af8fc0dadd0697b2479e27fd`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 30 semantic concerns before changing the private source tree.
+identities, and 33 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
@@ -48,6 +48,24 @@ has been delivered. Text, whitespace, and literal protocol-like XML remain
 verbatim. Transport failures, invalid usage, malformed calls, and post-terminal
 content retain diagnostic text without publishing executable calls or a normal
 terminal. Empty normally completed output is a valid response.
+
+A turn the model ended itself with no tool call is its final answer only when
+its visible text is one. A message with no visible text, or one carrying the
+served template's tool-call markup (`<tool_call>`, `</tool_call>`, `<function=`,
+`</function>`, `<parameter=`, `</parameter>`) outside a structured call, is a
+slip: it stays in history exactly as produced, is answered with a user-role
+notice that says nothing was executed, and is followed by the next turn, charged
+like any other. The third consecutive slip is the `SLIPPED_FINAL_MESSAGE` state,
+`error_slipped_final_message` on the wire with exit code 1, in the headless
+session and every subagent alike, decided after the incomplete-generation check
+and never in its place. One core module (`describeFinalMessageSlip`,
+`finalMessageSlipNotice`, `FINAL_MESSAGE_SLIP_LIMIT`) decides it for both
+reasoning loops by an exact string test on the turn's visible text; no judgment
+about task completion is made, and the removed next-speaker check does not
+return. The notice reaches the stream as a user record, the session recording as
+a mid-turn user record, and a subagent's transcript under its own input kind; the
+subagent's terminal event carries the shape of the slip and the number of
+notices, and its parent is told the assignment is unfinished.
 
 ## Context and instructions
 

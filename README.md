@@ -564,16 +564,19 @@ it is ever handed back to a model.
 
 The envelope names which terminal state ended the run, and the service carries that
 name through to the caller as `terminal.agent_result.agent_result_subtype`. `success` is the agent's
-assertion that the model wrote its final message to the end. Seven `error_*`
+assertion that the model wrote its final message to the end. Eight `error_*`
 spellings name the states that stopped a run instead, one name per state:
 `error_during_execution` when the run failed on its own terms, `error_timeout`,
 `error_max_turns` and `error_max_tool_calls` for the three caller-supplied bounds,
 `error_loop_detected` when the loop detector halted a run that had stopped making
 progress, `error_incomplete_generation` when the provider stopped the last
-generation from outside, and `error_cancelled` for an abort from outside. A state
-earns a name when it names an authority other than the run itself that ended the
-run, or a bound the caller set and can raise; everything the run did to itself is
-`error_during_execution`, told apart by the error message. Every one of the eight
+generation from outside, `error_slipped_final_message` when the model ended three
+consecutive turns with a message that was not a final answer after being told
+twice, and `error_cancelled` for an abort from outside. A state earns a name when
+it names an authority other than the run itself that ended the run, a bound the
+caller set and can raise, or a shape of ending a reader has to tell from the
+others without parsing English; everything else the run did to itself is
+`error_during_execution`, told apart by the error message. Every one of the nine
 names is a state the client contains a statement to produce, which the patch
 asserts before it writes a byte. A subagent's own scoped record carries the error
 names from the same list, so a subagent that ran out of turns and one whose tool
@@ -629,6 +632,33 @@ therefore reaches a caller only when a generation filled the window; the record
 names the prompt the generation was issued at, the remainder it was given and
 what it generated, so a reader can tell a turn too large for the window from a
 window too full for the turn. Nothing is retried, continued or repaired.
+
+A turn that ends on its own with no tool call is the model's final answer only
+when its visible text is one. The model is a stochastic entity: a message with no
+visible text, or one carrying the served template's own tool-call markup
+(`<tool_call>`, `</tool_call>`, `<function=`, `</function>`, `<parameter=`,
+`</parameter>`) that the backend did not parse as a call, is a slip -- the model
+meant to call a tool and mis-formed it, quoted the syntax, or stopped inside its
+reasoning. A slip is represented to the model and never executed: the message
+stays in history exactly as produced, a user-role notice below it says what
+happened, that nothing was executed and nothing changed, and how many notices
+remain, and the next turn is issued and charged to the turn budget like any
+other. Each notice is written to the stream as a `user` record, so the captured
+session shows how many were sent. The third consecutive slip ends the run as
+`error_slipped_final_message` (exit 1) with a message naming the shape of the
+slip and that the model was told twice; a turn that calls a tool or ends with a
+clean message resets the count. Detection is an exact string test on the turn's
+visible text, not its reasoning, and judges nothing about whether the task is
+done; the next-speaker check this deployment removed does not return. A
+generation stopped from outside is never read for a slip: `error_incomplete_generation`
+names it first. A subagent is held to the same rule in its own loop; one that
+ends this way is reported to its parent as unfinished, with the shape of the slip
+and its turn count, in the same form as an exhausted budget or a cut-off
+generation, and its scoped terminal record carries the same name. That name is
+not yet in the `resultErrorSubtype` enumeration of `protocol/stream-contract-v1.json`
+or in the parser's list in `src/result_parse.rs`; the client's own stream
+admission is compiled from that schema and refuses the record until the schema
+admits the name, so extending both is a prerequisite of releasing this client.
 
 ## Prefix caching evidence
 
