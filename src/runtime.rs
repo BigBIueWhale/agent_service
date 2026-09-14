@@ -356,36 +356,21 @@ pub struct RunningSnapshot {
     pub archive_sha256: String,
 }
 
-/// The turn budget carried by a record written before the budget was a
-/// request field. Those sessions ran under the sole compiled constant of
-/// their day, which is this deployment's default.
-fn default_recorded_max_session_turns() -> u32 {
-    crate::config::DEFAULT_MAX_SESSION_TURNS
-}
-
-// The record persists for the resource's whole lifetime and is read
-// tolerantly: a field another record generation carries is ignored, never
-// honoured, so every committed record on disk stays readable.
+// The record persists for the resource's whole lifetime and is read exactly
+// as it is written: an unknown or missing field is refused, never ignored or
+// defaulted.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct AcceptanceRecord {
-    /// Version 2 records the streamed-archive commitment. Version 1 recorded
-    /// a shared-filesystem `folder` path, but that transport predates durable
-    /// acceptance records in result directories, so version 2 is the only
-    /// version that can exist on disk. The record persists for the resource's
-    /// whole lifetime: terminal reads of current 256-bit handles cross-check
-    /// it against the published terminal body.
+    /// Version 2 records the streamed-archive commitment and is the only
+    /// version this service writes. Terminal reads cross-check the record
+    /// against the published terminal body.
     pub schema_version: u32,
     pub session_id: String,
     pub accepted_at_unix: u64,
     pub archive_bytes: u64,
     pub archive_sha256: String,
     pub prompt: String,
-    // Acceptance records committed before the budget became a request field
-    // were accepted under the locked default, which is their one
-    // semantically valid migration value. Version 2 stays the only version
-    // that can exist on disk: this adds a field to that shape, it does not
-    // define a new record.
-    #[serde(default = "default_recorded_max_session_turns")]
     pub max_session_turns: u32,
 }
 
@@ -473,12 +458,6 @@ enum SessionResolution {
     Running(Arc<RunningEntry>),
     MemoryTerminal(SessionBody),
     DiskTerminal,
-}
-
-#[derive(Serialize)]
-pub struct SessionList {
-    pub sessions: Vec<SessionBody>,
-    pub uninterpreted_records: Vec<crate::error::UninterpretedTerminalRecord>,
 }
 
 #[derive(Clone)]
@@ -697,15 +676,6 @@ pub async fn recover_interrupted_acceptances(cfg: &Config) -> ServiceResult<()> 
                 path.display()
             )));
         }
-        if path_entry_exists(
-            &path.join("finished.json"),
-            "restart recovery: stat committed evidence",
-        )? && matches!(
-            crate::api::committed_terminal_for_sweep(&path, &name, 1000, 1000)?,
-            Some(TerminalRecord::Uninterpreted(_))
-        ) {
-            continue;
-        }
         let accepted = acceptance_path(&cfg.results_dir, &name);
         if !path_entry_exists(
             &accepted,
@@ -782,6 +752,96 @@ pub async fn recover_interrupted_acceptances(cfg: &Config) -> ServiceResult<()> 
             "terminalized a durably accepted session interrupted by a prior service process"
         );
     }
+    Ok(())
+}
+
+/// Refuse to adopt the results directory while it holds anything this release
+/// cannot read, before acceptance recovery or any startup sweep acts on it. The
+/// service reads only the record formats it writes: it translates, defaults and
+/// skips no other format, and it never moves or deletes one for the operator.
+/// One refusal names every such directory, its reason, and any raw state tree
+/// beside it, so one cleanup precedes one restart. Deletion controls belong to
+/// interrupted-deletion recovery, which runs earlier.
+pub(crate) fn require_readable_result_records(cfg: &Config) -> ServiceResult<()> {
+    let mut entries = std::fs::read_dir(&cfg.results_dir)
+        .map_err(|error| {
+            ServiceError::Internal(io_msg(
+                "startup record check: read results directory",
+                &cfg.results_dir,
+                &error,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            ServiceError::Internal(io_msg(
+                "startup record check: read results entry",
+                &cfg.results_dir,
+                &error,
+            ))
+        })?;
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+
+    let mut refusals = Vec::new();
+    for entry in entries {
+        let path = entry.path();
+        let file_name = entry.file_name();
+        let reason = match file_name.to_str() {
+            Some(name) if name.starts_with(DELETE_INTENT_PREFIX) => continue,
+            Some(name) if is_safe_session_id(name) => match read_result_records(cfg, name) {
+                Ok(()) => continue,
+                Err(error) => error.message(),
+            },
+            Some(_) | None => "not a session result directory".to_string(),
+        };
+        let state_root = cfg.state_dir.join("sessions").join(&file_name);
+        let state = match std::fs::symlink_metadata(&state_root) {
+            Ok(_) => format!(" and raw state tree {}", state_root.display()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => format!(
+                " and possibly raw state tree {} (stat failed: {error})",
+                state_root.display()
+            ),
+        };
+        refusals.push(format!("{}{state}: {reason}", path.display()));
+    }
+    if refusals.is_empty() {
+        return Ok(());
+    }
+    Err(ServiceError::Internal(format!(
+        "startup refused before adopting {}: {} result {} cannot be read by this release, which reads only the record formats it writes and translates, skips, moves or deletes nothing else; remove these paths from the runtime directories (move them elsewhere to keep them), then start again: {}",
+        cfg.results_dir.display(),
+        refusals.len(),
+        if refusals.len() == 1 {
+            "directory"
+        } else {
+            "directories"
+        },
+        refusals.join("; ")
+    )))
+}
+
+/// Read each committed record in one result directory with the strict reader
+/// the service uses for it. Uncommitted `.next` candidates stay with recovery,
+/// which validates or discards them and never treats one as committed state.
+fn read_result_records(cfg: &Config, session_id: &str) -> ServiceResult<()> {
+    let result_dir = cfg.results_dir.join(session_id);
+    for (name, role) in [
+        ("finished.json", "committed terminal"),
+        ("finished.json.tmp", "prepared terminal draft"),
+    ] {
+        let path = result_dir.join(name);
+        if path_entry_exists(&path, "startup record check: stat terminal record")? {
+            open_terminal_body_file(&path, session_id, role)?;
+        }
+    }
+    if acceptance_exists(&cfg.results_dir, session_id)? {
+        read_acceptance(&cfg.results_dir, session_id)?;
+    }
+    let progress = progress_path(&cfg.results_dir, session_id);
+    if path_entry_exists(&progress, "startup record check: stat progress snapshot")? {
+        crate::progress::read_progress_events(&progress, session_id)?;
+    }
+    read_cancel_intent(&cfg.results_dir, session_id)?;
     Ok(())
 }
 
@@ -1610,7 +1670,7 @@ impl Manager {
     /// Pure read of every visible session. Combines in-memory running
     /// entries with on-disk terminal entries (the on-disk records survive
     /// across server restart).
-    pub async fn list(&self) -> ServiceResult<SessionList> {
+    pub async fn list(&self) -> ServiceResult<Vec<SessionBody>> {
         // Freeze only the set of visible resource identities under the short
         // admission fence. Each resource is then read independently after the
         // fence is released, so a large historical collection can never hold
@@ -1677,13 +1737,9 @@ impl Manager {
         };
 
         let mut bodies = Vec::with_capacity(ids.len());
-        let mut uninterpreted_records = Vec::new();
         for id in ids {
             match self.get(&id).await {
                 Ok(body) => bodies.push(body),
-                Err(ServiceError::UninterpretedTerminalRecord(record)) => {
-                    uninterpreted_records.push(record)
-                }
                 // A concurrent explicit DELETE after the identity snapshot
                 // makes omission the accurate later observation.
                 Err(ServiceError::NotFound { .. }) => {}
@@ -1691,10 +1747,7 @@ impl Manager {
             }
         }
         bodies.sort_by_key(|b| b.started_at_unix);
-        Ok(SessionList {
-            sessions: bodies,
-            uninterpreted_records,
-        })
+        Ok(bodies)
     }
 
     /// Durably request cancellation of a running session.  This is a short,
@@ -3893,65 +3946,32 @@ fn validate_delete_state_marker(
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum TerminalRecord {
-    Current(Box<SessionBody>),
-    Uninterpreted(crate::error::UninterpretedTerminalRecord),
-}
-
-impl TerminalRecord {
-    fn into_body(self) -> ServiceResult<SessionBody> {
-        match self {
-            Self::Current(body) => Ok(*body),
-            Self::Uninterpreted(record) => Err(ServiceError::UninterpretedTerminalRecord(record)),
-        }
-    }
-}
-
-/// Syntax and terminal identity establish preserved evidence. Only exact current
-/// deserialization and semantic validation establish resource-operation authority.
-pub(crate) fn interpret_terminal_record(
+/// Parse one persisted terminal record under the exact current schema. Startup
+/// refuses a results directory whose records do not parse, so after startup a
+/// refusal here is an internal invariant violation, never a resource state.
+pub(crate) fn parse_terminal_record(
     bytes: &[u8],
     session_id: &str,
     path: &Path,
-) -> ServiceResult<TerminalRecord> {
-    let json: serde_json::Value = serde_json::from_slice(bytes).map_err(|error| {
+) -> ServiceResult<SessionBody> {
+    let body = serde_json::from_slice::<SessionBody>(bytes).map_err(|error| {
         ServiceError::Internal(format!(
-            "terminal record {} has invalid JSON syntax: {error}",
+            "terminal record {} is malformed: {error}",
             path.display()
         ))
     })?;
-    if json.get("session_id").and_then(serde_json::Value::as_str) != Some(session_id)
-        || !matches!(
-            json.get("status").and_then(serde_json::Value::as_str),
-            Some("completed" | "cancelled")
-        )
-    {
+    if body.session_id != session_id || body.status == SessionStatus::Running {
         return Err(ServiceError::Internal(format!(
             "terminal record {} has identity/status mismatch for {session_id}",
             path.display()
         )));
     }
-    drop(json);
-    // Deserialize the original bytes: a Value would erase duplicate fields.
-    let body = match serde_json::from_slice::<SessionBody>(bytes) {
-        Ok(body) => body,
-        Err(error) => {
-            return Ok(TerminalRecord::Uninterpreted(
-                crate::error::UninterpretedTerminalRecord {
-                    session_id: session_id.to_string(),
-                    detail: error.to_string(),
-                },
-            ))
-        }
-    };
     body.validate_shape()?;
-    Ok(TerminalRecord::Current(Box::new(body)))
+    Ok(body)
 }
 
 /// Read the on-disk terminal record. `NotFound` if the directory or
-/// finished.json does not exist. Uninterpreted evidence has its own refusal;
-/// invalid syntax, inconsistent current evidence and storage failures stay errors.
+/// finished.json does not exist; `Internal` on read or parse failure.
 async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionBody> {
     if !is_safe_session_id(session_id) {
         return Err(ServiceError::InvalidRequest(format!(
@@ -3959,11 +3979,6 @@ async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionB
         )));
     }
     let path = finished_json_path(cfg, session_id);
-    let body =
-        open_terminal_body_file(&path, session_id, "committed terminal").map(|(body, _file)| body);
-    if matches!(&body, Err(ServiceError::UninterpretedTerminalRecord(_))) {
-        return body;
-    }
     let temporary_path = path.with_file_name("finished.json.tmp");
     match std::fs::symlink_metadata(&temporary_path) {
         Ok(_) => {
@@ -3981,7 +3996,7 @@ async fn read_terminal(cfg: &Config, session_id: &str) -> ServiceResult<SessionB
             )));
         }
     }
-    let body = body?;
+    let body = open_terminal_body_file(&path, session_id, "committed terminal")?.0;
     validate_terminal_resource(cfg, session_id, &body)?;
     crate::api::validate_terminal_storage(&cfg.results_dir.join(session_id), &body, 1000, 1000)?;
     validate_terminal_state_storage(cfg, &body)?;
@@ -4052,10 +4067,7 @@ fn open_terminal_body_file(
             bytes.len()
         )));
     }
-    Ok((
-        interpret_terminal_record(&bytes, session_id, path)?.into_body()?,
-        file,
-    ))
+    Ok((parse_terminal_record(&bytes, session_id, path)?, file))
 }
 
 fn validate_terminal_state_storage(cfg: &Config, body: &SessionBody) -> ServiceResult<()> {
@@ -4491,158 +4503,354 @@ mod tests {
     }
 
     #[test]
-    fn stored_terminal_interpretation_distinguishes_schema_from_syntax_and_semantics() {
-        let id = "s-11111111111111111111111111111111";
-        let path = Path::new("finished.json");
+    fn stored_terminal_records_parse_only_under_the_current_schema() {
+        let id = "s-1111111111111111111111111111111111111111111111111111111111111111";
+        let path = Path::new("results/finished.json");
         let original = serde_json::to_value(body(id)).unwrap();
-        assert!(matches!(
-            super::interpret_terminal_record(&serde_json::to_vec(&original).unwrap(), id, path)
-                .unwrap(),
-            super::TerminalRecord::Current(_)
-        ));
-        for field in ["preserve_thinking", "unrecognized_measurement"] {
-            let mut unknown = original.clone();
-            unknown[field] = serde_json::json!(true);
-            let bytes = serde_json::to_vec(&unknown).unwrap();
-            assert!(serde_json::from_slice::<SessionBody>(&bytes).is_err());
-            let record = super::interpret_terminal_record(&bytes, id, path).unwrap();
-            let error = record
-                .into_body()
-                .expect_err("schema mismatch cannot produce a current body");
-            assert_eq!(error.kind_str(), "uninterpreted_terminal_record");
-            assert_eq!(error.http_status(), axum::http::StatusCode::CONFLICT);
-            assert_eq!(error.session_id(), id);
-            assert!(error.message().contains(field));
-        }
-        let mut absent = original.clone();
-        absent.as_object_mut().unwrap().remove("terminal");
-        assert!(matches!(
-            super::interpret_terminal_record(&serde_json::to_vec(&absent).unwrap(), id, path)
-                .unwrap(),
-            super::TerminalRecord::Uninterpreted(_)
-        ));
+        let parsed =
+            super::parse_terminal_record(&serde_json::to_vec(&original).unwrap(), id, path)
+                .expect("a current record parses");
+        assert_eq!(parsed.session_id, id);
+
+        let mut unknown = original.clone();
+        unknown["preserve_thinking"] = serde_json::json!(true);
+        // The flat layout earlier releases wrote before the ending was nested.
+        let mut flattened = original.clone();
+        let object = flattened.as_object_mut().unwrap();
+        let ending = object.remove("terminal").unwrap();
+        object.extend(ending.as_object().unwrap().clone());
         let duplicate = serde_json::to_string(&original).unwrap().replacen(
             '{',
             "{\"status\":\"completed\",",
             1,
         );
-        assert!(matches!(
-            super::interpret_terminal_record(duplicate.as_bytes(), id, path).unwrap(),
-            super::TerminalRecord::Uninterpreted(_)
-        ));
-        let syntax = super::interpret_terminal_record(b"{", id, path).unwrap_err();
-        assert!(syntax.message().contains("invalid JSON syntax"));
-        for field in ["session_id", "status"] {
-            let mut wrong_identity = original.clone();
-            wrong_identity[field] = serde_json::json!("wrong");
-            let error = super::interpret_terminal_record(
-                &serde_json::to_vec(&wrong_identity).unwrap(),
-                id,
-                path,
-            )
-            .unwrap_err();
-            assert!(error.message().contains("identity/status mismatch"));
+        let mut wrong_identity = original.clone();
+        wrong_identity["session_id"] =
+            serde_json::json!("s-2222222222222222222222222222222222222222222222222222222222222222");
+        let mut running = original.clone();
+        running["status"] = serde_json::json!("running");
+        let mut contradictory = original;
+        contradictory["observed_output_tokens"] = serde_json::json!(0);
+        contradictory["observed_reasoning_tokens"] = serde_json::json!(1);
+        for (case, bytes, expected) in [
+            (
+                "unknown field",
+                serde_json::to_vec(&unknown).unwrap(),
+                "unknown field `preserve_thinking`",
+            ),
+            (
+                "flat ending",
+                serde_json::to_vec(&flattened).unwrap(),
+                "unknown field",
+            ),
+            (
+                "duplicate field",
+                duplicate.into_bytes(),
+                "duplicate field `status`",
+            ),
+            ("invalid syntax", b"{".to_vec(), "EOF while parsing"),
+            (
+                "identity",
+                serde_json::to_vec(&wrong_identity).unwrap(),
+                "identity/status mismatch",
+            ),
+            (
+                "running status",
+                serde_json::to_vec(&running).unwrap(),
+                "identity/status mismatch",
+            ),
+            (
+                "semantic contradiction",
+                serde_json::to_vec(&contradictory).unwrap(),
+                "reasoning tokens exceed",
+            ),
+        ] {
+            let error = super::parse_terminal_record(&bytes, id, path).expect_err(case);
+            assert!(matches!(error, ServiceError::Internal(_)), "{case}: {error}");
+            assert_eq!(
+                error.http_status(),
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "{case}"
+            );
+            assert!(error.to_string().contains(expected), "{case}: {error}");
         }
-        let mut invalid_counts = original;
-        invalid_counts["observed_output_tokens"] = serde_json::json!(0);
-        invalid_counts["observed_reasoning_tokens"] = serde_json::json!(1);
-        let error = super::interpret_terminal_record(
-            &serde_json::to_vec(&invalid_counts).unwrap(),
-            id,
-            path,
+    }
+
+    #[test]
+    fn acceptance_records_are_read_strictly() {
+        let tree = TestTree::new("strict-acceptance");
+        let results = tree.0.join("results");
+        let session_id = "s-5757575757575757575757575757575757575757575757575757575757575757";
+        std::fs::create_dir_all(results.join(session_id)).expect("create acceptance directory");
+        let current = AcceptanceRecord {
+            schema_version: 2,
+            session_id: session_id.to_string(),
+            accepted_at_unix: 1,
+            archive_bytes: 1,
+            archive_sha256: "1".repeat(64),
+            prompt: "strict acceptance fixture".to_string(),
+            max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+        };
+        let encoded = serde_json::to_value(&current).unwrap();
+        let mut unknown = encoded.clone();
+        unknown["preserve_thinking"] = serde_json::json!(false);
+        let mut missing = encoded.clone();
+        missing.as_object_mut().unwrap().remove("max_session_turns");
+        let path = results.join(session_id).join("accepted.json");
+        for (case, record, expected) in [
+            ("current", encoded, None),
+            (
+                "unknown field",
+                unknown,
+                Some("unknown field `preserve_thinking`"),
+            ),
+            (
+                "missing field",
+                missing,
+                Some("missing field `max_session_turns`"),
+            ),
+        ] {
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => panic!("remove acceptance fixture: {error}"),
+            }
+            private_write(&path, &serde_json::to_vec_pretty(&record).unwrap());
+            make_service_owned(&path);
+            let outcome = super::read_acceptance(&results, session_id);
+            match expected {
+                None => assert_eq!(outcome.expect(case), current),
+                Some(expected) => {
+                    let error = outcome.expect_err(case);
+                    assert!(matches!(error, ServiceError::Internal(_)), "{case}: {error}");
+                    let message = error.to_string();
+                    assert!(message.contains(expected), "{case}: {message}");
+                    assert!(
+                        message.contains(&path.display().to_string()),
+                        "{case}: {message}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn startup_refuses_unreadable_result_records_naming_every_directory_without_changes() {
+        let tree = TestTree::new("unreadable-startup");
+        let state = tree.0.join("state");
+        let results = tree.0.join("results");
+        std::fs::create_dir_all(state.join("sessions")).expect("create sessions root");
+        std::fs::create_dir(state.join("spool")).expect("create spool root");
+        std::fs::create_dir(&results).expect("create results root");
+        let cfg = test_config(state.clone(), results.clone());
+
+        // A current terminal resource with its acceptance and progress documents.
+        let current_id = "s-4545454545454545454545454545454545454545454545454545454545454545";
+        let current_dir = results.join(current_id);
+        std::fs::create_dir(&current_dir).expect("create current result directory");
+        std::fs::set_permissions(&current_dir, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod current result directory");
+        let progress = crate::progress::ProgressReporter::create(
+            &current_dir.join("progress.json"),
+            current_id,
+            "accepted for the startup refusal fixture",
         )
-        .unwrap_err();
-        assert!(
-            matches!(error, ServiceError::Internal(_)),
-            "current semantic contradiction must remain refused"
+        .expect("create current progress fixture");
+        let events = progress.events().expect("read current progress fixture");
+        let latest = events
+            .last()
+            .expect("progress fixture has its initial event")
+            .clone();
+        let mut terminal = body(current_id);
+        terminal.progress_events = events;
+        terminal.progress_revision = latest.revision;
+        terminal.progress_at_unix_ms = latest.at_unix_ms;
+        terminal.progress_phase = latest.phase;
+        terminal.progress_message = latest.message.clone();
+        let acceptance = AcceptanceRecord {
+            schema_version: 2,
+            session_id: current_id.to_string(),
+            accepted_at_unix: terminal.started_at_unix,
+            archive_bytes: terminal.archive_bytes,
+            archive_sha256: terminal.archive_sha256.clone(),
+            prompt: terminal.prompt_preview.clone(),
+            max_session_turns: terminal.max_session_turns,
+        };
+        private_write(
+            &current_dir.join("accepted.json"),
+            &serde_json::to_vec_pretty(&acceptance).unwrap(),
+        );
+        private_write(
+            &current_dir.join("finished.json"),
+            &serde_json::to_vec_pretty(&terminal).unwrap(),
+        );
+        // progress.json keeps the creating euid, which its reader requires.
+        for path in [
+            current_dir.clone(),
+            current_dir.join("accepted.json"),
+            current_dir.join("finished.json"),
+        ] {
+            make_service_owned(&path);
+        }
+
+        // A result directory an earlier release wrote: the flat ending and an
+        // acceptance field this release does not have, beside its raw state tree.
+        let legacy_id = "s-5656565656565656565656565656565656565656565656565656565656565656";
+        let legacy_dir = results.join(legacy_id);
+        std::fs::create_dir(&legacy_dir).expect("create legacy result directory");
+        std::fs::set_permissions(&legacy_dir, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod legacy result directory");
+        let mut legacy_terminal = serde_json::to_value(body(legacy_id)).unwrap();
+        let object = legacy_terminal.as_object_mut().unwrap();
+        let ending = object.remove("terminal").unwrap();
+        object.extend(ending.as_object().unwrap().clone());
+        let mut legacy_acceptance = serde_json::to_value(AcceptanceRecord {
+            session_id: legacy_id.to_string(),
+            ..acceptance.clone()
+        })
+        .unwrap();
+        legacy_acceptance["preserve_thinking"] = serde_json::json!(false);
+        private_write(
+            &legacy_dir.join("finished.json"),
+            &serde_json::to_vec_pretty(&legacy_terminal).unwrap(),
+        );
+        private_write(
+            &legacy_dir.join("accepted.json"),
+            &serde_json::to_vec_pretty(&legacy_acceptance).unwrap(),
+        );
+        for path in [
+            legacy_dir.clone(),
+            legacy_dir.join("finished.json"),
+            legacy_dir.join("accepted.json"),
+        ] {
+            make_service_owned(&path);
+        }
+        let legacy_state = state.join("sessions").join(legacy_id);
+        std::fs::create_dir(&legacy_state).expect("create legacy raw state tree");
+        private_write(
+            &legacy_state.join("raw-evidence"),
+            b"irreplaceable raw evidence",
+        );
+
+        let files = [
+            current_dir.join("accepted.json"),
+            current_dir.join("finished.json"),
+            current_dir.join("progress.json"),
+            legacy_dir.join("accepted.json"),
+            legacy_dir.join("finished.json"),
+            legacy_state.join("raw-evidence"),
+        ];
+        let snapshot = || {
+            files
+                .iter()
+                .map(|path| {
+                    let metadata = std::fs::symlink_metadata(path).expect("stat fixture");
+                    (
+                        std::fs::read(path).expect("read fixture"),
+                        metadata.ino(),
+                        metadata.mtime_nsec(),
+                        metadata.ctime_nsec(),
+                        metadata.nlink(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let before = snapshot();
+        for _ in 0..2 {
+            let error = crate::api::recover_local_state(&cfg)
+                .await
+                .expect_err("startup must refuse a result directory it cannot read");
+            assert!(matches!(error, ServiceError::Internal(_)), "{error}");
+            let message = error.to_string();
+            for expected in [
+                format!(
+                    "{} and raw state tree {}: terminal record",
+                    legacy_dir.display(),
+                    legacy_state.display()
+                ),
+                "unknown field".to_string(),
+                "1 result directory cannot be read".to_string(),
+                "remove these paths".to_string(),
+            ] {
+                assert!(message.contains(&expected), "missing {expected:?}: {message}");
+            }
+            assert!(
+                !message.contains(&current_dir.display().to_string()),
+                "{message}"
+            );
+            assert_eq!(snapshot(), before, "a refused startup changed persisted state");
+        }
+
+        // The operator's cleanup moves the named paths out of the runtime
+        // directories; startup then adopts the results directory it can read.
+        std::fs::rename(&legacy_dir, tree.0.join("kept-result")).expect("move legacy result");
+        std::fs::rename(&legacy_state, tree.0.join("kept-state")).expect("move legacy state");
+        crate::api::recover_local_state(&cfg)
+            .await
+            .expect("startup adopts a results directory it can read");
+        assert_eq!(
+            read_terminal(&cfg, current_id)
+                .await
+                .expect("the current resource stays readable")
+                .session_id,
+            current_id
         );
     }
 
     #[tokio::test]
-    async fn uninterpreted_history_has_no_recovery_or_mutation_authority_and_remains_listed() {
-        let tree = TestTree::new("uninterpreted-resource");
+    async fn unreadable_record_after_startup_is_an_internal_invariant_violation() {
+        let tree = TestTree::new("unreadable-after-startup");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
         std::fs::create_dir(&state).unwrap();
         std::fs::create_dir(&results).unwrap();
         let cfg = Arc::new(test_config(state, results.clone()));
-        let old_id = "s-11111111111111111111111111111111";
-        let current_id = "s-22222222222222222222222222222222";
-        let mut snapshots = Vec::new();
-        for id in [old_id, current_id] {
-            let dir = results.join(id);
-            std::fs::create_dir(&dir).unwrap();
-            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
-            let mut record = serde_json::to_value(body(id)).unwrap();
-            if id == old_id {
-                record["preserve_thinking"] = serde_json::json!(true);
-            }
-            let bytes = serde_json::to_vec_pretty(&record).unwrap();
-            let path = dir.join("finished.json");
-            private_write(&path, &bytes);
-            make_service_owned(&dir);
-            make_service_owned(&path);
-            if id == old_id {
-                for name in [
-                    "accepted.json",
-                    "progress.json",
-                    "cancel-requested.json.next",
-                ] {
-                    let path = dir.join(name);
-                    let bytes = b"historical evidence outside the current schema".to_vec();
-                    private_write(&path, &bytes);
-                    make_service_owned(&path);
-                    snapshots.push((path, bytes));
-                }
-                std::fs::hard_link(&path, dir.join("finished.json.tmp")).unwrap();
-            }
-            snapshots.push((path, bytes));
-        }
-        let identities: Vec<_> = snapshots
-            .iter()
-            .map(|(p, _)| {
-                let m = std::fs::metadata(p).unwrap();
-                (m.ino(), m.mtime_nsec(), m.ctime_nsec(), m.nlink())
-            })
-            .collect();
+        let session_id = "s-5858585858585858585858585858585858585858585858585858585858585858";
+        let result_dir = results.join(session_id);
+        std::fs::create_dir(&result_dir).unwrap();
+        std::fs::set_permissions(&result_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut record = serde_json::to_value(body(session_id)).unwrap();
+        record["preserve_thinking"] = serde_json::json!(true);
+        let bytes = serde_json::to_vec_pretty(&record).unwrap();
+        let path = result_dir.join("finished.json");
+        private_write(&path, &bytes);
+        make_service_owned(&result_dir);
+        make_service_owned(&path);
+
         let manager = super::Manager::new(Arc::clone(&cfg));
-        for _ in 0..2 {
-            super::recover_interrupted_acceptances(&cfg)
-                .await
-                .expect("completed uninterpreted history must not reopen its acceptance");
-            for error in [
-                manager.get(old_id).await.unwrap_err(),
-                manager.cancel(old_id).await.unwrap_err(),
-                manager.delete(old_id).await.unwrap_err(),
-            ] {
-                assert_eq!(error.kind_str(), "uninterpreted_terminal_record");
-                assert_eq!(error.session_id(), old_id);
-            }
+        for error in [
+            manager.get(session_id).await.unwrap_err(),
+            manager.cancel(session_id).await.unwrap_err(),
+            manager.delete(session_id).await.unwrap_err(),
+            manager.list().await.unwrap_err(),
+        ] {
+            assert!(matches!(error, ServiceError::Internal(_)), "{error}");
             assert_eq!(
-                manager.get(current_id).await.unwrap().session_id,
-                current_id
+                error.http_status(),
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
             );
-            let listing = manager.list().await.unwrap();
-            assert_eq!(listing.sessions.len(), 1);
-            assert_eq!(listing.sessions[0].session_id, current_id);
-            assert_eq!(listing.uninterpreted_records.len(), 1);
-            assert_eq!(listing.uninterpreted_records[0].session_id, old_id);
-            let json = serde_json::to_value(listing).unwrap();
-            assert!(json["uninterpreted_records"][0].get("terminal").is_none());
-            assert!(json["uninterpreted_records"][0]
-                .get("observed_output_tokens")
-                .is_none());
-            for ((path, bytes), expected) in snapshots.iter().zip(&identities) {
-                assert_eq!(&std::fs::read(path).unwrap(), bytes);
-                let m = std::fs::metadata(path).unwrap();
-                assert_eq!(
-                    (m.ino(), m.mtime_nsec(), m.ctime_nsec(), m.nlink()),
-                    *expected
-                );
-            }
-            assert!(results.join(old_id).join("finished.json.tmp").exists());
-            assert_eq!(std::fs::read_dir(&results).unwrap().count(), 2);
+            let message = error.to_string();
+            assert!(
+                message.contains("unknown field `preserve_thinking`"),
+                "{message}"
+            );
+            assert!(message.contains(&path.display().to_string()), "{message}");
         }
+        let names = |directory: &Path| {
+            std::fs::read_dir(directory)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert_eq!(
+            names(result_dir.as_path()),
+            vec![std::ffi::OsString::from("finished.json")]
+        );
+        assert_eq!(
+            names(results.as_path()),
+            vec![std::ffi::OsString::from(session_id)]
+        );
     }
 
     #[test]
@@ -5318,10 +5526,7 @@ mod tests {
                 assert!(!temporary.exists());
             }
             arm(None);
-            assert!(matches!(
-                reconcile().unwrap(),
-                Some(super::TerminalRecord::Current(_))
-            ));
+            assert!(reconcile().unwrap().is_some());
             assert_eq!(std::fs::read(&finished).unwrap(), original);
         }
     }

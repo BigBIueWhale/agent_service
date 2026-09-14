@@ -311,6 +311,14 @@ it is closed.
   list reports `sessions` and `uninterpreted_records` separately. Such a record
   is preserved, carries no recovery or mutation authority, and does not block
   startup.
+- **Fix removed** (2026-09-14): no compatibility is promised between record
+  versions, so the uninterpreted state, its HTTP 409 and the list's
+  `uninterpreted_records` are gone. A result directory this release cannot read
+  makes startup refuse, in one error naming every such directory, and the
+  operator removes those directories. The last four legacy result directories
+  on this workstation, from interrupted runs in passes v8, v9 and v10, were
+  copied into those runs' `service-record/` directories, verified by SHA-256,
+  and then removed from `.runtime/results`.
 - **Closed**, with the operational consequence recorded: a pass root is
   per-release evidence, and the driver's `PASS_ROOT` (`full-suite-run.sh:73`) is
   the only authority for which root is current.
