@@ -51,7 +51,7 @@ for command in awk cmp cp curl date docker du find flock git grep gzip jq mkdir 
 done
 
 readonly API='http://127.0.0.1:8090'
-readonly SUITE_ROOT="${BENCH_ROOT}/full-suite-v1"
+readonly MATERIALIZATION_ROOT="${BENCH_ROOT}/full-suite-materialization"
 # Pass v5 is the corrected-conditions pass: every run's prompt is the
 # committed harness preamble (time budget, grading mechanics, environment)
 # plus the untouched task statement, and every workspace carries the task's
@@ -76,7 +76,7 @@ readonly PROVENANCE_ROOT="${PASS_ROOT}/release-provenance"
 readonly PREAMBLE_FILE="${BENCH_ROOT}/prompt-preamble.md"
 readonly TASK_ENV_ROOT="${BENCH_ROOT}/full-suite-v1/task-env"
 readonly DATASET_ROOT="${BENCH_ROOT}/evaluator-dataset"
-readonly PLAN_FILE="${SUITE_ROOT}/suite-plan.json"
+readonly PLAN_FILE="${MATERIALIZATION_ROOT}/plan.json"
 # The agent's working budget is its turn count, enforced by the agent itself from
 # the locked limits.max_session_turns; this harness imposes no wall-clock bound on
 # a session. VERIFIER_TIMEOUT_SEC below bounds the deterministic evaluator
@@ -104,13 +104,13 @@ MAX_STAGED_ENTRIES="$(jq -er '.limits.max_staged_entries | numbers' "${SERVICE_R
   die 'stack lock .limits.max_staged_entries is absent or not a number'
 readonly MAX_STAGED_BYTES MAX_STAGED_FILES MAX_STAGED_ENTRIES
 
-[[ -f "${PLAN_FILE}" ]] || die "suite plan is missing: ${PLAN_FILE}"
-jq -e '(.runs | length) > 0 and .eligible_count == (.runs | length)
-       and all(.runs[]; (.task_id | type == "string") and (.task_id | length > 0))' "${PLAN_FILE}" >/dev/null ||
-  die 'suite plan is inconsistent: eligible_count must equal the run count, at least one run is required, and every run must carry a non-empty string task_id'
+[[ -f "${PLAN_FILE}" ]] || die "suite plan is missing: ${PLAN_FILE}; run ./full-suite-materialize.sh"
+jq -e --slurpfile stack "${SERVICE_ROOT}/config/stack.lock.json" '.schema_version == 3 and (.tasks | length) > 0 and all(.tasks[]; (.task_id | type == "string" and length > 0) and (.manifest_sha256 | test("^[0-9a-f]{64}$")))
+       and .service_limits == ($stack[0].limits | {max_prompt_bytes, max_staged_bytes, max_staged_files, max_staged_entries})' "${PLAN_FILE}" >/dev/null ||
+  die 'suite plan is unusable: it must be schema 3, list at least one task with a task_id and manifest SHA-256, and be derived against the service limits in config/stack.lock.json'
 # Number of tasks this shard owns (0-based plan position mod count == index).
 SHARD_TASK_COUNT="$(jq -er --argjson i "${SHARD_INDEX}" --argjson n "${SHARD_COUNT}" \
-  '[.runs | keys[] | select(. % $n == $i)] | length' "${PLAN_FILE}")"
+  '[.tasks | keys[] | select(. % $n == $i)] | length' "${PLAN_FILE}")"
 readonly SHARD_TASK_COUNT
 (( SHARD_TASK_COUNT > 0 )) ||
   printf 'NOTE: shard %s/%s owns no tasks (shard count exceeds the plan length); this pass completes with zero task pairs.\n' \
@@ -236,9 +236,9 @@ ensure_environment_image() {
   if [[ "${observed}" != "${image_id}" ]]; then
     printf 'Loading preserved evaluator image for %s...\n' "${task_id}" >&2
     require_equal "evaluator archive for ${task_id}" \
-      "$(sha256sum -- "${task_dir}/environment-image.tar" | awk '{print $1}')" \
+      "$(sha256sum -- "${BENCH_ROOT}/$(jq -er '.environment.archive_path' "${task_dir}/manifest.json")" | awk '{print $1}')" \
       "$(jq -er '.environment.archive_sha256' "${task_dir}/manifest.json")"
-    docker load --input "${task_dir}/environment-image.tar" >/dev/null
+    docker load --input "${BENCH_ROOT}/$(jq -er '.environment.archive_path' "${task_dir}/manifest.json")" >/dev/null
     observed="$(docker image inspect --format '{{.Id}}' "${image_tag}")"
   fi
   require_equal "evaluator image for ${task_id}" "${observed}" "${image_id}"
@@ -622,9 +622,9 @@ run_once() {
 
 run_task() {
   local task_id="$1"
-  local task_dir="${SUITE_ROOT}/materialization/${task_id}"
+  local task_dir="${MATERIALIZATION_ROOT}/tasks/${task_id}"
   local target="${RUNS_ROOT}/${task_id}"
-  [[ -d "${task_dir}" ]] || die "materialized task is missing: ${task_dir}"
+  require_equal "manifest of materialized task ${task_id}" "$(sha256sum -- "${task_dir}/manifest.json" 2>/dev/null | awk '{print $1}')" "$(jq -er --arg task "${task_id}" '.tasks[] | select(.task_id == $task) | .manifest_sha256' "${PLAN_FILE}")"
   if [[ -f "${target}/pair-summary.json" ]]; then
     printf 'Task %s already has an accepted pair summary; skipping.\n' "${task_id}" >&2
     return 0
@@ -729,13 +729,13 @@ while read -r task_id; do
       "${SHARD_INDEX}" "${SHARD_COUNT}" "${completed}" "${SHARD_TASK_COUNT}" >&2
   fi
   plan_index=$((plan_index + 1))
-done < <(jq -er '.runs[].task_id' "${PLAN_FILE}")
+done < <(jq -er '.tasks[].task_id' "${PLAN_FILE}")
 
 # A failure inside the process substitution above (a jq/IO error mid-stream)
 # cannot be seen by set -e, so the loop could consume only a prefix and still
 # reach here. Prove conservation both ways before declaring the pass complete:
 # every plan row was streamed, and every task this shard owns was processed.
-PLAN_ROW_COUNT="$(jq -er '.runs | length' "${PLAN_FILE}")"
+PLAN_ROW_COUNT="$(jq -er '.tasks | length' "${PLAN_FILE}")"
 readonly PLAN_ROW_COUNT
 (( plan_index == PLAN_ROW_COUNT )) ||
   die "the plan stream yielded ${plan_index} of ${PLAN_ROW_COUNT} rows; refusing to report a truncated pass as complete"

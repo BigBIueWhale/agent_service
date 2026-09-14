@@ -32,10 +32,10 @@ umask 077
 
 BENCH_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly BENCH_ROOT
-readonly MAT_ROOT="${BENCH_ROOT}/full-suite-v1/materialization"
+readonly MAT_ROOT="${BENCH_ROOT}/full-suite-materialization/tasks"
 readonly DATASET_ROOT="${BENCH_ROOT}/evaluator-dataset"
 readonly OUT_ROOT="${BENCH_ROOT}/full-suite-v1/task-env"
-readonly PLAN_FILE="${BENCH_ROOT}/full-suite-v1/suite-plan.json"
+readonly PLAN_FILE="${BENCH_ROOT}/full-suite-materialization/plan.json"
 readonly WARM_TIMEOUT_SEC=900
 readonly MIN_ARCHIVE_BYTES=1024
 
@@ -153,11 +153,16 @@ warm_one() {
 
   local manifest="${MAT_ROOT}/${task_id}/manifest.json"
   [[ -f "${manifest}" ]] || { printf 'ERROR %s: materialization manifest is missing at %s\n' "${task_id}" "${manifest}" >&2; exec {lockfd}>&-; return 1; }
-  local image working_dir
+  local manifest_sha256 planned_manifest_sha256
+  manifest_sha256="$(sha256sum -- "${manifest}" | awk '{print $1}')" || { printf 'ERROR %s: could not hash %s\n' "${task_id}" "${manifest}" >&2; exec {lockfd}>&-; return 1; }
+  planned_manifest_sha256="$(jq -er --arg task "${task_id}" '.tasks[] | select(.task_id == $task) | .manifest_sha256' "${PLAN_FILE}")" || { printf 'ERROR %s: the plan binds no manifest for this task\n' "${task_id}" >&2; exec {lockfd}>&-; return 1; }
+  [[ "${manifest_sha256}" == "${planned_manifest_sha256}" ]] || { printf 'ERROR %s: manifest SHA-256 %s is not the %s the plan binds\n' "${task_id}" "${manifest_sha256}" "${planned_manifest_sha256}" >&2; exec {lockfd}>&-; return 1; }
+  local image working_dir archive_path
   image="$(jq -er '.environment.image_tag' "${manifest}")" || { printf 'ERROR %s: manifest lacks .environment.image_tag\n' "${task_id}" >&2; exec {lockfd}>&-; return 1; }
   working_dir="$(jq -er '.environment.working_dir' "${manifest}")" || { printf 'ERROR %s: manifest lacks .environment.working_dir\n' "${task_id}" >&2; exec {lockfd}>&-; return 1; }
+  archive_path="$(jq -er '.environment.archive_path' "${manifest}")" || { printf 'ERROR %s: manifest lacks .environment.archive_path\n' "${task_id}" >&2; exec {lockfd}>&-; return 1; }
   if ! docker image inspect "${image}" >/dev/null 2>&1; then
-    docker load --input "${MAT_ROOT}/${task_id}/environment-image.tar" >/dev/null \
+    docker load --input "${BENCH_ROOT}/${archive_path}" >/dev/null \
       || { printf 'ERROR %s: could not load environment image %s\n' "${task_id}" "${image}" >&2; exec {lockfd}>&-; return 1; }
   fi
 
@@ -382,9 +387,9 @@ ENVEOF' \
 # Read the plan fail-closed BEFORE the loop: a process substitution's exit
 # status is discarded, so a missing/malformed/empty plan would otherwise report
 # a clean success having warmed nothing.
-plan_tasks="$(jq -er '.runs[].task_id' "${PLAN_FILE}")" \
-  || { printf 'ERROR: could not read task ids from %s (missing, malformed, or zero runs)\n' "${PLAN_FILE}" >&2; exit 2; }
-[[ -n "${plan_tasks}" ]] || { printf 'ERROR: suite plan %s contains zero runs\n' "${PLAN_FILE}" >&2; exit 2; }
+plan_tasks="$(jq -er 'if .schema_version == 3 then .tasks[].task_id else error("the plan is not schema 3") end' "${PLAN_FILE}")" \
+  || { printf 'ERROR: could not read task ids from %s (missing, not schema 3, or zero tasks)\n' "${PLAN_FILE}" >&2; exit 2; }
+[[ -n "${plan_tasks}" ]] || { printf 'ERROR: suite plan %s contains zero tasks\n' "${PLAN_FILE}" >&2; exit 2; }
 
 failures=0
 while read -r task_id; do
