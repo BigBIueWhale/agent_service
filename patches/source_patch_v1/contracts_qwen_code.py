@@ -934,7 +934,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "fails closed on malformed or mismatched responses",
         ),
         "packages/core/src/core/geminiChat.test.ts": (
-            "gives every turn the window share, whatever the prompt costs",
+            "gives every turn the window's remainder after its prompt",
             "refuses when the request cannot be counted at all",
             "resamples one invalid pre-content stream",
             "never resamples an invalid stream after visible output escaped",
@@ -944,7 +944,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "literal-with-structure",
         ),
         "packages/core/src/services/chatCompressionService.test.ts": (
-            "sends the ENTIRE history to one cache-preserving main-model request",
+            "sends the last issued prompt, and nothing after it, to one cache-preserving main-model request",
             "rejects unusable summary output",
             "name: STATE_SNAPSHOT_FUNCTION_NAME,",
             "requires an exact shrinking candidate that leaves a turn issuable",
@@ -2669,20 +2669,18 @@ def _validate_compaction_budget_before(state: State) -> None:
 # copy of it.
 _PARTITION_SHARE_NAMES = (
     ("WINDOW_SHARES", None),
-    ("SUMMARY_RESERVE_SHARES", "summaryReserve"),
-    ("TURN_OUTPUT_SHARES", "turnOutput"),
-    ("TOOL_RESULT_SHARES", "toolResult"),
+    ("GENERATION_RESERVE_SHARES", "generationReserve"),
     ("DIRECTIVE_RESERVE_SHARES", "directiveReserve"),
+    ("TOOL_RESULT_SHARES", "toolResult"),
 )
 
 # The served deployment, and the budgets its window must yield.
 _SERVED_WINDOW = 262_144
 _SERVED_PARTITION = {
-    "summaryReserve": 49_152,
-    "turnOutput": 32_768,
-    "toolResult": 16_384,
+    "generationReserve": 49_152,
     "directiveReserve": 2_048,
-    "compactionTrigger": 161_792,
+    "toolResult": 16_384,
+    "compactionTrigger": 210_944,
 }
 
 
@@ -2700,48 +2698,55 @@ def _read_partition_shares(source: str, *, label: str) -> dict[str, int]:
 
 def _partition(window: int, shares: dict[str, int]) -> dict[str, int]:
     total = shares["WINDOW_SHARES"]
-    summary = (window * shares["SUMMARY_RESERVE_SHARES"]) // total
-    turn = (window * shares["TURN_OUTPUT_SHARES"]) // total
-    tool = (window * shares["TOOL_RESULT_SHARES"]) // total
+    reserve = (window * shares["GENERATION_RESERVE_SHARES"]) // total
     directive = (window * shares["DIRECTIVE_RESERVE_SHARES"]) // total
+    tool = (window * shares["TOOL_RESULT_SHARES"]) // total
     return {
-        "summaryReserve": summary,
-        "turnOutput": turn,
-        "toolResult": tool,
+        "generationReserve": reserve,
         "directiveReserve": directive,
-        "compactionTrigger": window - summary - turn - tool - directive,
+        "toolResult": tool,
+        "compactionTrigger": window - reserve - directive,
     }
 
 
 def _validate_context_partition(state: State, *, label: str) -> None:
-    """Every context budget is a share of the served window, and the division
-    of it leaves the compaction trigger the largest budget.
+    """Every context budget is a share of the served window, and only the
+    generation reserve and the directive reserve are held back from the
+    history.
 
-    The safety argument — a turn issued below the compaction trigger, given
-    the turn-output share, appending at most the tool-result share, produces
-    a history no larger than the window less the summary reserve, the largest
-    history a whole-history summary request can still be issued for — holds
-    by construction: the trigger is defined as the remainder, so the five
-    terms sum to the window whatever the shares say. Asserting that sum here
-    would assert nothing about this tree, and a check that cannot fail reads
-    as protection that is not there. What the construction leaves open is how
-    the window is divided between the four reserved shares, so that is what
-    is checked here.
+    The safety argument: a turn is issued at a prompt below the compaction
+    trigger with the window's remainder as its limit, and the request that
+    later summarises that prompt appends at most the directive reserve, so it
+    is issued with at least the generation reserve plus one token whatever the
+    turn generated -- the turn is carried behind the snapshot, never inside
+    the request that summarises the prompt. That the three shares sum to the
+    window holds by construction, because the trigger is the remainder, so it
+    is not asserted here; what the construction leaves open is checked: every
+    share is positive, the history a turn stands on exceeds what is held back
+    from it at every window size, the tool-result bound stays a bound on what
+    one turn appends rather than a reservation, and the served window yields
+    the reviewed budgets.
     """
 
     limits = "packages/core/src/core/tokenLimits.ts"
     source = _source(state, limits, label=label)
     shares = _read_partition_shares(source, label=label)
-    reserved = sum(
-        shares[name] for name, budget in _PARTITION_SHARE_NAMES if budget is not None
-    )
     _require(
         all(value > 0 for value in shares.values()),
         f"{label}: every share must be a positive integer number of window shares",
     )
     _require(
-        reserved < shares["WINDOW_SHARES"],
+        shares["GENERATION_RESERVE_SHARES"] + shares["DIRECTIVE_RESERVE_SHARES"]
+        < shares["WINDOW_SHARES"],
         f"{label}: the reserved shares leave no window for the compaction trigger",
+    )
+    # The trigger is the window less the two reserves and nothing else: the
+    # tool-result bound is applied to a batch at admission, not held back.
+    require_text(
+        state,
+        limits,
+        "compactionTrigger: contextWindowSize - generationReserve - directiveReserve,",
+        label=label,
     )
     for window in (
         256,
@@ -2758,19 +2763,19 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             all(value > 0 for value in part.values()),
             f"{label}: a {window}-token window yields a non-positive budget {part!r}",
         )
-        trigger = part["compactionTrigger"]
-        largest_reserve = max(
-            (name for name in part if name != "compactionTrigger"),
-            key=lambda name: part[name],
+        held_back = part["generationReserve"] + part["directiveReserve"]
+        _require(
+            part["compactionTrigger"] > held_back,
+            f"{label}: at a {window}-token window the reserves hold back "
+            f"{held_back} tokens and the compaction trigger is "
+            f"{part['compactionTrigger']}. The trigger is whatever the reserves "
+            f"leave, so reserves that reach it leave a turn less history to "
+            f"stand on than the room it is guaranteed",
         )
         _require(
-            trigger > part[largest_reserve],
-            f"{label}: at a {window}-token window {largest_reserve} is "
-            f"{part[largest_reserve]} and the compaction trigger is {trigger}. "
-            f"The trigger is whatever the four reserved shares leave, so a "
-            f"reserve that reaches it is either a snapshot allowed to be larger "
-            f"than the history that triggered taking it, or a single turn "
-            f"budgeted more room than the history it is issued against",
+            part["toolResult"] < part["compactionTrigger"],
+            f"{label}: at a {window}-token window one turn's inline tool results "
+            f"may outgrow the history a turn stands on",
         )
     served = _partition(_SERVED_WINDOW, shares)
     _require(
@@ -2839,34 +2844,46 @@ def _validate_compaction_budget_after(state: State) -> None:
     chat_test = "packages/core/src/core/geminiChat.test.ts"
     service = "packages/core/src/services/chatCompressionService.ts"
     service_test = "packages/core/src/services/chatCompressionService.test.ts"
+    attachments = "packages/core/src/services/postCompactAttachments.ts"
+    attachments_test = "packages/core/src/services/postCompactAttachments.test.ts"
     pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
     generator = "packages/core/src/core/contentGenerator.ts"
+    generator_test = "packages/core/src/core/contentGenerator.test.ts"
     prompts = "packages/core/src/core/prompts.ts"
     prompts_test = "packages/core/src/core/prompts.test.ts"
 
     # The arithmetic itself, evaluated against the shares the tree declares.
     _validate_context_partition(state, label=label)
 
-    # One derivation, in one place, with no tuned constant beside it.
+    # One derivation, in one place, with no tuned constant beside it. A turn's
+    # limit is the window's remainder after its prompt and nothing else: no
+    # share of the window, no model ceiling, no clamp margin, no floor.
     limits_source = _require_all(
         state,
         limits,
         (
             "export interface ContextPartition {",
             "export function partitionContextWindow(",
-            "export function turnOutputBudget(",
-            "      directiveReserve,",
-            "return Math.min(outputCeiling, partition.turnOutput);",
+            "export function turnOutputLimit(",
+            "    generationReserve,\n    directiveReserve,\n    toolResult,\n"
+            "    compactionTrigger: contextWindowSize - generationReserve - directiveReserve,",
+            "return partition.window - promptTokens;",
         ),
         label=label,
     )
-    budget_start = limits_source.index("export function turnOutputBudget(")
-    budget_body = limits_source[budget_start:]
+    limit_body = limits_source.split("export function turnOutputLimit(", 1)[1].split(
+        "\n}\n", 1
+    )[0]
     _require(
-        "prompt" not in budget_body.lower().split("}")[0],
-        f"{label}: a turn's output budget depends on the prompt again",
+        "Math.min(" not in limit_body and "eiling" not in limit_body,
+        f"{label}: a turn's output limit is bounded by something other than the window",
     )
     for absent in (
+        "TURN_OUTPUT_SHARES",
+        "SUMMARY_RESERVE_SHARES",
+        "turnOutputBudget",
+        "summaryReserve",
+        "readonly turnOutput",
         "MIN_CLAMPED_OUTPUT_TOKENS",
         "outputClampMargin",
         "compactionRoom",
@@ -2875,51 +2892,127 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         _require(
             absent not in limits_source,
-            f"{label}: {limits} still carries the run-time budget term '{absent}'",
+            f"{label}: {limits} still carries the retired budget term '{absent}'",
         )
 
-    # A turn is issued below the compaction trigger or it is not issued.
+    # A turn is issued below the compaction trigger or it is not issued, and
+    # what it is issued with is the remainder. Nothing in the send path
+    # consults a ceiling: not a configured one, not the model's, not an
+    # environment variable.
+    chat_source = _source(state, chat, label=label)
     _require_ordered(
-        _source(state, chat, label=label),
+        chat_source,
         (
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
             "if (promptTokensForClamp >= partition.compactionTrigger) {",
             "throw new Error(",
-            "maxOutputTokens: turnOutputBudget(outputCeiling, partition),",
+            "maxOutputTokens: turnOutputLimit(partition, promptTokensForClamp),",
         ),
         label=label,
         location=chat,
     )
+    for absent in (
+        "turnOutputBudget",
+        "defaultOutputCeiling",
+        "explicitOutputCeiling",
+        "outputCeiling",
+        "QWEN_CODE_MAX_OUTPUT_TOKENS",
+        "OUTPUT_TOKEN_CEILING",
+        "samplingParams?.max_tokens",
+        "summaryReserve",
+    ):
+        forbid_text(state, chat, absent, label=label)
+    # The route refuses a configured ceiling at configuration, so the one
+    # limit a turn has is the one the send path derives.
+    _require_all(
+        state,
+        generator,
+        (
+            "PROVIDER_OUTPUT_BUDGET_KEYS",
+            "OUTPUT_CEILING_ENV",
+            "would be a second bound on the same quantity and is refused.",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        limits,
+        (
+            "export const PROVIDER_OUTPUT_BUDGET_KEYS = [",
+            "export const OUTPUT_CEILING_ENV = 'QWEN_CODE_MAX_OUTPUT_TOKENS';",
+        ),
+        label=label,
+    )
+    require_text(state, pipeline, "PROVIDER_OUTPUT_BUDGET_KEYS,", label=label)
+    forbid_text(
+        state,
+        pipeline,
+        "const PROVIDER_OUTPUT_BUDGET_KEYS = [",
+        label=label,
+    )
+
+    # The compaction unit is the prompt the last turn was issued against,
+    # split off the history by the chat that issued it and rendered as that
+    # request was; the turn after it is kept whole. The rule is one function
+    # and it walks back over the model content the turn recorded.
+    _require_all(
+        state,
+        chat,
+        (
+            "export function splitIssuedTurn(",
+            "while (index >= 0 && history[index].role === 'model') index--;",
+            "if (index < 0 || index === history.length - 1) return undefined;",
+            "renderIssuedTurnSplit(",
+            "this.getRequestHistoryFrom(split.prompt, issuedUserContent),",
+            "turn: extractCuratedHistory(split.turn).map(copyContentContainer),",
+        ),
+        label=label,
+    )
     for case in (
         "refuses when the directive outgrows the share reserved for it",
-        "holds the request and the whole reserve inside the window at the largest history a turn can produce",
+        "gives the snapshot at least the generation reserve at the largest prompt a turn can be issued against",
+        "sends the last issued prompt, and nothing after it, to one cache-preserving main-model request",
+        "keeps the pending tool result out of the summary and in the turn's commit counts",
+        "refuses to compact before any turn was issued",
     ):
         require_text(state, service_test, case, label=label)
     for case in (
-        "gives every turn the window share, whatever the prompt costs",
+        "gives every turn the window's remainder after its prompt",
+        "sends no output limit but the remainder, whatever the request asked for",
         "issues no turn once the rendered prompt reaches the compaction trigger",
         "refuses when the tokenizer reports another window",
         "refuses when the provider declares no context window",
     ):
         require_text(state, chat_test, case, label=label)
     for case in (
-        "spends the served window on five shares and nothing else",
+        "holds back only the generation reserve and the directive from the history",
         "sums to the window exactly at every window size",
-        "leaves a turn issued below the trigger inside the summarizable size",
+        "gives the compaction of any issued prompt at least the generation reserve",
+        "gives every turn at least the reserves it never has to hold",
         "re-derives every budget from a larger window with no code change",
         "refuses a window it cannot partition",
+        "gives a turn the window's remainder after its prompt",
+        "refuses a prompt no turn is issued against",
     ):
         require_text(state, limits_test, case, label=label)
+    for case in (
+        "refuses a configured output ceiling: samplingParams.%s",
+        "refuses the output-ceiling environment variable",
+    ):
+        require_text(state, generator_test, case, label=label)
 
-    # The reserve covers the directive and the snapshot together, sized from
-    # the request that was counted rather than from a margin.
+    # The reserve covers the snapshot's generation, and the request it is
+    # issued for is the issued prompt plus the directive: sized from the
+    # request that was counted rather than from a margin.
     service_source = _require_all(
         state,
         service,
         (
             "const partition = partitionContextWindow(contextLimit);",
+            "const split = chat.renderIssuedTurnSplit(",
+            "const issuedPrompt = split.prompt;",
             "compactionOutputBudget = contextLimit - summaryRequestTokenCount;",
-            "if (compactionOutputBudget < partition.summaryReserve) {",
+            "if (compactionOutputBudget < partition.generationReserve) {",
             "if (directiveTokens > partition.directiveReserve) {",
             "      if (originalTokenCount < partition.compactionTrigger) {",
             "    if (newTokenCount >= partition.compactionTrigger) {",
@@ -2927,11 +3020,13 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
     )
+    for absent in ("summaryReserve", "pendingToolResult", "sideQueryHistory"):
+        forbid_text(state, service, absent, label=label)
     # The snapshot is issued at the room the window actually has, and that room
-    # is never less than the reserve: a turn is only issued while the
-    # conversation is below the trigger, so the largest this request can become
-    # is A + C + T + D, which is W - S. The floor is asserted in the service so
-    # a broken partition fails loudly, rather than clamped so it silently
+    # is never less than the reserve: the prompt this request extends was
+    # issued below the trigger, so the request is at most A - 1 + D, leaving
+    # at least the reserve plus one. The floor is asserted in the service so a
+    # broken partition fails loudly, rather than clamped so it silently
     # shrinks the snapshot -- a clamp is what hands a summary a few thousand
     # tokens and truncates it.
     _require(
@@ -3040,22 +3135,19 @@ def _validate_compaction_budget_after(state: State) -> None:
     # carried it, so no caller can reintroduce a split budget.
     for path in (pipeline, generator):
         forbid_text(state, path, "phaseBudgetOverrides", label=label)
-    # The request stays a pure extension of the conversation already in the
-    # provider's prefix cache: same contents, same order, one appended
-    # directive. Reshaping it would re-prefill the whole history.
+    # The request is the issued prompt as the provider already holds it: the
+    # same contents, in the same order, one appended directive, and nothing
+    # the turn recorded after that prompt. Reshaping it would re-prefill the
+    # prompt for no reason; carrying the turn would make the turn's size the
+    # request's problem, which is the reservation this design removed.
     _require_all(
         state,
         service,
         (
-            "      contents: [...sideQueryHistory, directiveContent],",
+            "      contents: [...issuedPrompt, directiveContent],",
             "      promptCacheSharing: true,",
+            "            turn,\n          },\n        );",
         ),
-        label=label,
-    )
-    require_text(
-        state,
-        service_test,
-        "sends the ENTIRE history to one cache-preserving main-model request",
         label=label,
     )
     # A truncated snapshot is refused before its content is examined, so one
@@ -3080,7 +3172,8 @@ def _validate_compaction_budget_after(state: State) -> None:
     # nine-section schema gave one code snippet four. The sections are
     # described where they are declared, so the prompt shows no skeleton and
     # spends its instructions on faithfulness, which is the only part of this
-    # the model can be held to.
+    # the model can be held to. It also says where the conversation it is
+    # shown ends: at the issued prompt, with the turn following the snapshot.
     _require_all(
         state,
         prompts,
@@ -3088,6 +3181,9 @@ def _validate_compaction_budget_after(state: State) -> None:
             "record the snapshot by calling the one function this request declares",
             "there is no markup to produce and nothing to escape",
             "exactly once",
+            "ends with the prompt the latest turn was issued against",
+            "follow your snapshot verbatim",
+            "make next_step what that prompt called for",
         ),
         label=label,
     )
@@ -3112,6 +3208,12 @@ def _validate_compaction_budget_after(state: State) -> None:
         "asks for the declared call and describes no markup at all",
         label=label,
     )
+    require_text(
+        state,
+        prompts_test,
+        "ends the snapshot at the prompt the latest turn was issued against",
+        label=label,
+    )
 
     _require_all(
         state,
@@ -3126,15 +3228,34 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
     )
+    # The post-compact history is one user content the resuming agent reads,
+    # then the turn, verbatim. No synthetic model content stands between them:
+    # a model turn with no reasoning renders with an empty thinking block,
+    # which tells the model that turn thought nothing.
     _require_all(
         state,
-        "packages/core/src/services/postCompactAttachments.ts",
+        attachments,
         (
             "const authoredParts = retainedInstructionParts(history)",
             "...authoredParts",
+            "  turn?: Content[];",
+            "    turn = [],",
+            "return [{ role: 'user', parts }, ...turn.map((content) => ({ ...content }))];",
         ),
         label=label,
     )
+    for absent in (
+        "Got it. Thanks for the additional context!",
+        "trailingFunctionCallContent",
+        "ackParts",
+        "postAckParts",
+    ):
+        forbid_text(state, attachments, absent, label=label)
+    for case in (
+        "carries the turn verbatim behind the snapshot, reasoning included",
+        "ends with the turn so a pending functionResponse has its match",
+    ):
+        require_text(state, attachments_test, case, label=label)
     # The compaction request declares the snapshot function and forces the
     # call, so the artifact is constrained where it is generated rather than
     # judged after the model has hand-written it.
@@ -3295,6 +3416,9 @@ def _validate_incomplete_generation_after(state: State) -> None:
         (
             "export function describeIncompleteGeneration(",
             "reason: FinishReason | undefined,",
+            "issued?: IssuedGeneration,",
+            "export function issuedGeneration(",
+            "with the window's remaining ",
         ),
         label=label,
     )
@@ -3317,10 +3441,16 @@ def _validate_incomplete_generation_after(state: State) -> None:
         cli,
         (
             "let lastGenerationFinishReason: GeminiFinishedEventValue['reason'];",
+            "let lastGenerationUsage: GeminiFinishedEventValue['usageMetadata'];",
             "const incompleteGeneration = describeIncompleteGeneration(",
+            "                issuedGeneration(\n                  lastGenerationUsage,",
             "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
         ),
         label=label,
+    )
+    _require(
+        cli_source.count("lastGenerationUsage = event.value.usageMetadata;") == 2,
+        f"{label}: the main-turn and drain loops do not both record the served usage the terminal reason belongs to",
     )
     _require(
         cli_source.count("lastGenerationFinishReason = event.value.reason;") == 2,
@@ -3375,6 +3505,8 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "describeIncompleteGeneration(",
             "roundFinishReason,",
             "this.reasoningTurnsUsed,",
+            "issuedGeneration(",
+            "lastUsage,",
             "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
         ),
         label=label,
@@ -3405,6 +3537,12 @@ def _validate_incomplete_generation_after(state: State) -> None:
         state,
         turn_test,
         "names %s as a generation stopped from outside",
+        label=label,
+    )
+    require_text(
+        state,
+        turn_test,
+        "names the prompt, the limit and the output when a generation reached the window's remainder",
         label=label,
     )
     require_text(
@@ -5234,14 +5372,19 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="context-window-partition",
         rationale=(
-            "All request budgets derive from shares of the declared served window. Exact before/after "
-            "sizing governs compaction and tool-result displacement. Original authored inputs are "
-            "retained independently of model summaries; summaries must satisfy the six-section "
-            "structural contract. No phase budget forces reasoning to stop."
+            "Only the generation reserve and the directive reserve are held back from the served "
+            "window; a turn's output limit is the window's remainder after its prompt and nothing "
+            "else, and a configured ceiling is refused. Compaction summarises the prompt the last "
+            "turn was issued against and carries that turn verbatim behind the snapshot, so the "
+            "snapshot always has at least the reserve. Exact before/after sizing governs compaction "
+            "and tool-result displacement. Original authored inputs are retained independently of "
+            "model summaries; summaries must satisfy the six-section structural contract. No phase "
+            "budget forces reasoning to stop."
         ),
         removal_condition=(
-            "Upstream provides the same partition arithmetic, exact request sizing, durable "
-            "authored-input retention, and structural summary validation."
+            "Upstream provides the same remainder-limited turns, issued-prompt compaction with a "
+            "verbatim turn, exact request sizing, durable authored-input retention, and structural "
+            "summary validation."
         ),
         validate_before=_validate_compaction_budget_before,
         validate_after=_validate_compaction_budget_after,

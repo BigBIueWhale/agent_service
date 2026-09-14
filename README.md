@@ -177,45 +177,54 @@ Qwen3.8-27B was trained with preserved thinking, as nearly all current models
 are, and there is no correct off switch for it, which is why the served template
 offers none.
 
-The served context window is divided into five shares that spend it exactly, and
-every context budget is one of them:
+The served context window is divided into shares that spend it exactly, and
+only two of them are held back from the history:
 
 | share | of the window | at 262,144 |
 | --- | --- | --- |
-| summary reserve | 48/256 | 49,152 |
-| one turn's output | 32/256 | 32,768 |
-| that turn's tool results | 16/256 | 16,384 |
+| generation reserve | 48/256 | 49,152 |
 | the compaction directive | 2/256 | 2,048 |
-| the history a turn stands on | the remainder | 161,792 |
+| the history a turn stands on | the remainder | 210,944 |
 
-The last four sum to the window less the summary reserve. Under those bounded
-terms, a turn issued below the compaction trigger, given at most one
-turn's output and appending at most one turn's tool results, produces a history
-that leaves the summary reserve when the bounded directive is appended. Raising
-`max_model_len` re-derives all five shares. New authored input, retained
-instructions, tools, and the final compaction directive still require exact
-recounting at admission; the partition does not guarantee that arbitrary new
-content will fit.
+A turn holds no reservation. It is issued with the window's remainder after
+its prompt as its output limit — never less than the two reserves plus one,
+51,201 tokens at the largest prompt a turn is issued against, and more at every
+smaller one — and nothing else bounds it: the route refuses a configured
+`max_tokens`, `max_completion_tokens`, `max_new_tokens` or
+`QWEN_CODE_MAX_OUTPUT_TOKENS` at configuration. A turn that generates all of
+its remainder has filled the window, and that ends the session (see below).
+One sixteenth of the window, 16,384 tokens, bounds the tool results one turn
+appends inline before its largest result is written to disk and replaced by a
+reference; it bounds what one turn adds, it is not held back from the history,
+and it does not enter the trigger. Raising `max_model_len` re-derives every
+share. New authored input, retained instructions, tools, and the compaction
+directive still require exact recounting at admission; the partition does not
+guarantee that arbitrary new content will fit.
 
-The snapshot is issued at the room the window actually has — the window less
-the summary request that was just counted — and the reserve is the minimum room
-required to issue that request. A request lighter than the bounded worst case
-therefore buys the snapshot more room than the reserve. A request that would
-leave less than the reserve is refused instead of quietly shrinking the snapshot.
+Compaction summarises the prompt the last turn was issued against, not the
+history that turn produced. That prompt was admitted below the trigger when it
+was issued, so the request that summarises it — the prompt plus one directive
+— always leaves the snapshot at least the generation reserve plus one token,
+whatever the turn generated. The turn itself, reasoning included, is carried
+behind the snapshot verbatim, followed by the tool result it was waiting for;
+nothing synthetic stands between them. The snapshot is issued at the room the
+window actually has — the window less the summary request that was just
+counted — and a request that would leave less than the reserve is refused
+instead of quietly shrinking the snapshot.
 
 The compaction request replaces the turn's tool declarations with that single
 function rather than extending them, so the model has exactly one thing it can
-emit. The conversation it carries is unchanged, but the declared tool block is
-not, so the request does not reuse the turn's prompt-cache prefix: it re-reads
-the history it shares. That is the price of having the snapshot constrained as
-it is generated, and it is paid once per compaction rather than once per turn.
+emit. The prompt it carries is unchanged, but the declared tool block is not,
+so the request does not reuse the turn's prompt-cache prefix: it re-reads the
+prompt it shares. That is the price of having the snapshot constrained as it
+is generated, and it is paid once per compaction rather than once per turn.
 
 Every main-turn context-boundary decision uses the real vLLM tokenizer on the
 fully rendered request. Before compaction and again before generation, Qwen Code
 sends the exact messages, typed tool history, image parts, tool schemas, and
 template arguments to the backend `/tokenize` endpoint. A turn is issued below
 the compaction trigger or it is not issued at all, and it is issued with the
-smaller of the configured output ceiling and its window share. The tool results
+window's remainder after its prompt as its output limit. The tool results
 it appends are measured the same way — the rendered request counted with the
 pending batch and without it, the difference being what the batch costs — and a
 batch over its share is written to disk whole and replaced by references to the
@@ -347,11 +356,13 @@ A terminal conversation and a headless conversation share the same obligations:
   exact request counting, strict tool calls, and an explicit context window.
   Activation publishes the provider and configuration together; failed selection
   restores the preceding pair.
-- The fully rendered next request determines admission and the five context
-  shares. Ordinary output uses the smaller of its configured ceiling and its
-  window share. Compaction receives the room left by its exact input, requires at
-  least the summary reserve, and accepts only a normally terminated six-section
-  snapshot that leaves an issuable turn.
+- The fully rendered next request determines admission and the context shares.
+  Ordinary output is issued with the window's remainder after its prompt; no
+  configured ceiling is admitted. Compaction summarises the prompt the last turn
+  was issued against, receives the room left by that exact request, requires at
+  least the generation reserve, accepts only a normally terminated six-section
+  snapshot that leaves an issuable turn, and carries the turn behind the
+  snapshot verbatim.
 - A tool result declares whether it is complete. The one notice in
   `packages/core/src/tools/tools.ts` states what was asked for, what came back,
   the bound and its unit, the true total or an explicit reason the tool cannot
@@ -611,13 +622,13 @@ retention decision, and teardown diagnostics all live inside `terminal`; a runni
 session supplies no answers for them. See the [session resource contract](docs/session-resource.md)
 for exact fields and reader examples.
 
-Every turn is issued with the same output budget, the window's share, whatever
-the conversation has already cost: the trigger holds the history below the size
-at which a turn plus its tool results would outgrow the room the summary reserve
-keeps free, so the room a turn is given never depends on how full the
-conversation is. `error_incomplete_generation` therefore reaches a caller when
-the model's own generation was severed at that budget rather than when the
-history had eaten it.
+Every turn is issued with the window's remainder after its prompt as its output
+limit, and the trigger holds every prompt below the point at which that
+remainder would fall to the two reserves. `error_incomplete_generation`
+therefore reaches a caller only when a generation filled the window; the record
+names the prompt the generation was issued at, the remainder it was given and
+what it generated, so a reader can tell a turn too large for the window from a
+window too full for the turn. Nothing is retried, continued or repaired.
 
 ## Prefix caching evidence
 

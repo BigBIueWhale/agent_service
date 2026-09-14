@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `156b099fb5331b2604925f63464db59c798eb721fa285dc799f38303e1afbf73`
+- Review-diff SHA-256: `42849a31eaa8995484956b317c40fb2943658f421635b3315f439bb75731eb0c`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `4868356d63fbfd5b9b1736d648ff8a036c112194d70c5431ee2b7ba907d701be`
+- Transformer-manifest SHA-256: `182c5ce24bea4969332e00d43e9c109f2bafeb4a6867cbd7e49369b0e159a130`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -51,12 +51,15 @@ terminal. Empty normally completed output is a valid response.
 
 ## Context and instructions
 
-The context partition reserves 48/256 for a summary, 32/256 for ordinary output,
-16/256 for pending tool results, and 2/256 for the compaction directive; the
-remainder is the trigger. At a 262,144-token window these shares are 49,152,
-32,768, 16,384, 2,048, and 161,792 tokens. Independent floors leave rounding to
-the trigger. Input, directive, displaced results, and candidate histories are
-counted using the actual rendered request.
+The context partition holds back 48/256 of the window as the generation
+reserve and 2/256 for the compaction directive; the remainder is the trigger,
+and one sixteenth bounds the tool results one turn carries inline. At a
+262,144-token window these are 49,152, 2,048, 210,944 and 16,384 tokens.
+Independent floors leave rounding to the trigger. A turn is issued with the
+window's remainder after its prompt as its output limit and nothing else; the
+route refuses a configured ceiling, including `QWEN_CODE_MAX_OUTPUT_TOKENS`.
+Input, directive, displaced results, and candidate histories are counted using
+the actual rendered request.
 
 A tool result says whether it is complete. One notice states what was asked
 for, what came back, the bound and its unit, the real total or why the tool
@@ -66,11 +69,14 @@ without going through `boundedContent` refuses the build. A cap a service
 applied travels back with its items rather than being discarded, because a
 layer cannot declare a limit it was never told about.
 
-Compaction requests the room left by its exact input and refuses insufficient
-space. A candidate must end normally, carry the required six-part snapshot,
-reduce the request, and leave an issuable turn. Failure retains the previous
-history and reports that retained count. There is no separate reasoning-phase
-limit or forced reasoning-end marker.
+Compaction summarises the prompt the last turn was issued against and carries
+that turn, reasoning included, verbatim behind the snapshot, so the summary
+request never holds what the turn generated. It requests the room left by that
+exact input, which is never below the generation reserve, and refuses
+insufficient space. A candidate must end normally, carry the required six-part
+snapshot, reduce the request, and leave an issuable turn. Failure retains the
+previous history and reports that retained count. There is no separate
+reasoning-phase limit or forced reasoning-end marker.
 
 The snapshot is declared, not described. The compaction request replaces the
 turn's tools with one function whose closed parameter schema is the six ordered
