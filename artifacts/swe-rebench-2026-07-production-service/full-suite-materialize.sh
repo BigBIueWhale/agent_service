@@ -1,74 +1,32 @@
 #!/usr/bin/env bash
+# Materializes the SWE-rebench 2026-07 full suite that full-suite-run.sh runs and
+# warm-task-env.sh prepares, from the benchmark's own two locks.
+#
+# A materialization is identified by the benchmark, never by a service release:
+# the dataset pinned in full-suite-dataset.lock.json and, for each task, the
+# environment image pinned in full-suite-images.lock.json. That image is both the
+# tree the agent's workspace is copied from and the evaluator that grades the
+# result. It cannot be rebuilt into the same image, so a host that lacks it loads
+# its pinned archive, and nothing here builds one.
+#
+# Every task, in task-id order, has its dataset package and declarations
+# verified, its pinned image ensured, and the image's working tree copied out
+# through a sandboxed extractor and proved equal to the image in content, entry
+# type, mode, link target and Git status. The outcome is tasks/<task_id>/. A task
+# directory that already exists is proved again and must derive a byte-identical
+# manifest.
+#
+# plan.json then lists the tasks whose own inputs fit the service's input limits,
+# binds each task to its manifest by SHA-256, and records the lock hashes, this
+# script's Git blob and the limits it was derived against.
 set -Eeuo pipefail
+shopt -s inherit_errexit
 umask 077
 
 if (( $# != 0 )); then
   printf 'ERROR: full-suite materialization accepts no arguments.\n' >&2
   exit 2
 fi
-
-readonly SERVICE_ROOT=/home/user/Desktop/agent_service
-readonly BENCH_ROOT="${SERVICE_ROOT}/artifacts/swe-rebench-2026-07-production-service"
-readonly MATERIALIZER_RELATIVE=artifacts/swe-rebench-2026-07-production-service/full-suite-materialize.sh
-readonly DATASET_LOCK_RELATIVE=artifacts/swe-rebench-2026-07-production-service/full-suite-dataset.lock.json
-readonly MATERIALIZER_PATH="${SERVICE_ROOT}/${MATERIALIZER_RELATIVE}"
-readonly DATASET_ROOT="${BENCH_ROOT}/evaluator-dataset"
-readonly DATASET_LOCK="${SERVICE_ROOT}/${DATASET_LOCK_RELATIVE}"
-readonly SUITE_ROOT="${BENCH_ROOT}/full-suite-v1"
-readonly MATERIALIZATION_ROOT="${SUITE_ROOT}/materialization"
-readonly DATASET_NAME=ibragim-badertdinov/swe-rebench-07-2026@2026-07
-readonly DATASET_CONTENT_DIGEST=sha256:e2e357045bf03e4900d2506c36562f6eaff7acd37f63780600967ea3aecdcd79
-readonly HARBOR_VERSION=0.21.0
-readonly HARBOR_COMMIT=64afbbcb62165950301e1a6407c729aa26d844ff
-readonly DATASET_LOCK_SHA256=f994d9f7638f5b9f9ef29ca7a1385b25e61824641c05ef5b87a09231e52be1b2
-readonly SERVICE_RELEASE_COMMIT=bd1f5e2e1262570aff021c20430b43058ac55495
-readonly SERVICE_IMPLEMENTATION_COMMIT=718211dac56b866b2de603e1c1d23bb185a805b5
-readonly SERVICE_RELEASE_LOCK_SHA256=b505bfcd0991659961c6ae6a2734e7513ff43c9137472ee274210562f4a64640
-readonly STACK_LOCK_SHA256=06a9cc3cbe7070c04c23a1f8d59ef8de79cf410a33086aef28de0302676a2fcc
-# Reuse validation accepts any provenance tuple a reviewed release legitimately
-# produced -- not only today's -- because a manifest's production_release is an
-# immutable fact about materialization time, not a mirror of the current
-# contract. All 111 existing manifests were materialized under the original
-# accepted release; fresh materializations now stamp the re-released one. An
-# unknown tuple fails closed, admitted only by a reviewed commit extending this
-# list. Field order is release:implementation:release_lock_sha:stack_lock_sha.
-readonly -a ACCEPTED_PROVENANCE=(
-  "7a329f61665a7126e3f8cd9a4e3b7a6b66a639bc:bc67dae720894cbbcd62122a2a9ff6b56b042168:a43ffd0738749771fda13ce4d4b491e58356e2f0be430880334747ac5761f5d4:de1307bd8598cd928191b1a0947c086fcb9af2cc91c17c4488f70d06ca528de3"
-  "${SERVICE_RELEASE_COMMIT}:${SERVICE_IMPLEMENTATION_COMMIT}:${SERVICE_RELEASE_LOCK_SHA256}:${STACK_LOCK_SHA256}"
-)
-# The agent image doubles as the source extractor for fresh materialization, so
-# the current extractor must be the stack lock's agent image. It has been rebuilt
-# twice since the original suite (1dc84a6f -> 9393fe2c -> a85f7005, all GNU tar
-# 1.35), so a reused manifest may record any of them; the source is
-# independently re-verified against its exact env image, so a historical
-# extractor is accepted for validation. Entries other than the current one are
-# only ever string-compared against a manifest's recorded provenance and are
-# never run, so a superseded extractor image need not remain on disk.
-readonly SOURCE_EXTRACTOR_IMAGE_ID=sha256:a85f7005a0f43904eb322509c860046007ed4b52b125e631dc61521179143a3c
-readonly -a ACCEPTED_EXTRACTOR_IMAGES=(
-  sha256:1dc84a6f4e03b62a9540794a353c0b1e175a07e6afbcfed6441fe5f2d0f7d1ec
-  sha256:9393fe2c53b34ba220ef86a930ab6ea2c6c7ad23a439af85f6c98cc446fe2f15
-  "${SOURCE_EXTRACTOR_IMAGE_ID}"
-)
-readonly SOURCE_EXTRACTOR_TAR_VERSION='tar (GNU tar) 1.35'
-readonly EXPECTED_TASKS=111
-# Single source of truth: the stack lock (validated by the service against its
-# compiled constants, config.rs LimitsLock). A stale mirror here silently
-# wrong-sized the suite (this was a stale 4 GiB copy of the 8 GiB service cap).
-MAX_STAGED_FILES="$(jq -er '.limits.max_staged_files | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
-  { printf 'FATAL: stack lock .limits.max_staged_files is absent or not a number\n' >&2; exit 1; }
-MAX_STAGED_BYTES="$(jq -er '.limits.max_staged_bytes | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
-  { printf 'FATAL: stack lock .limits.max_staged_bytes is absent or not a number\n' >&2; exit 1; }
-MAX_PROMPT_BYTES="$(jq -er '.limits.max_prompt_bytes | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
-  { printf 'FATAL: stack lock .limits.max_prompt_bytes is absent or not a number\n' >&2; exit 1; }
-MAX_STAGED_ENTRIES="$(jq -er '.limits.max_staged_entries | numbers' "${SERVICE_ROOT}/config/stack.lock.json")" ||
-  { printf 'FATAL: stack lock .limits.max_staged_entries is absent or not a number\n' >&2; exit 1; }
-readonly MAX_STAGED_FILES MAX_STAGED_BYTES MAX_PROMPT_BYTES MAX_STAGED_ENTRIES
-readonly ENV_REPOSITORY=qwen38-swerebench-full-v1
-readonly UV_INSTALL='RUN curl -LsSf https://astral.sh/uv/0.7.13/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh'
-readonly LOGS_INSTALL='RUN mkdir -p /logs'
-
-ACTIVE_CONTAINER=
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -81,20 +39,28 @@ require_equal() {
     die "${label} mismatch: expected ${expected}, got ${actual}"
 }
 
-require_sha256() {
-  local path="$1" expected="$2" actual
-  [[ -f "${path}" && ! -L "${path}" ]] ||
-    die "required regular file is absent or a symlink: ${path}"
-  actual="$(sha256sum -- "${path}" | awk '{print $1}')"
-  require_equal "SHA-256 for ${path}" "${expected}" "${actual}"
+sha256_of() {
+  local digest
+  digest="$(sha256sum -- "$1")" || die "cannot hash $1"
+  printf '%s' "${digest%% *}"
 }
 
+require_sha256() {
+  local path="$1" expected="$2"
+  [[ -f "${path}" && ! -L "${path}" ]] || die "required regular file is absent or a symlink: ${path}"
+  require_equal "SHA-256 of ${path}" "${expected}" "$(sha256_of "${path}")"
+}
+
+ACTIVE_CONTAINER=
+SCRATCH=
 cleanup() {
   local rc=$?
   set +e
-  if [[ -n "${ACTIVE_CONTAINER}" ]] &&
-    docker container inspect "${ACTIVE_CONTAINER}" >/dev/null 2>&1; then
+  if [[ -n "${ACTIVE_CONTAINER}" ]]; then
     docker rm -f "${ACTIVE_CONTAINER}" >/dev/null 2>&1
+  fi
+  if [[ -n "${SCRATCH}" ]]; then
+    rm -rf -- "${SCRATCH}"
   fi
   exit "${rc}"
 }
@@ -102,107 +68,114 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-for command in awk bash chmod cmp cp curl cut date docker find flock git grep id jq \
-  mkdir mktemp mv readlink rm sed sha256sum sort stat sync tr wc xargs; do
+for command in awk chmod cmp comm cut date dirname docker find flock git grep id jq \
+  mkdir mktemp mv readlink realpath rm sha256sum sort stat sync wc xargs; do
   command -v "${command}" >/dev/null 2>&1 ||
     die "required host command is unavailable: ${command}"
 done
 
-[[ "$(id -u)" == 1000 && "$(id -g)" == 1000 ]] ||
-  die 'materialization must run as pinned host uid:gid 1000:1000'
-[[ "$(readlink -f -- "${SERVICE_ROOT}")" == "${SERVICE_ROOT}" ]] ||
-  die 'service root canonical path drift'
-[[ ! -L "${MATERIALIZER_PATH}" && "$(readlink -f -- "${BASH_SOURCE[0]}")" == "${MATERIALIZER_PATH}" ]] ||
-  die 'materializer must be invoked from its exact non-symlink project path'
-[[ -d "${BENCH_ROOT}" && ! -L "${BENCH_ROOT}" ]] ||
-  die 'benchmark root is absent or a symlink'
-[[ "$(stat -c '%u:%g:%a' -- "${BENCH_ROOT}")" == 1000:1000:700 ]] ||
-  die 'benchmark root must be owned by 1000:1000 with mode 0700'
-[[ -d "${DATASET_ROOT}" && ! -L "${DATASET_ROOT}" ]] ||
-  die 'dataset root is absent or a symlink'
-[[ -z "$(git -C "${SERVICE_ROOT}" status --porcelain=v1 --untracked-files=all)" ]] ||
-  die 'agent_service tracked worktree must be clean before materialization'
-require_equal 'agent_service branch' master "$(git -C "${SERVICE_ROOT}" branch --show-current)"
-for committed_input in "${MATERIALIZER_RELATIVE}" "${DATASET_LOCK_RELATIVE}"; do
-  git -C "${SERVICE_ROOT}" ls-files --error-unmatch -- "${committed_input}" >/dev/null 2>&1 ||
-    die "benchmark input is not tracked in Git: ${committed_input}"
-  cmp -- "${SERVICE_ROOT}/${committed_input}" \
-    <(git -C "${SERVICE_ROOT}" show "HEAD:${committed_input}") ||
-    die "benchmark input differs from committed HEAD: ${committed_input}"
+MATERIALIZER="$(readlink -e -- "${BASH_SOURCE[0]}")"
+BENCH_ROOT="$(dirname -- "${MATERIALIZER}")"
+SERVICE_ROOT="$(git -C "${BENCH_ROOT}" rev-parse --show-toplevel)"
+MATERIALIZER_RELATIVE="$(realpath --relative-to="${SERVICE_ROOT}" -- "${MATERIALIZER}")"
+BENCH_RELATIVE="$(dirname -- "${MATERIALIZER_RELATIVE}")"
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
+readonly MATERIALIZER BENCH_ROOT SERVICE_ROOT MATERIALIZER_RELATIVE BENCH_RELATIVE HOST_UID HOST_GID
+readonly DATASET_ROOT="${BENCH_ROOT}/evaluator-dataset"
+readonly DATASET_LOCK="${BENCH_ROOT}/full-suite-dataset.lock.json"
+readonly IMAGES_LOCK="${BENCH_ROOT}/full-suite-images.lock.json"
+readonly STACK_LOCK="${SERVICE_ROOT}/config/stack.lock.json"
+readonly MATERIALIZATION_ROOT="${BENCH_ROOT}/full-suite-materialization"
+readonly TASKS_ROOT="${MATERIALIZATION_ROOT}/tasks"
+readonly PLAN="${MATERIALIZATION_ROOT}/plan.json"
+readonly CONTAINER_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+readonly TASK_DIRECTORY_ENTRIES=$'d source\nf initial-git-status.z\nf manifest.json\nf source-modes.z\nf source-regular.sha256z'
+# Every task's environment/Dockerfile adds exactly these two layers to its base.
+readonly UV_VERSION=0.7.13
+readonly UV_INSTALL_LINE="RUN curl -LsSf https://astral.sh/uv/${UV_VERSION}/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh"
+readonly LOGS_LINE='RUN mkdir -p /logs'
+
+# The plan names this script by Git blob and the locks by SHA-256, and the service
+# input limits come from the stack lock, so all four must be committed bytes.
+for input in "${MATERIALIZER_RELATIVE}" "${BENCH_RELATIVE}/full-suite-dataset.lock.json" \
+  "${BENCH_RELATIVE}/full-suite-images.lock.json" config/stack.lock.json; do
+  git -C "${SERVICE_ROOT}" ls-files --error-unmatch -- "${input}" >/dev/null 2>&1 ||
+    die "materialization input is not tracked in Git: ${input}"
+  cmp -s -- "${SERVICE_ROOT}/${input}" <(git -C "${SERVICE_ROOT}" show "HEAD:${input}") ||
+    die "materialization input differs from HEAD: ${input}"
 done
-# Fingerprint the exact committed derivation code, proven above to equal HEAD.
-# The summary/plan record this so that a same-contract regeneration must be
-# byte-identical (else it is corruption), while a code change is an explicit,
-# archived supersession rather than a silent overwrite.
 MATERIALIZER_GIT_BLOB="$(git -C "${SERVICE_ROOT}" rev-parse "HEAD:${MATERIALIZER_RELATIVE}")"
-readonly MATERIALIZER_GIT_BLOB
-git -C "${SERVICE_ROOT}" merge-base --is-ancestor "${SERVICE_RELEASE_COMMIT}" HEAD ||
-  die 'benchmark tooling commit does not descend from the accepted production release'
-require_sha256 "${SERVICE_ROOT}/config/release.lock.json" "${SERVICE_RELEASE_LOCK_SHA256}"
-require_sha256 "${SERVICE_ROOT}/config/stack.lock.json" "${STACK_LOCK_SHA256}"
-require_equal 'source-extractor image ID in stack lock' "${SOURCE_EXTRACTOR_IMAGE_ID}" \
-  "$(jq -er '.agent.image_id' "${SERVICE_ROOT}/config/stack.lock.json")"
-require_equal 'source-extractor image architecture' amd64 \
-  "$(docker image inspect --format '{{.Architecture}}' "${SOURCE_EXTRACTOR_IMAGE_ID}")"
-require_equal 'source-extractor image OS' linux \
-  "$(docker image inspect --format '{{.Os}}' "${SOURCE_EXTRACTOR_IMAGE_ID}")"
-require_equal 'source-extractor GNU tar version' "${SOURCE_EXTRACTOR_TAR_VERSION}" \
-  "$(docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
-    --read-only --user 1000:1000 --entrypoint tar "${SOURCE_EXTRACTOR_IMAGE_ID}" \
-    --version | sed -n '1p')"
-jq -e \
-  --arg implementation "${SERVICE_IMPLEMENTATION_COMMIT}" \
-  --arg stack "${STACK_LOCK_SHA256}" \
-  '.implementation_commit == $implementation and .stack_lock_sha256 == $stack' \
-  "${SERVICE_ROOT}/config/release.lock.json" >/dev/null ||
-  die 'accepted production release-lock semantics drifted'
-require_sha256 "${DATASET_LOCK}" "${DATASET_LOCK_SHA256}"
-jq -e \
-  --arg dataset "${DATASET_NAME%@*}" \
-  --arg digest "${DATASET_CONTENT_DIGEST}" \
-  --arg harbor_version "${HARBOR_VERSION}" \
-  --arg harbor_commit "${HARBOR_COMMIT}" \
-  --argjson tasks "${EXPECTED_TASKS}" \
-  '.schema_version == 1 and .dataset.name == $dataset and
-   .dataset.selected_reference == $digest and .dataset.task_count == $tasks and
-   (.dataset.tasks | length) == $tasks and
-   ([.dataset.tasks[].task_id] | unique | length) == $tasks and
-   ([.dataset.tasks[].task_id] == ([.dataset.tasks[].task_id] | sort)) and
-   ([.dataset.tasks[].content_hash] | all(test("^[0-9a-f]{64}$"))) and
-   (.dataset.files == [{path:"README.md",
-     content_hash:"2cbef204aa1f09c36c62b94b9b72c6abfee38017a534575564f9ceff7ce21cca",
-     size_bytes:1756,
-     storage_path:"packages/ibragim-badertdinov/swe-rebench-07-2026/2cbef204aa1f09c36c62b94b9b72c6abfee38017a534575564f9ceff7ce21cca/README.md"}]) and
-   .harbor.version == $harbor_version and .harbor.commit == $harbor_commit' \
-  "${DATASET_LOCK}" >/dev/null || die 'pinned full-suite dataset lock is invalid'
+DATASET_LOCK_SHA256="$(sha256_of "${DATASET_LOCK}")"
+IMAGES_LOCK_SHA256="$(sha256_of "${IMAGES_LOCK}")"
+readonly MATERIALIZER_GIT_BLOB DATASET_LOCK_SHA256 IMAGES_LOCK_SHA256
 
-TASK_COUNT="$(find "${DATASET_ROOT}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | wc -l)"
-readonly TASK_COUNT
-require_equal 'dataset task count' "${EXPECTED_TASKS}" "${TASK_COUNT}"
-[[ -z "$(find "${DATASET_ROOT}" -type l -print -quit)" ]] ||
-  die 'dataset package itself contains a symbolic link'
-[[ -z "$(find "${DATASET_ROOT}" \! -type d \! -type f -print -quit)" ]] ||
-  die 'dataset package contains a special file'
-require_equal 'dataset-level file set' README.md \
-  "$(find "${DATASET_ROOT}" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)"
-cmp \
-  <(find "${DATASET_ROOT}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | LC_ALL=C sort) \
-  <(jq -r '.dataset.tasks[].task_id' "${DATASET_LOCK}" | LC_ALL=C sort) ||
-  die 'dataset task-directory set differs from the pinned registry digest'
-require_sha256 "${DATASET_ROOT}/README.md" \
-  "$(jq -er '.dataset.files[] | select(.path == "README.md") | .content_hash' "${DATASET_LOCK}")"
-require_equal 'dataset README bytes' \
-  "$(jq -er '.dataset.files[] | select(.path == "README.md") | .size_bytes' "${DATASET_LOCK}")" \
-  "$(stat -c '%s' -- "${DATASET_ROOT}/README.md")"
+jq -e '
+  def simple_name: type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._-]*$");
+  def sha256_hex: type == "string" and test("^[0-9a-f]{64}$");
+  .schema_version == 1 and
+  (.dataset.name | type == "string" and
+    test("^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")) and
+  (.dataset.tasks | type == "array" and length > 0) and
+  .dataset.task_count == (.dataset.tasks | length) and
+  all(.dataset.tasks[]; (.task_id | simple_name) and (.content_hash | sha256_hex)) and
+  ([.dataset.tasks[].task_id] | . == unique) and
+  (.dataset.files | type == "array") and
+  all(.dataset.files[]; (.path | simple_name) and (.content_hash | sha256_hex) and
+    (.size_bytes | type == "number" and . >= 0 and . == floor)) and
+  ([.dataset.files[].path] | . == unique)' "${DATASET_LOCK}" >/dev/null ||
+  die 'full-suite-dataset.lock.json is malformed'
 
-compute_harbor_task_content_hash() {
-  local task_root="$1" path relative digest
+jq -e --arg dataset_lock_sha256 "${DATASET_LOCK_SHA256}" --slurpfile dataset "${DATASET_LOCK}" '
+  def sha256_hex: type == "string" and test("^[0-9a-f]{64}$");
+  keys == ["dataset_lock_sha256", "environments", "integrity_contract", "schema_version",
+    "source_extractor"] and
+  .schema_version == 1 and
+  .dataset_lock_sha256 == $dataset_lock_sha256 and
+  (.integrity_contract | type == "string" and length > 0) and
+  (.source_extractor | keys == ["image"]) and
+  (.source_extractor.image | type == "string" and
+    test("^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[0-9a-f]{64}$")) and
+  [.environments[].task_id] == [$dataset[0].dataset.tasks[].task_id] and
+  all(.environments[];
+    keys == ["archive", "image_id", "image_tag", "task_id"] and
+    (.image_tag | type == "string" and
+      test("^[a-z0-9]+([._-][a-z0-9]+)*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")) and
+    (.image_tag | sub("^[^:]*:"; "")) == (.task_id | ascii_downcase) and
+    (.image_id | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
+    (.archive | keys == ["bytes", "path", "sha256"]) and
+    (.archive.path | type == "string" and
+      test("^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$")) and
+    (.archive.sha256 | sha256_hex) and
+    (.archive.bytes | type == "number" and . > 0 and . == floor)) and
+  ([.environments[].image_tag] | length == (unique | length)) and
+  ([.environments[].image_id] | length == (unique | length))' "${IMAGES_LOCK}" >/dev/null ||
+  die 'full-suite-images.lock.json is malformed or does not pin the locked dataset'
+
+SERVICE_LIMITS="$(jq -ce '
+  .limits | {max_prompt_bytes, max_staged_bytes, max_staged_files, max_staged_entries} |
+  if all(.[]; type == "number" and . > 0 and . == floor) then . else error("not positive integers") end' \
+  "${STACK_LOCK}")" ||
+  die 'config/stack.lock.json does not carry positive integer service input limits'
+DATASET_NAME="$(jq -er '.dataset.name' "${DATASET_LOCK}")"
+SOURCE_EXTRACTOR_IMAGE="$(jq -er '.source_extractor.image' "${IMAGES_LOCK}")"
+TASK_COUNT="$(jq -er '.dataset.tasks | length' "${DATASET_LOCK}")"
+mapfile -t TASK_IDS < <(jq -r '.dataset.tasks[].task_id' "${DATASET_LOCK}")
+require_equal 'locked task count' "${TASK_COUNT}" "${#TASK_IDS[@]}"
+readonly SERVICE_LIMITS DATASET_NAME SOURCE_EXTRACTOR_IMAGE TASK_COUNT TASK_IDS
+
+# Harbor 0.21.0's Packager.compute_content_hash, which the dataset lock's hashes
+# come from: SHA-256 over `relative_path NUL file_sha256 LF` for task.toml,
+# instruction.md, README.md and every file under environment/, tests/, solution/
+# and steps/, sorted by path. Harbor's default-ignored paths must be absent,
+# because ignore rules are not evaluated here.
+task_content_hash() {
+  local task_root="$1" path transient
   [[ ! -e "${task_root}/.gitignore" ]] ||
-    die "unexpected task-level .gitignore requires pinned PathSpec evaluation: ${task_root}"
-  [[ -z "$(find "${task_root}" \
-    \( -path '*/__pycache__/*' -o -name '*.pyc' -o -name '.DS_Store' -o \
-       -name '*.swp' -o -name '*.swo' -o -name '*~' \) -print -quit)" ]] ||
-    die "task contains a Harbor-default-ignored transient path: ${task_root}"
+    die "task-level .gitignore would need Harbor's ignore evaluation: ${task_root}"
+  transient="$(find "${task_root}" \( -path '*/__pycache__/*' -o -name '*.pyc' -o \
+    -name '.DS_Store' -o -name '*.swp' -o -name '*.swo' -o -name '*~' \) -print -quit)"
+  [[ -z "${transient}" ]] || die "task holds a path Harbor ignores by default: ${transient}"
   {
     for path in task.toml instruction.md README.md; do
       [[ ! -f "${task_root}/${path}" ]] || printf '%s\0' "${task_root}/${path}"
@@ -212,969 +185,430 @@ compute_harbor_task_content_hash() {
     done
   } | LC_ALL=C sort -z |
     while IFS= read -r -d '' path; do
-      relative="${path#"${task_root}"/}"
-      digest="$(sha256sum -- "${path}" | awk '{print $1}')"
-      printf '%s\0%s\n' "${relative}" "${digest}"
-    done | sha256sum | awk '{print $1}'
+      printf '%s\0%s\n' "${path#"${task_root}"/}" "$(sha256_of "${path}")"
+    done | sha256sum | cut -d' ' -f1
 }
 
-verified_task_hashes=0
-while IFS=$'\t' read -r task_id expected_content_hash; do
-  task_root="${DATASET_ROOT}/${task_id}"
-  require_equal "task package top-level shape for ${task_id}" \
-    $'d environment\nd solution\nd tests\nf instruction.md\nf task.toml' \
-    "$(find "${task_root}" -mindepth 1 -maxdepth 1 -printf '%y %f\n' | LC_ALL=C sort)"
-  require_equal "Harbor content hash for ${task_id}" "${expected_content_hash}" \
-    "$(compute_harbor_task_content_hash "${task_root}")"
-  verified_task_hashes=$((verified_task_hashes + 1))
-done < <(jq -r '.dataset.tasks[] | [.task_id,.content_hash] | @tsv' "${DATASET_LOCK}")
-require_equal 'verified Harbor task content-hash count' "${EXPECTED_TASKS}" "${verified_task_hashes}"
-
-mkdir -p -- "${SUITE_ROOT}" "${MATERIALIZATION_ROOT}"
-chmod 0700 -- "${SUITE_ROOT}" "${MATERIALIZATION_ROOT}"
-exec 9>"${SUITE_ROOT}/materialize.lock"
-flock -n 9 || die 'another full-suite materializer already holds the suite lock'
-
-# Per-run derived-classification ledger: exactly one JSON row per task, the
-# current contract applied to re-verified evidence, written under the exclusive
-# suite lock. The summary and plan are built from this ledger, never from the
-# manifests' stored (materialization-time) classification.
-readonly DERIVED_LEDGER="${SUITE_ROOT}/.derived-classification.jsonl"
-: >"${DERIVED_LEDGER}"
-
-write_regular_manifest() {
-  local root="$1" output="$2"
-  (
-    cd "${root}"
-    find . -type f -print0 | LC_ALL=C sort -z |
-      xargs -0 -r sha256sum --zero --
-  ) >"${output}"
+exact_line_count() {
+  awk -v expected="$2" '$0 == expected {count++} END {print count + 0}' "$1"
 }
 
-write_mode_manifest() {
-  local root="$1" output="$2"
-  (
-    cd "${root}"
-    find . -mindepth 1 -printf '%y %m %P -> %l\0' | LC_ALL=C sort -z
-  ) >"${output}"
-}
-
-write_symlink_manifest() {
-  local root="$1" output="$2"
-  (
-    cd "${root}"
-    find . -type l -printf '%P -> %l\0' | LC_ALL=C sort -z
-  ) >"${output}"
-}
-
-write_image_regular_manifest() {
-  local env_id="$1" output="$2"
-  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
-    --read-only --memory 1g --pids-limit 128 --env LC_ALL=C \
-    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
-    'find . -type f -print0 | sort -z | xargs -0 -r sha256sum --zero --' >"${output}"
-}
-
-write_image_mode_manifest() {
-  local env_id="$1" output="$2"
-  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
-    --read-only --memory 1g --pids-limit 128 --env LC_ALL=C \
-    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
-    'find . -mindepth 1 -printf "%y %m %P -> %l\0" | sort -z' >"${output}"
-}
-
-write_image_symlink_manifest() {
-  local env_id="$1" output="$2"
-  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
-    --read-only --memory 1g --pids-limit 128 --env LC_ALL=C \
-    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
-    'find . -type l -printf "%P -> %l\0" | sort -z' >"${output}"
-}
-
-write_environment_git_status() {
-  local env_id="$1" expected_base_commit="$2" output="$3"
-  docker run --rm --network none --cap-drop ALL \
-    --security-opt no-new-privileges --read-only --memory 1g --pids-limit 128 \
-    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
-    --env EXPECTED_BASE_COMMIT="${expected_base_commit}" \
-    --env GIT_CONFIG_NOSYSTEM=1 --env GIT_OPTIONAL_LOCKS=0 --env HOME=/tmp/no-home \
-    --env LC_ALL=C \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
-    'test -d .git && test ! -L .git;
-     git_bin="$(command -v git)"; test -n "$git_bin"; test -x "$git_bin";
-     test "$PWD" = "$(pwd -P)";
-     test "$PWD" = "$("$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --show-toplevel)";
-     test "$("$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD)" = "$EXPECTED_BASE_COMMIT";
-     "$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null status \
-       --porcelain=v1 -z --untracked-files=all --ignore-submodules=none' >"${output}"
-}
-
-write_copied_git_status() {
-  local env_id="$1" expected_base_commit="$2" source_root="$3" output="$4"
-  docker run --rm --network none --cap-drop ALL \
-    --security-opt no-new-privileges --read-only --memory 1g --pids-limit 128 \
-    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
-    --env EXPECTED_BASE_COMMIT="${expected_base_commit}" \
-    --env GIT_CONFIG_NOSYSTEM=1 --env GIT_OPTIONAL_LOCKS=0 --env HOME=/tmp/no-home \
-    --env LC_ALL=C \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    --mount "type=bind,src=${source_root},dst=/source,readonly" \
-    --workdir /source --user 1000:1000 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
-    'test -d .git && test ! -L .git;
-     git_bin="$(command -v git)"; test -n "$git_bin"; test -x "$git_bin";
-     test "$("$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null -c safe.directory=/source rev-parse HEAD)" = "$EXPECTED_BASE_COMMIT";
-     "$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null -c safe.directory=/source status \
-       --porcelain=v1 -z --untracked-files=all --ignore-submodules=none' >"${output}"
-}
-
-verify_source_manifests() {
-  local task_dir="$1"
-  local source_root="${task_dir}/source" scratch env_id
-  env_id="$(jq -er '.environment.image_id' "${task_dir}/manifest.json")"
-  scratch="$(mktemp -d "${SUITE_ROOT}/.verify-source.XXXXXXXX")"
-  write_regular_manifest "${source_root}" "${scratch}/regular.sha256z"
-  write_mode_manifest "${source_root}" "${scratch}/modes.z"
-  write_symlink_manifest "${source_root}" "${scratch}/symlinks.z"
-  write_image_regular_manifest "${env_id}" "${scratch}/image-regular.sha256z"
-  write_image_mode_manifest "${env_id}" "${scratch}/image-modes.z"
-  write_image_symlink_manifest "${env_id}" "${scratch}/image-symlinks.z"
-  cmp -- "${task_dir}/source-regular.sha256z" "${scratch}/regular.sha256z" ||
-    die "source regular-file content drift: ${source_root}"
-  cmp -- "${task_dir}/source-modes.z" "${scratch}/modes.z" ||
-    die "source type/mode/target drift: ${source_root}"
-  cmp -- "${task_dir}/source-symlinks.z" "${scratch}/symlinks.z" ||
-    die "source symlink drift: ${source_root}"
-  cmp -- "${task_dir}/source-regular.sha256z" "${scratch}/image-regular.sha256z" ||
-    die "materialized regular files differ from the exact environment image: ${source_root}"
-  cmp -- "${task_dir}/source-modes.z" "${scratch}/image-modes.z" ||
-    die "materialized types/modes/targets differ from the exact environment image: ${source_root}"
-  cmp -- "${task_dir}/source-symlinks.z" "${scratch}/image-symlinks.z" ||
-    die "materialized symlinks differ from the exact environment image: ${source_root}"
-  rm -rf -- "${scratch}"
-}
-
-verify_materialized_repository() {
-  local task_dir="$1" env_id base_commit status_path scratch environment_status copied_status
-  local status_sha status_bytes status_clean manifest_has_status_fields migration_partial
-  env_id="$(jq -er '.environment.image_id' "${task_dir}/manifest.json")"
-  base_commit="$(jq -er '.source.base_commit' "${task_dir}/manifest.json")"
-  status_path="${task_dir}/initial-git-status.z"
-  scratch="$(mktemp -d "${SUITE_ROOT}/.verify-git-status.XXXXXXXX")"
-  environment_status="${scratch}/environment.z"
-  copied_status="${scratch}/copied.z"
-  write_environment_git_status "${env_id}" "${base_commit}" "${environment_status}"
-  write_copied_git_status "${env_id}" "${base_commit}" "${task_dir}/source" "${copied_status}"
-  cmp -- "${environment_status}" "${copied_status}" ||
-    die "copied repository Git status differs from the exact environment image: $(basename "${task_dir}")"
-
-  status_sha="$(sha256sum -- "${environment_status}" | awk '{print $1}')"
-  status_bytes="$(stat -c '%s' -- "${environment_status}")"
-  status_clean=false
-  (( status_bytes != 0 )) || status_clean=true
-  manifest_has_status_fields="$(jq -r \
-    'if (.source.initial_git_status_sha256 | type) == "string" and
-        (.source.initial_git_status_bytes | type) == "number" and
-        (.source.initial_worktree_clean | type) == "boolean"
-     then "complete"
-     elif .source.initial_git_status_sha256 == null and
-          .source.initial_git_status_bytes == null and
-          .source.initial_worktree_clean == null
-     then "absent"
-     else "partial"
-     end' "${task_dir}/manifest.json")"
-  [[ "${manifest_has_status_fields}" != partial ]] ||
-    die "initial Git-status fields are only partially present: $(basename "${task_dir}")"
-
-  if [[ -e "${status_path}" ]]; then
-    [[ -f "${status_path}" && ! -L "${status_path}" ]] ||
-      die "initial Git-status evidence is not a regular file: ${status_path}"
-    [[ ! -e "${status_path}.partial" ]] ||
-      die "initial Git-status evidence has an unexpected partial sibling: ${status_path}.partial"
-    cmp -- "${status_path}" "${environment_status}" ||
-      die "initial Git-status evidence differs from the exact environment image: $(basename "${task_dir}")"
-  else
-    if [[ -e "${status_path}.partial" ]]; then
-      [[ -f "${status_path}.partial" && ! -L "${status_path}.partial" ]] ||
-        die "partial initial Git-status evidence is not a regular file: ${status_path}.partial"
-      cmp -- "${status_path}.partial" "${environment_status}" ||
-        die "partial initial Git-status evidence differs from the exact environment image: $(basename "${task_dir}")"
-    else
-      cp -- "${environment_status}" "${status_path}.partial"
-    fi
-    sync -f "${status_path}.partial"
-    mv -- "${status_path}.partial" "${status_path}"
-    sync -f "${task_dir}"
-  fi
-
-  if [[ "${manifest_has_status_fields}" == absent ]]; then
-    migration_partial="${task_dir}/manifest.json.git-status-migration.partial"
-    jq --arg status_sha "${status_sha}" --argjson status_bytes "${status_bytes}" \
-      --argjson status_clean "${status_clean}" \
-      '.source.initial_git_status_sha256 = $status_sha |
-       .source.initial_git_status_bytes = $status_bytes |
-       .source.initial_worktree_clean = $status_clean' \
-      "${task_dir}/manifest.json" >"${scratch}/migrated-manifest.json"
-    if [[ -e "${migration_partial}" ]]; then
-      [[ -f "${migration_partial}" && ! -L "${migration_partial}" ]] ||
-        die "partial Git-status manifest migration is not a regular file: ${migration_partial}"
-      cmp -- "${migration_partial}" "${scratch}/migrated-manifest.json" ||
-        die "partial Git-status manifest migration differs from the exact regenerated form: $(basename "${task_dir}")"
-    else
-      cp -- "${scratch}/migrated-manifest.json" "${migration_partial}"
-    fi
-    sync -f "${migration_partial}"
-    mv -- "${migration_partial}" "${task_dir}/manifest.json"
-    sync -f "${task_dir}"
-  else
-    [[ ! -e "${task_dir}/manifest.json.git-status-migration.partial" ]] ||
-      die "completed Git-status manifest has an unexpected partial migration sibling: $(basename "${task_dir}")"
-  fi
-
-  jq -e --arg status_sha "${status_sha}" --argjson status_bytes "${status_bytes}" \
-    --argjson status_clean "${status_clean}" \
-    '.source.initial_git_status_sha256 == $status_sha and
-     .source.initial_git_status_bytes == $status_bytes and
-     .source.initial_worktree_clean == $status_clean' \
-    "${task_dir}/manifest.json" >/dev/null ||
-    die "initial Git-status manifest evidence mismatch: $(basename "${task_dir}")"
-  require_sha256 "${status_path}" "${status_sha}"
-  rm -rf -- "${scratch}"
-}
-
-restore_environment_image_if_needed() {
-  local task_dir="$1" env_id env_tag archive
-  env_id="$(jq -er '.environment.image_id' "${task_dir}/manifest.json")"
-  env_tag="$(jq -er '.environment.image_tag' "${task_dir}/manifest.json")"
-  archive="${task_dir}/environment-image.tar"
-  if docker image inspect "${env_tag}" >/dev/null 2>&1; then
-    require_equal "existing environment tag for $(basename "${task_dir}")" "${env_id}" \
-      "$(docker image inspect --format '{{.Id}}' "${env_tag}")"
-  elif ! docker image inspect "${env_id}" >/dev/null 2>&1; then
-    docker load --input "${archive}" >"${task_dir}/restore.log.partial"
-    sync -f "${task_dir}/restore.log.partial"
-    mv -- "${task_dir}/restore.log.partial" "${task_dir}/restore.log"
-    sync -f "${task_dir}"
-  else
-    docker load --input "${archive}" >"${task_dir}/restore.log.partial"
-    sync -f "${task_dir}/restore.log.partial"
-    mv -- "${task_dir}/restore.log.partial" "${task_dir}/restore.log"
-    sync -f "${task_dir}"
-  fi
-  require_equal "restored environment image for $(basename "${task_dir}")" "${env_id}" \
-    "$(docker image inspect --format '{{.Id}}' "${env_tag}")"
-}
-
-validate_completed_task() {
+verify_task_package() {
   local task_id="$1"
-  local task_dir="${MATERIALIZATION_ROOT}/${task_id}"
-  local manifest="${task_dir}/manifest.json" archive_sha archive_bytes registry_content_hash evidence
-  local materialization_method
-  [[ -d "${task_dir}" && ! -L "${task_dir}" ]] ||
-    die "completed task directory is absent or a symlink: ${task_dir}"
-  [[ -f "${manifest}" && ! -L "${manifest}" ]] ||
-    die "completed task manifest is absent or a symlink: ${manifest}"
-  for evidence in pull.log build.log load.log environment-probe.txt \
-    materialize-container-id.txt materialize-container-removed-id.txt \
-    source-regular.sha256z source-modes.z source-symlinks.z; do
-    [[ -f "${task_dir}/${evidence}" && ! -L "${task_dir}/${evidence}" ]] ||
-      die "completed task evidence is absent or a symlink: ${task_dir}/${evidence}"
+  local root="${DATASET_ROOT}/${task_id}" path network image_name
+  require_equal "top-level layout of task ${task_id}" \
+    $'d environment\nd solution\nd tests\nf instruction.md\nf task.toml' \
+    "$(find "${root}" -mindepth 1 -maxdepth 1 -printf '%y %f\n' | LC_ALL=C sort)"
+  for path in environment/Dockerfile tests/config.json tests/test.sh tests/swan_log_parsers.py; do
+    [[ -f "${root}/${path}" ]] || die "task input is absent: ${task_id}/${path}"
   done
-  [[ -z "$(find "${task_dir}" -mindepth 1 -maxdepth 1 \
-    \! -type d \! -type f -print -quit)" ]] ||
-    die "completed task top level contains a symlink or special file: ${task_id}"
-  registry_content_hash="$(jq -er --arg task "${task_id}" \
-    '.dataset.tasks[] | select(.task_id == $task) | .content_hash' "${DATASET_LOCK}")"
+  require_equal "Harbor content hash of task ${task_id}" \
+    "$(jq -er --arg task "${task_id}" '.dataset.tasks[] | select(.task_id == $task) | .content_hash' \
+      "${DATASET_LOCK}")" \
+    "$(task_content_hash "${root}")"
   jq -e --arg task "${task_id}" \
-    --arg dataset_digest "${DATASET_CONTENT_DIGEST}" \
-    --arg dataset_lock_sha "${DATASET_LOCK_SHA256}" \
-    --arg registry_content_hash "${registry_content_hash}" \
-    '.schema_version == 1 and .task_id == $task and
-     .dataset.content_digest == $dataset_digest and
-     .dataset.lock_sha256 == $dataset_lock_sha and
-     .inputs.harbor_content_hash == $registry_content_hash and
-     (.classification == "eligible" or .classification == "production-input-contract-exclusion") and
-     (.policy_order == [false,true] or .policy_order == [true,false])' \
-    "${manifest}" >/dev/null || die "completed task manifest semantic mismatch: ${task_id}"
-  # Provenance is an immutable materialization-time fact, so accept any reviewed
-  # release tuple, not only the current one -- a re-release must not invalidate
-  # correctly materialized evidence. An unknown tuple fails closed. This is
-  # strictly stricter on one axis than before: it also pins implementation_commit,
-  # which the old per-manifest check never validated.
-  local manifest_provenance accepted provenance_ok=false
-  manifest_provenance="$(jq -er '[.production_release.release_commit,
-    .production_release.implementation_commit,
-    .production_release.release_lock_sha256,
-    .production_release.stack_lock_sha256] | join(":")' "${manifest}")"
-  for accepted in "${ACCEPTED_PROVENANCE[@]}"; do
-    [[ "${manifest_provenance}" != "${accepted}" ]] || provenance_ok=true
-  done
-  [[ "${provenance_ok}" == true ]] ||
-    die "completed task manifest provenance is not an accepted materialization contract: ${task_id}: ${manifest_provenance}"
-  materialization_method="$(jq -r '.source.materialization_method // "legacy Docker direct destination copy"' \
-    "${manifest}")"
-  if [[ "${materialization_method}" == \
-    'Docker archive stream plus pinned non-root GNU tar delayed-directory restoration' ]]; then
-    local recorded_extractor accepted_extractor extractor_ok=false
-    recorded_extractor="$(jq -er '.source.extractor_image_id' "${manifest}")"
-    for accepted_extractor in "${ACCEPTED_EXTRACTOR_IMAGES[@]}"; do
-      [[ "${recorded_extractor}" != "${accepted_extractor}" ]] || extractor_ok=true
-    done
-    [[ "${extractor_ok}" == true ]] ||
-      die "source extractor image for ${task_id} is not an accepted extractor: ${recorded_extractor}"
-    require_equal "source extractor tar version for ${task_id}" "${SOURCE_EXTRACTOR_TAR_VERSION}" \
-      "$(jq -er '.source.extractor_tar_version' "${manifest}")"
-    for evidence in source-archive.log source-extract.log; do
-      [[ -f "${task_dir}/${evidence}" && ! -L "${task_dir}/${evidence}" ]] ||
-        die "completed streamed-copy evidence is absent or a symlink: ${task_dir}/${evidence}"
-    done
-  elif [[ "${materialization_method}" != 'legacy Docker direct destination copy' ]]; then
-    die "unrecognized source materialization method for ${task_id}: ${materialization_method}"
+    '.instance_id == $task and (.language | type == "string" and length > 0) and
+     (.base_commit | type == "string" and test("^[0-9a-f]{40}$")) and
+     (.image_name | type == "string")' \
+    "${root}/tests/config.json" >/dev/null || die "tests/config.json does not describe task ${task_id}"
+
+  # Every task must declare the suite's one set of conditions. The driver grades
+  # each under a 3000 s verifier timeout, one CPU and 4096 MiB with network, and
+  # the agent timeout and storage declarations are uniform as well. Harbor 0.21.0
+  # reads the legacy `allow_internet = true` as public network.
+  require_equal "task name declarations in ${task_id}" 1 \
+    "$(exact_line_count "${root}/task.toml" "name = \"${DATASET_NAME%%/*}/${task_id}\"")"
+  require_equal "timeout declarations in ${task_id}" 2 \
+    "$(exact_line_count "${root}/task.toml" 'timeout_sec = 3000.0')"
+  require_equal "CPU declarations in ${task_id}" 1 \
+    "$(exact_line_count "${root}/task.toml" 'cpus = 1')"
+  require_equal "memory declarations in ${task_id}" 1 \
+    "$(exact_line_count "${root}/task.toml" 'memory_mb = 4096')"
+  require_equal "storage declarations in ${task_id}" 1 \
+    "$(exact_line_count "${root}/task.toml" 'storage_mb = 10240')"
+  network="$(awk '/^(network_mode|allow_internet) = /' "${root}/task.toml")"
+  [[ "${network}" == 'network_mode = "public"' || "${network}" == 'allow_internet = true' ]] ||
+    die "task ${task_id} does not declare exactly one public network setting: ${network}"
+
+  # The environment image is this recipe built; verify_environment_recipe checks
+  # what its two RUN lines add.
+  image_name="$(jq -er '.image_name' "${root}/tests/config.json")"
+  require_equal "environment/Dockerfile of task ${task_id}" \
+    "FROM ${image_name}"$'\n'"${UV_INSTALL_LINE}"$'\n'"${LOGS_LINE}" \
+    "$(grep -v '^$' "${root}/environment/Dockerfile")"
+}
+
+# A host that does not hold the pinned image loads it from its pinned archive;
+# either way the tag must name exactly the pinned image.
+ensure_environment_image() {
+  local task_id="$1"
+  local entry image_tag image_id archive_path archive_sha256 archive_bytes archive observed
+  entry="$(jq -er --arg task "${task_id}" '.environments[] | select(.task_id == $task) |
+    [.image_tag, .image_id, .archive.path, .archive.sha256, .archive.bytes] | @tsv' "${IMAGES_LOCK}")"
+  IFS=$'\t' read -r image_tag image_id archive_path archive_sha256 archive_bytes <<<"${entry}"
+  if ! observed="$(docker image inspect --format '{{.Id}}' "${image_tag}" 2>/dev/null)"; then
+    archive="${BENCH_ROOT}/${archive_path}"
+    printf 'Loading the pinned environment archive for %s.\n' "${task_id}" >&2
+    [[ -f "${archive}" && ! -L "${archive}" ]] ||
+      die "environment image ${image_tag} is absent and so is its pinned archive: ${archive}"
+    require_equal "size of ${archive}" "${archive_bytes}" "$(stat -c '%s' -- "${archive}")"
+    require_sha256 "${archive}" "${archive_sha256}"
+    docker load --input "${archive}" >/dev/null
+    observed="$(docker image inspect --format '{{.Id}}' "${image_tag}")"
   fi
-  archive_sha="$(jq -er '.environment.archive_sha256' "${manifest}")"
-  archive_bytes="$(jq -er '.environment.archive_bytes' "${manifest}")"
-  require_sha256 "${task_dir}/environment-image.tar" "${archive_sha}"
-  require_equal "environment archive bytes for ${task_id}" "${archive_bytes}" \
-    "$(stat -c '%s' -- "${task_dir}/environment-image.tar")"
-  require_equal "environment archive ownership/mode for ${task_id}" 1000:1000:600 \
-    "$(stat -c '%u:%g:%a' -- "${task_dir}/environment-image.tar")"
-  require_sha256 "${task_dir}/source-regular.sha256z" \
-    "$(jq -er '.source.regular_manifest_sha256' "${manifest}")"
-  require_sha256 "${task_dir}/source-modes.z" \
-    "$(jq -er '.source.mode_manifest_sha256' "${manifest}")"
-  require_sha256 "${task_dir}/source-symlinks.z" \
-    "$(jq -er '.source.symlink_manifest_sha256' "${manifest}")"
-  restore_environment_image_if_needed "${task_dir}"
-  [[ -d "${task_dir}/source/.git" && ! -L "${task_dir}/source/.git" ]] ||
-    die "materialized source has no real .git directory: ${task_id}"
-  verify_materialized_repository "${task_dir}"
-  [[ -f "${task_dir}/initial-git-status.z" && ! -L "${task_dir}/initial-git-status.z" ]] ||
-    die "completed task Git-status evidence is absent or a symlink: ${task_id}"
-  verify_source_manifests "${task_dir}"
+  require_equal "image named by ${image_tag}" "${image_id}" "${observed}"
 }
 
-# The one production input-contract classification rule, applied to a single
-# task's derived inputs. Prints "<classification>\t<reason-or-empty>". Fresh
-# materialization and reuse re-derivation both call this exact function, so the
-# eligibility contract lives in one place and cannot drift between them.
-classify_task_inputs() {
-  local instruction_bytes="$1" special_count="$2" file_count="$3" source_bytes="$4"
-  local dir_count="$5" symlink_count="$6"
-  # staging.rs counts one entry per distinct directory, symlink, and regular
-  # file, so the eligibility model counts the same three. Modelling only files
-  # and bytes let the plan call a task eligible that staging would then reject
-  # mid-run. max_archive_bytes needs no model here: submission-common.sh
-  # measures the real archive against it before anything is sent.
-  local entry_count=$(( dir_count + file_count + symlink_count ))
-  if (( instruction_bytes > MAX_PROMPT_BYTES )); then
-    printf 'production-input-contract-exclusion\tprompt_bytes_exceed_service_limit\n'
-  elif (( special_count > 0 )); then
-    printf 'production-input-contract-exclusion\tsource_contains_special_files\n'
-  elif (( file_count > MAX_STAGED_FILES )); then
-    printf 'production-input-contract-exclusion\tsource_file_count_exceeds_service_limit\n'
-  elif (( source_bytes > MAX_STAGED_BYTES )); then
-    printf 'production-input-contract-exclusion\tsource_bytes_exceed_service_limit\n'
-  elif (( entry_count > MAX_STAGED_ENTRIES )); then
-    printf 'production-input-contract-exclusion\tsource_entry_count_exceeds_service_limit\n'
-  else
-    printf 'eligible\t\n'
-  fi
+# What each environment/Dockerfile adds to its base, and grading relies on: uv
+# at the pinned version, and /logs.
+verify_environment_recipe() {
+  local env_id="$1"
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --memory 1g --pids-limit 128 \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
+    --env EXPECTED_UV_VERSION="uv ${UV_VERSION}" --env HOME=/tmp/no-home \
+    --env LC_ALL=C --env PATH="${CONTAINER_PATH}" \
+    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'test "$(uv --version)" = "$EXPECTED_UV_VERSION"
+     test -d /logs' ||
+    die "environment image ${env_id} lacks what its environment/Dockerfile adds"
 }
 
-# One JSON row per task appended to the per-run ledger the summary/plan build from.
-append_derived_classification() {
-  local task_id="$1" classification="$2" exclusion_reason="$3"
-  jq -cn --arg task_id "${task_id}" --arg classification "${classification}" \
-    --arg exclusion_reason "${exclusion_reason}" \
-    '{task_id:$task_id, classification:$classification,
-      exclusion_reason:(if $exclusion_reason == "" then null else $exclusion_reason end)}' \
-    >>"${DERIVED_LEDGER}"
+# The image's own tools describe its working tree, as root in a sandbox with no
+# network, no capabilities and a read-only root filesystem.
+image_regular_manifest() {
+  local env_id="$1"
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --memory 1g --pids-limit 128 \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
+    --env LC_ALL=C --env PATH="${CONTAINER_PATH}" \
+    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'find . -type f -print0 | sort -z | xargs -0 -r sha256sum --zero --'
 }
 
-# Re-derive eligibility for an already-materialized task against the CURRENT
-# contract, from re-verified evidence only. Must run strictly after
-# validate_completed_task has proven source/ == recorded evidence == the exact
-# environment image, and after startup proved the dataset equals the pinned
-# registry. Recorded counts are never trusted as inputs: they are recomputed and
-# any divergence from the manifest fails closed.
-rederive_task_classification() {
-  local task_id="$1" outvar="$2"
-  local task_dir="${MATERIALIZATION_ROOT}/${task_id}"
-  local manifest="${task_dir}/manifest.json"
-  local instruction="${DATASET_ROOT}/${task_id}/instruction.md"
-  local instruction_bytes file_count source_bytes symlink_count special_count dir_count
-  local classification exclusion_reason
-  [[ -f "${instruction}" && ! -L "${instruction}" ]] ||
-    die "dataset instruction is absent or a symlink: ${task_id}"
-  require_equal "manifest instruction identity for ${task_id}" \
-    "$(jq -er '.inputs.instruction_sha256' "${manifest}")" \
-    "$(sha256sum -- "${instruction}" | awk '{print $1}')"
-  instruction_bytes="$(stat -c '%s' -- "${instruction}")"
-  file_count="$(find "${task_dir}/source" -type f -printf '.\n' | wc -l)"
-  source_bytes="$(find "${task_dir}/source" -type f -printf '%s\n' | awk '{sum += $1} END {print sum + 0}')"
-  symlink_count="$(find "${task_dir}/source" -type l -printf '.\n' | wc -l)"
-  special_count="$(find "${task_dir}/source" \! -type d \! -type f \! -type l -printf '.\n' | wc -l)"
-  dir_count="$(find "${task_dir}/source" -type d -printf '.\n' | wc -l)"
-  jq -e \
+image_mode_manifest() {
+  local env_id="$1"
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --memory 1g --pids-limit 128 \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
+    --env LC_ALL=C --env PATH="${CONTAINER_PATH}" \
+    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'find . -mindepth 1 -printf "%y %m %P -> %l\0" | sort -z'
+}
+
+image_git_status() {
+  local env_id="$1" base_commit="$2"
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --memory 1g --pids-limit 128 \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
+    --env EXPECTED_BASE_COMMIT="${base_commit}" \
+    --env GIT_CONFIG_NOSYSTEM=1 --env GIT_OPTIONAL_LOCKS=0 --env HOME=/tmp/no-home \
+    --env LC_ALL=C --env PATH="${CONTAINER_PATH}" \
+    --user 0:0 --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'git_bin="$(command -v git)"
+     git() { "$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null "$@"; }
+     test -d .git
+     test ! -L .git
+     test "$PWD" = "$(pwd -P)"
+     test "$PWD" = "$(git rev-parse --show-toplevel)"
+     test "$(git rev-parse HEAD)" = "$EXPECTED_BASE_COMMIT"
+     git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=none'
+}
+
+write_image_evidence() {
+  local env_id="$1" base_commit="$2" directory="$3"
+  image_regular_manifest "${env_id}" >"${directory}/source-regular.sha256z"
+  image_mode_manifest "${env_id}" >"${directory}/source-modes.z"
+  image_git_status "${env_id}" "${base_commit}" >"${directory}/initial-git-status.z"
+}
+
+# The host's tools describe the copy, printing the same records as the image's.
+host_regular_manifest() {
+  local root="$1"
+  (cd -- "${root}" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum --zero --)
+}
+
+host_mode_manifest() {
+  local root="$1"
+  (cd -- "${root}" && find . -mindepth 1 -printf '%y %m %P -> %l\0' | LC_ALL=C sort -z)
+}
+
+# The image's own git reads the copy, mounted read-only, as the invoking user.
+copy_git_status() {
+  local env_id="$1" base_commit="$2" source_root="$3"
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    --read-only --memory 1g --pids-limit 128 \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
+    --env EXPECTED_BASE_COMMIT="${base_commit}" \
+    --env GIT_CONFIG_NOSYSTEM=1 --env GIT_OPTIONAL_LOCKS=0 --env HOME=/tmp/no-home \
+    --env LC_ALL=C --env PATH="${CONTAINER_PATH}" \
+    --mount "type=bind,src=${source_root},dst=/source,readonly" \
+    --workdir /source --user "${HOST_UID}:${HOST_GID}" --entrypoint bash "${env_id}" -Eeuo pipefail -c \
+    'git_bin="$(command -v git)"
+     git() { "$git_bin" -c core.fsmonitor=false -c core.hooksPath=/dev/null -c safe.directory=/source "$@"; }
+     test -d .git
+     test ! -L .git
+     test "$(git rev-parse HEAD)" = "$EXPECTED_BASE_COMMIT"
+     git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=none'
+}
+
+ensure_source_extractor() {
+  docker image inspect "${SOURCE_EXTRACTOR_IMAGE}" >/dev/null 2>&1 ||
+    docker pull "${SOURCE_EXTRACTOR_IMAGE}" >/dev/null
+}
+
+# The daemon streams the image's working tree as a tar archive, and GNU tar in the
+# pinned extractor restores it as the invoking user: without chown, with each
+# entry's permission bits, and with directory permissions applied last so trees
+# holding read-only directories restore completely. The extractor can write only
+# the destination, and what it writes is proved against the image before anything
+# records it.
+extract_working_tree() {
+  local task_id="$1" env_id="$2" working_dir="$3" destination="$4" container
+  container="qwen38-swe-materialize-$(printf '%s' "${task_id}" | sha256sum | cut -c1-20)"
+  [[ -z "$(docker ps --all --quiet --filter "name=^/${container}$")" ]] ||
+    die "materialization container name is already in use: ${container}"
+  ensure_source_extractor
+  ACTIVE_CONTAINER="${container}"
+  docker create --name "${container}" --network none --entrypoint true "${env_id}" >/dev/null
+  docker cp "${container}:${working_dir}/." - |
+    docker run --rm --interactive --network none --cap-drop ALL --security-opt no-new-privileges \
+      --read-only --memory 1g --pids-limit 128 --user "${HOST_UID}:${HOST_GID}" \
+      --mount "type=bind,src=${destination},dst=/output" \
+      --entrypoint tar "${SOURCE_EXTRACTOR_IMAGE}" \
+      --extract --file=- --directory=/output --no-same-owner --same-permissions \
+      --delay-directory-restore
+  docker rm "${container}" >/dev/null
+  ACTIVE_CONTAINER=
+}
+
+# Proves the copied working tree in a task directory against the evidence files
+# beside it, which already hold its environment image's own description, and
+# prints the task's manifest. environment.archive_path is relative to the
+# directory holding this script.
+derive_task_manifest() {
+  local task_id="$1" task_dir="$2" env_id="$3" base_commit="$4" working_dir="$5"
+  local source_root="${task_dir}/source" task_root="${DATASET_ROOT}/${task_id}"
+  local not_owned environment task_content_hash language
+  local instruction_sha256 instruction_bytes test_sh_sha256 test_config_sha256 test_parser_sha256
+  local regular_manifest_sha256 mode_manifest_sha256 initial_git_status_sha256
+  local directory_count regular_file_count regular_file_bytes symlink_count special_file_count
+  [[ -d "${source_root}/.git" && ! -L "${source_root}/.git" ]] ||
+    die "copied working tree of ${task_id} has no real .git directory"
+  host_regular_manifest "${source_root}" >"${SCRATCH}/copy-regular.sha256z"
+  cmp -s -- "${task_dir}/source-regular.sha256z" "${SCRATCH}/copy-regular.sha256z" ||
+    die "regular files copied for ${task_id} differ from its environment image"
+  host_mode_manifest "${source_root}" >"${SCRATCH}/copy-modes.z"
+  cmp -s -- "${task_dir}/source-modes.z" "${SCRATCH}/copy-modes.z" ||
+    die "entry types, modes or link targets copied for ${task_id} differ from its environment image"
+  copy_git_status "${env_id}" "${base_commit}" "${source_root}" >"${SCRATCH}/copy-git-status.z"
+  cmp -s -- "${task_dir}/initial-git-status.z" "${SCRATCH}/copy-git-status.z" ||
+    die "Git status of the tree copied for ${task_id} differs from its environment image"
+  not_owned="$(find "${source_root}" \! -user "${HOST_UID}" -print -quit)"
+  [[ -z "${not_owned}" ]] ||
+    die "tree copied for ${task_id} holds an entry not owned by uid ${HOST_UID}: ${not_owned}"
+
+  environment="$(jq -ec --arg task "${task_id}" --arg working_dir "${working_dir}" \
+    '.environments[] | select(.task_id == $task) |
+     {image_tag, image_id, working_dir: $working_dir, archive_path: .archive.path,
+      archive_sha256: .archive.sha256, archive_bytes: .archive.bytes}' "${IMAGES_LOCK}")"
+  task_content_hash="$(jq -er --arg task "${task_id}" \
+    '.dataset.tasks[] | select(.task_id == $task) | .content_hash' "${DATASET_LOCK}")"
+  language="$(jq -er '.language' "${task_root}/tests/config.json")"
+  instruction_sha256="$(sha256_of "${task_root}/instruction.md")"
+  instruction_bytes="$(stat -c '%s' -- "${task_root}/instruction.md")"
+  test_sh_sha256="$(sha256_of "${task_root}/tests/test.sh")"
+  test_config_sha256="$(sha256_of "${task_root}/tests/config.json")"
+  test_parser_sha256="$(sha256_of "${task_root}/tests/swan_log_parsers.py")"
+  regular_manifest_sha256="$(sha256_of "${task_dir}/source-regular.sha256z")"
+  mode_manifest_sha256="$(sha256_of "${task_dir}/source-modes.z")"
+  initial_git_status_sha256="$(sha256_of "${task_dir}/initial-git-status.z")"
+  directory_count="$(find "${source_root}" -mindepth 1 -type d -printf '.' | wc -c)"
+  regular_file_count="$(find "${source_root}" -type f -printf '.' | wc -c)"
+  regular_file_bytes="$(find "${source_root}" -type f -printf '%s\n' | jq -s 'add // 0')"
+  symlink_count="$(find "${source_root}" -type l -printf '.' | wc -c)"
+  special_file_count="$(find "${source_root}" \! -type d \! -type f \! -type l -printf '.' | wc -c)"
+
+  jq -n \
+    --arg task_id "${task_id}" \
+    --arg task_content_hash "${task_content_hash}" \
+    --arg language "${language}" \
+    --arg instruction_sha256 "${instruction_sha256}" \
     --argjson instruction_bytes "${instruction_bytes}" \
-    --argjson file_count "${file_count}" \
-    --argjson source_bytes "${source_bytes}" \
+    --arg test_sh_sha256 "${test_sh_sha256}" \
+    --arg test_config_sha256 "${test_config_sha256}" \
+    --arg test_parser_sha256 "${test_parser_sha256}" \
+    --argjson environment "${environment}" \
+    --arg base_commit "${base_commit}" \
+    --arg regular_manifest_sha256 "${regular_manifest_sha256}" \
+    --arg mode_manifest_sha256 "${mode_manifest_sha256}" \
+    --arg initial_git_status_sha256 "${initial_git_status_sha256}" \
+    --argjson directory_count "${directory_count}" \
+    --argjson regular_file_count "${regular_file_count}" \
+    --argjson regular_file_bytes "${regular_file_bytes}" \
     --argjson symlink_count "${symlink_count}" \
-    --argjson special_count "${special_count}" \
-    '.inputs.instruction_bytes == $instruction_bytes and
-     .source.regular_file_count == $file_count and
-     .source.regular_file_bytes == $source_bytes and
-     .source.symlink_count == $symlink_count and
-     .source.special_file_count == $special_count' "${manifest}" >/dev/null ||
-    die "recorded classification inputs diverge from re-derived evidence: ${task_id}"
-  IFS=$'\t' read -r classification exclusion_reason < <(classify_task_inputs \
-    "${instruction_bytes}" "${special_count}" "${file_count}" "${source_bytes}" \
-    "${dir_count}" "${symlink_count}")
-  [[ -n "${classification}" ]] || die "classification derivation failed: ${task_id}"
-  append_derived_classification "${task_id}" "${classification}" "${exclusion_reason}"
-  printf -v "${outvar}" '%s' "${classification}"
+    --argjson special_file_count "${special_file_count}" \
+    '{schema_version: 2,
+      task_id: $task_id,
+      task_content_hash: $task_content_hash,
+      language: $language,
+      inputs: {
+        instruction_sha256: $instruction_sha256,
+        instruction_bytes: $instruction_bytes,
+        test_sh_sha256: $test_sh_sha256,
+        test_config_sha256: $test_config_sha256,
+        test_parser_sha256: $test_parser_sha256},
+      environment: $environment,
+      source: {
+        base_commit: $base_commit,
+        regular_manifest_sha256: $regular_manifest_sha256,
+        mode_manifest_sha256: $mode_manifest_sha256,
+        initial_git_status_sha256: $initial_git_status_sha256,
+        directory_count: $directory_count,
+        regular_file_count: $regular_file_count,
+        regular_file_bytes: $regular_file_bytes,
+        symlink_count: $symlink_count,
+        special_file_count: $special_file_count}}'
 }
-
-readonly DATASET_REGULAR_MANIFEST="${SUITE_ROOT}/dataset-regular.sha256z"
-readonly DATASET_MODE_MANIFEST="${SUITE_ROOT}/dataset-modes.z"
-if [[ ! -e "${DATASET_REGULAR_MANIFEST}" && ! -e "${DATASET_MODE_MANIFEST}" ]]; then
-  write_regular_manifest "${DATASET_ROOT}" "${DATASET_REGULAR_MANIFEST}.partial"
-  write_mode_manifest "${DATASET_ROOT}" "${DATASET_MODE_MANIFEST}.partial"
-  sync -f "${DATASET_REGULAR_MANIFEST}.partial"
-  sync -f "${DATASET_MODE_MANIFEST}.partial"
-  mv -- "${DATASET_REGULAR_MANIFEST}.partial" "${DATASET_REGULAR_MANIFEST}"
-  mv -- "${DATASET_MODE_MANIFEST}.partial" "${DATASET_MODE_MANIFEST}"
-  sync -f "${SUITE_ROOT}"
-else
-  [[ -f "${DATASET_REGULAR_MANIFEST}" && -f "${DATASET_MODE_MANIFEST}" ]] ||
-    die 'dataset manifest pair is incomplete'
-  DATASET_VERIFY_DIR="$(mktemp -d "${SUITE_ROOT}/.verify-dataset.XXXXXXXX")"
-  readonly DATASET_VERIFY_DIR
-  write_regular_manifest "${DATASET_ROOT}" "${DATASET_VERIFY_DIR}/regular.sha256z"
-  write_mode_manifest "${DATASET_ROOT}" "${DATASET_VERIFY_DIR}/modes.z"
-  cmp -- "${DATASET_REGULAR_MANIFEST}" "${DATASET_VERIFY_DIR}/regular.sha256z" ||
-    die 'dataset regular-file content drift'
-  cmp -- "${DATASET_MODE_MANIFEST}" "${DATASET_VERIFY_DIR}/modes.z" ||
-    die 'dataset type/mode drift'
-  rm -rf -- "${DATASET_VERIFY_DIR}"
-fi
 
 materialize_task() {
-  local task_id="$1" task_index="$2"
-  local task_root="${DATASET_ROOT}/${task_id}"
-  local final_dir="${MATERIALIZATION_ROOT}/${task_id}"
-  local partial_dir="${MATERIALIZATION_ROOT}/${task_id}.partial"
-  local dockerfile="${task_root}/environment/Dockerfile"
-  local instruction="${task_root}/instruction.md"
-  local task_toml="${task_root}/task.toml"
-  local test_config="${task_root}/tests/config.json"
-  local test_sh="${task_root}/tests/test.sh"
-  local test_parser="${task_root}/tests/swan_log_parsers.py"
-  local source_root="${partial_dir}/source"
-  local base_ref base_repository base_id base_digest env_tag env_id workdir config_user base_commit
-  local language log_parser instruction_bytes file_count source_bytes symlink_count special_count dir_count
-  local classification=eligible exclusion_reason='' policy_first=false policy_second=true
-  local archive_sha archive_bytes regular_sha modes_sha symlinks_sha container_name source_archive
-  local initial_git_status_sha initial_git_status_bytes initial_worktree_clean copied_git_status
-  local registry_content_hash network_policy_source
-  local -a docker_lines
+  local task_id="$1"
+  local task_dir="${TASKS_ROOT}/${task_id}" partial="${TASKS_ROOT}/${task_id}.partial"
+  local env_id base_commit working_dir evidence
+  ensure_environment_image "${task_id}"
+  env_id="$(jq -er --arg task "${task_id}" '.environments[] | select(.task_id == $task) | .image_id' \
+    "${IMAGES_LOCK}")"
+  base_commit="$(jq -er '.base_commit' "${DATASET_ROOT}/${task_id}/tests/config.json")"
+  working_dir="$(docker image inspect --format '{{.Config.WorkingDir}}' "${env_id}")"
+  [[ "${working_dir}" == /* && "${working_dir}" != / && "${working_dir}" != *$'\n'* ]] ||
+    die "environment image of ${task_id} has no usable working directory: ${working_dir}"
+  verify_environment_recipe "${env_id}"
 
-  if [[ -e "${final_dir}" ]]; then
-    [[ ! -e "${partial_dir}" ]] || die "both final and partial task states exist: ${task_id}"
-    validate_completed_task "${task_id}"
-    local derived_classification
-    rederive_task_classification "${task_id}" derived_classification
-    printf 'MATERIALIZATION_REUSED task=%s index=%s classification=%s recorded_at_materialization=%s\n' \
-      "${task_id}" "${task_index}" "${derived_classification}" \
-      "$(jq -er '.classification' "${final_dir}/manifest.json")"
+  if [[ -e "${task_dir}" ]]; then
+    [[ -d "${task_dir}" && ! -L "${task_dir}" ]] || die "task entry is not a real directory: ${task_dir}"
+    require_equal "entries of ${task_dir}" "${TASK_DIRECTORY_ENTRIES}" \
+      "$(find "${task_dir}" -mindepth 1 -maxdepth 1 -printf '%y %f\n' | LC_ALL=C sort)"
+    write_image_evidence "${env_id}" "${base_commit}" "${SCRATCH}"
+    for evidence in source-regular.sha256z source-modes.z initial-git-status.z; do
+      cmp -s -- "${task_dir}/${evidence}" "${SCRATCH}/${evidence}" ||
+        die "${evidence} of ${task_id} no longer describes its environment image"
+    done
+    derive_task_manifest "${task_id}" "${task_dir}" "${env_id}" "${base_commit}" "${working_dir}" \
+      >"${SCRATCH}/manifest.json"
+    cmp -s -- "${task_dir}/manifest.json" "${SCRATCH}/manifest.json" ||
+      die "manifest of ${task_id} differs from the one derived now; move ${task_dir} aside to materialize the task again"
+    printf 'VERIFIED task=%s image=%s\n' "${task_id}" "${env_id}"
     return
   fi
-  [[ ! -e "${partial_dir}" ]] ||
-    die "partial task state requires explicit investigation before resume: ${partial_dir}"
-  mkdir -- "${partial_dir}"
-  chmod 0700 -- "${partial_dir}"
 
-  for path in "${dockerfile}" "${instruction}" "${task_toml}" "${test_config}" \
-    "${test_sh}" "${test_parser}"; do
-    [[ -f "${path}" && ! -L "${path}" ]] || die "task input is absent or a symlink: ${path}"
-  done
-  jq -e --arg task "${task_id}" '.instance_id == $task and (.language | type == "string") and
-    (.install_config.log_parser | type == "string") and (.base_commit | test("^[0-9a-f]{40}$"))' \
-    "${test_config}" >/dev/null || die "test config identity is malformed: ${task_id}"
-  registry_content_hash="$(jq -er --arg task "${task_id}" \
-    '.dataset.tasks[] | select(.task_id == $task) | .content_hash' "${DATASET_LOCK}")"
-  require_equal "task name declaration count for ${task_id}" 1 \
-    "$(awk -v expected="name = \"ibragim-badertdinov/${task_id}\"" \
-      '$0 == expected {count++} END {print count + 0}' "${task_toml}")"
-  require_equal "agent/verifier timeout declarations for ${task_id}" 2 \
-    "$(awk '$0 == "timeout_sec = 3000.0" {count++} END {print count + 0}' "${task_toml}")"
-  require_equal "CPU declaration count for ${task_id}" 1 \
-    "$(awk '$0 == "cpus = 1" {count++} END {print count + 0}' "${task_toml}")"
-  require_equal "memory declaration count for ${task_id}" 1 \
-    "$(awk '$0 == "memory_mb = 4096" {count++} END {print count + 0}' "${task_toml}")"
-  require_equal "storage declaration count for ${task_id}" 1 \
-    "$(awk '$0 == "storage_mb = 10240" {count++} END {print count + 0}' "${task_toml}")"
-  if [[ "${task_id}" == apache__dubbo-go-3357 ]]; then
-    require_equal 'apache__dubbo-go-3357 explicit network_mode declaration count' 0 \
-      "$(awk '$0 == "network_mode = \"public\"" {count++} END {print count + 0}' "${task_toml}")"
-    require_equal 'apache__dubbo-go-3357 legacy allow_internet declaration count' 1 \
-      "$(awk '$0 == "allow_internet = true" {count++} END {print count + 0}' "${task_toml}")"
-    network_policy_source='Harbor v0.21.0 legacy allow_internet=true migration to public'
-  else
-    require_equal "public network declaration count for ${task_id}" 1 \
-      "$(awk '$0 == "network_mode = \"public\"" {count++} END {print count + 0}' "${task_toml}")"
-    require_equal "legacy allow_internet declaration count for ${task_id}" 0 \
-      "$(awk '$0 == "allow_internet = true" {count++} END {print count + 0}' "${task_toml}")"
-    network_policy_source='explicit task.toml environment.network_mode=public'
-  fi
-  mapfile -t docker_lines < <(grep -v '^$' "${dockerfile}")
-  require_equal "Dockerfile nonblank line count for ${task_id}" 3 "${#docker_lines[@]}"
-  [[ "${docker_lines[0]}" == FROM\ docker.io/swerebenchv2/*:v0.1.0 ]] ||
-    die "unexpected task base image reference: ${docker_lines[0]}"
-  require_equal "uv installer line for ${task_id}" "${UV_INSTALL}" "${docker_lines[1]}"
-  require_equal "logs directory line for ${task_id}" "${LOGS_INSTALL}" "${docker_lines[2]}"
-  base_ref="${docker_lines[0]#FROM }"
-  require_equal "test-config image for ${task_id}" "${base_ref}" \
-    "$(jq -er '.image_name' "${test_config}")"
-  language="$(jq -er '.language' "${test_config}")"
-  log_parser="$(jq -er '.install_config.log_parser' "${test_config}")"
-  base_commit="$(jq -er '.base_commit' "${test_config}")"
-  instruction_bytes="$(stat -c '%s' -- "${instruction}")"
-
-  printf 'Pulling immutable candidate base for %s (%s).\n' "${task_id}" "${base_ref}" >&2
-  docker pull --platform linux/amd64 "${base_ref}" >"${partial_dir}/pull.log" 2>&1
-  base_id="$(docker image inspect --format '{{.Id}}' "${base_ref}")"
-  base_repository="${base_ref#docker.io/}"
-  base_repository="${base_repository%:v0.1.0}"
-  base_digest="$(docker image inspect "${base_ref}" | jq -er --arg repository "${base_repository}" \
-    '.[0].RepoDigests | map(select(startswith($repository + "@sha256:"))) |
-     if length == 1 then .[0] else error("expected exactly one matching repository digest") end')"
-  [[ "${base_id}" == sha256:* && "${base_digest}" == *@sha256:* ]] ||
-    die "pulled base lacks content identities: ${task_id}"
-  require_equal "base architecture for ${task_id}" amd64 \
-    "$(docker image inspect --format '{{.Architecture}}' "${base_ref}")"
-  require_equal "base OS for ${task_id}" linux \
-    "$(docker image inspect --format '{{.Os}}' "${base_ref}")"
-
-  env_tag="${ENV_REPOSITORY}:$(printf '%s' "${task_id}" | tr '[:upper:]' '[:lower:]')"
-  [[ "${#env_tag}" -le 180 ]] || die "derived environment tag is unexpectedly long: ${env_tag}"
-  if docker image inspect "${env_tag}" >/dev/null 2>&1; then
-    die "unowned environment tag already exists without a completed manifest: ${env_tag}"
-  fi
-  printf 'Building and archiving exact evaluator environment for %s.\n' "${task_id}" >&2
-  BUILDKIT_PROGRESS=plain docker buildx build --builder default --platform linux/amd64 \
-    --pull=false --no-cache --network=default --provenance=false \
-    --output "type=docker,name=${env_tag},dest=${partial_dir}/environment-image.tar.partial" \
-    "${task_root}/environment" >"${partial_dir}/build.log" 2>&1
-  grep -Fq 'no checksums to verify' "${partial_dir}/build.log" ||
-    die "uv installer checksum observation is absent: ${task_id}"
-  grep -Fq "${base_ref}@${base_digest#*@}" "${partial_dir}/build.log" ||
-    die "build log does not prove the pulled base digest: ${task_id}"
-  chmod 0600 -- "${partial_dir}/environment-image.tar.partial"
-  sync -f "${partial_dir}/environment-image.tar.partial"
-  mv -- "${partial_dir}/environment-image.tar.partial" "${partial_dir}/environment-image.tar"
-  docker load --input "${partial_dir}/environment-image.tar" >"${partial_dir}/load.log"
-  env_id="$(docker image inspect --format '{{.Id}}' "${env_tag}")"
-  require_equal "environment architecture for ${task_id}" amd64 \
-    "$(docker image inspect --format '{{.Architecture}}' "${env_id}")"
-  require_equal "environment OS for ${task_id}" linux \
-    "$(docker image inspect --format '{{.Os}}' "${env_id}")"
-  workdir="$(docker image inspect --format '{{.Config.WorkingDir}}' "${env_id}")"
-  config_user="$(docker image inspect --format '{{.Config.User}}' "${env_id}")"
-  [[ "${workdir}" == /* && "${workdir}" != / && "${workdir}" != *$'\n'* ]] ||
-    die "unsafe or empty environment working directory for ${task_id}: ${workdir}"
-
-  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
-    --user 0:0 --env GIT_CONFIG_NOSYSTEM=1 --env GIT_OPTIONAL_LOCKS=0 --env HOME=/tmp/no-home \
-    --entrypoint bash "${env_id}" -Eeuo pipefail -c \
-    'test "$PWD" = "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --show-toplevel)";
-     test "$PWD" = "$(pwd -P)";
-     test "$(uv --version)" = "uv 0.7.13";
-     test -d /logs;
-     git -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD' >"${partial_dir}/environment-probe.txt"
-  require_equal "environment repository HEAD for ${task_id}" "${base_commit}" \
-    "$(tr -d '[:space:]' <"${partial_dir}/environment-probe.txt")"
-  write_environment_git_status "${env_id}" "${base_commit}" \
-    "${partial_dir}/initial-git-status.z"
-
-  mkdir -- "${source_root}"
-  container_name="qwen38-swe-materialize-$(printf '%s' "${task_id}" | sha256sum | cut -c1-20)"
-  [[ -z "$(docker ps -a --filter "name=^/${container_name}$" --format '{{.ID}}')" ]] ||
-    die "materialization container name collision: ${container_name}"
-  ACTIVE_CONTAINER="${container_name}"
-  docker create --name "${container_name}" --network none --entrypoint true "${env_id}" \
-    >"${partial_dir}/materialize-container-id.txt"
-  source_archive="${partial_dir}/source.tar.partial"
-  docker cp "${container_name}:${workdir}/." - >"${source_archive}" \
-    2>"${partial_dir}/source-archive.log"
-  chmod 0600 -- "${source_archive}"
-  sync -f "${source_archive}"
-  docker rm "${container_name}" >"${partial_dir}/materialize-container-removed-id.txt"
-  ACTIVE_CONTAINER=
-  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
-    --read-only --memory 1g --pids-limit 128 --user 1000:1000 \
-    --mount "type=bind,src=${source_archive},dst=/input/source.tar,readonly" \
-    --mount "type=bind,src=${source_root},dst=/output" \
-    --entrypoint tar "${SOURCE_EXTRACTOR_IMAGE_ID}" \
-    --extract --file=/input/source.tar --directory=/output --no-same-owner \
-    --same-permissions --delay-directory-restore >"${partial_dir}/source-extract.log" 2>&1
-  rm -- "${source_archive}"
-  sync -f "${partial_dir}"
-  chmod 0700 -- "${source_root}"
-  [[ -d "${source_root}/.git" && ! -L "${source_root}/.git" ]] ||
-    die "materialized source lacks a real .git directory: ${task_id}"
-  [[ -z "$(find "${source_root}" \! -user 1000 -print -quit)" ]] ||
-    die "materialized source contains a file not owned by uid 1000: ${task_id}"
-  copied_git_status="${partial_dir}/copied-git-status.verify"
-  write_copied_git_status "${env_id}" "${base_commit}" "${source_root}" \
-    "${copied_git_status}"
-  cmp -- "${partial_dir}/initial-git-status.z" "${copied_git_status}" ||
-    die "copied repository Git status differs from the exact environment image: ${task_id}"
-  rm -- "${copied_git_status}"
-  initial_git_status_sha="$(sha256sum -- "${partial_dir}/initial-git-status.z" | awk '{print $1}')"
-  initial_git_status_bytes="$(stat -c '%s' -- "${partial_dir}/initial-git-status.z")"
-  initial_worktree_clean=false
-  (( initial_git_status_bytes != 0 )) || initial_worktree_clean=true
-
-  file_count="$(find "${source_root}" -type f -printf '.\n' | wc -l)"
-  source_bytes="$(find "${source_root}" -type f -printf '%s\n' | awk '{sum += $1} END {print sum + 0}')"
-  symlink_count="$(find "${source_root}" -type l -printf '.\n' | wc -l)"
-  special_count="$(find "${source_root}" \! -type d \! -type f \! -type l -printf '.\n' | wc -l)"
-  dir_count="$(find "${source_root}" -type d -printf '.\n' | wc -l)"
-  write_regular_manifest "${source_root}" "${partial_dir}/source-regular.sha256z"
-  write_mode_manifest "${source_root}" "${partial_dir}/source-modes.z"
-  write_symlink_manifest "${source_root}" "${partial_dir}/source-symlinks.z"
-  write_image_regular_manifest "${env_id}" "${partial_dir}/source-image-regular.verify"
-  write_image_mode_manifest "${env_id}" "${partial_dir}/source-image-modes.verify"
-  write_image_symlink_manifest "${env_id}" "${partial_dir}/source-image-symlinks.verify"
-  cmp -- "${partial_dir}/source-regular.sha256z" \
-    "${partial_dir}/source-image-regular.verify" ||
-    die "materialized regular files differ from the exact environment image: ${task_id}"
-  cmp -- "${partial_dir}/source-modes.z" "${partial_dir}/source-image-modes.verify" ||
-    die "materialized types/modes/targets differ from the exact environment image: ${task_id}"
-  cmp -- "${partial_dir}/source-symlinks.z" \
-    "${partial_dir}/source-image-symlinks.verify" ||
-    die "materialized symlinks differ from the exact environment image: ${task_id}"
-  rm -- "${partial_dir}/source-image-regular.verify" \
-    "${partial_dir}/source-image-modes.verify" \
-    "${partial_dir}/source-image-symlinks.verify"
-  regular_sha="$(sha256sum -- "${partial_dir}/source-regular.sha256z" | awk '{print $1}')"
-  modes_sha="$(sha256sum -- "${partial_dir}/source-modes.z" | awk '{print $1}')"
-  symlinks_sha="$(sha256sum -- "${partial_dir}/source-symlinks.z" | awk '{print $1}')"
-
-  # Classify against the current production input contract. The identical rule
-  # (classify_task_inputs) runs on reuse re-derivation, so a fresh and a reused
-  # task can never disagree. Symbolic links are eligible -- the shipped service
-  # stages them opaquely (zip -y receipts, link-preserving staging and bundling)
-  # and this materializer verifies each against its exact environment image;
-  # excluding them was a stale contract that silently dropped ~63% of tasks.
-  # Special files stay excluded: staging has no meaning for a device, fifo, or
-  # socket.
-  IFS=$'\t' read -r classification exclusion_reason < <(classify_task_inputs \
-    "${instruction_bytes}" "${special_count}" "${file_count}" "${source_bytes}" \
-    "${dir_count}" "${symlink_count}")
-  [[ -n "${classification}" ]] || die "classification derivation failed: ${task_id}"
-  if (( task_index % 2 == 1 )); then
-    policy_first=true
-    policy_second=false
-  fi
-
-  archive_sha="$(sha256sum -- "${partial_dir}/environment-image.tar" | awk '{print $1}')"
-  archive_bytes="$(stat -c '%s' -- "${partial_dir}/environment-image.tar")"
-  require_equal "environment archive ownership/mode for ${task_id}" 1000:1000:600 \
-    "$(stat -c '%u:%g:%a' -- "${partial_dir}/environment-image.tar")"
-
-  # shellcheck disable=SC2016 # The dollar-prefixed names in the filter are jq variables.
-  jq -n \
-    --arg dataset_name "${DATASET_NAME}" \
-    --arg dataset_digest "${DATASET_CONTENT_DIGEST}" \
-    --arg dataset_lock_sha "${DATASET_LOCK_SHA256}" \
-    --arg harbor_version "${HARBOR_VERSION}" \
-    --arg harbor_commit "${HARBOR_COMMIT}" \
-    --arg release_commit "${SERVICE_RELEASE_COMMIT}" \
-    --arg implementation_commit "${SERVICE_IMPLEMENTATION_COMMIT}" \
-    --arg release_lock_sha "${SERVICE_RELEASE_LOCK_SHA256}" \
-    --arg stack_lock_sha "${STACK_LOCK_SHA256}" \
-    --arg task_id "${task_id}" \
-    --argjson task_index "${task_index}" \
-    --arg language "${language}" \
-    --arg log_parser "${log_parser}" \
-    --arg classification "${classification}" \
-    --arg exclusion_reason "${exclusion_reason}" \
-    --arg registry_content_hash "${registry_content_hash}" \
-    --arg network_policy_source "${network_policy_source}" \
-    --arg base_ref "${base_ref}" \
-    --arg base_id "${base_id}" \
-    --arg base_digest "${base_digest}" \
-    --arg env_tag "${env_tag}" \
-    --arg env_id "${env_id}" \
-    --arg workdir "${workdir}" \
-    --arg config_user "${config_user}" \
-    --arg archive_sha "${archive_sha}" \
-    --argjson archive_bytes "${archive_bytes}" \
-    --arg base_commit "${base_commit}" \
-    --arg regular_sha "${regular_sha}" \
-    --arg modes_sha "${modes_sha}" \
-    --arg symlinks_sha "${symlinks_sha}" \
-    --arg source_extractor_image "${SOURCE_EXTRACTOR_IMAGE_ID}" \
-    --arg source_extractor_tar_version "${SOURCE_EXTRACTOR_TAR_VERSION}" \
-    --arg initial_git_status_sha "${initial_git_status_sha}" \
-    --argjson initial_git_status_bytes "${initial_git_status_bytes}" \
-    --argjson initial_worktree_clean "${initial_worktree_clean}" \
-    --argjson instruction_bytes "${instruction_bytes}" \
-    --argjson file_count "${file_count}" \
-    --argjson source_bytes "${source_bytes}" \
-    --argjson symlink_count "${symlink_count}" \
-    --argjson special_count "${special_count}" \
-    --arg instruction_sha "$(sha256sum -- "${instruction}" | awk '{print $1}')" \
-    --arg task_toml_sha "$(sha256sum -- "${task_toml}" | awk '{print $1}')" \
-    --arg dockerfile_sha "$(sha256sum -- "${dockerfile}" | awk '{print $1}')" \
-    --arg test_config_sha "$(sha256sum -- "${test_config}" | awk '{print $1}')" \
-    --arg test_sh_sha "$(sha256sum -- "${test_sh}" | awk '{print $1}')" \
-    --arg test_parser_sha "$(sha256sum -- "${test_parser}" | awk '{print $1}')" \
-    --argjson policy_first "${policy_first}" \
-    --argjson policy_second "${policy_second}" \
-    '{
-      schema_version:1,
-      dataset:{name:$dataset_name,content_digest:$dataset_digest,lock_sha256:$dataset_lock_sha},
-      harbor:{version:$harbor_version,commit:$harbor_commit},
-      production_release:{release_commit:$release_commit,
-        implementation_commit:$implementation_commit,
-        release_lock_sha256:$release_lock_sha,stack_lock_sha256:$stack_lock_sha},
-      task_id:$task_id,
-      task_index:$task_index,
-      language:$language,
-      log_parser:$log_parser,
-      classification:$classification,
-      exclusion_reason:(if $exclusion_reason == "" then null else $exclusion_reason end),
-      policy_order:[$policy_first,$policy_second],
-      inputs:{
-        harbor_content_hash:$registry_content_hash,
-        instruction_sha256:$instruction_sha,instruction_bytes:$instruction_bytes,
-        task_toml_sha256:$task_toml_sha,
-        environment_dockerfile_sha256:$dockerfile_sha,
-        test_config_sha256:$test_config_sha,
-        test_sh_sha256:$test_sh_sha,
-        test_parser_sha256:$test_parser_sha
-      },
-      environment:{
-        base_ref:$base_ref,base_image_id:$base_id,base_repo_digest:$base_digest,
-        image_tag:$env_tag,image_id:$env_id,working_dir:$workdir,
-        configured_user:$config_user,archive_path:"environment-image.tar",
-        archive_sha256:$archive_sha,archive_bytes:$archive_bytes,
-        build_network:"default (required only for the dataset Dockerfile uv installer)",
-        runtime_network_mode:"public",
-        runtime_network_policy_source:$network_policy_source,
-        installer_observation:"uv 0.7.13 installer reported: no checksums to verify",
-        rerun_authority:"preserved environment-image.tar, not another mutable network build"
-      },
-      source:{
-        relative_path:"source",base_commit:$base_commit,
-        regular_file_count:$file_count,regular_file_bytes:$source_bytes,
-        symlink_count:$symlink_count,special_file_count:$special_count,
-        regular_manifest_sha256:$regular_sha,
-        mode_manifest_sha256:$modes_sha,
-        symlink_manifest_sha256:$symlinks_sha,
-        materialization_method:"Docker archive stream plus pinned non-root GNU tar delayed-directory restoration",
-        extractor_image_id:$source_extractor_image,
-        extractor_tar_version:$source_extractor_tar_version,
-        initial_git_status_sha256:$initial_git_status_sha,
-        initial_git_status_bytes:$initial_git_status_bytes,
-        initial_worktree_clean:$initial_worktree_clean
-      }
-    }' >"${partial_dir}/manifest.json.partial"
-  jq -e --arg task "${task_id}" --arg classification "${classification}" \
-    '.schema_version == 1 and .task_id == $task and .classification == $classification and
-     (.policy_order == [false,true] or .policy_order == [true,false])' \
-    "${partial_dir}/manifest.json.partial" >/dev/null ||
-    die "generated task manifest failed its semantic assertion: ${task_id}"
-  sync -f "${partial_dir}/manifest.json.partial"
-  mv -- "${partial_dir}/manifest.json.partial" "${partial_dir}/manifest.json"
-  sync -f "${partial_dir}"
-  mv -- "${partial_dir}" "${final_dir}"
-  sync -f "${MATERIALIZATION_ROOT}"
-  validate_completed_task "${task_id}"
-  append_derived_classification "${task_id}" "${classification}" "${exclusion_reason}"
-  printf 'MATERIALIZED task=%s index=%s classification=%s language=%s image=%s\n' \
-    "${task_id}" "${task_index}" "${classification}" "${language}" "${env_id}"
+  mkdir -- "${partial}" "${partial}/source"
+  write_image_evidence "${env_id}" "${base_commit}" "${partial}"
+  extract_working_tree "${task_id}" "${env_id}" "${working_dir}" "${partial}/source"
+  chmod 0700 -- "${partial}/source"
+  derive_task_manifest "${task_id}" "${partial}" "${env_id}" "${base_commit}" "${working_dir}" \
+    >"${partial}/manifest.json.partial"
+  mv -- "${partial}/manifest.json.partial" "${partial}/manifest.json"
+  sync -f -- "${partial}"
+  mv -- "${partial}" "${task_dir}"
+  sync -f -- "${TASKS_ROOT}"
+  printf 'MATERIALIZED task=%s image=%s\n' "${task_id}" "${env_id}"
 }
 
-task_index=0
-while IFS= read -r -d '' task_id; do
-  materialize_task "${task_id}" "${task_index}"
-  task_index=$((task_index + 1))
-done < <(find "${DATASET_ROOT}" -mindepth 1 -maxdepth 1 -type d -printf '%f\0' | LC_ALL=C sort -z)
-require_equal 'materialized task iteration count' "${EXPECTED_TASKS}" "${task_index}"
-require_equal 'derived-classification ledger rows' "${EXPECTED_TASKS}" "$(wc -l <"${DERIVED_LEDGER}")"
+[[ -d "${DATASET_ROOT}" && ! -L "${DATASET_ROOT}" ]] ||
+  die "dataset root is absent or a symlink: ${DATASET_ROOT}"
+dataset_irregular="$(find "${DATASET_ROOT}" \! -type d \! -type f -print -quit)"
+[[ -z "${dataset_irregular}" ]] ||
+  die "dataset holds a symbolic link or special file: ${dataset_irregular}"
+require_equal 'dataset task directories' "$(printf '%s\n' "${TASK_IDS[@]}")" \
+  "$(find "${DATASET_ROOT}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | LC_ALL=C sort)"
+require_equal 'dataset top-level files' "$(jq -r '.dataset.files[].path' "${DATASET_LOCK}")" \
+  "$(find "${DATASET_ROOT}" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)"
+while IFS=$'\t' read -r dataset_file content_hash size_bytes; do
+  require_sha256 "${DATASET_ROOT}/${dataset_file}" "${content_hash}"
+  require_equal "size of dataset file ${dataset_file}" "${size_bytes}" \
+    "$(stat -c '%s' -- "${DATASET_ROOT}/${dataset_file}")"
+done < <(jq -r '.dataset.files[] | [.path, .content_hash, .size_bytes] | @tsv' "${DATASET_LOCK}")
+for task_id in "${TASK_IDS[@]}"; do
+  verify_task_package "${task_id}"
+done
 
-readonly SUMMARY_PATH="${SUITE_ROOT}/materialization-summary.json"
-readonly PLAN_PATH="${SUITE_ROOT}/suite-plan.json"
-readonly SUMMARY_PARTIAL="${SUMMARY_PATH}.partial"
-readonly PLAN_PARTIAL="${PLAN_PATH}.partial"
-# shellcheck disable=SC2016 # The dollar-prefixed names in the filter are jq variables.
-find "${MATERIALIZATION_ROOT}" -mindepth 2 -maxdepth 2 -name manifest.json -type f -print0 |
-  LC_ALL=C sort -z | xargs -0 jq -s \
-  --arg dataset_name "${DATASET_NAME}" \
-  --arg dataset_digest "${DATASET_CONTENT_DIGEST}" \
+mkdir -p -- "${TASKS_ROOT}"
+exec 9>"${MATERIALIZATION_ROOT}/materialize.lock"
+flock -n 9 || die "another materializer holds ${MATERIALIZATION_ROOT}/materialize.lock"
+SCRATCH="$(mktemp -d "${MATERIALIZATION_ROOT}/.scratch.XXXXXXXX")"
+readonly SCRATCH
+
+strays="$(find "${TASKS_ROOT}" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort |
+  LC_ALL=C comm -23 - <(printf '%s\n' "${TASK_IDS[@]}"))"
+[[ -z "${strays}" ]] ||
+  die "tasks/ holds entries that are not materialized tasks; an interrupted run leaves <task_id>.partial, which must be inspected and removed: ${strays}"
+
+for task_id in "${TASK_IDS[@]}"; do
+  materialize_task "${task_id}"
+done
+
+# A task is excluded when its own inputs already exceed a service input limit.
+# Staging accepts directories, regular files and symbolic links, and counts every
+# entry below the workspace root, every regular file, and regular-file bytes. The
+# driver adds its preamble to the prompt and the task environment to the
+# workspace, and checks the composed workspace against the staging limits again
+# before it submits.
+: >"${SCRATCH}/plan-rows.jsonl"
+for task_id in "${TASK_IDS[@]}"; do
+  manifest="${TASKS_ROOT}/${task_id}/manifest.json"
+  manifest_sha256="$(sha256_of "${manifest}")"
+  jq -c --arg manifest_sha256 "${manifest_sha256}" '{manifest_sha256: $manifest_sha256, manifest: .}' \
+    "${manifest}" >>"${SCRATCH}/plan-rows.jsonl"
+done
+jq -s \
   --arg dataset_lock_sha256 "${DATASET_LOCK_SHA256}" \
-  --arg dataset_regular_manifest_sha256 "$(sha256sum -- "${DATASET_REGULAR_MANIFEST}" | awk '{print $1}')" \
-  --arg dataset_mode_manifest_sha256 "$(sha256sum -- "${DATASET_MODE_MANIFEST}" | awk '{print $1}')" \
-  --arg release_commit "${SERVICE_RELEASE_COMMIT}" \
-  --arg implementation_commit "${SERVICE_IMPLEMENTATION_COMMIT}" \
-  --arg release_lock_sha256 "${SERVICE_RELEASE_LOCK_SHA256}" \
-  --arg stack_lock_sha256 "${STACK_LOCK_SHA256}" \
-  --arg materializer_blob "${MATERIALIZER_GIT_BLOB}" \
-  --slurpfile derived_rows "${DERIVED_LEDGER}" \
-  '($derived_rows | map({key:.task_id, value:.}) | from_entries) as $derived |
-   if (length != ($derived_rows | length)) or any(.[]; $derived[.task_id] == null)
-   then error("derived-classification ledger does not cover the manifest set exactly") else . end |
-   map(. + {classification: $derived[.task_id].classification,
-            exclusion_reason: $derived[.task_id].exclusion_reason,
-            classification_at_materialization: .classification,
-            exclusion_reason_at_materialization: .exclusion_reason}) |
-  {
-    schema_version:2,
-    derivation:{stack_lock_sha256:$stack_lock_sha256,materializer_git_blob:$materializer_blob},
-    dataset:{name:$dataset_name,content_digest:$dataset_digest,
-      lock_sha256:$dataset_lock_sha256,
-      regular_manifest_sha256:$dataset_regular_manifest_sha256,
-      mode_manifest_sha256:$dataset_mode_manifest_sha256},
-    production_release:{release_commit:$release_commit,
-      implementation_commit:$implementation_commit,
-      release_lock_sha256:$release_lock_sha256,
-      stack_lock_sha256:$stack_lock_sha256},
-    task_count:length,
-    eligible_count:(map(select(.classification == "eligible"))|length),
-    exclusion_count:(map(select(.classification == "production-input-contract-exclusion"))|length),
-    languages:(group_by(.language)|map({language:.[0].language,count:length})),
-    tasks:sort_by(.task_id)
-  }' >"${SUMMARY_PARTIAL}"
-jq -e --argjson expected "${EXPECTED_TASKS}" \
-  '.schema_version == 2 and .task_count == $expected and
-   (.eligible_count + .exclusion_count == .task_count)' \
-  "${SUMMARY_PARTIAL}" >/dev/null || die 'materialization summary failed its semantic assertion'
-jq '{
-  schema_version:2,
-  methodology:"one paired full-suite pass through production agent_service; policy order alternates by sorted dataset index; eligibility re-derived from verified evidence against the current release contract at plan generation",
-  derivation:.derivation,
-  eligible_count:.eligible_count,
-  excluded:[.tasks[]|select(.classification != "eligible")|{task_id,reason:.exclusion_reason}],
-  runs:[.tasks[]|select(.classification == "eligible")|{task_id,task_index,language,policy_order}]
-}' "${SUMMARY_PARTIAL}" >"${PLAN_PARTIAL}"
-sync -f "${SUMMARY_PARTIAL}"
-sync -f "${PLAN_PARTIAL}"
-# POSIX gives no atomic multi-file rename, so the summary/plan swap is made
-# recoverable instead of merely short. The renames are journalled and fsynced
-# first, and a committed-step counter is advanced atomically after each one, so
-# an interrupted commit is resumed from exactly where it stopped. The counter is
-# what makes this safe: the steps chain (summary -> archive, then partial ->
-# summary), so a blind "is the source still there?" replay would re-run the
-# first step against the already-installed new file and destroy both. A step
-# that is genuinely missing both endpoints is real loss and still fails closed.
-readonly COMMIT_JOURNAL="${SUITE_ROOT}/.summary-plan-commit.journal"
-readonly COMMIT_JOURNAL_PROGRESS="${COMMIT_JOURNAL}.committed-steps"
+  --arg images_lock_sha256 "${IMAGES_LOCK_SHA256}" \
+  --arg materializer_git_blob "${MATERIALIZER_GIT_BLOB}" \
+  --argjson service_limits "${SERVICE_LIMITS}" \
+  'def exclusion_reason:
+     .manifest as $manifest |
+     if $manifest.inputs.instruction_bytes > $service_limits.max_prompt_bytes then
+       "instruction_bytes_exceed_max_prompt_bytes"
+     elif $manifest.source.special_file_count > 0 then
+       "source_holds_special_files"
+     elif $manifest.source.regular_file_count > $service_limits.max_staged_files then
+       "source_regular_files_exceed_max_staged_files"
+     elif $manifest.source.regular_file_bytes > $service_limits.max_staged_bytes then
+       "source_regular_file_bytes_exceed_max_staged_bytes"
+     elif $manifest.source.directory_count + $manifest.source.regular_file_count
+       + $manifest.source.symlink_count > $service_limits.max_staged_entries then
+       "source_entries_exceed_max_staged_entries"
+     else null end;
+   map(. + {reason: exclusion_reason}) |
+   {schema_version: 3,
+    dataset_lock_sha256: $dataset_lock_sha256,
+    images_lock_sha256: $images_lock_sha256,
+    materializer_git_blob: $materializer_git_blob,
+    service_limits: $service_limits,
+    tasks: [.[] | select(.reason == null) |
+      {task_id: .manifest.task_id, language: .manifest.language, manifest_sha256}],
+    excluded: [.[] | select(.reason != null) |
+      {task_id: .manifest.task_id, reason, manifest_sha256}]}' \
+  "${SCRATCH}/plan-rows.jsonl" >"${PLAN}.partial"
+jq -e --argjson task_count "${TASK_COUNT}" '(.tasks | length) + (.excluded | length) == $task_count' \
+  "${PLAN}.partial" >/dev/null || die 'derived plan does not account for every task exactly once'
 
-record_committed_steps() {
-  printf '%s\n' "$1" >"${COMMIT_JOURNAL_PROGRESS}.partial"
-  sync -f "${COMMIT_JOURNAL_PROGRESS}.partial"
-  mv -- "${COMMIT_JOURNAL_PROGRESS}.partial" "${COMMIT_JOURNAL_PROGRESS}"
-  sync -f "${SUITE_ROOT}"
-}
-
-apply_commit_journal() {
-  local -a sources=() destinations=()
-  local source destination
-  while IFS=$'\t' read -r source destination; do
-    [[ -n "${source}" && -n "${destination}" ]] || die 'malformed summary/plan commit journal entry'
-    sources+=("${source}")
-    destinations+=("${destination}")
-  done <"${COMMIT_JOURNAL}"
-  (( ${#sources[@]} > 0 )) || die 'summary/plan commit journal is empty'
-
-  local committed=0
-  if [[ -f "${COMMIT_JOURNAL_PROGRESS}" ]]; then
-    committed="$(cat -- "${COMMIT_JOURNAL_PROGRESS}")"
-    [[ "${committed}" =~ ^[0-9]+$ ]] && (( committed <= ${#sources[@]} )) ||
-      die "summary/plan commit progress marker is unusable: ${committed}"
-  fi
-
-  local index
-  for (( index = committed; index < ${#sources[@]}; index++ )); do
-    if [[ -e "${sources[index]}" ]]; then
-      mv -- "${sources[index]}" "${destinations[index]}"
-    elif [[ ! -e "${destinations[index]}" ]]; then
-      die "summary/plan commit step lost both endpoints: ${sources[index]} -> ${destinations[index]}"
-    fi
-    record_committed_steps "$(( index + 1 ))"
-  done
-
-  rm -f -- "${COMMIT_JOURNAL}" "${COMMIT_JOURNAL_PROGRESS}"
-  sync -f "${SUITE_ROOT}"
-}
-
-# Args are source/destination pairs, in application order.
-commit_renames() {
-  local -a steps=("$@")
-  (( ${#steps[@]} >= 2 && ${#steps[@]} % 2 == 0 )) || die 'commit_renames needs source/destination pairs'
-  rm -f -- "${COMMIT_JOURNAL_PROGRESS}" "${COMMIT_JOURNAL_PROGRESS}.partial"
-  : >"${COMMIT_JOURNAL}.partial"
-  local index
-  for (( index = 0; index < ${#steps[@]}; index += 2 )); do
-    printf '%s\t%s\n' "${steps[index]}" "${steps[index + 1]}" >>"${COMMIT_JOURNAL}.partial"
-  done
-  sync -f "${COMMIT_JOURNAL}.partial"
-  mv -- "${COMMIT_JOURNAL}.partial" "${COMMIT_JOURNAL}"
-  sync -f "${SUITE_ROOT}"
-  apply_commit_journal
-}
-
-# An interrupted commit from a previous run is completed before anything else
-# inspects the pair, so the incomplete-pair check below can never see a torn
-# intermediate state.
-if [[ -f "${COMMIT_JOURNAL}" ]]; then
-  printf 'COMMIT_JOURNAL_REPLAY entries=%s committed=%s\n' \
-    "$(wc -l <"${COMMIT_JOURNAL}")" "$(cat -- "${COMMIT_JOURNAL_PROGRESS}" 2>/dev/null || printf 0)"
-  apply_commit_journal
-fi
-
-if [[ -e "${SUMMARY_PATH}" || -e "${PLAN_PATH}" ]]; then
-  [[ -f "${SUMMARY_PATH}" && -f "${PLAN_PATH}" ]] || die 'existing suite summary/plan pair is incomplete'
-  if cmp -s -- "${SUMMARY_PATH}" "${SUMMARY_PARTIAL}" && cmp -s -- "${PLAN_PATH}" "${PLAN_PARTIAL}"; then
-    rm -f -- "${SUMMARY_PARTIAL}" "${PLAN_PARTIAL}"
-  else
-    # A derived artifact may change only because the derivation contract changed;
-    # same-contract drift is corruption and fails closed. The old plan is
-    # archived, never destroyed.
-    prior_contract="$(jq -r '[(.derivation.stack_lock_sha256 // .production_release.stack_lock_sha256 // ""),
-      (.derivation.materializer_git_blob // "")] | join(":")' "${SUMMARY_PATH}")" ||
-      die 'existing materialization summary is unreadable; investigate before regeneration'
-    current_contract="${STACK_LOCK_SHA256}:${MATERIALIZER_GIT_BLOB}"
-    [[ "${prior_contract}" != "${current_contract}" ]] ||
-      die 'summary/plan drifted under an unchanged derivation contract'
-    superseded_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-    [[ ! -e "${SUMMARY_PATH}.superseded-${superseded_stamp}" && ! -e "${PLAN_PATH}.superseded-${superseded_stamp}" ]] ||
-      die 'supersession archive collision; investigate'
-    commit_renames \
-      "${SUMMARY_PATH}" "${SUMMARY_PATH}.superseded-${superseded_stamp}" \
-      "${PLAN_PATH}" "${PLAN_PATH}.superseded-${superseded_stamp}" \
-      "${SUMMARY_PARTIAL}" "${SUMMARY_PATH}" \
-      "${PLAN_PARTIAL}" "${PLAN_PATH}"
-    printf 'PLAN_SUPERSEDED prior_contract=%s current_contract=%s archive_suffix=superseded-%s\n' \
-      "${prior_contract}" "${current_contract}" "${superseded_stamp}"
-  fi
+# A pass records the SHA-256 of the plan it ran, so a replaced plan is kept beside
+# its successor.
+if [[ -e "${PLAN}" ]] && cmp -s -- "${PLAN}" "${PLAN}.partial"; then
+  rm -- "${PLAN}.partial"
 else
-  commit_renames \
-    "${SUMMARY_PARTIAL}" "${SUMMARY_PATH}" \
-    "${PLAN_PARTIAL}" "${PLAN_PATH}"
+  sync -f -- "${PLAN}.partial"
+  if [[ -e "${PLAN}" ]]; then
+    superseded="${PLAN}.superseded-$(date -u +%Y%m%dT%H%M%SZ)"
+    [[ ! -e "${superseded}" ]] || die "plan archive already exists: ${superseded}"
+    mv -- "${PLAN}" "${superseded}"
+    printf 'PLAN_SUPERSEDED archived=%s\n' "${superseded}"
+  fi
+  mv -- "${PLAN}.partial" "${PLAN}"
+  sync -f -- "${MATERIALIZATION_ROOT}"
 fi
-rm -f -- "${DERIVED_LEDGER}"
 
 printf 'FULL_SUITE_MATERIALIZATION_COMPLETE tasks=%s eligible=%s excluded=%s plan=%s\n' \
-  "${EXPECTED_TASKS}" "$(jq -er '.eligible_count' "${SUMMARY_PATH}")" \
-  "$(jq -er '.exclusion_count' "${SUMMARY_PATH}")" "${PLAN_PATH}"
+  "${TASK_COUNT}" "$(jq -r '.tasks | length' "${PLAN}")" "$(jq -r '.excluded | length' "${PLAN}")" \
+  "${PLAN}"
