@@ -654,11 +654,11 @@ generation stopped from outside is never read for a slip: `error_incomplete_gene
 names it first. A subagent is held to the same rule in its own loop; one that
 ends this way is reported to its parent as unfinished, with the shape of the slip
 and its turn count, in the same form as an exhausted budget or a cut-off
-generation, and its scoped terminal record carries the same name. That name is
-not yet in the `resultErrorSubtype` enumeration of `protocol/stream-contract-v1.json`
-or in the parser's list in `src/result_parse.rs`; the client's own stream
-admission is compiled from that schema and refuses the record until the schema
-admits the name, so extending both is a prerequisite of releasing this client.
+generation, and its scoped terminal record carries the same name. The name is
+one of the `resultErrorSubtype` values of `protocol/stream-contract-v1.json`,
+which is the one place the vocabulary is written: the parser's list, the
+service's closed-set check and the client's own stream admission are all
+compiled from that schema, so the record is admitted on both sides.
 
 ## Prefix caching evidence
 

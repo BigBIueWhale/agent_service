@@ -653,6 +653,30 @@ mod tests {
     }
 
     #[test]
+    fn a_run_the_model_ended_by_slipping_three_times_is_its_own_terminal_state() {
+        // The model ended three consecutive turns with a message that was not
+        // a final answer -- no visible text, or tool-call markup outside a
+        // structured call -- after being told twice. That is a different fact
+        // from a severed generation and from a failure during execution, and
+        // it is an error ending: the run holds no final answer, so it is
+        // never read as a success, and the shape of the slip survives in the
+        // message the caller reads.
+        let terminal = "{\"type\":\"result\",\"subtype\":\"error_slipped_final_message\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":91237,\"duration_api_ms\":90411,\"num_turns\":1,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"The model ended three consecutive turns with a message that was not a final answer (tool-call markup outside a structured call), after being told twice; this run carries no final answer.\"}}\n";
+        let text = format!("{INIT}{MAIN_TURN}{terminal}");
+        let parsed = parse_text(&text).expect("a slipped final message is a reportable ending");
+        assert!(parsed.is_error);
+        assert_eq!(parsed.subtype, "error_slipped_final_message");
+        assert!(ERROR_SUBTYPES.contains(&"error_slipped_final_message"));
+        assert!(parsed.response.contains("tool-call markup outside a structured call"));
+        assert!(parsed.response.contains("after being told twice"));
+        assert_eq!(parsed.duration_ms, 91_237);
+        // The same spelling on a success envelope is not an ending this
+        // service interprets.
+        let success = terminal.replace("\"is_error\":true", "\"is_error\":false");
+        assert!(parse_text(&format!("{INIT}{MAIN_TURN}{success}")).is_err());
+    }
+
+    #[test]
     fn every_terminal_state_reaches_the_caller_under_its_own_name() {
         // A caller distinguishes the endings by this field alone, so each
         // spelling the agent can emit must survive the parse verbatim, and

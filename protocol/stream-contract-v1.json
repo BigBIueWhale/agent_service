@@ -1623,6 +1623,7 @@
         "error_max_tool_calls",
         "error_loop_detected",
         "error_incomplete_generation",
+        "error_slipped_final_message",
         "error_cancelled"
       ]
     },
