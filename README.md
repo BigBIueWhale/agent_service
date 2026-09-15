@@ -317,7 +317,7 @@ The source pins describe this checkout. The independently pinned
 pins does not build, release, or update those images.
 
 The [source transformer](patches/source_patch_v1) applies the reviewed changes to
-that exact upstream tree. It checks source identities, structural landmarks, 34
+that exact upstream tree. It checks source identities, structural landmarks, 29
 semantic concerns, and final identities, including explicit absent identities for
 removed paths. Drift, ambiguous landmarks, intermediate states, or concurrent
 mutation refuse application. Failed publication restores original bytes, modes,
@@ -399,13 +399,6 @@ A terminal conversation and a headless conversation share the same obligations:
   permitted only before answer content or a structured call is delivered; the
   transport and invalid-stream categories each permit one fresh resample, while
   rate-limit retries follow the selected route's explicit policy.
-- An explicit `retryable: false` error body or `x-should-retry: false` header
-  ends the generation attempt without a retry event, another request, or request
-  adaptation. The same decision applies to HTTP and streaming errors, including
-  SDK envelopes and preserved causes. Positive hints cannot override a refusal,
-  cancellation, or client-error policy. The client owns generation retries and
-  disables the SDK's internal generation retries, so every attempt follows that
-  decision; ordinary transient errors retain their established recovery.
 - Dispatch and final observation share a durable request identity. Served counts,
   missing usage, and unfinalized requests remain distinct. One accumulator supplies
   session, child, history, export, and presentation summaries. Child status is
