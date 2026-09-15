@@ -12,14 +12,14 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `eb1ac9c2d26c4006971183420e7743649826e5cff7f8866a5239c428a9f760c7`
+- Review-diff SHA-256: `67e7f17308690130450da0928090412bf1be4ed126a23448d6cce0c2ee3a7e66`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `63369524e15aca3c3f9de823fb1f628197fc1c22af8fc0dadd0697b2479e27fd`
+- Transformer-manifest SHA-256: `ac2c10f678044f72804f0d1ce68461bedfa10b6f56740faeed7226ed9c36b5f6`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 33 semantic concerns before changing the private source tree.
+identities, and 34 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
@@ -44,7 +44,14 @@ retain the same model, template, tool, and ownership context.
 Structured calls become executable only after the full response and its
 canonical assistant record are accepted. Normal completion requires an explicit
 provider terminal. A fresh bounded retry is permitted only before answer content
-has been delivered. Text, whitespace, and literal protocol-like XML remain
+has been delivered and only when the failure permits another attempt. Explicit
+`retryable: false` bodies and `x-should-retry: false` headers end the attempt
+without a retry event, wait, request adaptation, or model fallback. The decision
+survives HTTP and SSE decoding, SDK envelopes, credential redaction, and preserved
+causes. A positive hint cannot cancel it or override cancellation/client-error
+refusal. Generation retries belong to the caller; both SDK generation calls
+disable internal retries. Ordinary transient recovery retains the caller's
+policy. Text, whitespace, and literal protocol-like XML remain
 verbatim. Transport failures, invalid usage, malformed calls, and post-terminal
 content retain diagnostic text without publishing executable calls or a normal
 terminal. Empty normally completed output is a valid response.

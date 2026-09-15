@@ -5371,7 +5371,98 @@ def _validate_bounded_output_after(state: State) -> None:
     )
 
 
+def _validate_generation_retry_before(state: State) -> None:
+    label = "explicit generation retry decision precondition"
+    for path, symbol in (
+        ("utils/retryPolicy.ts", "export function getRetryAfterDelayMs("),
+        ("utils/retry.ts", "export async function retryWithBackoff"),
+        ("utils/retryErrorClassification.ts", "export function classifyRetryError("),
+        ("core/geminiChat.ts", "isRateLimitError(error, extraRetryErrorCodes)"),
+        ("core/openaiContentGenerator/pipeline.ts", "isRequiredThinkingError(error)"),
+    ):
+        path = "packages/core/src/" + path
+        _require_all(state, path, (symbol,), label=label)
+        forbid_text(state, path, "hasExplicitNoRetry", label=label)
+
+
+def _validate_generation_retry_after(state: State) -> None:
+    label = "explicit generation retry decision result"
+    root = "packages/core/src/"
+    policy = _require_all(state, root + "utils/retryPolicy.ts", (
+        "export function hasExplicitNoRetry(error: unknown): boolean",
+        "const seen = new Set<object>();",
+        "seen.has(current)",
+        "seen.add(current);",
+        "fields['retryable'] === false",
+        "getHeaderValue(current, 'x-should-retry')",
+        "pending.push(fields['error'], fields['response'], fields['cause']);",
+        "(fields['response'] as Record<string, unknown>)['data']",
+        "current instanceof AggregateError",
+        "pending.push(...current.errors);",
+    ), label=label)
+    _require("JSON.parse" not in policy, f"{label}: messages must not supply retry policy")
+    retry = _source(state, root + "utils/retry.ts", label=label)
+    for symbol in ("defaultShouldRetry", "isTransientCapacityError"):
+        body = retry.split(f"export function {symbol}(", 1)[1].split("\n}", 1)[0]
+        _require_ordered(body, ("if (hasExplicitNoRetry(error)) return false;",
+                                "const status = getErrorStatus(error);"),
+                         label=label, location=symbol)
+    _require_ordered(retry.split("export async function retryWithBackoff", 1)[1], (
+        "retryDiagnostics.kind === 'abort' || hasExplicitNoRetry(error)",
+        "throw error;",
+        "const callerAllowsRetry =",
+        "shouldRetryOnError(error as Error)",
+    ), label=label, location="shared retry loop")
+    classification = _source(state, root + "utils/retryErrorClassification.ts", label=label)
+    _require_ordered(classification, (
+        "if (hasExplicitNoRetry(error))",
+        "diagnosis: 'fail-fast'",
+        "reason: 'explicit-no-retry'",
+        "if (isRateLimitError(error, context.extraRetryErrorCodes))",
+    ), label=label, location="retry classification")
+    chat = _source(state, root + "core/geminiChat.ts", label=label)
+    _require_ordered(chat, (
+        "if (deliveredContent || hasExplicitNoRetry(error)) throw error;",
+        "params.config?.abortSignal?.throwIfAborted();",
+        "isRateLimitError(error, extraRetryErrorCodes) &&",
+        "yield {",
+        "type: StreamEventType.RETRY",
+    ), label=label, location="chat stream restart")
+    pipeline = _source(state, root + "core/openaiContentGenerator/pipeline.ts", label=label)
+    _require(pipeline.count("maxRetries: 0") == 2,
+             f"{label}: both SDK generation calls must delegate retries to the caller")
+    _require_ordered(pipeline, (
+        "request.config?.abortSignal?.aborted !== true &&",
+        "!hasExplicitNoRetry(error) &&",
+        "isRequiredThinkingError(error)",
+        "this.requiredThinkingModels.add(model)",
+    ), label=label, location="required-thinking request adaptation")
+    for path in (
+        "utils/generation-no-retry.test.ts",
+        "utils/generation-no-retry-carriers.test.ts",
+        "core/openaiContentGenerator/generation-retry-sdk.test.ts",
+        "core/generation-retry-cancellation.test.ts",
+    ):
+        _require(bool(_source(state, root + path, label=label)),
+                 f"{label}: missing behavioral regression tests")
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
+    SemanticConcern(
+        name="explicit-generation-retry-decision",
+        rationale=(
+            "Structured nonretryable generation failures are authoritative across HTTP/SSE, "
+            "SDK envelopes, preserved causes, custom/persistent retry and stream restart. "
+            "Generation retries belong to the client, which can inspect the entire cause; "
+            "SDK retries cannot hide an additional attempt."
+        ),
+        removal_condition=(
+            "Upstream preserves explicit no-retry decisions through every generation attempt "
+            "and stream restart while retaining legitimate transient recovery."
+        ),
+        validate_before=_validate_generation_retry_before,
+        validate_after=_validate_generation_retry_after,
+    ),
     SemanticConcern(
         name="shared-stream-admission",
         rationale=(
