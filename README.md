@@ -245,8 +245,9 @@ bounded by the same budget in its own right, and if it exhausts it the parent is
 told so explicitly, with the turn count, and treats the assignment as unfinished
 rather than concluding from a partial report. Child work consumes additional
 provider tokens independently of the parent turn count. Returning to a parent
-can reuse backend state only while that state remains retained; whole-owner
-eviction can require reprocessing. Turns are the hardware-independent measure of
+can reuse backend state while its cache remains retained. Shared prefix
+references survive another agent's eviction; eviction of its own cached context
+can require reprocessing. Turns are the hardware-independent measure of
 agent progress, so the same trajectory is judged
 identically whatever the backend's generation speed; a wall-clock budget would
 instead score how fast this GPU happens to run. Reaching the budget is an
@@ -351,7 +352,15 @@ A terminal conversation and a headless conversation share the same obligations:
 - Each chat and side request carries an immutable invocation owner. Root work owns
   the session ID; a tool-launched child owns its spawning call ID. The common
   provider seam binds batch, streaming, and exact-count requests to that owner and
-  writes `kv_scope` after request decoration.
+  writes `kv_scope` after request decoration. These ID choices belong to this
+  client; the backend treats them as opaque. An ID with no cached blocks may
+  acquire a shared prefix as an implicit fork. Once it has cached blocks, it
+  matches its own acquired data and extends that cache. GPU and CPU use the same
+  membership; there is no parent field or lineage declaration. Evicting another
+  agent preserves shared references held by this agent's retained context.
+  Fresh IDs can observe initial cache hits through latency. IDs provide cache
+  accounting, with no authentication or confidentiality promise and no timing
+  padding; cache salts are independent of them.
 - A selected route must provide the supported OpenAI-compatible vLLM contract,
   exact request counting, strict tool calls, and an explicit context window.
   Activation publishes the provider and configuration together; failed selection

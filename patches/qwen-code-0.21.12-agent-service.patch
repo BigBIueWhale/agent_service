@@ -3276,9 +3276,10 @@ diff --git a/docs/design/full-turn-multimodal-routing.md b/docs/design/full-turn
  ## Context limits
  
 diff --git a/docs/design/invocation-and-artifact-ownership.md b/docs/design/invocation-and-artifact-ownership.md
+new file mode 100644
 --- /dev/null
 +++ b/docs/design/invocation-and-artifact-ownership.md
-@@ -0,0 +1,299 @@
+@@ -0,0 +1,307 @@
 +# Invocation and artifact ownership
 +
 +A terminal conversation and a headless conversation use the same generation,
@@ -3287,11 +3288,19 @@ diff --git a/docs/design/invocation-and-artifact-ownership.md b/docs/design/invo
 +
 +## Generation
 +
-+An invocation owns its cache scope independently of the model serving it. The
++An invocation has a stable agent ID independently of the model serving it. The
 +main conversation owns its session identity. A child launched by a tool owns the
 +spawning tool-call identity, including when it resumes from a persisted record.
 +A workflow call or utility fork owns its own invocation identity. Changing a
 +model does not change this ownership.
++
++The backend treats the ID as opaque. An ID with no cached blocks may acquire
++an initial shared prefix; after that it matches its acquired or computed data
++and extends its own cache. GPU and CPU share membership, and each agent retains
++references to the shared data it uses. No lineage or parent is declared. If all
++its cached blocks are evicted, the no-cache rule applies again. Fresh IDs can
++observe initial cache hits through latency; IDs promise no authentication or
++confidentiality, cache salts are independent, and no timing padding is added.
 +
 +`GenerationContext` is immutable. A chat and an agent runtime require one at
 +construction. The context binds a provider through `GenerationClient`, which
@@ -9298,27 +9307,34 @@ diff --git a/docs/users/features/status-line.md b/docs/users/features/status-lin
 diff --git a/docs/users/features/token-caching.md b/docs/users/features/token-caching.md
 --- a/docs/users/features/token-caching.md
 +++ b/docs/users/features/token-caching.md
-@@ -1,29 +1,16 @@
+@@ -1,29 +1,24 @@
 -# Token Caching and Cost Optimization
 +# Reported token cache reuse
  
 -Qwen Code automatically optimizes API costs through token caching when using API key authentication. This feature stores frequently used content like system instructions and conversation history to reduce the number of tokens processed in subsequent requests.
-+The backend can reuse retained state for a subsequent request with the same
-+invocation owner and compatible rendered prefix. A child invocation owns a
-+separate cache scope. Whole-owner eviction can require a later request to process
-+its prefix again; using an API key does not guarantee cache residency.
++Each invocation carries a stable, opaque agent ID in `kv_scope`. An ID with no
++cached blocks may acquire a matching shared prefix as an implicit fork. Once it
++has cached blocks, it matches only its acquired or computed data and extends
++that cache. GPU and CPU membership together determine whether it has a cache.
++The client declares no parent or lineage.
  
 -## How It Benefits You
-+The `/stats` command displays cached input tokens when the provider reports them.
-+It shows their count and their share of reported input tokens, for example:
++Shared data retains each acquiring agent's references. Evicting another agent
++preserves this agent's retained context; eviction of its own context can require
++reprocessing. After all its cached blocks are evicted, the no-cache rule applies
++again. Authentication does not guarantee residency, and IDs provide no
++confidentiality boundary: a fresh ID can observe initial hits through latency.
++Cache salts remain independent of IDs, and the backend adds no timing padding.
  
 -- **Cost reduction**: Less tokens mean lower API costs
 -- **Faster responses**: Cached content is retrieved more quickly
 -- **Automatic optimization**: No configuration needed - it works behind the scenes
-+> Reported cache reuse: 10,500 (40.4%) of reported input tokens were served from the cache.
++The `/stats` command displays cached input tokens when the provider reports them.
++It shows their count and their share of reported input tokens, for example:
  
 -## Token caching is available for
--
++> Reported cache reuse: 10,500 (40.4%) of reported input tokens were served from the cache.
+ 
 -- API key users (Qwen API key, OpenAI-compatible providers)
 -
 -## Monitoring Your Savings
