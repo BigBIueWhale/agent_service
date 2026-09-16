@@ -34,6 +34,8 @@ The fixed stack is:
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
 | vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v21 profile |
+| Backend image target | `qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v23`, awaiting build/adoption |
+| Served template SHA-256 | `6bc4e08a678c117f584f9c0811b2b77197347a2897d8870125b0c052cad34232`, pinned by the backend and included in its image |
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
 | Context | Native `262144` tokens |
@@ -52,6 +54,17 @@ The fixed stack is:
 | Stream-capture image | Pinned by [`config/release.lock.json`](config/release.lock.json) (`.images.capture`) |
 | Service listener | `127.0.0.1:8090` only |
 | Model listener | `127.0.0.1:8000` only |
+
+This source targets the corrected v23 backend and awaits a coordinated release.
+The image ID in `config/stack.lock.json` and `src/config.rs` remains the previous
+build's value under the backend's awaiting-adoption convention. The coordinator
+must replace both with the actual v23 ID after building and adopting the backend.
+The launch profile and cache volume remain v21; the image profile is v23. The
+template is derived and hash-pinned in the backend, then covered by the adopted
+image identity. No separate template file is built by this service. The current
+build-input and release locks still describe the previous release; `release.sh`
+must seal and build the new implementation after backend adoption. Prior live
+measurements below describe the releases that earned them.
 
 Every longer pin—including base-image digests, package snapshot and versions,
 source archive and patch hashes, Docker/BuildKit versions, image identity, live
