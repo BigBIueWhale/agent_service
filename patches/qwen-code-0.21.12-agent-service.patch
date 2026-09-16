@@ -222770,7 +222770,21 @@ diff --git a/packages/core/src/tools/read-mcp-resource.ts b/packages/core/src/to
 diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/ripGrep.test.ts
 --- a/packages/core/src/tools/ripGrep.test.ts
 +++ b/packages/core/src/tools/ripGrep.test.ts
-@@ -56,24 +56,20 @@
+@@ -12,12 +12,13 @@
+   afterEach,
+   vi,
+   type Mock,
+ } from 'vitest';
+ import type { RipGrepToolParams } from './ripGrep.js';
+ import { _resetRipGrepCachesForTest, RipGrepTool } from './ripGrep.js';
++import { ToolErrorType } from './tool-error.js';
+ import path from 'node:path';
+ import fsSync from 'node:fs';
+ import fs from 'node:fs/promises';
+ import os, { EOL } from 'node:os';
+ import type { Config } from '../config/config.js';
+ import { createMockWorkspaceContext } from '../test-utils/mockWorkspaceContext.js';
+@@ -56,24 +57,20 @@
      getTargetDir: () => tempRootDir,
      getWorkspaceContext: () => createMockWorkspaceContext(tempRootDir),
      getWorkingDir: () => tempRootDir,
@@ -222795,7 +222809,7 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
      };
      fileReadCache = new FileReadCache();
      Object.assign(mockConfig, {
-@@ -311,13 +307,13 @@
+@@ -311,13 +308,13 @@
  
        const invocation = grepTool.build({ pattern: 'hello' });
        const result = await invocation.execute(abortSignal);
@@ -222810,7 +222824,7 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
  
      it('logs runtime recovery telemetry after a successful EAGAIN retry', async () => {
        (runRipgrep as Mock).mockResolvedValue({
-@@ -404,21 +400,18 @@
+@@ -404,21 +401,18 @@
  
        const invocation = grepTool.build({ pattern: 'hello' });
        const result = await invocation.execute(abortSignal);
@@ -222834,7 +222848,7 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
          incomplete: true,
          error,
          recovery: {
-@@ -428,18 +421,15 @@
+@@ -428,18 +422,15 @@
          },
        });
  
@@ -222855,7 +222869,7 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
      it('should preserve absolute result paths reported by ripgrep', async () => {
        const absoluteMatchPath = path.join(
          tempRootDir,
-@@ -476,55 +466,12 @@
+@@ -476,55 +467,12 @@
        });
        const result = await invocation.execute(abortSignal);
  
@@ -222911,7 +222925,7 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
          stdout: `fileC.txt:1:another world in sub dir${EOL}`,
          truncated: false,
          error: undefined,
-@@ -668,30 +615,12 @@
+@@ -668,30 +616,12 @@
  
        const params: RipGrepToolParams = { pattern: 'ignored' };
        const invocation = grepTool.build(params);
@@ -222942,10 +222956,27 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
          stdout: '',
          truncated: false,
          error: undefined,
+@@ -787,12 +717,16 @@
+       const invocation = grepTool.build(params);
+ 
+       expect(await invocation.execute(abortSignal)).toStrictEqual({
+         llmContent:
+           'Error during grep search operation: ripgrep binary not found.',
+         returnDisplay: 'Error: ripgrep binary not found.',
++        error: {
++          message: 'ripgrep binary not found.',
++          type: ToolErrorType.GREP_EXECUTION_ERROR,
++        },
+       });
+     });
+ 
+     it('should pass useBuiltinRipgrep setting to ripgrep execution', async () => {
+       const systemOnlyConfig = {
+         ...mockConfig,
 diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGrep.ts
 --- a/packages/core/src/tools/ripGrep.ts
 +++ b/packages/core/src/tools/ripGrep.ts
-@@ -4,13 +4,19 @@
+@@ -4,14 +4,21 @@
   * SPDX-License-Identifier: Apache-2.0
   */
  
@@ -222961,12 +222992,14 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
 +  Kind,
 +} from './tools.js';
  import { ToolNames } from './tool-names.js';
++import { ToolErrorType } from './tool-error.js';
  import {
    resolveAndValidatePath,
    formatDisplayPath,
    resolvePath,
    unescapePath,
-@@ -30,15 +36,12 @@
+ } from '../utils/paths.js';
+@@ -30,15 +37,12 @@
  import { recordGrepResultFileReads } from './grepReadTracking.js';
  import { logRipgrepRuntimeRecovery } from '../telemetry/loggers.js';
  import { RipgrepRuntimeRecoveryEvent } from '../telemetry/types.js';
@@ -222982,7 +223015,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
      path: { text?: string; bytes?: string };
      lines?: { text?: string };
      line_number: number;
-@@ -351,13 +354,12 @@
+@@ -351,13 +355,12 @@
        }
        const matchTerm = totalMatches === 1 ? 'match' : 'matches';
  
@@ -222996,7 +223029,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
        );
  
        // Apply line limit first (if specified)
-@@ -365,63 +367,41 @@
+@@ -365,63 +368,41 @@
        let linesToInclude = allLines;
        if (allLines.length > lineLimit) {
          linesToInclude = allLines.slice(0, lineLimit);
@@ -223080,7 +223113,24 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
          displayTags.push('incomplete');
        }
        if (displayTags.length > 0) {
-@@ -573,16 +553,28 @@
+@@ -445,12 +426,16 @@
+     } catch (error) {
+       debugLogger.error('Error during ripgrep search operation:', error);
+       const errorMessage = getErrorMessage(error);
+       return {
+         llmContent: `Error during grep search operation: ${errorMessage}`,
+         returnDisplay: `Error: ${errorMessage}`,
++        error: {
++          message: errorMessage,
++          type: ToolErrorType.GREP_EXECUTION_ERROR,
++        },
+       };
+     }
+   }
+ 
+   private filterQwenIgnoredMatches(
+     lines: RipgrepMatchLine[],
+@@ -573,16 +558,28 @@
  
    private buildIncompleteSearchMessage(
      searchLocationDescription: string,
@@ -223112,7 +223162,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
      const { recovery } = result;
      if (recovery === undefined) {
        return;
-@@ -674,16 +666,12 @@
+@@ -674,16 +671,12 @@
  export class RipGrepTool extends BaseDeclarativeTool<
    RipGrepToolParams,
    ToolResult
@@ -223129,7 +223179,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
        'Grep',
        'A powerful search tool built on ripgrep\n\n  Usage:\n  - ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access.\n  - Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")\n  - Filter files with glob parameter (e.g., "*.js", "**/*.tsx")\n  - Use Agent tool for open-ended searches requiring multiple rounds\n  - Pattern syntax: Uses ripgrep (not grep) - special regex characters need escaping (use `interface\\{\\}` to find `interface{}` in Go code)\n',
        Kind.Search,
-@@ -709,12 +697,13 @@
+@@ -709,12 +702,13 @@
              minimum: 1,
              description:
                'Limit output to first N lines/entries. Must be a positive integer. Optional - shows all matches if not specified.',
