@@ -34,8 +34,8 @@ The fixed stack is:
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
 | vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v21 profile |
-| Backend image target | `qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v23`, awaiting build/adoption |
-| Served template SHA-256 | `6bc4e08a678c117f584f9c0811b2b77197347a2897d8870125b0c052cad34232`, pinned by the backend and included in its image |
+| Backend image target | `qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v23`, pinned by `config/stack.lock.json` |
+| Served template | Derived and pinned by the backend repository, and included in its image |
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
 | Context | Native `262144` tokens |
