@@ -792,10 +792,8 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.backend.endpoint != "http://127.0.0.1:8000"
         || lock.backend.profile_label != "socket-isolated-nonroot-vision-k8v4-agent-v21"
         || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v23"
-        // Awaiting adoption of the v23 build; update this and the stack lock
-        // together when the backend adopts its actual produced image ID.
         || lock.backend.image_id
-            != "sha256:695780692e2d9ea863f7081520e02ade0997ee7486a78e05968d2d62efe4b839"
+            != "sha256:f6397c5e2ef34eb14fe262f6da7fccb028b74877e64d412268cf781582a002fd"
         || lock.backend.served_model != "qwen3.8-27b-nvfp4-k8v4"
         || lock.backend.max_model_len != 262_144
         || lock.backend.kv_cache_dtype != "turboquant_k8v4"
