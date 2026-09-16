@@ -669,6 +669,10 @@ which is the one place the vocabulary is written: the parser's list, the
 service's closed-set check and the client's own stream admission are all
 compiled from that schema, so the record is admitted on both sides.
 
+The [implementation review](docs/model-output-handling-review.md) records the
+client/wire checks and the correction ensuring every notification-drain
+continuation consumes a turn and reports its terminal through the awaited queue.
+
 ## Prefix caching evidence
 
 Prefix caching is enabled in the sole backend command. It is not accepted on faith:

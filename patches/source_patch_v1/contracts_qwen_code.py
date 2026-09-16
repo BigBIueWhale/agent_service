@@ -3746,6 +3746,30 @@ def _validate_final_message_slip_after(state: State) -> None:
         location=cli,
     )
     forbid_text(state, cli, _OLD_FINAL_RESULT_NUDGE, label=label)
+    drain_source = cli_source.split("const drainBatch = async () => {", 1)[1]
+    _require_ordered(
+        drain_source,
+        (
+            "const itemPromptId = `${prompt_id}/automatic/${turnCount + 1}`;",
+            "while (true) {",
+            "admitBudgetedTurn();",
+            "turnCount++;",
+            "const itemStream = geminiClient.sendMessageStream(",
+            "await noticeForFinalMessageSlip(itemFinalMessageSlip)",
+        ),
+        label=label,
+        location=cli,
+    )
+    forbid_text(state, cli, "void p.finally(", label=label)
+    require_text(
+        state, cli,
+        "})().finally(() => {\n"
+        "                  if (drainPromise === p) drainPromise = null;\n"
+        "                });\n"
+        "                drainPromise = p;\n"
+        "                return p;",
+        label=label,
+    )
     require_text(state, types, "| 'error_slipped_final_message'", label=label)
     require_text(
         state,
@@ -3876,6 +3900,8 @@ def _validate_final_message_slip_after(state: State) -> None:
         "starts the count again after a turn that called a tool",
         "reads the whole message, so markup split across streamed chunks is the same slip as markup delivered in one piece",
         "does not read a generation stopped from outside for a slip: the cut is the terminal",
+        "counts every drain-slip generation through the third-slip terminal in one interaction",
+        "refuses the fourth generation when drain-slip notices exhaust the turn budget",
     ):
         require_text(state, cli_test, name, label=label)
     for name in (
