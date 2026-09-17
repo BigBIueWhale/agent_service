@@ -100899,7 +100899,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -13,37 +17,49 @@
+@@ -13,65 +17,78 @@
   *
   * AgentCore is stateless per-call: it does not own lifecycle or termination
   * logic. The caller (executor/collaborator) controls when to start, stop,
@@ -100950,12 +100950,13 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    type ExecutingToolCall,
    type WaitingToolCall,
  } from '../../core/coreToolScheduler.js';
-@@ -51,27 +67,28 @@
+ import type {
    ToolConfirmationOutcome,
    ToolCallConfirmationDetails,
    ToolResultDisplay,
  } from '../../tools/tools.js';
- import { isShellProgressData } from '../../tools/tools.js';
+-import { isShellProgressData } from '../../tools/tools.js';
++import { boundedFailureText, isShellProgressData } from '../../tools/tools.js';
  import { getInitialChatHistory } from '../../utils/environmentContext.js';
 -import {
 -  finalizeToolResponses,
@@ -102040,6 +102041,21 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    }> {
      const responseByCallId = new Map<
        string,
+@@ -1587,13 +1746,13 @@
+ 
+       if (errorMessage) {
+         const functionResponsePart = {
+           functionResponse: {
+             id: callId,
+             name: toolName,
+-            response: { error: errorMessage },
++            response: { error: boundedFailureText(errorMessage) },
+           },
+         };
+ 
+         this.emitSyntheticToolError({
+           callId,
+           name: toolName,
 @@ -1852,21 +2011,23 @@
      // Prepare requests and emit TOOL_CALL events
      const requests: ToolCallRequestInfo[] = authorizedCalls.map((fc) => {
@@ -131363,7 +131379,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18348,6 +17881,64 @@
+@@ -18348,6 +17881,100 @@
  
      await vi.waitFor(() => {
        expect(onAllToolCallsComplete).toHaveBeenCalled();
@@ -131428,6 +131444,42 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 +    ).toBe('first\nsecond');
 +  });
 +});
++
++describe('[error-envelope] boundedFailureText', () => {
++  // A failing tool's model-facing text is the one place a model-supplied
++  // argument is written back out. Bounding it belongs to the envelope, not
++  // to a habit each tool has to remember.
++  const argument = 'A'.repeat(100_414);
++  const oversized = `Error writing to file '${argument}': ENAMETOOLONG`;
++
++  it('leaves a failure inside the budget byte-identical', () => {
++    const message = "Error writing to file '/workspace/a.txt': ENOENT";
++    const [part] = convertToFunctionErrorResponse(
++      'write_file',
++      'call-1',
++      message,
++      'fallback',
++    );
++    expect(part.functionResponse?.response?.['error']).toBe(message);
++  });
++
++  it("bounds the model's copy of an oversized failure", () => {
++    const [part] = convertToFunctionErrorResponse(
++      'write_file',
++      'call-2',
++      oversized,
++      'fallback',
++    );
++    const error = part.functionResponse?.response?.['error'] as string;
++
++    expect(error.length).toBeLessThan(oversized.length);
++    const body = error.slice(error.indexOf('\n\n---\n\n') + 7);
++    expect(oversized.startsWith(body)).toBe(true);
++    expect(error).toContain(
++      `${Buffer.byteLength(oversized, 'utf8')} bytes of failure text in total`,
++    );
++  });
++});
 diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/core/coreToolScheduler.ts
 --- a/packages/core/src/core/coreToolScheduler.ts
 +++ b/packages/core/src/core/coreToolScheduler.ts
@@ -131477,11 +131529,19 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    FunctionResponsePart,
    Part,
    PartListUnion,
-@@ -78,16 +70,12 @@
+@@ -75,19 +67,19 @@
+ import {
+   promptIdContext,
+   todoWorkChainContext,
  } from '../utils/promptIdContext.js';
  import { unescapePath, PATH_ARG_KEYS } from '../utils/paths.js';
  import type { MemoryPressureMonitor } from '../services/memoryPressureMonitor.js';
- import { CONCURRENCY_SAFE_KINDS, isShellProgressData } from '../tools/tools.js';
+-import { CONCURRENCY_SAFE_KINDS, isShellProgressData } from '../tools/tools.js';
++import {
++  boundedFailureText,
++  CONCURRENCY_SAFE_KINDS,
++  isShellProgressData,
++} from '../tools/tools.js';
  import { isShellCommandReadOnly } from '../utils/shellReadOnlyChecker.js';
  import { parsePositiveIntegerEnv } from '../utils/env.js';
 -import {
@@ -131494,7 +131554,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  } from './permission-helpers.js';
  import {
    evaluatePermissionFlow,
-@@ -127,12 +115,17 @@
+@@ -127,12 +119,17 @@
  } from '../permissions/denialTracking.js';
  import {
    getResponseTextFromParts,
@@ -131512,7 +131572,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  } from '../tools/modifiable-tool.js';
  import * as Diff from 'diff';
  import levenshtein from 'fast-levenshtein';
-@@ -226,27 +219,12 @@
+@@ -226,27 +223,12 @@
  ): T {
    return request.goalContext
      ? goalTurnContext.run(request.goalContext, callback)
@@ -131540,7 +131600,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      const parts = toParts(c);
      return parts.map((p) => p.text ?? '').join('\n');
    }
-@@ -295,15 +273,15 @@
+@@ -295,15 +277,15 @@
  // The cancellation notice handed to the model depends on whether the tool's
  // work actually finished. Claiming a tool "already completed" when it was
  // interrupted mid-flight makes the model skip work that never happened; the
@@ -131558,7 +131618,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
   * execution timeout. Reported as a normal tool error so the model can adapt
   * (narrow scope, retry, etc.) instead of the session hanging.
   */
-@@ -849,12 +827,51 @@
+@@ -849,12 +831,51 @@
    }
  
    // Default case for other kinds of parts.
@@ -131610,7 +131670,25 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    llmContent: PartListUnion,
    fallbackError: string,
  ): Part[] {
-@@ -920,30 +937,39 @@
+@@ -876,13 +897,16 @@
+     const { output: _output, ...responseWithoutOutput } = response;
+ 
+     return {
+       ...part,
+       functionResponse: {
+         ...functionResponse,
+-        response: { ...responseWithoutOutput, error },
++        response: {
++          ...responseWithoutOutput,
++          error: boundedFailureText(error),
++        },
+       },
+     };
+   });
+ }
+ 
+ function toParts(input: PartListUnion): Part[] {
+@@ -920,30 +944,39 @@
    request: ToolCallRequestInfo,
    error: Error,
    errorType: ToolErrorType,
@@ -131632,7 +131710,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
 +  // model-facing content into it leaked tool output into all three.
 +  modelFacingText?: string,
 +): CoreToolCallResponseInfo => {
-+  const modelText = modelFacingText ?? error.message;
++  const modelText = boundedFailureText(modelFacingText ?? error.message);
 +  return {
 +    callId: request.callId,
 +    error,
@@ -131667,7 +131745,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    reason: string,
    executionStatus: ToolExecutionStatus,
    artifacts?: ToolArtifact[],
-@@ -1738,13 +1764,13 @@
+@@ -1738,13 +1771,13 @@
      toolSpan = this.toolSpans.get(callId),
    ): boolean {
      if (!signal.aborted) return false;
@@ -131682,7 +131760,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      if (toolSpan) {
        setToolSpanCancelled(toolSpan);
      }
-@@ -1920,49 +1946,26 @@
+@@ -1920,49 +1953,26 @@
        ? { success: false, error: r.hookError }
        : {
            success: true,
@@ -131734,7 +131812,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        };
        throw err;
      } finally {
-@@ -1986,13 +1989,13 @@
+@@ -1986,13 +1996,13 @@
      tool: AnyDeclarativeTool,
      args: object,
      callId?: string,
@@ -131749,7 +131827,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            maybeAware.setCallId(callId);
          }
        }
-@@ -2307,23 +2310,48 @@
+@@ -2307,23 +2317,48 @@
            if (!signal.aborted) return false;
            newToolCalls.push({
              status: 'cancelled',
@@ -131799,7 +131877,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            ) {
              newToolCalls.push({
                status: 'error',
-@@ -3510,12 +3538,13 @@
+@@ -3510,12 +3545,13 @@
                call_id: reqInfo.callId,
              });
              this.blockedSpans.set(reqInfo.callId, blockedSpan);
@@ -131813,7 +131891,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                  NotificationType.PermissionPrompt,
                  'Permission needed',
                ).catch((error) => {
-@@ -3671,12 +3700,28 @@
+@@ -3671,12 +3707,28 @@
        // Branch on signal.aborted so a throw caused by the abort signal
        // (e.g. ModifyWithEditor child interrupted by Ctrl+C) lands as
        // 'aborted'/'system' + UNSET status — matching the sister catch
@@ -131842,7 +131920,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            'cancelled',
            'Tool call cancelled by user.',
            'not_started',
-@@ -3691,24 +3736,12 @@
+@@ -3691,24 +3743,12 @@
              ToolErrorType.UNHANDLED_EXCEPTION,
              'not_started',
            ),
@@ -131867,7 +131945,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        // grepping logs by callId would otherwise see nothing if the
        // caller doesn't log the rejection itself (#4321 review-5
        // wenshao Suggestion).
-@@ -3834,15 +3867,13 @@
+@@ -3834,15 +3874,13 @@
          // filesystem paths (request.args may still hold escaped values
          // since buildInvocation normalizes a structuredClone) — UNLESS this
          // tool was bounced by a PreToolUse 'ask', in which case
@@ -131884,7 +131962,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                (normalizedArgs as Record<string, unknown>)[key] = unescapePath(
                  String(normalizedArgs[key]).trim(),
                );
-@@ -3864,13 +3895,13 @@
+@@ -3864,13 +3902,13 @@
            fileDiff: updatedDiff,
            isModifying: false,
          } as ToolCallConfirmationDetails);
@@ -131899,7 +131977,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              payload,
              signal,
            ))
-@@ -4010,13 +4041,13 @@
+@@ -4010,13 +4048,13 @@
      signal: AbortSignal,
    ): Promise<boolean> {
      const confirmDetails = toolCall.confirmationDetails;
@@ -131914,7 +131992,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  
      const currentContent = confirmDetails.originalContent ?? '';
      const modifyContext = toolCall.tool.getModifyContext(signal);
-@@ -4311,12 +4342,13 @@
+@@ -4311,12 +4349,13 @@
      });
      this.blockedSpans.set(callId, blockedSpan);
  
@@ -131928,7 +132006,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          NotificationType.PermissionPrompt,
          'Permission needed',
        ).catch((error) => {
-@@ -4348,12 +4380,13 @@
+@@ -4348,12 +4387,13 @@
  
    private async _executeToolCallBody(
      scheduledCall: ScheduledToolCall,
@@ -131942,7 +132020,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      const toolInput = scheduledCall.request.args as Record<string, unknown>;
  
      // Re-execution after the user approved a PreToolUse 'ask' bounce: the
-@@ -4469,12 +4502,13 @@
+@@ -4469,12 +4509,13 @@
            TOOL_SPAN_STATUS_PRE_HOOK_BLOCKED,
          );
          return;
@@ -131956,7 +132034,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        const guardDecision = await evaluateToolInvocationGuard(
          toolInvocationGuard,
          {
-@@ -4490,13 +4524,13 @@
+@@ -4490,13 +4531,13 @@
        if (signal.aborted) {
          this.setStatusInternal(
            callId,
@@ -131971,7 +132049,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          if (this.toolSpans.has(callId)) {
            setToolSpanCancelled(span);
          }
-@@ -4531,13 +4565,13 @@
+@@ -4531,13 +4572,13 @@
        ) {
          this.setStatusInternal(
            callId,
@@ -131986,7 +132064,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          if (this.toolSpans.has(callId)) {
            setToolSpanCancelled(span);
          }
-@@ -4674,12 +4708,13 @@
+@@ -4674,12 +4715,13 @@
              // boundary so setup failures remain not_started.
              this.setStatusInternal(callId, 'executing');
              execSpan = startToolExecutionSpan({
@@ -132000,7 +132078,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                liveOutputCallback,
                shellExecutionConfig,
                setPidCallback,
-@@ -4696,12 +4731,13 @@
+@@ -4696,12 +4738,13 @@
              // boundary so setup failures remain not_started.
              this.setStatusInternal(callId, 'executing');
              execSpan = startToolExecutionSpan({
@@ -132014,7 +132092,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                liveOutputCallback,
                shellExecutionConfig,
              );
-@@ -4861,23 +4897,15 @@
+@@ -4861,23 +4904,15 @@
          setToolSpanCancelled(span);
          return true;
        };
@@ -132039,7 +132117,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          // Deferred metadata: PostToolUse hook context and skill/rule reminders
          // are captured here and appended AFTER the model-facing truncation
          // below, so the head/tail truncator never bisects a <system-reminder>
-@@ -4962,22 +4990,12 @@
+@@ -4962,22 +4997,12 @@
                TOOL_SPAN_STATUS_POST_HOOK_STOPPED,
              );
              return;
@@ -132062,7 +132140,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          // (ripGrep array form). Conditional rules and skill activation
          // both key off the same path set, so inspect the union — and
          // gate the inspection on a tool-name allowlist (see
-@@ -5086,125 +5104,31 @@
+@@ -5086,125 +5111,31 @@
              const body = escapeSystemReminderTags(reminderBlocks.join('\n\n'));
              // Capture; appended after the model-facing truncation below.
              reminderEnvelope = `<system-reminder>\n${body}\n</system-reminder>`;
@@ -132195,7 +132273,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          const convertedResponse = convertToFunctionResponse(
            toolName,
            callId,
-@@ -5330,13 +5254,13 @@
+@@ -5330,13 +5261,13 @@
          }
        } else {
          // It is a failure
@@ -132210,7 +132288,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          let failureHookArtifacts: ToolArtifact[] | undefined;
          if (hooksEnabled && messageBus) {
            const failureHookResult = await this.withHookSpan(
-@@ -5370,21 +5294,16 @@
+@@ -5370,21 +5301,16 @@
              }
            }
            failureHookArtifacts = failureHookResult.artifacts;
@@ -132233,7 +132311,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              const lastIndex = responseParts.length - 1;
              responseParts = [...responseParts];
              responseParts[lastIndex] = appendContextToResponsePart(
-@@ -5404,21 +5323,15 @@
+@@ -5404,21 +5330,15 @@
            }, 0);
            const artifacts = [
              ...(toolResult.artifacts ?? []),
@@ -132257,7 +132335,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                visionBridgeNotice: processedImages.visionBridgeNotice,
              })
            ) {
-@@ -5450,33 +5363,20 @@
+@@ -5450,33 +5370,20 @@
              TOOL_FAILURE_KIND_TIMEOUT,
              TOOL_SPAN_STATUS_TOOL_TIMEOUT,
            );
@@ -132299,7 +132377,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            scheduledCall.request,
            error,
            executionErrorType ?? ToolErrorType.UNKNOWN,
-@@ -5484,12 +5384,13 @@
+@@ -5484,12 +5391,13 @@
            failureHookArtifacts,
            typeof toolResult.returnDisplay === 'string'
              ? undefined
@@ -132313,7 +132391,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              new Set(errorPersistedOutputFiles),
            );
          }
-@@ -5557,23 +5458,52 @@
+@@ -5557,23 +5465,52 @@
            span,
            TOOL_FAILURE_KIND_TOOL_ERROR,
            TOOL_SPAN_STATUS_TOOL_ERROR,
@@ -132368,7 +132446,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        const executionTimedOut =
          executionThrew && explicitErrorType === ToolErrorType.EXECUTION_TIMEOUT;
        const aborted = signal.aborted && !executionTimedOut;
-@@ -5682,12 +5612,13 @@
+@@ -5682,12 +5619,13 @@
            if (failureHookResult.additionalContext) {
              exceptionErrorMessage += `\n\n${failureHookResult.additionalContext}`;
            }
@@ -132382,7 +132460,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              createCancelledResponse(
                scheduledCall.request,
                // The abort landed while the failure hook was running; the
-@@ -5696,15 +5627,19 @@
+@@ -5696,15 +5634,19 @@
                  ? TOOL_CANCELLED_BEFORE_COMPLETION_MESSAGE
                  : TOOL_CANCELLED_AFTER_COMPLETION_MESSAGE,
                executionStatus,
@@ -132403,7 +132481,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            createErrorResponse(
              scheduledCall.request,
              executionError instanceof Error
-@@ -5712,17 +5647,12 @@
+@@ -5712,17 +5654,12 @@
                : new Error(String(executionError)),
              exceptionErrorType,
              executionStatus,
@@ -132421,7 +132499,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        sleepInhibitorHandle.release();
      }
    }
-@@ -5757,19 +5687,20 @@
+@@ -5757,19 +5694,20 @@
          debugLogger.warn(
            `PostToolBatch hook setup failed: ${
              error instanceof Error ? error.message : String(error)
@@ -132448,7 +132526,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              this.withHookSpan(
                { hookEvent: 'PostToolBatch', toolName: 'batch' },
                () =>
-@@ -5845,16 +5776,12 @@
+@@ -5845,16 +5783,12 @@
            completedCalls = withPostToolBatchArtifacts(
              completedCalls,
              batchHookResult.artifacts,
@@ -132465,7 +132543,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  
          for (const call of completedCalls) {
            this.runtimeContentGeneratorViews.delete(call.request.callId);
-@@ -5863,12 +5790,13 @@
+@@ -5863,12 +5797,13 @@
  
          this.recordToolResults(completedCalls);
  
@@ -132479,7 +132557,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            // failure points. Never leave the one span deliberately deferred
            // for PostToolBatch open when one of them throws.
            for (const call of completedCalls) {
-@@ -5882,90 +5810,12 @@
+@@ -5882,90 +5817,12 @@
            this.drainRequestQueueIfIdle();
          }
        }
@@ -167904,7 +167982,9 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
   * SPDX-License-Identifier: Apache-2.0
   *
   * Speculation Engine
-@@ -28,22 +29,19 @@
+@@ -27,23 +28,21 @@
++import { boundedFailureText } from '../tools/tools.js';
+ import { evaluateToolInvocationGuard } from '../core/tool-invocation-guard.js';
  import { getInvocationContext } from '../utils/invocation-context.js';
  import { stripToolResultImages } from '../services/visionBridge/tool-result-vision-bridge.js';
  import { OverlayFs } from './overlayFs.js';
@@ -167929,7 +168009,7 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
  // ---------------------------------------------------------------------------
  
  const debugLogger = createDebugLogger('SPECULATION');
-@@ -104,13 +102,13 @@
+@@ -104,13 +103,13 @@
  export async function startSpeculation(
    config: Config,
    suggestion: string,
@@ -167944,7 +168024,7 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
  
    const abortController = new AbortController();
  
-@@ -216,279 +214,276 @@
+@@ -216,279 +215,278 @@
    cacheSafe: import('../utils/forkedAgent.js').CacheSafeParams,
    modelOverride?: string,
  ): Promise<LoopResult> {
@@ -168197,7 +168277,9 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
 +                  functionResponse: {
 +                    ...(id ? { id } : {}),
 +                    name,
-+                    response: { error: `Tool '${name}' not found` },
++                    response: {
++                      error: boundedFailureText(`Tool '${name}' not found`),
++                    },
 +                  },
 +                };
 +                functionResponses.push(responsePart);
@@ -168461,7 +168543,7 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
  // ---------------------------------------------------------------------------
  // Accept speculation
  // ---------------------------------------------------------------------------
-@@ -502,41 +497,38 @@
+@@ -502,41 +500,38 @@
    geminiClient: GeminiClient,
  ): Promise<SpeculationResult> {
    const timeSavedMs = state.boundary
@@ -168529,7 +168611,7 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
  // Abort speculation
  // ---------------------------------------------------------------------------
  
-@@ -628,13 +620,13 @@
+@@ -628,13 +623,13 @@
  
      const augmentedPrompt = `The user just said: "${suggestionText}"
  The assistant responded: ${speculatedSummary || '(tool calls executed)'}
@@ -224913,13 +224995,14 @@ diff --git a/packages/core/src/tools/tool-search.ts b/packages/core/src/tools/to
 diff --git a/packages/core/src/tools/tools.test.ts b/packages/core/src/tools/tools.test.ts
 --- a/packages/core/src/tools/tools.test.ts
 +++ b/packages/core/src/tools/tools.test.ts
-@@ -5,16 +5,18 @@
+@@ -5,16 +5,19 @@
   */
  
  import { describe, it, expect, vi } from 'vitest';
  import type { ToolInvocation, ToolResult } from './tools.js';
  import type { PermissionDecision } from '../permissions/types.js';
  import {
++  boundedFailureText,
 +  cutToUtf8Bytes,
    DeclarativeTool,
    hasCycleInSchema,
@@ -224932,7 +225015,7 @@ diff --git a/packages/core/src/tools/tools.test.ts b/packages/core/src/tools/too
  class TestToolInvocation implements ToolInvocation<object, ToolResult> {
    constructor(
      readonly params: object,
-@@ -281,6 +283,43 @@
+@@ -281,6 +284,74 @@
          filePath: '/workspace/chart.png',
          mimeType: 'image/jpeg',
        }),
@@ -224974,6 +225057,37 @@ diff --git a/packages/core/src/tools/tools.test.ts b/packages/core/src/tools/too
 +  it('bounds one tool result at a positive whole number of bytes', () => {
 +    expect(Number.isSafeInteger(MAX_TOOL_RESULT_BYTES)).toBe(true);
 +    expect(MAX_TOOL_RESULT_BYTES).toBeGreaterThan(0);
++  });
++});
++
++describe('boundedFailureText', () => {
++  // The shape this exists for: a tool interpolated a model-supplied argument
++  // into its message, so the message is as large as the argument. The model
++  // composed that argument one turn earlier, so a full copy returns to the
++  // sender what it already holds.
++  const argument = 'A'.repeat(100_414);
++  const oversized = `Error writing to file '${argument}': ENAMETOOLONG`;
++
++  it('leaves a failure text inside the budget byte-identical', () => {
++    const message = "Error writing to file '/workspace/a.txt': ENOENT";
++    expect(boundedFailureText(message)).toBe(message);
++  });
++
++  it('bounds a failure text past the shared budget and states its true total', () => {
++    const bounded = boundedFailureText(oversized);
++    const body = bounded.slice(bounded.indexOf('\n\n---\n\n') + 7);
++
++    // What is kept is a prefix of what the tool built, cut at the shared
++    // budget rather than at a private one.
++    expect(Buffer.byteLength(body, 'utf8')).toBe(MAX_TOOL_RESULT_BYTES);
++    expect(oversized.startsWith(body)).toBe(true);
++    // The total is stated exactly: the whole string was in hand at the cut.
++    expect(bounded).toContain(
++      `${Buffer.byteLength(oversized, 'utf8')} bytes of failure text in total`,
++    );
++    // No continuation: the discarded bytes are a second copy of what the
++    // model itself sent, so there is nothing worth reading back.
++    expect(bounded).not.toContain('Continue with:');
 +  });
 +});
 diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
@@ -225132,7 +225246,7 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
      );
  
      if (errors) {
-@@ -482,12 +533,136 @@
+@@ -482,12 +533,178 @@
    url?: string;
    mimeType?: string;
    sizeBytes?: number;
@@ -225263,13 +225377,55 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 +  return encoded.subarray(0, end).toString('utf8');
 +}
 +
++/**
++ * The model's copy of a failed call's text, held to the shared per-result
++ * budget.
++ *
++ * A failure message is the one place a tool writes model-supplied input back
++ * out: the path it could not open, the pattern it could not compile, the tool
++ * name it did not recognise. Naming that input is worth doing — an error that
++ * named none would not say which call failed — but naming is not reproducing.
++ * The model composed the argument in the turn immediately before, so a full
++ * copy spends the context window returning to the sender what it already
++ * holds, and an argument that arrived merged or malformed makes that copy
++ * arbitrarily large. The two largest results in this deployment's recorded
++ * history were both this shape, and neither was tool output.
++ *
++ * No continuation is named, and that is a decision rather than an omission.
++ * The bytes past the cut are the tool's own prose plus, in the case this
++ * exists for, a second copy of what the model just sent; naming a file that
++ * read them back would invite the model to spend the window twice for
++ * nothing. Nothing is withheld by not naming one: this bounds the model's
++ * copy alone, and `error.message` — the operational half that the scrollback,
++ * the PostToolUseFailure hook and the telemetry span read — keeps the whole
++ * text.
++ *
++ * `total` is the exact byte length rather than an unknown, because the whole
++ * string is in hand at the moment of the cut; reporting it as unknown here
++ * would be choosing not to look.
++ */
++export function boundedFailureText(text: string): string {
++  const totalBytes = Buffer.byteLength(text, 'utf8');
++  if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++    return text;
++  }
++  const head = cutToUtf8Bytes(text, MAX_TOOL_RESULT_BYTES);
++  return boundedContent(head, {
++    returned: Buffer.byteLength(head, 'utf8'),
++    unit: 'bytes of failure text',
++    limit: MAX_TOOL_RESULT_BYTES,
++    limitUnit: 'bytes of failure text',
++    total: totalBytes,
++  });
++}
++
  export interface ToolResult {
    /**
     * Content meant to be included in LLM history.
     * This should represent the factual outcome of the tool execution.
     */
    llmContent: PartListUnion;
-@@ -630,29 +805,82 @@
+@@ -630,29 +847,82 @@
      return false;
    }
  

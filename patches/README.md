@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `9527e9892fa58ca808c161de4e20e36b70566b64404d177eaa715b26c0e03afa`
+- Review-diff SHA-256: `58817c80164a58cc78aa9283b4f11b462ad956aab492f5f2665b5eeed5abc0ca`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `b680036c617241d1449583047dab2e5a82dcfd493d5a9a10c2b2dc3d142f9e6a`
+- Transformer-manifest SHA-256: `fd595be128738ff5345f97a9d61be43b6eb8ab20f7a4060d061327bd6ee50c97`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -96,6 +96,18 @@ which refuses a request that no longer fits, and this budget is what keeps that
 refusal unreachable in ordinary work. Its magnitude is a policy choice recorded
 with the measurement it sits above, not a derivation, and bytes never stand in
 for tokens — nothing converts between them.
+
+A failed call's model-facing text is held to that same budget. A failure
+message is the one place a tool writes model-supplied input back out — the path
+it could not open, the pattern it could not compile, the tool name it did not
+recognise — and an argument that arrived merged or malformed makes that copy as
+large as the argument. The bound is applied where the model's copy is made
+rather than in each tool, so a tool cannot opt out of it and a new one inherits
+it. No continuation is named: the bytes past the cut are the tool's own prose
+plus a second copy of what the model just sent, so a file holding them would
+cost the window twice and return nothing the sender lacks. `error.message` is
+left whole on purpose, because the scrollback, the `PostToolUseFailure` hook and
+the sanitized telemetry span read it and want the operational summary in full.
 
 Compaction summarises the prompt the last turn was issued against and carries
 that turn, reasoning included, verbatim behind the snapshot, so the summary

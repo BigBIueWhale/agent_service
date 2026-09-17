@@ -2251,6 +2251,22 @@ def _validate_no_repair_validation_after(state: State) -> None:
     )
 
 
+# How a failed call's model-facing error field is built, tolerant of whichever
+# line shape prettier picks for it.
+_MODEL_FACING_ERROR_FIELD = re.compile(
+    r"response:\s*\{\s*(?:\.\.\.[A-Za-z_$][\w$]*,\s*)?error"
+)
+# Every module in this transformation's own file set that builds that field.
+_MODEL_FACING_ERROR_PRODUCERS = (
+    "packages/core/src/agents/runtime/agent-core.ts",
+    "packages/core/src/core/coreToolScheduler.ts",
+    "packages/core/src/core/geminiChat.ts",
+    "packages/core/src/core/turn.ts",
+    "packages/core/src/followup/speculation.ts",
+    "packages/core/src/services/chatCompressionService.ts",
+)
+
+
 def _validate_model_facing_failure_before(state: State) -> None:
     label = "model-facing failure text precondition"
     scheduler = "packages/core/src/core/coreToolScheduler.ts"
@@ -2271,6 +2287,10 @@ def _validate_model_facing_failure_before(state: State) -> None:
         "model-facing functionResponse from `error.message`, NOT from",
         label=label,
     )
+    # Nothing holds the model's copy of a failed call to any size: the
+    # response forwards whatever string it was handed, however long.
+    forbid_text(state, "packages/core/src/tools/tools.ts", "boundedFailureText", label=label)
+    forbid_text(state, scheduler, "boundedFailureText", label=label)
 
 
 def _validate_model_facing_failure_after(state: State) -> None:
@@ -2293,7 +2313,7 @@ def _validate_model_facing_failure_after(state: State) -> None:
             # telemetry span -- three readers that want the operational
             # summary, not the model's copy.
             "  modelFacingText?: string,",
-            "  const modelText = modelFacingText ?? error.message;",
+            "  const modelText = boundedFailureText(modelFacingText ?? error.message);",
             "        response: { error: modelText },",
             "    resultDisplay: resultDisplay ?? error.message,",
         ),
@@ -2338,6 +2358,97 @@ def _validate_model_facing_failure_after(state: State) -> None:
         "[error-envelope] mergeModelFacingFailureText",
         label=label,
     )
+
+    # ── The model's copy of a failure is bounded; the operational half is not
+    #
+    # A failure message is the one place a tool writes model-supplied input
+    # back out -- the path it could not open, the pattern it could not
+    # compile, the tool name it did not recognise. Naming that input is worth
+    # doing; reproducing it is not. The model composed the argument in the
+    # turn immediately before, so a full copy spends the window returning what
+    # the sender already holds, and an argument that arrived merged makes that
+    # copy as large as the argument itself: the two largest results in this
+    # deployment's recorded history were both this shape, and neither was tool
+    # output.
+    #
+    # `error.message` is deliberately left whole. The scrollback, the
+    # PostToolUseFailure hook and the sanitized telemetry span read it and
+    # want the operational summary in full; bounding it would take evidence
+    # away from three readers to save a window none of them spends.
+    _require_all(
+        state,
+        "packages/core/src/tools/tools.ts",
+        (
+            "export function boundedFailureText(text: string): string {",
+            "const totalBytes = Buffer.byteLength(text, 'utf8');",
+            "const head = cutToUtf8Bytes(text, MAX_TOOL_RESULT_BYTES);",
+            "limitUnit: 'bytes of failure text',",
+            "total: totalBytes,",
+        ),
+        label=label,
+    )
+    # No continuation is named, and that is the decision rather than an
+    # omission: the bytes past the cut are the tool's own prose plus a second
+    # copy of what the model just sent, so a file holding them would cost the
+    # window twice and return nothing the sender lacks.
+    bound_body = (
+        _source(state, "packages/core/src/tools/tools.ts", label=label)
+        .split("export function boundedFailureText(", 1)[1]
+        .split("\n}\n", 1)[0]
+    )
+    _require(
+        "continuation" not in bound_body,
+        f"{label}: boundedFailureText names a continuation. The discarded "
+        f"bytes are the model's own argument; there is nothing to read back.",
+    )
+    # Applied where the model's copy is made, so a tool cannot opt out of it
+    # and a tool added later inherits it without being told.
+    require_text(state, scheduler, "boundedFailureText(", count=2, label=label)
+    for path in (
+        "packages/core/src/agents/runtime/agent-core.ts",
+        "packages/core/src/followup/speculation.ts",
+    ):
+        require_text(state, path, "boundedFailureText(", count=1, label=label)
+
+    # A seventh producer would be a seventh place to forget the bound. Every
+    # module in this transformation's file set that builds the field is named
+    # above, so a new one has to join that list deliberately rather than
+    # appear quietly beside them. The set is not the whole tree:
+    # packages/core/src/core/turn-interruption.ts builds the same field and is
+    # not part of this transformation, so no state-based check can see it; the
+    # value it builds is a cancellation reason this process wrote, not text
+    # the model chose.
+    producers = sorted(
+        path
+        for path, text in state.items()
+        if path.startswith("packages/core/src/")
+        and path.endswith(".ts")
+        and not path.endswith(".test.ts")
+        and _MODEL_FACING_ERROR_FIELD.search(text)
+    )
+    _require(
+        producers == list(_MODEL_FACING_ERROR_PRODUCERS),
+        f"{label}: the modules building a failed call's model-facing error "
+        f"field changed to {producers}. A new one must either pass its text "
+        f"through boundedFailureText or carry only text this process wrote.",
+    )
+
+    # Executed in the build.
+    for path, case in (
+        (
+            "packages/core/src/tools/tools.test.ts",
+            "leaves a failure text inside the budget byte-identical",
+        ),
+        (
+            "packages/core/src/tools/tools.test.ts",
+            "bounds a failure text past the shared budget and states its true total",
+        ),
+        (
+            "packages/core/src/core/coreToolScheduler.test.ts",
+            "bounds the model's copy of an oversized failure",
+        ),
+    ):
+        require_text(state, path, case, label=label)
 
 
 def _validate_pdf_text_only_before(state: State) -> None:
