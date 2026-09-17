@@ -168024,7 +168024,7 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
  
    const abortController = new AbortController();
  
-@@ -216,279 +215,278 @@
+@@ -216,279 +215,279 @@
    cacheSafe: import('../utils/forkedAgent.js').CacheSafeParams,
    modelOverride?: string,
  ): Promise<LoopResult> {
@@ -168349,10 +168349,11 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
 +                  ...(id ? { id } : {}),
 +                  name,
 +                  response: {
-+                    error:
++                    error: boundedFailureText(
 +                      error instanceof Error
 +                        ? error.message
 +                        : 'Tool execution failed',
++                    ),
 +                  },
 +                },
 +              };
@@ -168543,7 +168544,7 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
  // ---------------------------------------------------------------------------
  // Accept speculation
  // ---------------------------------------------------------------------------
-@@ -502,41 +500,38 @@
+@@ -502,41 +501,38 @@
    geminiClient: GeminiClient,
  ): Promise<SpeculationResult> {
    const timeSavedMs = state.boundary
@@ -168611,7 +168612,7 @@ diff --git a/packages/core/src/followup/speculation.ts b/packages/core/src/follo
  // Abort speculation
  // ---------------------------------------------------------------------------
  
-@@ -628,13 +623,13 @@
+@@ -628,13 +624,13 @@
  
      const augmentedPrompt = `The user just said: "${suggestionText}"
  The assistant responded: ${speculatedSummary || '(tool calls executed)'}
@@ -214277,7 +214278,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
-@@ -1,15 +1,23 @@
+@@ -1,17 +1,29 @@
 +import { runCleanupSteps, withCleanup } from '../../utils/cleanup.js';
 +import { retainDelegatedTask } from '../../core/authored-instructions.js';
  /**
@@ -214293,16 +214294,22 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
 +import {
 +  BaseDeclarativeTool,
 +  BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
 +  Kind,
++  MAX_TOOL_RESULT_BYTES,
 +  undeclaredToolParamsError,
 +} from '../tools.js';
  import { ToolNames, ToolDisplayNames } from '../tool-names.js';
++import { persistSessionArtifact } from '../../utils/session-artifacts.js';
  import {
    EXCLUDED_TOOLS_FOR_SUBAGENTS,
    extractParentToolNames,
  } from '../../agents/runtime/agent-core.js';
  import type {
-@@ -38,13 +46,12 @@
+   ToolResult,
+   ToolResultDisplay,
+@@ -38,13 +50,12 @@
  import type { AgentExternalInput } from '../../agents/runtime/agent-types.js';
  import type { Content } from '@google/genai';
  import {
@@ -214316,7 +214323,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    buildPinnedWorktreeNotice,
    buildWorktreeNotice,
    normalizeForkTurns,
-@@ -70,12 +77,13 @@
+@@ -70,12 +81,13 @@
  import { getStartupContextLength } from '../../utils/environmentContext.js';
  import {
    childLaunchDepth,
@@ -214330,7 +214337,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  import {
    endSubagentSpan,
    runInSubagentSpanContext,
-@@ -85,37 +93,41 @@
+@@ -85,37 +97,41 @@
  } from '../../telemetry/index.js';
  import {
    AgentEventEmitter,
@@ -214375,7 +214382,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  import {
    buildAgentTranscriptAttach,
    getAgentMetaPath,
-@@ -127,80 +139,28 @@
+@@ -127,80 +143,28 @@
  import type {
    BackgroundSlotReservation,
    ResidentBackgroundAgent,
@@ -214462,7 +214469,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    description: string;
    prompt: string;
    /** Todo ID this top-level execution implements, when a visible plan exists. */
-@@ -537,15 +497,24 @@
+@@ -537,15 +501,24 @@
    // eslint-disable-next-line @typescript-eslint/no-explicit-any
    const ov = override as any;
    const agentRegistry = await ov.createToolRegistry(undefined, {
@@ -214490,7 +214497,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
   * Handle returned by {@link createApprovalModeOverride}.
   *
   * The `cleanup` callback MUST be invoked in a `finally` block after the
-@@ -611,13 +580,13 @@
+@@ -611,13 +584,13 @@
  function capturePersistedCliFlags(
    config: Config,
    resolvedApprovalMode: ApprovalMode,
@@ -214505,7 +214512,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      safeMode: config.isSafeMode(),
      sandbox: config.getSandbox() ?? null,
      screenReader: config.getScreenReader(),
-@@ -752,20 +721,12 @@
+@@ -752,20 +725,12 @@
   * The tool dynamically loads available agents and includes them in its description
   * for the model to choose from.
   */
@@ -214526,7 +214533,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    private readonly removeChangeListener: () => void;
  
    constructor(private readonly config: Config) {
-@@ -821,15 +782,14 @@
+@@ -821,15 +786,14 @@
            maxLength: 50,
            description:
              'Only valid with subagent_type "fork". Loads a project profile from .qwen/fork-profiles/<name>.md and applies its tools and optional promptHint. Cannot be combined with fork_tools.',
@@ -214543,7 +214550,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                name: TEAM_AGENT_NAME_PROPERTY,
                plan_mode_required: TEAM_AGENT_PLAN_REQUIRED_PROPERTY,
                read_only: TEAM_AGENT_READ_ONLY_PROPERTY,
-@@ -859,12 +819,36 @@
+@@ -859,12 +823,36 @@
        Kind.Agent,
        initialSchema,
        true, // isOutputMarkdown
@@ -214580,7 +214587,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      });
  
      // Initialize the tool asynchronously
-@@ -949,13 +933,13 @@
+@@ -949,13 +937,13 @@
  - If the agent description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.
  - If the user asks for agents "in parallel", group independent launches in a single message with multiple Agent tool use content blocks. Do not parallelize overlapping code changes.
  - Top-level regular subagents run in the background by default. Set \`run_in_background: false\` when the current turn must wait for the result before continuing. Nested agent launches run in the foreground and return to their direct parent; an explicit \`run_in_background: true\` request is rejected because nested agents cannot receive background completion notifications. Unnamed caller-owned \`working_dir\` launches default to foreground and cannot run in the background; named teammates may use one, but must be shut down before it is removed.
@@ -214595,7 +214602,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  Forks are cheap because they share your prompt cache. Don't set \`model\` on a fork — a different model can't reuse the parent's cache. Pass a short \`name\` (one or two words, lowercase) so the user can track the fork.
  
  **Don't peek.** For a background fork, do not read or tail its output unless the user explicitly asks for a progress check. You get a completion notification; trust it. Reading the transcript mid-flight pulls the fork's tool noise into your context, which defeats the point of forking.
-@@ -1001,14 +985,54 @@
+@@ -1001,14 +989,54 @@
  Since a significant piece of code was written and the task was completed, now use the test-runner agent to run the tests
  </commentary>
  assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
@@ -214652,7 +214659,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        properties?: {
          model?: {
            type: string;
-@@ -1032,24 +1056,30 @@
+@@ -1032,24 +1060,30 @@
          delete schema.properties.read_only;
        }
  
@@ -214684,7 +214691,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      if (
        !params.description ||
        typeof params.description !== 'string' ||
-@@ -1070,12 +1100,40 @@
+@@ -1070,12 +1104,40 @@
        params.todo_id !== undefined &&
        (typeof params.todo_id !== 'string' ||
          params.todo_id.trim() === '' ||
@@ -214725,7 +214732,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        if (
          typeof params.subagent_type !== 'string' ||
          params.subagent_type.trim() === ''
-@@ -1281,13 +1339,28 @@
+@@ -1281,13 +1343,28 @@
          if (params.plan_mode_required === true) {
            return 'Parameters "read_only" and "plan_mode_required" cannot be used together.';
          }
@@ -214755,7 +214762,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      const invocationParams = params.working_dir
        ? { ...params, isolation: undefined }
        : params;
-@@ -1372,22 +1445,12 @@
+@@ -1372,22 +1449,12 @@
      return {
        status: 'cancelled',
        terminateReason: signalAborted ? 'signal_aborted' : 'subagent_cancelled',
@@ -214778,8 +214785,48 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    // Non-throwing failure paths (ERROR / MAX_TURNS / TIMEOUT) — populate
    // `error`/`errorType` so endSubagentSpan sets standard OTel exception
    // attributes instead of a generic `'subagent failed'` placeholder.
-@@ -1421,14 +1484,21 @@
+@@ -1416,19 +1483,61 @@
+     // through getFinalText()). Setting this explicitly keeps attribute
+     // shape symmetric with the success-path derive so dashboards filtering
+     // on result_summary_present don't silently exclude failed runs.
+     // Review wenshao @ #4410.
+     resultSummaryPresent: false,
    };
++}
++
++/**
++ * The subagent's final text, bounded.
++ *
++ * How much a subagent produces is that agent's decision, not this tool's: it
++ * runs its own turns with its own tools and its own output limit, and the
++ * whole of its answer is handed back to the parent model. The complete text
++ * is written to the session's artifact store first, so the notice names the
++ * exact call that reads the rest back.
++ */
++async function boundedSubagentText(
++  config: Config,
++  text: string,
++): Promise<string> {
++  const totalBytes = Buffer.byteLength(text, 'utf8');
++  if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++    return text;
++  }
++  const head = cutToUtf8Bytes(text, MAX_TOOL_RESULT_BYTES);
++  const { filepath } = await persistSessionArtifact(
++    config,
++    Buffer.from(text, 'utf8'),
++    'txt',
++  );
++  return boundedContent(head, {
++    returned: Buffer.byteLength(head, 'utf8'),
++    unit: 'bytes of text',
++    limit: MAX_TOOL_RESULT_BYTES,
++    limitUnit: 'bytes of text',
++    total: totalBytes,
++    continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++      filepath,
++    )}, offset: 0`,
++  });
  }
  
  class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
@@ -214800,7 +214847,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      private readonly subagentManager: SubagentManager,
      params: AgentParams,
      private readonly forkProfile?: ForkProfile,
-@@ -1436,26 +1506,34 @@
+@@ -1436,26 +1545,34 @@
      super(params);
    }
  
@@ -214836,7 +214883,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        updateOutput(this.currentDisplay);
      }
    }
-@@ -1484,25 +1562,24 @@
+@@ -1484,25 +1601,24 @@
     * Sets up event listeners for real-time subagent progress updates
     */
    private setupEventListeners(
@@ -214863,7 +214910,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  
        this.updateDisplay(
          {
-@@ -1519,13 +1596,13 @@
+@@ -1519,13 +1635,13 @@
        );
        if (toolCallIndex >= 0) {
          this.currentToolCalls![toolCallIndex] = {
@@ -214878,7 +214925,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
              ? { resultDisplay: event.resultDisplay }
              : {}),
          };
-@@ -1549,53 +1626,79 @@
+@@ -1549,53 +1665,79 @@
            },
            updateOutput,
          );
@@ -214980,7 +215027,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        AgentEventType.TOOL_WAITING_APPROVAL,
        (...args: unknown[]) => {
          const event = args[0] as AgentApprovalRequestEvent;
-@@ -1702,12 +1805,13 @@
+@@ -1702,12 +1844,13 @@
      agentConfig: Config,
      eventEmitter: AgentEventEmitter = this.eventEmitter,
    ): Promise<{
@@ -214994,7 +215041,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      const generationConfig = geminiClient?.getChat().getGenerationConfig();
      const parentToolNames = generationConfig?.systemInstruction
        ? extractParentToolNames(generationConfig)
-@@ -1762,17 +1866,16 @@
+@@ -1762,17 +1905,16 @@
              forkTurns,
            ),
          ];
@@ -215014,7 +215061,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          const forkedMessages = buildForkedMessages(
            this.params.prompt,
            lastMessage,
-@@ -1789,22 +1892,20 @@
+@@ -1789,22 +1931,20 @@
                role: 'model' as const,
                parts: [{ text: 'Understood. Executing directive now.' }],
              },
@@ -215039,7 +215086,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      // Default: directive with fork boilerplate as task_prompt
      if (!taskPrompt) {
        taskPrompt = buildChildMessage(
-@@ -1870,22 +1971,32 @@
+@@ -1870,22 +2010,32 @@
            buildForkExecutionAllowlist(requestedTools, registeredToolNames),
          ),
        };
@@ -215073,7 +215120,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    // the reason back and re-executes until the configured cap prevents a
    // misconfigured hook from looping forever.
    private async runSubagentStopHookLoop(
-@@ -2171,17 +2282,22 @@
+@@ -2171,17 +2321,22 @@
        }
  
        // Get the results
@@ -215098,7 +215145,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // still reach telemetry instead of being clobbered by the catch
        // branch's exception derivation. Review wenshao @ #4410.
        //
-@@ -2196,28 +2312,40 @@
+@@ -2196,28 +2351,40 @@
            resultSummaryPresent: Boolean(
              subagentRawText && subagentRawText.length > 0,
            ),
@@ -215144,7 +215191,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        }
        return stopHookWarning;
      } catch (error) {
-@@ -2230,13 +2358,16 @@
+@@ -2230,13 +2397,16 @@
          error instanceof Error ? error.message : String(error);
        debugLogger.error(
          `[AgentTool] Error inside subagent background task: ${errorMessage}`,
@@ -215162,7 +215209,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        );
        return undefined;
      }
-@@ -2256,16 +2387,16 @@
+@@ -2256,16 +2426,16 @@
        // `error` marks the call failed in the scheduler, so tool-usage stats
        // record a failure — a blocked spawn must not count as a spawned
        // sub-agent (the scrollback summary derives its sub-agent count from
@@ -215183,7 +215230,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          subagentName:
            this.params.subagent_type ?? DEFAULT_BUILTIN_SUBAGENT_TYPE,
          taskDescription: this.params.description,
-@@ -2273,13 +2404,22 @@
+@@ -2273,13 +2443,22 @@
          status: 'failed' as const,
          terminateReason,
        },
@@ -215207,7 +215254,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      if (this.params.plan_mode_required === true) {
        if (
          !this.params.name ||
-@@ -2557,26 +2697,42 @@
+@@ -2557,26 +2736,42 @@
      // Hoisted so the outer catch can restore parent PermissionManager
      // state when an exception lands between `createApprovalModeOverride`
      // and the fg / bg / fork inner finallys (e.g. worktree provisioning
@@ -215250,7 +215297,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Forking is explicit: `subagent_type: "fork"` selects a fork. Any other
        // value — or an omitted subagent_type — resolves to a regular subagent
        // (general-purpose by default). Its execution mode is decided separately
-@@ -2600,19 +2756,12 @@
+@@ -2600,19 +2795,12 @@
          return this.buildSpawnBlockedResult(
            'Error: run_in_background: true is not supported from within a sub-agent. Run this agent in the foreground by omitting run_in_background or setting it to false.',
            'Background execution is not supported from a nested sub-agent',
@@ -215270,7 +215317,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        let subagentConfig: SubagentConfig;
  
        if (isFork) {
-@@ -2654,62 +2803,28 @@
+@@ -2654,62 +2842,28 @@
          this.params.model,
          subagentConfig,
        );
@@ -215347,7 +215394,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // agent — the caller could reap the worktree while the detached agent
          // is still running in it. validateToolParams rejects an explicit
          // run_in_background up front; this covers the other route into the
-@@ -2738,13 +2853,13 @@
+@@ -2738,13 +2892,13 @@
            subagentConfig.model,
            buildModelIdContext(this.config),
          );
@@ -215362,7 +215409,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          subagentRuntimeAuthOverrides = authType
            ? {
                authType,
-@@ -3022,38 +3137,35 @@
+@@ -3022,38 +3176,35 @@
          updateOutput,
        };
  
@@ -215404,7 +215451,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Per-spawn cleanup the subagent manager returns. The caller MUST
        // invoke this in the same `finally` block that wraps `execute()` —
        // see SubagentManager.createAgentHeadless's JSDoc for the leak
-@@ -3066,32 +3178,55 @@
+@@ -3066,32 +3217,55 @@
          const fork = await this.createForkSubagent(
            subagentRuntimeConfig as Config,
            backgroundEventEmitter,
@@ -215463,7 +215510,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // operating in an isolated worktree. The mechanical isolation
        // above guarantees correctness; the notice reduces user-visible
        // surprises when the model summarises file paths.
-@@ -3113,16 +3248,38 @@
+@@ -3113,16 +3287,38 @@
            ? buildPinnedWorktreeNotice(worktreeIsolation.path)
            : buildWorktreeNotice(
                this.config.getTargetDir(),
@@ -215503,7 +215550,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  
        // ── Background (async) execution path ──────────────────────
        if (shouldRunInBackground) {
-@@ -3150,47 +3307,23 @@
+@@ -3150,47 +3346,23 @@
          }
  
          // Create an independent AbortController — background agents
@@ -215554,7 +215601,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            hookOpts.agentId,
          );
          try {
-@@ -3259,12 +3392,13 @@
+@@ -3259,12 +3431,13 @@
              );
            }
  
@@ -215568,7 +215615,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            );
            void agentConfig
              .getToolRegistry()
-@@ -3272,23 +3406,18 @@
+@@ -3272,23 +3445,18 @@
              .catch((stopError) => {
                debugLogger.warn(
                  `[Agent] ToolRegistry stop after background registration failure failed: ${stopError}`,
@@ -215593,7 +215640,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            description: this.params.description,
            parentSessionId: sessionId,
            toolUseId: this.callId,
-@@ -3341,14 +3470,13 @@
+@@ -3341,14 +3509,13 @@
          let liveToolCallCount = 0;
          const refreshLiveStats = () => {
            const entry = registry.get(hookOpts.agentId);
@@ -215609,7 +215656,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          };
          const onToolCall = (event: AgentToolCallEvent) => {
            liveToolCallCount += 1;
-@@ -3393,14 +3521,13 @@
+@@ -3393,14 +3560,13 @@
            this.config.getMonitorRegistry().hasRunningForOwner(hookOpts.agentId),
          );
  
@@ -215625,7 +215672,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          };
  
          // Some launch modes have resources whose lifecycle cannot safely span
-@@ -3422,43 +3549,47 @@
+@@ -3422,43 +3588,47 @@
          let currentAbortController: AbortController | undefined =
            bgAbortController;
          let currentTurnPromise: Promise<void> | undefined;
@@ -215692,7 +215739,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // Fire-and-forget: start the subagent without blocking the parent.
          // For forks, wrap the body in runInForkContext so the recursive-fork
          // guard in execute() fires if the fork child's model calls `agent`
-@@ -3533,15 +3664,14 @@
+@@ -3533,15 +3703,14 @@
                  );
                }
  
@@ -215710,7 +215757,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                const hadWorktreeIsolation = worktreeIsolation !== null;
                const recordTerminalOutcome = () =>
                  recordSpanOutcome(
-@@ -3617,21 +3747,13 @@
+@@ -3617,21 +3786,13 @@
                  patchAgentMeta(metaPath, {
                    status: 'completed',
                    lastUpdatedAt: new Date().toISOString(),
@@ -215733,7 +215780,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                    completionStats,
                  );
                  persistBackgroundCancellation(
-@@ -3711,16 +3833,19 @@
+@@ -3711,16 +3872,19 @@
                  lastUpdatedAt: new Date().toISOString(),
                  lastError: errorMsg,
                });
@@ -215757,7 +215804,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // frame. The depth override is load-bearing for hot continuations:
          // send_message runs from the top level, but the continued agent must
          // retain the nesting budget it had when it was created.
-@@ -3737,12 +3862,13 @@
+@@ -3737,12 +3901,13 @@
                  isFork ? 'fork' : 'background',
                ),
                turnAbortController.signal,
@@ -215771,7 +215818,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                        turnAbortController,
                        recordOutcome,
                        fireStartHook,
-@@ -3825,12 +3951,13 @@
+@@ -3825,12 +3990,13 @@
            registry.registerResidentAgent(hookOpts.agentId, residentController);
            residentRegistered = true;
          }
@@ -215785,7 +215832,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            false,
          );
          currentTurnPromise.catch(reportUnexpectedBackgroundError);
-@@ -3850,89 +3977,12 @@
+@@ -3850,89 +4016,12 @@
        }
  
        // Same agent-identity frame as the background path: a foreground
@@ -215875,7 +215922,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Parent abort still propagates down (so ESC at the parent kills
        // the subagent), but child abort does NOT propagate up.
        const fgAbortController = new AbortController();
-@@ -3941,27 +3991,66 @@
+@@ -3941,27 +4030,66 @@
          fgAbortController.abort();
        } else {
          signal?.addEventListener('abort', onParentAbort, { once: true });
@@ -215949,7 +215996,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // skip XML notification and headless-holdback (see the registry for
        // the gating logic).
        //
-@@ -3970,32 +4059,18 @@
+@@ -3970,32 +4098,18 @@
        // as their backgrounded counterparts. Without this, post-mortem of a
        // cancelled / crashed foreground subagent has no on-disk evidence
        // beyond what made it into the parent's tool result.
@@ -215983,7 +216030,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            (input) => registry.queueExternalInput(hookOpts.agentId, input),
            () => registry.wakeExternalInputWaiters(hookOpts.agentId),
          );
-@@ -4024,14 +4099,13 @@
+@@ -4024,14 +4138,13 @@
        let fgLiveToolCallCount = 0;
        const refreshFgLiveStats = () => {
          const entry = registry.get(hookOpts.agentId);
@@ -215999,7 +216046,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        };
        const onFgToolCall = (...args: unknown[]) => {
          const event = args[0] as AgentToolCallEvent;
-@@ -4046,191 +4120,204 @@
+@@ -4046,191 +4159,210 @@
        const onFgUsageMetadata = () => {
          refreshFgLiveStats();
        };
@@ -216172,7 +216219,12 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
 +          // subagent had stopped without saying how far it had got, which is
 +          // the one fact that decides whether to resume, re-scope, or take the
 +          // assignment back.
-+          const finalText =
++          // Bounded once, where it is made. All three returns below take
++          // their model-facing text from this value, so holding it here is
++          // what keeps a subagent's whole answer out of the parent's window
++          // without three separate sites having to remember to do it.
++          const finalText = await boundedSubagentText(
++            this.config,
 +            appendStopHookBlockingCapWarning(
 +              toModelVisibleSubagentResult(
 +                subagent.getFinalText(),
@@ -216182,7 +216234,8 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
 +                subagent.getFinalMessageSlip(),
 +              ),
 +              stopHookWarning,
-+            ) + effectSuffix;
++            ) + effectSuffix,
++          );
 +          const wtSuffix = formatWorktreeSuffix(
 +            await cleanupWorktreeIsolation(),
 +          );
@@ -216376,7 +216429,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // happened between provisioning and the inner try (e.g. inside
        // `createApprovalModeOverride`, the agent constructor, or
        // anywhere else upstream of the foreground/background try blocks
-@@ -4257,21 +4344,29 @@
+@@ -4257,21 +4389,29 @@
        } catch (restoreError) {
          debugLogger.warn(
            `[AgentTool] restoreParentPM after error failed: ${restoreError}`,
@@ -217169,6 +217222,163 @@ diff --git a/packages/core/src/tools/agent/qwen38-subagent-scratch.ts b/packages
 +  fs.chmodSync(root, 0o700);
 +  return root;
 +}
+diff --git a/packages/core/src/tools/computer-use/tool.test.ts b/packages/core/src/tools/computer-use/tool.test.ts
+--- a/packages/core/src/tools/computer-use/tool.test.ts
++++ b/packages/core/src/tools/computer-use/tool.test.ts
+@@ -10,13 +10,13 @@
+   isHighRiskCall,
+ } from './tool.js';
+ import { ComputerUseClient } from './client.js';
+ import { COMPUTER_USE_SCHEMAS } from './schemas.js';
+ import { saveInstallState, isPackageSpecApproved } from './install-state.js';
+ import { approvalKey } from './constants.js';
+-import { ToolConfirmationOutcome } from '../tools.js';
++import { MAX_TOOL_RESULT_BYTES, ToolConfirmationOutcome } from '../tools.js';
+ import type { Part } from '@google/genai';
+ import type { Config } from '../../config/config.js';
+ 
+ function makeFakeClient(
+   callToolImpl: (name: string, args: unknown) => Promise<unknown>,
+ ) {
+@@ -124,12 +124,40 @@
+     const invocation = tool.build({ pid: 123 });
+     const result = await invocation.execute(new AbortController().signal);
+ 
+     expect(result.error).toBeDefined();
+     expect(String(result.llmContent)).toContain('something went wrong');
+   });
++
++  it('bounds a driver reply past the per-result budget and states its true total', async () => {
++    const tail = 'TAIL-MARKER';
++    const fake = makeFakeClient(async () => ({
++      content: [
++        { type: 'text', text: 'A'.repeat(MAX_TOOL_RESULT_BYTES) },
++        { type: 'text', text: tail },
++      ],
++      isError: false,
++    }));
++    ComputerUseClient.setSharedForTest(fake);
++
++    // The budget applies to the reply's text as a whole: neither part alone
++    // exceeds it, and together they do. Built without a Config, so there is
++    // no artifact store to page to and the notice offers nothing to continue
++    // with -- it still states the true total.
++    const tool = new ComputerUseTool(
++      'list_apps',
++      COMPUTER_USE_SCHEMAS.list_apps,
++    );
++    const result = await tool.build({}).execute(new AbortController().signal);
++
++    const parts = result.llmContent as Part[];
++    expect(parts[0].text).toContain('Bounded result:');
++    expect(parts[0].text).toContain('bytes of text in total');
++    expect(parts[0].text).not.toContain(tail);
++    expect(parts[0].text).not.toContain('Continue with:');
++  });
+ });
+ 
+ // ---------------------------------------------------------------------------
+ // Bidirectional type coercion tests
+ // ---------------------------------------------------------------------------
+ 
+diff --git a/packages/core/src/tools/computer-use/tool.ts b/packages/core/src/tools/computer-use/tool.ts
+--- a/packages/core/src/tools/computer-use/tool.ts
++++ b/packages/core/src/tools/computer-use/tool.ts
+@@ -4,19 +4,24 @@
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import {
+   BaseDeclarativeTool,
+   BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
+   Kind,
++  MAX_TOOL_RESULT_BYTES,
+   ToolConfirmationOutcome,
+   type ToolInvocation,
+   type ToolResult,
+   type ToolCallConfirmationDetails,
+   type ToolConfirmationPayload,
+ } from '../tools.js';
++import { ToolNames } from '../tool-names.js';
++import { persistSessionArtifact } from '../../utils/session-artifacts.js';
+ import type { PermissionDecision } from '../../permissions/types.js';
+ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+ import type { Part, PartListUnion } from '@google/genai';
+ import { ComputerUseClient } from './client.js';
+ import type { ComputerUseToolName, ComputerUseToolSchema } from './schemas.js';
+ import { COMPUTER_USE_SCHEMAS } from './schemas.js';
+@@ -283,16 +288,68 @@
+         returnDisplay: errorText,
+         error: { message: errorText },
+       };
+     }
+ 
+     return {
+-      llmContent,
++      llmContent: await this.boundedReplyParts(llmContent),
+       returnDisplay,
+     };
+   }
++
++  /**
++   * The driver's reply, bounded.
++   *
++   * How much cua-driver returns is the driver's decision, not this tool's.
++   * The budget applies to the reply's text as a whole rather than per part,
++   * because a reply of a hundred parts each just under the bound is exactly
++   * what a per-part limit waves through. Screenshots and other non-text parts
++   * are kept: they are what the model is meant to see. Without a `Config`
++   * there is no artifact store to write to and so nothing to continue from;
++   * the notice then states the true total and omits the continuation, which
++   * is the honest reading of a reply this tool cannot page.
++   */
++  private async boundedReplyParts(
++    content: PartListUnion,
++  ): Promise<PartListUnion> {
++    const parts = Array.isArray(content) ? content : [content];
++    const texts: string[] = [];
++    for (const part of parts) {
++      const text = (part as Part).text;
++      if (typeof text === 'string') texts.push(text);
++    }
++    const whole = texts.join('\n');
++    const totalBytes = Buffer.byteLength(whole, 'utf8');
++    if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++      return content;
++    }
++    const head = cutToUtf8Bytes(whole, MAX_TOOL_RESULT_BYTES);
++    let continuation: string | undefined;
++    if (this.config) {
++      const { filepath } = await persistSessionArtifact(
++        this.config,
++        Buffer.from(whole, 'utf8'),
++        'txt',
++      );
++      continuation = `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++        filepath,
++      )}, offset: 0`;
++    }
++    const notice = boundedContent(head, {
++      returned: Buffer.byteLength(head, 'utf8'),
++      unit: 'bytes of text',
++      limit: MAX_TOOL_RESULT_BYTES,
++      limitUnit: 'bytes of text',
++      total: totalBytes,
++      ...(continuation === undefined ? {} : { continuation }),
++    });
++    return [
++      { text: notice },
++      ...parts.filter((part) => typeof (part as Part).text !== 'string'),
++    ];
++  }
+ }
+ 
+ export class ComputerUseTool extends BaseDeclarativeTool<
+   ComputerUseParams,
+   ToolResult
+ > {
 diff --git a/packages/core/src/tools/create-sub-session.test.ts b/packages/core/src/tools/create-sub-session.test.ts
 --- a/packages/core/src/tools/create-sub-session.test.ts
 +++ b/packages/core/src/tools/create-sub-session.test.ts
@@ -227325,6 +227535,159 @@ diff --git a/packages/core/src/tools/web-search.ts b/packages/core/src/tools/web
        ToolDisplayNames.WEB_SEARCH,
        getWebSearchToolDescription(),
        Kind.Search,
+diff --git a/packages/core/src/tools/workflow/workflow.test.ts b/packages/core/src/tools/workflow/workflow.test.ts
+--- a/packages/core/src/tools/workflow/workflow.test.ts
++++ b/packages/core/src/tools/workflow/workflow.test.ts
+@@ -16,12 +16,14 @@
+ import {
+   DEFAULT_MAX_AGENTS_PER_RUN,
+   MAX_WORKFLOW_AGENTS_ENV,
+   MAX_WORKFLOW_CONCURRENCY_ENV,
+ } from '../../agents/runtime/workflow-orchestrator.js';
+ import { Storage } from '../../config/storage.js';
++import { MAX_TOOL_RESULT_BYTES } from '../tools.js';
++import { sessionArtifactDirectory } from '../../utils/session-artifacts.js';
+ 
+ function fakeConfig(): Config {
+   return {} as unknown as Config;
+ }
+ 
+ /**
+@@ -429,12 +431,42 @@
+     const result = await invocation.execute(new AbortController().signal);
+     expect(result.error).toBeUndefined();
+     const llmText = (result.llmContent as Array<{ text: string }>)[0].text;
+     expect(JSON.parse(llmText)).toEqual(['T:a', 'T:b']);
+   });
+ 
++  it('bounds a workflow result past the per-result budget and names the file holding it', async () => {
++    const projectDir = await fs.mkdtemp(
++      path.join(os.tmpdir(), 'workflow-bound-test-'),
++    );
++    try {
++      const config = {
++        getSessionId: () => 'session-1',
++        storage: { getProjectDir: () => projectDir },
++      } as unknown as Config;
++      const tool = new WorkflowTool(config, {
++        dispatch: async (prompt: string) => `T:${prompt}`,
++      });
++      const invocation = tool.build({
++        script: `return "A".repeat(${MAX_TOOL_RESULT_BYTES}) + "TAIL-MARKER";`,
++      });
++      const result = await invocation.execute(new AbortController().signal);
++
++      expect(result.error).toBeUndefined();
++      const llmText = (result.llmContent as Array<{ text: string }>)[0].text;
++      expect(llmText).toContain('Bounded result:');
++      expect(llmText).toContain('Continue with: read_file');
++      expect(llmText).not.toContain('TAIL-MARKER');
++      expect((await fs.readdir(sessionArtifactDirectory(config))).length).toBe(
++        1,
++      );
++    } finally {
++      await fs.rm(projectDir, { recursive: true, force: true });
++    }
++  });
++
+   // P3 (PR #5xxx): schema mode end-to-end through WorkflowTool. The
+   // dispatch returns the validated structured payload as an object; the
+   // sandbox revives it per-call into the vm realm; the script reads it
+   // as a vm-realm object; safeStringifyResult JSON-stringifies it for the
+   // LLM. A regression in any layer of that chain would surface here.
+   it('execute() runs agent({schema}) end-to-end and returns the revived object', async () => {
+diff --git a/packages/core/src/tools/workflow/workflow.ts b/packages/core/src/tools/workflow/workflow.ts
+--- a/packages/core/src/tools/workflow/workflow.ts
++++ b/packages/core/src/tools/workflow/workflow.ts
+@@ -10,20 +10,24 @@
+  * fan-out via `parallel()` / `pipeline()` throttled at the dispatch layer.
+  */
+ 
+ import {
+   BaseDeclarativeTool,
+   BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
+   Kind,
++  MAX_TOOL_RESULT_BYTES,
+   type ToolInvocation,
+   type ToolResult,
+   type ToolResultDisplay,
+   type ToolLocation,
+ } from '../tools.js';
+ import type { ShellExecutionConfig } from '../../services/shellExecutionService.js';
+ import { ToolNames, ToolDisplayNames } from '../tool-names.js';
++import { persistSessionArtifact } from '../../utils/session-artifacts.js';
+ // FIX-10 (REUSE-I1): import ToolErrorType to use the standard machine-readable
+ // error code rather than an ad-hoc bare `{ message }` object.
+ import { ToolErrorType } from '../tool-error.js';
+ import type { Config } from '../../config/config.js';
+ import type { WorkflowAgentDispatch } from '../../agents/runtime/workflow-orchestrator.js';
+ import {
+@@ -286,13 +290,15 @@
+               },
+             }
+           : {}),
+       });
+ 
+       return {
+-        llmContent: [{ text: llmText }],
++        llmContent: [
++          { text: await boundedWorkflowText(this.config, llmText) },
++        ],
+         returnDisplay: usageBanner + '```json\n' + displayJson + '\n```',
+       };
+     } else {
+       // FIX-H (Round 5 SEC Minor): surface only the message — never the
+       // stack frame — to the LLM and the UI. Caller's stderr/debug log
+       // can still see the full stack via standard logging mechanisms.
+@@ -468,12 +474,46 @@
+ 
+ /**
+  * T12 / T18 (PR #4732 R1): serialize the script's return value, falling back
+  * to a clear placeholder on BigInt / circular / non-JSON values so a
+  * successful workflow is not reported as a failure.
+  */
++/**
++ * The workflow's returned value, bounded.
++ *
++ * A workflow script returns whatever it computed -- a file it read, every
++ * agent result it collected -- so the size is the script's decision, not this
++ * tool's. The complete text is written to the session's artifact store first,
++ * so the notice names the exact call that reads the rest back.
++ */
++async function boundedWorkflowText(
++  config: Config,
++  text: string,
++): Promise<string> {
++  const totalBytes = Buffer.byteLength(text, 'utf8');
++  if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++    return text;
++  }
++  const head = cutToUtf8Bytes(text, MAX_TOOL_RESULT_BYTES);
++  const { filepath } = await persistSessionArtifact(
++    config,
++    Buffer.from(text, 'utf8'),
++    'txt',
++  );
++  return boundedContent(head, {
++    returned: Buffer.byteLength(head, 'utf8'),
++    unit: 'bytes of text',
++    limit: MAX_TOOL_RESULT_BYTES,
++    limitUnit: 'bytes of text',
++    total: totalBytes,
++    continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++      filepath,
++    )}, offset: 0`,
++  });
++}
++
+ function safeStringifyResult(result: unknown): string {
+   if (result === undefined) return '(workflow returned no value)';
+   if (typeof result === 'string') return result;
+   try {
+     return JSON.stringify(result, null, 2);
+   } catch {
 diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tools/write-file.test.ts
 --- a/packages/core/src/tools/write-file.test.ts
 +++ b/packages/core/src/tools/write-file.test.ts

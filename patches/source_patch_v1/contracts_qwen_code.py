@@ -2404,11 +2404,24 @@ def _validate_model_facing_failure_after(state: State) -> None:
     # Applied where the model's copy is made, so a tool cannot opt out of it
     # and a tool added later inherits it without being told.
     require_text(state, scheduler, "boundedFailureText(", count=2, label=label)
-    for path in (
+    require_text(
+        state,
         "packages/core/src/agents/runtime/agent-core.ts",
+        "boundedFailureText(",
+        count=1,
+        label=label,
+    )
+    # speculation builds the field at two sites: the unknown-tool refusal and
+    # the catch around a tool that threw. The second carries a thrown error's
+    # message, which is exactly where a tool interpolates the path it could
+    # not open, so it is held to the same bound as the first.
+    require_text(
+        state,
         "packages/core/src/followup/speculation.ts",
-    ):
-        require_text(state, path, "boundedFailureText(", count=1, label=label)
+        "boundedFailureText(",
+        count=2,
+        label=label,
+    )
 
     # A seventh producer would be a seventh place to forget the bound. Every
     # module in this transformation's file set that builds the field is named
@@ -5408,6 +5421,18 @@ _MODEL_FACING_NON_TOOL_SOURCES = (
     "packages/core/src/services/shellExecutionService.ts",
 )
 
+# Tools that live in a subdirectory of `src/tools`. `_tool_sources` looks only
+# at the top level, so a nested tool is invisible to the detector and is named
+# here instead. Each returns a result sized by something other than this
+# process -- another agent's whole answer, a workflow script's return value, a
+# desktop driver's reply -- and each must state its bound through the one
+# notice.
+_BOUNDED_SUBDIRECTORY_TOOLS = (
+    "packages/core/src/tools/agent/agent.ts",
+    "packages/core/src/tools/computer-use/tool.ts",
+    "packages/core/src/tools/workflow/workflow.ts",
+)
+
 
 def _tool_sources(state: State) -> dict[str, str]:
     prefix = "packages/core/src/tools/"
@@ -5468,6 +5493,8 @@ def _validate_bounded_output_before(state: State) -> None:
         "packages/core/src/tools/tool-registry.ts",
         "packages/core/src/tools/web-search.ts",
     ):
+        forbid_text(state, path, "boundedContent", label=label)
+    for path in _BOUNDED_SUBDIRECTORY_TOOLS:
         forbid_text(state, path, "boundedContent", label=label)
     # The shell service words its own capture-limit notice, one layer below the
     # tools and out of the one-notice detector's reach, and keeps the fact that
@@ -5568,6 +5595,9 @@ def _validate_bounded_output_after(state: State) -> None:
     ):
         require_text(state, path, "boundedContent(", count=1, label=label)
 
+    for path in _BOUNDED_SUBDIRECTORY_TOOLS:
+        require_text(state, path, "boundedContent(", count=1, label=label)
+
     # The comment that deferred sizing to a turn-level batch bound goes with
     # the bound this tool now applies itself: a result sized by the server on
     # the other end is this tool's to hold, not a later layer's.
@@ -5650,6 +5680,16 @@ def _validate_bounded_output_after(state: State) -> None:
         (
             "packages/core/src/tools/create-sub-session.test.ts",
             "bounds a first-turn result past the per-result budget and names "
+            "the file holding it",
+        ),
+        (
+            "packages/core/src/tools/computer-use/tool.test.ts",
+            "bounds a driver reply past the per-result budget and states its "
+            "true total",
+        ),
+        (
+            "packages/core/src/tools/workflow/workflow.test.ts",
+            "bounds a workflow result past the per-result budget and names "
             "the file holding it",
         ),
     ):
