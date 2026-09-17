@@ -5418,6 +5418,7 @@ _RETIRED_NOTICES = (
 # here is what keeps that rule enforced rather than merely true because
 # whoever last edited them happened to write it correctly.
 _MODEL_FACING_NON_TOOL_SOURCES = (
+    "packages/core/src/services/monitorRegistry.ts",
     "packages/core/src/services/shellExecutionService.ts",
 )
 
@@ -5496,6 +5497,19 @@ def _validate_bounded_output_before(state: State) -> None:
         forbid_text(state, path, "boundedContent", label=label)
     for path in _BOUNDED_SUBDIRECTORY_TOOLS:
         forbid_text(state, path, "boundedContent", label=label)
+    # A successful result's copy of the model's own argument is held to
+    # nothing, and several tools write one back out at full length.
+    forbid_text(
+        state, "packages/core/src/tools/tools.ts", "boundedEchoText", label=label
+    )
+    # One layer below the tools, the monitor registry cuts the event line the
+    # model actually reads and words that cut itself.
+    require_text(
+        state,
+        "packages/core/src/services/monitorRegistry.ts",
+        "'...[truncated]'",
+        label=label,
+    )
     # The shell service words its own capture-limit notice, one layer below the
     # tools and out of the one-notice detector's reach, and keeps the fact that
     # it truncated inside that prose rather than on the result.
@@ -5592,11 +5606,44 @@ def _validate_bounded_output_after(state: State) -> None:
         "packages/core/src/tools/tool-search.ts",
         "packages/core/src/tools/web-fetch.ts",
         "packages/core/src/tools/web-search.ts",
+        "packages/core/src/tools/write-file.ts",
     ):
         require_text(state, path, "boundedContent(", count=1, label=label)
 
     for path in _BOUNDED_SUBDIRECTORY_TOOLS:
         require_text(state, path, "boundedContent(", count=1, label=label)
+
+    # A result that echoes the model's own argument states its cut through one
+    # helper, which names no continuation because the discarded bytes are the
+    # sender's. write-file is deliberately not in this list: the bytes it
+    # echoes are ones a user changed and the model has not seen, so its result
+    # names the file that holds them through boundedContent instead.
+    require_text(
+        state,
+        "packages/core/src/tools/tools.ts",
+        "export function boundedEchoText(text: string): string {",
+        label=label,
+    )
+    for path in (
+        "packages/core/src/tools/monitor.ts",
+        "packages/core/src/tools/notebook-edit.ts",
+        "packages/core/src/tools/todoWrite.ts",
+        "packages/core/src/tools/web-fetch.ts",
+    ):
+        require_text(state, path, "boundedEchoText(", count=1, label=label)
+    require_text(
+        state,
+        "packages/core/src/tools/todoWrite.ts",
+        "formatOutputBound(",
+        count=1,
+        label=label,
+    )
+    forbid_text(
+        state,
+        "packages/core/src/services/monitorRegistry.ts",
+        "'...[truncated]'",
+        label=label,
+    )
 
     # The comment that deferred sizing to a turn-level batch bound goes with
     # the bound this tool now applies itself: a result sized by the server on
@@ -5691,6 +5738,24 @@ def _validate_bounded_output_after(state: State) -> None:
             "packages/core/src/tools/workflow/workflow.test.ts",
             "bounds a workflow result past the per-result budget and names "
             "the file holding it",
+        ),
+        (
+            "packages/core/src/tools/tools.test.ts",
+            "bounds an echoed argument past the shared budget and states its "
+            "true total",
+        ),
+        (
+            "packages/core/src/tools/todoWrite.test.ts",
+            "bounds the active Todo reminder through the one notice",
+        ),
+        (
+            "packages/core/src/services/monitorRegistry.test.ts",
+            "bounds a long event line through the one notice",
+        ),
+        (
+            "packages/core/src/tools/write-file.test.ts",
+            "bounds a user-modified content echo and names the file that "
+            "holds it",
         ),
     ):
         require_text(state, path, case, label=label)

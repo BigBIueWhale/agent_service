@@ -187867,6 +187867,77 @@ diff --git a/packages/core/src/services/microcompaction/microcompact.ts b/packag
    if (tokensSaved === 0 && triggerReason !== 'size') {
      return { history };
    }
+diff --git a/packages/core/src/services/monitorRegistry.test.ts b/packages/core/src/services/monitorRegistry.test.ts
+--- a/packages/core/src/services/monitorRegistry.test.ts
++++ b/packages/core/src/services/monitorRegistry.test.ts
+@@ -579,22 +579,27 @@
+     expect(ac1.signal.aborted).toBe(true);
+     expect(ac2.signal.aborted).toBe(true);
+     expect(registry.get('a')!.status).toBe('cancelled');
+     expect(registry.get('b')!.status).toBe('cancelled');
+   });
+ 
+-  it('truncates long event lines', () => {
++  it('bounds a long event line through the one notice', () => {
+     const callback = vi.fn();
+     registry.setNotificationCallback(callback);
+     registry.register(createEntry());
+ 
+     const longLine = 'x'.repeat(3000);
+     registry.emitEvent('mon-1', longLine);
+ 
+     const [, modelText] = callback.mock.calls[0] as [string, string];
+-    expect(modelText).toContain('...[truncated]');
++    // This is the cut the model actually reads: the Monitor tool's own
++    // 4096-character line guard sits behind it and its marker never
++    // survives this one. So this is where the fact has to be stated.
++    expect(modelText).toContain('Bounded result:');
++    expect(modelText).toContain('3000 characters of this event line in total');
++    expect(modelText).not.toContain('...[truncated]');
+     expect(modelText).not.toContain('x'.repeat(3000));
+   });
+ 
+   it('escapes XML metacharacters in event lines', () => {
+     const callback = vi.fn();
+     registry.setNotificationCallback(callback);
+diff --git a/packages/core/src/services/monitorRegistry.ts b/packages/core/src/services/monitorRegistry.ts
+--- a/packages/core/src/services/monitorRegistry.ts
++++ b/packages/core/src/services/monitorRegistry.ts
+@@ -21,12 +21,13 @@
+ import { todoWorkChainContext } from '../utils/promptIdContext.js';
+ import {
+   stripDisplayControlChars,
+   truncateNotificationLabel,
+ } from '../utils/terminalSafe.js';
+ import { escapeXml } from '../utils/xml.js';
++import { formatOutputBound } from '../tools/tools.js';
+ import type { TaskBase, TaskRegistration } from '../agents/tasks/types.js';
+ 
+ const debugLogger = createDebugLogger('MONITOR_REGISTRY');
+ 
+ const EVENT_LINE_TRUNCATE = 2000;
+ export const MAX_CONCURRENT_MONITORS = 16;
+@@ -220,13 +221,19 @@
+     entry.eventCount++;
+     entry.lastEventTime = Date.now();
+     this.resetIdleTimer(entry);
+ 
+     const truncatedLine =
+       line.length > EVENT_LINE_TRUNCATE
+-        ? line.slice(0, EVENT_LINE_TRUNCATE) + '...[truncated]'
++        ? `${line.slice(0, EVENT_LINE_TRUNCATE)} ${formatOutputBound({
++            returned: EVENT_LINE_TRUNCATE,
++            unit: 'characters of this event line',
++            limit: EVENT_LINE_TRUNCATE,
++            limitUnit: 'characters of this event line',
++            total: line.length,
++          })}`
+         : line;
+ 
+     this.emitNotification(entry, truncatedLine);
+ 
+     // Auto-stop if max events reached. Settle BEFORE aborting so that any
+     // synchronous abort listener that flushes buffered output back through
 diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/packages/core/src/services/postCompactAttachments.test.ts
 --- a/packages/core/src/services/postCompactAttachments.test.ts
 +++ b/packages/core/src/services/postCompactAttachments.test.ts
@@ -220724,7 +220795,27 @@ diff --git a/packages/core/src/tools/monitor.test.ts b/packages/core/src/tools/m
 diff --git a/packages/core/src/tools/monitor.ts b/packages/core/src/tools/monitor.ts
 --- a/packages/core/src/tools/monitor.ts
 +++ b/packages/core/src/tools/monitor.ts
-@@ -64,12 +64,25 @@
+@@ -29,13 +29,18 @@
+   ToolCallConfirmationDetails,
+   ToolExecuteConfirmationDetails,
+   ToolConfirmationOutcome,
+   ToolConfirmationPayload,
+ } from './tools.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedEchoText,
++  Kind,
++} from './tools.js';
+ import { getErrorMessage } from '../utils/errors.js';
+ import {
+   buildShellExecWarnings,
+   getCommandRoot,
+   getShellConfiguration,
+   hasUnsafeMonitorBackgroundOperator,
+@@ -64,12 +69,25 @@
  const MAX_MAX_EVENTS = 10000;
  const DEFAULT_IDLE_TIMEOUT_MS = 300_000; // 5 minutes
  const MAX_IDLE_TIMEOUT_MS = 600_000; // 10 minutes
@@ -220750,7 +220841,7 @@ diff --git a/packages/core/src/tools/monitor.ts b/packages/core/src/tools/monito
  
  function truncateDisplayDescription(description: string): string {
    return description.length > MAX_DISPLAY_DESCRIPTION_LENGTH
-@@ -547,29 +560,27 @@
+@@ -547,29 +565,27 @@
        if (
          !buffer.value.includes('\n') &&
          buffer.value.length > PARTIAL_LINE_BUFFER_CAP
@@ -220784,6 +220875,32 @@ diff --git a/packages/core/src/tools/monitor.ts b/packages/core/src/tools/monito
      child.stdout?.on('data', (data: Buffer) => processLines(stdoutBuf, data));
      child.stderr?.on('data', (data: Buffer) => processLines(stderrBuf, data));
  
+@@ -651,22 +667,23 @@
+         llmContent: `Monitor failed to start: ${getErrorMessage(earlySpawnError)}`,
+         returnDisplay: `Monitor failed: ${getErrorMessage(earlySpawnError)}`,
+       };
+     }
+ 
+     return {
+-      llmContent:
++      llmContent: boundedEchoText(
+         `Monitor started.\n` +
+         `id: ${monitorId}\n` +
+         `command: ${command}\n` +
+         `description: ${description}\n` +
+         `max_events: ${maxEvents}\n` +
+         `idle_timeout: ${idleTimeoutMs}ms\n` +
+         `Events will be delivered as notifications. ` +
+         `The monitor auto-stops after ${maxEvents} events or ${idleTimeoutMs}ms of silence.\n` +
+-        `To inspect: /tasks (text) or the interactive Background tasks dialog (focus the footer Background tasks pill, then Enter — detail view + live updates).`,
++          `To inspect: /tasks (text) or the interactive Background tasks dialog (focus the footer Background tasks pill, then Enter — detail view + live updates).`,
++      ),
+       returnDisplay: `Monitor started: ${displayDescription} (${monitorId})`,
+     };
+   }
+ }
+ 
+ export class MonitorTool extends BaseDeclarativeTool<
 diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/tools/notebook-edit.test.ts
 --- a/packages/core/src/tools/notebook-edit.test.ts
 +++ b/packages/core/src/tools/notebook-edit.test.ts
@@ -220852,7 +220969,21 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
  import { ApprovalMode } from '../config/config.js';
  import { detectLineEnding } from '../services/fileSystemService.js';
  import type { LineEnding } from '../services/fileSystemService.js';
-@@ -68,18 +73,12 @@
+@@ -17,12 +22,13 @@
+   ToolLocation,
+   ToolResult,
+ } from './tools.js';
+ import {
+   BaseDeclarativeTool,
+   BaseToolInvocation,
++  boundedEchoText,
+   Kind,
+   ToolConfirmationOutcome,
+ } from './tools.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+ import { createPatchSmart, getDiffStat } from './diffOptions.js';
+ import { FileOperation } from '../telemetry/metrics.js';
+@@ -68,18 +74,12 @@
    cell_id?: string;
    new_source?: string;
    cell_type?: EditableNotebookCellType;
@@ -220871,7 +221002,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
    editedCellType?: NotebookCellType;
    language: string;
    mode: NotebookEditMode;
-@@ -423,13 +422,13 @@
+@@ -423,13 +423,13 @@
    NotebookEditToolParams,
    ToolResult
  > {
@@ -220886,7 +221017,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
  
    override toolLocations(): ToolLocation[] {
      return [{ path: this.params.notebook_path }];
-@@ -529,17 +528,17 @@
+@@ -529,17 +529,17 @@
      );
      if (!postDecision.ok) {
        throw new StructuredToolError(postDecision.rawMessage, postDecision.type);
@@ -220906,7 +221037,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
            bom,
            encoding,
            lineEnding,
-@@ -636,13 +635,13 @@
+@@ -636,13 +636,13 @@
            bom: prepared.bom,
            encoding: prepared.encoding,
            lineEnding: prepared.lineEnding,
@@ -220921,7 +221052,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
            prepared.updatedContent,
          );
        }
-@@ -675,13 +674,13 @@
+@@ -675,13 +675,13 @@
          'Current',
          'Proposed',
        );
@@ -220936,7 +221067,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
        logFileOperation(
          this.config,
          new FileOperationEvent(
-@@ -700,13 +699,13 @@
+@@ -700,21 +700,21 @@
          originalContent: prepared.originalContent,
          newContent: prepared.updatedContent,
          diffStat,
@@ -220951,7 +221082,16 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
                  ? ''
                  : `\n\nUpdated source:\n\n---\n\n${normalizeSource(this.params.new_source ?? '')}`
              }`;
-@@ -731,21 +730,12 @@
+       return {
+-        llmContent,
++        llmContent: boundedEchoText(llmContent),
+         returnDisplay: displayResult,
+         resultFilePaths: [this.params.notebook_path],
+       };
+     } catch (error) {
+       const message = error instanceof Error ? error.message : String(error);
+       return {
+@@ -731,21 +731,12 @@
  
  export class NotebookEditTool
    extends BaseDeclarativeTool<NotebookEditToolParams, ToolResult>
@@ -220973,7 +221113,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
        ToolDisplayNames.NOTEBOOK_EDIT,
        `Edits a Jupyter notebook (.ipynb) safely at the cell level. Use this instead of ${ToolNames.EDIT} or ${ToolNames.WRITE_FILE} for notebook cells. Supports replacing, inserting, and deleting cells. Always read the notebook first with ${ToolNames.READ_FILE}; then use the cell IDs shown in that output.`,
        Kind.Edit,
-@@ -845,73 +835,14 @@
+@@ -845,73 +836,14 @@
    protected createInvocation(
      params: NotebookEditToolParams,
    ): ToolInvocation<NotebookEditToolParams, ToolResult> {
@@ -221049,7 +221189,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      _abortSignal: AbortSignal,
    ): ModifyContext<NotebookEditToolParams> {
      const currentContentSnapshots = new Map<string, string>();
-@@ -935,39 +866,28 @@
+@@ -935,39 +867,28 @@
        getCurrentContent: async (
          params: NotebookEditToolParams,
        ): Promise<string> => readCurrentContentSnapshot(params),
@@ -225231,10 +225371,50 @@ diff --git a/packages/core/src/tools/team-plan-approval.test.ts b/packages/core/
      expect(result.error?.message).toContain('Only the team leader');
    });
  
+diff --git a/packages/core/src/tools/todoWrite.test.ts b/packages/core/src/tools/todoWrite.test.ts
+--- a/packages/core/src/tools/todoWrite.test.ts
++++ b/packages/core/src/tools/todoWrite.test.ts
+@@ -395,13 +395,13 @@
+         planId: 'plan-to-clear',
+         todos: [],
+       });
+       expect(persisted).not.toHaveProperty('planId');
+     });
+ 
+-    it('bounds the active Todo reminder', async () => {
++    it('bounds the active Todo reminder through the one notice', async () => {
+       const params: TodoWriteParams = {
+         todos: [{ id: '1', content: 'x'.repeat(5000), status: 'in_progress' }],
+       };
+       const enoentError = new Error('ENOENT') as Error & { code: string };
+       enoentError.code = 'ENOENT';
+       mockFs.readFile.mockRejectedValue(enoentError);
+@@ -411,14 +411,19 @@
+       await promptIdContext.run('todo-prompt', () =>
+         tool.build(params).execute(mockAbortSignal),
+       );
+ 
+       const reminder = vi.mocked(mockConfig.setActiveTodoReminder).mock
+         .lastCall?.[1];
+-      expect(reminder).toContain('[truncated]');
+-      expect(reminder?.length).toBeLessThan(1100);
++      // The reminder is cut, and it says so the way every other cut result
++      // says so. A bare marker left the model unable to tell how much of its
++      // own list had been withheld, which is the fact the one notice carries.
++      expect(reminder).toContain('Bounded result:');
++      expect(reminder).toContain('characters of todo text in total');
++      expect(reminder).not.toContain('[truncated]');
++      expect(reminder?.length).toBeLessThan(1400);
+     });
+ 
+     it('skips active Todo reminder when no prompt id is active', async () => {
+       const params: TodoWriteParams = {
+         todos: [{ id: '1', content: 'Task 1', status: 'pending' }],
+       };
 diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todoWrite.ts
 --- a/packages/core/src/tools/todoWrite.ts
 +++ b/packages/core/src/tools/todoWrite.ts
-@@ -2,13 +2,18 @@
+@@ -2,13 +2,20 @@
   * @license
   * Copyright 2025 Google LLC
   * SPDX-License-Identifier: Apache-2.0
@@ -225245,6 +225425,8 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
 +import {
 +  BaseDeclarativeTool,
 +  BaseToolInvocation,
++  boundedEchoText,
++  formatOutputBound,
 +  Kind,
 +  undeclaredToolParamsError,
 +} from './tools.js';
@@ -225254,7 +225436,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
  import * as fs from 'fs/promises';
  import * as fsSync from 'fs';
  import * as path from 'path';
-@@ -25,14 +30,12 @@
+@@ -25,14 +32,12 @@
  
  const debugLogger = createDebugLogger('TODO_WRITE');
  const MAX_ACTIVE_TODO_CONTEXT_CHARS = 800;
@@ -225269,7 +225451,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
    name: 'todo_write',
    description:
      'Creates and manages a concise, user-visible task list for complex or multi-step work.',
-@@ -67,12 +70,13 @@
+@@ -67,12 +72,13 @@
            additionalProperties: false,
          },
          description: 'The updated todo list',
@@ -225283,7 +225465,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
  
  const todoWriteToolDescription = `
  Use this tool to create and manage a user-visible task list when explicit progress tracking improves clarity.
-@@ -272,30 +276,21 @@
+@@ -272,30 +278,21 @@
  
    getDescription(): string {
      return this.operationType === 'create' ? 'Create todos' : 'Update todos';
@@ -225316,7 +225498,47 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
        const finalTodos = candidateTodos as TodoItem[];
  
        // 2. Detect changes
-@@ -559,12 +554,22 @@
+@@ -396,13 +393,23 @@
+           0,
+           MAX_ACTIVE_TODO_CONTEXT_CHARS,
+         );
+         this.config.setActiveTodoReminder(
+           promptId,
+           unfinishedTodos.length > 0
+-            ? `<system-reminder>\nThe current task still has unfinished todo items:\n${todoContext}${serializedTodos.length > todoContext.length ? '\n[truncated]' : ''}\nKeep the todo list current and continue the task. Do not treat a successful intermediate tool call as task completion.\n</system-reminder>`
++            ? `<system-reminder>\nThe current task still has unfinished todo items:\n${todoContext}${
++                serializedTodos.length > todoContext.length
++                  ? `\n${formatOutputBound({
++                      returned: todoContext.length,
++                      unit: 'characters of todo text',
++                      limit: MAX_ACTIVE_TODO_CONTEXT_CHARS,
++                      limitUnit: 'characters of todo text',
++                      total: serializedTodos.length,
++                    })}`
++                  : ''
++              }\nKeep the todo list current and continue the task. Do not treat a successful intermediate tool call as task completion.\n</system-reminder>`
+             : undefined,
+         );
+       }
+ 
+       // 5. POST-WRITE PHASE: Execute hooks for side effects (logging, HTTP sync, etc.)
+       // These hooks can now safely perform side effects knowing data is persisted
+@@ -489,13 +496,13 @@
+ 
+ ${todosJson}. Continue on with the tasks at hand if applicable.
+ </system-reminder>${postWriteReminder}`;
+       }
+ 
+       return {
+-        llmContent,
++        llmContent: boundedEchoText(llmContent),
+         returnDisplay: todoResultDisplay,
+       };
+     } catch (error) {
+       const errorMessage =
+         error instanceof Error ? error.message : String(error);
+       debugLogger.error(
+@@ -559,12 +566,22 @@
        Kind.Think,
        todoWriteToolSchemaData.parametersJsonSchema as Record<string, unknown>,
      );
@@ -225743,13 +225965,14 @@ diff --git a/packages/core/src/tools/tool-search.ts b/packages/core/src/tools/to
 diff --git a/packages/core/src/tools/tools.test.ts b/packages/core/src/tools/tools.test.ts
 --- a/packages/core/src/tools/tools.test.ts
 +++ b/packages/core/src/tools/tools.test.ts
-@@ -5,16 +5,19 @@
+@@ -5,16 +5,20 @@
   */
  
  import { describe, it, expect, vi } from 'vitest';
  import type { ToolInvocation, ToolResult } from './tools.js';
  import type { PermissionDecision } from '../permissions/types.js';
  import {
++  boundedEchoText,
 +  boundedFailureText,
 +  cutToUtf8Bytes,
    DeclarativeTool,
@@ -225763,7 +225986,7 @@ diff --git a/packages/core/src/tools/tools.test.ts b/packages/core/src/tools/too
  class TestToolInvocation implements ToolInvocation<object, ToolResult> {
    constructor(
      readonly params: object,
-@@ -281,6 +284,74 @@
+@@ -281,6 +285,102 @@
          filePath: '/workspace/chart.png',
          mimeType: 'image/jpeg',
        }),
@@ -225835,6 +226058,34 @@ diff --git a/packages/core/src/tools/tools.test.ts b/packages/core/src/tools/too
 +    );
 +    // No continuation: the discarded bytes are a second copy of what the
 +    // model itself sent, so there is nothing worth reading back.
++    expect(bounded).not.toContain('Continue with:');
++  });
++});
++
++describe('boundedEchoText', () => {
++  // The shape this exists for: a tool confirms what it did by writing the
++  // model's own argument back out, so the result grows with the argument.
++  const echoed = `Todos have been modified successfully. ${'B'.repeat(100_000)}`;
++
++  it('leaves an echoed argument inside the budget byte-identical', () => {
++    const message = 'Todos have been modified successfully.';
++    expect(boundedEchoText(message)).toBe(message);
++  });
++
++  it('bounds an echoed argument past the shared budget and states its true total', () => {
++    const bounded = boundedEchoText(echoed);
++    const body = bounded.slice(bounded.indexOf('\n\n---\n\n') + 7);
++
++    // Cut at the shared budget rather than at a private one, and what is
++    // kept is a prefix of what the tool built.
++    expect(Buffer.byteLength(body, 'utf8')).toBe(MAX_TOOL_RESULT_BYTES);
++    expect(echoed.startsWith(body)).toBe(true);
++    // The total is stated exactly: the whole string was in hand at the cut.
++    expect(bounded).toContain(
++      `${Buffer.byteLength(echoed, 'utf8')} bytes of text in total`,
++    );
++    // No continuation: these are the model's own bytes, so a file holding
++    // them would return nothing the sender lacks.
 +    expect(bounded).not.toContain('Continue with:');
 +  });
 +});
@@ -225994,7 +226245,7 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
      );
  
      if (errors) {
-@@ -482,12 +533,178 @@
+@@ -482,13 +533,214 @@
    url?: string;
    mimeType?: string;
    sizeBytes?: number;
@@ -226167,13 +226418,49 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 +  });
 +}
 +
++/**
++ * A successful result's copy of an argument the model just sent, held to the
++ * shared per-result budget.
++ *
++ * Several tools confirm what they did by writing the argument back out: the
++ * todo list that was stored, the notebook source that was applied, the command
++ * a monitor was started with. Confirming is worth doing -- a result that named
++ * none of it would not say what had been done -- but naming is not
++ * reproducing. The model composed the argument in the turn immediately
++ * before, so a full copy spends the context window returning to the sender
++ * what it already holds, and an argument that arrived merged or malformed
++ * makes that copy as large as the argument itself.
++ *
++ * No continuation is named, for the reason `boundedFailureText` names none:
++ * the discarded bytes are the model's own argument, so a file holding them
++ * would cost the window twice and return nothing the sender lacks. A result
++ * that echoes bytes the model has *not* seen -- content a user changed before
++ * approving it -- is a different case: those bytes are worth reading back, and
++ * that tool states its own continuation through `boundedContent` instead.
++ */
++export function boundedEchoText(text: string): string {
++  const totalBytes = Buffer.byteLength(text, 'utf8');
++  if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++    return text;
++  }
++  const head = cutToUtf8Bytes(text, MAX_TOOL_RESULT_BYTES);
++  return boundedContent(head, {
++    returned: Buffer.byteLength(head, 'utf8'),
++    unit: 'bytes of text',
++    limit: MAX_TOOL_RESULT_BYTES,
++    limitUnit: 'bytes of text',
++    total: totalBytes,
++  });
++}
++
  export interface ToolResult {
    /**
     * Content meant to be included in LLM history.
     * This should represent the factual outcome of the tool execution.
     */
    llmContent: PartListUnion;
-@@ -630,29 +847,82 @@
+ 
+@@ -630,29 +882,82 @@
      return false;
    }
  
@@ -226702,7 +226989,7 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
  import { runSideQuery } from '../utils/sideQuery.js';
  import { ToolErrorType } from './tool-error.js';
  import type {
-@@ -30,13 +29,20 @@
+@@ -30,13 +29,21 @@
    ToolInvocation,
    ToolResult,
    ToolConfirmationPayload,
@@ -226714,6 +227001,7 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
 +  BaseDeclarativeTool,
 +  BaseToolInvocation,
 +  boundedContent,
++  boundedEchoText,
 +  cutToUtf8Bytes,
 +  Kind,
 +  MAX_TOOL_RESULT_BYTES,
@@ -226724,7 +227012,7 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
  import { parsePositiveIntegerEnv } from '../utils/env.js';
  import { getErrorMessage } from '../utils/errors.js';
  
-@@ -57,36 +63,31 @@
+@@ -57,36 +64,31 @@
    const value = parsePositiveIntegerEnv(
      process.env['QWEN_WEB_FETCH_PROCESSING_TIMEOUT_MS'],
      SIDE_QUERY_TIMEOUT_MS,
@@ -226763,7 +227051,7 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
    content: string;
    persistedPath?: string;
    persistedSize?: number;
-@@ -182,28 +183,18 @@
+@@ -182,28 +184,18 @@
  // Hint read_file only for formats it can actually display (mirrors the
  // natively-rendered kinds in fileUtils detectFileType: pdf and images); for
  // anything else, state the path and let the model pick a tool (shell,
@@ -226793,7 +227081,22 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
   * Parameters for the WebFetch tool
   */
  export interface WebFetchToolParams {
-@@ -326,12 +317,46 @@
+@@ -312,13 +304,13 @@
+ Status: ${redirect.status}
+ 
+ To fetch the redirected content, call ${WebFetchTool.Name} again with:
+ - url: "${redirect.redirectUrl}"
+ - prompt: "${this.params.prompt}"`;
+     return {
+-      llmContent: message,
++      llmContent: boundedEchoText(message),
+       returnDisplay: `Redirected to ${redirectHost} (${redirect.status}) — not followed (different host or scheme/port).`,
+     };
+   }
+ 
+   private buildMetadataHeader(entry: CacheEntry): string {
+     const urlLine =
+@@ -326,12 +318,46 @@
          ? `URL: ${this.params.url} (final: ${entry.finalUrl})`
          : `URL: ${this.params.url}`;
      return `${urlLine}
@@ -226840,7 +227143,7 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
      const fetchUrl = this.getFetchUrl();
      const acceptHeader = this.getAcceptHeader();
      const urlCache = getUrlCacheFor(this.config.storage);
-@@ -431,82 +456,56 @@
+@@ -431,82 +457,56 @@
        sniff.extensionSource === 'fallback' &&
        looksLikeText(response.body)
      ) {
@@ -226942,7 +227245,7 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
        `[WebFetchTool] network_ms=${networkMs} extract_ms=${Date.now() - extractStart}`,
      );
  
-@@ -547,45 +546,43 @@
+@@ -547,45 +547,43 @@
            ...redirect,
            returnDisplay: `${redirect.returnDisplay}${elapsedSuffix()}`,
          };
@@ -226997,7 +227300,7 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
              : {}),
          };
        }
-@@ -643,26 +640,28 @@
+@@ -643,26 +641,28 @@
            error,
          );
          // The fetch succeeded; only post-fetch processing failed. Return the
@@ -227705,7 +228008,22 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
    expect,
    beforeEach,
    afterEach,
-@@ -890,17 +891,20 @@
+@@ -18,13 +19,13 @@
+   WriteFileTool,
+   buildRecordArtifactReminder,
+   buildWorkspaceArtifactMetadata,
+ } from './write-file.js';
+ import { ToolErrorType } from './tool-error.js';
+ import type { FileDiff, ToolEditConfirmationDetails } from './tools.js';
+-import { ToolConfirmationOutcome } from './tools.js';
++import { MAX_TOOL_RESULT_BYTES, ToolConfirmationOutcome } from './tools.js';
+ import type { Config } from '../config/config.js';
+ import { ApprovalMode } from '../config/config.js';
+ import type { ToolRegistry } from './tool-registry.js';
+ import { clearAutoMemoryRootCache } from '../memory/paths.js';
+ import path from 'node:path';
+ import fs from 'node:fs';
+@@ -890,39 +891,64 @@
      });
  
      it('should include modification message when proposed content is modified', async () => {
@@ -227731,7 +228049,30 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
        expect(result.llmContent).toMatch(/User modified the `content`/);
      });
  
-@@ -908,21 +912,20 @@
++    it('bounds a user-modified content echo and names the file that holds it', async () => {
++      const filePath = path.join(rootDir, 'new_file_big_modified.txt');
++      const content = `A${'B'.repeat(MAX_TOOL_RESULT_BYTES)}`;
++
++      const params = withToolModification(
++        { file_path: filePath, content },
++        'model proposal',
++        'human edit',
++      );
++      const result = await tool.build(params).execute(abortSignal);
++
++      // These are bytes a user changed, so the model has not seen them and
++      // they are worth reading back -- unlike an argument echoed to its
++      // sender. They are already on disk at the path just written, so the
++      // notice names that read rather than a second copy.
++      expect(result.llmContent).toContain('Bounded result:');
++      expect(result.llmContent).toContain(
++        `Continue with: read_file with file_path: ${JSON.stringify(filePath)}`,
++      );
++      expect(result.llmContent).not.toContain('B'.repeat(MAX_TOOL_RESULT_BYTES));
++      expect(fs.readFileSync(filePath, 'utf8')).toBe(content);
++    });
++
+     it('should not include modification message when proposed content is not modified', async () => {
        const filePath = path.join(rootDir, 'new_file_unmodified.txt');
        const content = 'New file content not modified';
  
@@ -227754,7 +228095,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
        const params = {
          file_path: filePath,
          content,
-@@ -1335,19 +1338,24 @@
+@@ -1335,19 +1361,24 @@
        // session can be reconciled.
        expect(attribution!.aiCreated).toBe(true);
  
@@ -227785,7 +228126,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
          CommitAttributionService.getInstance().getFileAttribution(filePath),
        ).toBeUndefined();
  
-@@ -1487,14 +1495,13 @@
+@@ -1487,14 +1518,13 @@
        // read is enough to clear enforcement; the mtime/size drift
        // check remains the gate that distinguishes "model saw current
        // bytes" from "model saw older bytes".
@@ -227821,7 +228162,24 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
  import { ApprovalMode } from '../config/config.js';
  import { isAnyAutoMemPath, isTeamAutoMemPath } from '../memory/paths.js';
  import { checkTeamMemorySecrets } from '../memory/team-memory-secret-guard.js';
-@@ -88,22 +92,12 @@
+@@ -21,13 +25,16 @@
+   ToolResult,
+ } from './tools.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+ import {
+   BaseDeclarativeTool,
+   BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
+   Kind,
++  MAX_TOOL_RESULT_BYTES,
+   ToolConfirmationOutcome,
+ } from './tools.js';
+ import { ToolErrorType } from './tool-error.js';
+ import {
+   FileEncoding,
+   needsUtf8Bom,
+@@ -88,22 +95,12 @@
    file_path: string;
  
    /**
@@ -227844,7 +228202,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
    WriteFileToolParams,
    ToolResult
  > {
-@@ -273,14 +267,14 @@
+@@ -273,14 +270,14 @@
        },
      };
      return confirmationDetails;
@@ -227861,7 +228219,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      let useBOM = false;
      let detectedEncoding: string | undefined;
      let detectedLineEnding: LineEnding | undefined;
-@@ -517,13 +511,13 @@
+@@ -517,13 +514,13 @@
          },
        });
  
@@ -227876,7 +228234,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
            content,
          );
        }
-@@ -556,26 +550,27 @@
+@@ -556,26 +553,27 @@
          currentContentForDiff,
          content,
          'Original',
@@ -227906,7 +228264,69 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
        }
        const artifact = buildWorkspaceArtifactMetadata(
          this.config,
-@@ -790,12 +785,13 @@
+@@ -615,13 +613,16 @@
+         originalContent,
+         newContent: content,
+         diffStat,
+       };
+ 
+       return {
+-        llmContent: llmSuccessMessageParts.join(' '),
++        llmContent: boundedWriteSuccessMessage(
++          llmSuccessMessageParts.join(' '),
++          file_path,
++        ),
+         returnDisplay: displayResult,
+         ...(artifact ? { artifacts: [artifact] } : {}),
+       };
+     } catch (error) {
+       // Capture detailed error information for debugging
+       let errorMsg: string;
+@@ -763,12 +764,43 @@
+   );
+ }
+ 
+ /**
+  * Implementation of the WriteFile tool logic
+  */
++/**
++ * The write result's model-facing text, bounded.
++ *
++ * On the approval path this message quotes the content the *user* changed
++ * before approving, which is the one echo in this tool the model has not seen
++ * before: it did not compose those bytes. So unlike an argument echoed back to
++ * its sender, the discarded bytes here are worth reading back, and they are
++ * already on disk at the path just written -- the notice names that read
++ * rather than a second copy in the artifact store.
++ */
++function boundedWriteSuccessMessage(
++  message: string,
++  filePath: string,
++): string {
++  const totalBytes = Buffer.byteLength(message, 'utf8');
++  if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++    return message;
++  }
++  const head = cutToUtf8Bytes(message, MAX_TOOL_RESULT_BYTES);
++  return boundedContent(head, {
++    returned: Buffer.byteLength(head, 'utf8'),
++    unit: 'bytes of text',
++    limit: MAX_TOOL_RESULT_BYTES,
++    limitUnit: 'bytes of text',
++    total: totalBytes,
++    continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++      filePath,
++    )}, offset: 0`,
++  });
++}
++
+ export class WriteFileTool
+   extends BaseDeclarativeTool<WriteFileToolParams, ToolResult>
+   implements ModifiableDeclarativeTool<WriteFileToolParams>
+ {
+   static readonly Name: string = ToolNames.WRITE_FILE;
+ 
+@@ -790,12 +822,13 @@
            content: {
              description: 'The content to write to the file.',
              type: 'string',
@@ -227920,7 +228340,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
    }
  
    protected override validateToolParamValues(
-@@ -884,18 +880,16 @@
+@@ -884,18 +917,16 @@
        },
        getProposedContent: async (params: WriteFileToolParams) => params.content,
        createUpdatedParams: (
