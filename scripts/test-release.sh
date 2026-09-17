@@ -219,6 +219,59 @@ validate_release_lock "${advancing_lock}" >/dev/null ||
   fail 'the adopted archive hash is not the one that was bundled'
 
 # ---------------------------------------------------------------------------
+# The seal decision. A release owes a new implementation commit exactly when the
+# release lock no longer describes the working tree, and the question is asked
+# of the lock rather than of whether config/build-inputs.sha256 happened to be
+# stale on disk. An operator who regenerates and commits the manifest alongside
+# the change that moved it hands the loop a self-consistent tree; a seal that
+# measured the manifest against its own previous contents sees "nothing moved"
+# there, leaves the lock naming the previous release, and wedges every build on
+# the drift the lock records. Every probe below therefore passes the REAL
+# hashes of the tree on disk -- the manifest is current in all of them, and only
+# the lock differs.
+# ---------------------------------------------------------------------------
+tree_manifest="$(sha256sum "${PROJECT_DIR}/config/build-inputs.sha256" | cut -d' ' -f1)"
+tree_stack="$(sha256sum "${PROJECT_DIR}/config/stack.lock.json" | cut -d' ' -f1)"
+sealed_base="${TEST_DIR}/sealed-to-tree.lock.json"
+jq --arg m "${tree_manifest}" --arg s "${tree_stack}" \
+  '.build_inputs_manifest_sha256 = $m | .stack_lock_sha256 = $s' \
+  "${PROJECT_DIR}/config/release.lock.json" >"${sealed_base}"
+release_lock_describes_the_working_tree "${sealed_base}" "${tree_manifest}" "${tree_stack}" ||
+  fail 'a lock recording exactly the manifest and stack lock on disk was reported as not describing them; every seal would advance implementation_commit and no release could settle'
+seal_probe="${TEST_DIR}/seal-decision.lock.json"
+# One recorded value wrong at a time, so each is proved to be measured.
+jq --arg sha "$(printf 'b%.0s' {1..64})" '.build_inputs_manifest_sha256 = $sha' \
+  "${sealed_base}" >"${seal_probe}"
+if release_lock_describes_the_working_tree "${seal_probe}" "${tree_manifest}" "${tree_stack}"; then
+  fail 'a lock recording a previous build-input manifest was reported as describing this tree; the seal would not advance it and every build would refuse the drift'
+fi
+jq --arg sha "$(printf 'c%.0s' {1..64})" '.stack_lock_sha256 = $sha' \
+  "${sealed_base}" >"${seal_probe}"
+if release_lock_describes_the_working_tree "${seal_probe}" "${tree_manifest}" "${tree_stack}"; then
+  fail 'a lock recording a previous stack-lock hash was reported as describing this tree; the seal would not advance it and every build would refuse the drift'
+fi
+
+# The derived rule the header states, proved rather than remembered: sealing a
+# lock to the tree settles it, and the single edit a service repin makes cannot
+# unsettle it. Nothing special-cases the service here -- .images.service is
+# simply not one of the two values the lock describes the tree with, because the
+# stack lock does not record it and the manifest excludes the file it lives in.
+# Exercised on a copy with the release's own byte-substitution primitives.
+repin_probe="${TEST_DIR}/service-repin.lock.json"
+cp -- "${PROJECT_DIR}/config/release.lock.json" "${repin_probe}"
+write_sealed_release_identity "${repin_probe}" "$(printf '0%.0s' {1..40})" \
+  "${tree_manifest}" "${tree_stack}" >/dev/null ||
+  fail 'the seal step could not seal the decision probe to this tree'
+release_lock_describes_the_working_tree "${repin_probe}" "${tree_manifest}" "${tree_stack}" ||
+  fail 'a lock the seal step just wrote from this tree was reported as not describing it; the release loop could never converge'
+replace_exact_value "${repin_probe}" '.images.service' \
+  "$(jq -er '.images.service' "${repin_probe}")" "sha256:$(printf 'e%.0s' {1..64})" >/dev/null
+release_lock_describes_the_working_tree "${repin_probe}" "${tree_manifest}" "${tree_stack}" ||
+  fail 'a service repin left the lock no longer describing the tree; the next seal would advance implementation_commit and bake a SOURCE_COMMIT the built service image cannot match'
+
+printf 'RELEASE_SEAL_DECISION_OK stale-manifest=owed stale-stack-lock=owed sealed-to-tree=settled service-repin=no-advance\n'
+
+# ---------------------------------------------------------------------------
 # verify_service_archive_contents proves a bundle carries exactly the pinned
 # images, from the tar's own OCI index (whose per-image manifest digest IS
 # the Docker image ID under the containerd store). Proved against synthetic

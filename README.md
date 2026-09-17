@@ -1004,11 +1004,17 @@ build-input manifest, so adopting it changes no build input.
 
 Nothing in that sequence is a manual step or a remembered exception. In
 particular the release lock advances its `implementation_commit` only when the
-build-input manifest actually changed, which is what keeps the service image's
-baked `SOURCE_COMMIT` describing its own tree; that falls out of the rule rather
-than being a special case anyone has to know. `scripts/test-release.sh` proves
-the pin locations, the refusal to rewrite an ambiguous value, and the
-termination condition, and it runs as part of every `./build.sh`.
+lock no longer describes the working tree — when the build-input manifest hash
+or the stack-lock hash it records is not the one the tree has — which is what
+keeps the service image's baked `SOURCE_COMMIT` describing its own tree. A
+service repin moves neither of those values, so it cannot advance the commit;
+that falls out of the rule rather than being a special case anyone has to know.
+The question is asked of the lock and not of whether the manifest file was stale
+on disk, so regenerating and committing the manifest with the change that moved
+it — a self-consistent tree — is still a release the loop can cut.
+`scripts/test-release.sh` proves the pin locations, the refusal to rewrite an
+ambiguous value, the seal decision, and the termination condition, and it runs
+as part of every `./build.sh`.
 
 Start both the pinned backend (if absent) and the agent service:
 

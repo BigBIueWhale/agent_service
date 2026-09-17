@@ -18,9 +18,13 @@
 #
 # Nothing here is a judgement call at runtime. In particular the rule that a
 # service repin must not advance implementation_commit is not special-cased: it
-# falls out of "advance the release lock only when the build-input manifest
-# actually changed", because release.lock.json is not a build input. Encoding it
-# as a derived fact rather than a remembered exception is the point -- a baked
+# falls out of "advance the release lock only when the lock no longer describes
+# the working tree", because the two values the lock describes that tree with --
+# the build-input manifest hash and the stack-lock hash -- are exactly the two a
+# service repin cannot move. It writes only .images.service in
+# config/release.lock.json, which the stack lock does not record and
+# scripts/list-build-inputs.sh excludes from the manifest. Encoding it as a
+# derived fact rather than a remembered exception is the point -- a baked
 # SOURCE_COMMIT that no longer describes its own tree is the failure this
 # prevents.
 set -Eeuo pipefail
@@ -227,32 +231,56 @@ drifted_component() {
   [[ -n "${found}" ]]
 }
 
+# Does the release lock still describe the working tree? The lock describes it
+# with exactly two measurements -- the build-input manifest hash and the
+# stack-lock hash -- and check_pinned_inputs refuses to build a tree that
+# disagrees with either, so these two comparisons are the whole question of
+# whether a seal is owed.
+#
+# The question is asked of the lock, which is what every build is checked
+# against, and never of the manifest file's own previous contents. Regenerating
+# the manifest answers only whether that file had been brought up to date yet,
+# which is silent about a tree that moved and whose manifest was regenerated
+# before the release began -- the self-consistent committed tree an operator is
+# supposed to hand this script. Measuring the manifest against itself there
+# reports "nothing moved", so the lock keeps naming the previous release and
+# every build refuses the drift the lock itself records.
+#
+# Takes its target explicitly, on the same terms as validate_release_lock, so
+# the release test harness proves both answers against a copy.
+release_lock_describes_the_working_tree() {
+  local lock_path="$1" manifest="$2" stack_sha="$3" recorded_manifest recorded_stack
+  recorded_manifest="$(json_value "${lock_path}" '.build_inputs_manifest_sha256')"
+  recorded_stack="$(json_value "${lock_path}" '.stack_lock_sha256')"
+  [[ "${recorded_manifest}" == "${manifest}" && "${recorded_stack}" == "${stack_sha}" ]]
+}
+
 # Bring the release lock into agreement with the tree, and commit whatever
-# changed. The release lock names an implementation commit only when the
-# build-input manifest actually moved, which is what keeps the service image's
+# changed. The release lock names a new implementation commit only when it no
+# longer describes the working tree, which is what keeps the service image's
 # baked SOURCE_COMMIT describing its own tree.
 seal() {
-  local subject="$1" manifest_before manifest_after commit stack_sha
-  manifest_before="$(sha256_file "${BUILD_INPUTS_PATH}")"
+  local subject="$1" manifest stack_sha commit
   "${PROJECT_DIR}/scripts/generate-build-input-manifest.sh" >/dev/null
-  manifest_after="$(sha256_file "${BUILD_INPUTS_PATH}")"
+  manifest="$(sha256_file "${BUILD_INPUTS_PATH}")"
+  stack_sha="$(sha256_file "${STACK_LOCK_PATH}")"
 
-  if [[ "${manifest_after}" != "${manifest_before}" ]]; then
+  if ! release_lock_describes_the_working_tree "${RELEASE_LOCK_PATH}" \
+    "${manifest}" "${stack_sha}"; then
     # Build inputs moved, so this is a new implementation of the stack. Commit
     # them first: the release lock has to name a commit that already contains
     # them, and build.sh requires that commit to be an ancestor of HEAD.
-      if ! git -C "${PROJECT_DIR}" diff --quiet ||
+    if ! git -C "${PROJECT_DIR}" diff --quiet ||
       ! git -C "${PROJECT_DIR}" diff --cached --quiet; then
       git -C "${PROJECT_DIR}" add -A
       commit_sealed "${subject}"
       printf '  inputs commit: %s\n' "$(git -C "${PROJECT_DIR}" log --oneline -1)"
     fi
     commit="$(git -C "${PROJECT_DIR}" rev-parse HEAD)"
-    stack_sha="$(sha256_file "${STACK_LOCK_PATH}")"
     write_sealed_release_identity "${RELEASE_LOCK_PATH}" "${commit}" \
-      "${manifest_after}" "${stack_sha}"
+      "${manifest}" "${stack_sha}"
     printf '  release lock -> commit %s manifest %s, archive unpinned\n' \
-      "${commit:0:12}" "${manifest_after:0:12}"
+      "${commit:0:12}" "${manifest:0:12}"
   fi
 
   if ! git -C "${PROJECT_DIR}" diff --quiet ||
