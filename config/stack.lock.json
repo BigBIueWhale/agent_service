@@ -129,8 +129,8 @@
     "container_name": "qwen38-agent-native",
     "project_label": "Qwen_best_model_ever",
     "profile_label": "socket-isolated-nonroot-vision-k8v4-agent-v21",
-    "image_tag": "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v23",
-    "image_id": "sha256:f6397c5e2ef34eb14fe262f6da7fccb028b74877e64d412268cf781582a002fd",
+    "image_tag": "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v24",
+    "image_id": "sha256:e91fc7b2f92db062fcafa46a6bddfe07cdeb2e589ac600b994520649749fcdc6",
     "user": "2000:0",
     "rootfs_read_only": true,
     "tmpfs": {
