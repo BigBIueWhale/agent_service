@@ -217380,7 +217380,7 @@ diff --git a/packages/core/src/tools/computer-use/tool.ts b/packages/core/src/to
  import { ComputerUseClient } from './client.js';
  import type { ComputerUseToolName, ComputerUseToolSchema } from './schemas.js';
  import { COMPUTER_USE_SCHEMAS } from './schemas.js';
-@@ -283,16 +288,68 @@
+@@ -283,16 +288,76 @@
          returnDisplay: errorText,
          error: { message: errorText },
        };
@@ -217404,6 +217404,11 @@ diff --git a/packages/core/src/tools/computer-use/tool.ts b/packages/core/src/to
 +   * there is no artifact store to write to and so nothing to continue from;
 +   * the notice then states the true total and omits the continuation, which
 +   * is the honest reading of a reply this tool cannot page.
++   *
++   * A reply whose parts are every one of them text arrives here as a single
++   * collapsed string rather than as parts, so a string is measured as the
++   * text it is. Reading only `Part.text` would leave that -- the ordinary
++   * case -- unbounded.
 +   */
 +  private async boundedReplyParts(
 +    content: PartListUnion,
@@ -217411,7 +217416,7 @@ diff --git a/packages/core/src/tools/computer-use/tool.ts b/packages/core/src/to
 +    const parts = Array.isArray(content) ? content : [content];
 +    const texts: string[] = [];
 +    for (const part of parts) {
-+      const text = (part as Part).text;
++      const text = typeof part === 'string' ? part : (part as Part).text;
 +      if (typeof text === 'string') texts.push(text);
 +    }
 +    const whole = texts.join('\n');
@@ -217441,7 +217446,10 @@ diff --git a/packages/core/src/tools/computer-use/tool.ts b/packages/core/src/to
 +    });
 +    return [
 +      { text: notice },
-+      ...parts.filter((part) => typeof (part as Part).text !== 'string'),
++      ...parts.filter(
++        (part) =>
++          typeof part !== 'string' && typeof (part as Part).text !== 'string',
++      ),
 +    ];
 +  }
  }
@@ -224914,7 +224922,22 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          timeout: 5000,
        });
        const mockCombinedSignal = {
-@@ -7840,21 +7556,19 @@
+@@ -7832,8 +7548,12 @@
+       try {
+         const promise = invocation.execute(new AbortController().signal);
++        // Sized at the budget rather than past it: this test is about the
++        // operational error summary, and an over-budget output would instead
++        // exercise the shared bound and its artifact store, which this file's
++        // mocked fs/crypto deliberately cannot serve.
+         resolveExecutionPromise({
+-          rawOutput: Buffer.from('x'.repeat(40_000)),
+-          output: 'x'.repeat(40_000),
++          rawOutput: Buffer.from('x'.repeat(MAX_TOOL_RESULT_BYTES)),
++          output: 'x'.repeat(MAX_TOOL_RESULT_BYTES),
+           exitCode: null,
+           signal: null,
+           error: null,
+@@ -7840,21 +7560,19 @@
            aborted: true,
            pid: 12345,
            executionMethod: 'child_process',
@@ -224923,7 +224946,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
  
 -        expect(result.llmContent).toContain('/tmp/tool-output.txt');
 -        expect(result.returnDisplay).toContain('/tmp/tool-output.txt');
-+        expect(result.llmContent).toContain('x'.repeat(40_000));
++        expect(result.llmContent).toContain('x'.repeat(MAX_TOOL_RESULT_BYTES));
          expect(result.error).toEqual({
            message: 'Command timed out after 5000ms before it could complete.',
            type: ToolErrorType.EXECUTION_TIMEOUT,
@@ -227463,7 +227486,7 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
  
  vi.mock('openai', () => ({
    default: class MockOpenAI {
-@@ -660,13 +665,13 @@
+@@ -660,13 +665,16 @@
        defaultHeaders: Record<string, string>;
      };
      expect(opts.defaultHeaders['X-Gateway-Route']).toBe('ds');
@@ -227472,13 +227495,17 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
  
 -  it('truncates an oversized answer while preserving source URLs and the safety footer', async () => {
 +  it('retains the full large answer, source URLs, and safety footer', async () => {
-     const bigText = 'x'.repeat(150_000);
+-    const bigText = 'x'.repeat(150_000);
++    // Under MAX_TOOL_RESULT_BYTES: this test is about the absence of a
++    // tool-local truncation, not the shared per-result bound, which the
++    // dedicated bounding test below covers.
++    const bigText = 'x'.repeat(20_000);
      mockCreate.mockResolvedValueOnce(
        makeStream(
          completedEvents([
            SEARCH_ITEM,
            EXTRACTOR_ITEM,
-@@ -677,27 +682,22 @@
+@@ -677,27 +685,24 @@
            },
          ]),
        ),
@@ -227505,13 +227532,16 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
 +  });
 +
 +  it('preserves every Unicode character in a large answer', async () => {
-     const bigText = '😀'.repeat(60_000);
+-    const bigText = '😀'.repeat(60_000);
++    // Under MAX_TOOL_RESULT_BYTES, for the same reason as above: 5,000
++    // emoji are 20,000 UTF-8 bytes.
++    const bigText = '😀'.repeat(5_000);
      mockCreate.mockResolvedValueOnce(
        makeStream(
          completedEvents([
            SEARCH_ITEM,
            EXTRACTOR_ITEM,
-@@ -708,15 +708,41 @@
+@@ -708,15 +713,61 @@
            },
          ]),
        ),
@@ -227526,35 +227556,55 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
 +
 +  it('marks a resource-limited stream incomplete while retaining its observed answer', async () => {
 +    const observedText = '😀'.repeat(1_000_001) + 'OBSERVED-END';
-+    let consumedTerminal = false;
-+    mockCreate.mockResolvedValueOnce({
-+      async *[Symbol.asyncIterator]() {
-+        yield { type: 'response.output_item.done', item: SEARCH_ITEM };
-+        yield { type: 'response.output_text.delta', delta: observedText };
-+        consumedTerminal = true;
-+        yield {
-+          type: 'response.completed',
-+          response: {
-+            status: 'completed',
-+            output: [SEARCH_ITEM, MESSAGE_ITEM],
-+          },
-+        };
-+      },
-+    });
-+    const result = await runSearch(makeConfig());
-+    const content = result.llmContent as string;
-+    expect(content).toContain('[Partial result:');
-+    expect(content.includes(observedText)).toBe(true);
-+    expect(content).toContain('https://example.com/a');
-+    expect(consumedTerminal).toBe(false);
-+    expect(mockCreate.mock.calls[0][1].signal.aborted).toBe(true);
++    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-search-test-'));
++    try {
++      const config = makeConfig();
++      (config as unknown as { storage: unknown }).storage = {
++        getProjectDir: () => projectDir,
++      };
++      let consumedTerminal = false;
++      mockCreate.mockResolvedValueOnce({
++        async *[Symbol.asyncIterator]() {
++          yield { type: 'response.output_item.done', item: SEARCH_ITEM };
++          yield { type: 'response.output_text.delta', delta: observedText };
++          consumedTerminal = true;
++          yield {
++            type: 'response.completed',
++            response: {
++              status: 'completed',
++              output: [SEARCH_ITEM, MESSAGE_ITEM],
++            },
++          };
++        },
++      });
++      const result = await runSearch(config);
++      const content = result.llmContent as string;
++
++      expect(content).toContain('[Partial result:');
++      expect(consumedTerminal).toBe(false);
++      expect(mockCreate.mock.calls[0][1].signal.aborted).toBe(true);
++      // The observed answer is far past the per-result budget, so it is
++      // retained in the session artifact rather than inline, and the notice
++      // names the call that reads it back. The candidate URLs follow the
++      // answer in the body and are past the cut with it.
++      expect(content).toContain('Bounded result:');
++      expect(content).toContain('Continue with: read_file');
++      const directory = sessionArtifactDirectory(config);
++      const retained = fs.readdirSync(directory);
++      expect(retained).toHaveLength(1);
++      const whole = fs.readFileSync(path.join(directory, retained[0]), 'utf8');
++      expect(whole.includes(observedText)).toBe(true);
++      expect(whole).toContain('https://example.com/a');
++    } finally {
++      fs.rmSync(projectDir, { recursive: true, force: true });
++    }
    });
  
    it('salvages extracted page content as the answer when the stream dies before narration', async () => {
      mockCreate.mockResolvedValueOnce({
        async *[Symbol.asyncIterator]() {
          yield { type: 'response.created' };
-@@ -731,13 +757,13 @@
+@@ -731,13 +782,13 @@
      expect(content).toContain('[Partial result:');
      // EXTRACTOR_ITEM's output/goal back-fill the missing narration.
      expect(content).toContain('page content');
@@ -227569,7 +227619,7 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
      }));
      mockCreate.mockResolvedValueOnce(
        makeStream(
-@@ -749,16 +775,17 @@
+@@ -749,16 +800,17 @@
            MESSAGE_ITEM,
          ]),
        ),
@@ -227591,7 +227641,7 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
      );
      mockCreate.mockResolvedValueOnce(
        makeStream(
-@@ -774,15 +801,14 @@
+@@ -774,15 +826,14 @@
          ]),
        ),
      );
@@ -227609,7 +227659,7 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
      mockCreate.mockRejectedValueOnce(
        Object.assign(new Error('Too many requests'), { status: 429 }),
      );
-@@ -1020,12 +1046,54 @@
+@@ -1020,12 +1071,54 @@
      expect(result.error).toBeUndefined();
      const content = result.llmContent as string;
      expect(content).toContain('Partial result');
@@ -227967,7 +228017,7 @@ diff --git a/packages/core/src/tools/workflow/workflow.test.ts b/packages/core/s
  }
  
  /**
-@@ -429,12 +431,42 @@
+@@ -429,12 +431,45 @@
      const result = await invocation.execute(new AbortController().signal);
      expect(result.error).toBeUndefined();
      const llmText = (result.llmContent as Array<{ text: string }>)[0].text;
@@ -227981,7 +228031,10 @@ diff --git a/packages/core/src/tools/workflow/workflow.test.ts b/packages/core/s
 +    try {
 +      const config = {
 +        getSessionId: () => 'session-1',
-+        storage: { getProjectDir: () => projectDir },
++        // A real Storage, rooted in the temp dir: the runner also asks it
++        // for the run journal path, which a getProjectDir-only stub cannot
++        // answer.
++        storage: new Storage(projectDir, projectDir),
 +      } as unknown as Config;
 +      const tool = new WorkflowTool(config, {
 +        dispatch: async (prompt: string) => `T:${prompt}`,
