@@ -223657,7 +223657,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 diff --git a/packages/core/src/tools/read-mcp-resource.test.ts b/packages/core/src/tools/read-mcp-resource.test.ts
 --- a/packages/core/src/tools/read-mcp-resource.test.ts
 +++ b/packages/core/src/tools/read-mcp-resource.test.ts
-@@ -4,20 +4,20 @@
+@@ -4,20 +4,19 @@
   * SPDX-License-Identifier: Apache-2.0
   */
  
@@ -223674,7 +223674,6 @@ diff --git a/packages/core/src/tools/read-mcp-resource.test.ts b/packages/core/s
 +import fs from 'node:fs';
 +import os from 'node:os';
 +import path from 'node:path';
-+import { MAX_TOOL_RESULT_BYTES } from './tools.js';
 +import { sessionArtifactDirectory } from '../utils/session-artifacts.js';
  
  const inlineCount = (llmContent: unknown) =>
@@ -223683,7 +223682,7 @@ diff --git a/packages/core/src/tools/read-mcp-resource.test.ts b/packages/core/s
      : 0; // empty read → llmContent is the diagnostic string, not parts
  
  function configWith(
-@@ -80,12 +80,47 @@
+@@ -80,12 +79,47 @@
      );
      // returnDisplay mirrors the summary so a success card never hides what was
      // actually injected ('resource body' is 13 chars).
@@ -223731,7 +223730,7 @@ diff --git a/packages/core/src/tools/read-mcp-resource.test.ts b/packages/core/s
      const readMcpResource = vi.fn().mockResolvedValue({
        contents: [
          {
-@@ -198,65 +233,43 @@
+@@ -198,65 +232,43 @@
      const tool = new ReadMcpResourceTool(configWith(vi.fn()));
      expect(
        tool.toAutoClassifierInput({ server_name: 'srv', uri: 'x://a' }),
