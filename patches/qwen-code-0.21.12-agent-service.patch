@@ -217169,6 +217169,163 @@ diff --git a/packages/core/src/tools/agent/qwen38-subagent-scratch.ts b/packages
 +  fs.chmodSync(root, 0o700);
 +  return root;
 +}
+diff --git a/packages/core/src/tools/create-sub-session.test.ts b/packages/core/src/tools/create-sub-session.test.ts
+--- a/packages/core/src/tools/create-sub-session.test.ts
++++ b/packages/core/src/tools/create-sub-session.test.ts
+@@ -7,12 +7,17 @@
+ import { describe, expect, it, vi } from 'vitest';
+ import {
+   CreateSubSessionTool,
+   MAX_SUB_SESSION_PROMPT_CHARS,
+ } from './create-sub-session.js';
+ import type { Config, SubSessionSpawner } from '../config/config.js';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { MAX_TOOL_RESULT_BYTES } from './tools.js';
++import { sessionArtifactDirectory } from '../utils/session-artifacts.js';
+ 
+ function makeConfig(spawner?: SubSessionSpawner): Config {
+   return {
+     getSubSessionSpawner: () => spawner,
+   } as unknown as Config;
+ }
+@@ -58,12 +63,43 @@
+     });
+     expect(res.error).toBeUndefined();
+     expect(res.llmContent).toContain('the answer');
+     expect(res.llmContent).toContain('sub-1');
+   });
+ 
++  it('bounds a first-turn result past the per-result budget and names the file holding it', async () => {
++    const tail = 'TAIL-MARKER';
++    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sub-session-test-'));
++    try {
++      const spawner = vi.fn(async () => ({
++        sessionId: 'sub-big',
++        result: `${'A'.repeat(MAX_TOOL_RESULT_BYTES)}\n${tail}`,
++        stopReason: 'end_turn',
++      }));
++      const config = makeConfig(spawner);
++      (config as unknown as { storage: unknown }).storage = {
++        getProjectDir: () => projectDir,
++      };
++      (config as unknown as { getSessionId: unknown }).getSessionId = () =>
++        'session-1';
++
++      const res = await new CreateSubSessionTool(config)
++        .build({ prompt: 'go' })
++        .execute(new AbortController().signal);
++
++      const content = res.llmContent as string;
++      expect(res.error).toBeUndefined();
++      expect(content).toContain('Bounded result:');
++      expect(content).toContain('Continue with: read_file');
++      expect(content).not.toContain(tail);
++      expect(fs.readdirSync(sessionArtifactDirectory(config)).length).toBe(1);
++    } finally {
++      fs.rmSync(projectDir, { recursive: true, force: true });
++    }
++  });
++
+   it('sent: returns immediately with the session id, not a result', async () => {
+     const spawner = vi.fn(async () => ({ sessionId: 'sub-2' }));
+     const tool = new CreateSubSessionTool(makeConfig(spawner));
+     const res = await tool
+       .build({ prompt: 'go', completion: 'sent' })
+       .execute(new AbortController().signal);
+diff --git a/packages/core/src/tools/create-sub-session.ts b/packages/core/src/tools/create-sub-session.ts
+--- a/packages/core/src/tools/create-sub-session.ts
++++ b/packages/core/src/tools/create-sub-session.ts
+@@ -19,14 +19,22 @@
+  *                    forget); the sub-session keeps running independently.
+  *  - `'first-turn'`— wait for the sub-session's first turn to finish and return
+  *                    its result to the caller (default).
+  */
+ 
+ import type { ToolInvocation, ToolResult } from './tools.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
++  Kind,
++  MAX_TOOL_RESULT_BYTES,
++} from './tools.js';
+ import { ToolNames, ToolDisplayNames } from './tool-names.js';
++import { persistSessionArtifact } from '../utils/session-artifacts.js';
+ import type { Config } from '../config/config.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+ 
+ export interface CreateSubSessionParams {
+   prompt: string;
+   completion?: 'sent' | 'first-turn';
+@@ -195,13 +203,16 @@
+       const body =
+         res.result && res.result.length > 0
+           ? res.result
+           : `Sub-session ${sessionLink} completed its first turn but ` +
+             'produced no text output.';
+       return {
+-        llmContent: `Sub-session ${sessionLink} first-turn result${stop}:\n\n${body}${parentWarning}`,
++        llmContent: await boundedFirstTurnTextFor(
++          this.config,
++          `Sub-session ${sessionLink} first-turn result${stop}:\n\n${body}${parentWarning}`,
++        ),
+         returnDisplay: `${sessionLink} completed${stop}`,
+       };
+     } catch (error) {
+       const message = error instanceof Error ? error.message : String(error);
+       return {
+         llmContent: `Error creating sub-session: ${message}`,
+@@ -209,12 +220,46 @@
+         error: { message },
+       };
+     }
+   }
+ }
+ 
++/**
++ * The sub-session's first-turn output, bounded.
++ *
++ * What a sub-session produces is that session's decision, not this tool's: it
++ * is a whole agent turn with its own tools and its own output limit. The
++ * complete text is written to the session's artifact store first, so the
++ * notice names the exact call that reads the rest back.
++ */
++async function boundedFirstTurnTextFor(
++  config: Config,
++  text: string,
++): Promise<string> {
++  const totalBytes = Buffer.byteLength(text, 'utf8');
++  if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++    return text;
++  }
++  const head = cutToUtf8Bytes(text, MAX_TOOL_RESULT_BYTES);
++  const { filepath } = await persistSessionArtifact(
++    config,
++    Buffer.from(text, 'utf8'),
++    'txt',
++  );
++  return boundedContent(head, {
++    returned: Buffer.byteLength(head, 'utf8'),
++    unit: 'bytes of text',
++    limit: MAX_TOOL_RESULT_BYTES,
++    limitUnit: 'bytes of text',
++    total: totalBytes,
++    continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++      filepath,
++    )}, offset: 0`,
++  });
++}
++
+ export class CreateSubSessionTool extends BaseDeclarativeTool<
+   CreateSubSessionParams,
+   ToolResult
+ > {
+   static readonly Name = ToolNames.CREATE_SUB_SESSION;
+ 
 diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit.test.ts
 --- a/packages/core/src/tools/edit.test.ts
 +++ b/packages/core/src/tools/edit.test.ts
@@ -223038,7 +223195,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 diff --git a/packages/core/src/tools/read-mcp-resource.test.ts b/packages/core/src/tools/read-mcp-resource.test.ts
 --- a/packages/core/src/tools/read-mcp-resource.test.ts
 +++ b/packages/core/src/tools/read-mcp-resource.test.ts
-@@ -4,19 +4,14 @@
+@@ -4,20 +4,20 @@
   * SPDX-License-Identifier: Apache-2.0
   */
  
@@ -223052,13 +223209,67 @@ diff --git a/packages/core/src/tools/read-mcp-resource.test.ts b/packages/core/s
 -  MAX_MCP_RESOURCE_BLOB_CHARS,
 -  MAX_MCP_RESOURCE_TEXT_CHARS,
 -} from './mcp-resource-content.js';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { MAX_TOOL_RESULT_BYTES } from './tools.js';
++import { sessionArtifactDirectory } from '../utils/session-artifacts.js';
  
  const inlineCount = (llmContent: unknown) =>
    Array.isArray(llmContent)
      ? (llmContent as Part[]).filter((p) => 'inlineData' in (p as object)).length
      : 0; // empty read → llmContent is the diagnostic string, not parts
  
-@@ -198,65 +193,43 @@
+ function configWith(
+@@ -80,12 +80,47 @@
+     );
+     // returnDisplay mirrors the summary so a success card never hides what was
+     // actually injected ('resource body' is 13 chars).
+     expect(result.returnDisplay).toBe(
+       'Read resource asys-mcp-http:asight://skills/analyze_interconnect_desync.md — Injected 13 chars',
+     );
++  });
++
++  it('bounds a resource past the per-result budget and names the file holding it', async () => {
++    const tail = 'TAIL-MARKER';
++    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'read-mcp-test-'));
++    try {
++      const readMcpResource = vi.fn().mockResolvedValue({
++        contents: [
++          { uri: 'x://big', mimeType: 'text/plain', text: 'A'.repeat(20_000) },
++          { uri: 'x://big2', mimeType: 'text/plain', text: 'B'.repeat(20_000) },
++          { uri: 'x://big3', mimeType: 'text/plain', text: tail },
++        ],
++      });
++      const config = configWith(readMcpResource);
++      (config as unknown as { storage: unknown }).storage = {
++        getProjectDir: () => projectDir,
++      };
++      (config as unknown as { getSessionId: unknown }).getSessionId = () =>
++        'session-1';
++
++      const result = await new ReadMcpResourceTool(config)
++        .build({ server_name: 's', uri: 'x://big' })
++        .execute(new AbortController().signal);
++
++      // The budget applies to the reply's text as a whole: each part here is
++      // well under it, and together they are not.
++      const parts = result.llmContent as Part[];
++      expect(parts).toHaveLength(1);
++      expect(parts[0].text).toContain('Bounded result:');
++      expect(parts[0].text).toContain('Continue with: read_file');
++      expect(parts[0].text).not.toContain(tail);
++      expect(fs.readdirSync(sessionArtifactDirectory(config)).length).toBe(1);
++    } finally {
++      fs.rmSync(projectDir, { recursive: true, force: true });
++    }
+   });
+ 
+   it('surfaces a base64 blob as an inlineData media part, not raw text', async () => {
+     const readMcpResource = vi.fn().mockResolvedValue({
+       contents: [
+         {
+@@ -198,65 +233,43 @@
      const tool = new ReadMcpResourceTool(configWith(vi.fn()));
      expect(
        tool.toAutoClassifierInput({ server_name: 'srv', uri: 'x://a' }),
@@ -223154,7 +223365,31 @@ diff --git a/packages/core/src/tools/read-mcp-resource.test.ts b/packages/core/s
 diff --git a/packages/core/src/tools/read-mcp-resource.ts b/packages/core/src/tools/read-mcp-resource.ts
 --- a/packages/core/src/tools/read-mcp-resource.ts
 +++ b/packages/core/src/tools/read-mcp-resource.ts
-@@ -15,35 +15,21 @@
+@@ -1,14 +1,22 @@
+ /**
+  * @license
+  * Copyright 2026 Qwen
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
++import type { Part } from '@google/genai';
+ import type { Config } from '../config/config.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
++  Kind,
++  MAX_TOOL_RESULT_BYTES,
++} from './tools.js';
+ import type {
+   ToolCallConfirmationDetails,
+   ToolConfirmationOutcome,
+   ToolConfirmationPayload,
+   ToolInvocation,
+   ToolResult,
+@@ -15,35 +23,22 @@
  } from './tools.js';
  import type { PermissionDecision } from '../permissions/types.js';
  import { ToolDisplayNames, ToolNames } from './tool-names.js';
@@ -223166,6 +223401,7 @@ diff --git a/packages/core/src/tools/read-mcp-resource.ts b/packages/core/src/to
    formatMcpResourceContents,
    summarizeMcpResource,
  } from './mcp-resource-content.js';
++import { persistSessionArtifact } from '../utils/session-artifacts.js';
  
  export interface ReadMcpResourceToolParams {
    server_name: string;
@@ -223190,7 +223426,7 @@ diff --git a/packages/core/src/tools/read-mcp-resource.ts b/packages/core/src/to
    ToolResult
  > {
    private readonly debugLogger: DebugLogger;
-@@ -101,25 +87,14 @@
+@@ -101,46 +96,76 @@
      const label = this.getDescription();
      this.debugLogger.debug(`[ReadMcpResourceTool] Reading ${label}`);
      try {
@@ -223210,7 +223446,6 @@ diff --git a/packages/core/src/tools/read-mcp-resource.ts b/packages/core/src/to
 -        ),
 -      });
 -      TURN_BLOB_BUDGET.set(signal, used + formatted.blobChars);
-+      // Both intake paths preserve the resource; the common send boundary sizes it.
 +      const formatted = formatMcpResourceContents(result, label);
  
        this.debugLogger.debug(
@@ -223218,7 +223453,71 @@ diff --git a/packages/core/src/tools/read-mcp-resource.ts b/packages/core/src/to
        );
  
        return {
-@@ -188,24 +163,12 @@
+         llmContent:
+           formatted.parts.length > 0
+-            ? formatted.parts
++            ? await this.boundedResourceParts(formatted.parts)
+             : emptyMcpResourceText(formatted, label),
+         returnDisplay: `Read resource ${label} — ${summarizeMcpResource(
+           formatted,
+         )}`,
+       };
+     } catch (err) {
+       this.debugLogger.error(
+         `[ReadMcpResourceTool] ${label} failed: ${getErrorMessage(err)}`,
+       );
+       throw err;
+     }
++  }
++
++  /**
++   * The resource text this result hands the model, bounded.
++   *
++   * How large a resource is belongs to the MCP server, not to this tool. The
++   * budget applies to the reply's text as a whole rather than to each part,
++   * because a reply of a hundred parts each just under the bound is exactly
++   * what a per-part limit waves through. An over-budget reply becomes one
++   * bounded text part followed by its non-text parts; the complete text, in
++   * its original order, is the file the notice names.
++   */
++  private async boundedResourceParts(parts: Part[]): Promise<Part[]> {
++    const texts: string[] = [];
++    for (const part of parts) {
++      if (typeof part.text === 'string') texts.push(part.text);
++    }
++    const whole = texts.join('\n');
++    const totalBytes = Buffer.byteLength(whole, 'utf8');
++    if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++      return parts;
++    }
++    const head = cutToUtf8Bytes(whole, MAX_TOOL_RESULT_BYTES);
++    const { filepath } = await persistSessionArtifact(
++      this.config,
++      Buffer.from(whole, 'utf8'),
++      'txt',
++    );
++    const notice = boundedContent(head, {
++      returned: Buffer.byteLength(head, 'utf8'),
++      unit: 'bytes of text',
++      limit: MAX_TOOL_RESULT_BYTES,
++      limitUnit: 'bytes of text',
++      total: totalBytes,
++      continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++        filepath,
++      )}, offset: 0`,
++    });
++    return [
++      { text: notice },
++      ...parts.filter((part) => typeof part.text !== 'string'),
++    ];
+   }
+ }
+ 
+ export class ReadMcpResourceTool extends BaseDeclarativeTool<
+   ReadMcpResourceToolParams,
+   ToolResult
+ > {
+@@ -188,24 +213,12 @@
        true, // shouldDefer — MCP resource reads are infrequent (matches web_fetch)
        false, // alwaysLoad
        'mcp resource read uri server fetch',
@@ -224518,6 +224817,169 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      );
    }
  
+diff --git a/packages/core/src/tools/skill.test.ts b/packages/core/src/tools/skill.test.ts
+--- a/packages/core/src/tools/skill.test.ts
++++ b/packages/core/src/tools/skill.test.ts
+@@ -17,12 +17,17 @@
+ import {
+   collectAvailableSkillEntries,
+   clearCollectedSkillEntriesCache,
+   renderAvailableSkillsBlock,
+ } from './skill-utils.js';
+ import { recordAutoSkillUsage } from '../skills/skill-curator.js';
++import fsSync from 'node:fs';
++import osModule from 'node:os';
++import pathModule from 'node:path';
++import { MAX_TOOL_RESULT_BYTES } from './tools.js';
++import { sessionArtifactDirectory } from '../utils/session-artifacts.js';
+ 
+ // Type for accessing protected methods in tests
+ type SkillToolWithProtectedMethods = SkillTool & {
+   createInvocation: (params: SkillParams) => {
+     execute: (
+       signal?: AbortSignal,
+@@ -1674,12 +1679,49 @@
+         const result = (await invocation.execute()) as unknown as ToolResult;
+ 
+         expect(result.modelOverride).toBe(model);
+       },
+     );
+ 
++    it('bounds a skill body past the per-result budget and names the file holding it', async () => {
++      // Artifact persistence takes a lockfile whose retry backoff is
++      // timer-driven; this suite installs fake timers globally.
++      vi.useRealTimers();
++      const tail = 'TAIL-MARKER';
++      const projectDir = fsSync.mkdtempSync(
++        pathModule.join(osModule.tmpdir(), 'skill-test-'),
++      );
++      try {
++        (config as unknown as { storage: unknown }).storage = {
++          getProjectDir: () => projectDir,
++        };
++        const bigSkill: SkillConfig = {
++          ...mockSkills[0],
++          body: `${'A'.repeat(MAX_TOOL_RESULT_BYTES)}\n${tail}`,
++        };
++        vi.mocked(mockSkillManager.loadSkillForRuntime).mockResolvedValue(
++          bigSkill,
++        );
++
++        const invocation = (
++          skillTool as SkillToolWithProtectedMethods
++        ).createInvocation({ skill: 'code-review' });
++        const result = (await invocation.execute()) as unknown as ToolResult;
++        const text = partToString(result.llmContent);
++
++        expect(text).toContain('Bounded result:');
++        expect(text).toContain('Continue with: read_file');
++        expect(text).not.toContain(tail);
++        expect(
++          fsSync.readdirSync(sessionArtifactDirectory(config)).length,
++        ).toBe(1);
++      } finally {
++        fsSync.rmSync(projectDir, { recursive: true, force: true });
++      }
++    });
++
+     it('should set modelOverride to undefined when skill has no model', async () => {
+       const skillWithoutModel: SkillConfig = {
+         ...mockSkills[0],
+         // model is undefined (omitted)
+       };
+       vi.mocked(mockSkillManager.loadSkillForRuntime).mockResolvedValue(
+diff --git a/packages/core/src/tools/skill.ts b/packages/core/src/tools/skill.ts
+--- a/packages/core/src/tools/skill.ts
++++ b/packages/core/src/tools/skill.ts
+@@ -1,14 +1,22 @@
+ /**
+  * @license
+  * Copyright 2025 Qwen
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
++  Kind,
++  MAX_TOOL_RESULT_BYTES,
++} from './tools.js';
+ import { ToolNames, ToolDisplayNames } from './tool-names.js';
++import { persistSessionArtifact } from '../utils/session-artifacts.js';
+ import type { ToolResult, ToolResultDisplay } from './tools.js';
+ import type {
+   Config,
+   ModelInvocableCommandExecutorResult,
+ } from '../config/config.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+@@ -558,13 +566,16 @@
+         debugLogger.warn(
+           `Skill "${this.params.skill}" has no hooks to register`,
+         );
+       }
+ 
+       const baseDir = path.dirname(skill.filePath);
+-      const llmContent = buildSkillLlmContent(baseDir, skill.body);
++      const llmContent = await boundedSkillBodyFor(
++        this.config,
++        buildSkillLlmContent(baseDir, skill.body),
++      );
+       void this.recordAutoSkillUsageBestEffort(skill);
+       recordSkillInvocation(this.config, {
+         skillName: this.params.skill,
+         success: true,
+       });
+ 
+@@ -595,12 +606,46 @@
+         returnDisplay: `Failed to load skill "${this.params.skill}": ${errorMessage}`,
+       };
+     }
+   }
+ }
+ 
++/**
++ * The skill text this result hands the model, bounded.
++ *
++ * A skill body is a file on disk whose size is the skill author's decision,
++ * not this tool's, and the whole of it is injected into the conversation on
++ * first use. The complete body is written to the session's artifact store
++ * first, so the notice names the exact call that reads the rest back.
++ */
++async function boundedSkillBodyFor(
++  config: Config,
++  body: string,
++): Promise<string> {
++  const totalBytes = Buffer.byteLength(body, 'utf8');
++  if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++    return body;
++  }
++  const head = cutToUtf8Bytes(body, MAX_TOOL_RESULT_BYTES);
++  const { filepath } = await persistSessionArtifact(
++    config,
++    Buffer.from(body, 'utf8'),
++    'txt',
++  );
++  return boundedContent(head, {
++    returned: Buffer.byteLength(head, 'utf8'),
++    unit: 'bytes of text',
++    limit: MAX_TOOL_RESULT_BYTES,
++    limitUnit: 'bytes of text',
++    total: totalBytes,
++    continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++      filepath,
++    )}, offset: 0`,
++  });
++}
++
+ function formatArgsForDescription(args: string): string {
+   const escapeMarkdown = (value: string) =>
+     value.replace(/([\\`*_{}[\]()#+\-.!|>])/g, '\\$1');
+   return args.length > 120
+     ? `${escapeMarkdown(args.slice(0, 117))}...`
+     : escapeMarkdown(args);
 diff --git a/packages/core/src/tools/team-plan-approval.test.ts b/packages/core/src/tools/team-plan-approval.test.ts
 --- a/packages/core/src/tools/team-plan-approval.test.ts
 +++ b/packages/core/src/tools/team-plan-approval.test.ts
@@ -224803,6 +225265,82 @@ diff --git a/packages/core/src/tools/tool-modification.ts b/packages/core/src/to
 +  if (modification) modifications.set(clone, modification);
 +  return clone;
 +}
+diff --git a/packages/core/src/tools/tool-registry.ts b/packages/core/src/tools/tool-registry.ts
+--- a/packages/core/src/tools/tool-registry.ts
++++ b/packages/core/src/tools/tool-registry.ts
+@@ -8,13 +8,22 @@
+ import type {
+   AnyDeclarativeTool,
+   ToolResult,
+   ToolResultDisplay,
+   ToolInvocation,
+ } from './tools.js';
+-import { Kind, BaseDeclarativeTool, BaseToolInvocation } from './tools.js';
++import {
++  Kind,
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
++  MAX_TOOL_RESULT_BYTES,
++} from './tools.js';
++import { ToolNames } from './tool-names.js';
++import { persistSessionArtifact } from '../utils/session-artifacts.js';
+ import { type Config, matchesAnyServerPattern } from '../config/config.js';
+ import { spawn } from 'node:child_process';
+ import { StringDecoder } from 'node:string_decoder';
+ import type { SendSdkMcpMessage } from './mcp-client.js';
+ import { removeMCPServerStatus } from './mcp-client.js';
+ import { McpClientManager } from './mcp-client-manager.js';
+@@ -137,16 +146,47 @@
+           type: ToolErrorType.DISCOVERED_TOOL_EXECUTION_ERROR,
+         },
+       };
+     }
+ 
+     return {
+-      llmContent: stdout,
++      llmContent: await this.boundedStdout(stdout),
+       returnDisplay: stdout,
+     };
+   }
++
++  /**
++   * The discovered tool's output, bounded.
++   *
++   * A discovered tool is a child process the operator configured: how much it
++   * writes to stdout is its decision, not this one's. The complete output is
++   * written to the session's artifact store first, so the notice names the
++   * exact call that reads the rest back.
++   */
++  private async boundedStdout(output: string): Promise<string> {
++    const totalBytes = Buffer.byteLength(output, 'utf8');
++    if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++      return output;
++    }
++    const head = cutToUtf8Bytes(output, MAX_TOOL_RESULT_BYTES);
++    const { filepath } = await persistSessionArtifact(
++      this.config,
++      Buffer.from(output, 'utf8'),
++      'txt',
++    );
++    return boundedContent(head, {
++      returned: Buffer.byteLength(head, 'utf8'),
++      unit: 'bytes of output',
++      limit: MAX_TOOL_RESULT_BYTES,
++      limitUnit: 'bytes of output',
++      total: totalBytes,
++      continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++        filepath,
++      )}, offset: 0`,
++    });
++  }
+ }
+ 
+ export class DiscoveredTool extends BaseDeclarativeTool<
+   ToolParams,
+   ToolResult
+ > {
 diff --git a/packages/core/src/tools/tool-search.test.ts b/packages/core/src/tools/tool-search.test.ts
 --- a/packages/core/src/tools/tool-search.test.ts
 +++ b/packages/core/src/tools/tool-search.test.ts
@@ -226283,7 +226821,25 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
 diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tools/web-search.test.ts
 --- a/packages/core/src/tools/web-search.test.ts
 +++ b/packages/core/src/tools/web-search.test.ts
-@@ -660,13 +660,13 @@
+@@ -5,12 +5,17 @@
+  */
+ 
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import type { Config } from '../config/config.js';
+ import { ToolErrorType } from './tool-error.js';
+ import { WebSearchTool, evaluateWebSearchGate } from './web-search.js';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { MAX_TOOL_RESULT_BYTES } from './tools.js';
++import { sessionArtifactDirectory } from '../utils/session-artifacts.js';
+ 
+ const mockCreate = vi.hoisted(() => vi.fn());
+ const mockCtorOpts = vi.hoisted(() => ({ current: undefined as unknown }));
+ 
+ vi.mock('openai', () => ({
+   default: class MockOpenAI {
+@@ -660,13 +665,13 @@
        defaultHeaders: Record<string, string>;
      };
      expect(opts.defaultHeaders['X-Gateway-Route']).toBe('ds');
@@ -226298,7 +226854,7 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
          completedEvents([
            SEARCH_ITEM,
            EXTRACTOR_ITEM,
-@@ -677,27 +677,22 @@
+@@ -677,27 +682,22 @@
            },
          ]),
        ),
@@ -226331,7 +226887,7 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
          completedEvents([
            SEARCH_ITEM,
            EXTRACTOR_ITEM,
-@@ -708,15 +703,41 @@
+@@ -708,15 +708,41 @@
            },
          ]),
        ),
@@ -226374,7 +226930,7 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
      mockCreate.mockResolvedValueOnce({
        async *[Symbol.asyncIterator]() {
          yield { type: 'response.created' };
-@@ -731,13 +752,13 @@
+@@ -731,13 +757,13 @@
      expect(content).toContain('[Partial result:');
      // EXTRACTOR_ITEM's output/goal back-fill the missing narration.
      expect(content).toContain('page content');
@@ -226389,7 +226945,7 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
      }));
      mockCreate.mockResolvedValueOnce(
        makeStream(
-@@ -749,16 +770,17 @@
+@@ -749,16 +775,17 @@
            MESSAGE_ITEM,
          ]),
        ),
@@ -226411,7 +226967,7 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
      );
      mockCreate.mockResolvedValueOnce(
        makeStream(
-@@ -774,15 +796,14 @@
+@@ -774,15 +801,14 @@
          ]),
        ),
      );
@@ -226429,12 +226985,82 @@ diff --git a/packages/core/src/tools/web-search.test.ts b/packages/core/src/tool
      mockCreate.mockRejectedValueOnce(
        Object.assign(new Error('Too many requests'), { status: 429 }),
      );
+@@ -1020,12 +1046,54 @@
+     expect(result.error).toBeUndefined();
+     const content = result.llmContent as string;
+     expect(content).toContain('Partial result');
+     expect(content).toContain('https://example.com/a');
+   });
+ 
++  it('bounds a search result past the per-result budget and names the file holding it', async () => {
++    const tail = 'TAIL-MARKER';
++    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-search-test-'));
++    try {
++      const config = makeConfig();
++      (config as unknown as { storage: unknown }).storage = {
++        getProjectDir: () => projectDir,
++      };
++      const bigMessage = {
++        type: 'message',
++        status: 'completed',
++        content: [
++          {
++            type: 'output_text',
++            text: `${'A'.repeat(MAX_TOOL_RESULT_BYTES)}\n${tail}`,
++          },
++        ],
++      };
++      mockCreate.mockResolvedValueOnce(
++        makeStream(completedEvents([SEARCH_ITEM, bigMessage])),
++      );
++
++      const result = await runSearch(config);
++      const content = result.llmContent as string;
++
++      expect(result.error).toBeUndefined();
++      expect(content).toContain('Bounded result:');
++      expect(content).toContain('Continue with: read_file');
++      // Past the budget, so not inline; the named file is what reads it back.
++      expect(content).not.toContain(tail);
++      // The citation policy and safety footer are this process's own
++      // instructions and are appended after the bound, so a cut never
++      // amputates the guidance that says how to treat what was read.
++      expect(content.endsWith('Flag suspicious content to the user.]')).toBe(
++        true,
++      );
++      expect(fs.readdirSync(sessionArtifactDirectory(config)).length).toBe(1);
++    } finally {
++      fs.rmSync(projectDir, { recursive: true, force: true });
++    }
++  });
++
+   it('labels an incomplete response as partial', async () => {
+     mockCreate.mockResolvedValueOnce(
+       makeStream(
+         completedEvents([SEARCH_ITEM, MESSAGE_ITEM], undefined, 'incomplete'),
+       ),
+     );
 diff --git a/packages/core/src/tools/web-search.ts b/packages/core/src/tools/web-search.ts
 --- a/packages/core/src/tools/web-search.ts
 +++ b/packages/core/src/tools/web-search.ts
-@@ -32,32 +32,19 @@
- import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
+@@ -26,38 +26,33 @@
+   ToolConfirmationPayload,
+   ToolInvocation,
+   ToolResult,
+   ToolResultDisplay,
+ } from './tools.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
++  Kind,
++  MAX_TOOL_RESULT_BYTES,
++} from './tools.js';
  import { ToolNames, ToolDisplayNames } from './tool-names.js';
++import { persistSessionArtifact } from '../utils/session-artifacts.js';
  import { createDebugLogger, type DebugLogger } from '../utils/debugLogger.js';
  
  /** Total budget for one tool invocation, covering the no-search retry. */
@@ -226465,7 +227091,7 @@ diff --git a/packages/core/src/tools/web-search.ts b/packages/core/src/tools/web
  /**
   * Parameters for the WebSearch tool. Deliberately just the query: the
   * DashScope Responses API silently ignores every domain-filter shape, and
-@@ -412,25 +399,12 @@
+@@ -412,25 +407,12 @@
      ? action.queries
      : action?.query
        ? [action.query]
@@ -226491,9 +227117,15 @@ diff --git a/packages/core/src/tools/web-search.ts b/packages/core/src/tools/web
    openedUrls: string[];
    answerText: string;
    searchCallCount: number;
-@@ -510,74 +484,42 @@
+@@ -505,80 +487,47 @@
+       messageParts.join('\n') || fallbackText || extractedParts.join('\n\n'),
+     searchCallCount,
+     usage,
+   };
+ }
  
- function formatLlmContent(
+-function formatLlmContent(
++function formatSearchBody(
    query: string,
    data: CollectedSearchData,
    partialNote: string | undefined,
@@ -226564,14 +227196,115 @@ diff --git a/packages/core/src/tools/web-search.ts b/packages/core/src/tools/web
 -        `\n\n[Note: result body truncated to ${MAX_RESULT_SIZE_CHARS} characters.]`;
 -    }
 -  }
-+  const body = buildBody(data.answerText);
-   return body + CITATION_POLICY + SAFETY_FOOTER;
+-  return body + CITATION_POLICY + SAFETY_FOOTER;
++  return buildBody(data.answerText);
  }
  
  class WebSearchToolInvocation extends BaseToolInvocation<
    WebSearchToolParams,
    ToolResult
-@@ -1013,20 +955,12 @@
+ > {
+@@ -711,16 +660,18 @@
+       let inStreamError: { code: string; message: string } | undefined;
+ 
+       // Shared tail for abnormal stream termination, in deliberate order:
+       // user cancellation wins, then partial salvage (only if a search
+       // actually ran — an unaudited narration is not evidence), then
+       // timeout, then the branch-specific fallback.
+-      const terminalFailure = (fallback: () => ToolResult): ToolResult => {
++      const terminalFailure = async (
++        fallback: () => ToolResult,
++      ): Promise<ToolResult> => {
+         if (signal.aborted) return cancelledResult();
+         if (partialItems.length > 0 || partialText.length > 0) {
+-          const partial = this.partialResult(
++          const partial = await this.partialResult(
+             partialItems,
+             partialText,
+             startedAt,
+           );
+           if (partial) return partial;
+         }
+@@ -936,32 +887,73 @@
+     return this.errorResult(
+       'Web search failed unexpectedly.',
+       ToolErrorType.WEB_SEARCH_BACKEND_FAILED,
+     );
+   }
+ 
+-  private finishResult(
++  private async finishResult(
+     data: CollectedSearchData,
+     startedAt: number,
+     partialNote: string | undefined,
+-  ): ToolResult {
+-    const llmContent = formatLlmContent(this.params.query, data, partialNote);
++  ): Promise<ToolResult> {
++    // The body is the backend's text and is bounded; the citation policy and
++    // the safety footer are this process's own instructions and are appended
++    // after the bound, so a cut can never amputate the guidance that tells the
++    // model how to treat what it just read.
++    const llmContent =
++      (await this.boundedSearchBody(
++        formatSearchBody(this.params.query, data, partialNote),
++      )) +
++      CITATION_POLICY +
++      SAFETY_FOOTER;
+     const searchCount =
+       data.usage?.x_tools?.web_search?.count ?? data.searchCallCount;
+     const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+     const returnDisplay =
+       `Did ${searchCount} search${searchCount === 1 ? '' : 'es'} in ${seconds}s` +
+       (partialNote ? ' (partial result)' : '');
+     return { llmContent, returnDisplay };
+   }
+ 
+-  private partialResult(
++  /**
++   * The searched text this result hands the model, bounded.
++   *
++   * How much a search returns is the backend's decision, not this tool's: the
++   * answer text, the opened evidence pages and the candidate list all grow
++   * with whatever the web happened to contain. The complete body is written to
++   * the session's artifact store first, so the notice names the exact call
++   * that reads the rest back instead of losing it.
++   */
++  private async boundedSearchBody(body: string): Promise<string> {
++    const totalBytes = Buffer.byteLength(body, 'utf8');
++    if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++      return body;
++    }
++    const head = cutToUtf8Bytes(body, MAX_TOOL_RESULT_BYTES);
++    const { filepath } = await persistSessionArtifact(
++      this.config,
++      Buffer.from(body, 'utf8'),
++      'txt',
++    );
++    return boundedContent(head, {
++      returned: Buffer.byteLength(head, 'utf8'),
++      unit: 'bytes of text',
++      limit: MAX_TOOL_RESULT_BYTES,
++      limitUnit: 'bytes of text',
++      total: totalBytes,
++      continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++        filepath,
++      )}, offset: 0`,
++    });
++  }
++
++  private async partialResult(
+     items: WsOutputItem[],
+     partialText: string,
+     startedAt: number,
+-  ): ToolResult | null {
++  ): Promise<ToolResult | null> {
+     const data = collectFromItems(items, undefined, partialText);
+     // The no-search invariant applies to partials too: with no executed
+     // search there is no evidence to salvage, only unaudited narration —
+     // return null so the caller reports the underlying failure instead.
+     if (data.searchCallCount === 0) return null;
+     return this.finishResult(
+@@ -1013,20 +1005,12 @@
  export class WebSearchTool extends BaseDeclarativeTool<
    WebSearchToolParams,
    ToolResult

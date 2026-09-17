@@ -5457,6 +5457,18 @@ def _validate_bounded_output_before(state: State) -> None:
         "boundedContent",
         label=label,
     )
+    # Five more results whose size is decided outside this process reach the
+    # model whole: a search backend's answer, an MCP server's resource, a
+    # skill file on disk, a discovered tool's child process, and a whole
+    # first turn of another session.
+    for path in (
+        "packages/core/src/tools/create-sub-session.ts",
+        "packages/core/src/tools/read-mcp-resource.ts",
+        "packages/core/src/tools/skill.ts",
+        "packages/core/src/tools/tool-registry.ts",
+        "packages/core/src/tools/web-search.ts",
+    ):
+        forbid_text(state, path, "boundedContent", label=label)
     # The shell service words its own capture-limit notice, one layer below the
     # tools and out of the one-notice detector's reach, and keeps the fact that
     # it truncated inside that prose rather than on the result.
@@ -5539,17 +5551,32 @@ def _validate_bounded_output_after(state: State) -> None:
     # The known capping tools are named so the detector cannot be satisfied by
     # a tree that simply stopped capping anything.
     for path in (
+        "packages/core/src/tools/create-sub-session.ts",
         "packages/core/src/tools/glob.ts",
         "packages/core/src/tools/grep.ts",
         "packages/core/src/tools/ls.ts",
         "packages/core/src/tools/lsp.ts",
         "packages/core/src/tools/mcp-tool.ts",
+        "packages/core/src/tools/read-mcp-resource.ts",
         "packages/core/src/tools/ripGrep.ts",
         "packages/core/src/tools/shell.ts",
+        "packages/core/src/tools/skill.ts",
+        "packages/core/src/tools/tool-registry.ts",
         "packages/core/src/tools/tool-search.ts",
         "packages/core/src/tools/web-fetch.ts",
+        "packages/core/src/tools/web-search.ts",
     ):
         require_text(state, path, "boundedContent(", count=1, label=label)
+
+    # The comment that deferred sizing to a turn-level batch bound goes with
+    # the bound this tool now applies itself: a result sized by the server on
+    # the other end is this tool's to hold, not a later layer's.
+    forbid_text(
+        state,
+        "packages/core/src/tools/read-mcp-resource.ts",
+        "the common send boundary sizes it",
+        label=label,
+    )
 
     # A layer below the tools phrases model-facing text too. It states the
     # capture limit through the same helper, so a single result cannot carry
@@ -5604,6 +5631,26 @@ def _validate_bounded_output_after(state: State) -> None:
         (
             "packages/core/src/services/shellExecutionService.test.ts",
             "bounds buffered PTY output before building the final string",
+        ),
+        (
+            "packages/core/src/tools/web-search.test.ts",
+            "bounds a search result past the per-result budget and names the "
+            "file holding it",
+        ),
+        (
+            "packages/core/src/tools/read-mcp-resource.test.ts",
+            "bounds a resource past the per-result budget and names the file "
+            "holding it",
+        ),
+        (
+            "packages/core/src/tools/skill.test.ts",
+            "bounds a skill body past the per-result budget and names the file "
+            "holding it",
+        ),
+        (
+            "packages/core/src/tools/create-sub-session.test.ts",
+            "bounds a first-turn result past the per-result budget and names "
+            "the file holding it",
         ),
     ):
         require_text(state, path, case, label=label)
