@@ -55,15 +55,14 @@ The fixed stack is:
 | Service listener | `127.0.0.1:8090` only |
 | Model listener | `127.0.0.1:8000` only |
 
-This source targets the corrected v23 backend and awaits a coordinated release.
-The image ID in `config/stack.lock.json` and `src/config.rs` remains the previous
-build's value under the backend's awaiting-adoption convention. The coordinator
-must replace both with the actual v23 ID after building and adopting the backend.
-The launch profile and cache volume remain v21; the image profile is v23. The
-template is derived and hash-pinned in the backend, then covered by the adopted
-image identity. No separate template file is built by this service. The current
-build-input and release locks still describe the previous release; `release.sh`
-must seal and build the new implementation after backend adoption. Prior live
+This source targets the corrected v24 backend. The image ID is adopted in both
+`config/stack.lock.json` and `src/config.rs`, and is the ID the backend's own
+build verified as reproducible. The launch profile and cache volume remain v21,
+because they track the backend's `PROFILE_VERSION`, which did not move; the
+image profile is v24. The template is derived and hash-pinned in the backend,
+then covered by the adopted image identity. No separate template file is built
+by this service. The build-input and release locks are advanced only by
+`release.sh`, which seals the implementation and then builds it. Prior live
 measurements below describe the releases that earned them.
 
 Every longer pin—including base-image digests, package snapshot and versions,
