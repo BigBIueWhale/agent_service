@@ -4608,10 +4608,17 @@ def _validate_tool_result_bound_after(state: State) -> None:
         )
     for symbol in ("trackToolResultBytes", "unusedResultPath", "cleanupOldToolOutputs"):
         forbid_text(state, truncation, symbol, label=label)
+    # web-fetch persists twice, and the second is what makes its own bound
+    # continuable. The fetch path retains the original response bytes; the
+    # bound path retains the model-facing text at the moment it is cut. For
+    # HTML those are different documents -- the first is the source, the
+    # second the converted markdown the result actually carried -- so a
+    # continuation naming the original would not continue what was cut.
     require_text(
         state,
         "packages/core/src/tools/web-fetch.ts",
         "persistSessionArtifact(",
+        count=2,
         label=label,
     )
 
@@ -5307,6 +5314,29 @@ def _validate_bounded_output_before(state: State) -> None:
     forbid_text(
         state, "packages/core/src/lsp/types.ts", "LspBounded", label=label
     )
+    # web-fetch cut its own text at a character cap it never declared, phrased
+    # in its own words. That cap is what the shared per-result budget replaces,
+    # so the bound this concern puts back is restored rather than invented.
+    require_text(
+        state,
+        "packages/core/src/tools/web-fetch.ts",
+        "const MAX_CONTENT_CHARS = 100_000;",
+        label=label,
+    )
+    # There is no shared per-result budget yet, and an MCP reply is held to
+    # nothing at all.
+    forbid_text(
+        state,
+        "packages/core/src/tools/tools.ts",
+        "MAX_TOOL_RESULT_BYTES",
+        label=label,
+    )
+    forbid_text(
+        state,
+        "packages/core/src/tools/mcp-tool.ts",
+        "boundedContent",
+        label=label,
+    )
 
 
 def _validate_bounded_output_after(state: State) -> None:
@@ -5327,6 +5357,8 @@ def _validate_bounded_output_after(state: State) -> None:
             "coverageUnknown?: boolean;",
             "export function formatOutputBound(bound: OutputBound): string {",
             "export function boundedContent(content: string, bound: OutputBound): string {",
+            "export const MAX_TOOL_RESULT_BYTES = 32_768;",
+            "export function cutToUtf8Bytes(text: string, maxBytes: number): string {",
         ),
         label=label,
     )
@@ -5376,10 +5408,34 @@ def _validate_bounded_output_after(state: State) -> None:
         "packages/core/src/tools/grep.ts",
         "packages/core/src/tools/ls.ts",
         "packages/core/src/tools/lsp.ts",
+        "packages/core/src/tools/mcp-tool.ts",
         "packages/core/src/tools/ripGrep.ts",
         "packages/core/src/tools/tool-search.ts",
+        "packages/core/src/tools/web-fetch.ts",
     ):
         require_text(state, path, "boundedContent(", count=1, label=label)
+
+    # A result sized outside this process is held to the shared budget before
+    # it enters the conversation, and the budget is applied to a reply's text
+    # as a whole: a per-part limit would pass a reply whose every part is just
+    # under it. Executed in the build.
+    for path, case in (
+        (
+            "packages/core/src/tools/tools.test.ts",
+            "never splits a multi-byte code point at the boundary",
+        ),
+        (
+            "packages/core/src/tools/web-fetch.test.ts",
+            "bounds preapproved markdown past the per-result budget and names "
+            "the file holding it",
+        ),
+        (
+            "packages/core/src/tools/mcp-tool.test.ts",
+            "bounds a reply whose parts are each small but together exceed the "
+            "budget",
+        ),
+    ):
+        require_text(state, path, case, label=label)
 
     # A cap the service applied and then forgot cannot be declared by anyone,
     # so the fact travels with the items.

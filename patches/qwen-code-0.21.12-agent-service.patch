@@ -219351,7 +219351,52 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
        { allowInvocationContext: false, runWithContext: true },
        { allowInvocationContext: true, runWithContext: false },
      ])(
-@@ -1141,112 +1169,32 @@
+@@ -301,12 +329,44 @@
+       expect(toolResult.returnDisplay).toBe(
+         '[Error: Could not parse tool response]',
+       );
+       expect(toolResult.llmContent).toEqual([
+         { text: '[Error: Could not parse tool response]' },
+       ]);
++    });
++
++    it('bounds a reply whose parts are each small but together exceed the budget', async () => {
++      const tail = 'TAIL-MARKER';
++      const block = 'B'.repeat(16_000);
++      mockCallTool.mockResolvedValue([
++        {
++          functionResponse: {
++            name: serverToolName,
++            response: {
++              content: [
++                { type: 'text', text: block },
++                { type: 'text', text: block },
++                { type: 'text', text: `${block}\n${tail}` },
++              ],
++            },
++          },
++        },
++      ] as Part[]);
++
++      const toolResult: ToolResult = await tool
++        .build({ param: 'testValue' })
++        .execute(new AbortController().signal);
++
++      const parts = toolResult.llmContent as Part[];
++      expect(parts).toHaveLength(1);
++      expect(parts[0].text).toContain('Bounded result:');
++      expect(parts[0].text).toContain('bytes of text in total');
++      expect(parts[0].text).not.toContain(tail);
++      // This tool was built without a Config, so there is no artifact store to
++      // page to and the notice offers nothing to continue with.
++      expect(parts[0].text).not.toContain('Continue with:');
+     });
+ 
+     it('should propagate rejection if mcpTool.callTool rejects', async () => {
+       const params = { param: 'failCase' };
+       const expectedError = new Error('MCP call failed');
+       mockCallTool.mockRejectedValue(expectedError);
+@@ -1141,112 +1201,32 @@
        expect(await invocation.getDefaultPermission()).toBe('ask');
      });
    });
@@ -219468,7 +219513,7 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
            content: [{ type: 'text', text: smallText }],
          })),
        };
-@@ -1264,16 +1212,15 @@
+@@ -1264,16 +1244,15 @@
        );
  
        const invocation = truncTool.build({ param: 'test' });
@@ -219488,7 +219533,7 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
              {
                type: 'image',
                data: 'x'.repeat(5000), // large base64 data
-@@ -1300,54 +1247,12 @@
+@@ -1300,54 +1279,12 @@
  
        // Image data should not be truncated
        const inlineDataParts = (result.llmContent as Part[]).filter(
@@ -219543,7 +219588,7 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
        const largeText = 'Line of text content\n'.repeat(200);
        const mockMcpClient: McpDirectClient = {
          callTool: vi.fn(async () => ({
-@@ -1570,13 +1475,12 @@
+@@ -1570,13 +1507,12 @@
        const mockConfig = {
          isTrustedFolder: () => true,
          getToolRegistry: () => ({
@@ -219557,7 +219602,7 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
        const connectionError = new Error('Connection closed');
  
        updateMCPServerStatus(serverName, MCPServerStatus.CONNECTED);
-@@ -1769,13 +1673,12 @@
+@@ -1769,13 +1705,12 @@
        const mockConfig = {
          isTrustedFolder: () => true,
          getToolRegistry: () => ({
@@ -219571,7 +219616,7 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
          initialCallable,
          serverName,
          serverToolName,
-@@ -2056,13 +1959,12 @@
+@@ -2056,13 +1991,12 @@
        const mockConfig = {
          isTrustedFolder: () => true,
          getToolRegistry: () => ({
@@ -219585,7 +219630,7 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
          mockCallableToolInstance,
          serverName,
          serverToolName,
-@@ -2230,13 +2132,12 @@
+@@ -2230,13 +2164,12 @@
          const mockConfig = {
            isTrustedFolder: () => true,
            getToolRegistry: () => ({
@@ -219599,7 +219644,7 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
          const reconnectTool = new DiscoveredMCPTool(
            mockCallableToolInstance,
            serverName,
-@@ -2295,13 +2196,12 @@
+@@ -2295,13 +2228,12 @@
        const mockConfig = {
          isTrustedFolder: () => true,
          getToolRegistry: () => ({
@@ -219613,7 +219658,7 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
        updateMCPServerStatus(serverName, MCPServerStatus.DISCONNECTED);
  
        const reconnectTool = new DiscoveredMCPTool(
-@@ -2359,13 +2259,12 @@
+@@ -2359,13 +2291,12 @@
        const mockConfig = {
          isTrustedFolder: () => true,
          getToolRegistry: () => ({
@@ -219630,7 +219675,26 @@ diff --git a/packages/core/src/tools/mcp-tool.test.ts b/packages/core/src/tools/
 diff --git a/packages/core/src/tools/mcp-tool.ts b/packages/core/src/tools/mcp-tool.ts
 --- a/packages/core/src/tools/mcp-tool.ts
 +++ b/packages/core/src/tools/mcp-tool.ts
-@@ -22,13 +22,12 @@
+@@ -13,22 +13,30 @@
+   ToolResultDisplay,
+   ToolConfirmationPayload,
+   McpToolProgressData,
+   ToolConfirmationOutcome,
+ } from './tools.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
++  Kind,
++  MAX_TOOL_RESULT_BYTES,
++} from './tools.js';
++import { ToolNames } from './tool-names.js';
++import { persistSessionArtifact } from '../utils/session-artifacts.js';
+ import type {
+   CallableTool,
    FunctionCall,
    Part,
    PartListUnion,
@@ -219644,7 +219708,7 @@ diff --git a/packages/core/src/tools/mcp-tool.ts b/packages/core/src/tools/mcp-t
    getAllMCPServerStatuses,
    getMCPServerStatus,
    MCPServerStatus,
-@@ -585,28 +584,23 @@
+@@ -585,28 +593,23 @@
        const rawResponseParts = wrapMcpCallToolResultAsParts(
          this.serverToolName,
          callToolResult,
@@ -219668,7 +219732,7 @@ diff --git a/packages/core/src/tools/mcp-tool.ts b/packages/core/src/tools/mcp-t
 -          truncated.persistedOutputFiles,
 -        ),
 -        persistedOutputFiles: truncated.persistedOutputFiles,
-+        llmContent: transformedParts,
++        llmContent: await this.boundedResultParts(transformedParts),
 +        returnDisplay: getDisplayFromParts(transformedParts),
        };
      } catch (error) {
@@ -219676,7 +219740,7 @@ diff --git a/packages/core/src/tools/mcp-tool.ts b/packages/core/src/tools/mcp-t
        // execution timeout regardless of what the transport thinks.
        if (
          idleTimeoutWon ||
-@@ -656,25 +650,20 @@
+@@ -656,25 +659,20 @@
        if (isParentAbortOutcome(outcome)) {
          throw outcome.reason;
        }
@@ -219697,7 +219761,7 @@ diff --git a/packages/core/src/tools/mcp-tool.ts b/packages/core/src/tools/mcp-t
 -          truncated.persistedOutputFiles,
 -        ),
 -        persistedOutputFiles: truncated.persistedOutputFiles,
-+        llmContent: transformedParts,
++        llmContent: await this.boundedResultParts(transformedParts),
 +        returnDisplay: getDisplayFromParts(transformedParts),
        };
      } catch (error) {
@@ -219705,7 +219769,7 @@ diff --git a/packages/core/src/tools/mcp-tool.ts b/packages/core/src/tools/mcp-t
          throw new StructuredToolError(
            getErrorMessage(error),
            ToolErrorType.EXECUTION_TIMEOUT,
-@@ -683,29 +672,26 @@
+@@ -683,29 +681,78 @@
        return this.handleReconnectOnError(error, signal);
      } finally {
        parentAbortRace.dispose();
@@ -219713,6 +219777,58 @@ diff --git a/packages/core/src/tools/mcp-tool.ts b/packages/core/src/tools/mcp-t
    }
  
 -  private async buildMcpToolError(
++  /**
++   * The parts this result hands the model, bounded.
++   *
++   * A server's reply is sized by the server, not by this tool, so the text it
++   * carries is held to the shared per-result budget before it enters the
++   * conversation. The budget applies to the reply's text as a whole rather
++   * than to each part: a reply of a hundred parts, each just under the bound,
++   * is exactly the case a per-part limit would wave through.
++   *
++   * An over-budget reply becomes one bounded text part followed by its
++   * non-text parts. The complete text, in its original order, is the file the
++   * notice names, so nothing is lost by the reordering. Without a `Config`
++   * there is no artifact store to write to and so nothing to continue from;
++   * the notice then states the true total and omits the continuation, which is
++   * the honest reading of a reply this tool cannot page.
++   */
++  private async boundedResultParts(parts: Part[]): Promise<Part[]> {
++    const texts: string[] = [];
++    for (const part of parts) {
++      if (typeof part.text === 'string') texts.push(part.text);
++    }
++    const whole = texts.join('\n');
++    const totalBytes = Buffer.byteLength(whole, 'utf8');
++    if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++      return parts;
++    }
++    const head = cutToUtf8Bytes(whole, MAX_TOOL_RESULT_BYTES);
++    let continuation: string | undefined;
++    if (this.cliConfig) {
++      const { filepath } = await persistSessionArtifact(
++        this.cliConfig,
++        Buffer.from(whole, 'utf8'),
++        'txt',
++      );
++      continuation = `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++        filepath,
++      )}, offset: 0`;
++    }
++    const notice = boundedContent(head, {
++      returned: Buffer.byteLength(head, 'utf8'),
++      unit: 'bytes of text',
++      limit: MAX_TOOL_RESULT_BYTES,
++      limitUnit: 'bytes of text',
++      total: totalBytes,
++      ...(continuation === undefined ? {} : { continuation }),
++    });
++    return [
++      { text: notice },
++      ...parts.filter((part) => typeof part.text !== 'string'),
++    ];
++  }
++
 +  private buildMcpToolError(
      rawResponseParts: Part[],
      functionCall: FunctionCall,
@@ -219739,7 +219855,7 @@ diff --git a/packages/core/src/tools/mcp-tool.ts b/packages/core/src/tools/mcp-t
        }' reported tool error for function call: ${safeJsonStringify(
          functionCall,
        )} with response: ${safeJsonStringify(rawResponseParts)}`;
-@@ -716,80 +702,28 @@
+@@ -716,80 +763,28 @@
        llmContent,
        returnDisplay: `Error: MCP tool '${this.serverToolName}' reported an error.`,
        error: {
@@ -219820,7 +219936,7 @@ diff --git a/packages/core/src/tools/mcp-tool.ts b/packages/core/src/tools/mcp-t
        `mcp__${this.serverName}__${this.serverToolName}`,
      );
      return legacyName === this.name ? [] : [legacyName];
-@@ -1054,21 +988,10 @@
+@@ -1054,21 +1049,10 @@
      }
    }
  
@@ -224360,6 +224476,72 @@ diff --git a/packages/core/src/tools/tool-search.ts b/packages/core/src/tools/to
      if (loaded.length > 0) displayParts.push(`Loaded ${loaded.length} tool(s)`);
      if (missing.length > 0) displayParts.push(`${missing.length} missing`);
      if (blocked.length > 0) displayParts.push(`${blocked.length} unavailable`);
+diff --git a/packages/core/src/tools/tools.test.ts b/packages/core/src/tools/tools.test.ts
+--- a/packages/core/src/tools/tools.test.ts
++++ b/packages/core/src/tools/tools.test.ts
+@@ -5,16 +5,18 @@
+  */
+ 
+ import { describe, it, expect, vi } from 'vitest';
+ import type { ToolInvocation, ToolResult } from './tools.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+ import {
++  cutToUtf8Bytes,
+   DeclarativeTool,
+   hasCycleInSchema,
+   isTerminalImageDisplay,
+   Kind,
++  MAX_TOOL_RESULT_BYTES,
+ } from './tools.js';
+ import { ToolErrorType } from './tool-error.js';
+ 
+ class TestToolInvocation implements ToolInvocation<object, ToolResult> {
+   constructor(
+     readonly params: object,
+@@ -281,6 +283,43 @@
+         filePath: '/workspace/chart.png',
+         mimeType: 'image/jpeg',
+       }),
+     ).toBe(false);
+   });
+ });
++
++describe('cutToUtf8Bytes', () => {
++  it('returns the text unchanged when it already fits', () => {
++    expect(cutToUtf8Bytes('short', 32)).toBe('short');
++    const exact = 'a'.repeat(16);
++    expect(cutToUtf8Bytes(exact, 16)).toBe(exact);
++  });
++
++  it('never splits a multi-byte code point at the boundary', () => {
++    // Three bytes each, so a cut at 32 lands inside the eleventh.
++    const euros = '€'.repeat(12);
++    const cut = cutToUtf8Bytes(euros, 32);
++    expect(cut).toBe('€'.repeat(10));
++    expect(Buffer.byteLength(cut, 'utf8')).toBe(30);
++    // A cut that split a code point would decode to a replacement character
++    // and stop being a prefix of the original, so this is the property itself
++    // rather than a symptom of breaking it.
++    expect(euros.startsWith(cut)).toBe(true);
++
++    // Four bytes each, which is the longest walk back the cut can need.
++    const faces = '😀'.repeat(9);
++    const cutFaces = cutToUtf8Bytes(faces, 34);
++    expect(cutFaces).toBe('😀'.repeat(8));
++    expect(Buffer.byteLength(cutFaces, 'utf8')).toBe(32);
++    expect(faces.startsWith(cutFaces)).toBe(true);
++  });
++
++  it('returns nothing for a budget that admits nothing', () => {
++    expect(cutToUtf8Bytes('anything', 0)).toBe('');
++    expect(cutToUtf8Bytes('anything', -1)).toBe('');
++  });
++
++  it('bounds one tool result at a positive whole number of bytes', () => {
++    expect(Number.isSafeInteger(MAX_TOOL_RESULT_BYTES)).toBe(true);
++    expect(MAX_TOOL_RESULT_BYTES).toBeGreaterThan(0);
++  });
++});
 diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 --- a/packages/core/src/tools/tools.ts
 +++ b/packages/core/src/tools/tools.ts
@@ -224516,7 +224698,7 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
      );
  
      if (errors) {
-@@ -482,12 +533,91 @@
+@@ -482,12 +533,136 @@
    url?: string;
    mimeType?: string;
    sizeBytes?: number;
@@ -224602,13 +224784,58 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 +  return `${formatOutputBound(bound)}\n\n---\n\n${content}`;
 +}
 +
++/**
++ * The most model-facing text one tool result carries inline, in UTF-8 bytes.
++ *
++ * That a bound exists here is required. A result whose size is decided outside
++ * this process — a fetched page, a server's reply, a command's output — must
++ * not be able to reach the context window. The window is guarded in exact
++ * tokens by the compaction trigger, which refuses a request that no longer
++ * fits; this bound exists so that refusal stays unreachable in ordinary work.
++ * Bytes never stand in for tokens: nothing here converts between them, and no
++ * ratio between them is assumed or needed.
++ *
++ * That the magnitude is 32,768 is a policy choice, not a derivation, and it is
++ * recorded here so a later reader can revisit it rather than inherit it. It
++ * sits above a measured distribution of real results — 7,683 tool results
++ * across 54 recorded sessions, whose largest result not produced by echoing a
++ * model-supplied argument was 27,190 bytes. Two cautions belong with that
++ * number, and are why no margin is claimed for it. The distribution is itself
++ * shaped by `read_file`'s own 25,000-byte page budget, which accounts for most
++ * of the results near the top of it. And a measurement describes what has
++ * happened, never what a tool can emit: a single command can produce
++ * gigabytes, so this bound is what makes such a result representable, not
++ * evidence that one will not occur.
++ */
++export const MAX_TOOL_RESULT_BYTES = 32_768;
++
++/**
++ * The longest prefix of `text` that fits `maxBytes` once encoded as UTF-8, cut
++ * on a code-point boundary.
++ *
++ * Cutting a UTF-8 sequence in half would hand the model a replacement
++ * character indistinguishable from one the source actually contained, so the
++ * cut walks back off any continuation byte. A sequence is at most four bytes,
++ * so that walk is at most three steps.
++ */
++export function cutToUtf8Bytes(text: string, maxBytes: number): string {
++  if (maxBytes <= 0) return '';
++  const encoded = Buffer.from(text, 'utf8');
++  if (encoded.byteLength <= maxBytes) return text;
++  let end = maxBytes;
++  while (end > 0 && (encoded[end] & 0b1100_0000) === 0b1000_0000) {
++    end--;
++  }
++  return encoded.subarray(0, end).toString('utf8');
++}
++
  export interface ToolResult {
    /**
     * Content meant to be included in LLM history.
     * This should represent the factual outcome of the tool execution.
     */
    llmContent: PartListUnion;
-@@ -630,29 +760,82 @@
+@@ -630,29 +805,82 @@
      return false;
    }
  
@@ -224709,7 +224936,8 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
 +} from '../utils/session-artifacts.js';
  import type { Config } from '../config/config.js';
  import { ApprovalMode } from '../config/config.js';
- import { ToolConfirmationOutcome } from './tools.js';
+-import { ToolConfirmationOutcome } from './tools.js';
++import { MAX_TOOL_RESULT_BYTES, ToolConfirmationOutcome } from './tools.js';
  import { ToolErrorType } from './tool-error.js';
  import * as fetchUtils from '../utils/fetch.js';
  import type { FetchPolicyResponse } from '../utils/fetch.js';
@@ -225031,7 +225259,49 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
    describe('permission model', () => {
      it('always asks — WebFetch is egress, never auto-allowed by host', async () => {
        const tool = new WebFetchTool(mockConfig);
-@@ -1475,35 +1480,34 @@
+@@ -1220,12 +1225,41 @@
+       expect(mockGenerateContent).not.toHaveBeenCalled();
+       expect(result.llmContent).toContain('# JSON module');
+       expect(result.llmContent).toContain('Detailed raw docs.');
+       expect(result.llmContent).toContain('Status: 200 OK');
+     });
+ 
++    it('bounds preapproved markdown past the per-result budget and names the file holding it', async () => {
++      const tail = 'TAIL-MARKER';
++      const body = `# Big doc\n\n${'A'.repeat(MAX_TOOL_RESULT_BYTES)}\n${tail}`;
++      vi.spyOn(fetchUtils, 'fetchWithPolicy').mockResolvedValue(
++        okResponse({
++          contentType: 'text/markdown',
++          body: Buffer.from(body),
++          finalUrl: 'https://docs.python.org/3/library/json.md',
++        }),
++      );
++
++      const tool = new WebFetchTool(mockConfig);
++      const result = await tool
++        .build({
++          url: 'https://docs.python.org/3/library/json.md',
++          prompt: 'summarize',
++        })
++        .execute(new AbortController().signal);
++
++      expect(mockGenerateContent).not.toHaveBeenCalled();
++      expect(result.llmContent).toContain('Bounded result:');
++      expect(result.llmContent).toContain('Continue with: read_file');
++      // The tail is past the budget, so it is not inline; the file the notice
++      // names is what the continuation reads it back from.
++      expect(result.llmContent).not.toContain(tail);
++      const directory = sessionArtifactDirectory(mockConfig);
++      expect(fs.readdirSync(directory).length).toBeGreaterThan(0);
++    });
++
+     it('should still run the side query for non-preapproved markdown', async () => {
+       vi.spyOn(fetchUtils, 'fetchWithPolicy').mockResolvedValue(
+         okResponse({
+           contentType: 'text/markdown',
+           body: Buffer.from('# Raw docs'),
+         }),
+@@ -1475,35 +1509,34 @@
  
        const tool = new WebFetchTool(mockConfig);
        await tool
@@ -225094,7 +225364,29 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
  import { runSideQuery } from '../utils/sideQuery.js';
  import { ToolErrorType } from './tool-error.js';
  import type {
-@@ -57,36 +56,31 @@
+@@ -30,13 +29,20 @@
+   ToolInvocation,
+   ToolResult,
+   ToolConfirmationPayload,
+   ToolConfirmationOutcome,
+ } from './tools.js';
+ import type { PermissionDecision } from '../permissions/types.js';
+-import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
++import {
++  BaseDeclarativeTool,
++  BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
++  Kind,
++  MAX_TOOL_RESULT_BYTES,
++} from './tools.js';
+ import { ToolNames, ToolDisplayNames } from './tool-names.js';
+ import { isPreapprovedUrl } from './web-fetch-preapproved.js';
+ import { createDebugLogger, type DebugLogger } from '../utils/debugLogger.js';
+ import { parsePositiveIntegerEnv } from '../utils/env.js';
+ import { getErrorMessage } from '../utils/errors.js';
+ 
+@@ -57,36 +63,31 @@
    const value = parsePositiveIntegerEnv(
      process.env['QWEN_WEB_FETCH_PROCESSING_TIMEOUT_MS'],
      SIDE_QUERY_TIMEOUT_MS,
@@ -225133,7 +225425,7 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
    content: string;
    persistedPath?: string;
    persistedSize?: number;
-@@ -182,28 +176,18 @@
+@@ -182,28 +183,18 @@
  // Hint read_file only for formats it can actually display (mirrors the
  // natively-rendered kinds in fileUtils detectFileType: pdf and images); for
  // anything else, state the path and let the model pick a tool (shell,
@@ -225163,7 +225455,54 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
   * Parameters for the WebFetch tool
   */
  export interface WebFetchToolParams {
-@@ -431,82 +415,56 @@
+@@ -326,12 +317,46 @@
+         ? `URL: ${this.params.url} (final: ${entry.finalUrl})`
+         : `URL: ${this.params.url}`;
+     return `${urlLine}
+ Status: ${entry.status} ${entry.statusText || 'OK'} | Content-Type: ${entry.contentType || 'unknown'} | Size: ${entry.byteLength.toLocaleString('en-US')} bytes`;
+   }
+ 
++  /**
++   * The fetched text this result hands the model, bounded.
++   *
++   * A page's size is the page's decision, not this tool's, so the text is held
++   * to the shared per-result budget before it enters the conversation. The
++   * complete text is written to the session's artifact store first and the
++   * notice names that file, because `persistedPath` holds the *original*
++   * response bytes: for HTML that is a different document from the markdown
++   * returned here, and a continuation pointing at it would not continue what
++   * was cut.
++   */
++  private async boundedFetchedText(content: string): Promise<string> {
++    const totalBytes = Buffer.byteLength(content, 'utf8');
++    if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++      return content;
++    }
++    const head = cutToUtf8Bytes(content, MAX_TOOL_RESULT_BYTES);
++    const { filepath } = await persistSessionArtifact(
++      this.config,
++      Buffer.from(content, 'utf8'),
++      'txt',
++    );
++    return boundedContent(head, {
++      returned: Buffer.byteLength(head, 'utf8'),
++      unit: 'bytes of text',
++      limit: MAX_TOOL_RESULT_BYTES,
++      limitUnit: 'bytes of text',
++      total: totalBytes,
++      continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++        filepath,
++      )}, offset: 0`,
++    });
++  }
++
+   private async fetchAndProcess(
+     signal: AbortSignal,
+   ): Promise<CacheEntry | FetchPolicyRedirect> {
+     const fetchUrl = this.getFetchUrl();
+     const acceptHeader = this.getAcceptHeader();
+     const urlCache = getUrlCacheFor(this.config.storage);
+@@ -431,82 +456,56 @@
        sniff.extensionSource === 'fallback' &&
        looksLikeText(response.body)
      ) {
@@ -225265,7 +225604,7 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
        `[WebFetchTool] network_ms=${networkMs} extract_ms=${Date.now() - extractStart}`,
      );
  
-@@ -547,45 +505,41 @@
+@@ -547,45 +546,43 @@
            ...redirect,
            returnDisplay: `${redirect.returnDisplay}${elapsedSuffix()}`,
          };
@@ -225311,14 +225650,16 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
 +      if (preapproved && entry.contentType.includes('text/markdown')) {
          return {
 -          llmContent: `${header}\n\n${entry.content}${binaryNote}`,
-+          llmContent: `${header}\n\n${entry.content}${sourceNote}`,
++          llmContent: `${header}\n\n${await this.boundedFetchedText(
++            entry.content,
++          )}${sourceNote}`,
            returnDisplay: `${displaySummary}${elapsedSuffix()}`,
            ...(entry.persistedPath
              ? { resultFilePaths: [entry.persistedPath] }
              : {}),
          };
        }
-@@ -643,26 +597,26 @@
+@@ -643,26 +640,28 @@
            error,
          );
          // The fetch succeeded; only post-fetch processing failed. Return the
@@ -225326,7 +225667,9 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
          // binaries, orphaning the persisted file).
          return {
 -          llmContent: `${header}\n\n[Content processing failed (${getErrorMessage(error)}). The raw fetched content follows.]\n\n${entry.content}${binaryNote}`,
-+          llmContent: `${header}\n\n[Content processing failed (${getErrorMessage(error)}). The raw fetched content follows.]\n\n${entry.content}${sourceNote}`,
++          llmContent: `${header}\n\n[Content processing failed (${getErrorMessage(error)}). The raw fetched content follows.]\n\n${await this.boundedFetchedText(
++            entry.content,
++          )}${sourceNote}`,
            returnDisplay: `${displaySummary}${elapsedSuffix()} — processing failed, raw content returned`,
            ...(entry.persistedPath
              ? { resultFilePaths: [entry.persistedPath] }
