@@ -5286,6 +5286,15 @@ _RETIRED_NOTICES = (
     "Search did not complete",
     "No valid matches were returned",
     "Showing lines ",
+    "Output exceeded the maximum captured size",
+)
+
+# Modules outside `src/tools` that put text in front of the model. The one
+# notice belongs to them too, and `_tool_sources` cannot see them: naming them
+# here is what keeps that rule enforced rather than merely true because
+# whoever last edited them happened to write it correctly.
+_MODEL_FACING_NON_TOOL_SOURCES = (
+    "packages/core/src/services/shellExecutionService.ts",
 )
 
 
@@ -5335,6 +5344,21 @@ def _validate_bounded_output_before(state: State) -> None:
         state,
         "packages/core/src/tools/mcp-tool.ts",
         "boundedContent",
+        label=label,
+    )
+    # The shell service words its own capture-limit notice, one layer below the
+    # tools and out of the one-notice detector's reach, and keeps the fact that
+    # it truncated inside that prose rather than on the result.
+    require_text(
+        state,
+        "packages/core/src/services/shellExecutionService.ts",
+        "Output exceeded the maximum captured size",
+        label=label,
+    )
+    forbid_text(
+        state,
+        "packages/core/src/services/shellExecutionService.ts",
+        "outputCaptureLimitExceeded?:",
         label=label,
     )
 
@@ -5410,10 +5434,38 @@ def _validate_bounded_output_after(state: State) -> None:
         "packages/core/src/tools/lsp.ts",
         "packages/core/src/tools/mcp-tool.ts",
         "packages/core/src/tools/ripGrep.ts",
+        "packages/core/src/tools/shell.ts",
         "packages/core/src/tools/tool-search.ts",
         "packages/core/src/tools/web-fetch.ts",
     ):
         require_text(state, path, "boundedContent(", count=1, label=label)
+
+    # A layer below the tools phrases model-facing text too. It states the
+    # capture limit through the same helper, so a single result cannot carry
+    # two vocabularies for the same fact, and it reports the truncation as a
+    # field so a caller can tell a retained prefix from a complete capture
+    # without reading the prose.
+    for path in _MODEL_FACING_NON_TOOL_SOURCES:
+        text = _source(state, path, label=label)
+        for retired in _RETIRED_NOTICES:
+            _require(
+                retired not in text,
+                f"{label}: {path} contains the retired truncation wording "
+                f"{retired!r}. It is below `src/tools`, so the detector that "
+                f"holds tools to the single notice cannot see it; the rule "
+                f"applies here by name instead.",
+            )
+        require_text(state, path, "formatOutputBound(", count=1, label=label)
+    _require_all(
+        state,
+        "packages/core/src/services/shellExecutionService.ts",
+        (
+            "outputCaptureLimitExceeded?: boolean;",
+            "unit: 'bytes of output',",
+            "total: totalBytesReceived,",
+        ),
+        label=label,
+    )
 
     # A result sized outside this process is held to the shared budget before
     # it enters the conversation, and the budget is applied to a reply's text
@@ -5433,6 +5485,14 @@ def _validate_bounded_output_after(state: State) -> None:
             "packages/core/src/tools/mcp-tool.test.ts",
             "bounds a reply whose parts are each small but together exceed the "
             "budget",
+        ),
+        (
+            "packages/core/src/tools/shell.test.ts",
+            "returns command output inside the budget unchanged",
+        ),
+        (
+            "packages/core/src/services/shellExecutionService.test.ts",
+            "bounds buffered PTY output before building the final string",
         ),
     ):
         require_text(state, path, case, label=label)

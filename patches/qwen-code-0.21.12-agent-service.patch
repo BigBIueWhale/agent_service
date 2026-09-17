@@ -193846,6 +193846,284 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
  
  export async function computeUniqueBranchTitle(
    baseName: string,
+diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages/core/src/services/shellExecutionService.test.ts
+--- a/packages/core/src/services/shellExecutionService.test.ts
++++ b/packages/core/src/services/shellExecutionService.test.ts
+@@ -506,14 +506,15 @@
+         { ...shellExecutionConfig, maxBufferedOutputBytes: 10 },
+       );
+ 
+       expect(result.rawOutput.length).toBe(10);
+       expect(result.output).toContain('12345678ab');
+       expect(result.output).toContain(
+-        'Output exceeded the maximum captured size',
++        "cut at this tool's limit of 10 bytes of output",
+       );
++      expect(result.outputCaptureLimitExceeded).toBe(true);
+       expect(result.output).not.toContain('cdefg');
+     });
+ 
+     it('keeps PTY replay fallback bounded after the capture limit is exceeded', async () => {
+       mockSerializeTerminalToText.mockImplementationOnce(() => {
+         throw new Error('replay failed');
+@@ -529,14 +530,15 @@
+         { ...shellExecutionConfig, maxBufferedOutputBytes: 10 },
+       );
+ 
+       expect(result.rawOutput.toString()).toBe('12345678ab');
+       expect(result.output).toContain('12345678ab');
+       expect(result.output).toContain(
+-        'Output exceeded the maximum captured size',
++        "cut at this tool's limit of 10 bytes of output",
+       );
++      expect(result.outputCaptureLimitExceeded).toBe(true);
+       expect(result.output).not.toContain('cdefg');
+     });
+ 
+     it('does not add a capture-limit notice at the exact PTY buffer boundary', async () => {
+       const { result } = await simulateExecution(
+         'exact-output',
+@@ -546,15 +548,14 @@
+         },
+         { ...shellExecutionConfig, maxBufferedOutputBytes: 10 },
+       );
+ 
+       expect(result.rawOutput.length).toBe(10);
+       expect(result.output).toBe('1234567890');
+-      expect(result.output).not.toContain(
+-        'Output exceeded the maximum captured size',
+-      );
++      expect(result.output).not.toContain('Bounded result:');
++      expect(result.outputCaptureLimitExceeded).toBeFalsy();
+     });
+ 
+     it('should handle commands with no output', async () => {
+       await simulateExecution('touch file', (pty) => {
+         pty.onExit.mock.calls[0][0]({ exitCode: 0, signal: null });
+       });
+@@ -2430,20 +2431,20 @@
+ 
+       const result = await handle.result;
+ 
+       expect(result.rawOutput.length).toBe(10);
+       expect(result.output).toContain('12345678ab');
+       expect(result.output).toContain(
+-        'Output exceeded the maximum captured size',
++        "cut at this tool's limit of 10 bytes of output",
+       );
++      expect(result.outputCaptureLimitExceeded).toBe(true);
+       expect(result.output).not.toContain('cdefg');
++      // The notice reaches the live stream, not only the final result.
+       expect(onOutputEventMock).toHaveBeenCalledWith({
+         type: 'data',
+-        chunk: expect.stringContaining(
+-          'Output exceeded the maximum captured size',
+-        ),
++        chunk: expect.stringContaining('Bounded result:'),
+       });
+     });
+ 
+     it('does not add a capture-limit notice at the exact child_process buffer boundary', async () => {
+       const { result } = await simulateExecutionWithConfig(
+         'exact-output',
+@@ -2454,15 +2455,14 @@
+         },
+         { ...shellExecutionConfig, maxBufferedOutputBytes: 10 },
+       );
+ 
+       expect(result.rawOutput.length).toBe(10);
+       expect(result.output).toBe('1234567890');
+-      expect(result.output).not.toContain(
+-        'Output exceeded the maximum captured size',
+-      );
++      expect(result.output).not.toContain('Bounded result:');
++      expect(result.outputCaptureLimitExceeded).toBeFalsy();
+     });
+ 
+     it.each([
+       0,
+       0.5,
+       -1,
+@@ -2485,15 +2485,14 @@
+             maxBufferedOutputBytes: configuredValue as unknown as number,
+           },
+         );
+ 
+         expect(result.rawOutput.length).toBe(15);
+         expect(result.output).toBe('1234567890abcde');
+-        expect(result.output).not.toContain(
+-          'Output exceeded the maximum captured size',
+-        );
++        expect(result.output).not.toContain('Bounded result:');
++        expect(result.outputCaptureLimitExceeded).toBeFalsy();
+       },
+     );
+ 
+     it('reports capture-limit notice for streaming child_process output', async () => {
+       const { result } = await simulateExecutionWithConfig(
+         'streaming-large-output',
+@@ -2509,14 +2508,15 @@
+       expect(onOutputEventMock).toHaveBeenCalledWith({
+         type: 'data',
+         chunk: 'abcdef',
+       });
+       expect(result.rawOutput.length).toBe(1);
+       expect(result.output).toContain(
+-        'Output exceeded the maximum captured size',
++        "cut at this tool's limit of 1 bytes of output",
+       );
++      expect(result.outputCaptureLimitExceeded).toBe(true);
+     });
+ 
+     it('emits only the capture-limit notice when stripped captured output is empty', async () => {
+       const { result } = await simulateExecutionWithConfig(
+         'empty-captured-output',
+         (cp) => {
+@@ -2525,15 +2525,14 @@
+           cp.emit('close', 0, null);
+         },
+         { ...shellExecutionConfig, maxBufferedOutputBytes: 1 },
+       );
+ 
+       expect(result.rawOutput.length).toBe(1);
+-      expect(result.output).toMatch(
+-        /^\[Output exceeded the maximum captured size/,
+-      );
++      expect(result.output).toMatch(/^Bounded result: /);
++      expect(result.outputCaptureLimitExceeded).toBe(true);
+     });
+ 
+     it('should handle commands with no output', async () => {
+       const { result } = await simulateExecution('touch file', (cp) => {
+         cp.emit('exit', 0, null);
+         cp.emit('close', 0, null);
+diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core/src/services/shellExecutionService.ts
+--- a/packages/core/src/services/shellExecutionService.ts
++++ b/packages/core/src/services/shellExecutionService.ts
+@@ -23,13 +23,13 @@
+   serializeTerminalToObject,
+   serializeTerminalToText,
+   type AnsiOutput,
+ } from '../utils/terminalSerializer.js';
+ import { normalizePathEnvForWindows } from '../utils/windowsPath.js';
+ import { sanitizeChildEnv } from '../utils/sanitize-child-env.js';
+-import { formatMemoryUsage } from '../utils/formatters.js';
++import { formatOutputBound } from '../tools/tools.js';
+ import { getShellContextEnvVars } from '../utils/shellContextEnv.js';
+ import { createDebugLogger } from '../utils/debugLogger.js';
+ import { getShellPagerEnv } from '../utils/shell-pager-env.js';
+ 
+ const debugLogger = createDebugLogger('SHELL_EXECUTION');
+ 
+@@ -205,12 +205,21 @@
+    */
+   promoted?: boolean;
+   /** The process ID of the spawned shell. */
+   pid: number | undefined;
+   /** The method used to execute the shell command. */
+   executionMethod: 'lydell-node-pty' | 'node-pty' | 'child_process' | 'none';
++  /**
++   * Set when the capture buffer filled and the rest of the command's output
++   * was discarded, so `output` is a retained prefix rather than everything the
++   * command produced. Absent means nothing was discarded: a result that
++   * captured nothing at all captured all there was. A caller that reports a
++   * size cannot tell the two apart from `output` alone, which is why the fact
++   * travels with the result instead of only appearing in its text.
++   */
++  outputCaptureLimitExceeded?: boolean;
+ }
+ 
+ /** A handle for an ongoing shell execution. */
+ export interface ShellExecutionHandle {
+   /** The process ID of the spawned shell. */
+   pid: number | undefined;
+@@ -275,18 +284,24 @@
+   maxBufferedOutputBytes: number,
+ ): string {
+   if (!didExceedLimit) {
+     return output;
+   }
+ 
+-  const notice =
+-    `[Output exceeded the maximum captured size of ` +
+-    `${formatMemoryUsage(maxBufferedOutputBytes)}; captured the first ` +
+-    `${formatMemoryUsage(maxBufferedOutputBytes)} of ` +
+-    `${formatMemoryUsage(totalBytesReceived)} and discarded the rest to ` +
+-    `avoid constructing an oversized JavaScript string.]`;
++  // The one notice, phrased where every tool phrases it. This layer used to
++  // word its own, which meant a single result could carry two vocabularies for
++  // the same fact once the tool bounded it again. The total is known exactly,
++  // so coverage is partial rather than unknown; the discarded bytes were never
++  // retained anywhere, so there is nothing to continue from.
++  const notice = formatOutputBound({
++    returned: maxBufferedOutputBytes,
++    unit: 'bytes of output',
++    limit: maxBufferedOutputBytes,
++    limitUnit: 'bytes of output',
++    total: totalBytesReceived,
++  });
+ 
+   return output ? `${output}\n\n${notice}` : notice;
+ }
+ 
+ /**
+  * Optional caller-side handlers for the *post-promote* lifetime of a
+@@ -983,12 +998,13 @@
+             exitCode: code,
+             signal: signal ? os.constants.signals[signal] : null,
+             error,
+             aborted: abortSignal.aborted,
+             pid: undefined,
+             executionMethod: 'child_process',
++            outputCaptureLimitExceeded,
+           });
+         };
+ 
+         // Named handler refs so the background-promote branch below can
+         // detach them all and hand ownership of the child cleanly to the
+         // caller. Anonymous arrows here would leak: the still-running child
+@@ -1328,12 +1344,13 @@
+             // before `aborted` to avoid emitting "cancelled" copy for a
+             // process that's still running.
+             aborted: false,
+             promoted: true,
+             pid: child.pid,
+             executionMethod: 'child_process',
++            outputCaptureLimitExceeded,
+           });
+         };
+ 
+         const performCancelKill = async (): Promise<void> => {
+           if (!child.pid || exited) return;
+           if (isWindows) {
+@@ -1917,12 +1934,13 @@
+                   error,
+                   aborted: abortSignal.aborted,
+                   pid: ptyProcess.pid,
+                   executionMethod:
+                     (ptyInfo?.name as 'node-pty' | 'lydell-node-pty') ??
+                     'node-pty',
++                  outputCaptureLimitExceeded,
+                 });
+               } finally {
+                 disposeForegroundPtyResources();
+               }
+             };
+ 
+@@ -2286,12 +2304,13 @@
+               // (result.aborted)` branches must NOT trigger.
+               aborted: false,
+               promoted: true,
+               pid: ptyProcess.pid,
+               executionMethod:
+                 (ptyInfo?.name as 'node-pty' | 'lydell-node-pty') ?? 'node-pty',
++              outputCaptureLimitExceeded,
+             });
+           } finally {
+             try {
+               headlessTerminal.dispose();
+             } catch (e) {
+               debugLogger.warn(
 diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/src/services/state-snapshot.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.test.ts
@@ -223329,7 +223607,21 @@ diff --git a/packages/core/src/tools/shell.backgroundStatus.test.ts b/packages/c
 diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/shell.test.ts
 --- a/packages/core/src/tools/shell.test.ts
 +++ b/packages/core/src/tools/shell.test.ts
-@@ -130,15 +130,13 @@
+@@ -45,12 +45,13 @@
+   type ShellToolParams,
+ } from './shell.js';
+ import { detectBlockedSleepPattern } from './shell.js';
+ import { stripShellWrapper } from '../utils/shell-utils.js';
+ import { ApprovalMode, type Config } from '../config/config.js';
+ import {
++  MAX_TOOL_RESULT_BYTES,
+   ToolConfirmationOutcome,
+   type ToolInvocation,
+   type ToolResult,
+ } from './tools.js';
+ import {
+   type ShellExecutionResult,
+@@ -130,15 +131,13 @@
          .mockReturnValue(createMockWorkspaceContext('/test/dir')),
        storage: {
          getUserSkillsDirs: vi.fn().mockReturnValue(['/test/dir/.qwen/skills']),
@@ -223345,7 +223637,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        getFileHistoryService: vi.fn().mockReturnValue(mockFileHistoryService),
        getFileReadCache: vi.fn().mockReturnValue(mockFileReadCache),
        getFileReadCacheDisabled: vi.fn().mockReturnValue(false),
-@@ -437,47 +435,35 @@
+@@ -437,47 +436,35 @@
          command: 'npm test',
          is_background: false,
        });
@@ -223413,7 +223705,41 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
  
    describe('execute', () => {
      const mockAbortSignal = new AbortController().signal;
-@@ -3062,191 +3048,12 @@
+@@ -495,12 +482,33 @@
+         pid: 12345,
+         executionMethod: 'child_process',
+         ...result,
+       };
+       resolveExecutionPromise(fullResult);
+     };
++
++    it('returns command output inside the budget unchanged', async () => {
++      // Exactly at the budget: the bound admits it, so nothing is cut and no
++      // notice is added. One byte more is what the bound exists for.
++      const output = 'A'.repeat(MAX_TOOL_RESULT_BYTES);
++      const invocation = shellTool.build({
++        command: 'ls -l',
++        directory: '/test/dir',
++        is_background: false,
++      });
++
++      const resultPromise = invocation.execute(mockAbortSignal);
++      await vi.waitFor(() =>
++        expect(mockShellExecutionService).toHaveBeenCalled(),
++      );
++      resolveShellExecution({ output });
++      const result = await resultPromise;
++
++      expect(result.llmContent).toContain(output);
++      expect(result.llmContent).not.toContain('Bounded result:');
++    });
+ 
+     describe('simulated sed edit', () => {
+       const expectedSedFilePath = path.resolve('/test/dir', 'file.txt');
+ 
+       const confirmSedEdit = async (
+         invocation: ToolInvocation<ShellToolParams, ToolResult>,
+@@ -3062,191 +3070,12 @@
  
        const result = await promise;
  
@@ -223605,7 +223931,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        // assume. Tests use vi fake timers to drive the wall-clock past
        // the threshold without actually sleeping. Hint must fire on
        // success AND error completions (advice is the same), suppress
-@@ -3483,116 +3290,12 @@
+@@ -3483,116 +3312,12 @@
          });
          const promise = invocation.execute(mockAbortSignal);
          await vi.advanceTimersByTimeAsync(59_999);
@@ -223722,7 +224048,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          // User explicitly sets timeout: 600_000 (10 min) because they
          // expect a long command. Threshold is half that, so a 100s
          // run should NOT trigger the advisory — the user already told
-@@ -7798,22 +7501,13 @@
+@@ -7798,22 +7523,13 @@
          expect(result.error?.type).toBe(ToolErrorType.EXECUTION_TIMEOUT);
        } finally {
          vi.stubGlobal('AbortSignal', originalAbortSignal);
@@ -223746,7 +224072,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          timeout: 5000,
        });
        const mockCombinedSignal = {
-@@ -7840,21 +7534,19 @@
+@@ -7840,21 +7556,19 @@
            aborted: true,
            pid: 12345,
            executionMethod: 'child_process',
@@ -223772,12 +224098,16 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
 diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 --- a/packages/core/src/tools/shell.ts
 +++ b/packages/core/src/tools/shell.ts
-@@ -27,13 +27,12 @@
+@@ -27,13 +27,16 @@
    BaseDeclarativeTool,
    BaseToolInvocation,
++  boundedContent,
++  cutToUtf8Bytes,
    Kind,
++  MAX_TOOL_RESULT_BYTES,
    ToolConfirmationOutcome,
  } from './tools.js';
++import { persistSessionArtifact } from '../utils/session-artifacts.js';
  import { getErrorMessage, isNodeError } from '../utils/errors.js';
 -import { truncateToolOutput } from '../utils/truncation.js';
  import {
@@ -223786,7 +224116,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  } from '../services/commitAttribution.js';
  import { buildGitNotesCommand } from '../services/attributionTrailer.js';
  import type {
-@@ -85,19 +84,12 @@
+@@ -85,19 +88,12 @@
    detectLineEnding,
    type ReadTextFileResponse,
  } from '../services/fileSystemService.js';
@@ -223806,8 +224136,54 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
   * launch paths (`executeBackground` and the foreground→background
   * promote), so the two copies cannot drift (#7626).
   */
-@@ -2770,15 +2762,12 @@
-         `Output: ${result.output || '(empty)'}`,
+@@ -2726,36 +2722,38 @@
+       result.aborted &&
+       getShellAbortReasonKind(combinedSignal.reason) === 'background';
+     const timeoutSummary = wasTimeout
+       ? `Command timed out after ${effectiveTimeout}ms before it could complete.`
+       : undefined;
+ 
++    const boundedOutput = await this.boundedCommandOutput(result);
++
+     let llmContent = '';
+     if (result.aborted) {
+       if (wasTimeout) {
+         llmContent = timeoutSummary!;
+-        if (result.output.trim()) {
+-          llmContent += ` Below is the output before it timed out:\n${result.output}`;
++        if (boundedOutput.trim()) {
++          llmContent += ` Below is the output before it timed out:\n${boundedOutput}`;
+         } else {
+           llmContent += ' There was no output before it timed out.';
+         }
+       } else if (wasPromoteRefused) {
+         // The user pressed Ctrl+B (promote) but the service refused —
+         // typically the child had already terminated by the time the
+         // signal was checked. Treat as a benign race: report what
+         // actually happened (the run completed, just without the
+         // promote handoff) rather than as a cancellation or timeout.
+         llmContent =
+           'Command finished before the background-promote request could be honoured (the child had already exited).';
+-        if (result.output.trim()) {
+-          llmContent += ` Output:\n${result.output}`;
++        if (boundedOutput.trim()) {
++          llmContent += ` Output:\n${boundedOutput}`;
+         }
+       } else {
+         llmContent = 'Command was cancelled by user before it could complete.';
+-        if (result.output.trim()) {
+-          llmContent += ` Below is the output before it was cancelled:\n${result.output}`;
++        if (boundedOutput.trim()) {
++          llmContent += ` Below is the output before it was cancelled:\n${boundedOutput}`;
+         } else {
+           llmContent += ' There was no output before it was cancelled.';
+         }
+       }
+     } else {
+       // Create a formatted error string for display, replacing the wrapper command
+@@ -2770,15 +2768,12 @@
+-        `Output: ${result.output || '(empty)'}`,
++        `Output: ${boundedOutput || '(empty)'}`,
          `Error: ${finalError}`, // Use the cleaned error string.
          `Exit Code: ${result.exitCode ?? '(none)'}`,
          `Signal: ${result.signal ?? '(none)'}`,
@@ -223822,7 +224198,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // `git commit -m "x" && sleep 999` chain can move HEAD and then
      // time out, leaving the new commit without its attribution note
      // while the stale per-file attribution stays around for a later
-@@ -2902,68 +2891,24 @@
+@@ -2902,68 +2897,24 @@
          }
          // If output is empty and command succeeded (code 0, no error/signal/abort),
          // returnDisplayMessage will remain empty, which is fine.
@@ -223894,7 +224270,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // else: llmContent is a structured `Part[]` / `Part` rather than
        // a plain string. Today shell.ts only emits string llmContent,
        // but the type union allows structured content. If a future
-@@ -2988,20 +2933,17 @@
+@@ -2988,20 +2939,17 @@
          llmContent += `\n\n${attributionWarning}`;
        }
        returnDisplayMessage +=
@@ -223920,7 +224296,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // shellExecutionService.ts); non-zero exits leave it null. Real
      // spawn failures (ENOENT, permission denied) typically resolve in
      // <1s, so the elapsed >= threshold + spawn-error combination is
-@@ -3032,26 +2974,27 @@
+@@ -3032,26 +2980,27 @@
              },
            }
          : (!result.aborted && isSignalTermination(result.signal)) ||
@@ -223950,7 +224326,65 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Foreground → background promote handler. Called when the foreground
-@@ -4923,14 +4866,19 @@
+@@ -3067,12 +3016,57 @@
+    * PR-2.5: post-promote stream redirect + natural-exit registry
+    * settle are now live via the `postPromote` callbacks wired in
+    * `executeForeground`. The `promoteArtifacts` parameter carries the
+    * pre-allocated buffer/stream slots that absorb the race between
+    * service-side promote-time data flush and this finalizer running.
+    */
++  /**
++   * The command output this result hands the model, bounded.
++   *
++   * How much a command prints is the command's decision, not this tool's, so
++   * the text is held to the shared per-result budget before it enters the
++   * conversation. The complete captured output is written to the session's
++   * artifact store and the notice names the call that reads it back.
++   *
++   * When the service's capture buffer filled, the bytes past it were discarded
++   * and no longer exist to be counted, so the total is stated as unknown with
++   * that reason rather than reporting the retained prefix as though it were
++   * everything the command produced.
++   */
++  private async boundedCommandOutput(
++    result: ShellExecutionResult,
++  ): Promise<string> {
++    const output = result.output;
++    const totalBytes = Buffer.byteLength(output, 'utf8');
++    if (totalBytes <= MAX_TOOL_RESULT_BYTES) {
++      return output;
++    }
++    const head = cutToUtf8Bytes(output, MAX_TOOL_RESULT_BYTES);
++    const { filepath } = await persistSessionArtifact(
++      this.config,
++      Buffer.from(output, 'utf8'),
++      'txt',
++    );
++    return boundedContent(head, {
++      returned: Buffer.byteLength(head, 'utf8'),
++      unit: 'bytes of output',
++      limit: MAX_TOOL_RESULT_BYTES,
++      limitUnit: 'bytes of output',
++      total: result.outputCaptureLimitExceeded
++        ? {
++            unknown:
++              'the command produced more than the capture buffer retained, ' +
++              'so the rest was discarded before it could be counted',
++          }
++        : totalBytes,
++      continuation: `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(
++        filepath,
++      )}, offset: 0`,
++    });
++  }
++
+   private async handlePromotedForeground(
+     result: ShellExecutionResult,
+     cwd: string,
+     commandToExecute: string,
+     abortController: AbortController,
+     promoteArtifacts: PromoteArtifacts,
+@@ -4923,14 +4917,19 @@
  }
  
  function getShellCommandSequencingGuidance({
@@ -223971,7 +224405,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        return `- When issuing multiple commands:
    ${independentGuidance}
    - If the commands depend on each other and must run sequentially, use a single run_shell_command call with '&&' to chain them together (e.g., \`git add . && git commit -m "message" && git push\`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before run_shell_command for git operations, or git add before git commit), run these operations sequentially instead.
-@@ -5039,16 +4987,12 @@
+@@ -5039,16 +5038,12 @@
  
  export class ShellTool extends BaseDeclarativeTool<
    ShellToolParams,
@@ -223988,7 +224422,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        ShellTool.Name,
        ToolDisplayNames.SHELL,
        getShellToolDescription(),
-@@ -5078,12 +5022,13 @@
+@@ -5078,12 +5073,13 @@
              type: 'string',
              description:
                '(OPTIONAL) The absolute path of the directory to run the command in. If not provided, the project root directory is used. Must be a directory within the workspace and must already exist.',
