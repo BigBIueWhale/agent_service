@@ -2291,6 +2291,23 @@ def _validate_model_facing_failure_before(state: State) -> None:
     # response forwards whatever string it was handed, however long.
     forbid_text(state, "packages/core/src/tools/tools.ts", "boundedFailureText", label=label)
     forbid_text(state, scheduler, "boundedFailureText", label=label)
+    # A stat failure that may be permanent is answered with a transient
+    # failure's remedy. Three tools reach the shared branch -- edit,
+    # write_file and shell's sed path -- and the notebook tool carries its
+    # own copy of the same mistake.
+    require_text(
+        state,
+        "packages/core/src/tools/priorReadEnforcement.ts",
+        "then retry ${verb} it.",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/tools/notebook-edit.ts",
+        "Re-read it with the ${ToolNames.READ_FILE} tool before editing it.",
+        count=3,
+        label=label,
+    )
 
 
 def _validate_model_facing_failure_after(state: State) -> None:
@@ -2444,6 +2461,57 @@ def _validate_model_facing_failure_after(state: State) -> None:
         f"{label}: the modules building a failed call's model-facing error "
         f"field changed to {producers}. A new one must either pass its text "
         f"through boundedFailureText or carry only text this process wrote.",
+    )
+
+    # ── An error invites nothing it cannot deliver ──────────────────────
+    #
+    # A stat failure may be permanent: ENAMETOOLONG, ENOTDIR and ELOOP are
+    # properties of the path itself and EACCES a property of its permissions.
+    # `read_file` performs the same stat on the same path, so "re-read, then
+    # retry" asks for an identical call with an identical outcome -- the
+    # read/edit retry loop TARGET_NOT_REGULAR_FILE already exists to avoid,
+    # and the shape this deployment's own history records as having ended a
+    # run. Both stat-failure remedies now name the one route that does not
+    # repeat the syscall that just failed.
+    #
+    # No branch distinguishes a transient code from a permanent one, because
+    # re-reading is not the remedy for either and a second wording would be a
+    # second way to be wrong.
+    prior_read = "packages/core/src/tools/priorReadEnforcement.ts"
+    notebook = "packages/core/src/tools/notebook-edit.ts"
+    forbid_text(state, prior_read, "then retry", label=label)
+    require_text(
+        state, prior_read, "stat failed before ${verbDisplay}.", label=label
+    )
+    require_text(
+        state, notebook, "stat failed before editing this notebook.", label=label
+    )
+    # The other two re-read remedies stay: a notebook that disappeared or
+    # changed since it was read is a stale-state failure, and re-reading is
+    # exactly the remedy for that. Retiring those with the wrong one would
+    # take away a remedy that works.
+    require_text(
+        state,
+        notebook,
+        "Re-read it with the ${ToolNames.READ_FILE} tool before editing it.",
+        count=2,
+        label=label,
+    )
+    for path in (
+        "packages/core/src/tools/edit.test.ts",
+        "packages/core/src/tools/write-file.test.ts",
+    ):
+        require_text(
+            state,
+            path,
+            "expect(result.error?.message).not.toMatch(/retry/i);",
+            label=label,
+        )
+    require_text(
+        state,
+        "packages/core/src/tools/notebook-edit.test.ts",
+        "expect(String(result?.llmContent)).not.toMatch(/retry/i);",
+        label=label,
     )
 
     # Executed in the build.

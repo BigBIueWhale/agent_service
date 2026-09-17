@@ -217747,7 +217747,24 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
          file_path: filePath,
          old_string: 'old',
          new_string: 'new',
-@@ -1727,13 +1732,13 @@
+@@ -1474,12 +1479,16 @@
+         .execute(abortSignal);
+ 
+       expect(result.error?.type).toBe(
+         ToolErrorType.PRIOR_READ_VERIFICATION_FAILED,
+       );
+       expect(result.error?.message).toMatch(/Could not stat .*\(EACCES\)/);
++      // The remedy invites nothing: the read it would ask for performs the
++      // same stat on the same path.
++      expect(result.error?.message).not.toMatch(/retry/i);
++      expect(result.error?.message).not.toMatch(/re-read/i);
+       expect(fs.readFileSync(filePath, 'utf8')).toBe('untouched');
+ 
+       statSpy.mockRestore();
+     });
+ 
+     it('does not let an unread file be probed via NO_OCCURRENCE_FOUND', async () => {
+@@ -1727,13 +1736,13 @@
          );
  
          const invocation = tool.build(params);
@@ -220918,7 +220935,24 @@ diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/t
  import path from 'node:path';
  import { execFileSync } from 'node:child_process';
  import type { Config } from '../config/config.js';
-@@ -812,13 +813,13 @@
+@@ -710,12 +711,16 @@
+     }
+ 
+     expect(result?.error?.type).toBe(
+       ToolErrorType.PRIOR_READ_VERIFICATION_FAILED,
+     );
+     expect(result?.llmContent).toContain('Could not stat');
++    // The remedy invites nothing: the read it would ask for performs the
++    // same stat on the same path.
++    expect(String(result?.llmContent)).not.toMatch(/retry/i);
++    expect(String(result?.llmContent)).not.toMatch(/re-read/i);
+   });
+ 
+   it.skipIf(process.platform === 'win32')(
+     'rejects non-regular notebook paths with a dedicated error type',
+     async () => {
+       const fifoPath = path.join(tempDir, 'notebook-fifo.ipynb');
+@@ -812,13 +817,13 @@
        originalParams,
      );
      fs.writeFileSync(invalidPath, 'not json', 'utf-8');
@@ -220933,7 +220967,7 @@ diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/t
    });
  
    it('rejects direct attempts to set internal modified notebook content params', () => {
-@@ -919,13 +920,13 @@
+@@ -919,13 +924,13 @@
        currentContent,
        modifiedContent,
        originalParams,
@@ -221002,7 +221036,26 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
    editedCellType?: NotebookCellType;
    language: string;
    mode: NotebookEditMode;
-@@ -423,13 +423,13 @@
+@@ -345,14 +345,16 @@
+       return { ok: true };
+     }
+ 
+     return rejectNotebookPriorRead(notebookPath, 'stat-failed', {
+       ok: false,
+       type: ToolErrorType.PRIOR_READ_VERIFICATION_FAILED,
+-      rawMessage: `Could not stat ${notebookPath} to verify prior notebook read (${code ?? 'unknown error'}). Re-read it with the ${ToolNames.READ_FILE} tool before editing it.`,
+-      displayMessage: `cannot verify prior read of ${notebookPath}; re-run ${ToolNames.READ_FILE} before editing this notebook.`,
++      // Same reasoning as priorReadEnforcement's stat-failure branch: the
++      // read this would ask for performs the same stat on the same path.
++      rawMessage: `Could not stat ${notebookPath} to verify prior notebook read (${code ?? 'unknown error'}). This tool does not edit a notebook whose prior read it cannot confirm, and the ${ToolNames.READ_FILE} tool performs the same stat on the same path, so it fails the same way. Use a different mechanism (for example, the shell tool) to edit this notebook.`,
++      displayMessage: `cannot verify prior read of ${notebookPath}; stat failed before editing this notebook.`,
+     });
+   }
+ 
+   if (stats.isDirectory()) {
+     return rejectNotebookPriorRead(notebookPath, 'target-is-directory', {
+       ok: false,
+@@ -423,13 +425,13 @@
    NotebookEditToolParams,
    ToolResult
  > {
@@ -221017,7 +221070,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
  
    override toolLocations(): ToolLocation[] {
      return [{ path: this.params.notebook_path }];
-@@ -529,17 +529,17 @@
+@@ -529,17 +531,17 @@
      );
      if (!postDecision.ok) {
        throw new StructuredToolError(postDecision.rawMessage, postDecision.type);
@@ -221037,7 +221090,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
            bom,
            encoding,
            lineEnding,
-@@ -636,13 +636,13 @@
+@@ -636,13 +638,13 @@
            bom: prepared.bom,
            encoding: prepared.encoding,
            lineEnding: prepared.lineEnding,
@@ -221052,7 +221105,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
            prepared.updatedContent,
          );
        }
-@@ -675,13 +675,13 @@
+@@ -675,13 +677,13 @@
          'Current',
          'Proposed',
        );
@@ -221067,7 +221120,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
        logFileOperation(
          this.config,
          new FileOperationEvent(
-@@ -700,21 +700,21 @@
+@@ -700,21 +702,21 @@
          originalContent: prepared.originalContent,
          newContent: prepared.updatedContent,
          diffStat,
@@ -221091,7 +221144,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      } catch (error) {
        const message = error instanceof Error ? error.message : String(error);
        return {
-@@ -731,21 +731,12 @@
+@@ -731,21 +733,12 @@
  
  export class NotebookEditTool
    extends BaseDeclarativeTool<NotebookEditToolParams, ToolResult>
@@ -221113,7 +221166,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
        ToolDisplayNames.NOTEBOOK_EDIT,
        `Edits a Jupyter notebook (.ipynb) safely at the cell level. Use this instead of ${ToolNames.EDIT} or ${ToolNames.WRITE_FILE} for notebook cells. Supports replacing, inserting, and deleting cells. Always read the notebook first with ${ToolNames.READ_FILE}; then use the cell IDs shown in that output.`,
        Kind.Edit,
-@@ -845,73 +836,14 @@
+@@ -845,73 +838,14 @@
    protected createInvocation(
      params: NotebookEditToolParams,
    ): ToolInvocation<NotebookEditToolParams, ToolResult> {
@@ -221189,7 +221242,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      _abortSignal: AbortSignal,
    ): ModifyContext<NotebookEditToolParams> {
      const currentContentSnapshots = new Map<string, string>();
-@@ -935,39 +867,28 @@
+@@ -935,39 +869,28 @@
        getCurrentContent: async (
          params: NotebookEditToolParams,
        ): Promise<string> => readCurrentContentSnapshot(params),
@@ -221239,6 +221292,65 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      };
    }
  }
+diff --git a/packages/core/src/tools/priorReadEnforcement.ts b/packages/core/src/tools/priorReadEnforcement.ts
+--- a/packages/core/src/tools/priorReadEnforcement.ts
++++ b/packages/core/src/tools/priorReadEnforcement.ts
+@@ -158,31 +158,44 @@
+       }
+       // Pre-read disappearance race vs the caller's fileExists check.
+       // Let the downstream write path surface the absence — synthesising
+       // a "you must read first" message here would be misleading.
+       return { ok: true };
+     }
+-    // Any other stat failure: fail closed. We cannot prove the file
+-    // has been read; treating that as approval would silently bypass
+-    // enforcement on transient metadata errors that don't prevent
+-    // the subsequent write from succeeding. Use a distinct
+-    // PRIOR_READ_VERIFICATION_FAILED code (rather than
+-    // EDIT_REQUIRES_PRIOR_READ) because the model may have
+-    // legitimately read this file — we just cannot verify it.
+-    // Operators monitoring on error codes can route the two
+-    // populations separately.
++    // Any other stat failure: fail closed. We cannot prove the file has
++    // been read; treating that as approval would silently bypass
++    // enforcement. Use a distinct PRIOR_READ_VERIFICATION_FAILED code
++    // (rather than EDIT_REQUIRES_PRIOR_READ) because the model may have
++    // legitimately read this file — we just cannot verify it. Operators
++    // monitoring on error codes can route the two populations separately.
++    //
++    // The remedy names no retry, and that is the whole point of its
++    // wording. `read_file` performs the same stat on the same path, so
++    // whatever failed here fails there too: ENAMETOOLONG, ENOTDIR and
++    // ELOOP are properties of the path itself, and EACCES is a property
++    // of its permissions. A re-read-and-try-again remedy therefore asks for
++    // an identical call with an identical outcome — the read/edit retry loop
++    // that TARGET_NOT_REGULAR_FILE already exists to avoid. What is
++    // offered instead is the one route that does not repeat the syscall
++    // that just failed. No branch here distinguishes a transient code
++    // from a permanent one: re-reading is not the remedy for either, so a
++    // second wording would be a second way to be wrong.
++    const verbBare = verb === 'editing' ? 'edit' : 'overwrite';
+     const raw =
+       `Could not stat ${filePath} to verify prior read (${code ?? 'unknown error'}). ` +
+-      `Re-read with the ${ToolNames.READ_FILE} tool, then retry ${verb} it.`;
++      `This tool does not ${verbBare} a file whose prior read it cannot ` +
++      `confirm, and the ${ToolNames.READ_FILE} tool performs the same stat ` +
++      `on the same path, so it fails the same way. Use a different ` +
++      `mechanism (for example, the shell tool) to ${verbBare} this file.`;
+     const verbDisplay =
+       verb === 'editing' ? 'editing this file' : 'overwriting this file';
+     return {
+       ok: false,
+       type: ToolErrorType.PRIOR_READ_VERIFICATION_FAILED,
+       rawMessage: raw,
+-      displayMessage: `cannot verify prior read of ${filePath}; re-run ${ToolNames.READ_FILE} before ${verbDisplay}.`,
++      displayMessage: `cannot verify prior read of ${filePath}; stat failed before ${verbDisplay}.`,
+     };
+   }
+   // Directory and other non-regular paths get dedicated rejections
+   // with structured ToolErrorType codes — never `ok: true`. Falling
+   // through to readTextFile would either block (FIFO),
+   // over-allocate (/dev/urandom), or throw a plain Error that the
 diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools/read-file.test.ts
 --- a/packages/core/src/tools/read-file.test.ts
 +++ b/packages/core/src/tools/read-file.test.ts
@@ -228142,6 +228254,24 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
        // A future cache-entry schema change must update both halves to
        // keep the deadlock-free guarantee end-to-end.
        const filePath = path.join(rootDir, 'enforce-truncated-full.txt');
+@@ -1629,12 +1659,17 @@
+       // file — we just cannot verify because stat itself failed.
+       // EDIT_REQUIRES_PRIOR_READ would imply "definitely not read".
+       expect(result.error?.type).toBe(
+         ToolErrorType.PRIOR_READ_VERIFICATION_FAILED,
+       );
+       expect(result.error?.message).toMatch(/Could not stat .*\(EACCES\)/);
++      // The remedy invites nothing: read_file performs the same stat on the
++      // same path, so "re-read, then retry" would ask for an identical call
++      // with an identical outcome.
++      expect(result.error?.message).not.toMatch(/retry/i);
++      expect(result.error?.message).not.toMatch(/re-read/i);
+       // File untouched.
+       expect(fs.readFileSync(filePath, 'utf-8')).toBe('untouched');
+ 
+       statSpy.mockRestore();
+       fs.unlinkSync(filePath);
+     });
 diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/write-file.ts
 --- a/packages/core/src/tools/write-file.ts
 +++ b/packages/core/src/tools/write-file.ts
