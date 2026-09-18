@@ -934,7 +934,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "fails closed on malformed or mismatched responses",
         ),
         "packages/core/src/core/geminiChat.test.ts": (
-            "gives every turn the window's remainder after its prompt",
+            "gives every turn the generation reserve, whatever its prompt",
             "refuses when the request cannot be counted at all",
             "resamples one invalid pre-content stream",
             "never resamples an invalid stream after visible output escaped",
@@ -2869,7 +2869,6 @@ _PARTITION_SHARE_NAMES = (
     ("WINDOW_SHARES", None),
     ("GENERATION_RESERVE_SHARES", "generationReserve"),
     ("DIRECTIVE_RESERVE_SHARES", "directiveReserve"),
-    ("TOOL_RESULT_SHARES", "toolResult"),
 )
 
 # The served deployment, and the budgets its window must yield.
@@ -2877,7 +2876,6 @@ _SERVED_WINDOW = 262_144
 _SERVED_PARTITION = {
     "generationReserve": 49_152,
     "directiveReserve": 2_048,
-    "toolResult": 16_384,
     "compactionTrigger": 210_944,
 }
 
@@ -2898,11 +2896,9 @@ def _partition(window: int, shares: dict[str, int]) -> dict[str, int]:
     total = shares["WINDOW_SHARES"]
     reserve = (window * shares["GENERATION_RESERVE_SHARES"]) // total
     directive = (window * shares["DIRECTIVE_RESERVE_SHARES"]) // total
-    tool = (window * shares["TOOL_RESULT_SHARES"]) // total
     return {
         "generationReserve": reserve,
         "directiveReserve": directive,
-        "toolResult": tool,
         "compactionTrigger": window - reserve - directive,
     }
 
@@ -2913,17 +2909,17 @@ def _validate_context_partition(state: State, *, label: str) -> None:
     history.
 
     The safety argument: a turn is issued at a prompt below the compaction
-    trigger with the window's remainder as its limit, and the request that
+    trigger with the generation reserve as its limit, and the request that
     later summarises that prompt appends at most the directive reserve, so it
     is issued with at least the generation reserve plus one token whatever the
     turn generated -- the turn is carried behind the snapshot, never inside
-    the request that summarises the prompt. That the three shares sum to the
-    window holds by construction, because the trigger is the remainder, so it
-    is not asserted here; what the construction leaves open is checked: every
-    share is positive, the history a turn stands on exceeds what is held back
-    from it at every window size, the tool-result bound stays a bound on what
-    one turn appends rather than a reservation, and the served window yields
-    the reviewed budgets.
+    the request that summarises the prompt. That the shares sum to the window
+    holds by construction, because the trigger is the remainder, so it is not
+    asserted here; what the construction leaves open is checked: every share
+    is positive, the history a turn stands on exceeds what is held back from
+    it at every window size, that history holds three reserves -- the
+    snapshot, the turn carried behind it, and the next turn's results -- and
+    the served window yields the reviewed budgets.
     """
 
     limits = "packages/core/src/core/tokenLimits.ts"
@@ -2943,7 +2939,8 @@ def _validate_context_partition(state: State, *, label: str) -> None:
     require_text(
         state,
         limits,
-        "compactionTrigger: contextWindowSize - generationReserve - directiveReserve,",
+        "  const compactionTrigger =\n"
+        "    contextWindowSize - generationReserve - directiveReserve;",
         label=label,
     )
     for window in (
@@ -2971,9 +2968,13 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             f"stand on than the room it is guaranteed",
         )
         _require(
-            part["toolResult"] < part["compactionTrigger"],
-            f"{label}: at a {window}-token window one turn's inline tool results "
-            f"may outgrow the history a turn stands on",
+            part["compactionTrigger"] > 3 * part["generationReserve"],
+            f"{label}: at a {window}-token window the compaction trigger is "
+            f"{part['compactionTrigger']} and the generation reserve is "
+            f"{part['generationReserve']}. What survives a compaction is the "
+            f"snapshot, the turn carried behind it and the next turn's "
+            f"results, each given the reserve, so a history that cannot hold "
+            f"three of them cannot continue",
         )
     served = _partition(_SERVED_WINDOW, shares)
     _require(
@@ -3053,9 +3054,11 @@ def _validate_compaction_budget_after(state: State) -> None:
     # The arithmetic itself, evaluated against the shares the tree declares.
     _validate_context_partition(state, label=label)
 
-    # One derivation, in one place, with no tuned constant beside it. A turn's
-    # limit is the window's remainder after its prompt and nothing else: no
-    # share of the window, no model ceiling, no clamp margin, no floor.
+    # One derivation, in one place, with one tuned number in the system. A
+    # turn's limit is the generation reserve and nothing else: not the prompt,
+    # not a model ceiling, not a clamp margin, not a floor. The reserve is the
+    # same number a compaction's snapshot is issued with, because what a
+    # compaction has to carry is that quantity repeated.
     limits_source = _require_all(
         state,
         limits,
@@ -3063,9 +3066,9 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export interface ContextPartition {",
             "export function partitionContextWindow(",
             "export function turnOutputLimit(",
-            "    generationReserve,\n    directiveReserve,\n    toolResult,\n"
-            "    compactionTrigger: contextWindowSize - generationReserve - directiveReserve,",
-            "return partition.window - promptTokens;",
+            "    generationReserve,\n    directiveReserve,\n    compactionTrigger,\n  };",
+            "if (compactionTrigger <= 3 * generationReserve) {",
+            "return partition.generationReserve;",
         ),
         label=label,
     )
@@ -3077,6 +3080,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         f"{label}: a turn's output limit is bounded by something other than the window",
     )
     for absent in (
+        "TOOL_RESULT_SHARES",
+        "readonly toolResult",
         "TURN_OUTPUT_SHARES",
         "SUMMARY_RESERVE_SHARES",
         "turnOutputBudget",
@@ -3104,7 +3109,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
             "if (promptTokensForClamp >= partition.compactionTrigger) {",
             "throw new Error(",
-            "maxOutputTokens: turnOutputLimit(partition, promptTokensForClamp),",
+            "maxOutputTokens: turnOutputLimit(partition),",
         ),
         label=label,
         location=chat,
@@ -3175,8 +3180,8 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         require_text(state, service_test, case, label=label)
     for case in (
-        "gives every turn the window's remainder after its prompt",
-        "sends no output limit but the remainder, whatever the request asked for",
+        "gives every turn the generation reserve, whatever its prompt",
+        "sends no output limit but the reserve, whatever the request asked for",
         "issues no turn once the rendered prompt reaches the compaction trigger",
         "refuses when the tokenizer reports another window",
         "refuses when the provider declares no context window",
@@ -3186,11 +3191,12 @@ def _validate_compaction_budget_after(state: State) -> None:
         "holds back only the generation reserve and the directive from the history",
         "sums to the window exactly at every window size",
         "gives the compaction of any issued prompt at least the generation reserve",
-        "gives every turn at least the reserves it never has to hold",
+        "leaves a reserve-sized turn inside the window at the largest issuable prompt",
+        "keeps the trigger above three generation reserves at every window size",
         "re-derives every budget from a larger window with no code change",
         "refuses a window it cannot partition",
-        "gives a turn the window's remainder after its prompt",
-        "refuses a prompt no turn is issued against",
+        "gives a turn the generation reserve, whatever its prompt",
+        "gives every window size its own reserve and nothing else",
     ):
         require_text(state, limits_test, case, label=label)
     for case in (
@@ -3616,7 +3622,10 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "reason: FinishReason | undefined,",
             "issued?: IssuedGeneration,",
             "export function issuedGeneration(",
-            "with the window's remaining ",
+            # The limit the model is told about is read from the rule that
+            # sets it, not restated as arithmetic beside it, so the sentence
+            # cannot drift from the partition.
+            "turnOutputLimit(partitionContextWindow(issued.window))",
         ),
         label=label,
     )
@@ -3740,7 +3749,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
     require_text(
         state,
         turn_test,
-        "names the prompt, the limit and the output when a generation reached the window's remainder",
+        "names the prompt, the limit and the output when a generation reached its limit",
         label=label,
     )
     require_text(
@@ -4736,11 +4745,11 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "const baselineTokens = await countExactRequestTokens(",
             "parts: emptyPendingToolResults(userContent.parts ?? []),",
             "for (const result of pending) {",
-            "if (requestTokens - baselineTokens <= partition.toolResult) break;",
+            "if (requestTokens - baselineTokens <= partition.generationReserve) break;",
             "parts: await referencePendingToolResult(",
             "requestTokens = await countExactRequestTokens(",
             "const toolResultTokens = requestTokens - baselineTokens;",
-            "if (toolResultTokens > partition.toolResult) {",
+            "if (toolResultTokens > partition.generationReserve) {",
             "throw new Error(",
         ),
         label=label,
@@ -6198,7 +6207,7 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         name="context-window-partition",
         rationale=(
             "Only the generation reserve and the directive reserve are held back from the served "
-            "window; a turn's output limit is the window's remainder after its prompt and nothing "
+            "window; a turn's output limit is the generation reserve, the one tuned number, and nothing "
             "else, and a configured ceiling is refused. Compaction summarises the prompt the last "
             "turn was issued against and carries that turn verbatim behind the snapshot, so the "
             "snapshot always has at least the reserve. Exact before/after sizing governs compaction "

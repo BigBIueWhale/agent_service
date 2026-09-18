@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `39324ed884995335a6894d08c62dd5b91b5311f1a29197fc6f921242b9f6136d`
+- Review-diff SHA-256: `5c4267b0a3be32760584107a9e21f626ee9f2e4b26d2021181564aa59ebe562f`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `77af0c628cf06394e35e2dad888a482a6f1d7afe86cd5b57942f046cc400ed7a`
+- Transformer-manifest SHA-256: `3598974b348f366f3849a1f9fa41dfe4cb0d58522bdad63b480f803f270a01f9`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -70,12 +70,16 @@ notices, and its parent is told the assignment is unfinished.
 ## Context and instructions
 
 The context partition holds back 48/256 of the window as the generation
-reserve and 2/256 for the compaction directive; the remainder is the trigger,
-and one sixteenth bounds the tool results one turn carries inline. At a
-262,144-token window these are 49,152, 2,048, 210,944 and 16,384 tokens.
-Independent floors leave rounding to the trigger. A turn is issued with the
-window's remainder after its prompt as its output limit and nothing else; the
-route refuses a configured ceiling, including `QWEN_CODE_MAX_OUTPUT_TOKENS`.
+reserve and 2/256 for the compaction directive; the remainder is the trigger.
+At a 262,144-token window these are 49,152, 2,048 and 210,944 tokens.
+Independent floors leave rounding to the trigger. One reserve is the whole of
+what a generation is given: it is the output limit of every turn, whatever its
+prompt, the room a compaction's snapshot is issued with, and the bound on the
+tool results one turn appends inline. What survives a compaction is the
+snapshot, the turn carried behind it and the next turn's results, so the
+partition refuses any window whose trigger is not above three reserves; at the
+served window that is 147,456 against 210,944. The route refuses a configured
+ceiling, including `QWEN_CODE_MAX_OUTPUT_TOKENS`.
 Input, directive, displaced results, and candidate histories are counted using
 the actual rendered request.
 

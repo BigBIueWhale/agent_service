@@ -9785,7 +9785,7 @@ diff --git a/packages/acp-bridge/package.json b/packages/acp-bridge/package.json
 diff --git a/packages/acp-bridge/src/context-usage-types.ts b/packages/acp-bridge/src/context-usage-types.ts
 --- /dev/null
 +++ b/packages/acp-bridge/src/context-usage-types.ts
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,25 @@
 +import type { STATUS_SCHEMA_VERSION } from './status-version.js';
 +
 +export interface ServeSessionContextUsage {
@@ -9798,7 +9798,6 @@ diff --git a/packages/acp-bridge/src/context-usage-types.ts b/packages/acp-bridg
 +    compactionTrigger: number;
 +    generationReserve: number;
 +    directiveReserve: number;
-+    toolResult: number;
 +  };
 +  historyMessages: number;
 +  tools: Array<{ name: string; schemaBytes: number }>;
@@ -59131,7 +59130,7 @@ diff --git a/packages/cli/src/ui/commands/compressFastCommand.ts b/packages/cli/
 diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/src/ui/commands/contextCommand.test.ts
 --- a/packages/cli/src/ui/commands/contextCommand.test.ts
 +++ b/packages/cli/src/ui/commands/contextCommand.test.ts
-@@ -1,369 +1,304 @@
+@@ -1,369 +1,301 @@
  /**
   * @license
   * Copyright 2025 Qwen
@@ -59335,15 +59334,12 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 +    );
 +    expect(text).toContain('Compaction trigger: 160,938 tokens');
 +    expect(text).toContain(
-+      "the next turn's output limit is the window's remainder: 40,000 tokens",
++      'below trigger, so the next turn is issued with the 37,500-token generation reserve',
 +    );
 +    expect(text).toContain(
 +      'Generation reserve, the least room any turn or snapshot is issued with: 37,500 tokens',
 +    );
 +    expect(text).toContain('Reserved compaction directive: 1,562 tokens');
-+    expect(text).toContain(
-+      'Tool results one turn carries inline before paging to disk: 12,500 tokens',
-+    );
 +    expect(data.partition).toEqual(partitionContextWindow(200_000));
 +  });
 +
@@ -59352,7 +59348,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 +    async (tokens) => {
 +      const data = await collectContextData(makeFixture(tokens).config, false);
 +      expect(formatContextUsageText(data)).toContain(
-+        "below trigger, so the next turn's output limit is the window's remainder",
++        'below trigger, so the next turn is issued with the',
 +      );
      },
 -  };
@@ -59790,7 +59786,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/ui/commands/contextCommand.ts
 --- a/packages/cli/src/ui/commands/contextCommand.ts
 +++ b/packages/cli/src/ui/commands/contextCommand.ts
-@@ -1,626 +1,87 @@
+@@ -1,626 +1,86 @@
  /**
   * @license
 - * Copyright 2025 Qwen
@@ -60214,10 +60210,9 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/u
 +  const lines = [
 +    `Context: ${data.modelName}`,
 +    `Rendered request: ${count(data.renderedRequestTokens)} / ${count(data.contextWindowSize)} tokens (vLLM /tokenize)`,
-+    `Compaction trigger: ${count(p.compactionTrigger)} tokens; ${data.renderedRequestTokens >= p.compactionTrigger ? 'compaction required before another turn' : `below trigger, so the next turn's output limit is the window's remainder: ${count(data.contextWindowSize - data.renderedRequestTokens)} tokens`}.`,
++    `Compaction trigger: ${count(p.compactionTrigger)} tokens; ${data.renderedRequestTokens >= p.compactionTrigger ? 'compaction required before another turn' : `below trigger, so the next turn is issued with the ${count(p.generationReserve)}-token generation reserve`}.`,
 +    `Generation reserve, the least room any turn or snapshot is issued with: ${count(p.generationReserve)} tokens`,
 +    `Reserved compaction directive: ${count(p.directiveReserve)} tokens`,
-+    `Tool results one turn carries inline before paging to disk: ${count(p.toolResult)} tokens`,
 +    `History: ${data.historyMessages} messages; ${data.tools.length} available tool declarations.`,
 +  ];
 +  if (data.showDetails) {
@@ -128624,9 +128619,9 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
 +  ])(
 +    'refuses a configured output ceiling: samplingParams.%s',
 +    (key, samplingParams) => {
-+      // A turn's limit is the window's remainder after its prompt. A
-+      // configured ceiling is a second bound on the same quantity, and the
-+      // route refuses it at configuration rather than reconciling the two.
++      // A turn's limit is the generation reserve. A configured ceiling is a
++      // second bound on the same quantity, and the route refuses it at
++      // configuration rather than reconciling the two.
 +      expect(() =>
 +        createContentGeneratorConfig(config, AuthType.USE_OPENAI, {
 +          ...supported,
@@ -128821,10 +128816,10 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
 +      ),
 +    );
 +  }
-+  // A turn's output limit is the window's remainder after its prompt, and
-+  // nothing else bounds a turn. A configured ceiling would be a second bound
-+  // on the same quantity, one that cuts a generation short at a number the
-+  // window did not require, so it is refused rather than reconciled.
++  // A turn's output limit is the generation reserve, and nothing else bounds
++  // a turn. A configured ceiling would be a second bound on the same
++  // quantity, one that cuts a generation short at a number the partition did
++  // not require, so it is refused rather than reconciled.
 +  const configuredCeilings = [
 +    ...(['max_tokens', ...PROVIDER_OUTPUT_BUDGET_KEYS] as const).filter(
 +      (key) => config.samplingParams?.[key] !== undefined,
@@ -128836,7 +128831,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
 +  if (configuredCeilings.length > 0) {
 +    errors.push(
 +      new Error(
-+        `A turn is issued with the window's remainder after its prompt as its output limit; ${configuredCeilings.join(', ')} would be a second bound on the same quantity and is refused.`,
++        `A turn is issued with the generation reserve as its output limit; ${configuredCeilings.join(', ')} would be a second bound on the same quantity and is refused.`,
 +      ),
 +    );
 +  }
@@ -134793,7 +134788,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2425,87 +2046,37 @@
+@@ -2425,87 +2046,40 @@
        for await (const _ of stream) {
          // consume stream
        }
@@ -134811,9 +134806,12 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -          // The send path window-clamps every main-turn request; with a
 -          // near-empty prompt the 32K default ceiling binds.
 -          config: { maxOutputTokens: 32_000 },
-+          // Every main-turn request is issued with the window's remainder
-+          // after its prompt; the fixture counts the prompt as one token.
-+          config: { maxOutputTokens: DEFAULT_TEST_WINDOW - 1 },
++          // Every main-turn request is issued with the generation reserve,
++          // whatever its prompt.
++          config: {
++            maxOutputTokens: partitionContextWindow(DEFAULT_TEST_WINDOW)
++              .generationReserve,
++          },
          },
          'prompt-id-1',
        );
@@ -134891,7 +134889,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        vi.mocked(mockConfig.getChatCompression).mockReturnValue({
          maxRecentImagesToRetain: 1,
          imagePayloadThreshold: 1,
-@@ -2527,12 +2098,13 @@
+@@ -2527,12 +2101,13 @@
            role: 'model',
            parts: [{ text: 'I see the second image' }],
          },
@@ -134905,7 +134903,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2594,12 +2166,13 @@
+@@ -2594,12 +2169,13 @@
              },
            ],
          },
@@ -134919,7 +134917,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2664,12 +2237,13 @@
+@@ -2664,12 +2240,13 @@
        chat.setHistory([
          { role: 'user', parts: [{ text: 'prior question' }] },
          { role: 'model', parts: [{ text: 'prior answer' }] },
@@ -134933,7 +134931,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2714,13 +2288,19 @@
+@@ -2714,13 +2291,19 @@
          'prompt-id-no-request-clone',
        );
      });
@@ -134954,7 +134952,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: {
-@@ -2731,12 +2311,14 @@
+@@ -2731,12 +2314,14 @@
                index: 0,
                safetyRatings: [],
              },
@@ -134969,7 +134967,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2751,25 +2333,27 @@
+@@ -2751,25 +2336,27 @@
        );
        for await (const _ of stream) {
          // consume stream
@@ -134999,7 +134997,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              candidates: [
                {
                  content: {
-@@ -2779,173 +2363,179 @@
+@@ -2779,173 +2366,179 @@
                  finishReason: 'STOP',
                  index: 0,
                  safetyRatings: [],
@@ -135317,7 +135315,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              {
                content: {
                  parts: [{ text: 'response' }],
-@@ -2953,12 +2543,13 @@
+@@ -2953,12 +2546,13 @@
                },
                finishReason: 'STOP',
              },
@@ -135331,7 +135329,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2966,27 +2557,35 @@
+@@ -2966,27 +2560,35 @@
          response,
        );
  
@@ -135374,7 +135372,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -3015,13 +2614,13 @@
+@@ -3015,13 +2617,13 @@
      });
    });
  
@@ -135389,7 +135387,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: { parts: [{ text }], role: 'model' },
-@@ -3038,31 +2637,35 @@
+@@ -3038,31 +2640,35 @@
  
      it('releases the send-lock when auto-compression throws (no deadlock)', async () => {
        const compressSpy = vi
@@ -135433,7 +135431,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
  
-@@ -3084,31 +2687,37 @@
+@@ -3084,31 +2690,37 @@
          .mockResolvedValue({
            newHistory: null,
            info: {
@@ -135480,7 +135478,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
        const stream = await chat.sendMessageStream(
-@@ -3127,35 +2736,43 @@
+@@ -3127,35 +2739,43 @@
            .some((content) =>
              content.parts?.some((part) => part.text === 'first'),
            ),
@@ -135536,7 +135534,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse(),
        );
  
-@@ -3166,16 +2783,16 @@
+@@ -3166,16 +2786,16 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -135555,7 +135553,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        ];
        vi.spyOn(
          ChatCompressionService.prototype,
-@@ -3183,12 +2800,13 @@
+@@ -3183,12 +2803,13 @@
        ).mockResolvedValueOnce({
          newHistory: compressedHistory,
          info: {
@@ -135569,7 +135567,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('answer'),
        );
  
-@@ -3199,2262 +2817,1210 @@
+@@ -3199,2262 +2820,1209 @@
        );
        const events: Array<{ type: StreamEventType }> = [];
        for await (const event of stream) {
@@ -137677,10 +137675,9 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -            newTokenCount: 40_000,
 -            compressionStatus: CompressionStatus.COMPRESSED,
 -          },
-+    it("gives every turn the window's remainder after its prompt", async () => {
-+      // Nothing is reserved against a turn: the room it is issued with is
-+      // whatever the window has left, and only a turn that fills the window
-+      // can reach it.
++    it('gives every turn the generation reserve, whatever its prompt', async () => {
++      // A turn's room does not depend on its prompt: the same reserve is
++      // issued against an empty history and just below the trigger alike.
 +      for (const promptTokens of [
 +        1,
 +        12_345,
@@ -137714,9 +137711,9 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -        ).rejects.toThrow(
 -          /compression status: COMPRESSION_FAILED_EMPTY_SUMMARY/i,
 +        );
-+        expect(sentMaxOutputTokens()).toBe(WINDOW - promptTokens);
-+        expect(sentMaxOutputTokens()).toBeGreaterThan(
-+          PARTITION.generationReserve + PARTITION.directiveReserve,
++        expect(sentMaxOutputTokens()).toBe(PARTITION.generationReserve);
++        expect(promptTokens + PARTITION.generationReserve).toBeLessThan(
++          WINDOW,
          );
        }
 -
@@ -137765,9 +137762,9 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -
 -      expect(compressSpy).toHaveBeenCalledTimes(MAX_CONSECUTIVE_FAILURES + 1);
 -      expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();
-+    it('sends no output limit but the remainder, whatever the request asked for', async () => {
++    it('sends no output limit but the reserve, whatever the request asked for', async () => {
 +      // A per-request ceiling is not a second bound on the turn: the send
-+      // path replaces it with the window's remainder.
++      // path replaces it with the generation reserve.
 +      mockContentGenerator.countRequestTokens = vi
 +        .fn()
 +        .mockResolvedValue({ totalTokens: 12_345, maxModelLen: WINDOW });
@@ -137778,7 +137775,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          'prompt-partition-request-ceiling',
 +        ),
 +      );
-+      expect(sentMaxOutputTokens()).toBe(WINDOW - 12_345);
++      expect(sentMaxOutputTokens()).toBe(PARTITION.generationReserve);
      });
  
 -    it('stops hard-rescue after repeated NOOP results are still oversized', async () => {
@@ -138354,7 +138351,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -        contextWindowSize: 40_000,
 -      });
 +    it('sends a batch inside its share untouched', async () => {
-+      const output = 'a'.repeat(PARTITION.toolResult);
++      const output = 'a'.repeat(PARTITION.generationReserve);
 +      mockContentGenerator.countRequestTokens = countByChars();
  
 -      vi.spyOn(ChatCompressionService.prototype, 'compress').mockResolvedValue({
@@ -138385,7 +138382,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +      await drain(
 +        await newChat().sendMessageStream(
 +          'qwen3.8-27b-nvfp4-k8v4',
-+          { message: toolResultMessage([PARTITION.toolResult]) },
++          { message: toolResultMessage([PARTITION.generationReserve]) },
 +          'prompt-tool-result-fits',
 +        ),
        );
@@ -138410,7 +138407,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -        contextWindowSize: 40_000,
 -      });
 +    it('displaces the largest result to disk when the batch is over its share', async () => {
-+      const large = PARTITION.toolResult;
++      const large = PARTITION.generationReserve;
 +      mockContentGenerator.countRequestTokens = countByChars();
  
 -      vi.spyOn(ChatCompressionService.prototype, 'compress')
@@ -138522,7 +138519,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +      await drain(
 +        await newChat().sendMessageStream(
 +          'qwen3.8-27b-nvfp4-k8v4',
-+          { message: toolResultMessage([1000, PARTITION.toolResult, 1000]) },
++          { message: toolResultMessage([1000, PARTITION.generationReserve, 1000]) },
 +          'prompt-tool-result-partial',
 +        ),
        );
@@ -138568,7 +138565,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          );
 +          return {
 +            totalTokens: carriesResult
-+              ? HISTORY_TOKENS + PARTITION.toolResult + 1
++              ? HISTORY_TOKENS + PARTITION.generationReserve + 1
 +              : HISTORY_TOKENS,
 +            maxModelLen: WINDOW,
 +          };
@@ -138603,7 +138600,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          ),
 +        ),
 +      ).rejects.toThrow(
-+        /tool results render to 16385 tokens and no turn appends more than the 16384-token tool-result share/,
++        /tool results render to 49153 tokens and no turn appends more than the 49152-token generation reserve/,
        );
 -      for await (const _ of stream) {
 -        /* consume */
@@ -138713,7 +138710,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        async () => makeStreamResponse(),
 +      );
 +
-+      for (const argumentChars of [0, 1_000, PARTITION.toolResult * 4]) {
++      for (const argumentChars of [0, 1_000, PARTITION.generationReserve * 4]) {
 +        mockContentGenerator.countRequestTokens = countByRenderedChars();
 +        await drain(
 +          await chatAwaitingWrite(argumentChars).sendMessageStream(
@@ -138737,10 +138734,10 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        async () => makeStreamResponse(),
 +      );
 +      mockContentGenerator.countRequestTokens = countByRenderedChars();
-+      const oversized = 'r'.repeat(PARTITION.toolResult + 1);
++      const oversized = 'r'.repeat(PARTITION.generationReserve + 1);
 +
 +      await drain(
-+        await chatAwaitingWrite(PARTITION.toolResult * 4).sendMessageStream(
++        await chatAwaitingWrite(PARTITION.generationReserve * 4).sendMessageStream(
 +          'qwen3.8-27b-nvfp4-k8v4',
 +          { message: writeResultMessage(oversized) },
 +          'prompt-tool-result-argument-oversized',
@@ -138811,7 +138808,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('addHistory', () => {
      it('should add a new content item to the history', () => {
        const newContent: Content = {
-@@ -5858,20 +4424,22 @@
+@@ -5858,20 +4426,22 @@
          // Use mockImplementationOnce to provide a fresh, promise-wrapped generator for each attempt.
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockImplementationOnce(async () =>
@@ -138835,7 +138832,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -5915,33 +4483,213 @@
+@@ -5915,33 +4485,213 @@
          });
          expect(history[1]).toEqual({
            role: 'model',
@@ -139053,7 +139050,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                ],
              } as unknown as GenerateContentResponse;
            })(),
-@@ -5951,22 +4699,22 @@
+@@ -5951,22 +4701,22 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-fail',
@@ -139080,7 +139077,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          );
  
          // History should still contain the user message.
-@@ -5978,99 +4726,13 @@
+@@ -5978,99 +4728,13 @@
          });
        } finally {
          vi.useRealTimers();
@@ -139180,7 +139177,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          delta: {
            tool_calls: [
              {
-@@ -6079,23 +4741,23 @@
+@@ -6079,23 +4743,23 @@
                type: 'function',
                function: { arguments: '{}' },
              },
@@ -139206,7 +139203,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    {
                      index: 0,
                      delta: testCase.delta,
-@@ -6111,18 +4773,26 @@
+@@ -6111,18 +4775,26 @@
              buildRequest: (request: OpenAI.Chat.ChatCompletionCreateParams) =>
                request,
              buildHeaders: () => ({}),
@@ -139235,7 +139232,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
            const stream = await chat.sendMessageStream(
              'test-model',
-@@ -6146,76 +4816,23 @@
+@@ -6146,76 +4818,23 @@
          } finally {
            vi.useRealTimers();
          }
@@ -139317,7 +139314,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-invalid-stream-abort-delay',
          );
-@@ -6239,41 +4856,46 @@
+@@ -6239,41 +4858,46 @@
          ).toHaveBeenCalledTimes(1);
        } finally {
          vi.useRealTimers();
@@ -139366,7 +139363,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after empty stream' }],
                      },
                      finishReason: 'STOP',
-@@ -6308,29 +4930,21 @@
+@@ -6308,29 +4932,21 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -139398,7 +139395,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6345,12 +4959,13 @@
+@@ -6345,12 +4961,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -139412,7 +139409,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6360,21 +4975,29 @@
+@@ -6360,21 +4977,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -139443,7 +139440,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // History must NOT contain the failed attempt's partial
          // model[functionCall]. Expected shape: [user, model(success
          // text)] — exactly two entries, alternation intact.
-@@ -6389,24 +5012,18 @@
+@@ -6389,24 +5014,18 @@
          );
        } finally {
          vi.useRealTimers();
@@ -139470,7 +139467,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6426,12 +5043,13 @@
+@@ -6426,12 +5045,13 @@
              'Model stream ended without a finish reason.',
              'NO_FINISH_REASON',
            );
@@ -139484,7 +139481,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6441,21 +5059,29 @@
+@@ -6441,21 +5061,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -139515,7 +139512,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Final shape must be clean: [user, model(success text)].
          // The failed attempt's partial functionCall must NOT survive.
          expect(history.length).toBe(2);
-@@ -6469,56 +5095,12 @@
+@@ -6469,56 +5097,12 @@
          );
        } finally {
          vi.useRealTimers();
@@ -139572,7 +139569,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            status: 503,
          },
-@@ -6526,12 +5108,13 @@
+@@ -6526,12 +5110,13 @@
        const routeGenerateContentStream = vi
          .fn()
          .mockRejectedValueOnce(capacityError)
@@ -139586,7 +139583,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    finishReason: 'STOP',
                  },
                ],
-@@ -6543,14 +5126,17 @@
+@@ -6543,14 +5128,17 @@
          generateContentStream: routeGenerateContentStream,
        } as ContentGenerator;
        const routeSelector =
@@ -139605,7 +139602,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            modalities: { image: true },
          },
          retryAuthType: AuthType.USE_OPENAI,
-@@ -6561,12 +5147,13 @@
+@@ -6561,12 +5149,13 @@
        } as unknown as ReturnType<typeof mockConfig.getBaseLlmClient>);
        vi.mocked(mockConfig.getEffectiveInputModalities).mockReturnValue({
          pdf: true,
@@ -139619,7 +139616,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              role: 'user',
              parts: [
                { text: 'prior question' },
-@@ -6577,13 +5164,13 @@
+@@ -6577,13 +5166,13 @@
                  },
                },
              ],
@@ -139634,7 +139631,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        mockRetryWithBackoff.mockImplementation(async (apiCall, options) => {
          try {
            return await apiCall();
-@@ -6610,15 +5197,13 @@
+@@ -6610,15 +5199,13 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -139651,7 +139648,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const routeRequest = JSON.stringify(
          routeGenerateContentStream.mock.calls.at(-1)?.[0],
        );
-@@ -6629,12 +5214,13 @@
+@@ -6629,12 +5216,13 @@
  
        vi.mocked(
          mockContentGenerator.generateContentStream,
@@ -139665,7 +139662,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6671,752 +5257,12 @@
+@@ -6671,752 +5259,12 @@
        const history = JSON.stringify(chat.getHistory());
        expect(history).toContain('private-image');
        expect(history).toContain('prior-pdf');
@@ -140418,7 +140415,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const transportError = Object.assign(new TypeError('terminated'), {
            cause: Object.assign(new Error('other side closed'), {
              code: 'UND_ERR_SOCKET',
-@@ -7431,12 +5277,13 @@
+@@ -7431,12 +5279,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -140432,7 +140429,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after transport retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7497,13 +5344,13 @@
+@@ -7497,13 +5346,13 @@
            'test-model',
            { message: 'test' },
            'prompt-transport-retry-exhausted',
@@ -140447,7 +140444,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          let caughtError: unknown;
          const collecting = (async () => {
            try {
-@@ -7520,116 +5367,37 @@
+@@ -7520,116 +5369,37 @@
          await collecting;
  
          expect(caughtError).toBeInstanceOf(Error);
@@ -140569,7 +140566,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [
                          { text: 'Let me think about this…', thought: true },
                        ],
-@@ -7640,12 +5408,13 @@
+@@ -7640,12 +5410,13 @@
                throw transportError;
              })(),
            )
@@ -140583,7 +140580,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after thinking-phase retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7678,103 +5447,22 @@
+@@ -7678,103 +5449,22 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -140688,7 +140685,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { callId: 'call-preparing', toolName: 'read_file' },
          ]);
  
-@@ -7785,12 +5473,13 @@
+@@ -7785,12 +5475,13 @@
                throw transportError;
              })(),
            )
@@ -140702,7 +140699,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after preparation' }],
                      },
                      finishReason: 'STOP',
-@@ -7815,1231 +5504,206 @@
+@@ -7815,1231 +5506,206 @@
          ).toHaveLength(1);
        } finally {
          vi.useRealTimers();
@@ -142091,7 +142088,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        // a typo is introduced here, this fails instead of silently never
        // retrying.
        for (const code of RETRYABLE_STREAM_TRANSPORT_CODES) {
-@@ -9070,12 +5734,13 @@
+@@ -9070,12 +5736,13 @@
                  yield {} as GenerateContentResponse;
                })(),
              )
@@ -142105,7 +142102,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                          parts: [{ text: `Recovered from ${transportCode}` }],
                        },
                        finishReason: 'STOP',
-@@ -9125,13 +5790,17 @@
+@@ -9125,13 +5792,17 @@
              timeoutError,
              {
                model: 'test-model',
@@ -142124,7 +142121,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          }
  
          vi.mocked(mockContentGenerator.generateContentStream)
-@@ -9142,12 +5811,13 @@
+@@ -9142,12 +5813,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -142138,7 +142135,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after enhanced timeout' }],
                      },
                      finishReason: 'STOP',
-@@ -9200,12 +5870,13 @@
+@@ -9200,12 +5872,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -142152,7 +142149,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -9255,12 +5926,13 @@
+@@ -9255,12 +5928,13 @@
  
        vi.mocked(mockContentGenerator.generateContentStream)
          .mockRejectedValueOnce(transportError)
@@ -142166,7 +142163,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      parts: [{ text: 'Recovered from depth-2 RST' }],
                    },
                    finishReason: 'STOP',
-@@ -9391,13 +6063,17 @@
+@@ -9391,13 +6065,17 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-transport-abort-delay',
@@ -142185,7 +142182,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Abort while the generator is awaiting the retry delay.
          const nextPromise = iterator.next();
          abortController.abort();
-@@ -9409,41 +6085,35 @@
+@@ -9409,41 +6087,35 @@
          ).toHaveBeenCalledTimes(1);
        } finally {
          vi.useRealTimers();
@@ -142232,7 +142229,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -9458,12 +6128,13 @@
+@@ -9458,12 +6130,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -142246,7 +142243,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9473,130 +6144,42 @@
+@@ -9473,130 +6146,42 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -142386,7 +142383,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
-@@ -9606,12 +6189,13 @@
+@@ -9606,12 +6191,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -142400,7 +142397,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9626,24 +6210,28 @@
+@@ -9626,24 +6212,28 @@
            'test-model',
            { message: 'test' },
            'prompt-id-tpm-retry',
@@ -142430,7 +142427,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -9652,13 +6240,13 @@
+@@ -9652,13 +6242,13 @@
  
          expect(
            mockContentGenerator.generateContentStream,
@@ -142445,7 +142442,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after TPM retry',
-@@ -9696,14 +6284,17 @@
+@@ -9696,14 +6286,17 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -142464,7 +142461,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockContentGenerator.generateContentStream,
          ).toHaveBeenCalledTimes(1);
        } finally {
-@@ -9733,12 +6324,13 @@
+@@ -9733,12 +6326,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -142478,7 +142475,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Success after Retry-After' }],
                      },
                      finishReason: 'STOP',
-@@ -9752,21 +6344,25 @@
+@@ -9752,21 +6346,25 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-after',
@@ -142506,7 +142503,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -9792,12 +6388,13 @@
+@@ -9792,12 +6390,13 @@
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
@@ -142520,7 +142517,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9818,26 +6415,30 @@
+@@ -9818,26 +6417,30 @@
            'test-model',
            { message: 'test' },
            'prompt-id-skip-delay',
@@ -142553,7 +142550,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -9884,13 +6485,17 @@
+@@ -9884,13 +6487,17 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-abort-delay',
@@ -142572,7 +142569,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Abort while the generator is awaiting the 60s delay
          const nextPromise = iterator.next();
          abortController.abort();
-@@ -9905,12 +6510,13 @@
+@@ -9905,12 +6512,13 @@
  
          // Verify the next sendMessageStream is not blocked by the old delay.
          // If sendPromise were still pending, this would hang until the 60s
@@ -142586,7 +142583,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9954,12 +6560,13 @@
+@@ -9954,12 +6562,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -142600,7 +142597,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9974,33 +6581,37 @@
+@@ -9974,33 +6583,37 @@
            'test-model',
            { message: 'test' },
            'prompt-id-glm-retry',
@@ -142644,7 +142641,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -10009,13 +6620,13 @@
+@@ -10009,13 +6622,13 @@
  
          expect(
            mockContentGenerator.generateContentStream,
@@ -142659,7 +142656,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after GLM retry',
-@@ -10028,12 +6639,14 @@
+@@ -10028,12 +6641,14 @@
  
      it('should use configured delay across repeated streamed rate-limit errors', async () => {
        vi.useFakeTimers();
@@ -142674,7 +142671,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryMaxDelayMs: 5_000,
          });
          const firstError = new StreamContentError(
-@@ -10058,12 +6671,13 @@
+@@ -10058,12 +6673,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -142688,7 +142685,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10075,35 +6689,37 @@
+@@ -10075,35 +6691,37 @@
            'test-model',
            { message: 'test' },
            'prompt-id-streamed-rate-limit-backoff',
@@ -142731,7 +142728,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -10123,12 +6739,14 @@
+@@ -10123,12 +6741,14 @@
  
      it('uses configured stream rate-limit retry delays', async () => {
        vi.useFakeTimers();
@@ -142746,7 +142743,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryInitialDelayMs: 3_000,
            retryMaxDelayMs: 5_000,
          });
-@@ -10154,12 +6772,13 @@
+@@ -10154,12 +6774,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -142760,7 +142757,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10170,30 +6789,31 @@
+@@ -10170,30 +6791,31 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -142797,7 +142794,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -10261,12 +6881,13 @@
+@@ -10261,12 +6883,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error429)
@@ -142811,7 +142808,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10339,12 +6960,13 @@
+@@ -10339,12 +6962,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error500)
@@ -142825,7 +142822,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10372,12 +6994,13 @@
+@@ -10372,12 +6996,13 @@
        afterEach(() => {
          // Reset to default behavior
          mockRetryWithBackoff.mockImplementation(async (apiCall) => apiCall());
@@ -142839,7 +142836,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        { role: 'user', parts: [{ text: 'First question' }] },
        { role: 'model', parts: [{ text: 'First answer' }] },
      ];
-@@ -10385,20 +7008,22 @@
+@@ -10385,20 +7010,22 @@
  
      // 2. Mock the API to fail once with an empty stream, then succeed.
      vi.mocked(mockContentGenerator.generateContentStream)
@@ -142863,7 +142860,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -10450,103 +7075,113 @@
+@@ -10450,103 +7077,113 @@
          'Test setup error: Fourth turn is not a valid text part.',
        );
      }
@@ -143037,7 +143034,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              finishReason: 'STOP',
            },
          ],
-@@ -10561,41 +7196,58 @@
+@@ -10561,41 +7198,58 @@
      const firstStream = await chat.sendMessageStream(
        'test-model',
        { message: 'first' },
@@ -143108,7 +143105,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      expect(history.length).toBe(4);
  
      const turn4 = history[3];
-@@ -10606,12 +7258,13 @@
+@@ -10606,12 +7260,13 @@
      }
      expect(turn4.parts[0].text).toBe('second response');
    });
@@ -143122,7 +143119,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -10641,275 +7294,272 @@
+@@ -10641,275 +7296,272 @@
          }),
          'prompt-id-res3',
        );
@@ -143628,7 +143625,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      { text: 'thinking', thought: true },
                      { text: response.slice(0, splitAt) },
-@@ -10954,28 +7604,31 @@
+@@ -10954,28 +7606,31 @@
        expect(emittedParts.find((part) => part.thought)?.text).toBe('thinking');
        expect(streamedTextChunks.join('')).toBe(response);
        expect(chat.getLastModelMessageText()).toBe(response);
@@ -143661,7 +143658,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      );
  
      const stream = await chat.sendMessageStream(
-@@ -10996,138 +7649,55 @@
+@@ -10996,138 +7651,55 @@
      const emittedText = emittedParts
        .filter((part) => !part.thought)
        .map((part) => part.text ?? '')
@@ -143811,7 +143808,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const responses = toolCallFirst
          ? [functionCallResponse, ...textResponses]
          : [textResponses[0]!, functionCallResponse, textResponses[1]!];
-@@ -11138,33 +7708,33 @@
+@@ -11138,33 +7710,33 @@
        const stream = await chatWithRecording.sendMessageStream(
          'test-model',
          { message: 'test' },
@@ -143856,7 +143853,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              .map((part) => part.text)
              .join(''),
          ).toBe(response);
-@@ -11174,22 +7744,30 @@
+@@ -11174,22 +7746,30 @@
  
    it.each([false, true])(
      'keeps leading JSON before a later structured tool call (preparation: %s)',
@@ -143888,7 +143885,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              },
            ],
          } as unknown as GenerateContentResponse,
-@@ -11243,31 +7821,34 @@
+@@ -11243,31 +7823,34 @@
          expect(parts.findIndex((part) => part.text === response)).toBe(0);
          expect(parts.findIndex((part) => part.functionCall)).toBe(1);
        }
@@ -143926,7 +143923,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -11278,59 +7859,64 @@
+@@ -11278,59 +7861,64 @@
                      },
                    ],
                  },
@@ -143995,7 +143992,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -11371,252 +7957,12 @@
+@@ -11371,252 +7959,12 @@
      expect(events.some((event) => event.type === StreamEventType.RETRY)).toBe(
        false,
      );
@@ -144248,7 +144245,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'question' }] },
          {
            role: 'model',
-@@ -11790,179 +8136,633 @@
+@@ -11790,179 +8138,633 @@
        chat.stripOrphanedUserEntriesFromHistory();
  
        expect(chat.getHistory()).toEqual([]);
@@ -145016,7 +145013,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12075,17 +8875,12 @@
+@@ -12075,17 +8877,12 @@
        expect(parts[0]!.functionResponse?.id).toBe('call_A');
        expect(parts[1]!.functionResponse?.id).toBe('call_B');
        expect(parts[2]).toEqual({ text: 'retry prompt' });
@@ -145034,7 +145031,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,1792 +9363,166 @@
+@@ -12568,1792 +9365,166 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -146947,7 +146944,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const chat = chatWith([
          { role: 'user', parts: [{ text: 'plan it' }] },
          {
-@@ -14615,14 +9784,16 @@
+@@ -14615,14 +9786,16 @@
        // mockFileSystem, so "writing" the plan file is a Map insert.
        const planFile = '/plans/wired-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -146964,7 +146961,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(planFile));
        } finally {
          mockFileSystem.delete(planFile);
-@@ -14632,14 +9803,16 @@
+@@ -14632,14 +9805,16 @@
      it('is applied by the constructor for rehydrated history', () => {
        const planFile = '/plans/ctor-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -146981,7 +146978,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        } finally {
          mockFileSystem.delete(planFile);
        }
-@@ -14647,14 +9820,16 @@
+@@ -14647,14 +9822,16 @@
  
      it('setHistory leaves history alone when no plan file exists', () => {
        const chat = new GeminiChat(
@@ -146998,7 +146995,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        expect(fnCall.args!['plan']).toBe(PLAN);
      });
    });
-@@ -14725,821 +9900,684 @@
+@@ -14725,821 +9902,684 @@
        const snapshot = JSON.parse(JSON.stringify(original));
        redactStructuredOutputArgsForRecording(original);
        expect(original).toEqual(snapshot);
@@ -148101,9 +148098,9 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        expect(create.mock.calls[0]![0]).toMatchObject({
 +          model: 'test-model',
 +          stream: true,
-+          // The turn's limit is the window's remainder; the fixture counts
-+          // every prompt as one token.
-+          max_tokens: DEFAULT_TEST_WINDOW - 1,
++          // The turn's limit is the generation reserve, whatever its prompt.
++          max_tokens: partitionContextWindow(DEFAULT_TEST_WINDOW)
++            .generationReserve,
 +          kv_scope: 'chat-owner',
 +        });
 +        expect(recordAssistantTurn).toHaveBeenCalledOnce();
@@ -149943,7 +149940,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      ),
 +    );
 +    for (const result of pending) {
-+      if (requestTokens - baselineTokens <= partition.toolResult) break;
++      if (requestTokens - baselineTokens <= partition.generationReserve) break;
 +      userContent = {
 +        ...userContent,
 +        parts: await referencePendingToolResult(
@@ -149960,9 +149957,9 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      );
 +    }
 +    const toolResultTokens = requestTokens - baselineTokens;
-+    if (toolResultTokens > partition.toolResult) {
++    if (toolResultTokens > partition.generationReserve) {
 +      throw new Error(
-+        `This turn's tool results render to ${toolResultTokens} tokens and no turn appends more than the ${partition.toolResult}-token tool-result share of the ${partition.window}-token window. Every one of them already stands for the file that holds it whole.`,
++        `This turn's tool results render to ${toolResultTokens} tokens and no turn appends more than the ${partition.generationReserve}-token generation reserve of the ${partition.window}-token window.`,
 +      );
 +    }
 +    return { userContent, requestTokens };
@@ -150788,14 +150785,14 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +            `The conversation renders to ${promptTokensForClamp} tokens and no turn is issued at or above the ${partition.compactionTrigger}-token compaction trigger. Compaction left it there, so it cannot be reduced further in this session.`,
 +          );
 +        }
-+        // The turn's limit is the window's remainder. Nothing is reserved
-+        // against it: the room it does not use is the room the history has
-+        // left, and a turn that generates all of it has filled the window.
++        // The turn's limit is the generation reserve, whatever the prompt.
++        // trigger + reserve + directive === window, so a reserve-sized turn
++        // issued below the trigger cannot reach the window.
 +        params = {
 +          ...params,
 +          config: {
 +            ...params.config,
-+            maxOutputTokens: turnOutputLimit(partition, promptTokensForClamp),
++            maxOutputTokens: turnOutputLimit(partition),
 +          },
 +        };
 +      } catch (error) {
@@ -165410,7 +165407,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
  describe('normalize', () => {
    it('should lowercase and trim the model string', () => {
      expect(normalize('  GEMINI-1.5-PRO  ')).toBe('gemini-1.5-pro');
-@@ -509,68 +508,132 @@
+@@ -509,68 +508,125 @@
        expect(tokenLimit('QWEN3-MAX', 'output')).toBe(32768);
        expect(tokenLimit('qwen3-max-20250601', 'output')).toBe(32768);
      });
@@ -165457,7 +165454,6 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +      window: 262_144,
 +      generationReserve: 49_152,
 +      directiveReserve: 2_048,
-+      toolResult: 16_384,
 +      compactionTrigger: 210_944,
 +    });
 +  });
@@ -165485,19 +165481,22 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    }
 +  });
 +
-+  it('gives every turn at least the reserves it never has to hold', () => {
++  it('leaves a reserve-sized turn inside the window at the largest issuable prompt', () => {
++    // trigger + reserve + directive === window, so a turn issued just below
++    // the trigger and given the whole reserve still cannot reach the window.
 +    for (const window of WINDOWS) {
 +      const p = partitionContextWindow(window);
-+      expect(turnOutputLimit(p, p.compactionTrigger - 1)).toBe(
-+        p.generationReserve + p.directiveReserve + 1,
-+      );
++      expect(p.compactionTrigger - 1 + turnOutputLimit(p)).toBeLessThan(window);
 +    }
 +  });
 +
-+  it('bounds one turn\'s inline tool results without holding the bound back from the history', () => {
++  it('keeps the trigger above three generation reserves at every window size', () => {
++    // What survives a compaction is the snapshot, the turn carried behind it
++    // and the next turn's results; each is given the reserve, so the history
++    // a turn stands on has to hold three of them.
 +    for (const window of WINDOWS) {
 +      const p = partitionContextWindow(window);
-+      expect(p.toolResult).toBe(Math.floor((window * 16) / 256));
++      expect(p.compactionTrigger).toBeGreaterThan(3 * p.generationReserve);
 +      expect(p.compactionTrigger).toBe(
 +        window - p.generationReserve - p.directiveReserve,
 +      );
@@ -165509,7 +165508,6 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +      window: 1_048_576,
 +      generationReserve: 196_608,
 +      directiveReserve: 8_192,
-+      toolResult: 65_536,
 +      compactionTrigger: 843_776,
 +    });
 +  });
@@ -165518,7 +165516,6 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    const p = partitionContextWindow(262_145);
 +    expect(p.generationReserve).toBe(49_152);
 +    expect(p.directiveReserve).toBe(2_048);
-+    expect(p.toolResult).toBe(16_384);
 +    // The trigger takes the remainder, so the sum is exact and the trigger is
 +    // never the share that rounds away.
 +    expect(p.compactionTrigger).toBe(210_945);
@@ -165536,24 +165533,20 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +describe('turnOutputLimit', () => {
 +  const p = partitionContextWindow(262_144);
 +
-+  it("gives a turn the window's remainder after its prompt", () => {
-+    expect(turnOutputLimit(p, 0)).toBe(262_144);
-+    expect(turnOutputLimit(p, 77_179)).toBe(184_965);
-+    expect(turnOutputLimit(p, p.compactionTrigger - 1)).toBe(51_201);
-+  });
-+
-+  it('never gives a turn less than the generation reserve plus the directive reserve', () => {
-+    for (let prompt = 0; prompt < p.compactionTrigger; prompt += 4_999) {
-+      expect(turnOutputLimit(p, prompt)).toBeGreaterThanOrEqual(
-+        p.generationReserve + p.directiveReserve + 1,
++  it('gives every window size its own reserve and nothing else', () => {
++    for (const window of [256, 4_096, 131_072, 262_145, 1_048_576]) {
++      const part = partitionContextWindow(window);
++      expect(turnOutputLimit(part)).toBe(part.generationReserve);
++      expect(part.compactionTrigger - 1 + turnOutputLimit(part)).toBeLessThan(
++        window,
 +      );
-+      expect(prompt + turnOutputLimit(p, prompt)).toBe(p.window);
 +    }
 +  });
 +
-+  it('refuses a prompt no turn is issued against', () => {
-+    expect(() => turnOutputLimit(p, p.compactionTrigger)).toThrow(
-+      'compaction trigger',
++  it('gives a turn the generation reserve, whatever its prompt', () => {
++    expect(turnOutputLimit(p)).toBe(49_152);
++    expect(turnOutputLimit(p)).toBe(
++      p.generationReserve,
      );
 -    expect(clampOutputTokensToWindow(32_000, 40_000, 60_000)).toBe(
 -      MIN_CLAMPED_OUTPUT_TOKENS,
@@ -165583,9 +165576,6 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 -
 -  it('keeps OUTPUT_TOKEN_CEILING aligned with the escalation target', () => {
 -    expect(OUTPUT_TOKEN_CEILING).toBe(ESCALATED_MAX_TOKENS);
-+    for (const bad of [-1, 1.5, Number.NaN]) {
-+      expect(() => turnOutputLimit(p, bad)).toThrow('compaction trigger');
-+    }
 +  });
 +});
 +
@@ -165598,7 +165588,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
  describe('defaultOutputCeiling', () => {
    it('clips a model advertising more than the ceiling down to it', () => {
      // deepseek-v4 advertises 384K output → clipped to OUTPUT_TOKEN_CEILING.
-@@ -625,6 +688,39 @@
+@@ -625,6 +681,39 @@
    it('returns undefined when either side is absent (caller applies its own fallback)', () => {
      expect(reconcileMaxTokens(8_000, undefined)).toBeUndefined();
      expect(reconcileMaxTokens(undefined, 8_000)).toBeUndefined();
@@ -165641,7 +165631,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
-@@ -8,88 +8,149 @@
+@@ -8,88 +8,150 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -165716,7 +165706,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +/**
 + * The environment variable an operator may set to cap ordinary output on
 + * providers that take a fixed limit. The vLLM route refuses it: a turn's
-+ * limit there is the window's remainder, and nothing else bounds it.
++ * limit there is the generation reserve, and nothing else bounds it.
 + */
 +export const OUTPUT_CEILING_ENV = 'QWEN_CODE_MAX_OUTPUT_TOKENS';
 +
@@ -165724,26 +165714,28 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * The served context window, divided into shares and spent exactly.
 + *
 + * Two shares are held back from the history, and they are the whole of what
-+ * is held back. Three sixteenths are the generation reserve: the least room a
-+ * compaction's snapshot is ever issued with, and therefore the least room any
-+ * turn is ever issued with. An eighth of a sixteenth is the directive
-+ * reserve: a compaction request is an issued prompt plus one appended message
-+ * asking for the snapshot, and that message costs what it costs whether or not
-+ * anyone accounts for it. The remainder is the compaction trigger, the history
-+ * a turn may be issued against.
++ * is held back. Three sixteenths are the generation reserve: the room any
++ * generation is issued with, a turn and a compaction's snapshot alike. An
++ * eighth of a sixteenth is the directive reserve: a compaction request is an
++ * issued prompt plus one appended message asking for the snapshot, and that
++ * message costs what it costs whether or not anyone accounts for it. The
++ * remainder is the compaction trigger, the history a turn may be issued
++ * against.
 + *
-+ * A turn holds no reservation. It is issued with the window's remainder,
-+ * `window - prompt`, because compaction never has to carry what a turn
-+ * generates: the snapshot summarises the prompt the last turn was issued
-+ * against, and that turn rides behind the snapshot verbatim. Every issued
-+ * prompt is below the trigger, so the request that summarises it has at least
-+ * the reserve plus one token of room, whatever the turn generated. A turn that
-+ * exhausts its remainder has exhausted the window, which ends the session.
++ * One reserve, not three, because what survives a compaction is one quantity
++ * repeated. Post-compaction history is `R + S + A + T + B`: retained inputs,
++ * the snapshot, attachments, the turn carried verbatim behind the snapshot,
++ * and the results the next turn appends. `S`, `T` and `B` are the variable
++ * parts; giving each the same budget makes the condition for continuing to
++ * work exactly `trigger > 3 * reserve`. At the served window that is
++ * `3 * 49,152 = 147,456 < 210,944`, leaving 63,488 tokens for retained
++ * inputs and attachments. partitionContextWindow asserts it at every window
++ * rather than trusting a ratio to survive a change of shares.
 + *
-+ * One sixteenth is the tool-result bound: the largest batch of results one
-+ * turn appends inline before its largest result is written to disk and
-+ * replaced by a reference. It bounds what one turn adds to the history; it is
-+ * not held back from the history and it does not enter the trigger.
++ * A turn is issued with the reserve and nothing else. Every issued prompt is
++ * below the trigger, so the request that later summarises it has at least
++ * the reserve plus one token of room whatever the turn generated, and the
++ * turn rides behind the snapshot verbatim rather than inside that request.
 + *
 + * `generationReserve + directiveReserve + compactionTrigger === window`.
 + * Retained instructions, new user input, and the rendered compaction
@@ -165757,8 +165749,6 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +  readonly generationReserve: number;
 +  /** Room for the one message a compaction request appends to an issued prompt. */
 +  readonly directiveReserve: number;
-+  /** The largest batch of tool results one turn appends to the history inline. */
-+  readonly toolResult: number;
 +  /** The history size at which the next send compacts. */
 +  readonly compactionTrigger: number;
 +}
@@ -165766,7 +165756,6 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +const WINDOW_SHARES = 256;
 +const GENERATION_RESERVE_SHARES = 48;
 +const DIRECTIVE_RESERVE_SHARES = 2;
-+const TOOL_RESULT_SHARES = 16;
 +
 +/**
 + * Derive every context budget from the served window.
@@ -165790,27 +165779,39 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +    Math.floor((contextWindowSize * shares) / WINDOW_SHARES);
 +  const generationReserve = share(GENERATION_RESERVE_SHARES);
 +  const directiveReserve = share(DIRECTIVE_RESERVE_SHARES);
-+  const toolResult = share(TOOL_RESULT_SHARES);
++  const compactionTrigger =
++    contextWindowSize - generationReserve - directiveReserve;
++  // What survives a compaction is the snapshot, the turn carried behind it,
++  // and the results the next turn appends. Each is given the reserve, so the
++  // history a turn stands on has to hold three of them.
++  if (compactionTrigger <= 3 * generationReserve) {
++    throw new Error(
++      `A ${contextWindowSize}-token window leaves a ${compactionTrigger}-token compaction trigger, which is not more than three ${generationReserve}-token generation reserves; a snapshot, the turn it carries and the next turn's results would not fit the history a turn stands on.`,
++    );
++  }
 +  return {
 +    window: contextWindowSize,
 +    generationReserve,
 +    directiveReserve,
-+    toolResult,
-+    compactionTrigger: contextWindowSize - generationReserve - directiveReserve,
++    compactionTrigger,
 +  };
 +}
 +
 +/**
-+ * The output limit of a turn issued at `promptTokens`: the window's remainder.
++ * The output limit of a turn: the generation reserve.
 + *
-+ * Nothing else bounds a turn. A prompt is issued below the compaction trigger
-+ * or not at all, so the remainder is never less than the generation reserve
-+ * plus the directive reserve plus one; a turn that generates all of it has
-+ * filled the window, and that is the one limit a turn can reach.
++ * One number bounds every generation this client issues, a turn and a
++ * snapshot alike, and it does not depend on the prompt: a turn issued just
++ * below the trigger and a turn issued against an empty history get the same
++ * room, so what a turn may produce is knowable before its prompt is counted.
++ * `trigger + reserve + directive === window` makes that safe, and
++ * `trigger > 3 * reserve`, asserted at partition time, keeps a snapshot, the
++ * turn it carries and the next turn's results inside the history a turn
++ * stands on.
 + */
 +export function turnOutputLimit(
 +  partition: ContextPartition,
-   promptTokens: number,
+-  promptTokens: number,
  ): TokenCount {
 -  const room =
 -    contextWindowSize - promptTokens - outputClampMargin(contextWindowSize);
@@ -165819,16 +165820,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 -  // QWEN_CODE_MAX_OUTPUT_TOKENS=2000 on a capacity-constrained backend) must
 -  // be respected, not inflated to the floor.
 -  return Math.min(outputCeiling, Math.max(MIN_CLAMPED_OUTPUT_TOKENS, room));
-+  if (
-+    !Number.isSafeInteger(promptTokens) ||
-+    promptTokens < 0 ||
-+    promptTokens >= partition.compactionTrigger
-+  ) {
-+    throw new Error(
-+      `A turn is issued below the ${partition.compactionTrigger}-token compaction trigger or not at all; received a ${promptTokens}-token prompt.`,
-+    );
-+  }
-+  return partition.window - promptTokens;
++  return partition.generationReserve;
  }
  
  export function parsePositiveIntegerEnvValue(
@@ -165856,7 +165848,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
   * Accurate numeric limits:
   * - power-of-two approximations (128K -> 131072, 256K -> 262144, etc.)
   * - vendor-declared exact values (e.g., 200k -> 200000, 1m -> 1000000) are
-@@ -392,18 +453,20 @@
+@@ -392,18 +454,20 @@
    }
    return Math.min(outputLimit, OUTPUT_TOKEN_CEILING);
  }
@@ -165869,7 +165861,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 - * absent), leaving each provider to apply its own fallback — the shared
 - * invariant ("user max_tokens is a ceiling, not an escape hatch") stays in
 - * one place so a new provider can't silently reopen it.
-+ * send path's request value, the window's remainder after the prompt: the
++ * send path's request value, the generation reserve: the
 + * smaller wins, so a user's explicit ceiling is honored while never
 + * overriding the window upward. Returns undefined when the two can't be
 + * reconciled (either side absent), leaving each provider to apply its own
@@ -165950,7 +165942,7 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
    Content,
    PartListUnion,
  } from '@google/genai';
-@@ -114,12 +117,82 @@
+@@ -114,12 +117,81 @@
      });
  
      expect(response.executionStatus).toBe('not_started');
@@ -165981,21 +165973,20 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
 +    expect(described).toContain('turn 1');
 +  });
 +
-+  it("names the prompt, the limit and the output when a generation reached the window's remainder", () => {
-+    // A turn's limit is the window's remainder after its prompt, so a
-+    // generation stopped at MAX_TOKENS is described by exactly those numbers:
-+    // the reader can see whether the window was full or the turn was too
-+    // large for it.
++  it('names the prompt, the limit and the output when a generation reached its limit', () => {
++    // A turn's limit is the generation reserve, whatever its prompt, so a
++    // generation stopped at MAX_TOKENS is described by the prompt it was
++    // issued at, the reserve it was issued with, and what it produced.
 +    const described = describeIncompleteGeneration(
 +      FinishReason.MAX_TOKENS,
 +      93,
 +      issuedGeneration(
 +        {
 +          promptTokenCount: 77_179,
-+          candidatesTokenCount: 184_965,
++          candidatesTokenCount: 49_152,
 +          thoughtsTokenCount: 11_275,
 +          cachedContentTokenCount: 74_880,
-+          totalTokenCount: 262_144,
++          totalTokenCount: 126_331,
 +        },
 +        262_144,
 +      ),
@@ -166004,8 +165995,8 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
 +    expect(described).toContain('turn 93');
 +    expect(described).toContain('MAX_TOKENS');
 +    expect(described).toContain('77179-token prompt');
-+    expect(described).toContain('remaining 184965 tokens as its limit');
-+    expect(described).toContain('generated 184965');
++    expect(described).toContain('49152-token limit');
++    expect(described).toContain('generated 49152');
 +    expect(described).toContain('carries no final answer');
 +  });
 +
@@ -166033,7 +166024,7 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
    type MockedChatInstance = {
      sendMessageStream: typeof mockSendMessageStream;
      getHistory: typeof mockGetHistory;
-@@ -514,79 +587,12 @@
+@@ -514,79 +586,12 @@
        expect(event2.value.callId).toEqual(
          expect.stringMatching(/^tool2-\d{13}-\w{10,}$/),
        );
@@ -166113,7 +166104,7 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
          yield {
            type: StreamEventType.CHUNK,
            value: {
-@@ -1473,12 +1479,13 @@
+@@ -1473,12 +1478,13 @@
  
      it('bridges a compressed stream event to a ChatCompressed event', async () => {
        const compressionInfo = {
@@ -166127,7 +166118,7 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
          yield {
            type: StreamEventType.CHUNK,
            value: {
-@@ -1499,12 +1506,59 @@
+@@ -1499,12 +1505,59 @@
  
        expect(events).toEqual([
          { type: GeminiEventType.ChatCompressed, value: compressionInfo },
@@ -166187,7 +166178,7 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
      it('should set wasOutputTruncated=true on pending tool calls when finishReason is MAX_TOKENS', async () => {
        const mockResponseStream = (async function* () {
          // Yield a tool call request
-@@ -1638,6 +1692,39 @@
+@@ -1638,6 +1691,39 @@
        expect(turn.pendingToolCalls).toHaveLength(2);
        expect(turn.pendingToolCalls[0].wasOutputTruncated).toBe(true);
        expect(turn.pendingToolCalls[1].wasOutputTruncated).toBe(true);
@@ -166230,15 +166221,16 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
 diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 --- a/packages/core/src/core/turn.ts
 +++ b/packages/core/src/core/turn.ts
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
 +import type { ServedUsage } from './served-usage.js';
++import { partitionContextWindow, turnOutputLimit } from './tokenLimits.js';
  /**
   * @license
   * Copyright 2025 Google LLC
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -64,67 +65,123 @@
+@@ -64,67 +66,123 @@
    ToolCallConfirmation = 'tool_call_confirmation',
    UserCancelled = 'user_cancelled',
    Error = 'error',
@@ -166312,8 +166304,8 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +/**
 + * What a generation was issued with, read from the usage the provider served
 + * for it and the window it was issued against. A turn's output limit is the
-+ * window's remainder after its prompt, so these three numbers say exactly
-+ * where a generation that reached its limit stood.
++ * generation reserve that window yields, so these numbers say exactly where
++ * a generation that reached its limit stood.
 + */
 +export interface IssuedGeneration {
 +  promptTokens: number;
@@ -166356,8 +166348,8 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 + * model finished requires the provider to have said so.
 + *
 + * A generation stopped at its limit names the numbers: a turn's limit is the
-+ * window's remainder after its prompt, so the prompt, the limit and what was
-+ * generated say whether the window was full or the turn was too large for it.
++ * generation reserve, whatever its prompt, so the prompt, the limit and what
++ * was generated say whether the turn was too large for the room it had.
 + */
 +export function describeIncompleteGeneration(
 +  reason: FinishReason | undefined,
@@ -166370,9 +166362,9 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  const stopped =
 +    reason === FinishReason.MAX_TOKENS && issued !== undefined
 +      ? `Generation on turn ${turn} ended as ${reason}: it was issued at a ` +
-+        `${issued.promptTokens}-token prompt with the window's remaining ` +
-+        `${issued.window - issued.promptTokens} tokens as its limit and ` +
-+        `generated ${issued.outputTokens}, `
++        `${issued.promptTokens}-token prompt with a ` +
++        `${turnOutputLimit(partitionContextWindow(issued.window))}-token ` +
++        `limit and generated ${issued.outputTokens}, `
 +      : `Generation on turn ${turn} ended as ${reason ?? 'no terminal reason'} `;
 +  return (
 +    stopped +
@@ -166387,7 +166379,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
     * Original tool-call id emitted by the provider/model. When present, this is
     * the idempotency key for suppressing duplicate provider tool calls.
     */
-@@ -133,15 +190,43 @@
+@@ -133,15 +191,43 @@
    args: Record<string, unknown>;
    isClientInitiated: boolean;
    prompt_id: string;
@@ -166431,7 +166423,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    | 'error'
    | 'cancelled';
  
-@@ -218,12 +303,46 @@
+@@ -218,12 +304,46 @@
  }
  
  function duplicateProviderToolCallMessage(providerCallId: string): string {
@@ -166478,7 +166470,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    const providerCallId = request.providerCallId ?? request.callId;
    const message = duplicateProviderToolCallMessage(providerCallId);
    return {
-@@ -345,58 +464,210 @@
+@@ -345,58 +465,210 @@
    COMPRESSION_FAILED_EMPTY_SUMMARY,
  
    /** The compression was not necessary and no action was taken */
@@ -166700,7 +166692,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    type: GeminiEventType.Finished;
    value: GeminiFinishedEventValue;
  };
-@@ -450,29 +721,28 @@
+@@ -450,29 +722,28 @@
  };
  
  // The original union type, now composed of the individual types
@@ -166731,7 +166723,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    response: GenerateContentResponse,
  ): ServerGeminiContentPart[] {
    const parts = response.candidates?.[0]?.content?.parts ?? [];
-@@ -525,14 +795,12 @@
+@@ -525,14 +796,12 @@
    async *run(
      model: string,
      req: PartListUnion,
@@ -166746,7 +166738,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
            message: req,
            config: {
              abortSignal: signal,
-@@ -540,46 +808,47 @@
+@@ -540,46 +809,47 @@
          },
          this.prompt_id,
          this.goalContext,
@@ -261549,7 +261541,7 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
 diff --git a/packages/web-shell/client/App.test.tsx b/packages/web-shell/client/App.test.tsx
 --- a/packages/web-shell/client/App.test.tsx
 +++ b/packages/web-shell/client/App.test.tsx
-@@ -158,13 +158,35 @@
+@@ -158,13 +158,34 @@
    settingsSetValue,
    qualifiedWorkspaceSettings,
    rootWorkspaceProviders,
@@ -261571,7 +261563,6 @@ diff --git a/packages/web-shell/client/App.test.tsx b/packages/web-shell/client/
 +        compactionTrigger: 105472,
 +        generationReserve: 24576,
 +        directiveReserve: 1024,
-+        toolResult: 8192,
 +      },
 +      historyMessages: 2,
 +      tools: [{ name: 'read_file', schemaBytes: 120 }],
@@ -261585,7 +261576,7 @@ diff --git a/packages/web-shell/client/App.test.tsx b/packages/web-shell/client/
      clientId: 'client-1',
      displayName: 'Session One',
      workspaceCwd: '/tmp/project',
-@@ -213,12 +235,13 @@
+@@ -213,12 +234,13 @@
        .fn()
        .mockRejectedValue(new Error('Subagent details unavailable')),
    };
@@ -261599,7 +261590,7 @@ diff --git a/packages/web-shell/client/App.test.tsx b/packages/web-shell/client/
        sendPrompt: vi.fn().mockResolvedValue(undefined),
        btwSession: vi.fn().mockResolvedValue({ answer: 'side answer' }),
        generateSessionContent: vi.fn(async function* () {}),
-@@ -239,13 +262,13 @@
+@@ -239,13 +261,13 @@
        submitPermission: vi.fn().mockResolvedValue(true),
        clearGoal: vi.fn().mockResolvedValue(undefined),
        forkSession: vi.fn().mockResolvedValue({ launched: false }),
@@ -261614,7 +261605,7 @@ diff --git a/packages/web-shell/client/App.test.tsx b/packages/web-shell/client/
          now: 1,
          tasks: [],
        }),
-@@ -4565,13 +4588,13 @@
+@@ -4565,13 +4587,13 @@
    mockSessionActions.submitPermission.mockResolvedValue(undefined);
    mockSessionActions.clearGoal.mockResolvedValue(undefined);
    mockSessionActions.forkSession.mockResolvedValue({ launched: false });
@@ -261629,7 +261620,7 @@ diff --git a/packages/web-shell/client/App.test.tsx b/packages/web-shell/client/
      now: 1,
      tasks: [],
    });
-@@ -6238,12 +6261,19 @@
+@@ -6238,12 +6260,19 @@
        v: 1,
        sessionId: 'session-1',
        workspaceCwd: '/tmp/project',
@@ -261649,7 +261640,7 @@ diff --git a/packages/web-shell/client/App.test.tsx b/packages/web-shell/client/
          totalSuccess: 1,
          totalFail: 0,
          totalDurationMs: 120,
-@@ -6401,37 +6431,13 @@
+@@ -6401,37 +6430,13 @@
      });
  
      expect(mockStore.appendLocalUserMessage).toHaveBeenCalledWith('/status');
@@ -265713,7 +265704,7 @@ diff --git a/packages/web-shell/client/components/messages/ContextUsageMessage.t
  const mounted: Array<{ root: Root; container: HTMLElement }> = [];
  
  afterEach(() => {
-@@ -15,93 +18,172 @@
+@@ -15,93 +18,171 @@
      act(() => root.unmount());
      container.remove();
    }
@@ -265751,7 +265742,6 @@ diff --git a/packages/web-shell/client/components/messages/ContextUsageMessage.t
 +        compactionTrigger: 206_000,
 +        generationReserve: 48_000,
 +        directiveReserve: 2_000,
-+        toolResult: 16_000,
        },
 -      builtinTools: [],
 -      mcpTools: [],
