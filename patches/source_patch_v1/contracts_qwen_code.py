@@ -4716,7 +4716,15 @@ def _validate_tool_result_bound_after(state: State) -> None:
     finalizer_test = "packages/core/src/utils/tool-response-finalizer.test.ts"
 
     # What a batch costs is the difference it makes to the request that will
-    # be sent, counted twice by the tokenizer that will count the send.
+    # be sent, counted twice by the tokenizer that will count the send. The
+    # two counts differ in the result text and in nothing else, because the
+    # baseline is the same pending message with its results emptied rather
+    # than the history without it. A tool call whose result is absent is
+    # stripped of its arguments before it reaches the model, so a baseline
+    # taken from history alone charges the turn for the model's own tool-call
+    # argument -- a cost displacement cannot relieve, because it moves results
+    # and has no power over an argument. Emptying in place keeps every call
+    # matched, and every turn's reasoning present, on both sides.
     chat_source = _source(state, chat, label=label)
     _require_ordered(
         chat_source,
@@ -4725,18 +4733,26 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "let requestTokens = await countExactRequestTokens(",
             "const pending = pendingToolResults(userContent.parts ?? []);",
             "if (pending.length === 0) {",
-            "const historyTokens = await countExactRequestTokens(",
-            "this.getRequestHistoryForRoute(undefined, supportedModalities),",
+            "const baselineTokens = await countExactRequestTokens(",
+            "parts: emptyPendingToolResults(userContent.parts ?? []),",
             "for (const result of pending) {",
-            "if (requestTokens - historyTokens <= partition.toolResult) break;",
+            "if (requestTokens - baselineTokens <= partition.toolResult) break;",
             "parts: await referencePendingToolResult(",
             "requestTokens = await countExactRequestTokens(",
-            "const toolResultTokens = requestTokens - historyTokens;",
+            "const toolResultTokens = requestTokens - baselineTokens;",
             "if (toolResultTokens > partition.toolResult) {",
             "throw new Error(",
         ),
         label=label,
         location=chat,
+    )
+    # The retired baseline cannot return: rendering the history without the
+    # pending results is exactly what charged the model's own argument.
+    forbid_text(
+        state,
+        chat,
+        "this.getRequestHistoryForRoute(undefined, supportedModalities),",
+        label=label,
     )
     # The bound runs before the compaction gate, and its count is the count
     # the gate uses, so the batch is never counted twice for two purposes.
@@ -4761,6 +4777,8 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "export function pendingToolResults(parts: Part[]): PendingToolResult[] {",
             "if (isPersistedToolResult(value)) continue;",
             "return results.sort((a, b) => b.text.length - a.text.length);",
+            "export function emptyPendingToolResults(parts: Part[]): Part[] {",
+            "          [result.field]: result.protectedPrefix ?? '',",
             "export async function referencePendingToolResult(",
             "const persisted = await persistToolResult(",
             "        [result.field]: result.protectedPrefix",
@@ -4828,6 +4846,8 @@ def _validate_tool_result_bound_after(state: State) -> None:
         "displaces only as many results as the share requires",
         "issues no turn when a batch of references is still over its share",
         "takes no second count for a turn that appends no tool result",
+        "charges a turn for its results, never for the call they answer",
+        "displaces the result, not the argument, when a batch is over its share",
     ):
         require_text(state, chat_test, case, label=label)
     for case in (
@@ -4840,6 +4860,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
         "orders by size so the first displacement buys the most room",
         "skips a result that already stands for a file on disk",
         "keeps a protected prefix inline in front of the reference",
+        "empties exactly the text a displacement would move, and nothing else",
     ):
         require_text(state, finalizer_test, case, label=label)
 
@@ -6196,7 +6217,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="tool-result-bound",
         rationale=(
-            "The measured contribution of pending tool results fits one window share. Oversized results "
+            "The measured contribution of pending tool results fits one window share, measured against "
+            "the same message with its results emptied so the charge is the result text and never the "
+            "tool call it answers. Oversized results "
             "become references to complete immutable session artifacts. Text and binary producers share "
             "durable quota, exclusive publication, and ownership retention across Config recreation, "
             "resume, fork, and elapsed time."
