@@ -570,6 +570,14 @@ def _validate_tool_policy_after(state: State) -> None:
 def _validate_deployment_prompt_scratch_before(state: State) -> None:
     label = "deployment prompt, scratch, and effect journal precondition"
     builtin = "packages/core/src/subagents/builtin-agents.ts"
+    # The git snapshot is a system-prompt layer built from repository data.
+    # Upstream bounds the status listing and nothing else, so the branch name
+    # and five commit subjects decide how large that layer is.
+    git = "packages/core/src/utils/gitUtils.ts"
+    require_text(state, git, "    const MAX_STATUS_CHARS = 2000;", label=label)
+    forbid_text(state, git, "cappedRepositoryText", label=label)
+    forbid_text(state, git, "MAX_BRANCH_CHARS", label=label)
+    forbid_text(state, git, "MAX_LOG_CHARS", label=label)
     _require_all(
         state,
         builtin,
@@ -590,6 +598,70 @@ def _validate_deployment_prompt_scratch_before(state: State) -> None:
 
 def _validate_deployment_prompt_scratch_after(state: State) -> None:
     label = "deployment prompt, scratch, and effect journal result"
+    # Every value the git snapshot renders is repository data someone else
+    # sized, and all three go through one capping helper that shows the cut.
+    # The layer lands in the system prompt of every request, so an unbounded
+    # value there is a preamble whose size a commit subject decides -- and a
+    # refusal naming the preamble would name something already written into
+    # history, which nobody can shorten.
+    git = "packages/core/src/utils/gitUtils.ts"
+    git_source = _require_all(
+        state,
+        git,
+        (
+            "const MAX_BRANCH_CHARS = 200;",
+            "const MAX_STATUS_CHARS = 2000;",
+            "const MAX_LOG_CHARS = 1000;",
+            "function cappedRepositoryText(",
+            "if (value.length <= maxChars) return value;",
+            "cappedRepositoryText(status, MAX_STATUS_CHARS, 'status')",
+            "MAX_BRANCH_CHARS,",
+            "MAX_LOG_CHARS,",
+        ),
+        label=label,
+    )
+    for uncapped in (
+        "`Current branch: ${branch}`",
+        "`Recent commits:\\n${log}`",
+    ):
+        _require(
+            uncapped not in git_source,
+            f"{label}: {git} still renders {uncapped} without a cap; every "
+            f"value in the snapshot is repository data and goes through "
+            f"cappedRepositoryText.",
+        )
+    # The cases run against a fixture root with the repository walk stubbed.
+    # They asserted rendering while silently depending on whether the suite ran
+    # from inside a checkout, so in a tree extracted from an archive every one
+    # of them returned null before reaching the command it was testing.
+    _require_all(
+        state,
+        "packages/core/src/utils/gitUtils.test.ts",
+        (
+            "const { mockExistsSync } = vi.hoisted(() => ({",
+            "vi.mock('node:fs', async (importOriginal) => {",
+            "const REPO_ROOT = '/repo/fixture';",
+        ),
+        label=label,
+    )
+    forbid_text(
+        state,
+        "packages/core/src/utils/gitUtils.test.ts",
+        "getRecentGitStatus(process.cwd())",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/utils/gitUtils.test.ts",
+        "truncates a branch name over 200 characters",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/utils/gitUtils.test.ts",
+        "truncates recent commits over 1000 characters",
+        label=label,
+    )
     cli = "packages/cli/src/config/config.ts"
     prompt = "packages/core/src/core/qwen38-deployment-prompt.ts"
     prompts = "packages/core/src/core/prompts.ts"
