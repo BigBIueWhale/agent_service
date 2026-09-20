@@ -1648,6 +1648,33 @@ _NATIVE_TOOL_SOURCES: tuple[str, ...] = (
 )
 
 
+# The keywords a JSON-Schema string constraint is spelled with. The served
+# engine compiles a declared tool schema into the grammar it constrains
+# generation with, and a length- or pattern-bounded string there cannot also
+# carry the `<parameter=` / `</parameter>` exclusions that keep a malformed
+# tool call ungenerable; it refuses such a parameter rather than dropping
+# them. `pattern` and `format` are matched only where a string value follows,
+# because `pattern` is also the name of a parameter two of these tools
+# declare.
+_STRING_CONSTRAINT = re.compile(
+    r"\bminLength\s*:|\bmaxLength\s*:|\bpattern\s*:\s*['\"`]|\bformat\s*:\s*['\"`]"
+)
+
+
+def _require_no_string_constraint(state: State, path: str, *, label: str) -> None:
+    match = _STRING_CONSTRAINT.search(_source(state, path, label=label))
+    _require(
+        match is None,
+        f"{label}: {path} declares the JSON-Schema string constraint "
+        f"{match.group(0)!r} the served engine refuses. Delete the keyword "
+        f"from the declaration and enforce the bound in the tool's "
+        f"validateToolParams, where the refusal can name the parameter and "
+        f"the limit."
+        if match
+        else "",
+    )
+
+
 def _validate_param_contract_before(state: State) -> None:
     label = "closed tool-parameter schema precondition"
     tools = "packages/core/src/tools/tools.ts"
@@ -1697,6 +1724,19 @@ def _validate_param_contract_before(state: State) -> None:
     # Two live tool descriptions instruct the model to batch parallel calls.
     require_text(state, glob, "call multiple tools in a single response", label=label)
     require_text(state, shell, "run_shell_command tool calls in parallel.", label=label)
+    # Upstream spends JSON-Schema string constraints the served grammar cannot
+    # express: the agent tool bounds `todo_id` and `fork_profile` by length and
+    # `fork_turns` by pattern, and todo_write bounds every todo id.
+    agent = "packages/core/src/tools/agent/agent.ts"
+    todo = "packages/core/src/tools/todoWrite.ts"
+    require_text(state, agent, "          maxLength: 500,", label=label)
+    require_text(state, agent, "              pattern: '^[1-9][0-9]*$',", label=label)
+    require_text(state, agent, "          minLength: 2,", label=label)
+    require_text(state, agent, "          maxLength: 50,", label=label)
+    require_text(state, todo, "              minLength: 1,", label=label)
+    require_text(
+        state, todo, "              items: { type: 'string', maxLength: 500 },", label=label
+    )
 
 
 def _validate_param_contract_after(state: State) -> None:
@@ -1770,6 +1810,21 @@ def _validate_param_contract_after(state: State) -> None:
     for path in _NATIVE_TOOL_SOURCES:
         forbid_text(state, path, "runtimeOnlyParams", label=label)
 
+    # No native tool declares a string constraint the served grammar cannot
+    # express. The bound moves into the tool, which can refuse the call and
+    # name the parameter and the limit; a grammar can only reshape what the
+    # model was about to write, and say nothing. `fork_turns` loses the whole
+    # `oneOf` rather than just the `pattern` it carried: with the pattern gone
+    # both branches match "all", which `oneOf` rejects.
+    for path in _NATIVE_TOOL_SOURCES:
+        _require_no_string_constraint(state, path, label=label)
+    require_text(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        "        fork_turns: {\n          type: 'string',\n",
+        label=label,
+    )
+
     # The two tools that replace validateToolParams wholesale never run Ajv,
     # so they have to apply the shared rule themselves or they stay the only
     # tools that drop an undeclared name.
@@ -1832,6 +1887,12 @@ def _validate_param_contract_after(state: State) -> None:
         state,
         contract_test,
         "[param-contract] %s declares its parameter schema closed",
+        label=label,
+    )
+    require_text(
+        state,
+        contract_test,
+        "[param-contract] %s bounds its strings in code, not in the grammar",
         label=label,
     )
     require_text(
@@ -6270,14 +6331,18 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="schema-faithful-tool-parameters",
         rationale=(
-            "Native tool schemas explicitly close their parameter objects; external schemas retain "
-            "their declared openness and pattern rules. Authenticated editor changes travel through "
-            "private object provenance preserved by scheduler cloning, never hidden model parameter "
-            "names."
+            "Native tool schemas explicitly close their parameter objects and declare no "
+            "JSON-Schema string constraint, because the served engine compiles the declaration "
+            "into its generation grammar and refuses a bounded string there; each bound is "
+            "enforced in the tool, which names the parameter and the limit when it refuses. "
+            "External schemas retain their declared openness and pattern rules. Authenticated "
+            "editor changes travel through private object provenance preserved by scheduler "
+            "cloning, never hidden model parameter names."
         ),
         removal_condition=(
-            "Upstream validates each schema as written, preserves trusted editor provenance outside "
-            "model JSON, and refuses unsupported file ranges."
+            "Upstream validates each schema as written, declares no string constraint the served "
+            "grammar cannot express, preserves trusted editor provenance outside model JSON, and "
+            "refuses unsupported file ranges."
         ),
         validate_before=_validate_param_contract_before,
         validate_after=_validate_param_contract_after,
