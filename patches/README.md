@@ -12,14 +12,14 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `5c4267b0a3be32760584107a9e21f626ee9f2e4b26d2021181564aa59ebe562f`
+- Review-diff SHA-256: `a96e06f2d2e333368288b01a205018c5c1582257243056c9ea191350a167bb05`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `3598974b348f366f3849a1f9fa41dfe4cb0d58522bdad63b480f803f270a01f9`
+- Transformer-manifest SHA-256: `9678e51c7be7ea49ac9ed29ba79c827fbe6791fe8da5805215580760be0daeaa`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 33 semantic concerns before changing the private source tree.
+identities, and 34 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
@@ -120,7 +120,10 @@ exact input, which is never below the generation reserve, and refuses
 insufficient space. A candidate must end normally, carry the required six-part
 snapshot, reduce the request, and leave an issuable turn. Failure retains the
 previous history and reports that retained count. There is no separate
-reasoning-phase limit or forced reasoning-end marker.
+reasoning-phase limit or forced reasoning-end marker. Compaction invalidates
+what the model can quote, not what it has seen: it disarms every file-read
+entry's history residency and leaves the read and write evidence in place, so a
+file this session wrote itself is still one it is allowed to overwrite.
 
 The snapshot is declared, not described. The compaction request replaces the
 turn's tools with one function whose closed parameter schema is the six ordered

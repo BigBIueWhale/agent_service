@@ -5874,6 +5874,103 @@ def _validate_bounded_output_after(state: State) -> None:
     )
 
 
+def _validate_compaction_read_evidence_before(state: State) -> None:
+    label = "compaction read-evidence precondition"
+    cache = "packages/core/src/services/fileReadCache.ts"
+    chat = "packages/core/src/core/geminiChat.ts"
+    client = "packages/core/src/core/client.ts"
+    # Upstream has the per-file disarm microcompaction uses and nothing that
+    # disarms every entry, so a compaction that replaces the whole history
+    # reaches for clear() -- which also discards authorship.
+    require_text(
+        state,
+        cache,
+        "  markReadEvictedFromHistory(stats: Stats): boolean {",
+        label=label,
+    )
+    forbid_text(state, cache, "markAllReadsEvictedFromHistory", label=label)
+    require_text(
+        state, chat, "      this.config.getFileReadCache().clear();", label=label
+    )
+    require_text(
+        state,
+        client,
+        "      debugLogger.debug('[FILE_READ_CACHE] clear after tryCompressChat');",
+        label=label,
+    )
+
+
+def _validate_compaction_read_evidence_after(state: State) -> None:
+    """Compaction disarms quotability and leaves authorship alone.
+
+    recordWrite deliberately seeds read evidence, because the model composed
+    the bytes a tool just wrote and has therefore seen them. clear() discards
+    that along with residency, so a session was refused permission to
+    overwrite a file it had written itself. The two facts are different and
+    the entry already separates them: readResidentInHistory says the content
+    is still quotable from history, lastReadAt/lastWriteAt say the model has
+    seen it. Compaction invalidates only the first.
+    """
+
+    label = "compaction read-evidence result"
+    cache = "packages/core/src/services/fileReadCache.ts"
+    cache_test = "packages/core/src/services/fileReadCache.integration.test.ts"
+    chat = "packages/core/src/core/geminiChat.ts"
+    client = "packages/core/src/core/client.ts"
+
+    source = _require_all(
+        state,
+        cache,
+        (
+            "  markAllReadsEvictedFromHistory(): number {",
+            "  markReadEvictedFromHistory(stats: Stats): boolean {",
+            "  clear(): void {",
+        ),
+        label=label,
+    )
+    # The all-entry disarm touches residency and nothing else. Naming the
+    # authorship fields here is what keeps a later edit from folding clear()
+    # back into it.
+    body = source.split("  markAllReadsEvictedFromHistory(): number {", 1)[1]
+    body = body.split("\n  }\n", 1)[0]
+    _require(
+        "entry.readResidentInHistory = false;" in body,
+        f"{label}: the all-entry disarm does not disarm history residency",
+    )
+    for absent in (
+        "lastReadAt",
+        "lastWriteAt",
+        "lastReadWasFull",
+        "lastReadCacheable",
+        "delete",
+        "clear(",
+    ):
+        _require(
+            absent not in body,
+            f"{label}: the all-entry disarm touches {absent!r}, which is "
+            f"authorship evidence rather than quotability. A file the model "
+            f"wrote is one it has seen; discarding that refuses its next "
+            f"overwrite of bytes it authored",
+        )
+
+    # The compaction that replaces history disarms; it does not wipe. The
+    # client wrapper does not repeat it: the chat already disarmed before
+    # startChat, and the cache is owned by Config rather than by the chat.
+    require_text(state, chat, ".markAllReadsEvictedFromHistory();", label=label)
+    forbid_text(state, chat, "getFileReadCache().clear()", label=label)
+    forbid_text(
+        state, client, "[FILE_READ_CACHE] clear after tryCompressChat", label=label
+    )
+
+    # Executed in the build.
+    require_text(
+        state,
+        cache_test,
+        "disarms history residency without discarding the write that authored the file",
+        label=label,
+    )
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="shared-stream-admission",
@@ -6239,6 +6336,21 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_tool_result_bound_before,
         validate_after=_validate_tool_result_bound_after,
+    ),
+    SemanticConcern(
+        name="compaction-read-evidence",
+        rationale=(
+            "Compaction invalidates what the model can quote, not what it has seen. The entry "
+            "already separates the two, so compaction disarms history residency for every entry "
+            "and leaves the read and write evidence that authorises a later overwrite intact. A "
+            "file the session wrote itself stays a file it has seen."
+        ),
+        removal_condition=(
+            "Upstream separates history residency from read/write authorship across every "
+            "history-replacing path."
+        ),
+        validate_before=_validate_compaction_read_evidence_before,
+        validate_after=_validate_compaction_read_evidence_after,
     ),
     SemanticConcern(
         name="cli-invocation-time-anchor",
