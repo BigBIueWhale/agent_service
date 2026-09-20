@@ -137943,7 +137943,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -        { message: 'zero prompt count should not reseed' },
 -        'prompt-zero-count-no-reseed',
 +      expect(sentMaxOutputTokens()).toBe(
-+        WINDOW - (PARTITION.compactionTrigger - 1),
++        PARTITION.generationReserve,
        );
 -      for await (const _ of stream) {
 -        /* consume */
@@ -145096,7 +145096,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,1792 +9368,232 @@
+@@ -12568,1792 +9368,234 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -145600,9 +145600,11 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        ).toHaveBeenCalledOnce();
 +        const request = vi.mocked(mockContentGenerator.generateContentStream)
 +          .mock.calls[0]![0];
-+        // The fixture counts every prompt as one token, so the limit is the
-+        // window less one whatever the request asked for.
-+        expect(request.config?.maxOutputTokens).toBe(window - 1);
++        // A turn is issued with the generation reserve, whatever its
++        // prompt and whatever the request asked for.
++        expect(request.config?.maxOutputTokens).toBe(
++          partitionContextWindow(window).generationReserve,
++        );
 +        expect(request.contents).toEqual([{ role: 'user', parts: original }]);
          expect(
 -          retries.map(
@@ -147075,7 +147077,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const chat = chatWith([
          { role: 'user', parts: [{ text: 'plan it' }] },
          {
-@@ -14615,14 +9855,16 @@
+@@ -14615,14 +9857,16 @@
        // mockFileSystem, so "writing" the plan file is a Map insert.
        const planFile = '/plans/wired-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -147092,7 +147094,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(planFile));
        } finally {
          mockFileSystem.delete(planFile);
-@@ -14632,14 +9874,16 @@
+@@ -14632,14 +9876,16 @@
      it('is applied by the constructor for rehydrated history', () => {
        const planFile = '/plans/ctor-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -147109,7 +147111,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        } finally {
          mockFileSystem.delete(planFile);
        }
-@@ -14647,14 +9891,16 @@
+@@ -14647,14 +9893,16 @@
  
      it('setHistory leaves history alone when no plan file exists', () => {
        const chat = new GeminiChat(
@@ -147126,7 +147128,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        expect(fnCall.args!['plan']).toBe(PLAN);
      });
    });
-@@ -14725,821 +9971,684 @@
+@@ -14725,821 +9973,684 @@
        const snapshot = JSON.parse(JSON.stringify(original));
        redactStructuredOutputArgsForRecording(original);
        expect(original).toEqual(snapshot);
@@ -187872,6 +187874,32 @@ diff --git a/packages/core/src/services/fileReadCache.ts b/packages/core/src/ser
    invalidate(stats: Stats): void {
      if (!FileReadCache.hasVerifiableIdentity(stats)) {
        return;
+diff --git a/packages/core/src/services/fileSystemService.ts b/packages/core/src/services/fileSystemService.ts
+--- a/packages/core/src/services/fileSystemService.ts
++++ b/packages/core/src/services/fileSystemService.ts
+@@ -38,4 +38,6 @@
+     lineEnding?: LineEnding;
+     truncatedByBytes?: boolean;
++    /** True when the file's last byte is a newline. */
++    endsWithNewline?: boolean;
+     /** Byte offset to resume from; absent once the read reached EOF. */
+     nextByteOffset?: number;
+@@ -515,4 +517,5 @@
+   lineEnding?: LineEnding;
+   truncatedByBytes?: boolean;
++  endsWithNewline?: boolean;
+   nextByteOffset?: number;
+ }): ReadTextFileResponse {
+@@ -529,6 +532,9 @@
+       ...(readResult.truncatedByBytes !== undefined
+         ? { truncatedByBytes: readResult.truncatedByBytes }
+         : {}),
++      ...(readResult.endsWithNewline !== undefined
++        ? { endsWithNewline: readResult.endsWithNewline }
++        : {}),
+       ...(readResult.nextByteOffset !== undefined
+         ? { nextByteOffset: readResult.nextByteOffset }
+         : {}),
 diff --git a/packages/core/src/services/image-payload-references.ts b/packages/core/src/services/image-payload-references.ts
 --- a/packages/core/src/services/image-payload-references.ts
 +++ b/packages/core/src/services/image-payload-references.ts

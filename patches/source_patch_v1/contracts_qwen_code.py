@@ -5762,6 +5762,17 @@ def _validate_bounded_output_after(state: State) -> None:
         "    endsWithNewline: content.endsWith('\\n'),",
         label=label,
     )
+    # The fact has to survive the seam it crosses: the file-system response
+    # declares it too, or fileUtils reads a property the type does not have.
+    _require_all(
+        state,
+        "packages/core/src/services/fileSystemService.ts",
+        (
+            "    endsWithNewline?: boolean;",
+            "      ...(readResult.endsWithNewline !== undefined",
+        ),
+        label=label,
+    )
     _require_all(
         state,
         "packages/core/src/utils/fileUtils.ts",
