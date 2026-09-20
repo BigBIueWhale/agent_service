@@ -138665,7 +138665,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          ),
 +        ),
 +      ).rejects.toThrow(
-+        /tool results render to 49153 tokens and no turn appends more than the 49152-token generation reserve/,
++        /Refused: 49153 tokens in total exceeds this limit of 49152 tokens/,
        );
 -      for await (const _ of stream) {
 -        /* consume */
@@ -148563,7 +148563,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
-@@ -1,62 +1,59 @@
+@@ -1,62 +1,62 @@
 +import { CompactionFinalizationError } from './turn.js';
 +import { requireServedUsage } from './served-usage.js';
  /**
@@ -148640,13 +148640,17 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +} from './contentGenerator.js';
 +import type { ContextPartition } from './tokenLimits.js';
 +import { partitionContextWindow, turnOutputLimit } from './tokenLimits.js';
- import { hasCycleInSchema } from '../tools/tools.js';
+-import { hasCycleInSchema } from '../tools/tools.js';
++import {
++  formatOutputBound,
++  hasCycleInSchema,
++} from '../tools/tools.js';
  import { ToolNames, canonicalToolName } from '../tools/tool-names.js';
  import * as fs from 'node:fs';
  import { PLAN_EXIT_APPROVED_LLM_CONTENT_PREFIXES } from '../tools/exitPlanMode.js';
  import { isManagedMemoryPath } from '../memory/paths.js';
  import { STRUCTURED_OUTPUT_REDACTED_ARGS } from '../tools/syntheticOutput.js';
-@@ -65,49 +62,46 @@
+@@ -65,49 +65,46 @@
    logContentRetry,
    logContentRetryFailure,
    logApiRetry,
@@ -148704,7 +148708,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  } from '../utils/environmentContext.js';
  import type { SessionStartSource } from '../hooks/types.js';
  import {
-@@ -123,38 +117,25 @@
+@@ -123,38 +120,25 @@
  import {
    getToolCallPreparations,
    setToolCallPreparations,
@@ -148750,7 +148754,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  ): boolean {
    return Boolean(
      response.candidates?.some((candidate) =>
-@@ -215,9 +196,23 @@
+@@ -215,9 +199,23 @@
  export function approvedPlanRedactionText(planPath: string): string {
    return (
      `[Plan approved and saved to ${planPath}. The plan text was ` +
@@ -148774,7 +148778,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +}
 +
  /**
-@@ -321,719 +316,69 @@
+@@ -321,719 +319,69 @@
        ...part.functionCall,
        args: { ...STRUCTURED_OUTPUT_REDACTED_ARGS },
      },
@@ -149511,7 +149515,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * Starts at 60s to match DashScope's per-minute quota window, then backs off
   * across repeated stream-side throttling errors.
   * 10 retries aligns with Claude Code's retry behavior.
-@@ -1245,199 +590,58 @@
+@@ -1245,199 +593,58 @@
    return {
      ...content,
      parts,
@@ -149745,7 +149749,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * tool_use ↔ tool_result pair. For each `model[functionCall]`:
   *  - SYNTHESIZE an `error` `functionResponse` for ids with no match;
   *  - HOIST a real fr from a non-adjacent later user turn into the
-@@ -1712,72 +916,14 @@
+@@ -1712,72 +919,14 @@
  
  export class GeminiChat {
    // A promise to represent the current state of the message being sent to the
@@ -149820,7 +149824,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Monotonically counts user-content pushes that survived into history.
     * Incremented when `sendMessageStream` pushes the user content and decremented
-@@ -1787,109 +933,92 @@
+@@ -1787,109 +936,92 @@
     * whether the re-submitted content actually landed — a history-length delta
     * can't, since compression shrinks history independently of the push.
     */
@@ -149959,7 +149963,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            last.parts = [...(last.parts ?? []), ...reattachParts];
          } else {
            requestHistory.push({ role: 'user', parts: reattachParts });
-@@ -1897,173 +1026,300 @@
+@@ -1897,173 +1029,308 @@
        }
        return requestHistory;
      }
@@ -150114,7 +150118,15 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    const toolResultTokens = requestTokens - baselineTokens;
 +    if (toolResultTokens > partition.generationReserve) {
 +      throw new Error(
-+        `This turn's tool results render to ${toolResultTokens} tokens and no turn appends more than the ${partition.generationReserve}-token generation reserve of the ${partition.window}-token window.`,
++        formatOutputBound({
++          refused: true,
++          returned: 0,
++          total: toolResultTokens,
++          unit: 'tokens',
++          limit: partition.generationReserve,
++          limitUnit: 'tokens',
++          continuation: 'issue fewer tool calls in one turn',
++        }),
 +      );
 +    }
 +    return { userContent, requestTokens };
@@ -150372,7 +150384,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      // Step 1: force microcompaction (clear old tool results + media)
      const mcResult = microcompactHistory(
        this.history,
-@@ -2079,59 +1335,55 @@
+@@ -2079,59 +1346,55 @@
  
      // Step 2: strip thinking parts from model turns
      const newHistory = mcResult.history
@@ -150460,7 +150472,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
    setSystemInstruction(sysInstr: string) {
      this.generationConfig.systemInstruction = sysInstr;
-@@ -2192,1724 +1444,444 @@
+@@ -2192,1724 +1455,444 @@
    async sendMessageStream(
      model: string,
      params: SendMessageParameters,
@@ -152542,7 +152554,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -3933,23 +1905,14 @@
+@@ -3933,23 +1916,14 @@
          }
  
          return false;
@@ -152567,7 +152579,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            new ApiRetryEvent({
              model,
              promptId: prompt_id,
-@@ -3963,41 +1926,17 @@
+@@ -3963,41 +1937,17 @@
        },
      });
  
@@ -152610,7 +152622,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * @remarks
     * The history is a list of contents alternating between user and model.
     *
-@@ -4145,43 +2084,19 @@
+@@ -4145,43 +2095,19 @@
  
    /**
     * Clears the chat history.
@@ -152654,7 +152666,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Replaces the `plan` argument of an `exit_plan_mode` `functionCall` in
     * history with a short reference, keeping every other part and argument
     * intact.
-@@ -4184,61 +2099,81 @@
+@@ -4184,61 +2110,81 @@
    /**
 -   * Replaces the `plan` argument of an `exit_plan_mode` `functionCall` in
 -   * history with a short reference, keeping every other part and argument
@@ -152763,7 +152775,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      expectedPlan,
 +    );
 +  }
-@@ -4298,44 +2233,23 @@
+@@ -4298,44 +2244,23 @@
        );
      }
    }
@@ -152808,7 +152820,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Pop orphaned trailing user entries from chat history.
     * In a valid conversation the last entry is always a model response;
     * any trailing user entries are leftovers from a request that failed.
-@@ -4362,24 +2276,12 @@
+@@ -4362,24 +2287,12 @@
        const lastEntry = this.history[this.history.length - 1];
        if (lastEntry && isSystemReminderContent(lastEntry)) {
          break;
@@ -152833,7 +152845,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Instance wrapper around the free-function {@link repairOrphanedToolUseTurns}.
     * See the canonical note above `ORPHAN_TOOL_USE_REPAIR_REASON`.
-@@ -4393,13 +2295,13 @@
+@@ -4393,13 +2306,13 @@
  
    setTools(tools: Tool[]): void {
      this.generationConfig.tools = tools;
@@ -152848,7 +152860,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4427,693 +2329,216 @@
+@@ -4427,693 +2340,216 @@
            `\n`;
          error.message += extraDetails;
        }
@@ -223013,7 +223025,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(typeof result.llmContent).toBe('string');
        expect(result.llmContent).toContain('remaining cells truncated');
        expect(result.llmContent).not.toContain('Showing lines');
-@@ -1047,54 +877,149 @@
+@@ -1047,54 +877,174 @@
        if (status.state === 'fresh') {
          expect(status.entry.lastReadWasFull).toBe(false);
          expect(status.entry.lastReadCacheable).toBe(false);
@@ -223189,11 +223201,36 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      expect(() => tool.build(params)).not.toThrow();
      });
  
++    it('reports the true line count and names what actually bound', async () => {
++      const filePath = path.join(tempRootDir, 'trailing-newline.txt');
++      // 20 lines, newline-terminated: splitting on "\n" yields 21 segments.
++      // The paging arithmetic counts segments; the sentence says lines.
++      await fsp.writeFile(
++        filePath,
++        `${Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n')}\n`,
++        'utf-8',
++      );
++      const invocation = tool.build({
++        file_path: filePath,
++        offset: 5,
++        limit: 3,
++      }) as ToolInvocation<ReadFileToolParams, ToolResult>;
++
++      const result = await invocation.execute(abortSignal);
++
++      expect(result.llmContent).toContain('3 of 20 lines in total');
++      expect(result.llmContent).not.toContain('of 21 lines in total');
++      // The byte cap did not stop this page; the caller’s own limit did.
++      expect(result.llmContent).toContain(
++        "cut at this tool's limit of 3 lines",
++      );
++    });
++
      it('should support offset and limit for text files', async () => {
        const filePath = path.join(tempRootDir, 'paginated.txt');
        const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
        const fileContent = lines.join('\n');
-@@ -1109,13 +1034,13 @@
+@@ -1109,13 +1059,13 @@
          ReadFileToolParams,
          ToolResult
        >;
@@ -223208,7 +223245,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(result.llmContent).toContain('Line 8');
        expect(result.returnDisplay).toBe(
          'Read lines 6-8 of 20 from paginated.txt',
-@@ -1126,13 +1051,13 @@
+@@ -1126,13 +1076,13 @@
        const tempDir = path.join(tempRootDir, '.temp');
        await fsp.mkdir(tempDir, { recursive: true });
        const tempFilePath = path.join(tempDir, 'temp-output.txt');
@@ -223223,7 +223260,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1146,13 +1071,16 @@
+@@ -1146,13 +1096,16 @@
        );
        const tempFilePath = path.join(osTempFile, 'pr-review-context.md');
        const tempFileContent = '## PR #123\nFix encoding issues';
@@ -223241,7 +223278,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          >;
  
          const result = await invocation.execute(abortSignal);
-@@ -1187,36 +1115,38 @@
+@@ -1187,36 +1140,38 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -223285,7 +223322,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          );
          // Placeholder must not echo the original content.
          expect(second.llmContent).not.toContain('hello world');
-@@ -1224,89 +1154,93 @@
+@@ -1224,89 +1179,93 @@
        });
  
        it('re-emits bytes (no placeholder) after the read was evicted from history by microcompaction (issue #4239)', async () => {
@@ -223390,7 +223427,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            offset: 1,
            limit: 2,
          });
-@@ -1326,20 +1260,20 @@
+@@ -1326,20 +1285,20 @@
          const bigContent = Array.from(
            { length: 700 },
            (_, i) => `line ${i + 1}`,
@@ -223413,7 +223450,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        });
  
        it('does not arm the placeholder if the first Read was ranged', async () => {
-@@ -1348,26 +1282,26 @@
+@@ -1348,26 +1307,26 @@
          // pipeline, since the cache cannot prove the model has already
          // seen the entire file.
          const filePath = path.join(tempRootDir, 'big.txt');
@@ -223443,7 +223480,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('records an auto-memory read in the cache so a follow-up Edit can pass enforcement', async () => {
          // Auto-memory files skip the file_unchanged fast-path (they
-@@ -1386,13 +1320,13 @@
+@@ -1386,13 +1345,13 @@
            clearAutoMemoryRootCache();
            const memRoot = getAutoMemoryRoot(tempRootDir);
            await fsp.mkdir(memRoot, { recursive: true });
@@ -223458,7 +223495,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            // The cache must contain the auto-memory file's entry, AND
            // the entry must be in a shape that satisfies prior-read
            // enforcement on Edit / WriteFile (fresh + lastReadAt set +
-@@ -1428,13 +1362,13 @@
+@@ -1428,13 +1387,13 @@
          await fsp.writeFile(
            svgPath,
            '<svg xmlns="http://www.w3.org/2000/svg"></svg>\n',
@@ -223473,7 +223510,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          // The cache must record this as a full, cacheable read so
          // that prior-read enforcement on Edit / WriteFile would
          // recognise it as the model having seen the bytes.
-@@ -1492,13 +1426,13 @@
+@@ -1492,13 +1451,13 @@
          const bigContent = Array.from(
            { length: 700 },
            (_, i) => `line ${i + 1}`,
@@ -223488,7 +223525,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
            // Truncated → model has not seen every byte.
-@@ -1527,13 +1461,13 @@
+@@ -1527,13 +1486,13 @@
          // content to a `.cpp` file. The test relies on the
          // extension override winning over any future content-side
          // heuristic — there is no isBinaryFile mocking in scope.
@@ -223503,7 +223540,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          const status = fileReadCache.check(fs.statSync(filePath));
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
-@@ -1551,17 +1485,17 @@
+@@ -1551,17 +1510,17 @@
              background: '#306090',
            },
          })
@@ -223523,7 +223560,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('completely bypasses the cache when getFileReadCacheDisabled() is true', async () => {
          // Build a fresh ReadFileTool with a Config whose cache is
-@@ -1579,27 +1513,32 @@
+@@ -1579,27 +1538,32 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -223559,7 +223596,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          expect(second.llmContent).not.toMatch(/unchanged since/);
          expect(isolatedCache.size()).toBe(0);
        });
-@@ -1615,12 +1554,13 @@
+@@ -1615,12 +1579,13 @@
  
        it('should throw error if path is ignored by a .qwenignore pattern', async () => {
          const ignoredFilePath = path.join(tempRootDir, 'foo.bar');
@@ -223573,7 +223610,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        });
  
        it('should throw error if path is ignored by .agentignore or .aiignore', async () => {
-@@ -1634,18 +1574,18 @@
+@@ -1634,18 +1599,18 @@
          );
          const agentIgnoredFilePath = path.join(tempRootDir, 'agent-secret.txt');
          const aiIgnoredFilePath = path.join(tempRootDir, 'ai-secret.txt');
@@ -223598,7 +223635,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          await fsp.writeFile(
            path.join(tempRootDir, '.cursorignore'),
            'cursor-secret.txt\n',
-@@ -1660,46 +1600,47 @@
+@@ -1660,46 +1625,47 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -223843,7 +223880,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      //    everything". NotebookEdit also requires this flag so a
      //    truncated notebook render does not authorize structured writes
      //    against unseen cells.
-@@ -282,15 +243,38 @@
+@@ -282,15 +243,52 @@
        result.isTruncated &&
        result.linesShown &&
        result.originalLineCount !== undefined
@@ -223858,19 +223895,33 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 +      // getting it wrong silently skips or repeats content. The values are
 +      // known here, so the continuation carries the actual next call.
 +      const nextRead = result.nextRead;
++      // originalLineCount counts split segments; a file ending in a newline
++      // gives one more than it has lines. Every arithmetic use of it counts
++      // segments and is right to; this sentence says "lines".
++      const trueTotal = total - (result.endsWithNewline === true ? 1 : 0);
 +      llmContent = boundedContent(String(result.llmContent), {
 +        requested: this.params.limit,
 +        returned: end - start + 1,
-+        limit: DEFAULT_RANGE_READ_BYTES,
-+        limitUnit: 'bytes of content',
++        // Say which constraint actually bound this page. Blaming the byte
++        // cap when the caller's own smaller `limit` is what stopped it is a
++        // plausible wrong number, which is what this notice exists to stop.
++        limit:
++          result.truncatedByBytes === true || this.params.limit === undefined
++            ? DEFAULT_RANGE_READ_BYTES
++            : this.params.limit,
++        limitUnit:
++          result.truncatedByBytes === true || this.params.limit === undefined
++            ? 'bytes of content'
++            : 'lines',
 +        unit: 'lines',
 +        total:
 +          result.originalLineCountExact === false
 +            ? {
 +                unknown:
-+                  'the file is still being counted; at least ' + `${total}`,
++                  'the file is still being counted; at least ' +
++                  `${trueTotal}`,
 +              }
-+            : total,
++            : trueTotal,
 +        ...(nextRead
 +          ? {
 +              continuation: `read_file with file_path: ${JSON.stringify(
@@ -223885,7 +223936,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
  
      // For memory files, prepend a per-file staleness caveat so the model knows
      // the content is a point-in-time snapshot and may be stale.
-@@ -328,158 +312,14 @@
+@@ -328,158 +326,14 @@
          programming_language,
        ),
      );
@@ -224045,7 +224096,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
     * Build the placeholder ToolResult returned when the cache indicates
     * the file has not changed since the model last fully read it. The
     * placeholder is intentionally explicit about its assumptions so the
-@@ -525,49 +365,38 @@
+@@ -525,49 +379,38 @@
  export class ReadFileTool extends BaseDeclarativeTool<
    ReadFileToolParams,
    ToolResult
@@ -224100,7 +224151,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    }
  
    protected override validateToolParamValues(
-@@ -583,55 +412,27 @@
+@@ -583,55 +426,27 @@
      }
  
      if (!path.isAbsolute(filePath)) {
@@ -226879,7 +226930,7 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
      );
  
      if (errors) {
-@@ -482,13 +533,214 @@
+@@ -482,13 +533,229 @@
    url?: string;
    mimeType?: string;
    sizeBytes?: number;
@@ -226927,6 +226978,12 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 +   * must not read an empty or short result as proof of absence.
 +   */
 +  coverageUnknown?: boolean;
++  /**
++   * Set when the bound refused rather than cut: nothing was returned,
++   * because the request as asked could not be satisfied. A reader must not
++   * read the absence of content as an answer.
++   */
++  refused?: boolean;
 +}
 +
 +/**
@@ -226953,6 +227010,15 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 +  const next = bound.continuation
 +    ? ` Continue with: ${bound.continuation}`
 +    : '';
++  if (bound.refused) {
++    // A refusal cut nothing, so it must not say it did. Same vocabulary and
++    // the same numbers, read from the same fields.
++    return (
++      `Refused: ${total} exceeds this limit of ${bound.limit} ` +
++      `${bound.limitUnit}, and nothing was returned.` +
++      `${asked}${coverage}${next}`
++    );
++  }
 +  return (
 +    `Bounded result: ${bound.returned} of ${total}, ` +
 +    `cut at this tool's limit of ${bound.limit} ${bound.limitUnit}.` +
@@ -227094,7 +227160,7 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
     */
    llmContent: PartListUnion;
  
-@@ -630,29 +882,82 @@
+@@ -630,29 +897,82 @@
      return false;
    }
  
@@ -240333,7 +240399,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
    } finally {
      // Only what we opened. A borrowed handle outlives this call.
      if (opened) {
-@@ -890,55 +863,40 @@
+@@ -890,55 +863,42 @@
    }
  
    return 'text';
@@ -240352,6 +240418,8 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
    errorType?: ToolErrorType; // Structured error type
    originalLineCount?: number; // For text files, the total number of lines in the original file
    originalLineCountExact?: boolean; // False when a large range read stopped before EOF
++  endsWithNewline?: boolean; // True when the file's last byte is a newline
++  truncatedByBytes?: boolean; // True when the byte budget cut the page
    isTruncated?: boolean; // Indicates if displayed content was truncated
    linesShown?: [number, number]; // For text files [startLine, endLine] (1-based for display)
    /**
@@ -240401,7 +240469,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
   * Whether a {@link ProcessedFileReadResult} may be cached for prior-read
   * enforcement: the payload must be plain text (not an image / PDF `Part`)
   * and carry a known line count. Shared by `read-file.ts` and
-@@ -954,29 +912,23 @@
+@@ -954,29 +914,23 @@
    );
  }
  
@@ -240434,7 +240502,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
    textFileHandle?: FileHandle;
    textFileStats?: import('node:fs').Stats;
    textFileMaxScanBytes?: number;
-@@ -1028,35 +980,30 @@
+@@ -1028,35 +982,30 @@
  ): Promise<ProcessedFileReadResult>;
  export async function processSingleFileContent(
    filePath: string,
@@ -240470,7 +240538,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
    } = options;
    const rootDirectory = config.getTargetDir();
    const relativePathForDisplay = (
-@@ -1108,133 +1055,113 @@
+@@ -1108,133 +1057,113 @@
        };
      }
  
@@ -240674,7 +240742,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
              : `PDF requires page range: ${relativePathForDisplay}`;
          return {
            llmContent: guidance,
-@@ -1335,13 +1262,13 @@
+@@ -1335,13 +1264,13 @@
            stats,
          };
        }
@@ -240689,7 +240757,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
                fileHandle: options.textFileHandle,
                fileSize: stats.size,
                limit: limit ?? config.getTruncateToolOutputLines(),
-@@ -1355,14 +1282,21 @@
+@@ -1355,14 +1284,21 @@
                limit: limit ?? config.getTruncateToolOutputLines(),
                line: offset,
                maxOutputBytes,
@@ -240712,7 +240780,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          const originalLineCount =
            _meta?.originalLineCount ??
            (stats.size >= TEXT_RANGE_FAST_PATH_MAX_SIZE
-@@ -1370,171 +1304,149 @@
+@@ -1370,171 +1306,151 @@
              : await countFileLines(filePath));
          const originalLineCountExact =
            _meta?.originalLineCountExact === false
@@ -240856,6 +240924,8 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
            isTruncated,
            originalLineCount,
            originalLineCountExact,
++          endsWithNewline: _meta?.endsWithNewline,
++          truncatedByBytes: _meta?.truncatedByBytes === true,
            linesShown: [startLine + 1, actualEndLine],
 +          ...(isTruncated && moreRemains && linesIncluded > 0
 +            ? {
@@ -240996,7 +241066,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          const contentBuffer = await fs.promises.readFile(filePath);
          const base64Data = contentBuffer.toString('base64');
          const base64SizeInMB = base64Data.length / (1024 * 1024);
-@@ -1556,304 +1468,92 @@
+@@ -1556,304 +1472,92 @@
              },
            },
            returnDisplay: `Read ${fileType} file: ${relativePathForDisplay}`,
@@ -241329,7 +241399,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          try {
            const { content, isTruncated } =
              await readNotebookWithMetadata(filePath);
-@@ -1894,25 +1594,12 @@
+@@ -1894,25 +1598,12 @@
        error: `Error reading file ${relativePathForDisplay}: ${errorMessage}`,
        errorType: ToolErrorType.READ_CONTENT_FAILURE,
      };
@@ -247281,7 +247351,23 @@ diff --git a/packages/core/src/utils/read-text-range.test.ts b/packages/core/src
 diff --git a/packages/core/src/utils/read-text-range.ts b/packages/core/src/utils/read-text-range.ts
 --- a/packages/core/src/utils/read-text-range.ts
 +++ b/packages/core/src/utils/read-text-range.ts
-@@ -118,29 +118,37 @@
+@@ -63,7 +63,15 @@
+   bom?: boolean;
+   lineEnding?: 'crlf' | 'lf';
+   originalLineCountExact: boolean;
+   truncatedByBytes: boolean;
++  /**
++   * True when the decoded file ends with a newline. That is what makes
++   * `originalLineCount` one higher than the number of lines: splitting on
++   * "\n" yields a trailing empty segment the file does not contain. The
++   * count is a segment count and every arithmetic use of it is correct as
++   * such; only a message that says "lines" subtracts this.
++   */
++  endsWithNewline?: boolean;
+ }
+ 
+ /**
+@@ -118,29 +126,37 @@
        `Byte offset ${startOffset} is not the start of a line, and no line break was found within ${maxSnapBytes} bytes after it. Resume from a cursor this reader returned.`,
      );
      this.name = 'CursorNotAtLineBoundaryError';
@@ -247326,7 +247412,7 @@ diff --git a/packages/core/src/utils/read-text-range.ts b/packages/core/src/util
    constructor(
      readonly scannedBytes: number,
      readonly maxScanBytes: number,
-@@ -230,19 +238,19 @@
+@@ -230,19 +246,19 @@
  export async function readTextCursorWindowFromHandle(
    fileHandle: FileHandle,
    request: ReadTextCursorWindowRequest,
@@ -247348,7 +247434,7 @@ diff --git a/packages/core/src/utils/read-text-range.ts b/packages/core/src/util
    const maxOutputBytes = normalizeMaxBytes(request.maxOutputBytes);
    const startOffset = await snapToLineStart(fileHandle, request);
  
-@@ -259,13 +267,13 @@
+@@ -259,13 +275,13 @@
  
    const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
    const decode = (chunk?: Buffer, options?: TextDecodeOptions): string => {
@@ -247363,7 +247449,30 @@ diff --git a/packages/core/src/utils/read-text-range.ts b/packages/core/src/util
    const lines: string[] = [];
    let contentBytes = 0;
    // Bytes of the file consumed, relative to `startOffset`. Counts the newline
-@@ -532,17 +540,18 @@
+@@ -508,20 +524,22 @@
+   | 'originalLineCount'
+   | 'originalLineCountExact'
+   | 'truncatedByBytes'
++  | 'endsWithNewline'
+ > {
+   const lines = content.split('\n');
+   const originalLineCount = lines.length;
+   const start = Math.min(Math.max(0, offset ?? 0), originalLineCount);
+   const end =
+     limit === undefined
+       ? originalLineCount
+       : Math.min(start + Math.max(0, limit), originalLineCount);
+   const selected = lines.slice(start, end).join('\n');
+   const truncated = truncateUtf8(selected, maxOutputBytes);
+ 
+   return {
+     content: truncated.content,
+     originalLineCount,
+     originalLineCountExact: true,
+     truncatedByBytes: truncated.truncated,
++    endsWithNewline: content.endsWith('\n'),
+   };
+@@ -532,17 +550,18 @@
    request: { offset?: number; limit?: number; signal?: AbortSignal },
    maxOutputBytes: number,
    maxScanBytes: number,
@@ -247385,7 +247494,7 @@ diff --git a/packages/core/src/utils/read-text-range.ts b/packages/core/src/util
    const endLine =
      offset + Math.max(0, request.limit ?? Number.POSITIVE_INFINITY);
    let currentLine = 0;
-@@ -616,13 +625,13 @@
+@@ -616,13 +635,13 @@
      chunk?: Buffer,
      options?: TextDecodeOptions,
    ): string {
@@ -247596,6 +247705,24 @@ diff --git a/packages/core/src/utils/readManyFiles.test.ts b/packages/core/src/u
        // correct behaviour (false) from the bug it guards against: recording a
        // truncated attachment as `full: true` would silently clear Edit /
        // WriteFile prior-read enforcement for a file the model only partly saw.
+diff --git a/packages/core/src/utils/readManyFiles.ts b/packages/core/src/utils/readManyFiles.ts
+--- a/packages/core/src/utils/readManyFiles.ts
++++ b/packages/core/src/utils/readManyFiles.ts
+@@ -531,7 +531,13 @@
+         const [start, end] = fileReadResult.linesShown!;
+-        const total = fileReadResult.originalLineCount!;
++        // originalLineCount counts the segments a split on "\n" yields, so a
++        // file whose last byte is a newline gives one more than it has lines.
++        // The paging arithmetic counts segments and is right to; a sentence
++        // that says "lines" subtracts the phantom one.
++        const total =
++          fileReadResult.originalLineCount! -
++          (fileReadResult.endsWithNewline === true ? 1 : 0);
+         const totalLabel =
+           fileReadResult.originalLineCountExact === false
+             ? `at least ${total}`
+             : total;
+         fileContentForLlm = `Showing lines ${start}-${end} of ${totalLabel} total lines.\n---\n${fileReadResult.llmContent}`;
 diff --git a/packages/core/src/utils/request-tokenizer/imageTokenizer.test.ts b/packages/core/src/utils/request-tokenizer/imageTokenizer.test.ts
 --- a/packages/core/src/utils/request-tokenizer/imageTokenizer.test.ts
 +++ /dev/null

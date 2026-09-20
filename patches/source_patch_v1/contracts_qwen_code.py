@@ -4824,6 +4824,17 @@ def _validate_tool_result_bound_after(state: State) -> None:
         location=chat,
     )
 
+    # The refusal speaks the one vocabulary rather than a sentence of its own.
+    # The hand-written notice it replaces closed by asserting that every result
+    # already stood for a file that held it whole -- unconditional, never
+    # checked at throw time, and false whenever the charge was not tool
+    # results at all.
+    require_text(state, chat, "formatOutputBound({", label=label)
+    require_text(state, chat, "          refused: true,", label=label)
+    forbid_text(
+        state, chat, "already stands for the file that holds it whole", label=label
+    )
+
     # Displacement writes the result whole, largest first, and skips a result
     # that already stands for a file.
     _require_all(
@@ -5688,6 +5699,9 @@ def _validate_bounded_output_after(state: State) -> None:
             "total: number | { readonly unknown: string };",
             "continuation?: string;",
             "coverageUnknown?: boolean;",
+            "refused?: boolean;",
+            "  if (bound.refused) {",
+            "and nothing was returned.",
             "export function formatOutputBound(bound: OutputBound): string {",
             "export function boundedContent(content: string, bound: OutputBound): string {",
             "export const MAX_TOOL_RESULT_BYTES = 32_768;",
@@ -5719,6 +5733,56 @@ def _validate_bounded_output_after(state: State) -> None:
         f"total or why the tool cannot know it, and the exact call that "
         f"continues. Do not phrase a notice here: there is one, so that every "
         f"tool says it the same way and a reader learns the shape once.",
+    )
+
+    # One vocabulary covers a refusal too. A bound that returned nothing must
+    # not say it cut something, and its numbers still come from the same
+    # fields, so a refusal and a cut cannot drift into two dialects.
+    #
+    # The read notice names the constraint that actually bound: blaming the
+    # byte cap when the caller's own smaller `limit` is what stopped the page
+    # is exactly the plausible wrong number this notice exists to prevent.
+    _require_all(
+        state,
+        "packages/core/src/tools/read-file.ts",
+        (
+            "result.truncatedByBytes === true || this.params.limit === undefined",
+            "const trueTotal = total - (result.endsWithNewline === true ? 1 : 0);",
+        ),
+        label=label,
+    )
+    # A sentence that says "lines" means lines. `originalLineCount` counts the
+    # segments a split on "\n" yields, which is one more than the lines
+    # whenever the file ends with a newline; every arithmetic use of it counts
+    # segments and stays as it is, so the fact travels instead of the count
+    # changing under the paging that depends on it.
+    require_text(
+        state,
+        "packages/core/src/utils/read-text-range.ts",
+        "    endsWithNewline: content.endsWith('\\n'),",
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/utils/fileUtils.ts",
+        (
+            "  endsWithNewline?: boolean;",
+            "          endsWithNewline: _meta?.endsWithNewline,",
+            "          truncatedByBytes: _meta?.truncatedByBytes === true,",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/utils/readManyFiles.ts",
+        "          (fileReadResult.endsWithNewline === true ? 1 : 0);",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/tools/read-file.test.ts",
+        "reports the true line count and names what actually bound",
+        label=label,
     )
 
     # Nothing may re-grow a private notice beside it.
