@@ -131522,7 +131522,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    FunctionResponsePart,
    Part,
    PartListUnion,
-@@ -75,19 +67,19 @@
+@@ -67,1 +59,4 @@
+-import { approvedPlanRedactionText } from './geminiChat.js';
++import {
++  approvedPlanRedactionText,
++  writtenContentRedactionText,
++} from './geminiChat.js';
+@@ -75,19 +70,19 @@
  import {
    promptIdContext,
    todoWorkChainContext,
@@ -131547,7 +131553,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  } from './permission-helpers.js';
  import {
    evaluatePermissionFlow,
-@@ -127,12 +119,17 @@
+@@ -127,12 +122,17 @@
  } from '../permissions/denialTracking.js';
  import {
    getResponseTextFromParts,
@@ -131565,7 +131571,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  } from '../tools/modifiable-tool.js';
  import * as Diff from 'diff';
  import levenshtein from 'fast-levenshtein';
-@@ -226,27 +223,12 @@
+@@ -226,27 +226,12 @@
  ): T {
    return request.goalContext
      ? goalTurnContext.run(request.goalContext, callback)
@@ -131593,7 +131599,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      const parts = toParts(c);
      return parts.map((p) => p.text ?? '').join('\n');
    }
-@@ -295,15 +277,15 @@
+@@ -295,15 +280,15 @@
  // The cancellation notice handed to the model depends on whether the tool's
  // work actually finished. Claiming a tool "already completed" when it was
  // interrupted mid-flight makes the model skip work that never happened; the
@@ -131611,7 +131617,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
   * execution timeout. Reported as a normal tool error so the model can adapt
   * (narrow scope, retry, etc.) instead of the session hanging.
   */
-@@ -849,12 +831,51 @@
+@@ -849,12 +834,51 @@
    }
  
    // Default case for other kinds of parts.
@@ -131663,7 +131669,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    llmContent: PartListUnion,
    fallbackError: string,
  ): Part[] {
-@@ -876,13 +897,16 @@
+@@ -876,13 +900,16 @@
      const { output: _output, ...responseWithoutOutput } = response;
  
      return {
@@ -131681,7 +131687,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  }
  
  function toParts(input: PartListUnion): Part[] {
-@@ -920,30 +944,39 @@
+@@ -920,30 +947,39 @@
    request: ToolCallRequestInfo,
    error: Error,
    errorType: ToolErrorType,
@@ -131738,7 +131744,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    reason: string,
    executionStatus: ToolExecutionStatus,
    artifacts?: ToolArtifact[],
-@@ -1738,13 +1771,13 @@
+@@ -1738,13 +1774,13 @@
      toolSpan = this.toolSpans.get(callId),
    ): boolean {
      if (!signal.aborted) return false;
@@ -131753,7 +131759,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      if (toolSpan) {
        setToolSpanCancelled(toolSpan);
      }
-@@ -1920,49 +1953,26 @@
+@@ -1920,49 +1956,26 @@
        ? { success: false, error: r.hookError }
        : {
            success: true,
@@ -131805,7 +131811,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        };
        throw err;
      } finally {
-@@ -1986,13 +1996,13 @@
+@@ -1986,13 +1999,13 @@
      tool: AnyDeclarativeTool,
      args: object,
      callId?: string,
@@ -131820,7 +131826,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            maybeAware.setCallId(callId);
          }
        }
-@@ -2307,23 +2317,48 @@
+@@ -2307,23 +2320,48 @@
            if (!signal.aborted) return false;
            newToolCalls.push({
              status: 'cancelled',
@@ -131870,7 +131876,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            ) {
              newToolCalls.push({
                status: 'error',
-@@ -3510,12 +3545,13 @@
+@@ -3510,12 +3548,13 @@
                call_id: reqInfo.callId,
              });
              this.blockedSpans.set(reqInfo.callId, blockedSpan);
@@ -131884,7 +131890,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                  NotificationType.PermissionPrompt,
                  'Permission needed',
                ).catch((error) => {
-@@ -3671,12 +3707,28 @@
+@@ -3671,12 +3710,28 @@
        // Branch on signal.aborted so a throw caused by the abort signal
        // (e.g. ModifyWithEditor child interrupted by Ctrl+C) lands as
        // 'aborted'/'system' + UNSET status — matching the sister catch
@@ -131913,7 +131919,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            'cancelled',
            'Tool call cancelled by user.',
            'not_started',
-@@ -3691,24 +3743,12 @@
+@@ -3691,24 +3746,12 @@
              ToolErrorType.UNHANDLED_EXCEPTION,
              'not_started',
            ),
@@ -131938,7 +131944,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        // grepping logs by callId would otherwise see nothing if the
        // caller doesn't log the rejection itself (#4321 review-5
        // wenshao Suggestion).
-@@ -3834,15 +3874,13 @@
+@@ -3834,15 +3877,13 @@
          // filesystem paths (request.args may still hold escaped values
          // since buildInvocation normalizes a structuredClone) — UNLESS this
          // tool was bounced by a PreToolUse 'ask', in which case
@@ -131955,7 +131961,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                (normalizedArgs as Record<string, unknown>)[key] = unescapePath(
                  String(normalizedArgs[key]).trim(),
                );
-@@ -3864,13 +3902,13 @@
+@@ -3864,13 +3905,13 @@
            fileDiff: updatedDiff,
            isModifying: false,
          } as ToolCallConfirmationDetails);
@@ -131970,7 +131976,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              payload,
              signal,
            ))
-@@ -4010,13 +4048,13 @@
+@@ -4010,13 +4051,13 @@
      signal: AbortSignal,
    ): Promise<boolean> {
      const confirmDetails = toolCall.confirmationDetails;
@@ -131985,7 +131991,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  
      const currentContent = confirmDetails.originalContent ?? '';
      const modifyContext = toolCall.tool.getModifyContext(signal);
-@@ -4311,12 +4349,13 @@
+@@ -4311,12 +4352,13 @@
      });
      this.blockedSpans.set(callId, blockedSpan);
  
@@ -131999,7 +132005,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          NotificationType.PermissionPrompt,
          'Permission needed',
        ).catch((error) => {
-@@ -4348,12 +4387,13 @@
+@@ -4348,12 +4390,13 @@
  
    private async _executeToolCallBody(
      scheduledCall: ScheduledToolCall,
@@ -132013,7 +132019,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      const toolInput = scheduledCall.request.args as Record<string, unknown>;
  
      // Re-execution after the user approved a PreToolUse 'ask' bounce: the
-@@ -4469,12 +4509,13 @@
+@@ -4469,12 +4512,13 @@
            TOOL_SPAN_STATUS_PRE_HOOK_BLOCKED,
          );
          return;
@@ -132027,7 +132033,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        const guardDecision = await evaluateToolInvocationGuard(
          toolInvocationGuard,
          {
-@@ -4490,13 +4531,13 @@
+@@ -4490,13 +4534,13 @@
        if (signal.aborted) {
          this.setStatusInternal(
            callId,
@@ -132042,7 +132048,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          if (this.toolSpans.has(callId)) {
            setToolSpanCancelled(span);
          }
-@@ -4531,13 +4572,13 @@
+@@ -4531,13 +4575,13 @@
        ) {
          this.setStatusInternal(
            callId,
@@ -132057,7 +132063,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          if (this.toolSpans.has(callId)) {
            setToolSpanCancelled(span);
          }
-@@ -4674,12 +4715,13 @@
+@@ -4674,12 +4718,13 @@
              // boundary so setup failures remain not_started.
              this.setStatusInternal(callId, 'executing');
              execSpan = startToolExecutionSpan({
@@ -132071,7 +132077,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                liveOutputCallback,
                shellExecutionConfig,
                setPidCallback,
-@@ -4696,12 +4738,13 @@
+@@ -4696,12 +4741,13 @@
              // boundary so setup failures remain not_started.
              this.setStatusInternal(callId, 'executing');
              execSpan = startToolExecutionSpan({
@@ -132085,7 +132091,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                liveOutputCallback,
                shellExecutionConfig,
              );
-@@ -4861,23 +4904,15 @@
+@@ -4861,23 +4907,15 @@
          setToolSpanCancelled(span);
          return true;
        };
@@ -132110,7 +132116,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          // Deferred metadata: PostToolUse hook context and skill/rule reminders
          // are captured here and appended AFTER the model-facing truncation
          // below, so the head/tail truncator never bisects a <system-reminder>
-@@ -4962,22 +4997,12 @@
+@@ -4962,22 +5000,12 @@
                TOOL_SPAN_STATUS_POST_HOOK_STOPPED,
              );
              return;
@@ -132133,7 +132139,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          // (ripGrep array form). Conditional rules and skill activation
          // both key off the same path set, so inspect the union — and
          // gate the inspection on a tool-name allowlist (see
-@@ -5086,125 +5111,31 @@
+@@ -5086,125 +5114,31 @@
              const body = escapeSystemReminderTags(reminderBlocks.join('\n\n'));
              // Capture; appended after the model-facing truncation below.
              reminderEnvelope = `<system-reminder>\n${body}\n</system-reminder>`;
@@ -132266,7 +132272,60 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          const convertedResponse = convertToFunctionResponse(
            toolName,
            callId,
-@@ -5330,13 +5261,13 @@
+@@ -5306,4 +5240,52 @@
+           }
+         }
++        // After a SUCCEEDED write_file, swap the `content` argument still
++        // sitting in the model turn's functionCall for a pointer to the file
++        // it wrote. The generation that produced those bytes is spent and
++        // unrecoverable; the permanent history cost is not, and the file is
++        // the artifact, so the conversation need not hold a second copy.
++        // Gated on the file holding exactly those bytes: a write that added
++        // a BOM or rewrote line endings does not match and declines, so the
++        // pointer can never name bytes that are not there. Must run BEFORE
++        // setStatusInternal, like the plan redaction above.
++        if (
++          canonicalName === ToolNames.WRITE_FILE &&
++          toolResult.error === undefined
++        ) {
++          try {
++            const writtenPath = (scheduledCall.request.args ?? {})[
++              'file_path'
++            ];
++            if (typeof writtenPath === 'string') {
++              const onDisk = fsSync.readFileSync(writtenPath, 'utf-8');
++              const displaced = this.config
++                .getGeminiClient?.()
++                ?.getChat()
++                .redactCompletedCallArgument(
++                  callId,
++                  ToolNames.WRITE_FILE,
++                  'content',
++                  writtenContentRedactionText(writtenPath),
++                  onDisk,
++                );
++              if (displaced === false) {
++                debugLogger.debug(
++                  `Written-content displacement left history unchanged ` +
++                    `for ${callId}: no matching write_file call, or its ` +
++                    `content argument does not match ${writtenPath}.`,
++                );
++              }
++            }
++          } catch (displaceErr) {
++            debugLogger.warn(
++              `Skipping written-content displacement for ${callId} ` +
++                `(file unavailable?): ${
++                  displaceErr instanceof Error
++                    ? displaceErr.message
++                    : String(displaceErr)
++                }`,
++            );
++          }
++        }
+         if (
+           cancelAfterPostProcessing(artifacts, {
+@@ -5330,13 +5312,13 @@
          }
        } else {
          // It is a failure
@@ -132281,7 +132340,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          let failureHookArtifacts: ToolArtifact[] | undefined;
          if (hooksEnabled && messageBus) {
            const failureHookResult = await this.withHookSpan(
-@@ -5370,21 +5301,16 @@
+@@ -5370,21 +5352,16 @@
              }
            }
            failureHookArtifacts = failureHookResult.artifacts;
@@ -132304,7 +132363,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              const lastIndex = responseParts.length - 1;
              responseParts = [...responseParts];
              responseParts[lastIndex] = appendContextToResponsePart(
-@@ -5404,21 +5330,15 @@
+@@ -5404,21 +5381,15 @@
            }, 0);
            const artifacts = [
              ...(toolResult.artifacts ?? []),
@@ -132328,7 +132387,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                visionBridgeNotice: processedImages.visionBridgeNotice,
              })
            ) {
-@@ -5450,33 +5370,20 @@
+@@ -5450,33 +5421,20 @@
              TOOL_FAILURE_KIND_TIMEOUT,
              TOOL_SPAN_STATUS_TOOL_TIMEOUT,
            );
@@ -132370,7 +132429,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            scheduledCall.request,
            error,
            executionErrorType ?? ToolErrorType.UNKNOWN,
-@@ -5484,12 +5391,13 @@
+@@ -5484,12 +5442,13 @@
            failureHookArtifacts,
            typeof toolResult.returnDisplay === 'string'
              ? undefined
@@ -132384,7 +132443,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              new Set(errorPersistedOutputFiles),
            );
          }
-@@ -5557,23 +5465,52 @@
+@@ -5557,23 +5516,52 @@
            span,
            TOOL_FAILURE_KIND_TOOL_ERROR,
            TOOL_SPAN_STATUS_TOOL_ERROR,
@@ -132439,7 +132498,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        const executionTimedOut =
          executionThrew && explicitErrorType === ToolErrorType.EXECUTION_TIMEOUT;
        const aborted = signal.aborted && !executionTimedOut;
-@@ -5682,12 +5619,13 @@
+@@ -5682,12 +5670,13 @@
            if (failureHookResult.additionalContext) {
              exceptionErrorMessage += `\n\n${failureHookResult.additionalContext}`;
            }
@@ -132453,7 +132512,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              createCancelledResponse(
                scheduledCall.request,
                // The abort landed while the failure hook was running; the
-@@ -5696,15 +5634,19 @@
+@@ -5696,15 +5685,19 @@
                  ? TOOL_CANCELLED_BEFORE_COMPLETION_MESSAGE
                  : TOOL_CANCELLED_AFTER_COMPLETION_MESSAGE,
                executionStatus,
@@ -132474,7 +132533,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            createErrorResponse(
              scheduledCall.request,
              executionError instanceof Error
-@@ -5712,17 +5654,12 @@
+@@ -5712,17 +5705,12 @@
                : new Error(String(executionError)),
              exceptionErrorType,
              executionStatus,
@@ -132492,7 +132551,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        sleepInhibitorHandle.release();
      }
    }
-@@ -5757,19 +5694,20 @@
+@@ -5757,19 +5745,20 @@
          debugLogger.warn(
            `PostToolBatch hook setup failed: ${
              error instanceof Error ? error.message : String(error)
@@ -132519,7 +132578,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              this.withHookSpan(
                { hookEvent: 'PostToolBatch', toolName: 'batch' },
                () =>
-@@ -5845,16 +5783,12 @@
+@@ -5845,16 +5834,12 @@
            completedCalls = withPostToolBatchArtifacts(
              completedCalls,
              batchHookResult.artifacts,
@@ -132536,7 +132595,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  
          for (const call of completedCalls) {
            this.runtimeContentGeneratorViews.delete(call.request.callId);
-@@ -5863,12 +5797,13 @@
+@@ -5863,12 +5848,13 @@
  
          this.recordToolResults(completedCalls);
  
@@ -132550,7 +132609,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            // failure points. Never leave the one span deliberately deferred
            // for PostToolBatch open when one of them throws.
            for (const call of completedCalls) {
-@@ -5882,90 +5817,12 @@
+@@ -5882,90 +5868,12 @@
            this.drainRequestQueueIfIdle();
          }
        }
@@ -145037,7 +145096,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,1792 +9368,166 @@
+@@ -12568,1792 +9368,232 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -146946,11 +147005,77 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +      );
      }
  
++    it('displaces the content argument of a completed write to a pointer', () => {
++      const chat = chatWith([
++        { role: 'user', parts: [{ text: 'write it' }] },
++        {
++          role: 'model',
++          parts: [
++            {
++              functionCall: {
++                id: 'w1',
++                name: 'write_file',
++                args: { file_path: '/tmp/out.txt', content: 'BODY' },
++              },
++            },
++          ],
++        },
++      ]);
++
++      expect(
++        chat.redactCompletedCallArgument(
++          'w1',
++          'write_file',
++          'content',
++          '[pointer]',
++          'BODY',
++        ),
++      ).toBe(true);
++      const call = chat.getHistory()[1]!.parts![0]!.functionCall!;
++      expect(call.args!['content']).toBe('[pointer]');
++      // Every other argument of the same call survives untouched.
++      expect(call.args!['file_path']).toBe('/tmp/out.txt');
++    });
++
++    it('declines when the file does not hold the argument byte-for-byte', () => {
++      const chat = chatWith([
++        { role: 'user', parts: [{ text: 'write it' }] },
++        {
++          role: 'model',
++          parts: [
++            {
++              functionCall: {
++                id: 'w1',
++                name: 'write_file',
++                args: { file_path: '/tmp/out.txt', content: 'BODY' },
++              },
++            },
++          ],
++        },
++      ]);
++
++      // What a BOM or a line-ending rewrite leaves on disk: the write
++      // succeeded, but these are not the bytes the argument carried, so a
++      // pointer would misname them.
++      expect(
++        chat.redactCompletedCallArgument(
++          'w1',
++          'write_file',
++          'content',
++          '[pointer]',
++          '\uFEFFBODY',
++        ),
++      ).toBe(false);
++      expect(
++        chat.getHistory()[1]!.parts![0]!.functionCall!.args!['content'],
++      ).toBe('BODY');
++    });
++
      it('rewrites only the plan arg of the matching exit_plan_mode call', () => {
        const chat = chatWith([
          { role: 'user', parts: [{ text: 'plan it' }] },
          {
-@@ -14615,14 +9789,16 @@
+@@ -14615,14 +9855,16 @@
        // mockFileSystem, so "writing" the plan file is a Map insert.
        const planFile = '/plans/wired-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -146967,7 +147092,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(planFile));
        } finally {
          mockFileSystem.delete(planFile);
-@@ -14632,14 +9808,16 @@
+@@ -14632,14 +9874,16 @@
      it('is applied by the constructor for rehydrated history', () => {
        const planFile = '/plans/ctor-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -146984,7 +147109,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        } finally {
          mockFileSystem.delete(planFile);
        }
-@@ -14647,14 +9825,16 @@
+@@ -14647,14 +9891,16 @@
  
      it('setHistory leaves history alone when no plan file exists', () => {
        const chat = new GeminiChat(
@@ -147001,7 +147126,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        expect(fnCall.args!['plan']).toBe(PLAN);
      });
    });
-@@ -14725,821 +9905,684 @@
+@@ -14725,821 +9971,684 @@
        const snapshot = JSON.parse(JSON.stringify(original));
        redactStructuredOutputArgsForRecording(original);
        expect(original).toEqual(snapshot);
@@ -148625,7 +148750,31 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  ): boolean {
    return Boolean(
      response.candidates?.some((candidate) =>
-@@ -321,719 +302,69 @@
+@@ -215,9 +196,23 @@
+ export function approvedPlanRedactionText(planPath: string): string {
+   return (
+     `[Plan approved and saved to ${planPath}. The plan text was ` +
+     `removed from the conversation after approval; read that ` +
+     `file if you need to consult it again.]`
+   );
+ }
+ 
++/**
++ * Single source of the pointer text that replaces a completed write's
++ * `functionCall.args.content`. The file the write produced is the
++ * artifact, so the pointer names that path rather than a second copy in
++ * the artifact store.
++ */
++export function writtenContentRedactionText(filePath: string): string {
++  return (
++    `[Content written to ${filePath}. The text was removed from the ` +
++    `conversation after the write succeeded; read that file if you ` +
++    `need to consult it again.]`
++  );
++}
++
+ /**
+@@ -321,719 +316,69 @@
        ...part.functionCall,
        args: { ...STRUCTURED_OUTPUT_REDACTED_ARGS },
      },
@@ -149362,7 +149511,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * Starts at 60s to match DashScope's per-minute quota window, then backs off
   * across repeated stream-side throttling errors.
   * 10 retries aligns with Claude Code's retry behavior.
-@@ -1245,199 +576,58 @@
+@@ -1245,199 +590,58 @@
    return {
      ...content,
      parts,
@@ -149596,7 +149745,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * tool_use ↔ tool_result pair. For each `model[functionCall]`:
   *  - SYNTHESIZE an `error` `functionResponse` for ids with no match;
   *  - HOIST a real fr from a non-adjacent later user turn into the
-@@ -1712,72 +902,14 @@
+@@ -1712,72 +916,14 @@
  
  export class GeminiChat {
    // A promise to represent the current state of the message being sent to the
@@ -149671,7 +149820,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Monotonically counts user-content pushes that survived into history.
     * Incremented when `sendMessageStream` pushes the user content and decremented
-@@ -1787,109 +919,92 @@
+@@ -1787,109 +933,92 @@
     * whether the re-submitted content actually landed — a history-length delta
     * can't, since compression shrinks history independently of the push.
     */
@@ -149810,7 +149959,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            last.parts = [...(last.parts ?? []), ...reattachParts];
          } else {
            requestHistory.push({ role: 'user', parts: reattachParts });
-@@ -1897,173 +1012,300 @@
+@@ -1897,173 +1026,300 @@
        }
        return requestHistory;
      }
@@ -150223,7 +150372,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      // Step 1: force microcompaction (clear old tool results + media)
      const mcResult = microcompactHistory(
        this.history,
-@@ -2079,59 +1321,55 @@
+@@ -2079,59 +1335,55 @@
  
      // Step 2: strip thinking parts from model turns
      const newHistory = mcResult.history
@@ -150311,7 +150460,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
    setSystemInstruction(sysInstr: string) {
      this.generationConfig.systemInstruction = sysInstr;
-@@ -2192,1724 +1430,444 @@
+@@ -2192,1724 +1444,444 @@
    async sendMessageStream(
      model: string,
      params: SendMessageParameters,
@@ -152393,7 +152542,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -3933,23 +1891,14 @@
+@@ -3933,23 +1905,14 @@
          }
  
          return false;
@@ -152418,7 +152567,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            new ApiRetryEvent({
              model,
              promptId: prompt_id,
-@@ -3963,41 +1912,17 @@
+@@ -3963,41 +1926,17 @@
        },
      });
  
@@ -152461,7 +152610,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * @remarks
     * The history is a list of contents alternating between user and model.
     *
-@@ -4145,43 +2070,19 @@
+@@ -4145,43 +2084,19 @@
  
    /**
     * Clears the chat history.
@@ -152505,7 +152654,116 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Replaces the `plan` argument of an `exit_plan_mode` `functionCall` in
     * history with a short reference, keeping every other part and argument
     * intact.
-@@ -4298,44 +2199,23 @@
+@@ -4184,61 +2099,81 @@
+   /**
+-   * Replaces the `plan` argument of an `exit_plan_mode` `functionCall` in
+-   * history with a short reference, keeping every other part and argument
+-   * intact.
+-   *
+-   * The full plan text a model submits to `exit_plan_mode` stays in history
+-   * as its own tool-call arguments; on long conversations models
+-   * occasionally regurgitate chunks of that blob in later responses
+-   * (#6237). Once the plan is approved it is persisted to disk by
+-   * `Config.savePlan`, so the in-context copy can be swapped for a pointer
+-   * without losing information. Rejected plans are left untouched — the
+-   * model needs the text to revise them.
+-   *
+-   * When `expectedPlan` is provided the rewrite additionally requires the
+-   * in-history plan to equal it byte-for-byte. Callers pass the on-disk
+-   * plan-file content here so the pointer can never claim a save that
+-   * failed (`savePlanBestEffort` swallows filesystem errors) or reference
+-   * a file that holds a different plan.
++   * Replace one argument of a completed `functionCall` in history with a
++   * short reference, keeping every other part and argument intact.
++   *
++   * An argument the model has already spent is the one thing a
++   * displacement can reach that a tool result cannot. Once the call has
++   * succeeded, the bytes it carried are also somewhere durable, so the
++   * conversation can hold a pointer instead of a second copy. The
++   * generation is spent either way; the permanent history cost is not.
++   * Models otherwise regurgitate chunks of such a blob in later responses
++   * (#6237).
++   *
++   * When `expected` is provided the rewrite additionally requires the
++   * in-history argument to equal it byte-for-byte. Callers pass the bytes
++   * the durable copy actually holds, so a pointer can never claim a write
++   * that failed or name a file holding something else. A call that did not
++   * succeed is simply never offered here.
+    *
+    * The entry is replaced immutably at the same index; the partial-push
+    * markers compare by index and role, so this cannot desync them.
+    *
+    * @returns true when a matching functionCall was found and rewritten.
+    */
+-  redactApprovedPlanFromHistory(
+-    callId: string,
+-    replacement: string,
+-    expectedPlan?: string,
++  redactCompletedCallArgument(
++    callId: string,
++    toolName: string,
++    argument: string,
++    replacement: string,
++    expected?: string,
+   ): boolean {
+     for (let i = this.history.length - 1; i >= 0; i--) {
+       const entry = this.history[i];
+       if (entry?.role !== 'model' || !entry.parts) continue;
+       const partIdx = entry.parts.findIndex(
+         (part) =>
+           part.functionCall?.id === callId &&
+-          canonicalPlanToolName(part.functionCall.name) ===
+-            ToolNames.EXIT_PLAN_MODE,
++          canonicalPlanToolName(part.functionCall.name) === toolName,
+       );
+       if (partIdx === -1) continue;
+       const part = entry.parts[partIdx]!;
+       const functionCall = part.functionCall!;
+-      const plan = (functionCall.args ?? {})['plan'];
+-      if (typeof plan !== 'string') {
++      const value = (functionCall.args ?? {})[argument];
++      if (typeof value !== 'string') {
+         return false;
+       }
+-      if (expectedPlan !== undefined && plan !== expectedPlan) {
++      if (expected !== undefined && value !== expected) {
+         return false;
+       }
+       const newParts = [...entry.parts];
+       newParts[partIdx] = {
+         ...part,
+         functionCall: {
+           ...functionCall,
+-          args: { ...functionCall.args, plan: replacement },
++          args: { ...functionCall.args, [argument]: replacement },
+         },
+       };
+       this.history[i] = { ...entry, parts: newParts };
+       return true;
+     }
+     return false;
+   }
++
++  /**
++   * The approved-plan case of {@link redactCompletedCallArgument}, kept as
++   * its own name because the load-side pass and the scheduler both call it
++   * that. The rule lives in one place; this only says which call and which
++   * argument.
++   */
++  redactApprovedPlanFromHistory(
++    callId: string,
++    replacement: string,
++    expectedPlan?: string,
++  ): boolean {
++    return this.redactCompletedCallArgument(
++      callId,
++      ToolNames.EXIT_PLAN_MODE,
++      'plan',
++      replacement,
++      expectedPlan,
++    );
++  }
+@@ -4298,44 +2233,23 @@
        );
      }
    }
@@ -152550,7 +152808,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Pop orphaned trailing user entries from chat history.
     * In a valid conversation the last entry is always a model response;
     * any trailing user entries are leftovers from a request that failed.
-@@ -4362,24 +2242,12 @@
+@@ -4362,24 +2276,12 @@
        const lastEntry = this.history[this.history.length - 1];
        if (lastEntry && isSystemReminderContent(lastEntry)) {
          break;
@@ -152575,7 +152833,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Instance wrapper around the free-function {@link repairOrphanedToolUseTurns}.
     * See the canonical note above `ORPHAN_TOOL_USE_REPAIR_REASON`.
-@@ -4393,13 +2261,13 @@
+@@ -4393,13 +2295,13 @@
  
    setTools(tools: Tool[]): void {
      this.generationConfig.tools = tools;
@@ -152590,7 +152848,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4427,693 +2295,216 @@
+@@ -4427,693 +2329,216 @@
            `\n`;
          error.message += extraDetails;
        }

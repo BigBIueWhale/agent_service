@@ -2171,6 +2171,53 @@ def _validate_literal_response_after(state: State) -> None:
         label=label,
     )
 
+    # ── The one displacement rule, stated where fidelity is stated
+    #
+    # Visible text and reasoning keep their bytes for the life of the
+    # conversation. An argument of a call that has already completed is the
+    # single exception, and it is an exception about copies rather than about
+    # fidelity: the bytes are already durable somewhere, so history may hold a
+    # pointer to them instead of a second copy. The generation that produced
+    # them is spent either way; the permanent history cost is not.
+    #
+    # It is one rule in one place. The rewrite is refused unless the argument
+    # equals the durable bytes exactly, so a pointer can never name something
+    # the file does not hold -- a write that added a BOM or rewrote line
+    # endings declines rather than lying about what is on disk.
+    _require_all(
+        state,
+        chat,
+        (
+            "  redactCompletedCallArgument(",
+            "      if (expected !== undefined && value !== expected) {",
+            "          args: { ...functionCall.args, [argument]: replacement },",
+            "export function writtenContentRedactionText(filePath: string): string {",
+        ),
+        label=label,
+    )
+    require_text(state, chat, "redactCompletedCallArgument(", count=2, label=label)
+    scheduler = "packages/core/src/core/coreToolScheduler.ts"
+    _require_ordered(
+        _source(state, scheduler, label=label),
+        (
+            "canonicalName === ToolNames.WRITE_FILE &&",
+            "toolResult.error === undefined",
+            "fsSync.readFileSync(writtenPath, 'utf-8')",
+            ".redactCompletedCallArgument(",
+            "writtenContentRedactionText(writtenPath),",
+            "onDisk,",
+        ),
+        label=label,
+        location=scheduler,
+    )
+    for case in (
+        "displaces the content argument of a completed write to a pointer",
+        "declines when the file does not hold the argument byte-for-byte",
+    ):
+        require_text(
+            state, "packages/core/src/core/geminiChat.test.ts", case, label=label
+        )
+
 
 def _validate_no_repair_validation_before(state: State) -> None:
     label = "schema validation repair precondition"
@@ -6383,7 +6430,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         rationale=(
             "Visible text and reasoning retain their original bytes through stream, history, and "
             "recording, including XML-like text beside real structured calls. Execution depends on "
-            "validated structured calls rather than text classification."
+            "validated structured calls rather than text classification. One displacement rule is "
+            "excepted and it is the only one: an argument of a call that has already completed may "
+            "be replaced by a pointer to the durable copy of the same bytes, through "
+            "redactCompletedCallArgument and only where the argument equals those bytes exactly. "
+            "Visible text and reasoning are never displaced."
         ),
         removal_condition=(
             "Upstream preserves arbitrary literal response text with the same strict executable-call "
