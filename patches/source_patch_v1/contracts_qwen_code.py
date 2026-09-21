@@ -3374,13 +3374,22 @@ def _validate_compaction_budget_after(state: State) -> None:
             # `D` and `F` are declared rather than derived, so they are proved
             # against the served tokenizer before this chat issues anything --
             # through the turn's own counter, so the route that will serve the
-            # turn is the route they are proved against.
+            # turn is the route they are proved against. Each framing is the
+            # request with one more message, less the request without it, less
+            # that message's content counted alone.
             "private async verifyDeclarations(",
             "const preamble = await count([]);",
             "if (preamble > partition.staticPreamble) {",
-            "const framing = framed - preamble;",
+            "const probe = await countText(FRAMING_PROBE_TEXT);",
+            "const withMessage = await count([message]);",
+            "const withTurn = await count([message, turn]);",
+            "const withResult = await count([message, call, result]);",
+            "['user message', withMessage - preamble - probe],",
+            "['assistant turn', withTurn - withMessage - 2 * probe],",
+            "['tool result, with the call it answers', withResult - withTurn - probe],",
             "if (framing > partition.messageFraming) {",
-            "await this.verifyDeclarations(partition, countExactRequestTokens);",
+            "await this.verifyDeclarations(",
+            "countExactTextTokens,",
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
             "if (promptTokensForClamp >= partition.compactionTrigger) {",
             "throw new Error(",
@@ -3398,6 +3407,28 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "Shorten the system prompt or a tool description, or deploy on a larger window.",
             "Raise the declared framing to match the template, or serve the template the partition was written for.",
+        ),
+        label=label,
+    )
+    # The framing proof once counted an empty message, which the converter
+    # drops before the request is sent, so it measured nothing and could not
+    # fail. The probe carries content, the text count takes it back out, and
+    # the tests prove a template wider than `F` is refused on the wire.
+    require_text(state, chat, "const FRAMING_PROBE_TEXT = 'framing';", label=label)
+    forbid_text(state, chat, "const framing = framed - preamble;", label=label)
+    _require_all(
+        state,
+        "packages/core/src/core/openaiContentGenerator/pipeline.ts",
+        ("async countTextTokens(", "prompt: request.text,", "add_special_tokens: false,"),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/geminiChat.test.ts",
+        (
+            "'refuses a template that frames one %s past the declared framing',",
+            "'shows why an empty probe measured nothing: the converter never sends it'",
+            "'measures every framing from the wire requests the converter really sends'",
         ),
         label=label,
     )

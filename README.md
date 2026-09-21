@@ -211,7 +211,10 @@ by the served tokenizer, this deployment's own preamble is 7,683 tokens in the
 turn shape before any Git snapshot, and 3,365 in the compaction shape before
 the 559 its directive adds, so the declared capacity is 1.60x the larger; a
 Git snapshot at its status and log caps, in ASCII, added 793. `F` is proved
-the same way, as the difference an empty message makes.
+against the served template too: a user message, an assistant turn and a tool
+result, each counted with the request and without it, less its content counted
+alone. The served template frames them in 5, 10 and 24 tokens, the last with
+the markup of the call it answers.
 
 `M` is the one declared magnitude and is openly a policy: it is the most any
 single block placed inline may be — one tool result, one `read_file` page, one

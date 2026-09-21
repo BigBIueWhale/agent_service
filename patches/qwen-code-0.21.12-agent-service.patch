@@ -127985,7 +127985,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src/core/contentGenerator.test.ts
 --- a/packages/core/src/core/contentGenerator.test.ts
 +++ b/packages/core/src/core/contentGenerator.test.ts
-@@ -10,55 +10,56 @@
+@@ -10,55 +10,57 @@
    createContentGeneratorConfig,
    AuthType,
    preloadContentGenerator,
@@ -128040,13 +128040,14 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
          })(),
 -      countTokens: async () => ({ totalTokens: 1 }),
 +      countRequestTokens: async () => ({ totalTokens: 1, maxModelLen: 262144 }),
++      countTextTokens: async () => ({ totalTokens: 2, maxModelLen: 262144 }),
        embedContent: async () => ({ embeddings: [] }),
        useSummarizedThinking: () => false,
      });
      const gate = openaiMockState.constructionGates[attempt];
      if (!gate) {
        return createGenerator();
-@@ -71,203 +72,133 @@
+@@ -71,203 +73,150 @@
    },
  }));
  
@@ -128243,6 +128244,23 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
 +      ),
      ]);
      expect(openaiMockState.createCount).toBe(1);
++  });
++
++  it('counts a text alone through the provider it loads', async () => {
++    const mockConfig = {
++      getUsageStatisticsEnabled: () => false,
++      getContentGeneratorConfig: () => ({}),
++      getCliVersion: () => '1.0.0',
++      getTelemetryEnabled: () => false,
++      getSessionId: () => 'test-session',
++    } as unknown as Config;
++    const generator = await createContentGenerator(supported, mockConfig);
++    await expect(
++      generator.countTextTokens!(
++        { model: 'test-model', text: 'framing' },
++        'test-prompt',
++      ),
++    ).resolves.toEqual({ totalTokens: 2, maxModelLen: 262144 });
    });
  
    it('does not preload non-lazy content generators', async () => {
@@ -128296,7 +128314,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
    });
  
    it('discards an unused preload after session configuration changes', async () => {
-@@ -275,58 +206,44 @@
+@@ -275,58 +224,44 @@
        getUsageStatisticsEnabled: () => false,
        getContentGeneratorConfig: () => ({}),
        getCliVersion: () => '1.0.0',
@@ -128370,7 +128388,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
  
    it('does not discard an in-flight preload after real use begins', async () => {
      let releaseConstruction: () => void = () => undefined;
-@@ -339,32 +256,28 @@
+@@ -339,32 +274,28 @@
        getUsageStatisticsEnabled: () => false,
        getContentGeneratorConfig: () => ({}),
        getCliVersion: () => '1.0.0',
@@ -128415,7 +128433,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
    it('isolates a reset in-flight preload from the replacement first use', async () => {
      let releasePreload: () => void = () => undefined;
      let releaseFirstUse: () => void = () => undefined;
-@@ -382,70 +295,70 @@
+@@ -382,70 +313,70 @@
        getUsageStatisticsEnabled: () => false,
        getContentGeneratorConfig: () => ({}),
        getCliVersion: () => '1.0.0',
@@ -128519,7 +128537,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
    it('rebuilds OpenAI logging with the relocated working directory', async () => {
      let workingDir = '/workspace/before';
      const mockConfig = {
-@@ -455,28 +368,29 @@
+@@ -455,28 +386,29 @@
        getTelemetryEnabled: () => false,
        getSessionId: () => 'test-session',
        getWorkingDir: () => workingDir,
@@ -128553,7 +128571,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
        { customLogDir: 'logs', cwd: '/workspace/after' },
      ]);
    });
-@@ -491,98 +405,47 @@
+@@ -491,98 +423,47 @@
      } as unknown as Config;
      const moduleError = new Error(
        "Cannot find module './openaiContentGenerator-STALE.js'",
@@ -128671,7 +128689,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
      const mockConfig = {
        getUsageStatisticsEnabled: () => true,
        getContentGeneratorConfig: () => ({}),
-@@ -591,19 +454,20 @@
+@@ -591,19 +472,20 @@
        getSessionId: () => 'test-session',
      } as unknown as Config;
  
@@ -128693,7 +128711,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
  describe('createContentGenerator - ERR_MODULE_NOT_FOUND handling', () => {
    const mockConfig = {
      getUsageStatisticsEnabled: () => true,
-@@ -613,61 +477,31 @@
+@@ -613,61 +495,31 @@
      getSessionId: () => 'test-session',
    } as unknown as Config;
  
@@ -128761,7 +128779,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
      const moduleError = new Error(
        "Cannot find module './openaiContentGenerator-STALE.js'",
      );
-@@ -677,21 +511,17 @@
+@@ -677,21 +529,17 @@
      });
      const { createContentGenerator: createWithMissingProvider } = await import(
        './contentGenerator.js'
@@ -128787,7 +128805,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
        const err = error as Error;
        expect(err.message).toMatch(
          /updated in the background and needs to be restarted/,
-@@ -700,33 +530,57 @@
+@@ -700,33 +548,57 @@
        expect(err.cause).toBe(moduleError);
      }
    });
@@ -128913,7 +128931,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
  } from '../models/modelConfigErrors.js';
  import { PROVIDER_SOURCED_FIELDS } from '../models/constants.js';
  import { preloadRuntimeFetchModule } from '../utils/runtimeFetchOptions.js';
-@@ -43,28 +45,42 @@
+@@ -43,28 +45,60 @@
  
    generateContentStream(
      request: GenerateContentParameters,
@@ -128932,6 +128950,17 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
 +    userPromptId: string,
 +  ): Promise<ExactRequestTokenCount>;
  
++  /**
++   * Count a text standing alone, as the server tokenizes the content of a
++   * message: no chat template and no special tokens. What a template adds
++   * around a message is a rendered request's count less its content's, so
++   * this is the other half of measuring it.
++   */
++  countTextTokens?(
++    request: TextTokenCountRequest,
++    userPromptId: string,
++  ): Promise<ExactRequestTokenCount>;
++
    embedContent(request: EmbedContentParameters): Promise<EmbedContentResponse>;
  
    useSummarizedThinking(): boolean;
@@ -128940,6 +128969,13 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
 +export type ExactRequestTokenCount = {
 +  totalTokens: number;
 +  maxModelLen: number;
++};
++
++/** One text to count alone, on the route of `model`. */
++export type TextTokenCountRequest = {
++  model: string;
++  text: string;
++  abortSignal?: AbortSignal;
 +};
  
  export enum AuthType {
@@ -128958,7 +128994,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
     */
    promptCacheSharing?: boolean;
  };
-@@ -90,20 +106,16 @@
+@@ -90,20 +124,16 @@
    enableOpenAILogging?: boolean;
    openAILoggingDir?: string;
    timeout?: number; // Timeout configuration in milliseconds
@@ -128982,7 +129018,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
    retryMaxDelayMs?: number; // Maximum delay for stream rate-limit retries
    retryErrorCodes?: number[]; // Additional error codes that trigger rate-limit retry
    enableCacheControl?: boolean; // Enable provider prompt-cache controls
-@@ -170,12 +182,20 @@
+@@ -170,12 +200,20 @@
    customHeaders?: Record<string, string>;
    // Extra body parameters to be merged into the request body
    extra_body?: Record<string, unknown>;
@@ -129003,7 +129039,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
    // When true, media parts in tool responses (including the built-in read_file
    // and MCP tools) are split into a follow-up `role: "user"` message instead of
    // being embedded inside the `role: "tool"` message. The OpenAI Chat
-@@ -297,15 +317,56 @@
+@@ -297,15 +335,56 @@
  export function validateModelConfig(
    config: ContentGeneratorConfig,
    isStrictModelProvider: boolean = false,
@@ -129063,7 +129099,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
    if (!config.apiKey) {
      if (isStrictModelProvider) {
        errors.push(
-@@ -336,26 +397,12 @@
+@@ -336,26 +415,12 @@
      } else {
        const envKey = getDefaultModelEnvVar(config.authType);
        errors.push(new MissingModelError({ authType: config.authType, envKey }));
@@ -129090,7 +129126,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
  export function createContentGeneratorConfig(
    config: Config,
    authType: AuthType | undefined,
-@@ -448,16 +495,23 @@
+@@ -448,16 +513,36 @@
      return (await this.getGeneratorForUse()).generateContentStream(
        request,
        userPromptId,
@@ -129114,6 +129150,19 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
 +    return generator.countRequestTokens(request, userPromptId);
    }
  
++  async countTextTokens(
++    request: TextTokenCountRequest,
++    userPromptId: string,
++  ): Promise<ExactRequestTokenCount> {
++    const generator = await this.getGeneratorForUse();
++    if (!generator.countTextTokens) {
++      throw new Error(
++        'Exact text token counting is not supported by this content generator.',
++      );
++    }
++    return generator.countTextTokens(request, userPromptId);
++  }
++
    async embedContent(
      request: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
@@ -134108,7 +134157,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    approvedPlanRedactionText,
    redactApprovedPlansInHistory,
    redactStructuredOutputArgsForRecording,
-@@ -30,30 +46,108 @@
+@@ -30,30 +46,152 @@
  import { EnhancedErrorHandler } from './openaiContentGenerator/errorHandler.js';
  import { APIConnectionTimeoutError } from 'openai';
  import type { OpenAICompatibleProvider } from './openaiContentGenerator/provider/index.js';
@@ -134145,49 +134194,93 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +/** The served profile's window; every mock config declares one. */
 +const DEFAULT_TEST_WINDOW = 262_144;
 +
++/** The content every framing probe carries. */
++const FRAMING_PROBE = 'framing';
++
 +/**
 + * Before its first turn a chat proves `D` and `F` against the served
-+ * tokenizer: it counts the preamble alone, then one empty message. Both are
-+ * fixed requests, so a case that stubs a count by value has to say what those
-+ * two render to as well, and a case that counts calls has to know which of
-+ * them were this proof.
++ * tokenizer: it counts the preamble alone, then the preamble with each of
++ * three framing probes -- a user message, then an assistant turn after it,
++ * then a tool result with the call it answers -- and the probe's text
++ * alone. They are fixed requests, so a case that stubs a count by value has
++ * to say what they render to as well, and a case that counts calls has to
++ * know which of them were this proof. Every probe opens with the same user
++ * message.
 + */
 +function isDeclarationProbe(contents: Content[]): boolean {
 +  if (contents.length === 0) return true;
-+  if (contents.length !== 1) return false;
-+  const [only] = contents;
++  const [first] = contents;
 +  return (
-+    only.role === 'user' &&
-+    only.parts?.length === 1 &&
-+    only.parts[0].text === ''
++    first.role === 'user' &&
++    first.parts?.length === 1 &&
++    first.parts[0].text === FRAMING_PROBE
 +  );
 +}
 +
-+/** What this deployment's own preamble and framing render to. */
-+const DECLARED_PREAMBLE_TOKENS = 8_172;
-+const DECLARED_FRAMING_TOKENS = 28;
++/**
++ * What the served template and tokenizer render this deployment's proof to:
++ * the preamble, the probe word alone, and the framing of each probed kind,
++ * the tool result's with the call markup it is measured behind.
++ */
++const DECLARED_PREAMBLE_TOKENS = 7_683;
++const FRAMING_PROBE_TOKENS = 2;
++type ProbedKind = 'message' | 'turn' | 'result';
++const SERVED_FRAMING_TOKENS: Record<ProbedKind, number> = {
++  message: 5,
++  turn: 10,
++  result: 24,
++};
++
++/**
++ * The count a template renders a proof request to: the preamble, then for
++ * each probed message its framing plus the probe words it carries -- one in
++ * a message or a result, two in a turn, its reasoning and its text.
++ */
++function declarationProbeTokens(
++  contents: Content[],
++  framings: Record<ProbedKind, number>,
++  preamble: number,
++): number {
++  if (contents.length === 0) return preamble;
++  const message = preamble + framings.message + FRAMING_PROBE_TOKENS;
++  if (contents.length === 1) return message;
++  const turn = message + framings.turn + 2 * FRAMING_PROBE_TOKENS;
++  if (contents.length === 2) return turn;
++  return turn + framings.result + FRAMING_PROBE_TOKENS;
++}
 +
 +/**
 + * Answer the declaration proof from the request's shape and leave every other
-+ * count to `count`.
++ * count to `count`. A case can serve a template that frames some kind more
++ * widely, or a longer preamble.
 + */
 +function answeringDeclarations(
 +  count: NonNullable<ContentGenerator['countRequestTokens']>,
 +  window: number,
++  framings: Partial<Record<ProbedKind, number>> = {},
++  preamble = DECLARED_PREAMBLE_TOKENS,
 +): Mock<NonNullable<ContentGenerator['countRequestTokens']>> {
++  const served = { ...SERVED_FRAMING_TOKENS, ...framings };
 +  return vi.fn(async (request, promptId) => {
 +    const contents = request.contents as Content[];
 +    if (isDeclarationProbe(contents)) {
 +      return {
-+        totalTokens:
-+          contents.length === 0
-+            ? DECLARED_PREAMBLE_TOKENS
-+            : DECLARED_PREAMBLE_TOKENS + DECLARED_FRAMING_TOKENS,
++        totalTokens: declarationProbeTokens(contents, served, preamble),
 +        maxModelLen: window,
 +      };
 +    }
 +    return count(request, promptId);
 +  });
++}
++
++/** The probe word counted alone, on a route reporting `window`. */
++function countingProbeText(
++  window: number,
++): Mock<NonNullable<ContentGenerator['countTextTokens']>> {
++  return vi.fn(async () => ({
++    totalTokens: FRAMING_PROBE_TOKENS,
++    maxModelLen: window,
++  }));
 +}
 +const TEST_CONTENT_CONFIG = {
 +  authType: AuthType.USE_OPENAI,
@@ -134226,7 +134319,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  vi.mock('node:fs', () => {
    const fsModule = {
      mkdirSync: vi.fn(),
-@@ -88,35 +182,29 @@
+@@ -88,35 +226,29 @@
    return {
      ...actual,
      retryWithBackoff: mockRetryWithBackoff,
@@ -134264,7 +134357,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  const { mockAcquireSleepInhibitor, mockSleepInhibitorRelease } = vi.hoisted(
    () => ({
      mockAcquireSleepInhibitor: vi.fn(),
-@@ -154,54 +242,75 @@
+@@ -154,54 +286,84 @@
  
    beforeEach(() => {
      vi.clearAllMocks();
@@ -134281,6 +134374,15 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +      // against the one the budgets are derived from, so the default mock
 +      // answers with the served profile's window.
 +      countRequestTokens: vi.fn(async () => ({
++        totalTokens: 1,
++        maxModelLen:
++          (
++            mockConfig.getContentGeneratorConfig() as {
++              contextWindowSize?: number;
++            }
++          ).contextWindowSize ?? DEFAULT_TEST_WINDOW,
++      })),
++      countTextTokens: vi.fn(async () => ({
 +        totalTokens: 1,
 +        maxModelLen:
 +          (
@@ -134349,7 +134451,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          .mockReturnValue({ debug: vi.fn(), warn: vi.fn(), info: vi.fn() }),
        getApprovalMode: vi.fn().mockReturnValue('default'),
        takePendingManualPlanExitNotice: vi.fn().mockReturnValue(undefined),
-@@ -208,3 +317,6 @@
+@@ -208,3 +370,6 @@
        restorePendingManualPlanExitNotice: vi.fn(),
 -      getFileReadCache: vi.fn().mockReturnValue({ clear: vi.fn() }),
 +      getFileReadCache: vi.fn().mockReturnValue({
@@ -134357,7 +134459,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        markAllReadsEvictedFromHistory: vi.fn().mockReturnValue(0),
 +      }),
      } as unknown as Config;
-@@ -211,15 +323,16 @@
+@@ -211,15 +376,16 @@
  
      // Disable 429 simulation for tests
      setSimulate429(false);
@@ -134375,7 +134477,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
    afterEach(() => {
      vi.restoreAllMocks();
-@@ -271,12 +384,13 @@
+@@ -271,12 +437,13 @@
        yield* responses;
      })();
    }
@@ -134389,7 +134491,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -284,15 +398,16 @@
+@@ -284,15 +451,16 @@
    }
  
    describe('system instruction helpers', () => {
@@ -134407,7 +134509,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
-@@ -302,15 +417,16 @@
+@@ -302,15 +470,16 @@
        );
      });
  
@@ -134425,7 +134527,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nUser memory\n\n---\n\nAppended rule',
        );
  
-@@ -322,20 +438,21 @@
+@@ -322,20 +491,21 @@
        );
      });
  
@@ -134448,7 +134550,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
  
-@@ -344,15 +461,16 @@
+@@ -344,15 +514,16 @@
        );
      });
  
@@ -134466,7 +134568,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.applySessionStartContext(
          '  Sync ctx  ',
-@@ -364,15 +482,16 @@
+@@ -364,15 +535,16 @@
        );
      });
  
@@ -134484,7 +134586,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nSessionStart additional context:\nLegitimate content',
        );
  
-@@ -389,12 +508,13 @@
+@@ -389,12 +561,13 @@
  
    describe('sendMessageStream', () => {
      it('releases the sleep inhibitor after the stream is consumed', async () => {
@@ -134498,7 +134600,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -415,12 +535,93 @@
+@@ -415,12 +588,93 @@
          mockConfig,
          'Qwen Code is streaming a model response',
        );
@@ -134592,7 +134694,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockContentGenerator.generateContentStream,
          ).mockImplementation(async () =>
            streamResponse(stopResponse([{ text: 'ok' }])),
-@@ -536,18 +737,23 @@
+@@ -536,18 +790,23 @@
            chat as unknown as { getRequestHistory: () => Content[] },
            'getRequestHistory',
          ).mockImplementationOnce(() => {
@@ -134621,7 +134723,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockConfig.restorePendingManualPlanExitNotice,
          ).toHaveBeenCalledWith(11);
  
-@@ -648,60 +854,67 @@
+@@ -648,60 +907,67 @@
                role: 'user',
                parts: [{ text: 'restored attachment context' }],
              },
@@ -134711,7 +134813,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    'changed outside the approved exit_plan_mode flow',
                  ),
                ),
-@@ -725,15 +938,16 @@
+@@ -725,15 +991,16 @@
              ),
            );
            expect(noticeTurn?.parts?.at(-1)?.text).toContain(
@@ -134730,7 +134832,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              mockConfig.takePendingManualPlanExitNotice,
            ).toHaveBeenCalledTimes(1);
            expect(
-@@ -764,13 +978,19 @@
+@@ -764,13 +1031,19 @@
            'prompt-id-plan-exit-before-rebuild',
          );
          for await (const _ of firstStream) {
@@ -134751,7 +134853,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'replacement chat' },
            'prompt-id-plan-exit-after-rebuild',
          );
-@@ -795,12 +1015,13 @@
+@@ -795,12 +1068,13 @@
      });
  
      it('increments the user-content push counter once per surviving send', async () => {
@@ -134765,7 +134867,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -824,12 +1045,13 @@
+@@ -824,12 +1098,13 @@
      });
  
      it('releases the sleep inhibitor when the stream errors', async () => {
@@ -134779,7 +134881,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                },
              ],
            } as unknown as GenerateContentResponse;
-@@ -852,43 +1074,46 @@
+@@ -852,43 +1127,46 @@
        ).rejects.toThrow('stream aborted');
  
        expect(mockSleepInhibitorRelease).toHaveBeenCalledTimes(1);
@@ -134829,7 +134931,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'prompt-id-tool-call-empty-end',
        );
        await expect(
-@@ -907,38 +1132,40 @@
+@@ -907,38 +1185,40 @@
        expect(modelTurn?.parts![0]!.functionCall).toBeDefined();
      });
  
@@ -134875,7 +134977,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test message' },
            'prompt-id-no-finish-empty-end',
          );
-@@ -949,23 +1176,25 @@
+@@ -949,23 +1229,25 @@
      });
  
      it('should succeed if the stream ends with an invalid part but has a finishReason and contained a valid part', async () => {
@@ -134901,7 +135003,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '' }], // Invalid part
                },
-@@ -1002,20 +1231,22 @@
+@@ -1002,20 +1284,22 @@
      });
  
      it('should consolidate subsequent text chunks after receiving an empty text chunk', async () => {
@@ -134924,7 +135026,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1045,39 +1276,44 @@
+@@ -1045,39 +1329,44 @@
      });
  
      it('should consolidate adjacent text parts that arrive in separate stream chunks', async () => {
@@ -134969,7 +135071,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        })();
  
        vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
-@@ -1110,12 +1346,13 @@
+@@ -1110,12 +1399,13 @@
        expect(modelTurn.parts![2]!.text).toBe('This is the second part.');
      });
      it('should preserve text parts that stream in the same chunk as a thought', async () => {
@@ -134983,7 +135085,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    { thought: 'This is a thought.' },
-@@ -1160,14 +1397,13 @@
+@@ -1160,14 +1450,13 @@
        );
      });
  
@@ -134999,7 +135101,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'first message' }] },
          {
            role: 'model',
-@@ -1182,12 +1418,13 @@
+@@ -1182,12 +1471,13 @@
            ],
          },
        ]);
@@ -135013,7 +135115,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1256,12 +1493,13 @@
+@@ -1256,12 +1546,13 @@
            ],
          },
        ]);
@@ -135027,7 +135129,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1295,114 +1533,70 @@
+@@ -1295,114 +1586,70 @@
        expect(frParts[0]!.functionResponse?.id).toBe('call_retry_real_fr');
        expect(
          (frParts[0]!.functionResponse?.response as { output?: string })?.output,
@@ -135190,7 +135292,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            role: 'model',
            parts: [
-@@ -1426,21 +1620,23 @@
+@@ -1426,21 +1673,23 @@
                },
              },
            ],
@@ -135214,7 +135316,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    role: 'model',
                    parts: [
                      {
-@@ -1452,12 +1648,13 @@
+@@ -1452,12 +1701,13 @@
                      },
                    ],
                  },
@@ -135228,7 +135330,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const stream = await chat.sendMessageStream(
          'test-model',
          { message: 'second request' },
-@@ -1479,157 +1676,18 @@
+@@ -1479,157 +1729,18 @@
          functionCall?.type === StreamEventType.CHUNK
            ? functionCall.value.functionCalls?.[0]?.id
            : undefined,
@@ -135388,7 +135490,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: 'partial reply that will be lost' }],
                },
-@@ -1663,62 +1721,30 @@
+@@ -1663,62 +1774,30 @@
      });
  
      it('should throw InvalidStreamError when no tool call and no finish reason', async () => {
@@ -135457,7 +135559,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test' },
            'prompt-id-1',
          );
-@@ -1730,12 +1756,13 @@
+@@ -1730,12 +1809,13 @@
  
      it('should succeed when there is finish reason and only thought content (reasoning models)', async () => {
        // This test verifies that responses containing only thought/reasoning content
@@ -135471,7 +135573,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -1777,215 +1804,13 @@
+@@ -1777,215 +1857,13 @@
        expect(modelTurn.parts![0]).toEqual({
          thought: true,
          text: 'Let me think through this problem step by step...',
@@ -135688,7 +135790,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -2045,172 +1870,16 @@
+@@ -2045,172 +1923,16 @@
                (part) => part.functionCall?.id === 'call_list_files',
              ),
          ),
@@ -135863,7 +135965,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '(empty content)' }],
                },
-@@ -2259,12 +1928,14 @@
+@@ -2259,12 +1981,14 @@
          } as unknown as GenerateContentResponse;
  
          // Some providers emit a trailing usage-only chunk after finishReason.
@@ -135878,7 +135980,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2289,24 +1960,26 @@
+@@ -2289,24 +2013,26 @@
      });
  
      it('should succeed for thought-only content when finish reason arrives in a later chunk', async () => {
@@ -135905,7 +136007,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [],
                },
-@@ -2356,12 +2029,14 @@
+@@ -2356,12 +2082,14 @@
          } as unknown as GenerateContentResponse;
  
          // Provider can emit trailing usage-only chunk after finish.
@@ -135920,7 +136022,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2404,12 +2079,14 @@
+@@ -2404,12 +2132,14 @@
                index: 0,
                safetyRatings: [],
              },
@@ -135935,7 +136037,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2425,87 +2102,40 @@
+@@ -2425,87 +2155,40 @@
        for await (const _ of stream) {
          // consume stream
        }
@@ -136036,7 +136138,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        vi.mocked(mockConfig.getChatCompression).mockReturnValue({
          maxRecentImagesToRetain: 1,
          imagePayloadThreshold: 1,
-@@ -2527,12 +2157,13 @@
+@@ -2527,12 +2210,13 @@
            role: 'model',
            parts: [{ text: 'I see the second image' }],
          },
@@ -136050,7 +136152,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2594,12 +2225,13 @@
+@@ -2594,12 +2278,13 @@
              },
            ],
          },
@@ -136064,7 +136166,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2664,12 +2296,13 @@
+@@ -2664,12 +2349,13 @@
        chat.setHistory([
          { role: 'user', parts: [{ text: 'prior question' }] },
          { role: 'model', parts: [{ text: 'prior answer' }] },
@@ -136078,7 +136180,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2714,13 +2347,19 @@
+@@ -2714,13 +2400,19 @@
          'prompt-id-no-request-clone',
        );
      });
@@ -136099,7 +136201,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: {
-@@ -2731,12 +2370,14 @@
+@@ -2731,12 +2423,14 @@
                index: 0,
                safetyRatings: [],
              },
@@ -136114,7 +136216,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2751,25 +2392,27 @@
+@@ -2751,25 +2445,27 @@
        );
        for await (const _ of stream) {
          // consume stream
@@ -136144,7 +136246,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              candidates: [
                {
                  content: {
-@@ -2779,173 +2422,179 @@
+@@ -2779,173 +2475,180 @@
                  finishReason: 'STOP',
                  index: 0,
                  safetyRatings: [],
@@ -136377,6 +136479,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          totalTokens: 1,
 +          maxModelLen: DEFAULT_TEST_WINDOW,
 +        }));
++        generator.countTextTokens = countingProbeText(DEFAULT_TEST_WINDOW);
 +        vi.mocked(mockConfig.getContentGenerator).mockReturnValue(
 +          new GenerationContext('test-session-id').bind(generator),
 +        );
@@ -136462,7 +136565,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              {
                content: {
                  parts: [{ text: 'response' }],
-@@ -2953,12 +2602,13 @@
+@@ -2953,12 +2656,13 @@
                },
                finishReason: 'STOP',
              },
@@ -136476,7 +136579,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2966,27 +2616,35 @@
+@@ -2966,27 +2670,35 @@
          response,
        );
  
@@ -136519,7 +136622,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -3015,13 +2673,13 @@
+@@ -3015,13 +2727,13 @@
      });
    });
  
@@ -136534,7 +136637,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: { parts: [{ text }], role: 'model' },
-@@ -3038,31 +2696,35 @@
+@@ -3038,31 +2750,35 @@
  
      it('releases the send-lock when auto-compression throws (no deadlock)', async () => {
        const compressSpy = vi
@@ -136578,7 +136681,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
  
-@@ -3084,31 +2746,37 @@
+@@ -3084,31 +2800,37 @@
          .mockResolvedValue({
            newHistory: null,
            info: {
@@ -136625,7 +136728,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
        const stream = await chat.sendMessageStream(
-@@ -3127,35 +2795,43 @@
+@@ -3127,35 +2849,43 @@
            .some((content) =>
              content.parts?.some((part) => part.text === 'first'),
            ),
@@ -136681,7 +136784,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse(),
        );
  
-@@ -3166,16 +2842,16 @@
+@@ -3166,16 +2896,16 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -136700,7 +136803,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        ];
        vi.spyOn(
          ChatCompressionService.prototype,
-@@ -3183,12 +2859,13 @@
+@@ -3183,12 +2913,13 @@
        ).mockResolvedValueOnce({
          newHistory: compressedHistory,
          info: {
@@ -136714,7 +136817,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('answer'),
        );
  
-@@ -3199,2262 +2876,1236 @@
+@@ -3199,2262 +2930,1427 @@
        );
        const events: Array<{ type: StreamEventType }> = [];
        for await (const event of stream) {
@@ -139250,6 +139353,197 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +      ).rejects.toThrow('this provider declares none');
 +      expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();
      });
++
++    describe('the declaration proof', () => {
++      const KINDS: Array<[ProbedKind, string]> = [
++        ['message', 'user message'],
++        ['turn', 'assistant turn'],
++        ['result', 'tool result, with the call it answers'],
++      ];
++      /** What the served template spends on a call's markup, within a result's measurement. */
++      const CALL_MARKUP_TOKENS = 14;
++
++      function serve(
++        framings: Partial<Record<ProbedKind, number>> = {},
++        preamble = DECLARED_PREAMBLE_TOKENS,
++      ) {
++        mockContentGenerator.countTextTokens = countingProbeText(WINDOW);
++        mockContentGenerator.countRequestTokens = answeringDeclarations(
++          vi.fn().mockResolvedValue({ totalTokens: 12_345, maxModelLen: WINDOW }),
++          WINDOW,
++          framings,
++          preamble,
++        );
++      }
++
++      async function send(promptId: string) {
++        await drain(
++          await newChat().sendMessageStream(
++            'qwen3.8-27b-nvfp4-k8v4',
++            { message: 'hi' },
++            promptId,
++          ),
++        );
++      }
++
++      /**
++       * A served endpoint behind the real generator, pipeline and converter. Its
++       * `/tokenize` models a template on the wire messages the converter really
++       * produced: the preamble for the system message, then per message its
++       * framing plus two tokens for each probe word it carries. A message the
++       * converter dropped costs nothing, exactly as on a real server.
++       */
++      function serveOnTheWire(framings: Partial<Record<ProbedKind, number>> = {}) {
++        const served = { ...SERVED_FRAMING_TOKENS, ...framings };
++        const words = (text: unknown): number =>
++          typeof text === 'string'
++            ? text.split(FRAMING_PROBE).length - 1
++            : Array.isArray(text)
++              ? text.reduce((n, part) => n + words((part as { text?: unknown }).text), 0)
++              : 0;
++        const afterSystem = (body: Record<string, unknown>) => {
++          const messages = body['messages'] as Array<Record<string, unknown>>;
++          return messages[0]?.['role'] === 'system' ? messages.slice(1) : messages;
++        };
++        const bodies: Array<Record<string, unknown>> = [];
++        const post = vi.fn(async (_path: string, { body }: { body: Record<string, unknown> }) => {
++          bodies.push(body);
++          if (typeof body['prompt'] === 'string') {
++            return { count: words(body['prompt']) * FRAMING_PROBE_TOKENS, max_model_len: WINDOW };
++          }
++          let count = DECLARED_PREAMBLE_TOKENS;
++          for (const m of afterSystem(body)) {
++            const carried = words(m['content']) + words(m['reasoning_content']);
++            if (m['role'] === 'user') count += served.message;
++            if (m['role'] === 'assistant') {
++              count += served.turn;
++              if (Array.isArray(m['tool_calls']) && m['tool_calls'].length > 0) {
++                count += CALL_MARKUP_TOKENS;
++              }
++            }
++            if (m['role'] === 'tool') count += served.result - CALL_MARKUP_TOKENS;
++            count += carried * FRAMING_PROBE_TOKENS;
++          }
++          return { count, max_model_len: WINDOW };
++        });
++        const create = vi.fn(async () =>
++          (async function* () {
++            yield {
++              id: 'wire-proof',
++              created: 1,
++              model: 'qwen3.8-27b-nvfp4-k8v4',
++              usage: {
++                prompt_tokens: 10,
++                completion_tokens: 1,
++                total_tokens: 11,
++                prompt_tokens_details: { cached_tokens: 0 },
++                completion_tokens_details: { reasoning_tokens: 0 },
++              },
++              choices: [{ index: 0, delta: { content: 'ok' }, finish_reason: 'stop' }],
++            } as unknown as OpenAI.Chat.ChatCompletionChunk;
++          })(),
++        );
++        const provider = {
++          buildClient: () =>
++            ({ post, chat: { completions: { create } } }) as unknown as OpenAI,
++          buildRequest: (request: OpenAI.Chat.ChatCompletionCreateParams) => request,
++          buildHeaders: () => ({}),
++          getDefaultGenerationConfig: () => ({}),
++        } as OpenAICompatibleProvider;
++        const generator = new OpenAIContentGenerator(
++          { ...TEST_CONTENT_CONFIG, contextWindowSize: WINDOW },
++          mockConfig,
++          provider,
++        );
++        vi.mocked(mockConfig.getContentGenerator).mockReturnValue(
++          new GenerationContext('wire-proof-owner').bind(generator),
++        );
++        return { bodies, create, afterSystem };
++      }
++
++      it('measures every framing from the wire requests the converter really sends', async () => {
++        // The empty message the proof used to send never reached the server:
++        // the converter drops a message with no content. Every probe here
++        // carries content, and the probe word is counted alone to be taken
++        // back out.
++        const { bodies, create, afterSystem } = serveOnTheWire();
++        await send('prompt-proof-wire');
++        expect(bodies).toContainEqual({
++          model: 'qwen3.8-27b-nvfp4-k8v4',
++          prompt: FRAMING_PROBE,
++          add_special_tokens: false,
++        });
++        const shapes = bodies
++          .filter((body) => Array.isArray(body['messages']))
++          .map((body) =>
++            afterSystem(body).map((m) =>
++              m['role'] === 'assistant' && Array.isArray(m['tool_calls'])
++                ? 'assistant+call'
++                : String(m['role']),
++            ),
++          );
++        expect(shapes.slice(0, 4)).toEqual([
++          [],
++          ['user'],
++          ['user', 'assistant'],
++          ['user', 'assistant+call', 'tool'],
++        ]);
++        expect(create).toHaveBeenCalledOnce();
++      });
++
++      it('shows why an empty probe measured nothing: the converter never sends it', async () => {
++        const { bodies, afterSystem } = serveOnTheWire();
++        const generator = vi.mocked(mockConfig.getContentGenerator)();
++        await generator.countRequestTokens(
++          {
++            model: 'qwen3.8-27b-nvfp4-k8v4',
++            contents: [{ role: 'user', parts: [{ text: '' }] }],
++            config: {},
++          },
++          'prompt-proof-empty',
++        );
++        expect(afterSystem(bodies[0]).map((m) => m['role'])).toEqual([]);
++      });
++
++      it.each(KINDS)(
++        'refuses a template that frames one %s past the declared framing',
++        async (kind, label) => {
++          const { create } = serveOnTheWire({ [kind]: PARTITION.messageFraming + 1 });
++          await expect(send(`prompt-proof-wide-${kind}`)).rejects.toThrow(
++            `The served chat template frames one ${label} in ${PARTITION.messageFraming + 1} tokens, past the ${PARTITION.messageFraming} the partition charges every message.`,
++          );
++          expect(create).not.toHaveBeenCalled();
++        },
++      );
++
++      it('accepts a template that frames every kind at exactly the declared framing', async () => {
++        const { create } = serveOnTheWire({
++          message: PARTITION.messageFraming,
++          turn: PARTITION.messageFraming,
++          result: PARTITION.messageFraming,
++        });
++        await send('prompt-proof-framing-at-bound');
++        expect(create).toHaveBeenCalledOnce();
++      });
++
++      it('refuses a preamble past its declared share', async () => {
++        serve({}, PARTITION.staticPreamble + 1);
++        await expect(send('prompt-proof-wide-preamble')).rejects.toThrow(
++          `renders to ${PARTITION.staticPreamble + 1} tokens, past the ${PARTITION.staticPreamble} this ${WINDOW}-token window declares for it.`,
++        );
++        expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();
++      });
++
++      it('refuses when the route cannot count a text alone', async () => {
++        serve();
++        delete (mockContentGenerator as { countTextTokens?: unknown })
++          .countTextTokens;
++        await expect(send('prompt-proof-no-text-counter')).rejects.toThrow(
++          'cannot count a text alone',
++        );
++        expect(mockContentGenerator.generateContentStream).not.toHaveBeenCalled();
++      });
++    });
 +  });
  
 -    it('gates thresholds on the full window and clamps maxOutputTokens to the room left (issue #5950)', async () => {
@@ -139988,7 +140282,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('addHistory', () => {
      it('should add a new content item to the history', () => {
        const newContent: Content = {
-@@ -5858,20 +4509,22 @@
+@@ -5858,20 +4754,22 @@
          // Use mockImplementationOnce to provide a fresh, promise-wrapped generator for each attempt.
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockImplementationOnce(async () =>
@@ -140012,7 +140306,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -5915,33 +4568,213 @@
+@@ -5915,33 +4813,213 @@
          });
          expect(history[1]).toEqual({
            role: 'model',
@@ -140230,7 +140524,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                ],
              } as unknown as GenerateContentResponse;
            })(),
-@@ -5951,22 +4784,22 @@
+@@ -5951,22 +5029,22 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-fail',
@@ -140257,7 +140551,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          );
  
          // History should still contain the user message.
-@@ -5978,99 +4811,13 @@
+@@ -5978,99 +5056,13 @@
          });
        } finally {
          vi.useRealTimers();
@@ -140357,7 +140651,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          delta: {
            tool_calls: [
              {
-@@ -6079,23 +4826,23 @@
+@@ -6079,23 +5071,23 @@
                type: 'function',
                function: { arguments: '{}' },
              },
@@ -140383,7 +140677,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    {
                      index: 0,
                      delta: testCase.delta,
-@@ -6111,18 +4858,26 @@
+@@ -6111,18 +5103,27 @@
              buildRequest: (request: OpenAI.Chat.ChatCompletionCreateParams) =>
                request,
              buildHeaders: () => ({}),
@@ -140400,6 +140694,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +            totalTokens: 1,
 +            maxModelLen: DEFAULT_TEST_WINDOW,
 +          }));
++          generator.countTextTokens = countingProbeText(DEFAULT_TEST_WINDOW);
 +          vi.mocked(mockConfig.getContentGenerator).mockReturnValue(
 +            new GenerationContext('test-session-id').bind(generator),
 +          );
@@ -140412,7 +140707,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
            const stream = await chat.sendMessageStream(
              'test-model',
-@@ -6146,76 +4901,23 @@
+@@ -6146,76 +5147,23 @@
          } finally {
            vi.useRealTimers();
          }
@@ -140494,7 +140789,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-invalid-stream-abort-delay',
          );
-@@ -6239,41 +4941,46 @@
+@@ -6239,41 +5187,46 @@
          ).toHaveBeenCalledTimes(1);
        } finally {
          vi.useRealTimers();
@@ -140543,7 +140838,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after empty stream' }],
                      },
                      finishReason: 'STOP',
-@@ -6308,29 +5015,21 @@
+@@ -6308,29 +5261,21 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -140575,7 +140870,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6345,12 +5044,13 @@
+@@ -6345,12 +5290,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -140589,7 +140884,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6360,21 +5060,29 @@
+@@ -6360,21 +5306,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -140620,7 +140915,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // History must NOT contain the failed attempt's partial
          // model[functionCall]. Expected shape: [user, model(success
          // text)] — exactly two entries, alternation intact.
-@@ -6389,24 +5097,18 @@
+@@ -6389,24 +5343,18 @@
          );
        } finally {
          vi.useRealTimers();
@@ -140647,7 +140942,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6426,12 +5128,13 @@
+@@ -6426,12 +5374,13 @@
              'Model stream ended without a finish reason.',
              'NO_FINISH_REASON',
            );
@@ -140661,7 +140956,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6441,21 +5144,29 @@
+@@ -6441,21 +5390,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -140692,7 +140987,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Final shape must be clean: [user, model(success text)].
          // The failed attempt's partial functionCall must NOT survive.
          expect(history.length).toBe(2);
-@@ -6469,56 +5180,12 @@
+@@ -6469,56 +5426,12 @@
          );
        } finally {
          vi.useRealTimers();
@@ -140749,7 +141044,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            status: 503,
          },
-@@ -6526,12 +5193,13 @@
+@@ -6526,12 +5439,13 @@
        const routeGenerateContentStream = vi
          .fn()
          .mockRejectedValueOnce(capacityError)
@@ -140763,7 +141058,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    finishReason: 'STOP',
                  },
                ],
-@@ -6543,14 +5211,17 @@
+@@ -6543,14 +5457,17 @@
          generateContentStream: routeGenerateContentStream,
        } as ContentGenerator;
        const routeSelector =
@@ -140782,7 +141077,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            modalities: { image: true },
          },
          retryAuthType: AuthType.USE_OPENAI,
-@@ -6561,12 +5232,13 @@
+@@ -6561,12 +5478,13 @@
        } as unknown as ReturnType<typeof mockConfig.getBaseLlmClient>);
        vi.mocked(mockConfig.getEffectiveInputModalities).mockReturnValue({
          pdf: true,
@@ -140796,7 +141091,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              role: 'user',
              parts: [
                { text: 'prior question' },
-@@ -6577,13 +5249,13 @@
+@@ -6577,13 +5495,13 @@
                  },
                },
              ],
@@ -140811,7 +141106,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        mockRetryWithBackoff.mockImplementation(async (apiCall, options) => {
          try {
            return await apiCall();
-@@ -6610,15 +5282,13 @@
+@@ -6610,15 +5528,13 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -140828,7 +141123,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const routeRequest = JSON.stringify(
          routeGenerateContentStream.mock.calls.at(-1)?.[0],
        );
-@@ -6629,12 +5299,13 @@
+@@ -6629,12 +5545,13 @@
  
        vi.mocked(
          mockContentGenerator.generateContentStream,
@@ -140842,7 +141137,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6671,752 +5342,12 @@
+@@ -6671,752 +5588,12 @@
        const history = JSON.stringify(chat.getHistory());
        expect(history).toContain('private-image');
        expect(history).toContain('prior-pdf');
@@ -141595,7 +141890,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const transportError = Object.assign(new TypeError('terminated'), {
            cause: Object.assign(new Error('other side closed'), {
              code: 'UND_ERR_SOCKET',
-@@ -7431,12 +5362,13 @@
+@@ -7431,12 +5608,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -141609,7 +141904,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after transport retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7497,13 +5429,13 @@
+@@ -7497,13 +5675,13 @@
            'test-model',
            { message: 'test' },
            'prompt-transport-retry-exhausted',
@@ -141624,7 +141919,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          let caughtError: unknown;
          const collecting = (async () => {
            try {
-@@ -7520,116 +5452,37 @@
+@@ -7520,116 +5698,37 @@
          await collecting;
  
          expect(caughtError).toBeInstanceOf(Error);
@@ -141746,7 +142041,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [
                          { text: 'Let me think about this…', thought: true },
                        ],
-@@ -7640,12 +5493,13 @@
+@@ -7640,12 +5739,13 @@
                throw transportError;
              })(),
            )
@@ -141760,7 +142055,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after thinking-phase retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7678,103 +5532,22 @@
+@@ -7678,103 +5778,22 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -141865,7 +142160,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { callId: 'call-preparing', toolName: 'read_file' },
          ]);
  
-@@ -7785,12 +5558,13 @@
+@@ -7785,12 +5804,13 @@
                throw transportError;
              })(),
            )
@@ -141879,7 +142174,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after preparation' }],
                      },
                      finishReason: 'STOP',
-@@ -7815,1231 +5589,206 @@
+@@ -7815,1231 +5835,206 @@
          ).toHaveLength(1);
        } finally {
          vi.useRealTimers();
@@ -143268,7 +143563,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        // a typo is introduced here, this fails instead of silently never
        // retrying.
        for (const code of RETRYABLE_STREAM_TRANSPORT_CODES) {
-@@ -9070,12 +5819,13 @@
+@@ -9070,12 +6065,13 @@
                  yield {} as GenerateContentResponse;
                })(),
              )
@@ -143282,7 +143577,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                          parts: [{ text: `Recovered from ${transportCode}` }],
                        },
                        finishReason: 'STOP',
-@@ -9125,13 +5875,17 @@
+@@ -9125,13 +6121,17 @@
              timeoutError,
              {
                model: 'test-model',
@@ -143301,7 +143596,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          }
  
          vi.mocked(mockContentGenerator.generateContentStream)
-@@ -9142,12 +5896,13 @@
+@@ -9142,12 +6142,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -143315,7 +143610,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after enhanced timeout' }],
                      },
                      finishReason: 'STOP',
-@@ -9200,12 +5955,13 @@
+@@ -9200,12 +6201,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -143329,7 +143624,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -9255,12 +6011,13 @@
+@@ -9255,12 +6257,13 @@
  
        vi.mocked(mockContentGenerator.generateContentStream)
          .mockRejectedValueOnce(transportError)
@@ -143343,7 +143638,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      parts: [{ text: 'Recovered from depth-2 RST' }],
                    },
                    finishReason: 'STOP',
-@@ -9391,13 +6148,17 @@
+@@ -9391,13 +6394,17 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-transport-abort-delay',
@@ -143362,7 +143657,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Abort while the generator is awaiting the retry delay.
          const nextPromise = iterator.next();
          abortController.abort();
-@@ -9409,41 +6170,35 @@
+@@ -9409,41 +6416,35 @@
          ).toHaveBeenCalledTimes(1);
        } finally {
          vi.useRealTimers();
@@ -143409,7 +143704,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -9458,12 +6213,13 @@
+@@ -9458,12 +6459,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -143423,7 +143718,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9473,130 +6229,42 @@
+@@ -9473,130 +6475,42 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -143563,7 +143858,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
-@@ -9606,12 +6274,13 @@
+@@ -9606,12 +6520,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -143577,7 +143872,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9626,24 +6295,28 @@
+@@ -9626,24 +6541,28 @@
            'test-model',
            { message: 'test' },
            'prompt-id-tpm-retry',
@@ -143607,7 +143902,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -9652,13 +6325,13 @@
+@@ -9652,13 +6571,13 @@
  
          expect(
            mockContentGenerator.generateContentStream,
@@ -143622,7 +143917,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after TPM retry',
-@@ -9696,14 +6369,17 @@
+@@ -9696,14 +6615,17 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -143641,7 +143936,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockContentGenerator.generateContentStream,
          ).toHaveBeenCalledTimes(1);
        } finally {
-@@ -9733,12 +6409,13 @@
+@@ -9733,12 +6655,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -143655,7 +143950,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Success after Retry-After' }],
                      },
                      finishReason: 'STOP',
-@@ -9752,21 +6429,25 @@
+@@ -9752,21 +6675,25 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-after',
@@ -143683,7 +143978,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -9792,12 +6473,13 @@
+@@ -9792,12 +6719,13 @@
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
@@ -143697,7 +143992,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9818,26 +6500,30 @@
+@@ -9818,26 +6746,30 @@
            'test-model',
            { message: 'test' },
            'prompt-id-skip-delay',
@@ -143730,7 +144025,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -9884,13 +6570,17 @@
+@@ -9884,13 +6816,17 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-abort-delay',
@@ -143749,7 +144044,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Abort while the generator is awaiting the 60s delay
          const nextPromise = iterator.next();
          abortController.abort();
-@@ -9905,12 +6595,13 @@
+@@ -9905,12 +6841,13 @@
  
          // Verify the next sendMessageStream is not blocked by the old delay.
          // If sendPromise were still pending, this would hang until the 60s
@@ -143763,7 +144058,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9954,12 +6645,13 @@
+@@ -9954,12 +6891,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -143777,7 +144072,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9974,33 +6666,37 @@
+@@ -9974,33 +6912,37 @@
            'test-model',
            { message: 'test' },
            'prompt-id-glm-retry',
@@ -143821,7 +144116,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -10009,13 +6705,13 @@
+@@ -10009,13 +6951,13 @@
  
          expect(
            mockContentGenerator.generateContentStream,
@@ -143836,7 +144131,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after GLM retry',
-@@ -10028,12 +6724,14 @@
+@@ -10028,12 +6970,14 @@
  
      it('should use configured delay across repeated streamed rate-limit errors', async () => {
        vi.useFakeTimers();
@@ -143851,7 +144146,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryMaxDelayMs: 5_000,
          });
          const firstError = new StreamContentError(
-@@ -10058,12 +6756,13 @@
+@@ -10058,12 +7002,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -143865,7 +144160,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10075,35 +6774,37 @@
+@@ -10075,35 +7020,37 @@
            'test-model',
            { message: 'test' },
            'prompt-id-streamed-rate-limit-backoff',
@@ -143908,7 +144203,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -10123,12 +6824,14 @@
+@@ -10123,12 +7070,14 @@
  
      it('uses configured stream rate-limit retry delays', async () => {
        vi.useFakeTimers();
@@ -143923,7 +144218,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryInitialDelayMs: 3_000,
            retryMaxDelayMs: 5_000,
          });
-@@ -10154,12 +6857,13 @@
+@@ -10154,12 +7103,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -143937,7 +144232,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10170,30 +6874,31 @@
+@@ -10170,30 +7120,31 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -143974,7 +144269,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -10261,12 +6966,13 @@
+@@ -10261,12 +7212,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error429)
@@ -143988,7 +144283,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10339,12 +7045,13 @@
+@@ -10339,12 +7291,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error500)
@@ -144002,7 +144297,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10372,12 +7079,13 @@
+@@ -10372,12 +7325,13 @@
        afterEach(() => {
          // Reset to default behavior
          mockRetryWithBackoff.mockImplementation(async (apiCall) => apiCall());
@@ -144016,7 +144311,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        { role: 'user', parts: [{ text: 'First question' }] },
        { role: 'model', parts: [{ text: 'First answer' }] },
      ];
-@@ -10385,20 +7093,22 @@
+@@ -10385,20 +7339,22 @@
  
      // 2. Mock the API to fail once with an empty stream, then succeed.
      vi.mocked(mockContentGenerator.generateContentStream)
@@ -144040,7 +144335,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -10450,103 +7160,113 @@
+@@ -10450,103 +7406,113 @@
          'Test setup error: Fourth turn is not a valid text part.',
        );
      }
@@ -144214,7 +144509,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              finishReason: 'STOP',
            },
          ],
-@@ -10561,41 +7281,58 @@
+@@ -10561,41 +7527,58 @@
      const firstStream = await chat.sendMessageStream(
        'test-model',
        { message: 'first' },
@@ -144285,7 +144580,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      expect(history.length).toBe(4);
  
      const turn4 = history[3];
-@@ -10606,12 +7343,13 @@
+@@ -10606,12 +7589,13 @@
      }
      expect(turn4.parts[0].text).toBe('second response');
    });
@@ -144299,7 +144594,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -10641,275 +7379,272 @@
+@@ -10641,275 +7625,277 @@
          }),
          'prompt-id-res3',
        );
@@ -144376,6 +144671,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        ...mockContentGenerator,
 +        generateContentStream,
 +        countRequestTokens,
++        countTextTokens: countingProbeText(routeWindow),
 +      };
 +      const resolved: Awaited<
 +        ReturnType<ReturnType<Config['getBaseLlmClient']>['resolveForModel']>
@@ -144635,7 +144931,10 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        ...mockContentGenerator,
 +        generateContentStream: vi.fn(),
 +        countRequestTokens: vi.fn(),
++        countTextTokens: vi.fn(),
 +      };
++      mockContentGenerator.countTextTokens =
++        countingProbeText(DEFAULT_TEST_WINDOW);
 +      vi.mocked(mockContentGenerator.countRequestTokens!).mockImplementation(
 +        async () => {
 +          vi.mocked(mockConfig.getContentGenerator).mockReturnValue(
@@ -144722,6 +145021,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +      expect(mockContentGenerator.countRequestTokens).toHaveBeenCalled();
 +      expect(mockContentGenerator.generateContentStream).toHaveBeenCalledOnce();
 +      expect(replacementProvider.countRequestTokens).not.toHaveBeenCalled();
++      expect(replacementProvider.countTextTokens).not.toHaveBeenCalled();
 +      expect(replacementProvider.generateContentStream).not.toHaveBeenCalled();
 +      expect(mockContentGenerator.generateContentStream).toHaveBeenCalledWith(
 +        expect.objectContaining({
@@ -144805,7 +145105,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      { text: 'thinking', thought: true },
                      { text: response.slice(0, splitAt) },
-@@ -10954,28 +7689,31 @@
+@@ -10954,28 +7940,31 @@
        expect(emittedParts.find((part) => part.thought)?.text).toBe('thinking');
        expect(streamedTextChunks.join('')).toBe(response);
        expect(chat.getLastModelMessageText()).toBe(response);
@@ -144838,7 +145138,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      );
  
      const stream = await chat.sendMessageStream(
-@@ -10996,138 +7734,55 @@
+@@ -10996,138 +7985,55 @@
      const emittedText = emittedParts
        .filter((part) => !part.thought)
        .map((part) => part.text ?? '')
@@ -144988,7 +145288,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const responses = toolCallFirst
          ? [functionCallResponse, ...textResponses]
          : [textResponses[0]!, functionCallResponse, textResponses[1]!];
-@@ -11138,33 +7793,33 @@
+@@ -11138,33 +8044,33 @@
        const stream = await chatWithRecording.sendMessageStream(
          'test-model',
          { message: 'test' },
@@ -145033,7 +145333,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              .map((part) => part.text)
              .join(''),
          ).toBe(response);
-@@ -11174,22 +7829,30 @@
+@@ -11174,22 +8080,30 @@
  
    it.each([false, true])(
      'keeps leading JSON before a later structured tool call (preparation: %s)',
@@ -145065,7 +145365,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              },
            ],
          } as unknown as GenerateContentResponse,
-@@ -11243,31 +7906,34 @@
+@@ -11243,31 +8157,34 @@
          expect(parts.findIndex((part) => part.text === response)).toBe(0);
          expect(parts.findIndex((part) => part.functionCall)).toBe(1);
        }
@@ -145103,7 +145403,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -11278,59 +7944,64 @@
+@@ -11278,59 +8195,64 @@
                      },
                    ],
                  },
@@ -145172,7 +145472,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -11371,252 +8042,12 @@
+@@ -11371,252 +8293,12 @@
      expect(events.some((event) => event.type === StreamEventType.RETRY)).toBe(
        false,
      );
@@ -145425,7 +145725,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'question' }] },
          {
            role: 'model',
-@@ -11790,179 +8221,633 @@
+@@ -11790,179 +8472,633 @@
        chat.stripOrphanedUserEntriesFromHistory();
  
        expect(chat.getHistory()).toEqual([]);
@@ -146193,7 +146493,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12075,17 +8960,12 @@
+@@ -12075,17 +9211,12 @@
        expect(parts[0]!.functionResponse?.id).toBe('call_A');
        expect(parts[1]!.functionResponse?.id).toBe('call_B');
        expect(parts[2]).toEqual({ text: 'retry prompt' });
@@ -146211,7 +146511,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,1792 +9448,234 @@
+@@ -12568,1792 +9699,234 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -148192,7 +148492,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const chat = chatWith([
          { role: 'user', parts: [{ text: 'plan it' }] },
          {
-@@ -14615,14 +9937,16 @@
+@@ -14615,14 +10188,16 @@
        // mockFileSystem, so "writing" the plan file is a Map insert.
        const planFile = '/plans/wired-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -148209,7 +148509,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(planFile));
        } finally {
          mockFileSystem.delete(planFile);
-@@ -14632,14 +9956,16 @@
+@@ -14632,14 +10207,16 @@
      it('is applied by the constructor for rehydrated history', () => {
        const planFile = '/plans/ctor-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -148226,7 +148526,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        } finally {
          mockFileSystem.delete(planFile);
        }
-@@ -14647,14 +9973,16 @@
+@@ -14647,14 +10224,16 @@
  
      it('setHistory leaves history alone when no plan file exists', () => {
        const chat = new GeminiChat(
@@ -148243,7 +148543,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        expect(fnCall.args!['plan']).toBe(PLAN);
      });
    });
-@@ -14725,821 +10053,685 @@
+@@ -14725,821 +10304,686 @@
        const snapshot = JSON.parse(JSON.stringify(original));
        redactStructuredOutputArgsForRecording(original);
        expect(original).toEqual(snapshot);
@@ -149037,6 +149337,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        totalTokens: 1,
 +        maxModelLen: DEFAULT_TEST_WINDOW,
 +      }));
++      generator.countTextTokens = countingProbeText(DEFAULT_TEST_WINDOW);
 +      vi.mocked(mockConfig.getContentGenerator).mockReturnValue(
 +        new GenerationContext('provider-owner').bind(generator),
        );
@@ -150871,7 +151172,23 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * tool_use ↔ tool_result pair. For each `model[functionCall]`:
   *  - SYNTHESIZE an `error` `functionResponse` for ids with no match;
   *  - HOIST a real fr from a non-adjacent later user turn into the
-@@ -1712,72 +923,16 @@
+@@ -1680,6 +891,15 @@
+  * @remarks
+  * The session maintains all the turns between user and model.
+  */
++/**
++ * The content every framing probe carries, and the id of the one call it
++ * makes. The converter drops a message that has no content, so a framing can
++ * only be measured around some; why this one is a word of letters is at
++ * `verifyDeclarations`.
++ */
++const FRAMING_PROBE_TEXT = 'framing';
++const FRAMING_PROBE_CALL_ID = 'framing_probe';
++
+ const SESSION_START_CONTEXT_SENTINEL_START =
+   '<qwen:session-start-context hidden="true">';
+ const SESSION_START_CONTEXT_SENTINEL_END = '</qwen:session-start-context>';
+@@ -1712,72 +932,16 @@
  
  export class GeminiChat {
    // A promise to represent the current state of the message being sent to the
@@ -150948,7 +151265,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Monotonically counts user-content pushes that survived into history.
     * Incremented when `sendMessageStream` pushes the user content and decremented
-@@ -1787,109 +942,92 @@
+@@ -1787,109 +951,92 @@
     * whether the re-submitted content actually landed — a history-length delta
     * can't, since compression shrinks history independently of the push.
     */
@@ -151087,7 +151404,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            last.parts = [...(last.parts ?? []), ...reattachParts];
          } else {
            requestHistory.push({ role: 'user', parts: reattachParts });
-@@ -1897,173 +1035,355 @@
+@@ -1897,173 +1044,423 @@
        }
        return requestHistory;
      }
@@ -151283,9 +151600,35 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +   * are texts this repo ships, and the window has to hold them before it
 +   * holds any conversation. They are counted here exactly, by the same
 +   * server tokenizer that counts every request, against the share the
-+   * partition holds back. `F` is the framing the served chat template wraps
-+   * around one message, which belongs to the engine rather than to this
-+   * repo; it is counted as the difference an empty message makes.
++   * partition holds back.
++   *
++   * `F` is the framing the served chat template wraps around one message,
++   * which belongs to the engine rather than to this repo. It is measured
++   * from counts the server makes: the request with one more message, less
++   * the request without it, less that message's content counted alone.
++   * Three are measured, because the fit charges `F` to three kinds -- a user
++   * message, an assistant turn with its reasoning, and a tool result -- and
++   * each must be within it.
++   *
++   * The probe's content is one word of letters. The template trims what it
++   * renders, so content always starts right after a newline or a special
++   * token, and the served tokenizer never lets a word of letters share a
++   * token with a newline or a special token on either side: the probe
++   * counts the same in place as alone, nothing is merged away, and what is
++   * left is the framing's own count. Real content can end in punctuation
++   * that shares a token with the newline after it; that token spans one
++   * framing byte, which the probe's framing already counts as a token of
++   * its own, so a message still costs at most its content's bytes, as the
++   * tokenizer's NFC normalization leaves them, plus the framing measured
++   * here.
++   *
++   * The check is in tokens, and that is what the fit needs: `F` is written
++   * as the framing's bytes, but the fit spends it as tokens, so a framing
++   * proved within `F` tokens is within what the fit charges. A tool result
++   * renders only behind the call it answers -- the converter drops a call
++   * nothing answers -- so its measurement also holds that call's markup,
++   * which a turn's own room pays for. Counting it here as well makes the
++   * check stricter, never looser.
 +   *
 +   * The counter is the turn's own, so both are proved against the route that
 +   * will serve the turn and against the window the partition was derived
@@ -151300,6 +151643,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  private async verifyDeclarations(
 +    partition: ContextPartition,
 +    count: (contents: Content[]) => Promise<number>,
++    countText: (text: string) => Promise<number>,
 +  ): Promise<void> {
 +    if (this.declarationsVerified) return;
 +    const preamble = await count([]);
@@ -151308,14 +151652,55 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        `The static preamble -- the system prompt and the tool declarations -- renders to ${preamble} tokens, past the ${partition.staticPreamble} this ${partition.window}-token window declares for it. Shorten the system prompt or a tool description, or deploy on a larger window.`,
 +      );
 +    }
-+    const framed = await count([
-+      { role: 'user', parts: [{ text: '' }] },
-+    ]);
-+    const framing = framed - preamble;
-+    if (framing > partition.messageFraming) {
-+      throw new Error(
-+        `The served chat template frames one message in ${framing} tokens, past the ${partition.messageFraming} the partition charges every message. Raise the declared framing to match the template, or serve the template the partition was written for.`,
-+      );
++    const probe = await countText(FRAMING_PROBE_TEXT);
++    const message: Content = {
++      role: 'user',
++      parts: [{ text: FRAMING_PROBE_TEXT }],
++    };
++    const reasoned: Part[] = [
++      { text: FRAMING_PROBE_TEXT, thought: true },
++      { text: FRAMING_PROBE_TEXT },
++    ];
++    const turn: Content = { role: 'model', parts: reasoned };
++    const call: Content = {
++      role: 'model',
++      parts: [
++        ...reasoned,
++        {
++          functionCall: {
++            id: FRAMING_PROBE_CALL_ID,
++            name: FRAMING_PROBE_TEXT,
++            args: {},
++          },
++        },
++      ],
++    };
++    const result: Content = {
++      role: 'user',
++      parts: [
++        {
++          functionResponse: {
++            id: FRAMING_PROBE_CALL_ID,
++            name: FRAMING_PROBE_TEXT,
++            response: { output: FRAMING_PROBE_TEXT },
++          },
++        },
++      ],
++    };
++    const withMessage = await count([message]);
++    const withTurn = await count([message, turn]);
++    const withResult = await count([message, call, result]);
++    const framings: Array<[kind: string, framing: number]> = [
++      ['user message', withMessage - preamble - probe],
++      ['assistant turn', withTurn - withMessage - 2 * probe],
++      ['tool result, with the call it answers', withResult - withTurn - probe],
++    ];
++    for (const [kind, framing] of framings) {
++      if (framing > partition.messageFraming) {
++        throw new Error(
++          `The served chat template frames one ${kind} in ${framing} tokens, past the ${partition.messageFraming} the partition charges every message. Raise the declared framing to match the template, or serve the template the partition was written for.`,
++        );
++      }
 +    }
 +    this.declarationsVerified = true;
 +  }
@@ -151556,7 +151941,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      // Step 1: force microcompaction (clear old tool results + media)
      const mcResult = microcompactHistory(
        this.history,
-@@ -2079,59 +1399,55 @@
+@@ -2079,59 +1476,55 @@
  
      // Step 2: strip thinking parts from model turns
      const newHistory = mcResult.history
@@ -151644,7 +152029,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
    setSystemInstruction(sysInstr: string) {
      this.generationConfig.systemInstruction = sysInstr;
-@@ -2192,1724 +1508,445 @@
+@@ -2192,1724 +1585,463 @@
    async sendMessageStream(
      model: string,
      params: SendMessageParameters,
@@ -151957,7 +152342,25 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        }
 +        return result.totalTokens;
 +      };
-+      await this.verifyDeclarations(partition, countExactRequestTokens);
++      // A text alone, on the same route and checked against the same window:
++      // the other half of measuring what the template adds around a message.
++      const countExactTextTokens = async (text: string): Promise<number> => {
++        const result = await requestRoute.contentGenerator.countTextTokens(
++          { model, text, abortSignal: params.config?.abortSignal },
++          prompt_id,
++        );
++        if (result.maxModelLen !== partition.window) {
++          throw new Error(
++            `Exact tokenizer max_model_len=${result.maxModelLen} does not match the ${partition.window}-token window the budgets are derived from.`,
++          );
++        }
++        return result.totalTokens;
++      };
++      await this.verifyDeclarations(
++        partition,
++        countExactRequestTokens,
++        countExactTextTokens,
++      );
 +      let promptTokensForClamp = 0;
 +
 +      let currentUserContent: Content | undefined;
@@ -153727,7 +154130,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -3933,23 +1970,14 @@
+@@ -3933,23 +2065,14 @@
          }
  
          return false;
@@ -153752,7 +154155,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            new ApiRetryEvent({
              model,
              promptId: prompt_id,
-@@ -3963,41 +1991,17 @@
+@@ -3963,41 +2086,17 @@
        },
      });
  
@@ -153795,7 +154198,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * @remarks
     * The history is a list of contents alternating between user and model.
     *
-@@ -4145,43 +2149,19 @@
+@@ -4145,43 +2244,19 @@
  
    /**
     * Clears the chat history.
@@ -153839,7 +154242,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Replaces the `plan` argument of an `exit_plan_mode` `functionCall` in
     * history with a short reference, keeping every other part and argument
     * intact.
-@@ -4184,61 +2164,81 @@
+@@ -4184,61 +2259,81 @@
    /**
 -   * Replaces the `plan` argument of an `exit_plan_mode` `functionCall` in
 -   * history with a short reference, keeping every other part and argument
@@ -153948,7 +154351,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      expectedPlan,
 +    );
 +  }
-@@ -4298,44 +2298,23 @@
+@@ -4298,44 +2393,23 @@
        );
      }
    }
@@ -153993,7 +154396,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Pop orphaned trailing user entries from chat history.
     * In a valid conversation the last entry is always a model response;
     * any trailing user entries are leftovers from a request that failed.
-@@ -4362,24 +2341,12 @@
+@@ -4362,24 +2436,12 @@
        const lastEntry = this.history[this.history.length - 1];
        if (lastEntry && isSystemReminderContent(lastEntry)) {
          break;
@@ -154018,7 +154421,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Instance wrapper around the free-function {@link repairOrphanedToolUseTurns}.
     * See the canonical note above `ORPHAN_TOOL_USE_REPAIR_REASON`.
-@@ -4393,13 +2360,13 @@
+@@ -4393,13 +2455,13 @@
  
    setTools(tools: Tool[]): void {
      this.generationConfig.tools = tools;
@@ -154033,7 +154436,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4427,693 +2394,216 @@
+@@ -4427,693 +2489,216 @@
            `\n`;
          error.message += extraDetails;
        }
@@ -154999,7 +155402,7 @@ diff --git a/packages/core/src/core/genai-compat.ts b/packages/core/src/core/gen
 diff --git a/packages/core/src/core/generation-context.test.ts b/packages/core/src/core/generation-context.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/generation-context.test.ts
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,118 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -155058,6 +155461,27 @@ diff --git a/packages/core/src/core/generation-context.test.ts b/packages/core/s
 +    expect(Object.isFrozen(owner)).toBe(true);
 +  });
 +
++  it('forwards a text count to its provider, and refuses one the provider cannot make', async () => {
++    const countTextTokens = vi
++      .fn()
++      .mockResolvedValue({ totalTokens: 2, maxModelLen: 262144 });
++    const request = { model: 'served-model', text: 'framing' };
++    const counting = new GenerationContext('spawn-call').bind({
++      countTextTokens,
++    } as unknown as ContentGenerator);
++    await expect(counting.countTextTokens(request, 'text')).resolves.toEqual({
++      totalTokens: 2,
++      maxModelLen: 262144,
++    });
++    expect(countTextTokens).toHaveBeenCalledExactlyOnceWith(request, 'text');
++    const lacking = new GenerationContext('spawn-call').bind(
++      {} as unknown as ContentGenerator,
++    );
++    expect(() => lacking.countTextTokens(request, 'text')).toThrow(
++      'cannot count a text alone',
++    );
++  });
++
 +  it('keeps concurrent child Config requests separate and restores the parent', async () => {
 +    const provider = {
 +      generateContent: vi.fn().mockResolvedValue({}),
@@ -155100,7 +155524,7 @@ diff --git a/packages/core/src/core/generation-context.test.ts b/packages/core/s
 diff --git a/packages/core/src/core/generation-context.ts b/packages/core/src/core/generation-context.ts
 --- /dev/null
 +++ b/packages/core/src/core/generation-context.ts
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,80 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -155111,7 +155535,10 @@ diff --git a/packages/core/src/core/generation-context.ts b/packages/core/src/co
 +  GenerateContentParameters,
 +  EmbedContentParameters,
 +} from '@google/genai';
-+import type { ContentGenerator } from './contentGenerator.js';
++import type {
++  ContentGenerator,
++  TextTokenCountRequest,
++} from './contentGenerator.js';
 +
 +/** Cache ownership belongs to an invocation, independently of model selection. */
 +export class GenerationContext {
@@ -155162,6 +155589,13 @@ diff --git a/packages/core/src/core/generation-context.ts b/packages/core/src/co
 +      { ...request, generationContext: this.context },
 +      promptId,
 +    );
++  }
++
++  countTextTokens(request: TextTokenCountRequest, promptId: string) {
++    if (!this.provider.countTextTokens) {
++      throw new Error('The configured provider cannot count a text alone.');
++    }
++    return this.provider.countTextTokens(request, promptId);
 +  }
 +
 +  embedContent(request: EmbedContentParameters) {
@@ -155434,7 +155868,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          const span = createOwnedLlmSpan(model, promptId, options);
          return {
            span: span as never,
-@@ -421,12 +451,223 @@
+@@ -421,12 +451,253 @@
    afterEach(() => {
      convertGeminiRequestToOpenAISpy.mockClear();
      convertGeminiToolsToOpenAISpy.mockClear();
@@ -155652,13 +156086,43 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
 +    expect(wrapped.generateContentStream).not.toHaveBeenCalled();
 +  });
 +
++  it('forwards a text count unchanged without dispatching generation', async () => {
++    const wrapped = createWrappedGenerator(vi.fn(), vi.fn());
++    const count = vi
++      .fn()
++      .mockResolvedValue({ totalTokens: 2, maxModelLen: 262144 });
++    wrapped.countTextTokens = count;
++    const generator = new LoggingContentGenerator(wrapped, createConfig(), {
++      model: 'test-model',
++      authType: AuthType.USE_OPENAI,
++    });
++    const request = { model: 'test-model', text: 'framing' };
++    await expect(
++      generator.countTextTokens(request, 'framing-prompt'),
++    ).resolves.toEqual({ totalTokens: 2, maxModelLen: 262144 });
++    expect(count).toHaveBeenCalledExactlyOnceWith(request, 'framing-prompt');
++    expect(wrapped.generateContent).not.toHaveBeenCalled();
++    expect(wrapped.generateContentStream).not.toHaveBeenCalled();
++  });
++  it('refuses a text count when the wrapped provider lacks that capability', async () => {
++    const wrapped = createWrappedGenerator(vi.fn(), vi.fn());
++    delete wrapped.countTextTokens;
++    const generator = new LoggingContentGenerator(wrapped, createConfig(), {
++      model: 'test-model',
++      authType: AuthType.USE_OPENAI,
++    });
++    await expect(
++      generator.countTextTokens({ model: 'test-model', text: 'framing' }, 'framing-prompt'),
++    ).rejects.toThrow('Exact text token counting is not supported');
++  });
++
    it('passes the owning config identity to a standalone LLM span', async () => {
      const wrapped = createWrappedGenerator(
        vi
          .fn()
          .mockResolvedValue(
            createResponse('resp-owner', 'test-model', [{ text: 'ok' }]),
-@@ -441,12 +682,13 @@
+@@ -441,12 +712,13 @@
          authType: AuthType.USE_OPENAI,
        },
      );
@@ -155672,7 +156136,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        'owner-prompt',
      );
  
-@@ -493,12 +735,13 @@
+@@ -493,12 +765,13 @@
          authType: AuthType.USE_OPENAI,
        },
      );
@@ -155686,7 +156150,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        'parent-prompt',
      );
  
-@@ -536,12 +779,13 @@
+@@ -536,12 +809,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
      });
@@ -155700,7 +156164,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        'stream-owner-prompt',
      );
      activeSessionId = 'stream-session-C';
-@@ -577,12 +821,14 @@
+@@ -577,12 +851,14 @@
        vi.fn().mockResolvedValue(
          createResponse(
            'resp-1',
@@ -155715,7 +156179,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
            },
            'STOP',
          ),
-@@ -600,12 +846,13 @@
+@@ -600,12 +876,13 @@
        wrapped,
        createConfig({ authType: AuthType.USE_ANTHROPIC }),
        generatorConfig,
@@ -155729,7 +156193,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
            role: 'user',
            parts: [
              { text: 'Hello', thought: 'internal' },
-@@ -657,13 +904,17 @@
+@@ -657,13 +934,17 @@
      expect(getGenerateContentSpanRecord().endMetadata).toMatchObject({
        responseModel: 'model-v2',
        finishReasons: ['STOP'],
@@ -155748,7 +156212,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      expect(convertGeminiToolsToOpenAISpy).toHaveBeenCalledTimes(1);
      expect(convertGeminiResponseToOpenAISpy).toHaveBeenCalledTimes(1);
  
-@@ -707,12 +958,13 @@
+@@ -707,12 +988,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
@@ -155762,7 +156226,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await generator.generateContent(request, 'prompt-span');
  
-@@ -740,12 +992,13 @@
+@@ -740,12 +1022,13 @@
            vi.fn(),
          ),
          createConfig(),
@@ -155776,7 +156240,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      } as unknown as GenerateContentParameters;
  
      await makeGenerator(AuthType.USE_GEMINI).generateContent(request, 'g');
-@@ -787,13 +1040,17 @@
+@@ -787,13 +1070,17 @@
        createWrappedGenerator(vi.fn().mockResolvedValue(response), vi.fn()),
        createConfig(),
        { model: 'request-model', authType: AuthType.USE_OPENAI },
@@ -155795,7 +156259,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      expect(getGenerateContentSpanRecord().endMetadata).toMatchObject({
        responseModel: 'actual-model',
        finishReasons: ['STOP', 'MAX_TOKENS'],
-@@ -812,12 +1069,13 @@
+@@ -812,12 +1099,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -155809,7 +156273,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await generator.generateContent(request, 'prompt-stream-attr');
  
-@@ -839,12 +1097,13 @@
+@@ -839,12 +1127,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -155823,7 +156287,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -861,12 +1120,13 @@
+@@ -861,12 +1150,13 @@
        spanRecord.attributes['gen_ai.response.time_to_first_chunk'],
      ).toBeGreaterThanOrEqual(0);
    });
@@ -155837,7 +156301,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        totalTokenCount: 59,
      };
      setGenAiUsageProvenance(usage, {
-@@ -883,12 +1143,13 @@
+@@ -883,12 +1173,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -155851,7 +156315,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await generator.generateContent(request, 'prompt-meta');
  
-@@ -911,12 +1172,13 @@
+@@ -911,12 +1202,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -155865,7 +156329,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await expect(
        generator.generateContent(request, 'prompt-err'),
-@@ -952,12 +1214,13 @@
+@@ -952,12 +1244,13 @@
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
      });
@@ -155879,7 +156343,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      } as unknown as GenerateContentParameters;
  
      await expect(
-@@ -984,12 +1247,13 @@
+@@ -984,12 +1277,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -155893,7 +156357,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await expect(
        generator.generateContent(request, 'prompt-real-error'),
-@@ -1015,12 +1279,13 @@
+@@ -1015,12 +1309,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
@@ -155907,7 +156371,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      } as unknown as GenerateContentParameters;
  
      await expect(
-@@ -1043,12 +1308,13 @@
+@@ -1043,12 +1338,13 @@
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
      });
@@ -155921,7 +156385,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      } as unknown as GenerateContentParameters;
  
      await expect(
-@@ -1073,12 +1339,13 @@
+@@ -1073,12 +1369,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -155935,7 +156399,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await expect(
        generator.generateContent(request, 'prompt-no-signal-abort'),
-@@ -1108,12 +1375,13 @@
+@@ -1108,12 +1405,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -155949,7 +156413,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      } as unknown as GenerateContentParameters;
  
      await expect(
-@@ -1150,12 +1418,13 @@
+@@ -1150,12 +1448,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -155963,7 +156427,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      } as unknown as GenerateContentParameters;
  
      const stream = await generator.generateContentStream(
-@@ -1193,12 +1462,13 @@
+@@ -1193,12 +1492,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -155977,7 +156441,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      } as unknown as GenerateContentParameters;
  
      const stream = await generator.generateContentStream(
-@@ -1225,12 +1495,14 @@
+@@ -1225,12 +1525,14 @@
    it('forwards usage attached to the final response after it was yielded', async () => {
      const response = createResponse('r1', 'test-model', [{ text: 'a' }]);
      const streamFn = vi.fn().mockResolvedValue(
@@ -155992,7 +156456,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          };
        })(),
      );
-@@ -1238,12 +1510,13 @@
+@@ -1238,12 +1540,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -156006,7 +156470,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(request, 'prompt-tok');
      for await (const _ of stream) {
-@@ -1264,12 +1537,14 @@
+@@ -1264,12 +1567,14 @@
    it('retains late-attached usage when the stream subsequently fails', async () => {
      const response = createResponse('r1', 'test-model', [{ text: 'a' }]);
      const streamFn = vi.fn().mockResolvedValue(
@@ -156021,7 +156485,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          };
          throw new Error('late failure');
        })(),
-@@ -1282,12 +1557,13 @@
+@@ -1282,12 +1587,13 @@
          authType: AuthType.USE_OPENAI,
          enableOpenAILogging: false,
        },
@@ -156035,7 +156499,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        'prompt-late-usage-error',
      );
  
-@@ -1321,19 +1597,23 @@
+@@ -1321,19 +1627,23 @@
          // clock: time_to_first_chunk must come from performance.now()
          // (100ms -> 0.1s), so a mutant reading Date.now() (900ms -> 0.9s)
          // fails the toBeCloseTo(0.1) assertion below instead of passing.
@@ -156059,7 +156523,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          });
        })();
      });
-@@ -1341,12 +1621,13 @@
+@@ -1341,12 +1651,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -156073,7 +156537,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      try {
        const stream = await generator.generateContentStream(
-@@ -1372,26 +1653,28 @@
+@@ -1372,26 +1683,28 @@
    });
  
    it('forwards cachedInputTokens from usageMetadata to endLLMRequestSpan (Phase 4a)', async () => {
@@ -156103,7 +156567,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -1412,12 +1695,14 @@
+@@ -1412,12 +1725,14 @@
    it('leaves ttftMs undefined when stream yields no user-visible chunks (Phase 4a)', async () => {
      // Stream emits only usage-metadata chunks (no text/functionCall/etc).
      // ttftMs must stay undefined — TTFT is only meaningful when content arrives.
@@ -156118,7 +156582,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          });
        })(),
      );
-@@ -1425,12 +1710,13 @@
+@@ -1425,12 +1740,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -156132,7 +156596,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -1465,12 +1751,13 @@
+@@ -1465,12 +1781,13 @@
          enableOpenAILogging: false,
        },
      );
@@ -156146,7 +156610,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        'prompt-empty-stream',
      );
      for await (const _ of stream) {
-@@ -1483,12 +1770,14 @@
+@@ -1483,12 +1800,14 @@
    });
  
    it('does not retry first-chunk telemetry after setAttribute fails', async () => {
@@ -156161,7 +156625,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        }),
        createResponse('r2', 'test-model', [{ text: 'ok' }]),
      ];
-@@ -1506,12 +1795,13 @@
+@@ -1506,12 +1825,13 @@
          enableOpenAILogging: false,
        },
      );
@@ -156175,7 +156639,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        'prompt-first-chunk-attribute-failure',
      );
      const seen: GenerateContentResponse[] = [];
-@@ -1530,25 +1820,27 @@
+@@ -1530,25 +1850,27 @@
      ).toBeUndefined();
    });
  
@@ -156204,7 +156668,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await generator.generateContent(request, 'prompt-cache-non-stream');
  
-@@ -1582,12 +1874,13 @@
+@@ -1582,12 +1904,13 @@
        ?.value as { logInteraction: ReturnType<typeof vi.fn> };
      openaiLoggerInstance.logInteraction.mockRejectedValueOnce(
        new Error('openai-log-fail'),
@@ -156218,7 +156682,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const response = await generator.generateContent(request, 'prompt-safe');
  
-@@ -1611,12 +1904,13 @@
+@@ -1611,12 +1934,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
@@ -156232,7 +156696,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await generator.generateContent(request, 'prompt-long');
  
-@@ -1647,12 +1941,13 @@
+@@ -1647,12 +1971,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
@@ -156246,7 +156710,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await generator.generateContent(request, 'prompt-empty');
  
-@@ -1679,12 +1974,13 @@
+@@ -1679,12 +2004,13 @@
        wrapped,
        createConfig(),
        generatorConfig,
@@ -156260,7 +156724,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await expect(
        generator.generateContent(request, 'prompt-2'),
-@@ -1721,12 +2017,13 @@
+@@ -1721,12 +2047,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: true,
@@ -156274,7 +156738,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await expect(
        generator.generateContent(request, 'prompt-log-prep'),
-@@ -1743,15 +2040,21 @@
+@@ -1743,15 +2070,21 @@
      );
      expect(spanRecord.ended).toBe(true);
    });
@@ -156296,7 +156760,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      } as GenerateContentResponseUsageMetadata;
  
      const response1 = createResponse(
-@@ -1800,12 +2103,13 @@
+@@ -1800,12 +2133,13 @@
        wrapped,
        createConfig(),
        generatorConfig,
@@ -156310,7 +156774,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(request, 'prompt-3');
      const seen: GenerateContentResponse[] = [];
-@@ -1814,13 +2118,17 @@
+@@ -1814,13 +2148,17 @@
      }
      expect(seen).toHaveLength(3);
  
@@ -156329,7 +156793,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      const [consolidatedResponse] =
        convertGeminiResponseToOpenAISpy.mock.calls[0];
      const consolidatedParts =
-@@ -1850,12 +2158,16 @@
+@@ -1850,12 +2188,16 @@
      const usageResponses = Array.from({ length: 1_000 }, (_, index) => {
        const response = new GenerateContentResponse();
        response.responseId = `resp-usage-${index}`;
@@ -156346,7 +156810,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      });
      const wrapped = createWrappedGenerator(
        vi.fn(),
-@@ -1878,12 +2190,13 @@
+@@ -1878,12 +2220,13 @@
        },
        'consolidateGeminiResponsesForLogging',
      );
@@ -156360,7 +156824,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        'prompt-metadata-only',
      );
      for await (const _response of stream) {
-@@ -1921,12 +2234,13 @@
+@@ -1921,12 +2264,13 @@
        ?.value as { logInteraction: ReturnType<typeof vi.fn> };
      openaiLoggerInstance.logInteraction.mockRejectedValueOnce(
        new Error('openai-log-fail'),
@@ -156374,7 +156838,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -1959,12 +2273,13 @@
+@@ -1959,12 +2303,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
@@ -156388,7 +156852,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -1999,12 +2314,13 @@
+@@ -1999,12 +2344,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
@@ -156402,7 +156866,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(request, 'prompt-3');
      for await (const _item of stream) {
-@@ -2030,12 +2346,13 @@
+@@ -2030,12 +2376,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
@@ -156416,7 +156880,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await expect(
        generator.generateContentStream(request, 'prompt-setup-error'),
-@@ -2061,12 +2378,14 @@
+@@ -2061,12 +2408,14 @@
    it('logs stream errors and skips response logging', async () => {
      const response1 = createResponse(
        'resp-1',
@@ -156431,7 +156895,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        },
      );
      const streamError = new Error('stream-fail');
-@@ -2088,12 +2407,13 @@
+@@ -2088,12 +2437,13 @@
        wrapped,
        createConfig(),
        generatorConfig,
@@ -156445,7 +156909,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(request, 'prompt-4');
      await expect(async () => {
-@@ -2128,12 +2448,14 @@
+@@ -2128,12 +2478,14 @@
      const abortController = new AbortController();
      const response = createResponse(
        'resp-abort',
@@ -156460,7 +156924,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        },
        'STOP',
      );
-@@ -2150,12 +2472,13 @@
+@@ -2150,12 +2502,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'request-model',
        authType: AuthType.USE_OPENAI,
@@ -156474,7 +156938,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        } as never,
        'prompt-abort',
      );
-@@ -2197,12 +2520,13 @@
+@@ -2197,12 +2550,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'request-model',
        authType: AuthType.USE_OPENAI,
@@ -156488,7 +156952,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        } as never,
        'prompt-swallowed-abort',
      );
-@@ -2237,12 +2561,13 @@
+@@ -2237,12 +2591,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'request-model',
        authType: AuthType.USE_OPENAI,
@@ -156502,7 +156966,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        } as never,
        'prompt-late-abort',
      );
-@@ -2293,13 +2618,17 @@
+@@ -2293,13 +2648,17 @@
      );
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'request-model',
@@ -156521,7 +156985,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      for await (const _ of stream) {
        // Consume the stream so the span is finalized.
      }
-@@ -2340,12 +2669,14 @@
+@@ -2340,12 +2699,14 @@
        });
        const response1 = createResponse(
          'resp-idle',
@@ -156536,7 +157000,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          },
          'MAX_TOKENS',
        );
-@@ -2370,12 +2701,13 @@
+@@ -2370,12 +2731,13 @@
          enableOpenAILogging: true,
        });
        const openaiLoggerInstance = vi.mocked(OpenAILogger).mock.results.at(-1)
@@ -156550,7 +157014,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
        const stream = await generator.generateContentStream(
          request,
-@@ -2469,12 +2801,13 @@
+@@ -2469,12 +2831,13 @@
          enableOpenAILogging: true,
        });
        const openaiLoggerInstance = vi.mocked(OpenAILogger).mock.results.at(-1)
@@ -156564,7 +157028,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
        const stream = await generator.generateContentStream(
          request,
-@@ -2532,12 +2865,13 @@
+@@ -2532,12 +2895,13 @@
        ?.value as { logInteraction: ReturnType<typeof vi.fn> };
      openaiLoggerInstance.logInteraction.mockRejectedValueOnce(
        new Error('openai-log-fail'),
@@ -156578,7 +157042,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(request, 'prompt-4');
      await expect(async () => {
-@@ -2575,12 +2909,13 @@
+@@ -2575,12 +2939,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
@@ -156592,7 +157056,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -2618,12 +2953,13 @@
+@@ -2618,12 +2983,13 @@
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: false,
@@ -156606,7 +157070,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(request, 'prompt-4');
      for await (const _item of stream) {
-@@ -2666,12 +3002,13 @@
+@@ -2666,12 +3032,13 @@
        wrapped,
        createConfig(),
        generatorConfig,
@@ -156620,7 +157084,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
            role: 'user',
            parts: [
              { text: 'Inspect this' },
-@@ -2738,12 +3075,13 @@
+@@ -2738,12 +3105,13 @@
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: true,
        toolResultContentFormat: 'string',
@@ -156634,7 +157098,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
            role: 'model',
            parts: [{ functionCall: { id: 'call_1', name: 'shell', args: {} } }],
          },
-@@ -2799,12 +3137,13 @@
+@@ -2799,12 +3167,13 @@
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: true,
        openAILoggingDir: 'logs',
@@ -156648,7 +157112,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await generator.generateContent(request, 'prompt-cap');
  
-@@ -2850,12 +3189,13 @@
+@@ -2850,12 +3219,13 @@
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: true,
        openAILoggingDir: 'logs',
@@ -156662,7 +157126,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -2893,12 +3233,13 @@
+@@ -2893,12 +3263,13 @@
        authType: AuthType.USE_OPENAI,
        enableOpenAILogging: true,
        openAILoggingDir: 'logs',
@@ -156676,7 +157140,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      } as unknown as GenerateContentParameters;
  
      await generator.generateContent(request, 'prompt-fallback');
-@@ -2938,12 +3279,13 @@
+@@ -2938,12 +3309,13 @@
      // Force the synthetic build to throw, then verify the API result still surfaces.
      convertGeminiRequestToOpenAISpy.mockImplementationOnce(() => {
        throw new Error('synth-fail-success');
@@ -156690,7 +157154,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      await expect(
        successGen.generateContent(request, 'prompt-safe-success'),
-@@ -2995,12 +3337,13 @@
+@@ -2995,12 +3367,13 @@
        ?.value as { logInteraction: ReturnType<typeof vi.fn> };
      openaiLoggerInstance.logInteraction.mockRejectedValueOnce(
        new Error('log-fail-on-stream-success'),
@@ -156704,7 +157168,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -3039,12 +3382,13 @@
+@@ -3039,12 +3412,13 @@
        ?.value as { logInteraction: ReturnType<typeof vi.fn> };
      openaiLoggerInstance.logInteraction.mockRejectedValueOnce(
        new Error('log-fail-on-stream-error'),
@@ -156718,7 +157182,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -3067,13 +3411,19 @@
+@@ -3067,13 +3441,19 @@
      'skips logApiRequest but writes tagged OpenAI logging for internal promptId %s (generateContent)',
      async (promptId) => {
        const mockResponse = {
@@ -156739,7 +157203,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          generateContent: vi.fn().mockResolvedValue(mockResponse),
          generateContentStream: vi.fn(),
        } as unknown as ContentGenerator;
-@@ -3082,12 +3432,13 @@
+@@ -3082,12 +3462,13 @@
          model: 'test-model',
          enableOpenAILogging: true,
          openAILoggingDir: '/tmp/test-logs',
@@ -156753,7 +157217,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
        await gen.generateContent(request, promptId);
  
-@@ -3129,13 +3480,19 @@
+@@ -3129,13 +3510,19 @@
      'skips logApiRequest but writes tagged OpenAI logging for internal promptId %s (generateContentStream)',
      async (promptId) => {
        const mockChunk = {
@@ -156774,7 +157238,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          yield mockChunk;
        }
  
-@@ -3148,12 +3505,13 @@
+@@ -3148,12 +3535,13 @@
          model: 'test-model',
          enableOpenAILogging: true,
          openAILoggingDir: '/tmp/test-logs',
@@ -156788,7 +157252,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
        const stream = await gen.generateContentStream(request, promptId);
        // Consume the stream
-@@ -3182,12 +3540,764 @@
+@@ -3182,12 +3570,764 @@
          expect.objectContaining({ id: 'openai-response' }),
        );
        expect(openaiError).toBeUndefined();
@@ -157553,7 +158017,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  // Phase 4b — retryContext ALS propagation into LoggingContentGenerator.
  // Asserts the contract: when the LLM call runs inside a retryContext.run()
  // frame, endLLMRequestSpan receives the frame's values. When no frame is
-@@ -3205,12 +4315,14 @@
+@@ -3205,12 +4345,14 @@
    it('non-stream: forwards retryContext.attempt/requestSetupMs/retryTotalDelayMs to endLLMRequestSpan', async () => {
      const { retryContext } = await import('../../utils/retryContext.js');
  
@@ -157568,7 +158032,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          }),
        ),
        vi.fn(),
-@@ -3218,12 +4330,13 @@
+@@ -3218,12 +4360,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -157582,7 +158046,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      // Simulate being invoked from within `retryWithBackoff`'s ALS frame —
      // the LoggingContentGenerator must read these values and forward them.
-@@ -3244,12 +4357,14 @@
+@@ -3244,12 +4387,14 @@
    });
  
    it('non-stream: defaults attempt=1 and leaves setup/delay undefined when no retry context (direct call / warmup)', async () => {
@@ -157597,7 +158061,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          }),
        ),
        vi.fn(),
-@@ -3257,12 +4372,13 @@
+@@ -3257,12 +4402,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -157611,7 +158075,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      // No retryContext.run() — direct invocation.
      await generator.generateContent(request, 'prompt-direct');
-@@ -3282,12 +4398,14 @@
+@@ -3282,12 +4428,14 @@
      const { retryContext } = await import('../../utils/retryContext.js');
  
      const streamFn = vi.fn().mockResolvedValue(
@@ -157626,7 +158090,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          });
        })(),
      );
-@@ -3295,12 +4413,13 @@
+@@ -3295,12 +4443,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -157640,7 +158104,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      // Critical: the stream wrapper is iterated AFTER retryContext.run resolves
      // its synchronous body. The closure-captured snapshot must carry values
-@@ -3339,12 +4458,13 @@
+@@ -3339,12 +4488,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -157654,7 +158118,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const stream = await generator.generateContentStream(
        request,
-@@ -3393,12 +4513,13 @@
+@@ -3393,12 +4543,13 @@
      const generator = new LoggingContentGenerator(wrapped, createConfig(), {
        model: 'test-model',
        authType: AuthType.USE_OPENAI,
@@ -157671,7 +158135,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
 diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts b/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
 --- a/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
 +++ b/packages/core/src/core/loggingContentGenerator/loggingContentGenerator.ts
-@@ -1,45 +1,50 @@
+@@ -1,45 +1,51 @@
 +import { runCleanupSteps, withCleanup } from '../../utils/cleanup.js';
 +import { ResponseObservationError } from '../served-usage.js';
  /**
@@ -157720,12 +158184,13 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
    ContentGeneratorConfig,
 +  ExactRequestTokenCount,
    InputModalities,
++  TextTokenCountRequest,
  } from '../contentGenerator.js';
  import { OpenAIContentConverter } from '../openaiContentGenerator/converter.js';
  import { openaiRequestCaptureContext } from '../openaiContentGenerator/requestCaptureContext.js';
  import type { RequestContext } from '../openaiContentGenerator/types.js';
  import { OpenAILogger } from '../../utils/openaiLogger.js';
-@@ -227,25 +232,23 @@
+@@ -227,25 +233,23 @@
    private _logApiResponse(
      responseId: string,
      durationMs: number,
@@ -157751,7 +158216,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        ),
        sessionId,
      );
-@@ -319,36 +322,61 @@
+@@ -319,36 +323,61 @@
    private safelyLogApiResponse(
      responseId: string,
      durationMs: number,
@@ -157815,7 +158280,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
  
      const ownerSessionId = this.config.getSessionId();
      const ownerUserId = this.config.getTelemetryUserId();
-@@ -373,120 +401,148 @@
+@@ -373,120 +402,148 @@
          this.config.getTelemetrySensitiveSpanAttributeMaxLength(),
      });
      const spanContext = exchange.context;
@@ -158062,7 +158527,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      // AsyncGenerator, the caller iterates AFTER `retryWithBackoff` has
      // resolved and the frame has exited. Threaded as a parameter to
      // loggingStreamWrapper so its closure carries the snapshot to all later
-@@ -521,18 +577,26 @@
+@@ -521,18 +578,26 @@
          this.config.getTelemetrySensitiveSpanAttributeMaxLength(),
      });
      const spanContext = exchange.context;
@@ -158089,7 +158554,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        });
        streamRequest = await context.with(spanContext, async () => {
          if (!isInternal) {
-@@ -541,13 +605,16 @@
+@@ -541,13 +606,16 @@
              req.model,
              userPromptId,
              requestSessionId,
@@ -158106,7 +158571,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
            );
            return { stream, requestIssuedAtMs };
          });
-@@ -589,13 +656,18 @@
+@@ -589,13 +657,18 @@
            error,
            userPromptId,
          );
@@ -158126,7 +158591,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      const openaiRequestPromise = this.openaiLogger
        ? session.resolve(req).catch((loggingError: unknown) => {
            debugLogger.warn('Failed to resolve OpenAI request:', loggingError);
-@@ -608,12 +680,13 @@
+@@ -608,12 +681,13 @@
          stream,
          startTime,
          requestIssuedAtMs,
@@ -158140,7 +158605,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
          retrySnapshot,
          exchange.controller,
        ),
-@@ -647,12 +720,16 @@
+@@ -647,12 +721,16 @@
      stream: AsyncGenerator<GenerateContentResponse>,
      startTime: number,
      requestIssuedAtMs: number,
@@ -158157,7 +158622,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      span?: Span,
      abortSignal?: AbortSignal,
      // Phase 4b — snapshot of retry context captured BEFORE the stream wrapper
-@@ -678,21 +755,20 @@
+@@ -678,21 +756,20 @@
      let lastUsageMetadata: GenerateContentResponseUsageMetadata | undefined;
      const refreshLateUsageMetadata = () => {
        if (lastResponse?.usageMetadata) {
@@ -158180,7 +158645,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      // generateContentStream startTime to the first chunk containing
      // user-visible content. This is distinct from the standard first-chunk
      // timer above.
-@@ -843,27 +919,25 @@
+@@ -843,27 +920,25 @@
          this.safelyLogApiResponse(
            firstResponseId,
            durationMs,
@@ -158209,7 +158674,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
        // exact contradictory pair the timeout fix targets — span timed-out
        // + api_error log — just on the error branch.
        if (!spanEndedByTimeout) {
-@@ -884,58 +958,68 @@
+@@ -884,58 +959,68 @@
            error,
            userPromptId,
          );
@@ -158324,7 +158789,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
    private async buildOpenAIRequestForLogging(
      request: GenerateContentParameters,
    ): Promise<OpenAI.Chat.ChatCompletionCreateParams | undefined> {
-@@ -1036,13 +1120,13 @@
+@@ -1036,13 +1121,13 @@
      }
    }
  
@@ -158339,7 +158804,7 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
      );
    }
  
-@@ -1205,14 +1289,22 @@
+@@ -1205,14 +1290,34 @@
    }
  
    private shouldCollectSensitiveSpanAttributes(): boolean {
@@ -158360,6 +158825,18 @@ diff --git a/packages/core/src/core/loggingContentGenerator/loggingContentGenera
 +    return this.wrapped.countRequestTokens(req, userPromptId);
    }
  
++  async countTextTokens(
++    req: TextTokenCountRequest,
++    userPromptId: string,
++  ): Promise<ExactRequestTokenCount> {
++    if (!this.wrapped.countTextTokens) {
++      throw new Error(
++        'Exact text token counting is not supported by the wrapped content generator.',
++      );
++    }
++    return this.wrapped.countTextTokens(req, userPromptId);
++  }
++
    async embedContent(
      req: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
@@ -161659,7 +162136,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
  describe('OpenAIContentGenerator (Refactored)', () => {
    let generator: OpenAIContentGenerator;
    let mockConfig: Config;
-@@ -120,43 +98,36 @@
+@@ -120,43 +98,57 @@
      it('should delegate to pipeline.executeStream', async () => {
        // This test verifies the method exists and can be called
        expect(typeof generator.generateContentStream).toBe('function');
@@ -161721,13 +162198,34 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
 +    ).resolves.toEqual({ totalTokens: 37, maxModelLen: 262144 });
 +    expect(count).toHaveBeenCalledWith(request, 'sizing-prompt');
 +    expect(count.mock.calls[0][0]).toBe(request);
++  });
++
++  it('forwards a text count to the pipeline unchanged', async () => {
++    const pipeline = (
++      generator as unknown as {
++        pipeline: {
++          countTextTokens: (
++            request: { model: string; text: string },
++            promptId: string,
++          ) => Promise<{ totalTokens: number; maxModelLen: number }>;
++        };
++      }
++    ).pipeline;
++    const count = vi
++      .spyOn(pipeline, 'countTextTokens')
++      .mockResolvedValue({ totalTokens: 2, maxModelLen: 262144 });
++    const request = { model: 'gpt-4', text: 'framing' };
++    await expect(
++      generator.countTextTokens(request, 'framing-prompt'),
++    ).resolves.toEqual({ totalTokens: 2, maxModelLen: 262144 });
++    expect(count).toHaveBeenCalledExactlyOnceWith(request, 'framing-prompt');
    });
  
    describe('embedContent', () => {
      it('should delegate to pipeline.client.embeddings.create', async () => {
        // This test verifies the method exists and can be called
        expect(typeof generator.embedContent).toBe('function');
-@@ -238,12 +209,13 @@
+@@ -238,12 +230,13 @@
          mockProvider,
        );
      });
@@ -161741,7 +162239,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
  
        const result = testGenerator.testShouldSuppressErrorLogging(
          new Error('Test error'),
-@@ -255,12 +227,13 @@
+@@ -255,12 +248,13 @@
  
      it('should return true for AbortError when signal is also aborted (user cancellation)', () => {
        const abortController = new AbortController();
@@ -161755,7 +162253,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
            abortSignal: abortController.signal,
          },
        };
-@@ -279,12 +252,13 @@
+@@ -279,12 +273,13 @@
  
      it('should return false for AbortError when signal is NOT aborted (network abort)', () => {
        const abortController = new AbortController();
@@ -161769,7 +162267,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
            abortSignal: abortController.signal,
          },
        };
-@@ -300,12 +274,13 @@
+@@ -300,12 +295,13 @@
  
        expect(result).toBe(false);
      });
@@ -161783,7 +162281,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
  
        // AbortError but no signal at all - unknown source
        const abortError = new Error('The operation was aborted');
-@@ -321,12 +296,13 @@
+@@ -321,12 +317,13 @@
  
      it('should return false for non-AbortError even when signal is aborted', () => {
        const abortController = new AbortController();
@@ -161797,7 +162295,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
            abortSignal: abortController.signal,
          },
        };
-@@ -341,12 +317,13 @@
+@@ -341,12 +338,13 @@
      });
  
      it('should return false for errors with non-aborted signal', () => {
@@ -161811,7 +162309,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
            abortSignal: abortController.signal,
          },
        };
-@@ -411,12 +388,13 @@
+@@ -411,12 +409,13 @@
          contentGeneratorConfig,
          mockConfig,
          mockProvider,
@@ -161828,12 +162326,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
 diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
 --- a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
 +++ b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
-@@ -1,21 +1,21 @@
+@@ -1,21 +1,22 @@
 -import type { ContentGenerator } from '../contentGenerator.js';
 +import type { OwnedGenerationRequest as GenerateContentParameters } from '../generation-context.js';
 +import type {
 +  ContentGenerator,
 +  ExactRequestTokenCount,
++  TextTokenCountRequest,
 +} from '../contentGenerator.js';
  import type { Config } from '../../config/config.js';
  import { type OpenAICompatibleProvider } from './provider/index.js';
@@ -161855,7 +162354,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
  import { redactProxyError } from '../../utils/runtimeFetchOptions.js';
  
  const debugLogger = createDebugLogger('OPENAI');
-@@ -77,37 +77,17 @@
+@@ -77,37 +78,24 @@
      request: GenerateContentParameters,
      userPromptId: string,
    ): Promise<AsyncGenerator<GenerateContentResponse>> {
@@ -161894,6 +162393,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
 +    return this.pipeline.countRequestTokens(request, userPromptId);
    }
  
++  async countTextTokens(
++    request: TextTokenCountRequest,
++    userPromptId: string,
++  ): Promise<ExactRequestTokenCount> {
++    return this.pipeline.countTextTokens(request, userPromptId);
++  }
++
    async embedContent(
      request: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
@@ -162150,10 +162656,61 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
    reportOpenAiChunk: mockReportOpenAiChunk,
  }));
  
-@@ -137,16 +134,152 @@
+@@ -137,16 +134,203 @@
    describe('constructor', () => {
      it('should initialize with correct configuration', () => {
        expect(mockProvider.buildClient).toHaveBeenCalled();
++    });
++  });
++
++  describe('countTextTokens', () => {
++    beforeEach(() => {
++      mockContentGeneratorConfig.exactTokenCounting = 'vllm';
++      mockContentGeneratorConfig.baseUrl = 'https://text-count.invalid/v1';
++      mockContentGeneratorConfig.contextWindowSize = 1000;
++      mockClient.post = vi.fn().mockResolvedValue({ count: 2, max_model_len: 1000 });
++      pipeline = new ContentGenerationPipeline(mockConfig);
++    });
++
++    it('counts a text alone through the completion form of /tokenize, special tokens off', async () => {
++      const abort = new AbortController();
++      await expect(
++        pipeline.countTextTokens(
++          { model: 'selected-model', text: 'framing', abortSignal: abort.signal },
++          'text-count',
++        ),
++      ).resolves.toEqual({ totalTokens: 2, maxModelLen: 1000 });
++      expect(mockClient.post).toHaveBeenCalledExactlyOnceWith(
++        'https://text-count.invalid/tokenize',
++        {
++          body: { model: 'selected-model', prompt: 'framing', add_special_tokens: false },
++          signal: abort.signal,
++        },
++      );
++    });
++
++    it('refuses a request without a model before posting it', async () => {
++      await expect(
++        pipeline.countTextTokens({ model: ' ', text: 'framing' }, 'text-count'),
++      ).rejects.toThrow('Generation requests require a nonempty model.');
++      expect(mockClient.post).not.toHaveBeenCalled();
++    });
++
++    it('refuses a count from a server serving another window', async () => {
++      mockClient.post = vi.fn().mockResolvedValue({ count: 2, max_model_len: 2000 });
++      pipeline = new ContentGenerationPipeline(mockConfig);
++      await expect(
++        pipeline.countTextTokens({ model: 'selected-model', text: 'framing' }, 'text-count'),
++      ).rejects.toThrow('reports max_model_len=2000, but contextWindowSize=1000');
++    });
++
++    it('refuses to count without exactTokenCounting=vllm', async () => {
++      mockContentGeneratorConfig.exactTokenCounting = undefined;
++      pipeline = new ContentGenerationPipeline(mockConfig);
++      await expect(
++        pipeline.countTextTokens({ model: 'selected-model', text: 'framing' }, 'text-count'),
++      ).rejects.toThrow('without exactTokenCounting=vllm');
++      expect(mockClient.post).not.toHaveBeenCalled();
      });
    });
  
@@ -162303,7 +162860,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockMessages = [
-@@ -216,12 +349,13 @@
+@@ -216,12 +400,13 @@
        );
      });
  
@@ -162317,7 +162874,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockMessages = [
-@@ -265,12 +399,13 @@
+@@ -265,12 +450,13 @@
          expect.any(Object),
        );
      });
@@ -162331,7 +162888,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -307,12 +442,13 @@
+@@ -307,12 +493,13 @@
          }),
        );
      });
@@ -162345,7 +162902,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -350,12 +486,13 @@
+@@ -350,12 +537,13 @@
          }),
        );
      });
@@ -162359,7 +162916,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -394,12 +531,13 @@
+@@ -394,12 +582,13 @@
          }),
        );
      });
@@ -162373,7 +162930,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -435,12 +573,13 @@
+@@ -435,12 +624,13 @@
          }),
        );
      });
@@ -162387,7 +162944,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -476,65 +615,31 @@
+@@ -476,65 +666,31 @@
          expect.objectContaining({
            toolResultContentFormat: 'string',
          }),
@@ -162464,7 +163021,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            tools: [
              {
                functionDeclarations: [
-@@ -602,12 +707,13 @@
+@@ -602,12 +758,13 @@
        );
      });
  
@@ -162478,7 +163035,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        const userPromptId = 'test-prompt-id';
  
-@@ -662,12 +768,13 @@
+@@ -662,12 +819,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true, // Simulates extra_body injection
@@ -162492,7 +163049,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        const userPromptId = 'forked_query';
  
-@@ -945,12 +1052,13 @@
+@@ -945,12 +1103,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          ...(testCase.extraBody ?? {}),
@@ -162506,7 +163063,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          contents: [{ parts: [{ text: 'Summarize' }], role: 'user' }],
          config: {
            thinkingConfig: { includeThoughts: testCase.includeThoughts },
-@@ -1025,12 +1133,13 @@
+@@ -1025,12 +1184,13 @@
        );
        (mockProvider.buildRequest as Mock).mockImplementation((req) =>
          realProvider.buildRequest(req, 'side-query:combined-shape'),
@@ -162520,7 +163077,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: true },
            tools: [
              {
-@@ -1066,12 +1175,50 @@
+@@ -1066,12 +1226,50 @@
  
        const apiCall = (mockClient.chat.completions.create as Mock).mock
          .calls[0][0];
@@ -162571,7 +163128,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        // The provider canonicalizes the documented extra_body
        // `enable_thinking: false` escape hatch into the tiered family's
        // canonical disable shape (`reasoning_effort: 'none'`) even when no
-@@ -1101,12 +1248,13 @@
+@@ -1101,12 +1299,13 @@
        );
        (mockProvider.buildRequest as Mock).mockImplementation((req) =>
          realProvider.buildRequest(req, 'side-query:escape-hatch'),
@@ -162585,7 +163142,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: true },
            tools: [
              {
-@@ -1186,12 +1334,13 @@
+@@ -1186,12 +1385,13 @@
          .mockResolvedValue({
            id: 'r',
            choices: [{ message: { content: '4' }, finish_reason: 'stop' }],
@@ -162599,7 +163156,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: false },
            tools: [
              {
-@@ -1296,12 +1445,13 @@
+@@ -1296,12 +1496,13 @@
              id: 'r',
              choices: [{ message: { content: '4' }, finish_reason: 'stop' }],
            } as OpenAI.Chat.ChatCompletion);
@@ -162613,7 +163170,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            },
            'forked_query',
          );
-@@ -1355,12 +1505,13 @@
+@@ -1355,12 +1556,13 @@
        const retryError = new Error('retry failed');
        (mockClient.chat.completions.create as Mock)
          .mockRejectedValueOnce(requiredThinkingError)
@@ -162627,7 +163184,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        await expect(pipeline.execute(request, 'forked_query')).rejects.toBe(
-@@ -1391,12 +1542,13 @@
+@@ -1391,12 +1593,13 @@
        );
        (mockClient.chat.completions.create as Mock).mockRejectedValueOnce(
          requiredThinkingError,
@@ -162641,7 +163198,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            abortSignal: AbortSignal.abort(),
            thinkingConfig: { includeThoughts: false },
          },
-@@ -1439,12 +1591,13 @@
+@@ -1439,12 +1642,13 @@
          });
          (mockClient.chat.completions.create as Mock).mockRejectedValue(error);
  
@@ -162655,7 +163212,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
              },
              'forked_query',
            ),
-@@ -1458,12 +1611,13 @@
+@@ -1458,12 +1662,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          reasoning: { effort: 'high' },
@@ -162669,7 +163226,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockMessages = [
-@@ -1503,12 +1657,13 @@
+@@ -1503,12 +1708,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162683,7 +163240,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1534,12 +1689,13 @@
+@@ -1534,12 +1740,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true,
@@ -162697,7 +163254,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockMessages = [
-@@ -1583,12 +1739,13 @@
+@@ -1583,12 +1790,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162711,7 +163268,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1622,12 +1779,13 @@
+@@ -1622,12 +1830,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162725,7 +163282,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
          { role: 'user', content: 'Hello' },
-@@ -1659,12 +1817,13 @@
+@@ -1659,12 +1868,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162739,7 +163296,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1699,12 +1858,13 @@
+@@ -1699,12 +1909,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162753,7 +163310,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1744,12 +1904,13 @@
+@@ -1744,12 +1955,13 @@
  
        // Provider passes the request through unchanged — simulates the
        // common case where the user has not configured
@@ -162767,7 +163324,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1783,12 +1944,13 @@
+@@ -1783,12 +1995,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162781,7 +163338,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
          { role: 'user', content: 'Hello' },
-@@ -1825,12 +1987,13 @@
+@@ -1825,12 +2038,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162795,7 +163352,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1866,12 +2029,13 @@
+@@ -1866,12 +2080,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162809,7 +163366,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1906,12 +2070,13 @@
+@@ -1906,12 +2121,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162823,7 +163380,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1953,12 +2118,13 @@
+@@ -1953,12 +2169,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true, // Simulates extra_body injection
@@ -162837,7 +163394,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1993,12 +2159,13 @@
+@@ -1993,12 +2210,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162851,7 +163408,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2038,12 +2205,13 @@
+@@ -2038,12 +2256,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          chat_template_kwargs: { apply_chat_template: true },
@@ -162865,7 +163422,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2082,12 +2250,13 @@
+@@ -2082,12 +2301,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162879,7 +163436,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2122,12 +2291,13 @@
+@@ -2122,12 +2342,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162893,7 +163450,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2161,12 +2331,13 @@
+@@ -2161,12 +2382,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162907,7 +163464,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2203,12 +2374,13 @@
+@@ -2203,12 +2425,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -162921,7 +163478,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2229,12 +2401,13 @@
+@@ -2229,12 +2452,13 @@
        expect(apiCall.enable_thinking).toBe(false);
      });
  
@@ -162935,7 +163492,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('API Error');
  
-@@ -2252,12 +2425,13 @@
+@@ -2252,12 +2476,13 @@
          request,
        );
      });
@@ -162949,7 +163506,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error(
          'connect ECONNREFUSED token@proxy.local:8080',
-@@ -2280,12 +2454,13 @@
+@@ -2280,12 +2505,13 @@
        expect(testError.message).not.toContain('token@');
      });
  
@@ -162963,7 +163520,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
-@@ -2307,12 +2482,13 @@
+@@ -2307,12 +2533,13 @@
        expect(sdkSignal).not.toBe(abortController.signal);
      });
  
@@ -162977,7 +163534,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        let capturedSignal: AbortSignal | undefined;
-@@ -2381,12 +2557,13 @@
+@@ -2381,12 +2608,13 @@
        (mockClient.chat.completions.create as Mock)
          .mockReturnValueOnce(failedCreate)
          .mockReturnValueOnce(successfulCreate);
@@ -162991,7 +163548,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'forked_query',
        );
-@@ -2404,12 +2581,13 @@
+@@ -2404,12 +2632,13 @@
        expect(mockErrorHandler.handle).not.toHaveBeenCalled();
      });
  
@@ -163005,7 +163562,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockChunk1 = {
-@@ -2439,13 +2617,13 @@
+@@ -2439,13 +2668,13 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIChunkToGemini as Mock)
@@ -163020,7 +163577,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        );
        const telemetryAttempt = {};
        mockReportOpenAiRequest.mockReturnValueOnce(telemetryAttempt);
-@@ -2472,13 +2650,13 @@
+@@ -2472,13 +2701,13 @@
        ).mock.calls[1];
        expect(firstChunkContext).toEqual(
          expect.objectContaining({
@@ -163035,7 +163592,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          firstChunkContext.toolCallParser,
        );
        expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
-@@ -2505,12 +2683,13 @@
+@@ -2505,12 +2734,13 @@
        );
      });
  
@@ -163049,7 +163606,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockChunk1 = {
-@@ -2576,539 +2755,516 @@
+@@ -2576,539 +2806,516 @@
  
        // Assert
        expect(results).toHaveLength(1); // Empty response should be filtered out
@@ -164080,7 +164637,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const mockChunk = {
          id: 'chunk-tool-opener',
          choices: [{ delta: { tool_calls: [] }, finish_reason: null }],
-@@ -3146,12 +3302,13 @@
+@@ -3146,12 +3353,13 @@
        expect(results).toEqual([preparationResponse]);
      });
  
@@ -164094,7 +164651,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('Stream Error');
  
-@@ -3194,12 +3351,13 @@
+@@ -3194,12 +3402,13 @@
          request,
        );
      });
@@ -164108,7 +164665,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('407 via http://user:pass@proxy.local');
  
-@@ -3219,12 +3377,13 @@
+@@ -3219,12 +3428,13 @@
        );
        expect(testError.message).not.toContain('user:pass');
      });
@@ -164122,7 +164679,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error(
          'connect ECONNREFUSED token@proxy.local:8080',
-@@ -3261,12 +3420,13 @@
+@@ -3261,12 +3471,13 @@
        );
        expect(testError.message).not.toContain('token@');
      });
@@ -164136,7 +164693,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -3289,29 +3449,43 @@
+@@ -3289,29 +3500,43 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
@@ -164184,7 +164741,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const mockStream = {
          async *[Symbol.asyncIterator]() {
            yield {
-@@ -3329,28 +3503,36 @@
+@@ -3329,28 +3554,36 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
@@ -164225,7 +164782,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -3396,12 +3578,13 @@
+@@ -3396,12 +3629,13 @@
        expect(thrownError!.requestId).toBe('req-123');
        expect(thrownError!.request_id).toBe('req-123');
      });
@@ -164239,7 +164796,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const jsonBody = '{"error":"gateway blocked streaming request"}';
        const mockStream = {
-@@ -3449,12 +3632,13 @@
+@@ -3449,12 +3683,13 @@
        expect(thrownError!.bodyPrefix).toContain('gateway blocked');
        expect(thrownError!.requestId).toBe('req-json');
      });
@@ -164253,7 +164810,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const htmlBody = '<html>' + 'x'.repeat(700) + '</html>';
        const mockStream = {
-@@ -3505,12 +3689,13 @@
+@@ -3505,12 +3740,13 @@
        expect(thrownError!.bodyPrefix).toHaveLength(512);
        expect(thrownError!.requestId).toBeNull();
      });
@@ -164267,7 +164824,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockStream = {
          async *[Symbol.asyncIterator]() {},
-@@ -3554,12 +3739,13 @@
+@@ -3554,12 +3790,13 @@
        expect(thrownError).toBeInstanceOf(NonSSEResponseError);
        expect(thrownError!.bodyPrefix).toBe('');
      });
@@ -164281,7 +164838,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockGeminiResponse = new GenerateContentResponse();
        mockGeminiResponse.candidates = [
-@@ -3615,12 +3801,13 @@
+@@ -3615,12 +3852,13 @@
        }
        expect(results.length).toBeGreaterThan(0);
      });
@@ -164295,7 +164852,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockGeminiResponse = new GenerateContentResponse();
        mockGeminiResponse.candidates = [
-@@ -3661,12 +3848,13 @@
+@@ -3661,12 +3899,13 @@
        expect(results.length).toBeGreaterThan(0);
      });
  
@@ -164309,7 +164866,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3698,12 +3886,13 @@
+@@ -3698,12 +3937,13 @@
        expect(sdkSignal).not.toBe(abortController.signal);
      });
  
@@ -164323,7 +164880,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3735,12 +3924,13 @@
+@@ -3735,12 +3975,13 @@
        expect(sdkSignal.aborted).toBe(true);
      });
  
@@ -164337,7 +164894,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3775,12 +3965,13 @@
+@@ -3775,12 +4016,13 @@
        expect(sdkSignal.aborted).toBe(true);
      });
  
@@ -164351,7 +164908,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        let capturedSignal: AbortSignal | undefined;
-@@ -3799,12 +3990,13 @@
+@@ -3799,12 +4041,13 @@
        expect(capturedSignal!.aborted).toBe(true);
      });
  
@@ -164365,7 +164922,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk
-@@ -3928,12 +4120,13 @@
+@@ -3928,12 +4171,13 @@
        }
      });
  
@@ -164379,7 +164936,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk
-@@ -4010,12 +4203,13 @@
+@@ -4010,12 +4254,13 @@
        });
      });
  
@@ -164393,7 +164950,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk with zero usage (typical for modelscope)
-@@ -4119,12 +4313,13 @@
+@@ -4119,12 +4364,13 @@
        });
      });
  
@@ -164407,7 +164964,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk with zero usage
-@@ -4211,12 +4406,13 @@
+@@ -4211,12 +4457,13 @@
        // Reproduces the real-world bug: some providers (e.g. bailian/glm-5)
        // send trailing empty chunks AFTER the finish+usage pair. Before the
        // fix, each trailing chunk re-triggered the merge logic and yielded
@@ -164421,7 +164978,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Chunk 1: content text
-@@ -4350,12 +4546,13 @@
+@@ -4350,12 +4597,13 @@
    });
  
    describe('buildRequest', () => {
@@ -164435,7 +164992,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            temperature: 0.8,
            topP: 0.7,
            maxOutputTokens: 500,
-@@ -4396,12 +4593,13 @@
+@@ -4396,12 +4644,13 @@
        );
      });
  
@@ -164449,7 +165006,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -4435,12 +4633,13 @@
+@@ -4435,12 +4684,13 @@
        );
      });
  
@@ -164463,7 +165020,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -4508,12 +4707,13 @@
+@@ -4508,12 +4758,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -164477,7 +165034,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          'prompt-id',
        );
  
-@@ -4542,22 +4742,26 @@
+@@ -4542,22 +4793,26 @@
        );
        (mockClient.chat.completions.create as Mock).mockResolvedValue({
          id: 'test',
@@ -164514,7 +165071,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          expect.objectContaining({
            prompt_cache_key: 'qwen-code:session-123:Explore-a1b2c3d4',
          }),
-@@ -4582,22 +4786,26 @@
+@@ -4582,22 +4837,26 @@
        (mockClient.chat.completions.create as Mock).mockResolvedValue({
          id: 'test',
          choices: [{ message: { content: 'response' } }],
@@ -164551,7 +165108,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
          expect.objectContaining({
            prompt_cache_key: 'qwen-code:session-123',
-@@ -4630,12 +4838,13 @@
+@@ -4630,12 +4889,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -164565,21 +165122,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          'prompt-id',
        );
  
-@@ -4667,12 +4876,13 @@
-         id: 'test',
-         choices: [{ message: { content: 'response' } }],
-       });
- 
-       await pipeline.execute(
-         {
-+          generationContext: new GenerationContext('provider-test-owner'),
-           model: 'gpt-5.6',
-           contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
-           promptCacheSharing: true,
-         },
-         'prompt-id',
-       );
-@@ -4707,12 +4917,13 @@
+@@ -4667,12 +4927,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -164593,7 +165136,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4750,12 +4961,13 @@
+@@ -4707,12 +4968,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -164607,7 +165150,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4797,12 +5009,13 @@
+@@ -4750,12 +5012,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -164621,7 +165164,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4826,12 +5039,13 @@
+@@ -4797,12 +5060,13 @@
+         id: 'test',
+         choices: [{ message: { content: 'response' } }],
+       });
+ 
+       await pipeline.execute(
+         {
++          generationContext: new GenerationContext('provider-test-owner'),
+           model: 'gpt-5.6',
+           contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
+           promptCacheSharing: true,
+         },
+         'prompt-id',
+       );
+@@ -4826,12 +5090,13 @@
          reasoning_effort: 'medium',
          verbosity: 'low',
        } as ContentGeneratorConfig['samplingParams'];
@@ -164635,7 +165192,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4867,12 +5081,13 @@
+@@ -4867,12 +5132,13 @@
          max_completion_tokens: 200000,
          reasoning_effort: 'high',
        } as ContentGeneratorConfig['samplingParams'];
@@ -164649,7 +165206,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4907,12 +5122,13 @@
+@@ -4907,12 +5173,13 @@
          max_tokens: 50000,
          max_completion_tokens: 100000,
        } as ContentGeneratorConfig['samplingParams'];
@@ -164663,7 +165220,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4944,12 +5160,13 @@
+@@ -4944,12 +5211,13 @@
        mockContentGeneratorConfig.samplingParams = {
          temperature: 0.7,
        } as ContentGeneratorConfig['samplingParams'];
@@ -164677,7 +165234,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4976,12 +5193,13 @@
+@@ -4976,12 +5244,13 @@
        // Arrange: no samplingParams — request.config.maxOutputTokens must still
        // fall through to max_tokens on the wire (original behavior unchanged).
        mockContentGeneratorConfig.samplingParams = undefined;
@@ -164691,7 +165248,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -5008,12 +5226,13 @@
+@@ -5008,12 +5277,13 @@
    });
  
    describe('createRequestContext', () => {
@@ -164705,7 +165262,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockOpenAIResponse = new GenerateContentResponse();
  
-@@ -5032,12 +5251,13 @@
+@@ -5032,12 +5302,13 @@
        // Assert
      });
  
@@ -164719,7 +165276,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -5195,12 +5415,13 @@
+@@ -5195,12 +5466,13 @@
  
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          mockStream,
@@ -164733,7 +165290,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        // Collect responses
        const responses: GenerateContentResponse[] = [];
-@@ -5218,12 +5439,13 @@
+@@ -5218,12 +5490,13 @@
      });
    });
  
@@ -164747,7 +165304,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -5271,12 +5493,13 @@
+@@ -5271,12 +5544,13 @@
          }),
        );
      });
@@ -164761,7 +165318,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -5322,12 +5545,13 @@
+@@ -5322,12 +5596,13 @@
          }),
        );
      });
@@ -164775,7 +165332,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -5457,12 +5681,13 @@
+@@ -5457,12 +5732,13 @@
          choices: [{ delta: { content: text } }],
        } as OpenAI.Chat.ChatCompletionChunk;
      }
@@ -164789,7 +165346,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        } as GenerateContentParameters;
      }
  
-@@ -5783,13 +6008,13 @@
+@@ -5783,13 +6059,13 @@
        const err = (await captured) as { name?: string; code?: string };
        expect(err.name).toBe('AbortError');
        expect(err.code).not.toBe('ETIMEDOUT');
@@ -164804,7 +165361,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        );
        const p = buildPipeline(0);
        const gen = await p.executeStream(
-@@ -5882,118 +6107,43 @@
+@@ -5882,118 +6158,43 @@
        expect(settled).toBe(false);
        await vi.advanceTimersByTimeAsync(4000); // reach the config value (5000)
        await consume;
@@ -164951,7 +165508,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gated = gatedStream(); // silent
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          gated.stream,
-@@ -6015,35 +6165,20 @@
+@@ -6015,35 +6216,20 @@
        await vi.advanceTimersByTimeAsync(DEFAULT_STREAM_IDLE_TIMEOUT_MS);
        expect(settled).toBe(false);
        gated.end();
@@ -164994,7 +165551,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '0');
        const gated = gatedStream(); // silent
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
-@@ -6067,35 +6202,17 @@
+@@ -6067,35 +6253,17 @@
        await vi.advanceTimersByTimeAsync(DEFAULT_STREAM_IDLE_TIMEOUT_MS + 60000);
        expect(settled).toBe(false);
        gated.end();
@@ -165035,7 +165592,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gated = gatedStream(); // drip-fed, never ends
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          gated.stream,
-@@ -6259,47 +6376,20 @@
+@@ -6259,47 +6427,20 @@
        // t=3200: past the 3s config cap.
        await consume;
        expect(error).toBeInstanceOf(StreamLifetimeExceededError);
@@ -165161,7 +165718,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.tes
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-@@ -1,19 +1,24 @@
+@@ -1,19 +1,25 @@
 +import { ResponseObservationError } from '../served-usage.js';
  /**
   * @license
@@ -165185,12 +165742,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    ContentGeneratorConfig,
 +  ExactRequestTokenCount,
    PromptCacheSharingParameters,
++  TextTokenCountRequest,
  } from '../contentGenerator.js';
  import { OpenAIContentConverter } from './converter.js';
  import { DashScopeOpenAICompatibleProvider } from './provider/dashscope.js';
  import {
    applyOfficialOpenAIPromptCaching,
-@@ -21,16 +26,22 @@
+@@ -21,16 +27,22 @@
  } from './prefix-caching.js';
  import { isDeepSeekHostname } from './provider/deepseek.js';
  import { openaiRequestCaptureContext } from './requestCaptureContext.js';
@@ -165215,7 +165773,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  } from '../modalityDefaults.js';
  import {
    DEFAULT_STREAM_IDLE_TIMEOUT_MS,
-@@ -39,14 +50,12 @@
+@@ -39,14 +51,12 @@
    QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
    QWEN_STREAM_MAX_LIFETIME_MS_ENV,
  } from './constants.js';
@@ -165230,7 +165788,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    reportOpenAiChunk,
    reportOpenAiRequest,
    reportOpenAiResponse,
-@@ -180,20 +189,17 @@
+@@ -180,20 +190,17 @@
      this.status = httpStatus;
      this.request_id = requestId;
    }
@@ -165255,7 +165813,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    return PROVIDER_OUTPUT_BUDGET_KEYS.some(
      (key) => samplingParams[key] !== undefined,
    );
-@@ -220,63 +226,41 @@
+@@ -220,63 +227,41 @@
        samplingParams[key] = requestMaxTokens;
      }
    }
@@ -165335,7 +165893,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    return resolveStreamGuardMs(
      config.streamIdleTimeoutMs,
      'streamIdleTimeoutMs',
-@@ -302,13 +286,13 @@
+@@ -302,13 +287,13 @@
   * ETIMEDOUT. The idle timer resets on every chunk (including
   * thinking/reasoning deltas), so an actively streaming model is never
   * interrupted by it. The lifetime cap does NOT reset: once the stream has
@@ -165350,9 +165908,16 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    source: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
    idleMs: number,
    maxLifetimeMs: number,
-@@ -435,30 +419,73 @@
+@@ -435,30 +420,112 @@
  export type { PipelineConfig } from './types.js';
  
++/** Every request this pipeline sends names the model it is for. */
++function requireRequestModel(model: unknown): asserts model is string {
++  if (typeof model !== 'string' || !model.trim()) {
++    throw new Error('Generation requests require a nonempty model.');
++  }
++}
++
  export class ContentGenerationPipeline {
    client: OpenAI;
    private contentGeneratorConfig: ContentGeneratorConfig;
@@ -165417,6 +165982,38 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +      response,
 +      this.contentGeneratorConfig.contextWindowSize,
 +    );
++  }
++
++  /**
++   * Count a text alone through the same `/tokenize` endpoint: the completion
++   * form, which applies no chat template, with special tokens off because a
++   * rendered chat request is tokenized with them off too.
++   */
++  async countTextTokens(
++    request: TextTokenCountRequest,
++    _userPromptId: string,
++  ): Promise<ExactRequestTokenCount> {
++    if (this.contentGeneratorConfig.exactTokenCounting !== 'vllm') {
++      throw new Error(
++        'Exact text token counting was called without exactTokenCounting=vllm.',
++      );
++    }
++    requireRequestModel(request.model);
++    const response = await this.client.post<VllmTokenizeResponse>(
++      deriveVllmTokenizeUrl(this.contentGeneratorConfig.baseUrl),
++      {
++        body: {
++          model: request.model,
++          prompt: request.text,
++          add_special_tokens: false,
++        },
++        signal: request.abortSignal,
++      },
++    );
++    return validateVllmTokenizeResponse(
++      response,
++      this.contentGeneratorConfig.contextWindowSize,
++    );
    }
  
    async execute(
@@ -165428,7 +166025,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        request,
        userPromptId,
        false,
-@@ -492,13 +519,13 @@
+@@ -492,13 +559,13 @@
          }
        },
      );
@@ -165443,7 +166040,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        request,
        userPromptId,
        true,
-@@ -586,13 +613,13 @@
+@@ -586,13 +653,13 @@
          // Two guards wrap the stream (the SDK `timeout` only bounds connect +
          // first response). The inactivity watchdog aborts + surfaces a
          // retryable ETIMEDOUT after `idleMs` of no chunks; the lifetime cap
@@ -165458,7 +166055,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
            idleMs > 0 || maxLifetimeMs > 0
              ? withStreamGuards(
                  stream,
-@@ -608,13 +635,12 @@
+@@ -608,13 +675,12 @@
          // once the stream is fully consumed or abandoned, releasing the SDK
          // request and any parent listener.
          const innerStream = this.processStreamWithLogging(
@@ -165472,7 +166069,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
            try {
              yield* innerStream;
            } finally {
-@@ -635,192 +661,95 @@
+@@ -635,192 +701,95 @@
     * 4. Handle success/error logging
     */
    private async *processStreamWithLogging(
@@ -165735,7 +166332,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
        // Re-throw StreamContentError directly so it can be handled by
        // the caller's retry logic (e.g., TPM throttling retry in sendMessageStream)
-@@ -829,16 +758,12 @@
+@@ -829,16 +798,12 @@
        }
  
        // Bypass handleError so callers retain the dedicated timeout type and
@@ -165752,7 +166349,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ) {
          const isLifetime = error instanceof StreamLifetimeExceededError;
          debugLogger.warn(
-@@ -858,100 +783,19 @@
+@@ -858,100 +823,19 @@
                : { idleMs: (error as StreamInactivityTimeoutError).idleMs }),
            },
          );
@@ -165854,7 +166451,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    ): Promise<OpenAI.Chat.ChatCompletionCreateParams> {
      const messages = OpenAIContentConverter.convertGeminiRequestToOpenAI(
        request,
-@@ -1029,13 +873,13 @@
+@@ -1029,13 +913,13 @@
      // Exception: `thinkingMandatory` marks models that reject
      // `enable_thinking: false` with a 400 (e.g. qwen3.8-max-preview on
      // DashScope Token Plan gateways — set by the preset, or by users via
@@ -165869,7 +166466,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      const thinkingMandatory = this.requiresThinking(model);
      const reasoningDisabled =
        request.config?.thinkingConfig?.includeThoughts === false ||
-@@ -1047,15 +891,14 @@
+@@ -1047,15 +931,14 @@
        // Hostname + model-name gate avoids leaking this qwen-specific field
        // to non-qwen routings on the same DashScope hostname (GLM uses
        // `extra_body.thinking.enabled`, DeepSeek-on-DashScope uses
@@ -165887,7 +166484,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        // model would miss the disable signal (the regression).
        if (!thinkingMandatory && isQwenFamilyWireModel(model)) {
          if (isDashScope) {
-@@ -1173,12 +1016,14 @@
+@@ -1173,12 +1056,14 @@
          'DashScope: dropping tool_choice=required while thinking is enabled',
          { model, reasoningEffort, thinkingBudget, thinkingMandatory },
        );
@@ -165902,7 +166499,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,13 +1163,13 @@
+@@ -1318,13 +1203,13 @@
    }
  
    /**
@@ -165917,7 +166514,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        openaiRequest: OpenAI.Chat.ChatCompletionCreateParams,
        context: RequestContext,
        telemetryAttempt: GenAiAttemptHandle | undefined,
-@@ -1400,13 +1245,15 @@
+@@ -1400,13 +1285,13 @@
     * Create request context with common properties
     */
    private createRequestContext(
@@ -165925,16 +166522,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      isStreaming: boolean,
    ): RequestContext {
 -    const effectiveModel = request.model || this.contentGeneratorConfig.model;
-+    if (typeof request.model !== 'string' || !request.model.trim()) {
-+      throw new Error('Generation requests require a nonempty model.');
-+    }
++    requireRequestModel(request.model);
      const providerOverrides =
        this.config.provider.getRequestContextOverrides?.() ?? {};
      const toolCallParser = isStreaming
        ? new StreamingToolCallParser()
        : undefined;
      const responseParsingOptions =
-@@ -1414,15 +1261,18 @@
+@@ -1414,15 +1299,18 @@
      const taggedThinkingParser =
        isStreaming && responseParsingOptions?.taggedThinkingTags
          ? new TaggedThinkingParser()
@@ -244394,7 +244989,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
 diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/src/utils/forkedAgent.agent.test.ts
 --- a/packages/core/src/utils/forkedAgent.agent.test.ts
 +++ b/packages/core/src/utils/forkedAgent.agent.test.ts
-@@ -1,84 +1,154 @@
+@@ -1,84 +1,158 @@
  /**
   * @license
   * Copyright 2025 Qwen
@@ -244502,6 +245097,10 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
 +    totalTokens: 1,
 +    maxModelLen: 262144,
 +  })),
++  countTextTokens: vi.fn(async () => ({
++    totalTokens: 1,
++    maxModelLen: 262144,
++  })),
 +  embedContent: vi.fn(),
 +  useSummarizedThinking: () => false,
 +};
@@ -244584,7 +245183,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
    // the re-export layer in `agents/index.js` — vitest's module-mock layer
    // doesn't reliably forward `export *` re-exports through `...actual`,
    // and stubbing the full surface manually is brittle.
-@@ -94,12 +164,13 @@
+@@ -94,12 +168,13 @@
        promptConfig: PromptConfig | undefined;
      } = { config: undefined, promptConfig: undefined };
      const spy = vi
@@ -244598,7 +245197,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
            ..._rest: unknown[]
          ): Promise<AgentHeadless> => {
            captured.config = config;
-@@ -112,12 +183,202 @@
+@@ -112,12 +187,202 @@
            } as any;
          },
        );
@@ -244801,7 +245400,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
        skipDiscovery: true,
      });
      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-@@ -194,13 +455,13 @@
+@@ -194,13 +459,13 @@
      // 2. Resolve approval mode to YOLO (the override)
      expect(captured.config!.getApprovalMode()).toBe(ApprovalMode.YOLO);
      // 3. Hand out a different ToolRegistry instance from the parent
@@ -244816,7 +245415,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
      });
      // eslint-disable-next-line @typescript-eslint/no-explicit-any
      (parent as any).toolRegistry = parentRegistry;
-@@ -210,13 +471,13 @@
+@@ -210,13 +475,13 @@
          ({
            execute: vi.fn().mockResolvedValue(undefined),
            getTerminateMode: vi.fn().mockReturnValue(AgentTerminateMode.GOAL),
@@ -244831,7 +245430,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
      );
  
      try {
-@@ -225,13 +486,15 @@
+@@ -225,13 +490,15 @@
          systemPrompt: 'You are a test fork.',
          taskPrompt: 'do the task',
          config: parent,
@@ -244848,7 +245447,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
    });
  
    it.each([AgentTerminateMode.MAX_TURNS, AgentTerminateMode.LOOP_DETECTED])(
-@@ -277,12 +540,13 @@
+@@ -277,12 +544,13 @@
      });
      // eslint-disable-next-line @typescript-eslint/no-explicit-any
      (parent as any).toolRegistry = parentRegistry;
@@ -244862,7 +245461,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
          _modelConfig,
          _runConfig,
          _toolConfig,
-@@ -478,24 +742,18 @@
+@@ -478,24 +746,18 @@
          config: parent,
        });
      } finally {
@@ -244888,7 +245487,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
      const parent = new ConfigImpl(baseParams);
      const parentRegistry = await parent.createToolRegistry(undefined, {
        skipDiscovery: true,
-@@ -535,13 +793,13 @@
+@@ -535,13 +797,13 @@
      expect(stopSpy).toHaveBeenCalledTimes(1);
    });
  
@@ -244903,7 +245502,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
      });
      // eslint-disable-next-line @typescript-eslint/no-explicit-any
      (parent as any).toolRegistry = parentRegistry;
-@@ -583,94 +841,264 @@
+@@ -583,94 +845,264 @@
      }
  
      await new Promise((resolve) => setImmediate(resolve));
@@ -245253,7 +245852,7 @@ diff --git a/packages/core/src/utils/forkedAgent.agent.test.ts b/packages/core/s
 diff --git a/packages/core/src/utils/forkedAgent.cache.test.ts b/packages/core/src/utils/forkedAgent.cache.test.ts
 --- a/packages/core/src/utils/forkedAgent.cache.test.ts
 +++ b/packages/core/src/utils/forkedAgent.cache.test.ts
-@@ -1,97 +1,207 @@
+@@ -1,97 +1,211 @@
  /**
   * @license
   * Copyright 2025 Qwen Team
@@ -245393,6 +245992,10 @@ diff --git a/packages/core/src/utils/forkedAgent.cache.test.ts b/packages/core/s
 +      totalTokens: 1,
 +      maxModelLen: 262144,
 +    })),
++    countTextTokens: vi.fn(async () => ({
++      totalTokens: 1,
++      maxModelLen: 262144,
++    })),
 +    embedContent: vi.fn(),
 +    useSummarizedThinking: () => false,
 +  };
@@ -245497,7 +246100,7 @@ diff --git a/packages/core/src/utils/forkedAgent.cache.test.ts b/packages/core/s
        expect(rereadTools[0].functionDeclarations).toHaveLength(1);
      });
  
-@@ -101,17 +211,17 @@
+@@ -101,17 +215,17 @@
          role: 'user',
          parts: [historyPart],
        };
@@ -245517,7 +246120,7 @@ diff --git a/packages/core/src/utils/forkedAgent.cache.test.ts b/packages/core/s
        expect(params!.history[0]!.parts).toHaveLength(1);
        expect(params!.history[0]!.parts).not.toBe(historyEntry.parts);
        expect(params!.history[0]!.parts![0]).toBe(historyPart);
-@@ -120,847 +230,666 @@
+@@ -120,847 +234,666 @@
  
        params!.history.push({
          role: 'model',
