@@ -92,11 +92,11 @@
     "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
     "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
     "settings_sha256": "5be5eb3e2287654acea147942aca944fed5c90656e98850f55fb5c6d25731e03",
-    "instructions_sha256": "bbc9822bf00df48e4240167a33173b70406c66cfbca1f53a0e00fc7a1f4910e7",
+    "instructions_sha256": "311e41d2debc5ecaeb6934607a8232eeeae57022adf6aecbee55083b2b12abf6",
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
-    "deployment_contract_sha256": "e7c163655eea49580bb61214fb68f8e2cceb8f7b3056842cdf96d382577fe726",
+    "deployment_contract_sha256": "8aa4379bbf19749f26eaecff549524e7c85300d4235a06baeba4579762cc207b",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "runtime_contract_sha256": "d8b1dcd88b2d955b3709e6d1b1d82367f4782f27271246063ffa395b3d46b5d3",
+    "runtime_contract_sha256": "389aac969609d9542f183f36bf53f3d7f5a83e89d108096900c114d20d93ec4a",
     "wrapper_sha256": "0fdb2ac4b0f2fa4aafe1ea81322895ad4292ac88919c010f7eeea6f387ebc9d8",
     "agent_exec_source_sha256": "e6ddbbdc5f78b4e5fdcf3e6f96483e670c02ca50c94a4b5131f2a18d0c9ceb0b",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
@@ -120,8 +120,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "841e4c94999049e2ae070c3e8c77e7bd964f1a33aeb170dc51672e5c661f052a",
-      "source_patch_manifest_sha256": "1f9447dc6bea47714bc07bc69282d0bbcfc1a982cd0403c9bfa26d77a62e15c8"
+      "patch_sha256": "5eadbab946e44dbfc90be72172e25ba108d367f265fa628c5501a52d0efa849e",
+      "source_patch_manifest_sha256": "73e0cfe0633c514c73be3475e5297d31b96e61ba935b6af740d3aa4e254b1a90"
     }
   },
   "backend": {
@@ -290,7 +290,7 @@
     "docker_socket_gid": 984
   },
   "limits": {
-    "max_prompt_bytes": 1048576,
+    "max_prompt_bytes": 32768,
     "max_staged_bytes": 214748364800,
     "max_staged_files": 200000,
     "max_staged_entries": 250000,

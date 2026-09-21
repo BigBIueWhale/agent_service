@@ -65,7 +65,7 @@ use crate::validation::{self, ValidatedRequest};
 
 // Durable JSON records are bounded independently of available disk/RAM so a
 // corrupted service-owned path cannot make an ordinary GET allocate without
-// limit. Acceptance contains at most the explicit 1 MiB prompt, one canonical
+// limit. Acceptance contains at most one prompt of MAX_PROMPT_BYTES, one canonical
 // host path, and fixed metadata. Terminal state additionally contains at most
 // 4,096 progress messages of 4 KiB each plus the model's bounded final output;
 // 128 MiB leaves ample structural headroom without weakening those semantic

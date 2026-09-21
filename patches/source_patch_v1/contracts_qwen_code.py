@@ -1006,7 +1006,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "fails closed on malformed or mismatched responses",
         ),
         "packages/core/src/core/geminiChat.test.ts": (
-            "gives every turn the generation reserve, whatever its prompt",
+            "gives every turn the same room, whatever its prompt",
             "refuses when the request cannot be counted at all",
             "resamples one invalid pre-content stream",
             "never resamples an invalid stream after visible output escaped",
@@ -2510,7 +2510,7 @@ def _validate_model_facing_failure_after(state: State) -> None:
             # telemetry span -- three readers that want the operational
             # summary, not the model's copy.
             "  modelFacingText?: string,",
-            "  const modelText = boundedFailureText(modelFacingText ?? error.message);",
+            "  const modelText = boundedFailureText(\n    modelFacingText ?? error.message,\n    maxBytes,\n  );",
             "        response: { error: modelText },",
             "    resultDisplay: resultDisplay ?? error.message,",
         ),
@@ -2576,9 +2576,9 @@ def _validate_model_facing_failure_after(state: State) -> None:
         state,
         "packages/core/src/tools/tools.ts",
         (
-            "export function boundedFailureText(text: string): string {",
+            "export function boundedFailureText(text: string, maxBytes: number): string {",
             "const totalBytes = Buffer.byteLength(text, 'utf8');",
-            "const head = cutToUtf8Bytes(text, MAX_TOOL_RESULT_BYTES);",
+            "const head = cutToUtf8Bytes(text, maxBytes);",
             "limitUnit: 'bytes of failure text',",
             "total: totalBytes,",
         ),
@@ -3041,122 +3041,188 @@ def _validate_compaction_budget_before(state: State) -> None:
     require_text(state, prompts, "<all_user_messages>", label=label)
 
 
-# The window divides into this many shares, and these are the shares each
-# budget takes. They are read out of the post-patch source rather than
-# restated here, so the arithmetic below is a check on the tree and not a
-# copy of it.
-_PARTITION_SHARE_NAMES = (
-    ("WINDOW_SHARES", None),
-    ("GENERATION_RESERVE_SHARES", "generationReserve"),
-    ("DIRECTIVE_RESERVE_SHARES", "directiveReserve"),
+# The three quantities the partition declares. `D` and `M` are shares of the
+# window; `F` is a byte count that belongs to the served chat template and
+# does not scale with the window. They are read out of the post-patch source
+# rather than restated here, so the arithmetic below is a check on the tree
+# and not a copy of it.
+_PARTITION_DECLARED_NAMES = (
+    "WINDOW_SHARES",
+    "STATIC_PREAMBLE_SHARES",
+    "INLINE_BLOCK_SHARES",
+    "MESSAGE_FRAMING_BYTES",
 )
 
-# The served deployment, and the budgets its window must yield.
+# The served deployment, and the partition its window must yield.
 _SERVED_WINDOW = 262_144
 _SERVED_PARTITION = {
-    "generationReserve": 49_152,
-    "directiveReserve": 2_048,
-    "compactionTrigger": 210_944,
+    "staticPreamble": 12_288,
+    "inlineBlockBytes": 32_768,
+    "messageFraming": 61,
+    "turnGeneration": 69_509,
+    "compactionTrigger": 180_347,
 }
 
 
-def _read_partition_shares(source: str, *, label: str) -> dict[str, int]:
-    shares: dict[str, int] = {}
-    for name, _ in _PARTITION_SHARE_NAMES:
+def _read_partition_declarations(source: str, *, label: str) -> dict[str, int]:
+    declared: dict[str, int] = {}
+    for name in _PARTITION_DECLARED_NAMES:
         match = re.search(rf"^const {name} = (\d+);$", source, re.MULTILINE)
         _require(
             match is not None,
-            f"{label}: tokenLimits.ts does not declare {name} as an integer share",
+            f"{label}: tokenLimits.ts does not declare {name} as an integer",
         )
-        shares[name] = int(match.group(1))
-    return shares
+        declared[name] = int(match.group(1))
+    return declared
 
 
-def _partition(window: int, shares: dict[str, int]) -> dict[str, int]:
-    total = shares["WINDOW_SHARES"]
-    reserve = (window * shares["GENERATION_RESERVE_SHARES"]) // total
-    directive = (window * shares["DIRECTIVE_RESERVE_SHARES"]) // total
+def _surviving(window: int, declared: dict[str, int], turn: int) -> int:
+    """What a compaction leaves standing if a turn were given `turn` tokens.
+
+    The static preamble, then the snapshot, the authored input and one result
+    -- each at most one framed inline block -- and the carried turn, framed
+    like any other message.
+    """
+    total = declared["WINDOW_SHARES"]
+    preamble = (window * declared["STATIC_PREAMBLE_SHARES"]) // total
+    block = (window * declared["INLINE_BLOCK_SHARES"]) // total + declared[
+        "MESSAGE_FRAMING_BYTES"
+    ]
+    return preamble + 3 * block + (turn + declared["MESSAGE_FRAMING_BYTES"])
+
+
+def _fits(window: int, declared: dict[str, int], turn: int) -> bool:
+    """Whether a turn of `turn` tokens leaves that standing below its trigger."""
+    total = declared["WINDOW_SHARES"]
+    preamble = (window * declared["STATIC_PREAMBLE_SHARES"]) // total
+    return _surviving(window, declared, turn) <= window - turn - preamble - 1
+
+
+def _partition(window: int, declared: dict[str, int]) -> dict[str, int]:
+    """`C` by search, so this checks the definition rather than the formula.
+
+    `C` is the largest room a turn may be given while a compaction can still
+    leave its result standing below the trigger. The source solves that in
+    closed form; here it is found by bisection from the property itself, and
+    the two are then required to agree.
+    """
+    total = declared["WINDOW_SHARES"]
+    preamble = (window * declared["STATIC_PREAMBLE_SHARES"]) // total
+    low, high = 0, window
+    if not _fits(window, declared, 1):
+        turn = 0
+    else:
+        while low + 1 < high:
+            mid = (low + high) // 2
+            if _fits(window, declared, mid):
+                low = mid
+            else:
+                high = mid
+        turn = low
     return {
-        "generationReserve": reserve,
-        "directiveReserve": directive,
-        "compactionTrigger": window - reserve - directive,
+        "staticPreamble": preamble,
+        "inlineBlockBytes": (window * declared["INLINE_BLOCK_SHARES"]) // total,
+        "messageFraming": declared["MESSAGE_FRAMING_BYTES"],
+        "turnGeneration": turn,
+        "compactionTrigger": window - turn - preamble,
     }
 
 
 def _validate_context_partition(state: State, *, label: str) -> None:
-    """Every context budget is a share of the served window, and only the
-    generation reserve and the directive reserve are held back from the
-    history.
+    """Every context budget follows from three declared quantities, and the
+    two that are derived are the largest values the fit admits.
 
-    The safety argument: a turn is issued at a prompt below the compaction
-    trigger with the generation reserve as its limit, and the request that
-    later summarises that prompt appends at most the directive reserve, so it
-    is issued with at least the generation reserve plus one token whatever the
-    turn generated -- the turn is carried behind the snapshot, never inside
-    the request that summarises the prompt. That the shares sum to the window
-    holds by construction, because the trigger is the remainder, so it is not
-    asserted here; what the construction leaves open is checked: every share
-    is positive, the history a turn stands on exceeds what is held back from
-    it at every window size, that history holds three reserves -- the
-    snapshot, the turn carried behind it, and the next turn's results -- and
-    the served window yields the reviewed budgets.
+    The safety argument: what stands in the window after a compaction is the
+    static preamble plus a snapshot, the authored input, one tool result and
+    the turn carried behind them. Three of those four are bounded in bytes
+    before they exist, and a byte bound is a token bound under a byte-level
+    tokenizer, so the whole of it is known before any of it is generated.
+    `C` is the largest room a turn may be given while that still stands below
+    the trigger, and `T` is what the window has left. This checks the
+    definition rather than the formula: `C` is found here by bisection on the
+    fit and required to be what the source computes, `C + 1` is required not
+    to fit, and the two consequences -- that a turn issued at the largest
+    admitted prompt cannot reach the end of the window, and that the request
+    which later summarises that prompt is issued with at least `C + 1` -- are
+    asserted at every window the deployment can be given.
     """
 
     limits = "packages/core/src/core/tokenLimits.ts"
     source = _source(state, limits, label=label)
-    shares = _read_partition_shares(source, label=label)
+    declared = _read_partition_declarations(source, label=label)
     _require(
-        all(value > 0 for value in shares.values()),
-        f"{label}: every share must be a positive integer number of window shares",
+        all(value > 0 for value in declared.values()),
+        f"{label}: every declared quantity must be a positive integer",
     )
     _require(
-        shares["GENERATION_RESERVE_SHARES"] + shares["DIRECTIVE_RESERVE_SHARES"]
-        < shares["WINDOW_SHARES"],
-        f"{label}: the reserved shares leave no window for the compaction trigger",
+        declared["STATIC_PREAMBLE_SHARES"] + declared["INLINE_BLOCK_SHARES"]
+        < declared["WINDOW_SHARES"],
+        f"{label}: the declared shares leave no window for a turn or a trigger",
     )
-    # The trigger is the window less the two reserves and nothing else: the
-    # tool-result bound is applied to a batch at admission, not held back.
+    # `T` is what the window has left once `C` and `D` are held back, so the
+    # three terms spend the window exactly and no fourth budget exists.
     require_text(
         state,
         limits,
-        "  const compactionTrigger =\n"
-        "    contextWindowSize - generationReserve - directiveReserve;",
+        "  const compactionTrigger = contextWindowSize - turnGeneration - staticPreamble;",
         label=label,
     )
+    # Every window this partition can be asked to describe: the served one,
+    # 524,288 as the next served tier, the tiers the model table can select,
+    # and two off a share boundary so the rounding is covered.
     for window in (
-        256,
         4_096,
         131_072,
+        196_608,
         200_000,
         202_752,
         _SERVED_WINDOW,
         _SERVED_WINDOW + 1,
+        272_000,
+        524_288,
+        1_000_000,
         1_048_576,
     ):
-        part = _partition(window, shares)
+        part = _partition(window, declared)
         _require(
             all(value > 0 for value in part.values()),
             f"{label}: a {window}-token window yields a non-positive budget {part!r}",
         )
-        held_back = part["generationReserve"] + part["directiveReserve"]
         _require(
-            part["compactionTrigger"] > held_back,
-            f"{label}: at a {window}-token window the reserves hold back "
-            f"{held_back} tokens and the compaction trigger is "
-            f"{part['compactionTrigger']}. The trigger is whatever the reserves "
-            f"leave, so reserves that reach it leave a turn less history to "
-            f"stand on than the room it is guaranteed",
+            part["staticPreamble"] + part["turnGeneration"] + part["compactionTrigger"]
+            == window,
+            f"{label}: a {window}-token window is not spent exactly by {part!r}",
         )
         _require(
-            part["compactionTrigger"] > 3 * part["generationReserve"],
-            f"{label}: at a {window}-token window the compaction trigger is "
-            f"{part['compactionTrigger']} and the generation reserve is "
-            f"{part['generationReserve']}. What survives a compaction is the "
-            f"snapshot, the turn carried behind it and the next turn's "
-            f"results, each given the reserve, so a history that cannot hold "
-            f"three of them cannot continue",
+            _fits(window, declared, part["turnGeneration"])
+            and not _fits(window, declared, part["turnGeneration"] + 1),
+            f"{label}: at a {window}-token window {part['turnGeneration']} is not "
+            f"the largest room a turn can be given while a compaction still "
+            f"leaves {_surviving(window, declared, part['turnGeneration'])} "
+            f"tokens standing below the trigger",
         )
-    served = _partition(_SERVED_WINDOW, shares)
+        _require(
+            part["compactionTrigger"] - 1 + part["turnGeneration"] < window,
+            f"{label}: at a {window}-token window a turn issued at the largest "
+            f"admitted prompt ({part['compactionTrigger'] - 1}) with its "
+            f"{part['turnGeneration']}-token room reaches past the window",
+        )
+        _require(
+            window - (part["compactionTrigger"] - 1)
+            == part["turnGeneration"] + part["staticPreamble"] + 1,
+            f"{label}: at a {window}-token window the request that summarises "
+            f"the largest admitted prompt is not issued with a whole turn's "
+            f"room plus the preamble",
+        )
+    # A window too small to leave a turn any room is refused rather than
+    # partitioned into something unusable.
+    for tiny in (256, 257, 459):
+        _require(
+            _partition(tiny, declared)["turnGeneration"] < 1,
+            f"{label}: a {tiny}-token window must leave a turn no room, so the "
+            f"partition refuses it instead of deriving one",
+        )
+    served = _partition(_SERVED_WINDOW, declared)
     _require(
         served == _SERVED_PARTITION,
         f"{label}: the served {_SERVED_WINDOW}-token window yields {served!r}, "
@@ -3209,7 +3275,15 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "required: [...STATE_SNAPSHOT_SECTIONS],",
             "additionalProperties: false,",
-            "export const STATE_SNAPSHOT_TOOL: Tool = {",
+            # The bound travels with the declaration, so the model is told what
+            # one inline block may carry before it composes a snapshot, and
+            # acceptance -- not decoding -- is where a longer draw is refused
+            # and redrawn whole.
+            "export function stateSnapshotTool(maxBytes: number): Tool {",
+            "`${maxBytes} bytes, including their headings; a longer snapshot is refused and redrawn.`,",
+            "export function acceptStateSnapshot(\n  calls: readonly FunctionCall[],\n  maxBytes: number,\n): StateSnapshotAcceptance {",
+            "const renderedBytes = Buffer.byteLength(renderStateSnapshot(snapshot), 'utf8');",
+            "if (renderedBytes > maxBytes) {",
             "SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args)",
             "(section) => !String(record[section]).trim(),",
         ),
@@ -3234,11 +3308,11 @@ def _validate_compaction_budget_after(state: State) -> None:
     # The arithmetic itself, evaluated against the shares the tree declares.
     _validate_context_partition(state, label=label)
 
-    # One derivation, in one place, with one tuned number in the system. A
-    # turn's limit is the generation reserve and nothing else: not the prompt,
-    # not a model ceiling, not a clamp margin, not a floor. The reserve is the
-    # same number a compaction's snapshot is issued with, because what a
-    # compaction has to carry is that quantity repeated.
+    # One derivation, in one place, from three declared quantities. A turn's
+    # limit is the room the fit leaves and nothing else: not the prompt, not a
+    # model ceiling, not a clamp margin, not a floor. It is the same number a
+    # compaction's snapshot is issued with, because what a compaction has to
+    # carry is that quantity repeated.
     limits_source = _require_all(
         state,
         limits,
@@ -3246,9 +3320,10 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export interface ContextPartition {",
             "export function partitionContextWindow(",
             "export function turnOutputLimit(",
-            "    generationReserve,\n    directiveReserve,\n    compactionTrigger,\n  };",
-            "if (compactionTrigger <= 3 * generationReserve) {",
-            "return partition.generationReserve;",
+            "export function inlineBlockTokenBound(",
+            "    turnGeneration,\n    compactionTrigger,\n  };",
+            "return partition.turnGeneration;",
+            "return partition.inlineBlockBytes + partition.messageFraming;",
         ),
         label=label,
     )
@@ -3272,6 +3347,16 @@ def _validate_compaction_budget_after(state: State) -> None:
         "compactionRoom",
         "clampOutputTokensToWindow",
         "clampExactOutputTokensToWindow",
+        # The reserve pair this partition replaced. A reserve was a magnitude
+        # held back by choice; every term here is now derived from the fit or
+        # declared with its count, so neither name may return under either
+        # spelling.
+        "GENERATION_RESERVE_SHARES",
+        "DIRECTIVE_RESERVE_SHARES",
+        "generationReserve",
+        "directiveReserve",
+        "GENERATION_RESERVE",
+        "DIRECTIVE_RESERVE",
     ):
         _require(
             absent not in limits_source,
@@ -3286,6 +3371,16 @@ def _validate_compaction_budget_after(state: State) -> None:
     _require_ordered(
         chat_source,
         (
+            # `D` and `F` are declared rather than derived, so they are proved
+            # against the served tokenizer before this chat issues anything --
+            # through the turn's own counter, so the route that will serve the
+            # turn is the route they are proved against.
+            "private async verifyDeclarations(",
+            "const preamble = await count([]);",
+            "if (preamble > partition.staticPreamble) {",
+            "const framing = framed - preamble;",
+            "if (framing > partition.messageFraming) {",
+            "await this.verifyDeclarations(partition, countExactRequestTokens);",
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
             "if (promptTokensForClamp >= partition.compactionTrigger) {",
             "throw new Error(",
@@ -3293,6 +3388,18 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
         location=chat,
+    )
+    # Both refusals name a move the operator has. A preamble already written
+    # into history cannot be shortened after the fact, which is why every
+    # value the preamble renders is bounded before it is counted.
+    _require_all(
+        state,
+        chat,
+        (
+            "Shorten the system prompt or a tool description, or deploy on a larger window.",
+            "Raise the declared framing to match the template, or serve the template the partition was written for.",
+        ),
+        label=label,
     )
     for absent in (
         "turnOutputBudget",
@@ -3303,6 +3410,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         "OUTPUT_TOKEN_CEILING",
         "samplingParams?.max_tokens",
         "summaryReserve",
+        "generationReserve",
+        "directiveReserve",
     ):
         forbid_text(state, chat, absent, label=label)
     # The route refuses a configured ceiling at configuration, so the one
@@ -3352,33 +3461,42 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
     for case in (
-        "refuses when the directive outgrows the share reserved for it",
-        "gives the snapshot at least the generation reserve at the largest prompt a turn can be issued against",
+        "refuses when the directive outgrows the static preamble",
+        "gives the snapshot at least a turn's room at the largest prompt a turn can be issued against",
         "sends the last issued prompt, and nothing after it, to one cache-preserving main-model request",
         "keeps the pending tool result out of the summary and in the turn's commit counts",
         "refuses to compact before any turn was issued",
     ):
         require_text(state, service_test, case, label=label)
     for case in (
-        "gives every turn the generation reserve, whatever its prompt",
-        "sends no output limit but the reserve, whatever the request asked for",
+        "gives every turn the same room, whatever its prompt",
+        "sends no output limit but the turn's room, whatever the request asked for",
         "issues no turn once the rendered prompt reaches the compaction trigger",
         "refuses when the tokenizer reports another window",
         "refuses when the provider declares no context window",
     ):
         require_text(state, chat_test, case, label=label)
     for case in (
-        "holds back only the generation reserve and the directive from the history",
-        "sums to the window exactly at every window size",
-        "gives the compaction of any issued prompt at least the generation reserve",
-        "leaves a reserve-sized turn inside the window at the largest issuable prompt",
-        "keeps the trigger above three generation reserves at every window size",
-        "re-derives every budget from a larger window with no code change",
-        "refuses a window it cannot partition",
-        "gives a turn the generation reserve, whatever its prompt",
-        "gives every window size its own reserve and nothing else",
+        "declares D and M as shares of the window and F as a constant",
+        "gives a turn the largest room the fit allows, at every window",
+        "spends the whole window and nothing more",
+        "cannot overrun the window from the largest admitted prompt",
+        "issues the compaction of any admitted prompt with a whole turn of room",
+        "leaves the trigger independent of the static preamble",
+        "names the served partition",
+        "refuses a window too small to leave a turn any room",
+        "refuses a window that is not a count of tokens",
+        "is the turn generation room and nothing else",
+        "gives a turn the same room whatever its prompt",
+        "spends the byte-to-token theorem once, as M plus the framing",
     ):
         require_text(state, limits_test, case, label=label)
+    # The retired vocabulary cannot come back through a test either: a case
+    # that still names a reserve is describing a partition this deployment no
+    # longer has.
+    for retired in ("generationReserve", "directiveReserve"):
+        for path in (limits_test, chat_test, service_test):
+            forbid_text(state, path, retired, label=label)
     for case in (
         "refuses a configured output ceiling: samplingParams.%s",
         "refuses the output-ceiling environment variable",
@@ -3396,23 +3514,28 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const split = chat.renderIssuedTurnSplit(",
             "const issuedPrompt = split.prompt;",
             "compactionOutputBudget = contextLimit - summaryRequestTokenCount;",
-            "if (compactionOutputBudget < partition.generationReserve) {",
-            "if (directiveTokens > partition.directiveReserve) {",
+            "if (compactionOutputBudget < partition.turnGeneration) {",
+            "if (directiveTokens > partition.staticPreamble) {",
             "      if (originalTokenCount < partition.compactionTrigger) {",
             "    if (newTokenCount >= partition.compactionTrigger) {",
             "          maxOutputTokens: compactionOutputBudget,",
         ),
         label=label,
     )
-    for absent in ("summaryReserve", "pendingToolResult", "sideQueryHistory"):
+    for absent in (
+        "summaryReserve",
+        "pendingToolResult",
+        "sideQueryHistory",
+        "generationReserve",
+        "directiveReserve",
+    ):
         forbid_text(state, service, absent, label=label)
     # The snapshot is issued at the room the window actually has, and that room
-    # is never less than the reserve: the prompt this request extends was
-    # issued below the trigger, so the request is at most A - 1 + D, leaving
-    # at least the reserve plus one. The floor is asserted in the service so a
-    # broken partition fails loudly, rather than clamped so it silently
-    # shrinks the snapshot -- a clamp is what hands a summary a few thousand
-    # tokens and truncates it.
+    # is never less than a turn's: the prompt this request extends was issued
+    # below the trigger, so the request is at most T - 1 + D, leaving at least
+    # C + 1. The floor is asserted in the service so a broken partition fails
+    # loudly, rather than clamped so it silently shrinks the snapshot -- a
+    # clamp is what hands a summary a few thousand tokens and truncates it.
     _require(
         "Math.min(" not in service_source.split("compactionOutputBudget =")[1][:400],
         f"{label}: {service} clamps the summary instead of asserting its floor",
@@ -3647,9 +3770,9 @@ def _validate_compaction_budget_after(state: State) -> None:
         state,
         service,
         (
-            "tools: [STATE_SNAPSHOT_TOOL],",
+            "tools: [stateSnapshotTool(partition.inlineBlockBytes)],",
             "mode: FunctionCallingConfigMode.ANY,",
-            "acceptStateSnapshot(summaryResult.functionCalls)",
+            "acceptStateSnapshot(\n        summaryResult.functionCalls,\n        partition.inlineBlockBytes,\n      )",
             "if (!acceptance.snapshot) {",
         ),
         label=label,
@@ -4925,11 +5048,12 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "const baselineTokens = await countExactRequestTokens(",
             "parts: emptyPendingToolResults(userContent.parts ?? []),",
             "for (const result of pending) {",
-            "if (requestTokens - baselineTokens <= partition.generationReserve) break;",
+            "if (requestTokens - baselineTokens <= inlineBlockTokenBound(partition))",
             "parts: await referencePendingToolResult(",
             "requestTokens = await countExactRequestTokens(",
             "const toolResultTokens = requestTokens - baselineTokens;",
-            "if (toolResultTokens > partition.generationReserve) {",
+            "const inlineBound = inlineBlockTokenBound(partition);",
+            "if (toolResultTokens > inlineBound) {",
             "throw new Error(",
         ),
         label=label,
@@ -5041,13 +5165,13 @@ def _validate_tool_result_bound_after(state: State) -> None:
 
     # Executed in the build.
     for case in (
-        "sends a batch inside its share untouched",
-        "displaces the largest result to disk when the batch is over its share",
-        "displaces only as many results as the share requires",
-        "issues no turn when a batch of references is still over its share",
+        "sends a batch inside the bound untouched",
+        "displaces the largest result to disk when the batch is over the bound",
+        "displaces only as many results as the bound requires",
+        "issues no turn when a batch of references is still over the bound",
         "takes no second count for a turn that appends no tool result",
         "charges a turn for its results, never for the call they answer",
-        "displaces the result, not the argument, when a batch is over its share",
+        "displaces the result, not the argument, when a batch is over the bound",
     ):
         require_text(state, chat_test, case, label=label)
     for case in (
@@ -5759,11 +5883,18 @@ def _validate_bounded_output_before(state: State) -> None:
         label=label,
     )
     # There is no shared per-result budget yet, and an MCP reply is held to
-    # nothing at all.
+    # nothing at all. Nothing upstream knows what one inline block may be,
+    # which is the quantity this concern introduces and threads.
     forbid_text(
         state,
         "packages/core/src/tools/tools.ts",
-        "MAX_TOOL_RESULT_BYTES",
+        "requireSessionConfig",
+        label=label,
+    )
+    forbid_text(
+        state,
+        "packages/core/src/config/config.ts",
+        "getInlineBlockBytes",
         label=label,
     )
     forbid_text(
@@ -5837,11 +5968,62 @@ def _validate_bounded_output_after(state: State) -> None:
             "and nothing was returned.",
             "export function formatOutputBound(bound: OutputBound): string {",
             "export function boundedContent(content: string, bound: OutputBound): string {",
-            "export const MAX_TOOL_RESULT_BYTES = 32_768;",
+            # `M` is not a constant here any more: it is a share of the served
+            # window, so a producer is told its bound by the session rather
+            # than reading one this file chose. The two producers that hold a
+            # session optionally refuse rather than fall back.
+            "export function requireSessionConfig<",
+            "so the inline-block bound is unknown and its result cannot be bounded.",
             "export function cutToUtf8Bytes(text: string, maxBytes: number): string {",
         ),
         label=label,
     )
+
+    # `M` is a share of the served window, so the session is what knows it and
+    # every bounded producer asks the session rather than a constant. The
+    # window is the one place it is derived, and a provider that declares none
+    # has no share to take and is refused instead of given a default.
+    _require_all(
+        state,
+        "packages/core/src/config/config.ts",
+        (
+            "  getInlineBlockBytes(): number {",
+            "return partitionContextWindow(contextWindowSize).inlineBlockBytes;",
+            "The inline-block bound is a share of the served context window, and this provider declares none.",
+        ),
+        label=label,
+    )
+    for producer in (
+        "packages/core/src/tools/read-mcp-resource.ts",
+        "packages/core/src/tools/shell.ts",
+        "packages/core/src/tools/skill.ts",
+        "packages/core/src/tools/monitor.ts",
+        "packages/core/src/tools/notebook-edit.ts",
+        "packages/core/src/tools/todoWrite.ts",
+        "packages/core/src/tools/web-fetch.ts",
+        "packages/core/src/tools/web-search.ts",
+        "packages/core/src/tools/write-file.ts",
+        "packages/core/src/tools/create-sub-session.ts",
+        "packages/core/src/tools/tool-registry.ts",
+        "packages/core/src/tools/workflow/workflow.ts",
+        "packages/core/src/tools/agent/agent.ts",
+    ):
+        _require(
+            "getInlineBlockBytes()" in _source(state, producer, label=label),
+            f"{label}: {producer} does not read its inline-block bound from "
+            f"the session, so its result is bounded by something the served "
+            f"window does not decide",
+        )
+    # The two producers that hold their session optionally have no unbounded
+    # second mode: they refuse, and name themselves in the refusal.
+    for producer, name in (
+        ("packages/core/src/tools/mcp-tool.ts", "MCP tool result"),
+        ("packages/core/src/tools/computer-use/tool.ts", "computer-use result"),
+    ):
+        require_text(
+            state, producer, f"requireSessionConfig(", label=label
+        )
+        require_text(state, producer, f"'{name}'", label=label)
 
     sources = _tool_sources(state)
     _require(
@@ -5974,7 +6156,7 @@ def _validate_bounded_output_after(state: State) -> None:
     require_text(
         state,
         "packages/core/src/tools/tools.ts",
-        "export function boundedEchoText(text: string): string {",
+        "export function boundedEchoText(text: string, maxBytes: number): string {",
         label=label,
     )
     for path in (

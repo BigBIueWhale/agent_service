@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `841e4c94999049e2ae070c3e8c77e7bd964f1a33aeb170dc51672e5c661f052a`
+- Review-diff SHA-256: `5eadbab946e44dbfc90be72172e25ba108d367f265fa628c5501a52d0efa849e`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `1f9447dc6bea47714bc07bc69282d0bbcfc1a982cd0403c9bfa26d77a62e15c8`
+- Transformer-manifest SHA-256: `73e0cfe0633c514c73be3475e5297d31b96e61ba935b6af740d3aa4e254b1a90`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -69,19 +69,36 @@ notices, and its parent is told the assignment is unfinished.
 
 ## Context and instructions
 
-The context partition holds back 48/256 of the window as the generation
-reserve and 2/256 for the compaction directive; the remainder is the trigger.
-At a 262,144-token window these are 49,152, 2,048 and 210,944 tokens.
-Independent floors leave rounding to the trigger. One reserve is the whole of
-what a generation is given: it is the output limit of every turn, whatever its
-prompt, the room a compaction's snapshot is issued with, and the bound on the
-tool results one turn appends inline. What survives a compaction is the
-snapshot, the turn carried behind it and the next turn's results, so the
-partition refuses any window whose trigger is not above three reserves; at the
-served window that is 147,456 against 210,944. The route refuses a configured
-ceiling, including `QWEN_CODE_MAX_OUTPUT_TOKENS`.
-Input, directive, displaced results, and candidate histories are counted using
-the actual rendered request.
+The context partition spends the window exactly, from three declared
+quantities. `D`, the static preamble, is 3W/64 — 12,288 tokens at 262,144 — a
+declared capacity rather than a derivation: the system prompt and the tool
+declarations are texts this repo ships, so the turn preamble is counted
+exactly against it by the served tokenizer before the first turn, and a
+preamble that does not fit is a startup refusal naming shorten-or-deploy-
+larger; each compaction's preflight holds what its directive adds to the same
+share. `M`, one inline block, is W/8 bytes — 32,768 — the one declared
+magnitude and openly a policy: it is the most any single block placed
+inline may be, and anything larger is kept whole in a file and paged back
+rather than shortened. `F`, the per-message framing, is the 61 bytes the served
+template wraps around one message at its widest, declared here and verified
+against the template rather than copied from it.
+
+`C`, the room every generation is issued with, and `T`, the compaction
+trigger, follow. What stands in the window after a compaction is the preamble
+plus `snapshot + authored input + carried turn + one result`; every term but
+the turn is bounded in bytes before it exists, and a byte bound is a token
+bound under a byte-level tokenizer, so `C` is the largest room a turn may be
+given while `D + 3(M + F) + (C + F)` still fits below the trigger, and
+`T = W - C - D`. At the served window that is 69,509 and 180,347. Both are
+asserted, not assumed: the fit, the no-overrun property and the compaction
+room are checked at every window the partition can be given, and a window too
+small to leave a turn any room is refused rather than partitioned. `T` does
+not depend on `D`, which cancels, so the preamble trades against turn room and
+never against the trigger. One number is the whole of what a generation is
+given: the output limit of every turn whatever its prompt, and the room a
+compaction's snapshot is issued with. The route refuses a configured ceiling,
+including `QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive, displaced results,
+and candidate histories are counted using the actual rendered request.
 
 A tool result says whether it is complete. One notice states what was asked
 for, what came back, the bound and its unit, the real total or why the tool
@@ -97,14 +114,20 @@ applied travels back with its items rather than being discarded, because a
 layer cannot declare a limit it was never told about.
 
 A result whose size is decided outside this process — a fetched page, an MCP
-server's reply — is held to one shared budget, `MAX_TOOL_RESULT_BYTES`, before
-it enters the conversation; the complete text is retained as a session artifact
-and the notice names the exact call that reads it back. That a bound exists is
-required: the window is guarded in exact tokens by the compaction trigger,
-which refuses a request that no longer fits, and this budget is what keeps that
-refusal unreachable in ordinary work. Its magnitude is a policy choice recorded
-with the measurement it sits above, not a derivation, and bytes never stand in
-for tokens — nothing converts between them.
+server's reply — is held to `M`, one inline block, before it enters the
+conversation; the complete text is retained as a session artifact and the
+notice names the exact call that reads it back. `M` is a share of the served
+window, so the session is what knows it and every bounded producer asks the
+session rather than a constant of its own; a provider that declares no window
+has no share to take and is refused. The two producers that hold their session
+optionally refuse and name themselves rather than fall back to an unbounded
+mode. That a bound exists is required: the window is guarded in exact tokens by
+the compaction trigger, which refuses a request that no longer fits, and this
+budget is what keeps that refusal unreachable in ordinary work. Its magnitude
+is a declared policy, not a derivation. Bytes stand in for tokens in exactly
+one place and one direction — `inlineBlockTokenBound`, where a block of `M`
+bytes cannot exceed `M` tokens under a byte-level tokenizer — and nothing
+else converts between the two units.
 
 A failed call's model-facing text is held to that same budget. A failure
 message is the one place a tool writes model-supplied input back out — the path
@@ -121,8 +144,10 @@ the sanitized telemetry span read it and want the operational summary in full.
 Compaction summarises the prompt the last turn was issued against and carries
 that turn, reasoning included, verbatim behind the snapshot, so the summary
 request never holds what the turn generated. It requests the room left by that
-exact input, which is never below the generation reserve, and refuses
-insufficient space. A candidate must end normally, carry the required six-part
+exact input, which is never below `C`, and refuses insufficient space. The
+accepted snapshot is itself one inline block: the bound is stated in the
+declaration the model is given, and acceptance — not decoding — refuses a
+longer draw, which is redrawn whole rather than cut. A candidate must end normally, carry the required six-part
 snapshot, reduce the request, and leave an issuable turn. Failure retains the
 previous history and reports that retained count. There is no separate
 reasoning-phase limit or forced reasoning-end marker. Compaction invalidates

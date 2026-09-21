@@ -51,10 +51,6 @@
   Its trusted result metadata lists changes and names the exact hashed manifest.
   Journal failure makes the tool call fail; changes are never silently reverted.
 
-## Model, reasoning, sampling, and context
-
-- Do not reconstruct or persist hidden reasoning outside model history.
-
 ## Full-quality vision and document work
 
 - At most fifteen images may exist in one rendered

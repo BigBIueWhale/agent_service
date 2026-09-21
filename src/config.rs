@@ -17,11 +17,25 @@ pub const STACK_LOCK_JSON: &str = include_str!("../config/stack.lock.json");
 pub const BROKER_POLICY_JSON: &str = include_str!("../config/broker-policy-v1.json");
 pub const QWEN_CODE_VERSION: &str = "0.21.12";
 
-/// The prompt is additionally bounded by the HTTP request-body limit from
-/// the lock file.  Keeping this lower semantic limit explicit makes error
-/// messages useful when a syntactically valid JSON body contains an
-/// unexpectedly enormous prompt.
-pub const MAX_PROMPT_BYTES: usize = 1024 * 1024;
+/// The served context window, in tokens. `validate_lock` refuses any backend
+/// that reports another, so every budget below is a share of this one number
+/// rather than a figure someone chose separately.
+pub const SERVED_CONTEXT_WINDOW: u64 = 262_144;
+
+/// `M`, in UTF-8 bytes: the most any one block placed inline may be.
+///
+/// A submitted prompt is such a block. It is retained verbatim in every
+/// post-compaction history for the life of the session, so its size is not a
+/// transient cost: at a byte per token it would fill the window on its own
+/// and leave a history no compaction could shrink below it. An eighth of the
+/// window is what the client pages `read_file` and tool results in, and a
+/// prompt is held to the same magnitude so the three cannot drift apart.
+///
+/// It is a share and not a constant because 512K and 1M are the next served
+/// tiers; a constant would quietly stop describing them. The HTTP
+/// request-body limit from the lock bounds the envelope; this bounds the
+/// prompt inside it, which is what makes the error say something useful.
+pub const MAX_PROMPT_BYTES: usize = (SERVED_CONTEXT_WINDOW / 8) as usize;
 // 200 GiB: the workspace-staging bound is disk accounting, not memory. The
 // archive is streamed to a disk spool and never buffered in RAM, and the staged
 // tree lives on ordinary disk-backed storage, so this caps the disk a single
@@ -795,7 +809,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.backend.image_id
             != "sha256:e91fc7b2f92db062fcafa46a6bddfe07cdeb2e589ac600b994520649749fcdc6"
         || lock.backend.served_model != "qwen3.8-27b-nvfp4-k8v4"
-        || lock.backend.max_model_len != 262_144
+        || lock.backend.max_model_len != SERVED_CONTEXT_WINDOW
         || lock.backend.kv_cache_dtype != "turboquant_k8v4"
     {
         return fail(

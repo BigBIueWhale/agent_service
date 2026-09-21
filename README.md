@@ -189,40 +189,71 @@ Qwen3.8-27B was trained with preserved thinking, as nearly all current models
 are, and there is no correct off switch for it, which is why the served template
 offers none.
 
-The served context window is divided into shares that spend it exactly, and
-only two of them are held back from the history:
+The served context window is spent exactly, from three declared quantities and
+two derived from them:
 
-| share | of the window | at 262,144 |
+| quantity | what it is | at 262,144 |
 | --- | --- | --- |
-| generation reserve | 48/256 | 49,152 |
-| the compaction directive | 2/256 | 2,048 |
-| the history a turn stands on | the remainder | 210,944 |
+| `D`, the static preamble | 3W/64, a declared capacity | 12,288 tokens |
+| `M`, one inline block | W/8, the one declared magnitude | 32,768 bytes |
+| `F`, the per-message framing | the served template's widest | 61 bytes |
+| `C`, a turn's generation room | derived from the fit | 69,509 tokens |
+| `T`, the compaction trigger | `W − C − D` | 180,347 tokens |
 
-A turn holds no reservation. It is issued with the window's remainder after
-its prompt as its output limit — never less than the two reserves plus one,
-51,201 tokens at the largest prompt a turn is issued against, and more at every
-smaller one — and nothing else bounds it: the route refuses a configured
-`max_tokens`, `max_completion_tokens`, `max_new_tokens` or
-`QWEN_CODE_MAX_OUTPUT_TOKENS` at configuration. A turn that generates all of
-its remainder has filled the window, and that ends the session (see below).
-One sixteenth of the window, 16,384 tokens, bounds the tool results one turn
-appends inline before its largest result is written to disk and replaced by a
-reference; it bounds what one turn adds, it is not held back from the history,
-and it does not enter the trigger. Raising `max_model_len` re-derives every
-share. New authored input, retained instructions, tools, and the compaction
-directive still require exact recounting at admission; the partition does not
-guarantee that arbitrary new content will fit.
+`D` is a capacity, not a derivation: the system prompt and the tool
+declarations are texts this repo ships, and the window holds them before it
+holds any conversation. It is chosen here and then proved — the real turn
+preamble is counted by the served tokenizer before the first turn, and a
+deployment whose own preamble does not fit is refused at startup rather than
+part-way through a session; each compaction's preflight holds what its
+directive adds to the same share. Rendered by the served template and counted
+by the served tokenizer, this deployment's own preamble is 7,683 tokens in the
+turn shape before any Git snapshot, and 3,365 in the compaction shape before
+the 559 its directive adds, so the declared capacity is 1.60x the larger; a
+Git snapshot at its status and log caps, in ASCII, added 793. `F` is proved
+the same way, as the difference an empty message makes.
+
+`M` is the one declared magnitude and is openly a policy: it is the most any
+single block placed inline may be — one tool result, one `read_file` page, one
+accepted snapshot, one submitted prompt — and anything larger is kept whole in
+a file and read back a page at a time rather than shortened. It is measured in
+bytes, and a byte bound is a token bound because the served tokenizer is
+byte-level: no byte sequence becomes more tokens than it has bytes. That
+inequality is the whole of the conversion, it is spent in one function, and
+nothing converts between the two units in either direction.
+
+`C` follows. What stands in the window after a compaction is the preamble plus
+`snapshot + authored input + carried turn + one result`; three of those four
+are blocks bounded in bytes before they exist, and the fourth is the turn,
+bounded by the room it was issued with. So the largest request a compaction
+can leave behind is `D + 3(M + F) + (C + F)`, and `C` is the largest room a
+turn may be given while that still fits below the trigger. `T` is what the
+window has left. Both are asserted rather than assumed, and `T` does not
+depend on `D` — substituting `C` into `W − C − D` cancels it — so a larger
+preamble trades against turn room and never against the trigger.
+
+A turn is issued with `C` whatever its prompt, reasoning included, and nothing
+else bounds it: the route refuses a configured `max_tokens`,
+`max_completion_tokens`, `max_new_tokens` or `QWEN_CODE_MAX_OUTPUT_TOKENS` at
+configuration. A turn that generates all of `C` has filled the room the window
+can give it, and that ends the session (see below). Raising `max_model_len`
+re-derives `D`, `M`, `C` and `T`; `F` belongs to the served template and does
+not move. New authored input, retained instructions, tools,
+and the compaction directive still require exact recounting at admission; the
+partition does not guarantee that arbitrary new content will fit.
 
 Compaction summarises the prompt the last turn was issued against, not the
 history that turn produced. That prompt was admitted below the trigger when it
-was issued, so the request that summarises it — the prompt plus one directive
-— always leaves the snapshot at least the generation reserve plus one token,
-whatever the turn generated. The turn itself, reasoning included, is carried
-behind the snapshot verbatim, followed by the tool result it was waiting for;
-nothing synthetic stands between them. The snapshot is issued at the room the
-window actually has — the window less the summary request that was just
-counted — and a request that would leave less than the reserve is refused
-instead of quietly shrinking the snapshot.
+was issued, so the request that summarises it — the prompt plus one directive,
+under a preamble also bounded by `D` — always leaves the snapshot at least
+`C + 1`, whatever the turn generated. The turn itself, reasoning included, is
+carried behind the snapshot verbatim, followed by the tool result it was
+waiting for; nothing synthetic stands between them. The snapshot is issued at
+the room the window actually has — the window less the summary request that
+was just counted — and a request that would leave less than `C` is refused
+instead of quietly shrinking the snapshot. The accepted snapshot is itself one
+inline block: the bound is stated in the declaration the model is given, and a
+draw that renders past it is refused and redrawn whole rather than cut.
 
 The compaction request replaces the turn's tool declarations with that single
 function rather than extending them, so the model has exactly one thing it can
@@ -235,11 +266,11 @@ Every main-turn context-boundary decision uses the real vLLM tokenizer on the
 fully rendered request. Before compaction and again before generation, Qwen Code
 sends the exact messages, typed tool history, image parts, tool schemas, and
 template arguments to the backend `/tokenize` endpoint. A turn is issued below
-the compaction trigger or it is not issued at all, and it is issued with the
-window's remainder after its prompt as its output limit. The tool results
-it appends are measured the same way — the rendered request counted with the
-pending batch and without it, the difference being what the batch costs — and a
-batch over its share is written to disk whole and replaced by references to the
+the compaction trigger or it is not issued at all, and it is issued with `C`.
+The tool results it appends are measured the same way — the rendered request
+counted with the pending batch and without it, the difference being what the
+batch costs — and a batch over one framed inline block, 32,829 tokens at the
+served window, is written to disk whole and replaced by references to the
 files rather than shortened. There is no character division, `target // 8`,
 image-token guess, padding margin, local tokenizer, or tokenizer fallback
 anywhere in the compaction trigger, the outbound sizing, or the tool-result
@@ -377,12 +408,13 @@ A terminal conversation and a headless conversation share the same obligations:
   exact request counting, strict tool calls, and an explicit context window.
   Activation publishes the provider and configuration together; failed selection
   restores the preceding pair.
-- The fully rendered next request determines admission and the context shares.
-  Ordinary output is issued with the window's remainder after its prompt; no
-  configured ceiling is admitted. Compaction summarises the prompt the last turn
-  was issued against, receives the room left by that exact request, requires at
-  least the generation reserve, accepts only a normally terminated six-section
-  snapshot that leaves an issuable turn, and carries the turn behind the
+- The fully rendered next request determines admission, and the partition is
+  derived from the served window rather than tuned. Ordinary output is issued
+  with `C`, the turn generation room, whatever the prompt was; no configured
+  ceiling is admitted. Compaction summarises the prompt the last turn was
+  issued against, receives the room left by that exact request, requires at
+  least `C`, accepts only a normally terminated six-section snapshot that fits
+  one inline block and leaves an issuable turn, and carries the turn behind the
   snapshot verbatim.
 - A tool result declares whether it is complete. The one notice in
   `packages/core/src/tools/tools.ts` states what was asked for, what came back,
@@ -646,11 +678,11 @@ retention decision, and teardown diagnostics all live inside `terminal`; a runni
 session supplies no answers for them. See the [session resource contract](docs/session-resource.md)
 for exact fields and reader examples.
 
-Every turn is issued with the window's remainder after its prompt as its output
-limit, and the trigger holds every prompt below the point at which that
-remainder would fall to the two reserves. `error_incomplete_generation`
-therefore reaches a caller only when a generation filled the window; the record
-names the prompt the generation was issued at, the remainder it was given and
+Every turn is issued with `C`, the turn generation room, whatever its prompt,
+and the trigger holds every prompt below the point at which a turn of `C` could
+reach the end of the window. `error_incomplete_generation` therefore reaches a
+caller only when a generation filled the room the window can give it; the
+record names the prompt the generation was issued at, the room it was given and
 what it generated, so a reader can tell a turn too large for the window from a
 window too full for the turn. Nothing is retried, continued or repaired.
 
@@ -1108,8 +1140,13 @@ exactly, so a reset or truncation can never masquerade as success; replaying
 the identical receipt is a pure lookup, and every session read echoes the
 accepted archive commitment. There is no waiting endpoint: the operation never
 belongs to a connection, and callers poll the monotonic `progress_revision` /
-`progress_events` on the ordinary session read. The prompt cap is 1 MiB;
-prompt bytes enter Qwen through text stdin, not a shell argument, so Linux's
+`progress_events` on the ordinary session read. The prompt cap is `M`, one
+inline block, 32,768 bytes at the served window: a submitted prompt is retained
+verbatim in every post-compaction history for the life of the session, so it is
+held to the same magnitude as every other block placed inline, and material
+larger than that belongs in the submitted workspace where the session reads it
+by path. The refusal says so. Prompt bytes enter Qwen through text stdin, not a
+shell argument, so Linux's
 per-argument limit does not invalidate the API contract or expose the prompt
 in a process listing.
 
