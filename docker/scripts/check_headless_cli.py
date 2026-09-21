@@ -166,10 +166,20 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                     require(0 < size < 2 * 1024 * 1024, "unexpected request size")
                     body = json.loads(self.rfile.read(size))
                     requests.append({"path": self.path, "body": body})
-                    require(len(requests) <= 12, "CLI exceeded the smoke request bound")
+                    # The two-turn cycle issues thirteen requests: the startup proof's six counts (the
+                    # preamble, the preamble with its startup context, the framing text alone, and the
+                    # message, turn and tool-result probes), each turn's pending-results and pre-issue
+                    # counts, the second turn's tool-result baseline, and the two generations.
+                    require(len(requests) <= 13, "CLI exceeded the smoke request bound")
                     require(body["model"] == model, "CLI selected a different model")
                     if self.path == "/tokenize":
-                        require(isinstance(body["messages"], list), "sizing lacks messages")
+                        # Both forms the served /tokenize accepts: a rendered chat request, and a text
+                        # alone, with no template and special tokens off.
+                        if "messages" in body:
+                            require(isinstance(body["messages"], list), "sizing lacks messages")
+                        else:
+                            require(isinstance(body.get("prompt"), str) and body.get("add_special_tokens") is False,
+                                    "text sizing is not a template-free prompt with special tokens off")
                         self.reply(200, json.dumps({"count": 1024, "max_model_len": 262144}).encode())
                         return
                     require(self.path == "/v1/chat/completions", "unexpected provider route")
