@@ -208,16 +208,24 @@ deployment whose own preamble does not fit is refused at startup rather than
 part-way through a session; each compaction's preflight holds what its
 directive adds to the same share. The proof counts this deployment's turn
 preamble with the Git snapshot's repository values left out — 7,748 tokens,
-rendered by the served template and counted by the served tokenizer — and adds
-the 3,328 bytes those values may hold, capped after the tokenizer's NFC
-normalization, as the most tokens they can cost: a bound of 11,076 that is the
-same for every repository, so no repository can make a deployment refuse to
-start. In the compaction shape, without a snapshot, the preamble is 3,365
-before the 559 its directive adds. `F` is proved against the served template
-too: a user message, an assistant turn and a tool result, each counted with the
-request and without it, less its content counted alone. The served template
-frames them in 5, 10 and 24 tokens, the last with the markup of the call it
-answers.
+rendered by the served template and counted by the served tokenizer — and the
+startup context that opens every history with its workspace data left out, 46
+more. It adds the most bytes the data left out may hold, capped in the NFC
+form the tokenizer reads, as the most tokens they can cost: 1,920 for the
+snapshot's branch, status and commits, and 1,280 for the startup context's
+environment lines and folder listing. That is a bound of 10,994, the same for
+every repository and every workspace, so neither can make a deployment refuse
+to start, with 1,294 left for the prompt and the declarations to grow into.
+Each run of data sits between fixed lines at a boundary no token spans, so
+the context costs its fixed text plus each run's own tokens exactly; counted
+through the served path, it does. The startup context is kept whole at the
+head of every history a compaction builds, never summarized and rebuilt, so
+nothing can fail to put it back. In the compaction shape, without a snapshot,
+the preamble is 3,365 before the 559 its directive adds. `F` is proved against
+the served template too: a user message, an assistant turn and a tool result,
+each counted with the request and without it, less its content counted
+alone. The served template frames them in 5, 10 and 24 tokens, the last with
+the markup of the call it answers.
 
 `M` is the one declared magnitude and is openly a policy: it is the most any
 single block placed inline may be — one tool result, one `read_file` page, one

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `45aedd5da2961e78bea8103566ce7eec35ba0bc6d00835a23843c515880b9f28`
+- Review-diff SHA-256: `35211202788a79afccfc51f590e71efd7ae14859ee3d08396f3887a67674c9f1`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `dc6142cd22af879320436adcb948a32961264f5be0f834340a7209f1053c07d9`
+- Transformer-manifest SHA-256: `2094cd3486a94f37c64d00420f932076773e0922fb0aefc05018d3ffcc90f2d5`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -75,9 +75,13 @@ declared capacity rather than a derivation: the system prompt and the tool
 declarations are texts this repo ships, so the turn preamble is counted
 exactly against it by the served tokenizer before the first turn, with the Git
 snapshot's repository values bounded by their byte caps rather than counted,
-and a preamble that does not fit is a startup refusal naming shorten-or-deploy-
-larger; each compaction's preflight holds what its directive adds to the same
-share. `M`, one inline block, is W/8 bytes — 32,768 — the one declared
+and so is the startup context that opens every history, its environment lines
+and folder listing bounded the same way; a preamble that does not fit is a
+startup refusal naming shorten-or-deploy-larger; each compaction's preflight
+holds what its directive adds to the same share. The startup context is kept
+whole at the head of every history a compaction builds rather than rebuilt
+after it, so it is in the candidate the compaction counts and cannot go
+missing. `M`, one inline block, is W/8 bytes — 32,768 — the one declared
 magnitude and openly a policy: it is the most any single block placed
 inline may be, and anything larger is kept whole in a file and paged back
 rather than shortened. `F`, the per-message framing, is the 61 bytes the served
@@ -425,8 +429,8 @@ One formatter handles all named statuses and rejects absent, non-finite, unsafe 
 negative counts. A reduced candidate with insufficient request room is distinct
 from a candidate that did not shrink. The terminal retains a compression marker
 for history mapping, and its shared text projection survives browser replay.
-Successful counts describe the committed checkpoint; restored startup context is
-an independent subsequent change.
+Successful counts describe the committed checkpoint, the startup context it
+keeps at its head included.
 
 Checkpoint recording and flush precede live installation. An independent failure
 after durable acceptance preserves the completed info and its cause and blocks

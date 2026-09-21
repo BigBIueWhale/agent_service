@@ -611,9 +611,9 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         state,
         git,
         (
-            "const MAX_BRANCH_BYTES = 256;",
-            "const MAX_STATUS_BYTES = 2048;",
-            "const MAX_LOG_BYTES = 1024;",
+            "const MAX_BRANCH_BYTES = 128;",
+            "const MAX_STATUS_BYTES = 1024;",
+            "const MAX_LOG_BYTES = 768;",
             "export const GIT_SNAPSHOT_REPOSITORY_BYTES =",
             "MAX_BRANCH_BYTES + MAX_STATUS_BYTES + MAX_LOG_BYTES;",
             "function repositoryLines(",
@@ -672,8 +672,8 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         state,
         "packages/core/src/utils/gitUtils.test.ts",
         (
-            "truncates a branch name over 256 bytes",
-            "truncates recent commits over 1024 bytes",
+            "truncates a branch name over 128 bytes",
+            "truncates recent commits over 768 bytes",
             "cuts a value on a character boundary, within its byte cap",
             "measures a value in the bytes the served tokenizer sees, after NFC",
             "adds at most its repository byte cap to the snapshot without repository data, for any repository",
@@ -3446,8 +3446,10 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const declared = this.preambleDeclaration;",
             "count(contents, declared?.systemInstruction);",
             "const bare = await counted([]);",
+            "const withStartup = startup ? await counted([startup.counted]) : bare;",
             "const repositoryData = declared?.repositoryDataBytes ?? 0;",
-            "const preamble = bare + repositoryData;",
+            "const workspaceData = startup?.workspaceDataBytes ?? 0;",
+            "const preamble = withStartup + repositoryData + workspaceData;",
             "if (preamble > partition.staticPreamble) {",
             "const probe = await countText(FRAMING_PROBE_TEXT);",
             "const withMessage = await counted([message]);",
@@ -3509,6 +3511,90 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
     forbid_text(state, chat, "const framing = framed - preamble;", label=label)
+    # The startup context opens every history, so it is part of the static
+    # preamble: counted with its two runs of workspace data left out and those
+    # runs bounded by their caps in the NFC bytes the tokenizer reads. Every
+    # chat that opens with it declares it, the main session's and each
+    # agent's, and a declaration is proved again before the next turn.
+    environment = "packages/core/src/utils/environmentContext.ts"
+    _require_all(
+        state,
+        environment,
+        (
+            "export const STARTUP_ENVIRONMENT_BYTES = 256;",
+            "export const STARTUP_LISTING_BYTES = 1024;",
+            "export const STARTUP_CONTEXT_WORKSPACE_BYTES =",
+            "export const STARTUP_CONTEXT_WITHOUT_WORKSPACE_DATA = `${STARTUP_CONTEXT_HEAD}${STARTUP_CONTEXT_FOLDERS}${SYSTEM_REMINDER_CLOSE}`;",
+            "return `${STARTUP_CONTEXT_HEAD}${environment}${STARTUP_CONTEXT_FOLDERS}${listing}${SYSTEM_REMINDER_CLOSE}`;",
+            "if (lines.bytes > STARTUP_ENVIRONMENT_BYTES) {",
+            "if (listing.bytes <= STARTUP_LISTING_BYTES) return listing.text;",
+            "if (cut.bytes > STARTUP_LISTING_BYTES) {",
+            "export function declareStartupContext(",
+            "return { ...part, text: STARTUP_CONTEXT_WITHOUT_WORKSPACE_DATA };",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        chat,
+        (
+            "  declareStartupContext(\n    declaration: StartupContextDeclaration | undefined,\n  ): void {",
+            "JSON.stringify(this.history[0]) !== JSON.stringify(declaration.content)",
+            "  getStartupContext(): Content | undefined {",
+            "    this.preambleDeclaration = declaration;\n    // A new declaration is a new preamble, proved before the next turn.\n    this.declarationsVerified = false;",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/core/client.ts",
+        "chat.declareStartupContext(declareStartupContext(history));",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/agents/runtime/agent-core.ts",
+        "chat.declareStartupContext(declareStartupContext(startHistory));",
+        label=label,
+    )
+    # A compaction keeps the startup context whole at the head of the history
+    # it counts and commits, so nothing rebuilds it afterwards and nothing can
+    # fail to. The rebuild, and the catch that swallowed its failures, are
+    # gone.
+    _require_ordered(
+        _source(state, "packages/core/src/services/chatCompressionService.ts", label=label),
+        (
+            "const startupContext = chat.getStartupContext();",
+            "...(startupContext ? [startupContext] : []),",
+            "...(await composePostCompactHistory(",
+            "const candidateCount = await chat.countRequestTokensForCandidateHistory(",
+        ),
+        label=label,
+        location="packages/core/src/services/chatCompressionService.ts",
+    )
+    for rebuilt in (
+        "restoreStartupContextAfterCompaction",
+        "Failed to restore startup context after compaction",
+    ):
+        forbid_text(state, "packages/core/src/core/client.ts", rebuilt, label=label)
+    require_text(
+        state,
+        "packages/core/src/core/client.ts",
+        "extraHistory && stripStartupContext(extraHistory),",
+        label=label,
+    )
+    for test_path, name in (
+        ("packages/core/src/utils/environmentContext.test.ts", "renders the context as upstream does when its workspace data fits"),
+        ("packages/core/src/utils/environmentContext.test.ts", "cuts a listing past its cap to whole lines, ending in the upstream indicator"),
+        ("packages/core/src/utils/environmentContext.test.ts", "measures the listing in the NFC bytes the tokenizer reads"),
+        ("packages/core/src/utils/environmentContext.test.ts", "refuses environment lines past their cap rather than cut a directory short"),
+        ("packages/core/src/utils/environmentContext.test.ts", "refuses to declare a context the proof could not bound"),
+        (chat_test, "counts the startup context without its workspace data and bounds that data by bytes"),
+        (chat_test, "refuses a startup context whose workspace bound passes the share, naming that room"),
+        (service_test, "keeps the startup context whole at the head of the history it counts and commits"),
+        ("packages/core/src/core/client.test.ts", "leaves the startup prelude to the compaction that kept it"),
+    ):
+        require_text(state, test_path, name, label=label)
     _require_all(
         state,
         "packages/core/src/core/openaiContentGenerator/pipeline.ts",
@@ -3779,7 +3865,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "      contents: [...issuedPrompt, directiveContent],",
             "      promptCacheSharing: true,",
-            "            turn,\n          },\n        );",
+            "              turn,\n            },\n          )),",
         ),
         label=label,
     )
