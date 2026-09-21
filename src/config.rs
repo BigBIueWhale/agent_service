@@ -22,7 +22,12 @@ pub const QWEN_CODE_VERSION: &str = "0.21.12";
 /// rather than a figure someone chose separately.
 pub const SERVED_CONTEXT_WINDOW: u64 = 262_144;
 
-/// `M`, in UTF-8 bytes: the most any one block placed inline may be.
+/// `M`, in UTF-8 bytes of NFC: the most any one block placed inline may be.
+///
+/// Bytes bound tokens only in the form the served tokenizer counts, NFC, which
+/// can be up to three times longer than the text as written; so a prompt is
+/// admitted only in NFC, where its length is that measure (see
+/// `validation.rs`).
 ///
 /// A submitted prompt is such a block. It is retained verbatim in every
 /// post-compaction history for the life of the session, so its size is not a

@@ -7,6 +7,8 @@
 
 use std::path::PathBuf;
 
+use unicode_normalization::is_nfc;
+
 use crate::config::{MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES, MAX_SESSION_TURNS_CEILING};
 use crate::error::{io_msg, ServiceError, ServiceResult};
 
@@ -56,6 +58,21 @@ fn validate_prompt(prompt: &str) -> ServiceResult<String> {
     if trimmed.is_empty() {
         return Err(ServiceError::InvalidRequest(
             "field `prompt` is empty after trimming whitespace".into(),
+        ));
+    }
+    // The limit stands in for the prompt's tokens, and bytes bound tokens only
+    // in NFC: the served tokenizer normalizes to NFC before it counts, and NFC
+    // can make a text up to three times longer. A prompt in another form is
+    // refused rather than normalized here, because it is retained verbatim;
+    // one in NFC is its own normal form, so its length is the measure.
+    if !is_nfc(prompt) {
+        return Err(ServiceError::InvalidRequest(
+            "field `prompt` is not in Unicode Normalization Form C (NFC). The \
+             served tokenizer normalizes text to NFC before it counts it, and \
+             NFC can make a text up to three times longer, so the prompt limit \
+             is measured in NFC and only a prompt already in NFC is accepted. \
+             Normalize the prompt to NFC and submit it again."
+                .into(),
         ));
     }
     if prompt.len() > MAX_PROMPT_BYTES {
@@ -269,6 +286,41 @@ mod tests {
         assert!(validate_prompt(" \n\t ").is_err());
         assert!(validate_prompt("invalid\0prompt").is_err());
         assert!(validate_prompt(&"x".repeat(MAX_PROMPT_BYTES + 1)).is_err());
+        assert!(validate_prompt(&"\u{e9}".repeat(MAX_PROMPT_BYTES / 2)).is_ok());
+    }
+
+    #[test]
+    fn prompt_limit_is_measured_in_nfc_and_refuses_any_other_form() {
+        // The counterexample to measuring a prompt as written: U+1D1C0 is four
+        // bytes, and its NFC form -- what the served tokenizer counts -- is
+        // three characters of twelve. A prompt of these inside the limit as
+        // written is three times the limit as counted.
+        let fusa = "\u{1D1C0}".repeat(MAX_PROMPT_BYTES / 4);
+        assert_eq!(fusa.len(), MAX_PROMPT_BYTES);
+        for prompt in [fusa.as_str(), "\u{1D1C0}", "e\u{301}", "\u{212B}"] {
+            let message = validate_prompt(prompt)
+                .expect_err("a prompt not in NFC is refused, never measured as written")
+                .to_string();
+            assert!(
+                message.contains("not in Unicode Normalization Form C (NFC)")
+                    && message.contains("Normalize the prompt to NFC"),
+                "unexplained refusal: {message}"
+            );
+        }
+        // Its NFC form is admitted up to the limit and refused past it.
+        let normalized = "\u{1D1BA}\u{1D165}\u{1D16F}";
+        assert!(validate_prompt("\u{e9}").is_ok());
+        assert!(validate_prompt(&normalized.repeat(MAX_PROMPT_BYTES / 12)).is_ok());
+        assert!(validate_prompt(&normalized.repeat(MAX_PROMPT_BYTES / 12 + 1)).is_err());
+    }
+
+    #[test]
+    fn prompt_normalizer_is_the_materializers_unicode() {
+        // The suite materializer measures a composed prompt with Python's
+        // unicodedata and refuses it on the same terms as this service, which
+        // is exact only while both normalize by the same Unicode version.
+        // full-suite-materialize.sh asserts 15.0.0 on its side.
+        assert_eq!(unicode_normalization::UNICODE_VERSION, (15, 0, 0));
     }
 
     #[test]

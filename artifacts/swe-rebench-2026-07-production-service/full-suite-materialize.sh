@@ -18,9 +18,10 @@
 #
 # plan.json then lists the tasks whose inputs fit the service's input limits --
 # the prompt measured as full-suite-run.sh submits it, the committed preamble
-# followed by the task statement -- binds each task to its manifest by SHA-256,
-# and records the lock hashes, the preamble's hash and size, this script's Git
-# blob and the limits it was derived against.
+# followed by the task statement, in NFC as the service measures it -- binds
+# each task to its manifest by SHA-256, and records the lock hashes, the
+# preamble's hash and size, this script's Git blob and the limits it was
+# derived against.
 set -Eeuo pipefail
 shopt -s inherit_errexit
 umask 077
@@ -71,10 +72,19 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 for command in awk chmod cmp comm cut date dirname docker find flock git grep id jq \
-  mkdir mktemp mv readlink realpath rm sha256sum sort stat sync wc xargs; do
+  mkdir mktemp mv python3 readlink realpath rm sha256sum sort stat sync wc xargs; do
   command -v "${command}" >/dev/null 2>&1 ||
     die "required host command is unavailable: ${command}"
 done
+
+# A prompt's byte limit stands in for its tokens, and bytes bound tokens only in
+# NFC, the form the served tokenizer counts; the service therefore refuses a
+# prompt not in NFC and measures one that is. This measures the same way, with
+# Python's unicodedata, which agrees with the service's unicode-normalization
+# 0.1.22 only at the Unicode version both carry.
+readonly PROMPT_UNICODE_VERSION=15.0.0
+require_equal "Unicode version of python3's unicodedata, which measures prompts as the service does" \
+  "${PROMPT_UNICODE_VERSION}" "$(python3 -c 'import unicodedata; print(unicodedata.unidata_version)')"
 
 MATERIALIZER="$(readlink -e -- "${BASH_SOURCE[0]}")"
 BENCH_ROOT="$(dirname -- "${MATERIALIZER}")"
@@ -556,8 +566,11 @@ done
 
 # A task is excluded when its inputs already exceed a service input limit. The
 # prompt is measured as full-suite-run.sh submits it: the committed preamble
-# followed by the task statement, byte for byte, so its size is the sum of the
-# two. The plan records the preamble it measured, and the driver refuses a plan
+# followed by the task statement, byte for byte, and as the service measures
+# it: a prompt not in NFC is refused there, and one in NFC is its own normal
+# form, so its size is the sum of the two files. Both facts are measured on
+# the composed text, because NFC of a concatenation is not the concatenation of
+# NFCs. The plan records the preamble it measured, and the driver refuses a plan
 # whose preamble is not the one it submits. Staging accepts directories, regular
 # files and symbolic links, and counts every entry below the workspace root,
 # every regular file, and regular-file bytes. The driver adds the task
@@ -567,9 +580,24 @@ done
 for task_id in "${TASK_IDS[@]}"; do
   manifest="${TASKS_ROOT}/${task_id}/manifest.json"
   manifest_sha256="$(sha256_of "${manifest}")"
-  jq -c --arg manifest_sha256 "${manifest_sha256}" '{manifest_sha256: $manifest_sha256, manifest: .}' \
+  prompt="$(python3 -c '
+import json, sys, unicodedata
+composed = open(sys.argv[1], "rb").read() + open(sys.argv[2], "rb").read()
+text = composed.decode("utf-8")
+print(json.dumps({"nfc": unicodedata.is_normalized("NFC", text),
+                  "bytes": len(unicodedata.normalize("NFC", text).encode("utf-8"))}))
+' "${PREAMBLE}" "${DATASET_ROOT}/${task_id}/instruction.md")" ||
+    die "the composed prompt of ${task_id} is not UTF-8 text"
+  jq -c --arg manifest_sha256 "${manifest_sha256}" --argjson prompt "${prompt}" \
+    '{manifest_sha256: $manifest_sha256, manifest: ., prompt: $prompt}' \
     "${manifest}" >>"${SCRATCH}/plan-rows.jsonl"
 done
+# A prompt already in NFC measures what its files hold, which ties the
+# measurement to the statement the manifest recorded.
+jq -se --argjson preamble_bytes "${PREAMBLE_BYTES}" \
+  'all(.[]; (.prompt.nfc | not) or .prompt.bytes == $preamble_bytes + .manifest.inputs.instruction_bytes)' \
+  "${SCRATCH}/plan-rows.jsonl" >/dev/null ||
+  die 'an NFC prompt measured other than its preamble and statement bytes'
 jq -s \
   --arg dataset_lock_sha256 "${DATASET_LOCK_SHA256}" \
   --arg images_lock_sha256 "${IMAGES_LOCK_SHA256}" \
@@ -577,10 +605,13 @@ jq -s \
   --arg preamble_sha256 "${PREAMBLE_SHA256}" \
   --argjson preamble_bytes "${PREAMBLE_BYTES}" \
   --argjson service_limits "${SERVICE_LIMITS}" \
-  'def prompt_bytes: $preamble_bytes + .manifest.inputs.instruction_bytes;
+  --arg prompt_unicode_version "${PROMPT_UNICODE_VERSION}" \
+  'def prompt_bytes: .prompt.bytes;
    def exclusion_reason:
      .manifest as $manifest |
-     if prompt_bytes > $service_limits.max_prompt_bytes then
+     if .prompt.nfc | not then
+       "prompt_is_not_nfc"
+     elif prompt_bytes > $service_limits.max_prompt_bytes then
        "prompt_bytes_exceed_max_prompt_bytes"
      elif $manifest.source.special_file_count > 0 then
        "source_holds_special_files"
@@ -593,17 +624,19 @@ jq -s \
        "source_entries_exceed_max_staged_entries"
      else null end;
    map(. + {reason: exclusion_reason, prompt_bytes: prompt_bytes}) |
-   {schema_version: 4,
+   {schema_version: 5,
     dataset_lock_sha256: $dataset_lock_sha256,
     images_lock_sha256: $images_lock_sha256,
     materializer_git_blob: $materializer_git_blob,
     prompt_preamble: {sha256: $preamble_sha256, bytes: $preamble_bytes},
+    prompt_measure: {form: "NFC", unicode_version: $prompt_unicode_version},
     service_limits: $service_limits,
     tasks: [.[] | select(.reason == null) |
       {task_id: .manifest.task_id, language: .manifest.language, manifest_sha256}],
     excluded: [.[] | select(.reason != null) |
       {task_id: .manifest.task_id, reason, manifest_sha256} +
-      if .reason == "prompt_bytes_exceed_max_prompt_bytes" then {prompt_bytes} else {} end]}' \
+      if .reason == "prompt_bytes_exceed_max_prompt_bytes" or .reason == "prompt_is_not_nfc"
+      then {prompt_bytes} else {} end]}' \
   "${SCRATCH}/plan-rows.jsonl" >"${PLAN}.partial"
 jq -e --argjson task_count "${TASK_COUNT}" '(.tasks | length) + (.excluded | length) == $task_count' \
   "${PLAN}.partial" >/dev/null || die 'derived plan does not account for every task exactly once'
@@ -629,6 +662,9 @@ jq -r '.prompt_preamble.bytes as $preamble | .service_limits.max_prompt_bytes as
     if .reason == "prompt_bytes_exceed_max_prompt_bytes" then
       "; the submitted prompt is \(.prompt_bytes) bytes, a \($preamble)-byte preamble and a " +
       "\(.prompt_bytes - $preamble)-byte task statement, past max_prompt_bytes \($limit)"
+    elif .reason == "prompt_is_not_nfc" then
+      "; the submitted prompt, the preamble followed by the task statement, is not in NFC, " +
+      "which the service refuses; in NFC it is \(.prompt_bytes) bytes"
     else "" end' "${PLAN}"
 printf 'FULL_SUITE_MATERIALIZATION_COMPLETE tasks=%s eligible=%s excluded=%s plan=%s\n' \
   "${TASK_COUNT}" "$(jq -r '.tasks | length' "${PLAN}")" "$(jq -r '.excluded | length' "${PLAN}")" \

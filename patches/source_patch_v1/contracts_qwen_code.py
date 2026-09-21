@@ -617,9 +617,14 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "export const GIT_SNAPSHOT_REPOSITORY_BYTES =",
             "MAX_BRANCH_BYTES + MAX_STATUS_BYTES + MAX_LOG_BYTES;",
             "function repositoryLines(",
-            ".normalize('NFC')",
+            "const lines = tokenizerText(",
             ".map((line) => `git: ${line}\\n`)",
-            "if (Buffer.byteLength(lines, 'utf8') <= maxBytes) return lines;",
+            "if (lines.bytes <= maxBytes) return lines.text;",
+            "const kept = cutToTokenizerBytes(",
+            "if (rendered.bytes > maxBytes) {",
+            # A value over its cap is a defect in the cut, and must not pass
+            # for a repository that had no snapshot.
+            "  return renderGitSnapshot(values);\n}",
             "value(values?.branch ?? '', MAX_BRANCH_BYTES, 'branch --show-current')",
             "value(values?.status ?? '', MAX_STATUS_BYTES, 'status')",
             "value(values?.log ?? '', MAX_LOG_BYTES, 'log --oneline -n 5')",
@@ -627,7 +632,7 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         ),
         label=label,
     )
-    for uncounted in ("MAX_BRANCH_CHARS", "MAX_STATUS_CHARS", "MAX_LOG_CHARS", "cappedRepositoryText"):
+    for uncounted in ("MAX_BRANCH_CHARS", "MAX_STATUS_CHARS", "MAX_LOG_CHARS", "cappedRepositoryText", "utf8Prefix"):
         _require(
             uncounted not in git_source,
             f"{label}: {git} still caps a snapshot value by '{uncounted}'; a "
@@ -2204,16 +2209,17 @@ def _validate_text_read_fidelity_after(state: State) -> None:
     )
     forbid_text(state, ranges, "LargeNonUtf8TextError", label=label)
 
-    # A page is a contiguous slice of the file: lines verbatim, and the
-    # newline that terminates the last one whenever the file continues past
-    # it, so the pages a caller is told to read concatenate to the file.
+    # A page is a contiguous slice of the file: its lines as the file spells
+    # them, in the NFC form the tokenizer reads, and the newline that
+    # terminates the last one whenever the file continues past it, so the
+    # pages a caller is told to read concatenate to the file in that form.
     _require_all(
         state,
         files,
         (
             "        const rangeReachedEof =",
-            "        const linesIncluded = selectedLines.length;",
-            "            index === selectedLines.length - 1 && rangeReachedEof",
+            "        const linesIncluded = pageLines.length;",
+            "            index === pageLines.length - 1 && rangeReachedEof",
             "              : `${line}\\n`,",
             "                  offset: actualEndLine,",
         ),
@@ -2590,10 +2596,9 @@ def _validate_model_facing_failure_after(state: State) -> None:
         "packages/core/src/tools/tools.ts",
         (
             "export function boundedFailureText(text: string, maxBytes: number): string {",
-            "const totalBytes = Buffer.byteLength(text, 'utf8');",
-            "const head = cutToUtf8Bytes(text, maxBytes);",
+            "  const whole = tokenizerText(text);\n  return boundedTokenizerText(whole.text, maxBytes, {\n    unit: 'bytes of failure text',",
             "limitUnit: 'bytes of failure text',",
-            "total: totalBytes,",
+            "total: whole.bytes,",
         ),
         label=label,
     )
@@ -3148,8 +3153,10 @@ def _validate_context_partition(state: State, *, label: str) -> None:
     The safety argument: what stands in the window after a compaction is the
     static preamble plus a snapshot, the authored input, one tool result and
     the turn carried behind them. Three of those four are bounded in bytes
-    before they exist, and a byte bound is a token bound under a byte-level
-    tokenizer, so the whole of it is known before any of it is generated.
+    before they exist, and a text's tokens are at most the UTF-8 bytes of its
+    NFC form -- the served tokenizer normalizes to NFC and then spends at
+    least a byte per token -- so the whole of it is known before any of it is
+    generated.
     `C` is the largest room a turn may be given while that still stands below
     the trigger, and `T` is what the window has left. This checks the
     definition rather than the formula: `C` is found here by bisection on the
@@ -3295,8 +3302,9 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export function stateSnapshotTool(maxBytes: number): Tool {",
             "`${maxBytes} bytes, including their headings; a longer snapshot is refused and redrawn.`,",
             "export function acceptStateSnapshot(\n  calls: readonly FunctionCall[],\n  maxBytes: number,\n): StateSnapshotAcceptance {",
-            "const renderedBytes = Buffer.byteLength(renderStateSnapshot(snapshot), 'utf8');",
-            "if (renderedBytes > maxBytes) {",
+            "const rendered = tokenizerText(renderStateSnapshot(snapshot));",
+            "if (rendered.bytes > maxBytes) {",
+            "  return tokenizerText(\n    [\n      '# state_snapshot',",
             "SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args)",
             "(section) => !String(record[section]).trim(),",
         ),
@@ -3337,9 +3345,53 @@ def _validate_compaction_budget_after(state: State) -> None:
             "    turnGeneration,\n    compactionTrigger,\n  };",
             "return partition.turnGeneration;",
             "return partition.inlineBlockBytes + partition.messageFraming;",
+            # A text's tokens are at most the UTF-8 bytes of its NFC form, not
+            # of the text as written, and this is the one place either is
+            # measured: every byte bound that stands in for tokens takes its
+            # measure here and hands on the form it measured.
+            "export function tokenizerText(text: string): TokenizerText {",
+            "const normalized = text.normalize('NFC');",
+            "export function cutToTokenizerBytes(",
+            "const head = tokenizerText(encoded.subarray(0, end).toString('utf8'));",
+            "if (head.bytes > maxBytes) {",
         ),
         label=label,
     )
+    for false_theorem in (
+        "no byte sequence becomes more tokens than it has",
+        "this tokenizer is byte-level, so no block",
+    ):
+        _require(
+            false_theorem not in limits_source,
+            f"{label}: {limits} still states that bytes as written bound tokens "
+            f"('{false_theorem}'); NFC can make a text three times longer, so "
+            f"only the bytes of its NFC form do",
+        )
+    measuring = sorted(
+        path
+        for path, text in state.items()
+        if path.startswith("packages/")
+        and path.endswith((".ts", ".tsx"))
+        and ".test." not in path
+        and ("normalize('NF" in text or 'normalize("NF' in text)
+    )
+    _require(
+        measuring == [limits],
+        f"{label}: text is normalized for measuring outside {limits}: "
+        f"{', '.join(p for p in measuring if p != limits) or 'nowhere, not even there'}. "
+        f"One helper measures, tokenizerText, and everything uses it.",
+    )
+    # The counterexample that refutes the old statement is kept as a test
+    # wherever a bound is taken.
+    for test_path, name in (
+        (limits_test, "measures U+1D1C0 at the twelve bytes of its NFC form, not the four it is written in"),
+        (limits_test, "bounds what U+1D1C0 normalizes to, not what it is written in"),
+        ("packages/core/src/tools/tools.test.ts", "bounds U+1D1C0 by the twelve bytes it normalizes to, not the four it is written in"),
+        ("packages/core/src/tools/read-file.test.ts", "pages by the bytes a line normalizes to, not the bytes it is written in"),
+        ("packages/core/src/services/state-snapshot.test.ts", "measures the rendered snapshot in the NFC bytes the tokenizer reads"),
+        ("packages/core/src/tools/mcp-tool.test.ts", "measures a reply in NFC and hands on the form it measured"),
+    ):
+        require_text(state, test_path, name, label=label)
     limit_body = limits_source.split("export function turnOutputLimit(", 1)[1].split(
         "\n}\n", 1
     )[0]
@@ -5884,7 +5936,7 @@ def _validate_stream_admission_after(state: State) -> None:
 _OUTPUT_CAP = re.compile(
     r"\.slice\(\s*0,\s*[\w$.]*(?:[Ll]imit|[Mm]axResults|[Mm]axShown|[Cc]ap)\b"
 )
-_BOUND_HELPER = re.compile(r"\b(?:boundedContent|formatOutputBound)\(")
+_BOUND_HELPER = re.compile(r"\b(?:boundedContent|boundedTokenizerText|formatOutputBound)\(")
 
 # Phrasings the tools used before there was one notice. They are forbidden by
 # name so a tool cannot quietly grow its own vocabulary again: to say a result
@@ -6048,7 +6100,15 @@ def _validate_bounded_output_after(state: State) -> None:
             # session optionally refuse rather than fall back.
             "export function requireSessionConfig<",
             "so the inline-block bound is unknown and its result cannot be bounded.",
-            "export function cutToUtf8Bytes(text: string, maxBytes: number): string {",
+            # A byte-bounded result is measured, cut and handed on in the NFC
+            # form the tokenizer reads, and its notice is inside the bound: the
+            # head gets what the notice at its widest leaves, and the text
+            # handed on is measured whole again and refused over the bound.
+            "export function boundedTokenizerText(",
+            "boundedContent('', { ...bound, returned: maxBytes, limit: maxBytes }),",
+            "const head = cutToTokenizerBytes(whole.text, maxBytes - widest);",
+            "if (emitted.bytes > maxBytes) {",
+            "export function partInTokenizerForm(part: Part): Part {",
         ),
         label=label,
     )
@@ -6087,6 +6147,32 @@ def _validate_bounded_output_after(state: State) -> None:
             f"{label}: {producer} does not read its inline-block bound from "
             f"the session, so its result is bounded by something the served "
             f"window does not decide",
+        )
+    # Each producer measures its result, cuts it and hands it on through the
+    # one measure, in the NFC form the tokenizer reads. A byte count of the
+    # text as written bounds nothing: NFC can make it three times longer.
+    for producer in (
+        "packages/core/src/tools/read-mcp-resource.ts",
+        "packages/core/src/tools/shell.ts",
+        "packages/core/src/tools/skill.ts",
+        "packages/core/src/tools/web-fetch.ts",
+        "packages/core/src/tools/web-search.ts",
+        "packages/core/src/tools/write-file.ts",
+        "packages/core/src/tools/create-sub-session.ts",
+        "packages/core/src/tools/tool-registry.ts",
+        "packages/core/src/tools/mcp-tool.ts",
+        "packages/core/src/tools/workflow/workflow.ts",
+        "packages/core/src/tools/agent/agent.ts",
+        "packages/core/src/tools/computer-use/tool.ts",
+    ):
+        producer_source = _source(state, producer, label=label)
+        _require(
+            "tokenizerText(" in producer_source
+            and producer_source.count("boundedTokenizerText(") == 1
+            and "const totalBytes = Buffer.byteLength(" not in producer_source,
+            f"{label}: {producer} does not measure and bound its result through "
+            f"tokenizerText and boundedTokenizerText, so its bound is taken in "
+            f"bytes the tokenizer does not count",
         )
     # The two producers that hold their session optionally have no unbounded
     # second mode: they refuse, and name themselves in the refusal.
@@ -6168,7 +6254,22 @@ def _validate_bounded_output_after(state: State) -> None:
         (
             "  endsWithNewline?: boolean;",
             "          endsWithNewline: _meta?.endsWithNewline,",
-            "          truncatedByBytes: _meta?.truncatedByBytes === true,",
+            "          truncatedByBytes,",
+            # A page is budgeted in the NFC form it is handed on in, which the
+            # range reader's count of the file's own bytes is not.
+            "const normalized = tokenizerText(line);",
+            "if (pageBytes + separator + normalized.bytes > maxOutputBytes) break;",
+            "const page = tokenizerText(pageLines.join('\\n'));",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/tools/read-file.ts",
+        (
+            "if (typeof llmContent === 'string' && result.linesShown !== undefined) {",
+            "const block = tokenizerText(llmContent);",
+            "const maxBytes = this.config.getInlineBlockBytes();",
         ),
         label=label,
     )
@@ -6185,6 +6286,19 @@ def _validate_bounded_output_after(state: State) -> None:
         label=label,
     )
 
+    # The raw byte cut is gone: a cut is made in the tokenizer's form or not
+    # at all.
+    for path in list(sources) + [
+        "packages/core/src/tools/agent/agent.ts",
+        "packages/core/src/tools/computer-use/tool.ts",
+        "packages/core/src/tools/workflow/workflow.ts",
+    ]:
+        _require(
+            "cutToUtf8Bytes" not in _source(state, path, label=label),
+            f"{label}: {path} still cuts by raw UTF-8 bytes; the bound is the NFC "
+            f"form's bytes, cut by cutToTokenizerBytes",
+        )
+
     # Nothing may re-grow a private notice beside it.
     for path, text in sources.items():
         if path == tools_ts:
@@ -6199,28 +6313,31 @@ def _validate_bounded_output_after(state: State) -> None:
             )
 
     # The known capping tools are named so the detector cannot be satisfied by
-    # a tree that simply stopped capping anything.
+    # a tree that simply stopped capping anything. A tool that caps a count
+    # states it through boundedContent; one that caps bytes, through
+    # boundedTokenizerText, which puts the same notice inside the bound.
     for path in (
-        "packages/core/src/tools/create-sub-session.ts",
         "packages/core/src/tools/glob.ts",
         "packages/core/src/tools/grep.ts",
         "packages/core/src/tools/ls.ts",
         "packages/core/src/tools/lsp.ts",
+        "packages/core/src/tools/ripGrep.ts",
+        "packages/core/src/tools/tool-search.ts",
+    ):
+        require_text(state, path, "boundedContent(", count=1, label=label)
+    for path in (
+        "packages/core/src/tools/create-sub-session.ts",
         "packages/core/src/tools/mcp-tool.ts",
         "packages/core/src/tools/read-mcp-resource.ts",
-        "packages/core/src/tools/ripGrep.ts",
         "packages/core/src/tools/shell.ts",
         "packages/core/src/tools/skill.ts",
         "packages/core/src/tools/tool-registry.ts",
-        "packages/core/src/tools/tool-search.ts",
         "packages/core/src/tools/web-fetch.ts",
         "packages/core/src/tools/web-search.ts",
         "packages/core/src/tools/write-file.ts",
+        *_BOUNDED_SUBDIRECTORY_TOOLS,
     ):
-        require_text(state, path, "boundedContent(", count=1, label=label)
-
-    for path in _BOUNDED_SUBDIRECTORY_TOOLS:
-        require_text(state, path, "boundedContent(", count=1, label=label)
+        require_text(state, path, "boundedTokenizerText(", count=1, label=label)
 
     # A result that echoes the model's own argument states its cut through one
     # helper, which names no continuation because the discarded bytes are the

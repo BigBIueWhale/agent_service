@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `d0bd1c4c9779047adf5a00d744fa8cc1dc4bb2e92354ca8e67420943cf6d8ae8`
+- Review-diff SHA-256: `45aedd5da2961e78bea8103566ce7eec35ba0bc6d00835a23843c515880b9f28`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `7a1eded1d0cc5e67b224dea78dbe744210f2b2dbbd3ca8c4b114211989254647`
+- Transformer-manifest SHA-256: `dc6142cd22af879320436adcb948a32961264f5be0f834340a7209f1053c07d9`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -87,10 +87,11 @@ against the template rather than copied from it.
 `C`, the room every generation is issued with, and `T`, the compaction
 trigger, follow. What stands in the window after a compaction is the preamble
 plus `snapshot + authored input + carried turn + one result`; every term but
-the turn is bounded in bytes before it exists, and a byte bound is a token
-bound under a byte-level tokenizer, so `C` is the largest room a turn may be
-given while `D + 3(M + F) + (C + F)` still fits below the trigger, and
-`T = W - C - D`. At the served window that is 69,509 and 180,347. Both are
+the turn is bounded in bytes before it exists, and a text's tokens are at most
+the UTF-8 bytes of its NFC form, the form the served tokenizer splits, so `C`
+is the largest room a turn may be given while `D + 3(M + F) + (C + F)` still
+fits below the trigger, and `T = W - C - D`. At the served window that is
+69,509 and 180,347. Both are
 asserted, not assumed: the fit, the no-overrun property and the compaction
 room are checked at every window the partition can be given, and a window too
 small to leave a turn any room is refused rather than partitioned. `T` does
@@ -127,8 +128,15 @@ the compaction trigger, which refuses a request that no longer fits, and this
 budget is what keeps that refusal unreachable in ordinary work. Its magnitude
 is a declared policy, not a derivation. Bytes stand in for tokens in exactly
 one place and one direction — `inlineBlockTokenBound`, where a block of `M`
-bytes cannot exceed `M` tokens under a byte-level tokenizer — and nothing
-else converts between the two units.
+bytes of NFC cannot exceed `M` tokens, because the tokenizer normalizes to NFC
+and then spends at least a byte per token — and nothing else converts between
+the two units. The bytes a text is written in are not that bound: NFC can make
+a text three times longer, and U+1D1C0, four bytes, normalizes to twelve. So
+one function, `tokenizerText`, measures every such bound in NFC, and a bounded
+text is cut on a character boundary in that form, measured again whole, and
+handed on in the form measured; its notice is inside the bound, not on top of
+it. The service refuses a prompt not in NFC, and the suite materializer
+excludes one on the same terms with the same Unicode version.
 
 A failed call's model-facing text is held to that same budget. A failure
 message is the one place a tool writes model-supplied input back out — the path

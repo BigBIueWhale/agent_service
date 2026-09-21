@@ -24,6 +24,7 @@ tracing            = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "fmt"] }
 libc               = "=0.2.186"
 zip                = { version = "=8.6.0", default-features = false, features = ["deflate"] }
+unicode-normalization = "=0.1.22"
 
 [build-dependencies]
 runtime_contract = { path = "protocol/engine" }

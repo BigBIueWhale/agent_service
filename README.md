@@ -223,10 +223,21 @@ answers.
 single block placed inline may be — one tool result, one `read_file` page, one
 accepted snapshot, one submitted prompt — and anything larger is kept whole in
 a file and read back a page at a time rather than shortened. It is measured in
-bytes, and a byte bound is a token bound because the served tokenizer is
-byte-level: no byte sequence becomes more tokens than it has bytes. That
-inequality is the whole of the conversion, it is spent in one function, and
-nothing converts between the two units in either direction.
+the UTF-8 bytes of a text's NFC form, and that is a token bound because the
+served tokenizer normalizes to NFC before it splits anything and every token
+covers at least one byte of what that produced: a text's tokens are at most the
+UTF-8 bytes of its NFC form. The bytes a text is written in bound nothing, since
+NFC can make a text three times longer — U+1D1C0 is four bytes and normalizes
+to twelve. One function, `tokenizerText`, takes that measure for every bound,
+and a bounded text is handed on in the form it was measured in: the
+tokenizer's normalizer follows an older Unicode and composes less than the
+measuring ones, so a text as written can normalize there to more bytes than it
+measured, while text already in the measured form it leaves no longer.
+`scripts/test-normalizer-agreement.sh` runs every code point, alone and in
+composition probes, through each measuring normalizer and the served one and
+holds them to that. That inequality is the whole of the conversion, it is spent
+in one function, and nothing converts between the two units in either
+direction.
 
 `C` follows. What stands in the window after a compaction is the preamble plus
 `snapshot + authored input + carried turn + one result`; three of those four
@@ -1151,10 +1162,12 @@ inline block, 32,768 bytes at the served window: a submitted prompt is retained
 verbatim in every post-compaction history for the life of the session, so it is
 held to the same magnitude as every other block placed inline, and material
 larger than that belongs in the submitted workspace where the session reads it
-by path. The refusal says so. Prompt bytes enter Qwen through text stdin, not a
-shell argument, so Linux's
-per-argument limit does not invalidate the API contract or expose the prompt
-in a process listing.
+by path. The refusal says so. The cap stands in for the prompt's tokens, which
+are bounded by the bytes of its NFC form rather than the bytes it is written
+in, so a prompt not already in NFC is refused with the instruction to normalize
+it, and one in NFC is measured by its length. Prompt bytes enter Qwen through
+text stdin, not a shell argument, so Linux's per-argument limit does not
+invalidate the API contract or expose the prompt in a process listing.
 
 All session endpoints return the [same evidence contract](docs/session-resource.md).
 `session.sh` validates its live/terminal distinction before displaying the JSON;
