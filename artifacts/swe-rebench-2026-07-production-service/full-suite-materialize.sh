@@ -16,9 +16,11 @@
 # directory that already exists is proved again and must derive a byte-identical
 # manifest.
 #
-# plan.json then lists the tasks whose own inputs fit the service's input limits,
-# binds each task to its manifest by SHA-256, and records the lock hashes, this
-# script's Git blob and the limits it was derived against.
+# plan.json then lists the tasks whose inputs fit the service's input limits --
+# the prompt measured as full-suite-run.sh submits it, the committed preamble
+# followed by the task statement -- binds each task to its manifest by SHA-256,
+# and records the lock hashes, the preamble's hash and size, this script's Git
+# blob and the limits it was derived against.
 set -Eeuo pipefail
 shopt -s inherit_errexit
 umask 077
@@ -86,6 +88,7 @@ readonly DATASET_ROOT="${BENCH_ROOT}/evaluator-dataset"
 readonly DATASET_LOCK="${BENCH_ROOT}/full-suite-dataset.lock.json"
 readonly IMAGES_LOCK="${BENCH_ROOT}/full-suite-images.lock.json"
 readonly STACK_LOCK="${SERVICE_ROOT}/config/stack.lock.json"
+readonly PREAMBLE="${BENCH_ROOT}/prompt-preamble.md"
 readonly MATERIALIZATION_ROOT="${BENCH_ROOT}/full-suite-materialization"
 readonly TASKS_ROOT="${MATERIALIZATION_ROOT}/tasks"
 readonly PLAN="${MATERIALIZATION_ROOT}/plan.json"
@@ -96,10 +99,12 @@ readonly UV_VERSION=0.7.13
 readonly UV_INSTALL_LINE="RUN curl -LsSf https://astral.sh/uv/${UV_VERSION}/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh"
 readonly LOGS_LINE='RUN mkdir -p /logs'
 
-# The plan names this script by Git blob and the locks by SHA-256, and the service
-# input limits come from the stack lock, so all four must be committed bytes.
+# The plan names this script by Git blob and the locks and the prompt preamble by
+# SHA-256, and the service input limits come from the stack lock, so all five
+# must be committed bytes.
 for input in "${MATERIALIZER_RELATIVE}" "${BENCH_RELATIVE}/full-suite-dataset.lock.json" \
-  "${BENCH_RELATIVE}/full-suite-images.lock.json" config/stack.lock.json; do
+  "${BENCH_RELATIVE}/full-suite-images.lock.json" "${BENCH_RELATIVE}/prompt-preamble.md" \
+  config/stack.lock.json; do
   git -C "${SERVICE_ROOT}" ls-files --error-unmatch -- "${input}" >/dev/null 2>&1 ||
     die "materialization input is not tracked in Git: ${input}"
   cmp -s -- "${SERVICE_ROOT}/${input}" <(git -C "${SERVICE_ROOT}" show "HEAD:${input}") ||
@@ -108,7 +113,9 @@ done
 MATERIALIZER_GIT_BLOB="$(git -C "${SERVICE_ROOT}" rev-parse "HEAD:${MATERIALIZER_RELATIVE}")"
 DATASET_LOCK_SHA256="$(sha256_of "${DATASET_LOCK}")"
 IMAGES_LOCK_SHA256="$(sha256_of "${IMAGES_LOCK}")"
-readonly MATERIALIZER_GIT_BLOB DATASET_LOCK_SHA256 IMAGES_LOCK_SHA256
+PREAMBLE_SHA256="$(sha256_of "${PREAMBLE}")"
+PREAMBLE_BYTES="$(stat -c '%s' -- "${PREAMBLE}")"
+readonly MATERIALIZER_GIT_BLOB DATASET_LOCK_SHA256 IMAGES_LOCK_SHA256 PREAMBLE_SHA256 PREAMBLE_BYTES
 
 jq -e '
   def simple_name: type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._-]*$");
@@ -547,12 +554,15 @@ for task_id in "${TASK_IDS[@]}"; do
   materialize_task "${task_id}"
 done
 
-# A task is excluded when its own inputs already exceed a service input limit.
-# Staging accepts directories, regular files and symbolic links, and counts every
-# entry below the workspace root, every regular file, and regular-file bytes. The
-# driver adds its preamble to the prompt and the task environment to the
-# workspace, and checks the composed workspace against the staging limits again
-# before it submits.
+# A task is excluded when its inputs already exceed a service input limit. The
+# prompt is measured as full-suite-run.sh submits it: the committed preamble
+# followed by the task statement, byte for byte, so its size is the sum of the
+# two. The plan records the preamble it measured, and the driver refuses a plan
+# whose preamble is not the one it submits. Staging accepts directories, regular
+# files and symbolic links, and counts every entry below the workspace root,
+# every regular file, and regular-file bytes. The driver adds the task
+# environment to the workspace, and checks the composed workspace against the
+# staging limits again before it submits.
 : >"${SCRATCH}/plan-rows.jsonl"
 for task_id in "${TASK_IDS[@]}"; do
   manifest="${TASKS_ROOT}/${task_id}/manifest.json"
@@ -564,11 +574,14 @@ jq -s \
   --arg dataset_lock_sha256 "${DATASET_LOCK_SHA256}" \
   --arg images_lock_sha256 "${IMAGES_LOCK_SHA256}" \
   --arg materializer_git_blob "${MATERIALIZER_GIT_BLOB}" \
+  --arg preamble_sha256 "${PREAMBLE_SHA256}" \
+  --argjson preamble_bytes "${PREAMBLE_BYTES}" \
   --argjson service_limits "${SERVICE_LIMITS}" \
-  'def exclusion_reason:
+  'def prompt_bytes: $preamble_bytes + .manifest.inputs.instruction_bytes;
+   def exclusion_reason:
      .manifest as $manifest |
-     if $manifest.inputs.instruction_bytes > $service_limits.max_prompt_bytes then
-       "instruction_bytes_exceed_max_prompt_bytes"
+     if prompt_bytes > $service_limits.max_prompt_bytes then
+       "prompt_bytes_exceed_max_prompt_bytes"
      elif $manifest.source.special_file_count > 0 then
        "source_holds_special_files"
      elif $manifest.source.regular_file_count > $service_limits.max_staged_files then
@@ -579,16 +592,18 @@ jq -s \
        + $manifest.source.symlink_count > $service_limits.max_staged_entries then
        "source_entries_exceed_max_staged_entries"
      else null end;
-   map(. + {reason: exclusion_reason}) |
-   {schema_version: 3,
+   map(. + {reason: exclusion_reason, prompt_bytes: prompt_bytes}) |
+   {schema_version: 4,
     dataset_lock_sha256: $dataset_lock_sha256,
     images_lock_sha256: $images_lock_sha256,
     materializer_git_blob: $materializer_git_blob,
+    prompt_preamble: {sha256: $preamble_sha256, bytes: $preamble_bytes},
     service_limits: $service_limits,
     tasks: [.[] | select(.reason == null) |
       {task_id: .manifest.task_id, language: .manifest.language, manifest_sha256}],
     excluded: [.[] | select(.reason != null) |
-      {task_id: .manifest.task_id, reason, manifest_sha256}]}' \
+      {task_id: .manifest.task_id, reason, manifest_sha256} +
+      if .reason == "prompt_bytes_exceed_max_prompt_bytes" then {prompt_bytes} else {} end]}' \
   "${SCRATCH}/plan-rows.jsonl" >"${PLAN}.partial"
 jq -e --argjson task_count "${TASK_COUNT}" '(.tasks | length) + (.excluded | length) == $task_count' \
   "${PLAN}.partial" >/dev/null || die 'derived plan does not account for every task exactly once'
@@ -609,6 +624,12 @@ else
   sync -f -- "${MATERIALIZATION_ROOT}"
 fi
 
+jq -r '.prompt_preamble.bytes as $preamble | .service_limits.max_prompt_bytes as $limit |
+  .excluded[] | "EXCLUDED \(.task_id): \(.reason)" +
+    if .reason == "prompt_bytes_exceed_max_prompt_bytes" then
+      "; the submitted prompt is \(.prompt_bytes) bytes, a \($preamble)-byte preamble and a " +
+      "\(.prompt_bytes - $preamble)-byte task statement, past max_prompt_bytes \($limit)"
+    else "" end' "${PLAN}"
 printf 'FULL_SUITE_MATERIALIZATION_COMPLETE tasks=%s eligible=%s excluded=%s plan=%s\n' \
   "${TASK_COUNT}" "$(jq -r '.tasks | length' "${PLAN}")" "$(jq -r '.excluded | length' "${PLAN}")" \
   "${PLAN}"

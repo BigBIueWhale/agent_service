@@ -104,10 +104,16 @@ MAX_STAGED_ENTRIES="$(jq -er '.limits.max_staged_entries | numbers' "${SERVICE_R
   die 'stack lock .limits.max_staged_entries is absent or not a number'
 readonly MAX_STAGED_BYTES MAX_STAGED_FILES MAX_STAGED_ENTRIES
 
+# The plan excluded every task whose prompt -- this preamble followed by its
+# statement -- exceeds max_prompt_bytes, so it holds only for the preamble it
+# measured. A plan derived against any other preamble is refused.
+PREAMBLE_SHA256="$(sha256sum -- "${PREAMBLE_FILE}" | awk '{print $1}')"
+readonly PREAMBLE_SHA256
 [[ -f "${PLAN_FILE}" ]] || die "suite plan is missing: ${PLAN_FILE}; run ./full-suite-materialize.sh"
-jq -e --slurpfile stack "${SERVICE_ROOT}/config/stack.lock.json" '.schema_version == 3 and (.tasks | length) > 0 and all(.tasks[]; (.task_id | type == "string" and length > 0) and (.manifest_sha256 | test("^[0-9a-f]{64}$")))
-       and .service_limits == ($stack[0].limits | {max_prompt_bytes, max_staged_bytes, max_staged_files, max_staged_entries})' "${PLAN_FILE}" >/dev/null ||
-  die 'suite plan is unusable: it must be schema 3, list at least one task with a task_id and manifest SHA-256, and be derived against the service limits in config/stack.lock.json'
+jq -e --slurpfile stack "${SERVICE_ROOT}/config/stack.lock.json" --arg preamble_sha256 "${PREAMBLE_SHA256}" '.schema_version == 4 and (.tasks | length) > 0 and all(.tasks[]; (.task_id | type == "string" and length > 0) and (.manifest_sha256 | test("^[0-9a-f]{64}$")))
+       and .service_limits == ($stack[0].limits | {max_prompt_bytes, max_staged_bytes, max_staged_files, max_staged_entries})
+       and .prompt_preamble.sha256 == $preamble_sha256' "${PLAN_FILE}" >/dev/null ||
+  die 'suite plan is unusable: it must be schema 4, list at least one task with a task_id and manifest SHA-256, be derived against the service limits in config/stack.lock.json, and have measured its prompts with the prompt-preamble.md this driver submits; run ./full-suite-materialize.sh'
 # Number of tasks this shard owns (0-based plan position mod count == index).
 SHARD_TASK_COUNT="$(jq -er --argjson i "${SHARD_INDEX}" --argjson n "${SHARD_COUNT}" \
   '[.tasks | keys[] | select(. % $n == $i)] | length' "${PLAN_FILE}")"

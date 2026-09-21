@@ -387,8 +387,8 @@ ENVEOF' \
 # Read the plan fail-closed BEFORE the loop: a process substitution's exit
 # status is discarded, so a missing/malformed/empty plan would otherwise report
 # a clean success having warmed nothing.
-plan_tasks="$(jq -er 'if .schema_version == 3 then .tasks[].task_id else error("the plan is not schema 3") end' "${PLAN_FILE}")" \
-  || { printf 'ERROR: could not read task ids from %s (missing, not schema 3, or zero tasks)\n' "${PLAN_FILE}" >&2; exit 2; }
+plan_tasks="$(jq -er 'if .schema_version == 4 then .tasks[].task_id else error("the plan is not schema 4") end' "${PLAN_FILE}")" \
+  || { printf 'ERROR: could not read task ids from %s (missing, not schema 4, or zero tasks)\n' "${PLAN_FILE}" >&2; exit 2; }
 [[ -n "${plan_tasks}" ]] || { printf 'ERROR: suite plan %s contains zero tasks\n' "${PLAN_FILE}" >&2; exit 2; }
 
 failures=0
