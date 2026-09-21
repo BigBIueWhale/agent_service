@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `c3e8d24d2679672c309862828f6455005a64d40008f88eb3794d8ef75c03fad0`
+- Review-diff SHA-256: `d0bd1c4c9779047adf5a00d744fa8cc1dc4bb2e92354ca8e67420943cf6d8ae8`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `edc4b8ac96edf511b4c83307b16c3e525871dbdb9b16c710af6528b4c0f29e31`
+- Transformer-manifest SHA-256: `7a1eded1d0cc5e67b224dea78dbe744210f2b2dbbd3ca8c4b114211989254647`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -73,8 +73,9 @@ The context partition spends the window exactly, from three declared
 quantities. `D`, the static preamble, is 3W/64 — 12,288 tokens at 262,144 — a
 declared capacity rather than a derivation: the system prompt and the tool
 declarations are texts this repo ships, so the turn preamble is counted
-exactly against it by the served tokenizer before the first turn, and a
-preamble that does not fit is a startup refusal naming shorten-or-deploy-
+exactly against it by the served tokenizer before the first turn, with the Git
+snapshot's repository values bounded by their byte caps rather than counted,
+and a preamble that does not fit is a startup refusal naming shorten-or-deploy-
 larger; each compaction's preflight holds what its directive adds to the same
 share. `M`, one inline block, is W/8 bytes — 32,768 — the one declared
 magnitude and openly a policy: it is the most any single block placed

@@ -600,26 +600,39 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
     label = "deployment prompt, scratch, and effect journal result"
     # Every value the git snapshot renders is repository data someone else
     # sized, and all three go through one capping helper that shows the cut.
-    # The layer lands in the system prompt of every request, so an unbounded
-    # value there is a preamble whose size a commit subject decides -- and a
-    # refusal naming the preamble would name something already written into
-    # history, which nobody can shorten.
+    # The layer lands in the system prompt of every request, so the startup
+    # proof bounds the values by their caps instead of counting them: no
+    # repository can make a deployment refuse to start. The caps are bytes,
+    # measured after NFC because the served tokenizer normalizes first, and
+    # every value is lines behind `git: ` ending in a newline between fixed
+    # lines that end in one, so no token spans a value's edge.
     git = "packages/core/src/utils/gitUtils.ts"
     git_source = _require_all(
         state,
         git,
         (
-            "const MAX_BRANCH_CHARS = 200;",
-            "const MAX_STATUS_CHARS = 2000;",
-            "const MAX_LOG_CHARS = 1000;",
-            "function cappedRepositoryText(",
-            "if (value.length <= maxChars) return value;",
-            "cappedRepositoryText(status, MAX_STATUS_CHARS, 'status')",
-            "MAX_BRANCH_CHARS,",
-            "MAX_LOG_CHARS,",
+            "const MAX_BRANCH_BYTES = 256;",
+            "const MAX_STATUS_BYTES = 2048;",
+            "const MAX_LOG_BYTES = 1024;",
+            "export const GIT_SNAPSHOT_REPOSITORY_BYTES =",
+            "MAX_BRANCH_BYTES + MAX_STATUS_BYTES + MAX_LOG_BYTES;",
+            "function repositoryLines(",
+            ".normalize('NFC')",
+            ".map((line) => `git: ${line}\\n`)",
+            "if (Buffer.byteLength(lines, 'utf8') <= maxBytes) return lines;",
+            "value(values?.branch ?? '', MAX_BRANCH_BYTES, 'branch --show-current')",
+            "value(values?.status ?? '', MAX_STATUS_BYTES, 'status')",
+            "value(values?.log ?? '', MAX_LOG_BYTES, 'log --oneline -n 5')",
+            "export const GIT_SNAPSHOT_WITHOUT_REPOSITORY_DATA = renderGitSnapshot();",
         ),
         label=label,
     )
+    for uncounted in ("MAX_BRANCH_CHARS", "MAX_STATUS_CHARS", "MAX_LOG_CHARS", "cappedRepositoryText"):
+        _require(
+            uncounted not in git_source,
+            f"{label}: {git} still caps a snapshot value by '{uncounted}'; a "
+            f"character cap is no token cap, so every value is capped in bytes.",
+        )
     for uncapped in (
         "`Current branch: ${branch}`",
         "`Recent commits:\\n${log}`",
@@ -650,16 +663,16 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         "getRecentGitStatus(process.cwd())",
         label=label,
     )
-    require_text(
+    _require_all(
         state,
         "packages/core/src/utils/gitUtils.test.ts",
-        "truncates a branch name over 200 characters",
-        label=label,
-    )
-    require_text(
-        state,
-        "packages/core/src/utils/gitUtils.test.ts",
-        "truncates recent commits over 1000 characters",
+        (
+            "truncates a branch name over 256 bytes",
+            "truncates recent commits over 1024 bytes",
+            "cuts a value on a character boundary, within its byte cap",
+            "measures a value in the bytes the served tokenizer sees, after NFC",
+            "adds at most its repository byte cap to the snapshot without repository data, for any repository",
+        ),
         label=label,
     )
     cli = "packages/cli/src/config/config.ts"
@@ -3378,13 +3391,17 @@ def _validate_compaction_budget_after(state: State) -> None:
             # request with one more message, less the request without it, less
             # that message's content counted alone.
             "private async verifyDeclarations(",
-            "const preamble = await count([]);",
+            "const declared = this.preambleDeclaration;",
+            "count(contents, declared?.systemInstruction);",
+            "const bare = await counted([]);",
+            "const repositoryData = declared?.repositoryDataBytes ?? 0;",
+            "const preamble = bare + repositoryData;",
             "if (preamble > partition.staticPreamble) {",
             "const probe = await countText(FRAMING_PROBE_TEXT);",
-            "const withMessage = await count([message]);",
-            "const withTurn = await count([message, turn]);",
-            "const withResult = await count([message, call, result]);",
-            "['user message', withMessage - preamble - probe],",
+            "const withMessage = await counted([message]);",
+            "const withTurn = await counted([message, turn]);",
+            "const withResult = await counted([message, call, result]);",
+            "['user message', withMessage - bare - probe],",
             "['assistant turn', withTurn - withMessage - 2 * probe],",
             "['tool result, with the call it answers', withResult - withTurn - probe],",
             "if (framing > partition.messageFraming) {",
@@ -3415,6 +3432,30 @@ def _validate_compaction_budget_after(state: State) -> None:
     # fail. The probe carries content, the text count takes it back out, and
     # the tests prove a template wider than `F` is refused on the wire.
     require_text(state, chat, "const FRAMING_PROBE_TEXT = 'framing';", label=label)
+    # The main session's instruction carries repository data, so its chat is
+    # declared with that instruction's fixed text and the data's byte bound;
+    # replacing the instruction clears the declaration it no longer matches.
+    _require_all(
+        state,
+        chat,
+        (
+            "export interface PreambleDeclaration {",
+            "    this.preambleDeclaration = undefined;",
+            "  declarePreamble(declaration: PreambleDeclaration): void {",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/client.ts",
+        (
+            "gitStatus: GIT_SNAPSHOT_WITHOUT_REPOSITORY_DATA,",
+            "repositoryDataBytes: GIT_SNAPSHOT_REPOSITORY_BYTES,",
+            "chat.declarePreamble(declaration);",
+            "this.chat.declarePreamble(preamble.declaration);",
+        ),
+        label=label,
+    )
     forbid_text(state, chat, "const framing = framed - preamble;", label=label)
     _require_all(
         state,
@@ -3429,6 +3470,8 @@ def _validate_compaction_budget_after(state: State) -> None:
             "'refuses a template that frames one %s past the declared framing',",
             "'shows why an empty probe measured nothing: the converter never sends it'",
             "'measures every framing from the wire requests the converter really sends'",
+            "'counts the declared instruction and bounds its repository data by bytes'",
+            "'drops a declaration when the instruction it describes is replaced'",
         ),
         label=label,
     )

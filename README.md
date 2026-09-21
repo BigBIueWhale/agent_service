@@ -206,15 +206,18 @@ holds any conversation. It is chosen here and then proved — the real turn
 preamble is counted by the served tokenizer before the first turn, and a
 deployment whose own preamble does not fit is refused at startup rather than
 part-way through a session; each compaction's preflight holds what its
-directive adds to the same share. Rendered by the served template and counted
-by the served tokenizer, this deployment's own preamble is 7,683 tokens in the
-turn shape before any Git snapshot, and 3,365 in the compaction shape before
-the 559 its directive adds, so the declared capacity is 1.60x the larger; a
-Git snapshot at its status and log caps, in ASCII, added 793. `F` is proved
-against the served template too: a user message, an assistant turn and a tool
-result, each counted with the request and without it, less its content counted
-alone. The served template frames them in 5, 10 and 24 tokens, the last with
-the markup of the call it answers.
+directive adds to the same share. The proof counts this deployment's turn
+preamble with the Git snapshot's repository values left out — 7,748 tokens,
+rendered by the served template and counted by the served tokenizer — and adds
+the 3,328 bytes those values may hold, capped after the tokenizer's NFC
+normalization, as the most tokens they can cost: a bound of 11,076 that is the
+same for every repository, so no repository can make a deployment refuse to
+start. In the compaction shape, without a snapshot, the preamble is 3,365
+before the 559 its directive adds. `F` is proved against the served template
+too: a user message, an assistant turn and a tool result, each counted with the
+request and without it, less its content counted alone. The served template
+frames them in 5, 10 and 24 tokens, the last with the markup of the call it
+answers.
 
 `M` is the one declared magnitude and is openly a policy: it is the most any
 single block placed inline may be — one tool result, one `read_file` page, one
