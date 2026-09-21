@@ -12,7 +12,7 @@
     "agent_apt_lock_sha256": "b653bee65b0d55f999b96a73102bdd3de03d72a4136a62810b9c89f091997770",
     "toolchain_verifier_sha256": "092f465dc47c3d102d7abe9d92d8317eea7e732d3133a7449607eb1dd46fe3ec",
     "toolchain_verifier_test_sha256": "932d6c5956a0e18a9f31a473ef68d1359d7bbd88a5b4fecdd5741568c3183011",
-    "runtime_contract_verifier_sha256": "d3f04941016936b58946ee0c7002226c9d5f2ebb58b7801e460a9063e2275244",
+    "runtime_contract_verifier_sha256": "e878567504844287312c4c06c593fa96502cc1a3fa3a19190e6bf524d34de6ea",
     "runtime_contract_verifier_test_sha256": "1224506b32f33ceec79ec74b4d5e7dcf3f9c4f43b7b8b79ee02fd8f53d3c125f",
     "wrapper_contract_test_sha256": "4d152995741166a803388cb4741c15753d8b94f0d58ae6b71b19cc64b01ff18a",
     "jks_normalizer_sha256": "309570025cc08c1ea865d67607e357d92cbb32ce2afe9af5e17c2cd7af8c3d6a",
