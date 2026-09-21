@@ -810,9 +810,9 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     if lock.backend.container_name != "qwen38-agent-native"
         || lock.backend.endpoint != "http://127.0.0.1:8000"
         || lock.backend.profile_label != "socket-isolated-nonroot-vision-k8v4-agent-v21"
-        || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v24"
+        || lock.backend.image_tag != "qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v25"
         || lock.backend.image_id
-            != "sha256:e91fc7b2f92db062fcafa46a6bddfe07cdeb2e589ac600b994520649749fcdc6"
+            != "sha256:477c9b55cfafc8e9fcb96fd8aa72e03b3a56d773f6a26bb93fa4c0330dfc9f1b"
         || lock.backend.served_model != "qwen3.8-27b-nvfp4-k8v4"
         || lock.backend.max_model_len != SERVED_CONTEXT_WINDOW
         || lock.backend.kv_cache_dtype != "turboquant_k8v4"
