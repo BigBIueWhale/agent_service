@@ -1685,23 +1685,6 @@
         {
           "properties": {
             "subtype": {
-              "const": "error_max_tool_calls"
-            },
-            "is_error": {
-              "const": true
-            },
-            "exit_code": {
-              "const": 55
-            }
-          },
-          "required": [
-            "subtype",
-            "is_error"
-          ]
-        },
-        {
-          "properties": {
-            "subtype": {
               "const": "error_loop_detected"
             },
             "is_error": {

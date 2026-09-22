@@ -341,8 +341,8 @@ A session is bounded by model turns, never by wall-clock time: the default
 budget is 400 turns (`limits.max_session_turns`), a submission may name any
 budget from 1 to the locked 2,000-turn ceiling
 (`limits.max_session_turns_ceiling`) in its optional `max_session_turns` field,
-the chosen budget is enforced by the client itself, and `max_wall_time_seconds`
-is disabled everywhere. The model is told its budget once, as a fixed line of
+and the chosen budget is enforced by the client itself, which has no wall-clock
+or cumulative tool-call budget to set. The model is told its budget once, as a fixed line of
 the `## Context` section — the number, and that reaching it ends the session —
 and it is never counted down; a subagent is told its own the same way. The
 budget counts the owning session's own turns, so a
@@ -684,12 +684,11 @@ it is ever handed back to a model.
 
 The envelope names which terminal state ended the run, and the service carries that
 name through to the caller as `terminal.agent_result.agent_result_subtype`. `success` is the agent's
-assertion that the model wrote its final message to the end. Eight `error_*`
+assertion that the model wrote its final message to the end. Seven `error_*`
 spellings name the states that stopped a run instead, one name per state:
-`error_during_execution` when the run failed on its own terms, `error_timeout`,
-`error_max_turns` and `error_max_tool_calls` for the three caller-supplied bounds,
-`error_loop_detected` when the loop detector halted a run that had stopped making
-progress, `error_incomplete_generation` when the provider stopped the last
+`error_during_execution` when the run failed on its own terms, `error_max_turns`
+when the turn budget ran out, `error_loop_detected` when the loop detector halted
+a run that had stopped making progress, `error_incomplete_generation` when the provider stopped the last
 generation from outside, `error_slipped_final_message` when the model ended three
 consecutive turns with a message that was not a final answer after being told
 twice, and `error_cancelled` for an abort from outside. The names, whether each
@@ -697,8 +696,10 @@ is an error, and the exit code a process that ended with each leaves are one
 table in the stream contract, `terminalOutcome` in
 `protocol/stream-contract-v1.json`, which validates a record's pairing and from
 which both the client's and the service's bindings are generated: `success`
-exits 0, `error_max_turns` 53, `error_timeout` and `error_max_tool_calls` 55,
-`error_cancelled` 130, and every other error 1. A completed session's process
+exits 0, `error_max_turns` 53, `error_cancelled` 130, and every other error 1.
+The table also names `error_timeout`, which no session ends in: only a subagent
+scope does, when the working time a subagent definition allows it runs out, and a
+scope's record carries no exit code. A completed session's process
 error is exactly an exit that disagrees with the subtype its certified record
 carries (a cancelled session's exit is the cancellation's, and is not
 compared), so the service reports an ending the run recorded and exited with as
@@ -798,9 +799,10 @@ generation stopped from outside is never read for a slip: `error_incomplete_gene
 names it first. A subagent is held to the same rule in its own loop; one that
 ends this way is reported to its parent as unfinished, with the shape of the slip
 and its turn count, in the same form as an exhausted budget or a cut-off
-generation, and its scoped terminal record carries the same name. The name is
-one of the `resultErrorSubtype` values of `protocol/stream-contract-v1.json`,
-which is the one place the vocabulary is written: the parser's list, the
+generation, and its scoped terminal record carries the same name. The name is a
+row of the terminal table, `terminalOutcome` in
+`protocol/stream-contract-v1.json`, which is the one place the vocabulary is
+written: the parser's list, the
 service's closed-set check and the client's own stream admission are all
 compiled from that schema, so the record is admitted on both sides.
 

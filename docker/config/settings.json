@@ -32,11 +32,8 @@
     "baseUrl": "http://127.0.0.1:18000/v1",
     "reasoningEffort": "xhigh",
     "maxSessionTurns": 400,
-    "maxWallTimeSeconds": -1,
-    "maxToolCalls": -1,
     "maxToolCallsPerTurn": 1000,
     "maxSubagentDepth": 1,
-    "sessionTokenLimit": -1,
     "skipLoopDetection": true,
     "chatCompression": {
       "maxRecentImagesToRetain": 0

@@ -4685,6 +4685,38 @@ _OLD_FINAL_RESULT_NUDGE = "'Please provide the final result now and stop calling
 # only switched it off; the check, its telemetry event and the setting are gone.
 _NEXT_SPEAKER_MODULE = "packages/core/src/utils/nextSpeakerChecker.ts"
 _NEXT_SPEAKER_TEST = "packages/core/src/utils/nextSpeakerChecker.test.ts"
+# Upstream bounds an unattended run three ways beside its turn budget: a
+# wall-clock budget and a cumulative tool-call budget, enforced against the
+# same controller as SIGINT, and a session token limit that refuses a send.
+# This deployment can set none of them -- the launcher passes a fixed argv, the
+# sealed settings are the only settings, and neither names any of the three --
+# so each was a bound with no way in. They are gone, with the terminal state
+# and the wire name the tool-call budget ended a run in.
+_RUN_BUDGET_MODULE = "packages/cli/src/utils/runBudget.ts"
+_RUN_BUDGET_TEST = "packages/cli/src/utils/runBudget.test.ts"
+_RETIRED_BUDGET_NAMES = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"\bRunBudgetEnforcer\b",
+        r"\bBudgetKind\b",
+        r"\bBUDGET_STATE\b",
+        r"\bFatalBudgetExceededError\b",
+        r"utils/runBudget",
+        r"max-wall-time",
+        r"max-tool-calls",
+        r"\bmaxWallTime\b",
+        r"\bmaxWallTimeSeconds\b",
+        r"\bmaxToolCalls\b",
+        r"\bmax_tool_calls\b",
+        r"AgentTerminateMode\.MAX_TOOL_CALLS",
+        r"MAX_TOOL_CALLS = 'MAX_TOOL_CALLS'",
+        r"error_max_tool_calls",
+        r"\bsessionTokenLimit\b",
+        r"SessionTokenLimit",
+        r"session-token-limit-error",
+    )
+)
+
 _RETIRED_NEXT_SPEAKER_NAMES = (
     "checkNextSpeaker",
     "nextSpeakerChecker",
@@ -5108,6 +5140,31 @@ def _validate_terminal_state_before(state: State) -> None:
     ):
         require_text(state, errors, helper, label=label)
 
+    # The three bounds beside the turn budget: a wall-clock and a cumulative
+    # tool-call budget with their flags and settings, and a session token limit.
+    _require_all(
+        state,
+        _RUN_BUDGET_MODULE,
+        (
+            "export type BudgetKind = 'wall-time' | 'tool-calls';",
+            "export class RunBudgetEnforcer {",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/cli/src/config/config.ts",
+        (".option('max-wall-time', {", ".option('max-tool-calls', {"),
+        label=label,
+    )
+    require_text(state, cli, "    const budgetEnforcer = new RunBudgetEnforcer(", label=label)
+    require_text(
+        state,
+        "packages/core/src/config/config.ts",
+        "  getSessionTokenLimit(): number {",
+        label=label,
+    )
+
     # The turn budget is counted twice, checked by two spellings of one
     # predicate, and charged to the turn before the turn is admitted.
     require_text(state, cli, "let limitedTurnCount = 0;", label=label)
@@ -5207,7 +5264,7 @@ def _validate_terminal_state_after(state: State) -> None:
     # deployment's argv can reach a producing statement is a path-sensitive
     # property of a call graph that no text-level check can decide, and the
     # state set is instead kept equal to the states this build can reach, so
-    # the two coincide -- a property a reader checks by eye on a nine-member
+    # the two coincide -- a property a reader checks by eye on an eight-member
     # enum.
     enum_source = _source(state, agent_types, label=label)
     enum_body = enum_source.split("export enum AgentTerminateMode {", 1)[1].split(
@@ -5395,7 +5452,6 @@ def _validate_terminal_state_after(state: State) -> None:
         "terminateMode?: AgentTerminateMode;",
         label=label,
     )
-    require_text(state, agent_types, "MAX_TOOL_CALLS = 'MAX_TOOL_CALLS',", label=label)
     _require(
         _source(state, agent, label=label).count("terminateMode:") >= 5,
         f"{label}: {agent} publishes a terminal display that names no state",
@@ -5414,6 +5470,27 @@ def _validate_terminal_state_after(state: State) -> None:
     # owes its scope a record.
     forbid_text(state, helpers, "previousStatus !== undefined", label=label)
 
+    # ── The bounds this deployment cannot set are gone ───────────────────
+    #
+    # The wall-clock budget, the cumulative tool-call budget and the session
+    # token limit are deleted with their module, flags, settings, tests and
+    # documentation, and the tool-call budget's terminal state and wire name
+    # with them: nothing this launcher can pass or this settings file can carry
+    # reaches any of them, so each was a bound with no way in rather than a
+    # bound left unset. No file the transformation writes names them again, and
+    # a run is bounded by its turn budget alone. `error_timeout` stays: a
+    # subagent whose definition allows it a working time still ends there,
+    # though no session does, and a scope's record carries no exit code.
+    for absent in (_RUN_BUDGET_MODULE, _RUN_BUDGET_TEST):
+        _require(absent not in state, f"{label}: {absent} still ships")
+    for path, source in sorted(state.items()):
+        for retired in _RETIRED_BUDGET_NAMES:
+            _require(
+                retired.search(source) is None,
+                f"{label}: {path} still names the retired bound "
+                f"{retired.pattern!r}",
+            )
+
     # ── Executed in the build ────────────────────────────────────────────
     for case in (
         "names a scope that stopped in %s as %s",
@@ -5425,12 +5502,6 @@ def _validate_terminal_state_after(state: State) -> None:
         state,
         cli_test,
         "ends a run that reached the session turn budget as error_max_turns",
-        label=label,
-    )
-    require_text(
-        state,
-        cli_test,
-        "names each run budget on the record of the run it stopped",
         label=label,
     )
     require_text(
@@ -7940,7 +8011,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "A closed terminal-state value maps once to a wire name, whose error classification and exit "
             "code are the stream contract's terminal table, read from its generated binding. The "
             "constructed and mapped state sets agree, and every name the contract defines is one a "
-            "state produces. Budget admission precedes "
+            "state produces. A run is bounded by its turn budget and nothing else: the wall-clock and "
+            "cumulative tool-call budgets and the session token limit, which no fixed argv or sealed "
+            "settings file could set, are gone with the state and wire name the tool-call budget ended "
+            "a run in. Budget admission precedes "
             "charging. One queued-turn lifetime tracks result delivery, so failed cleanup cannot mint a "
             "second terminal; cleanup and output callbacks are awaited."
         ),

@@ -107,6 +107,11 @@ class VerifyRuntimeContractTests(unittest.TestCase):
         for path, value in (
             (("model", "skipNextSpeakerCheck"), True),
             (("model", "skipNextSpeakerCheck"), False),
+            (("model", "maxWallTimeSeconds"), -1),
+            (("model", "maxWallTimeSeconds"), 600),
+            (("model", "maxToolCalls"), -1),
+            (("model", "maxToolCalls"), 1000),
+            (("model", "sessionTokenLimit"), -1),
         ):
             with self.subTest(path=path, value=value), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)

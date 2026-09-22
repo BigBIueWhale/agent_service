@@ -34,6 +34,9 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 # that still exists; each is refused by name instead.
 RETIRED_SETTINGS = (
     ("model", "skipNextSpeakerCheck"),
+    ("model", "maxWallTimeSeconds"),
+    ("model", "maxToolCalls"),
+    ("model", "sessionTokenLimit"),
 )
 
 
@@ -118,16 +121,6 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
         "settings default max session turns",
         settings["model"]["maxSessionTurns"],
         execution["max_session_turns"],
-    )
-    require_equal(
-        "settings max wall time",
-        settings["model"]["maxWallTimeSeconds"],
-        execution["max_wall_time_seconds"],
-    )
-    require_equal(
-        "settings max cumulative tool calls",
-        settings["model"]["maxToolCalls"],
-        execution["max_cumulative_tool_calls"],
     )
     require_equal(
         "settings per-turn tool-call circuit breaker",
@@ -485,7 +478,7 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
     strict_tools = [arg.removeprefix("--strict-tools=") for arg in arguments if arg.startswith("--strict-tools=")]
     require_equal("agent_exec strict tools", strict_tools, [",".join(contract["native_tools"])])
     for required in ["--input-format=text", "--approval-mode=yolo", "--output-format=stream-json",
-                     "--foreground-agents-only", "--max-subagent-depth=1", "--max-tool-calls=-1"]:
+                     "--foreground-agents-only", "--max-subagent-depth=1"]:
         require_equal(f"agent_exec argument {required}", arguments.count(required), 1)
 
 

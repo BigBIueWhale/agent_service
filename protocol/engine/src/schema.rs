@@ -514,7 +514,6 @@ mod tests {
             ("error_during_execution", 1),
             ("error_timeout", 55),
             ("error_max_turns", 53),
-            ("error_max_tool_calls", 55),
             ("error_loop_detected", 1),
             ("error_incomplete_generation", 1),
             ("error_slipped_final_message", 1),
@@ -526,7 +525,7 @@ mod tests {
                 "{subtype}"
             );
         }
-        assert_eq!(crate::TERMINAL_OUTCOMES.len(), 9);
+        assert_eq!(crate::TERMINAL_OUTCOMES.len(), 8);
         assert_eq!(crate::terminal_exit_code("unknown_terminal"), None);
     }
 

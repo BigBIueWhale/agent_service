@@ -2239,7 +2239,6 @@ mod tests {
             ("success", 0),
             ("error_max_turns", 53),
             ("error_timeout", 55),
-            ("error_max_tool_calls", 55),
             ("error_during_execution", 1),
             ("error_cancelled", 130),
         ] {

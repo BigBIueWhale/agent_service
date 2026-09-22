@@ -80,8 +80,8 @@ pub const MAX_ARCHIVE_BYTES: u64 = MAX_STAGED_BYTES + 64 * 1024 * 1024;
 /// converging. Qwen Code stops itself at this count, records `error_max_turns`
 /// and exits 53, the exit the stream contract's terminal table gives that
 /// subtype, so it is an ordinary terminal outcome graded on the work done,
-/// never a process error. `max_wall_time_seconds` stays disabled everywhere by
-/// design.
+/// never a process error. A run is bounded by turns and by nothing else: the
+/// client has no wall-clock or tool-call budget to disable.
 ///
 /// This is the budget a submission that says nothing about turns receives. A
 /// caller that knows its task is shaped differently may name another budget in

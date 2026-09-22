@@ -98,7 +98,6 @@ const CLI_ARGS: &[&str] = &[
     "--strict-tools=agent,edit,glob,grep_search,list_directory,notebook_edit,read_file,run_shell_command,todo_write,write_file",
     "--foreground-agents-only",
     "--max-subagent-depth=1",
-    "--max-tool-calls=-1",
 ];
 
 #[repr(C)]
