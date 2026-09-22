@@ -6382,23 +6382,30 @@ def _validate_bounded_output_after(state: State) -> None:
         f"tool says it the same way and a reader learns the shape once.",
     )
 
-    # read_file pages by the room one inline block leaves its notice, and only
-    # two things can end a page: its bytes, or the caller's own `limit`. The
-    # notice names whichever did -- blaming the bytes when the caller's
-    # smaller `limit` stopped the page is exactly the plausible wrong number
-    # this notice exists to prevent -- and a page that reached the end of the
-    # file carries none, because nothing cut it.
+    # read_file pages by the room one inline block leaves what leads a page,
+    # and only two things can end a page: its bytes, or the caller's own
+    # `limit`. The notice names whichever did -- blaming the bytes when the
+    # caller's smaller `limit` stopped the page is exactly the plausible wrong
+    # number this notice exists to prevent. The page the file ends with carries
+    # no notice, because nothing cut it; it says instead which lines it holds
+    # and that the file ends with them, counted in lines rather than in the
+    # segments a final newline adds one to, so a reader that paged there knows
+    # it reached the end.
     _require_all(
         state,
         "packages/core/src/tools/read-file.ts",
         (
             "function readPageBytes(",
-            "      result.nextRead &&",
+            "if (result.nextRead && result.linesShown && trueTotal !== undefined) {",
             "result.truncatedByBytes === true || this.params.limit === undefined;",
             "limit: cutByBytes ? pageBytes : this.params.limit!,",
             "limitUnit: cutByBytes ? 'bytes of content' : 'lines',",
             "result.originalLineCount - (result.endsWithNewline === true ? 1 : 0);",
-            "page.split('\\n').length - (page === '' || page.endsWith('\\n') ? 1 : 0),",
+            "  return page.split('\\n').length - (page === '' || page.endsWith('\\n') ? 1 : 0);",
+            "      returned: pageLineCount(page),",
+            "`Lines ${first}-${first + returned - 1} of ${total} in total: the file ends here.`",
+            "llmContent = `${pageEnd(this.params.offset + 1, pageLineCount(page), trueTotal)}${PAGE_STATEMENT_BREAK}${page}`;",
+            "tokenizerText(`${pageEnd(most, most, most)}${PAGE_STATEMENT_BREAK}`).bytes,",
         ),
         label=label,
     )
@@ -6460,7 +6467,8 @@ def _validate_bounded_output_after(state: State) -> None:
     )
     for case in (
         "reports the true line count and names what actually bound",
-        "carries no notice on the last page",
+        "says the last page of a file read in pages is its end, counting its lines, not its final newline",
+        "says a read that starts past the end of a file has no lines, and where the file ends",
         "counts the lines of a page by the page",
     ):
         require_text(state, "packages/core/src/tools/read-file.test.ts", case, label=label)
