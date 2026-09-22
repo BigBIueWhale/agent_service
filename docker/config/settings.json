@@ -37,7 +37,6 @@
     "maxToolCallsPerTurn": 1000,
     "maxSubagentDepth": 1,
     "sessionTokenLimit": -1,
-    "skipNextSpeakerCheck": true,
     "skipLoopDetection": true,
     "chatCompression": {
       "maxRecentImagesToRetain": 0

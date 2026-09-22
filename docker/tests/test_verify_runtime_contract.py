@@ -101,6 +101,32 @@ class VerifyRuntimeContractTests(unittest.TestCase):
                 ):
                     MODULE.verify(paths)
 
+    def test_rejects_retired_settings_even_if_resealed(self) -> None:
+        # A setting the client no longer has is refused by name: resealed into the
+        # file it would read as a mode that could still be switched on.
+        for path, value in (
+            (("model", "skipNextSpeakerCheck"), True),
+            (("model", "skipNextSpeakerCheck"), False),
+        ):
+            with self.subTest(path=path, value=value), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                settings = json.loads(self.paths[1].read_text(encoding="utf-8"))
+                node = settings
+                for key in path[:-1]:
+                    node = node.setdefault(key, {})
+                node[path[-1]] = value
+                settings_path = root / "settings.json"
+                settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+                contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+                contract["components"]["settings_sha256"] = MODULE.sha256(settings_path.read_bytes())
+                contract_path = root / "contract.json"
+                contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+                paths = [contract_path, settings_path, *self.paths[2:]]
+                with self.assertRaisesRegex(
+                    MODULE.ContractError, f"settings carry {'.'.join(path)}, which the client no longer has"
+                ):
+                    MODULE.verify(paths)
+
     def test_rejects_a_wrapper_that_sets_stream_bounds_even_if_resealed(self) -> None:
         # The client derives every stream bound itself; a wrapper that pins one
         # through the environment is a second source, refused by name.

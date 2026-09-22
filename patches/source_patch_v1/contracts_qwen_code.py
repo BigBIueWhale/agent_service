@@ -4638,6 +4638,22 @@ _FINAL_MESSAGE_SLIP_MARKUP = (
     "'</parameter>',",
 )
 _OLD_FINAL_RESULT_NUDGE = "'Please provide the final result now and stop calling tools.'"
+# Upstream asks a model, after every turn that ends without a tool call, whether it
+# should keep talking, and answers "Please continue." when it says yes. A setting
+# only switched it off; the check, its telemetry event and the setting are gone.
+_NEXT_SPEAKER_MODULE = "packages/core/src/utils/nextSpeakerChecker.ts"
+_NEXT_SPEAKER_TEST = "packages/core/src/utils/nextSpeakerChecker.test.ts"
+_RETIRED_NEXT_SPEAKER_NAMES = (
+    "checkNextSpeaker",
+    "nextSpeakerChecker",
+    "NextSpeakerCheckEvent",
+    "logNextSpeakerCheck",
+    "EVENT_NEXT_SPEAKER_CHECK",
+    "next_speaker_check",
+    "skipNextSpeakerCheck",
+    "SkipNextSpeakerCheck",
+    "Skip Next Speaker Check",
+)
 
 
 def _validate_final_message_slip_before(state: State) -> None:
@@ -4660,6 +4676,23 @@ def _validate_final_message_slip_before(state: State) -> None:
         forbid_text(state, path, "finalMessageSlip", label=label)
     forbid_text(state, agent_types, "SLIPPED_FINAL_MESSAGE", label=label)
     forbid_text(state, types, "error_slipped_final_message", label=label)
+    # The next-speaker check ships, switched off by a setting that defaults to off.
+    _require_all(
+        state,
+        _NEXT_SPEAKER_MODULE,
+        ("export async function checkNextSpeaker(",),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/client.ts",
+        (
+            "        if (this.config.getSkipNextSpeakerCheck()) {",
+            "        const nextSpeakerCheck = await checkNextSpeaker(",
+            "            : [{ text: 'Please continue.' }];",
+        ),
+        label=label,
+    )
 
 
 def _validate_final_message_slip_after(state: State) -> None:
@@ -4745,6 +4778,21 @@ def _validate_final_message_slip_after(state: State) -> None:
         forbid_text(state, path, "nextSpeaker", label=label)
         forbid_text(state, path, "checkNextSpeaker", label=label)
     require_text(state, index, "} from './core/final-message-slip.js';", label=label)
+    # Nor anywhere else: the check, its test, its telemetry event and its setting are
+    # gone from the shipped tree, and no file the transformation writes names them, so
+    # nothing can switch the judgment back on. A turn that ends without a tool call
+    # takes the completion every turn nobody continues takes.
+    for absent in (_NEXT_SPEAKER_MODULE, _NEXT_SPEAKER_TEST):
+        _require(absent not in state, f"{label}: {absent} still ships")
+    for path, source in sorted(state.items()):
+        for retired in _RETIRED_NEXT_SPEAKER_NAMES:
+            _require(
+                retired not in source,
+                f"{label}: {path} still names the retired next-speaker {retired!r}",
+            )
+    forbid_text(
+        state, "packages/core/src/core/client.ts", "[{ text: 'Please continue.' }]", label=label
+    )
 
     # ── The session: notice, continuation, and the third slip's terminal ─
     #
@@ -7804,7 +7852,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "to end the run until it repeats. The third consecutive slip is the SLIPPED_FINAL_MESSAGE "
             "state, error_slipped_final_message on the wire, in the headless session and every "
             "subagent alike, after the incomplete-generation check and never in its place. Detection "
-            "is an exact string test on the turn's visible text; no next-speaker judgment returns."
+            "is an exact string test on the turn's visible text; no next-speaker judgment returns: "
+            "the check, its telemetry event and the setting that switched it off are gone."
         ),
         removal_condition=(
             "Upstream answers an empty or markup-carrying self-ended turn with the same notice in "

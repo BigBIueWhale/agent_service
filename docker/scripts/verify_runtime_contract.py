@@ -29,6 +29,12 @@ EXPECTED_TOP_LEVEL = {
     "components",
 }
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+# Settings the client no longer has, by their path in settings.json. The client passes over
+# a key it does not declare, so a retired one resealed into the file would read as a mode
+# that still exists; each is refused by name instead.
+RETIRED_SETTINGS = (
+    ("model", "skipNextSpeakerCheck"),
+)
 
 
 class ContractError(RuntimeError):
@@ -79,7 +85,20 @@ def require_fragments(label: str, text: str, fragments: list[str]) -> None:
             raise ContractError(f"{label} is missing canonical fragment: {fragment!r}")
 
 
+def require_no_retired_settings(settings: dict[str, Any]) -> None:
+    for path in RETIRED_SETTINGS:
+        node: Any = settings
+        for key in path[:-1]:
+            node = node.get(key) if isinstance(node, dict) else None
+        if isinstance(node, dict) and path[-1] in node:
+            raise ContractError(
+                f"settings carry {'.'.join(path)}, which the client no longer has; "
+                "a retired setting is not a mode that can be switched back on"
+            )
+
+
 def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
+    require_no_retired_settings(settings)
     model = contract["model"]
     generation = contract["generation"]
     vision = contract["vision"]
