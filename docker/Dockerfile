@@ -2,7 +2,10 @@
 
 # Our images. Everything generic -- the pinned apt sets, the toolchains and the
 # Node dependency bytes -- is in the two base images `docker/Dockerfile.base`
-# builds, and this file reaches the network for nothing. The bases are pinned by
+# builds. What this file still fetches is pinned by hash: the crates the Rust
+# stages build from are checked against `Cargo.lock`, the Docker CLI archive
+# against its `ADD --checksum`, and this frontend and the Rust image are pulled
+# by digest when the host lacks them. The bases are pinned by
 # image ID in `config/stack.lock.json` and `./build.sh` refuses any other, so a
 # missing or drifted base is a named failure rather than a silent rebuild.
 # Both are required of every build of this file, whichever target it asks for:

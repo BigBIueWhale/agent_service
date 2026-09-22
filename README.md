@@ -906,20 +906,27 @@ them by [`docker/Dockerfile`](docker/Dockerfile). The split is not a convenience
 the two concerns were previously one `RUN`, so a layer of pinned third-party
 packages could not be separated from the account our code runs as.
 
-[`scripts/build-base-images.sh`](scripts/build-base-images.sh) is the only thing in
-this repository that fetches from the network, and it runs only when a pin moves.
-`./build.sh` reaches the network for nothing. Ubuntu packages come from the
-timestamped `20260814T120000Z` snapshot with an exact version for every requested
-package; the initial TLS bootstrap authenticates repository metadata by Ubuntu's
-signed `InRelease`, and after the exact CA package is installed the snapshot is
-fetched again with ordinary certificate verification. Qwen, Go and Docker CLI
-remote archives use BuildKit `ADD --checksum=sha256:...` and are hashed again
-inside the build. The base images are digest-pinned linux/amd64 Ubuntu; our own
+[`scripts/build-base-images.sh`](scripts/build-base-images.sh) fetches everything
+the two base images hold, and it runs only when a pin moves. `./build.sh` fetches
+too: the Rust stages download the crates `Cargo.lock` lists, and Cargo verifies
+each against the checksum the lockfile records; the
+broker stage downloads the Docker CLI archive; and BuildKit pulls the Dockerfile
+frontend and the Rust image by their digests on a host that does not already hold
+them. A build that runs those steps rather than reusing them from its cache
+therefore fails without a network, and nothing it fetches can change what it
+builds without failing a checksum or a digest. Ubuntu packages come from
+the timestamped `20260814T120000Z` snapshot with an exact version for every
+requested package; the initial TLS bootstrap authenticates repository metadata by
+Ubuntu's signed `InRelease`, and after the exact CA package is installed the
+snapshot is fetched again with ordinary certificate verification. Qwen, Go and
+Docker CLI remote archives use BuildKit `ADD --checksum=sha256:...` and are hashed
+again inside the build — the Qwen and Go archives in the base build, the Docker
+CLI archive in ours. The base images are digest-pinned linux/amd64 Ubuntu; our own
 Rust stages are digest-pinned Rust.
 
 Both bases are pinned by image ID under `.build.base` in
 [`config/stack.lock.json`](config/stack.lock.json), and `./build.sh` refuses to
-build against any other — no mutable tag is accepted and nothing is pulled. That
+build against any other — no mutable tag is accepted and no base is pulled. That
 makes reproducibility stronger rather than weaker: our images' inputs are now a
 pinned base ID plus our own sources, instead of a base plus several hundred
 package fetches trusted to keep returning the same bytes. The bases travel to

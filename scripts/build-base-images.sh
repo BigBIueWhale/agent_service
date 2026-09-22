@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# One script fetches. Nothing else does.
+# One script fetches the generic layers.
 #
 # The generic layers of this stack -- pinned apt packages, the toolchains and
 # the Node dependency bytes -- live in two base images built here. `./build.sh`
-# builds our own images from them and reaches the network for nothing, which is
-# the point: rebuilding our logic, which happens constantly, no longer
-# re-downloads several hundred packages from a third party's mirror to arrive
-# at bytes we already had.
+# builds our own images from them, and what it still fetches is its own and
+# pinned by hash: the crates `Cargo.lock` lists, the Docker CLI archive, and the
+# frontend and Rust images by digest. That is the point: rebuilding our logic,
+# which happens constantly, no longer re-downloads several hundred packages from
+# a third party's mirror to arrive at bytes we already had.
 #
 # Run this only when a pin in `config/stack.lock.json` moves. It is the rare
 # operation; `./build.sh` is the common one. Both images are then pinned by ID

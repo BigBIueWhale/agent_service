@@ -209,11 +209,13 @@ check_host_tools_and_versions() {
 }
 
 # The generic layers of this stack live in two base images that
-# `docker/Dockerfile.base` builds and `./scripts/build-base-images.sh` is the
-# only thing that fetches for. Our images are built FROM them and fetch
-# nothing, so the bases are build inputs like any other and are pinned by ID
-# rather than by tag: a tag is mutable and would let a differently-built base
-# be substituted silently, which is the whole failure this replaces.
+# `docker/Dockerfile.base` builds and `./scripts/build-base-images.sh` fetches
+# for. Our images are built FROM them, so the bases are build inputs like any
+# other and are pinned by ID rather than by tag: a tag is mutable and would let
+# a differently-built base be substituted silently, which is the whole failure
+# this replaces. What our images still fetch is their own and pinned by hash:
+# the crates `Cargo.lock` lists, the Docker CLI archive, and the frontend and
+# Rust images by digest.
 #
 # There is one behaviour here. A base that is absent, unpinned or drifted is
 # refused by name; nothing is rebuilt to repair it and nothing is pulled. The
