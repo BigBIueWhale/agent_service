@@ -169834,7 +169834,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
-@@ -0,0 +1,322 @@
+@@ -0,0 +1,325 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -170134,6 +170134,9 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +    });
 +    expect(prompt).toContain('Role: Explore');
 +    expect(prompt).toContain('/tmp/qwen-subagents/Explore-abc123');
++    expect(prompt).toContain(
++      'it lives under /tmp, which is discarded at session teardown, so anything that must survive belongs in /workspace or /artifacts.',
++    );
 +    expect(() =>
 +      appendQwen38SubagentInvocation('role and contract', undefined),
 +    ).toThrow('outside its invocation frame');
@@ -170361,7 +170364,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +      'locked agent-service subagent prompt was built outside its invocation frame',
 +    );
 +  }
-+  return `${base.trim()}\n\n## This foreground invocation\n\n- Role: ${execution.subagentType}\n- Private scratch root: ${execution.scratchDir}\n- TMPDIR, language caches, and build caches are routed beneath that exact scratch root.\n- Scratch is not a deliverable and is not automatically bundled. Deliberately promote anything that must survive to /workspace or /artifacts.\n- The scratch tree remains available to the parent until session teardown; cleanup errors are teardown diagnostics, never silent success.`;
++  return `${base.trim()}\n\n## This foreground invocation\n\n- Role: ${execution.subagentType}\n- Private scratch root: ${execution.scratchDir}\n- TMPDIR, language caches, and build caches are routed beneath that exact scratch root.\n- Scratch is not a deliverable: it lives under /tmp, which is discarded at session teardown, so anything that must survive belongs in /workspace or /artifacts.\n- The scratch tree remains available to the parent until session teardown; cleanup errors are teardown diagnostics, never silent success.`;
 +}
 diff --git a/packages/core/src/core/served-usage.test.ts b/packages/core/src/core/served-usage.test.ts
 --- /dev/null

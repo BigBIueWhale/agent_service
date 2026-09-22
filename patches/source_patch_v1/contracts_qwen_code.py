@@ -720,6 +720,20 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         ),
         label=label,
     )
+    # A subagent's scratch is under /tmp, so its frame says what the
+    # deployment contract says of /tmp, in the same plain words: discarded at
+    # session teardown, with anything that must survive belonging in
+    # /workspace or /artifacts. The service's "bundled" is not the model's
+    # word for either.
+    require_text(
+        state,
+        prompt,
+        "- Scratch is not a deliverable: it lives under /tmp, which is discarded at "
+        "session teardown, so anything that must survive belongs in /workspace or "
+        "/artifacts.",
+        label=label,
+    )
+    forbid_text(state, prompt, "bundled", label=label)
     _require_all(
         state,
         prompts,
