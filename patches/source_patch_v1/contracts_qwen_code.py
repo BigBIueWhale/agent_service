@@ -4849,12 +4849,16 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "export interface GenerationTerminal {\n"
             "  reason: FinishReason;\n"
             "  issued: IssuedGeneration;\n"
+            "  position: GenerationPosition;\n"
             "}",
+            "  /** The part of `outputTokens` the provider counted as reasoning. */\n"
+            "  reasoningTokens: number;",
             "export function generationTerminal(",
-            "): GenerationTerminal {",
+            "  position: GenerationPosition,\n): GenerationTerminal {",
+            "!Number.isSafeInteger(usage.thoughtsTokenCount) ||",
             "    throw new Error(\n"
-            "      `A finished generation carries its terminal reason and its served prompt "
-            "and output counts, on a route that declares its context window;",
+            "      `A finished generation carries its terminal reason and its served prompt, "
+            "output and reasoning counts, on a route that declares its context window;",
             "export function describeIncompleteGeneration(\n"
             "  terminal: GenerationTerminal | undefined,\n"
             "  turn: number,\n"
@@ -4863,6 +4867,26 @@ def _validate_incomplete_generation_after(state: State) -> None:
             # sets it, not restated as arithmetic beside it, so the sentence
             # cannot drift from the partition.
             "turnOutputLimit(partitionContextWindow(terminal.issued.window))",
+            # Where the generation stood is read from what the turn produced:
+            # a call its limit stopped, carried as served, outranks any text,
+            # and whitespace is not a message.
+            "export type GenerationPosition =",
+            "export function generationPosition(\n"
+            "  visibleText: string,\n"
+            "  incompleteToolCalls: readonly IncompleteToolCall[],\n"
+            "): GenerationPosition {",
+            "  if (incompleteToolCalls.length > 0) {\n"
+            "    return { within: 'tool_call', calls: [...incompleteToolCalls] };\n"
+            "  }\n"
+            "  return visibleText.trim().length > 0\n",
+            # What the stop cost, in its three shapes, and what the run can do.
+            "that the model had not completed, so the call was not made; ",
+            "Buffer.byteLength(call.arguments, 'utf8')",
+            "are recorded, exactly as served, in this turn's incomplete_tool_use",
+            "'It stopped inside its message text, so that text is a cut-off prefix.'",
+            "'It stopped before the model wrote any message text or tool call.'",
+            "'This run cannot be continued: a generation that did not end on its own is ' +",
+            "'final answer. What earlier turns wrote to the workspace is kept.'",
         ),
         label=label,
     )
@@ -4872,12 +4896,30 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "export function describeIncompleteGeneration(",
             "if (terminal?.reason === FinishReason.STOP) {",
             "return null;",
-            "terminal?.reason === FinishReason.MAX_TOKENS",
-            "terminal?.reason ?? 'no terminal reason'",
+            "terminal === undefined",
+            "ended with no terminal reason, so nothing ",
+            "terminal.reason === FinishReason.MAX_TOKENS",
+            "of them reasoning, rather than the ",
+            "describeGenerationPosition(terminal.position)",
+            "describeGenerationPosition(terminal.position)",
+            "return `${ended} ${INCOMPLETE_RUN_ENDS}`;",
         ),
         label=label,
         location=turn,
     )
+    # The description once called every stopped generation a cut-off text
+    # prefix, which a call the limit stopped is not, and named nothing the
+    # run could do next.
+    for retired in (
+        "so its text is a cut-off",
+        "the text on the wire is\n * a prefix",
+    ):
+        forbid_text(state, turn, retired, label=label)
+    forbid_text(
+        state, cli, "the text the adapter\n              // collected is the prefix", label=label
+    )
+    forbid_text(state, agent_types, "holds a cut-off prefix rather than", label=label)
+    forbid_text(state, types, "so the scope holds a cut-off prefix", label=label)
     for retired in (
         "issued?: IssuedGeneration",
         "IssuedGeneration | undefined",
@@ -4912,6 +4954,24 @@ def _validate_incomplete_generation_after(state: State) -> None:
         cli_source.count("lastGenerationTerminal = undefined;") == 2,
         f"{label}: a turn head can inherit a stale terminal, or its numbers",
     )
+    # Both loops read where the generation stood from the turn's own events,
+    # and a retry starts the turn's record again.
+    for text_name, calls_name in (
+        ("turnText", "turnIncompleteToolCalls"),
+        ("itemText", "itemIncompleteToolCalls"),
+    ):
+        _require_all(
+            state,
+            cli,
+            (
+                f"let {calls_name}: IncompleteToolCall[] = [];",
+                f"{calls_name}.push(event.value);",
+                f"generationPosition({text_name}, {calls_name}),",
+                f"{text_name} = '';\n",
+                f"{calls_name} = [];",
+            ),
+            label=label,
+        )
     for retired in ("lastGenerationFinishReason", "lastGenerationUsage", "issuedGeneration("):
         forbid_text(state, cli, retired, label=label)
     _require_ordered(
@@ -4946,6 +5006,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "roundTerminal = generationTerminal(\n"
             "                chunkFinishReason,\n"
             "                resp.usageMetadata,",
+            "generationPosition(roundText, roundIncompleteToolCalls),",
             "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
             "// No tool calls and a self-ended generation \u2014 this is the",
         ),
@@ -4991,12 +5052,14 @@ def _validate_incomplete_generation_after(state: State) -> None:
         "names %s as a generation stopped from outside",
         label=label,
     )
-    require_text(
-        state,
-        turn_test,
-        "names the prompt, the limit and the output when a generation reached its limit",
-        label=label,
-    )
+    for name in (
+        "names the prompt, the limit and the output, reasoning included, when a generation reached its limit",
+        "names the call a limit stopped, what was served of it and where it is kept, and never calls it a text prefix",
+        "counts every call a limit stopped and names one the provider left unnamed",
+        "calls only message text a cut-off prefix, and says so when nothing visible was written",
+        "describes a generation whose terminal reason never arrived without saying where it stopped",
+    ):
+        require_text(state, turn_test, name, label=label)
     require_text(
         state,
         turn_test,
@@ -8567,7 +8630,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Only a self-ended STOP can satisfy the completed-generation predicate. Missing or "
             "externally stopped terminals retain an explicit incomplete state in root and child "
             "reasoning loops and UI. A terminal always carries the served counts and the window its "
-            "generation was issued with, so one stopped at its limit is always described with them."
+            "generation was issued with, so one stopped at its limit is always described with them, "
+            "and what the generation was writing when it ended, so the description says what the "
+            "stop cost -- a call the model had not completed, which was not made, and where what "
+            "was served of it is kept; a message cut to a prefix; or nothing visible -- and that "
+            "the run cannot be continued."
         ),
         removal_condition=(
             "Upstream distinguishes self-ended generation from a severed response and preserves that "

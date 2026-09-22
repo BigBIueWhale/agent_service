@@ -785,8 +785,19 @@ and the trigger holds every prompt below the point at which a turn of `C` could
 reach the end of the window. `error_incomplete_generation` therefore reaches a
 caller only when a generation filled the room the window can give it; the
 record names the prompt the generation was issued at, the room it was given and
-what it generated, so a reader can tell a turn too large for the window from a
-window too full for the turn. Nothing is retried, continued or repaired.
+what it generated, reasoning included, so a reader can tell a turn too large for
+the window from a window too full for the turn. It also says what the stop cost,
+from what the generation was writing: a call the model had not completed, which
+was not made and whose served arguments the turn's `incomplete_tool_use` block
+keeps; its message text, which is then a cut-off prefix; or nothing visible.
+Nothing is retried, continued or repaired, and the session cannot be continued:
+the service has no operation that resumes a finished session, and
+`./resubmit.sh` is not one -- it replays a submission whose acceptance was never
+proved, its receipt is removed once acceptance is, and replaying an accepted
+request returns that same session. What the session left is in its bundle
+(`./bundle.sh`) -- the final workspace, `/artifacts` and the event stream, the
+stopped call included -- and a new session (`./run.sh`) starts from whatever
+workspace it is given.
 
 A streaming generation is held to bounds the client derives rather than reads
 from settings, and none of them can be disabled. Until its first chunk, only
