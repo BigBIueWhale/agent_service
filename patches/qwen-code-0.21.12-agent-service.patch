@@ -169556,7 +169556,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
-@@ -8,88 +8,360 @@
+@@ -8,88 +8,362 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -169647,7 +169647,9 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * exactly against it before the first turn, so a deployment whose own
 + * preamble does not fit is refused at startup rather than part-way through a
 + * session. The compaction shape is counted where it occurs: each compaction's
-+ * preflight measures what its directive adds and holds that to `D`.
++ * preflight measures what its directive adds, adds the widest notice a
++ * redraw may carry of why the draw before it was refused, framed, and holds
++ * the two to `D`.
 + *
 + * `M`, the inline block, in UTF-8 bytes of its NFC form: the most any one
 + * block placed inline may be -- one tool result, one `read_file` page, one
@@ -169983,7 +169985,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
   * Accurate numeric limits:
   * - power-of-two approximations (128K -> 131072, 256K -> 262144, etc.)
   * - vendor-declared exact values (e.g., 200k -> 200000, 1m -> 1000000) are
-@@ -392,18 +664,20 @@
+@@ -392,18 +666,20 @@
    }
    return Math.min(outputLimit, OUTPUT_TOKEN_CEILING);
  }
@@ -181708,7 +181710,7 @@ diff --git a/packages/core/src/qwen/qwenContentGenerator.ts b/packages/core/src/
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,1294 @@
+@@ -1,4405 +1,1611 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -181774,7 +181776,10 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +import * as attachments from './postCompactAttachments.js';
 +import {
 +  ChatCompressionService,
++  DRAW_REFUSAL_NOTICE_MAX_BYTES,
++  drawRefusalNotice,
 +  MAX_COMPACTION_CANDIDATE_ATTEMPTS,
++  type DrawRefusal,
 +} from './chatCompressionService.js';
 +import { partitionContextWindow } from '../core/tokenLimits.js';
 +import {
@@ -181787,8 +181792,19 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +const MODEL = 'Qwen3.8-27B-NVFP4';
 +const WINDOW = 262_144;
 +const PARTITION = partitionContextWindow(WINDOW);
-+/** What the deployment's compaction directive renders to, measured. */
-+const DIRECTIVE_TOKENS = 1_104;
++/**
++ * What the deployment's compaction directive renders to, measured through the
++ * served template and tokenizer: the request with it, less the request
++ * without it.
++ */
++const DIRECTIVE_TOKENS = 548;
++/**
++ * What the ceiling holds back for the one message a redraw appends: the
++ * widest refusal notice's bytes, the most tokens its text can be, and the
++ * partition's framing.
++ */
++const REDRAW_NOTICE_TOKENS =
++  PARTITION.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;
 +
 +/** Stub the pair of counts one compaction takes. */
 +function stubSideQueryCounts(
@@ -181926,8 +181942,8 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +  // Two counts per compaction: the request, then the same request without
 +  // the directive, so the directive's share can be checked against what it
 +  // actually renders to.
-+  // 190,000 leaves 72,144 for the snapshot, above the 69,509 a turn is
-+  // guaranteed at this window.
++  // 190,000 leaves 72,144 for the snapshot less what a redraw's notice may
++  // take, above the 69,509 a turn is guaranteed at this window.
 +  const countSideQuery = vi
 +    .fn()
 +    .mockResolvedValue({ totalTokens: 190_000, maxModelLen: WINDOW })
@@ -182211,7 +182227,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      unknown
 +    >;
 +    expect({ ...generated, config: generatedConfig }).toEqual(counted);
-+    expect(maxOutputTokens).toBe(WINDOW - 190_000);
++    expect(maxOutputTokens).toBe(WINDOW - 190_000 - REDRAW_NOTICE_TOKENS);
 +    expect(generated).toMatchObject({
 +      model: MODEL,
 +      stream: true,
@@ -183552,21 +183568,29 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(rejected.generateText).not.toHaveBeenCalled();
 +  });
 +
-+  it("issues the generation at the room the window has, never below a turn's", async () => {
-+    for (const requestTokens of [
-+      1_000 + DIRECTIVE_TOKENS,
-+      150_000,
-+      PARTITION.compactionTrigger - 1 + DIRECTIVE_TOKENS,
-+      PARTITION.compactionTrigger - 1 + PARTITION.staticPreamble,
++  it("issues the generation at the room the window has, less a redraw's notice, never below a turn's", async () => {
++    // One ceiling for every draw: the room this request leaves, less the most
++    // a redraw's one extra message can take, so a redraw fits the window too.
++    for (const [requestTokens, directiveTokens] of [
++      [1_000 + DIRECTIVE_TOKENS, DIRECTIVE_TOKENS],
++      [150_000, DIRECTIVE_TOKENS],
++      [PARTITION.compactionTrigger - 1 + DIRECTIVE_TOKENS, DIRECTIVE_TOKENS],
++      [
++        PARTITION.compactionTrigger -
++          1 +
++          PARTITION.staticPreamble -
++          REDRAW_NOTICE_TOKENS,
++        PARTITION.staticPreamble - REDRAW_NOTICE_TOKENS,
++      ],
 +    ]) {
 +      const harness = makeHarness();
-+      stubSideQueryCounts(harness, requestTokens);
++      stubSideQueryCounts(harness, requestTokens, directiveTokens);
 +      await compress(harness);
 +      const generated = harness.generateText.mock
 +        .calls[0]![0] as GenerateTextOptions;
 +      const budget = (generated.config as { maxOutputTokens?: number })
 +        .maxOutputTokens;
-+      expect(budget).toBe(WINDOW - requestTokens);
++      expect(budget).toBe(WINDOW - requestTokens - REDRAW_NOTICE_TOKENS);
 +      expect(budget).toBeGreaterThan(PARTITION.turnGeneration);
 +    }
    });
@@ -183626,16 +183650,16 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -      expect.stringContaining('COMPACT_MAX_OUTPUT_TOKENS'),
 +  it("gives the snapshot at least a turn's room at the largest prompt a turn can be issued against", async () => {
 +    // The largest request compaction can ever issue: the prompt of a turn
-+    // issued one token below the trigger, plus a directive that fills the
-+    // whole static preamble. What the turn generated after that prompt is not
-+    // in it, so the room left is a turn's room plus one, whatever the turn
-+    // produced.
++    // issued one token below the trigger, plus a directive that, with the
++    // widest notice a redraw adds, fills the whole static preamble. What the
++    // turn generated after that prompt is not in it, so the room left is a
++    // turn's room plus one, whatever the turn produced, for every draw.
 +    const largestPrompt = PARTITION.compactionTrigger - 1;
 +    const harness = makeHarness();
 +    stubSideQueryCounts(
 +      harness,
-+      largestPrompt + PARTITION.staticPreamble,
-+      PARTITION.staticPreamble,
++      largestPrompt + PARTITION.staticPreamble - REDRAW_NOTICE_TOKENS,
++      PARTITION.staticPreamble - REDRAW_NOTICE_TOKENS,
 +    );
 +    await compress(harness);
 +    const generated = harness.generateText.mock
@@ -183652,6 +183676,77 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
      );
 +    expect(overgrown.generateText).not.toHaveBeenCalled();
++  });
++
++  it("holds the widest redraw notice inside the directive's share of the static preamble", async () => {
++    // A redraw's notice is counted before the first draw, at its widest and
++    // framed, so no redraw can be issued with less than a turn's room.
++    const fits = makeHarness();
++    stubSideQueryCounts(
++      fits,
++      150_000,
++      PARTITION.staticPreamble - REDRAW_NOTICE_TOKENS,
++    );
++    expect((await compress(fits)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSED,
++    );
++    const overgrown = makeHarness();
++    stubSideQueryCounts(
++      overgrown,
++      150_000,
++      PARTITION.staticPreamble - REDRAW_NOTICE_TOKENS + 1,
++    );
++    expect((await compress(overgrown)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(overgrown.generateText).not.toHaveBeenCalled();
++    expect(overgrown.warn).toHaveBeenCalledWith(
++      expect.stringContaining(
++        `a redraw's refusal notice to at most ${REDRAW_NOTICE_TOKENS} more`,
++      ),
++    );
++  });
++
++  it('derives the widest notice from the notices themselves', () => {
++    // Every number at the most digits a safe integer has, every section
++    // named: no notice a draw can be refused with is wider.
++    const N = Number.MAX_SAFE_INTEGER;
++    const widest: DrawRefusal[] = [
++      { kind: 'truncated', limit: N },
++      { kind: 'unfinished' },
++      { kind: 'incomplete', lack: { kind: 'call_count', calls: N } },
++      { kind: 'incomplete', lack: { kind: 'other_function' } },
++      { kind: 'incomplete', lack: { kind: 'no_arguments' } },
++      { kind: 'incomplete', lack: { kind: 'schema' } },
++      {
++        kind: 'incomplete',
++        lack: {
++          kind: 'empty_sections',
++          sections: [
++            'intent',
++            'environment',
++            'completed',
++            'in_progress',
++            'learnings',
++            'next_step',
++          ],
++        },
++      },
++      { kind: 'over_bound', bytes: N, maxBytes: N },
++      { kind: 'not_smaller', newTokenCount: N, originalTokenCount: N },
++      { kind: 'no_room', newTokenCount: N, trigger: N },
++    ];
++    const bytes = widest.map((refusal) =>
++      Buffer.byteLength(drawRefusalNotice(refusal).normalize('NFC'), 'utf8'),
++    );
++    expect(DRAW_REFUSAL_NOTICE_MAX_BYTES).toBe(Math.max(...bytes));
++    for (const refusal of widest) {
++      // One line, naming what the draw did and what to do instead.
++      expect(drawRefusalNotice(refusal)).not.toContain('\n');
++      expect(drawRefusalNotice(refusal)).toMatch(
++        /^Your previous answer to this request was refused because .+\. .+\.$/,
++      );
++    }
    });
  
 -  it('should reject CJK cap-sized summaries when usage metadata is missing', async () => {
@@ -184880,11 +184975,28 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      expect(
 +        result.info.rejectedAttempts.map((attempt) => attempt.status),
 +      ).toEqual(Array(MAX_COMPACTION_CANDIDATE_ATTEMPTS - 1).fill(status));
-+      // The request is frozen across draws: each is issued with the same
-+      // options, and the exact pre-compaction count is taken once.
++      // Every draw is issued from the same request under the same ceiling,
++      // and the exact pre-compaction count is taken once. A redraw adds one
++      // message, why the draw before it was refused, and nothing else.
 +      expect(harness.countCandidate).toHaveBeenCalledTimes(1);
-+      const [first, ...rest] = harness.generateText.mock.calls;
-+      for (const call of rest) expect(call).toEqual(first);
++      const [first, ...rest] = harness.generateText.mock.calls.map(
++        ([options]) => options as GenerateTextOptions,
++      );
++      for (const redraw of rest) {
++        expect({ ...redraw, contents: redraw.contents.slice(0, -1) }).toEqual(
++          first,
++        );
++        expect(redraw.contents.at(-1)).toEqual({
++          role: 'user',
++          parts: [
++            {
++              text: expect.stringMatching(
++                /^Your previous answer to this request was refused because /,
++              ),
++            },
++          ],
++        });
++      }
      },
    );
  
@@ -185181,6 +185293,213 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -
 -    expect(coldSpy).toHaveBeenCalledTimes(1);
 +    ]);
++  });
++
++  it.each<[string, (harness: Harness) => void, DrawRefusal]>([
++    [
++      'a draw cut off at the ceiling',
++      (harness) =>
++        harness.generateText.mockResolvedValueOnce(
++          summaryResult({ finishReason: FinishReason.MAX_TOKENS }),
++        ),
++      {
++        kind: 'truncated',
++        limit: WINDOW - 190_000 - REDRAW_NOTICE_TOKENS,
++      },
++    ],
++    [
++      'a draw with no terminal',
++      (harness) =>
++        harness.generateText.mockResolvedValueOnce(
++          summaryResult({ finishReason: undefined }),
++        ),
++      { kind: 'unfinished' },
++    ],
++    [
++      'a draw that called no function',
++      (harness) =>
++        harness.generateText.mockResolvedValueOnce(
++          summaryResult({ functionCalls: [], text: 'a summary in prose' }),
++        ),
++      { kind: 'incomplete', lack: { kind: 'call_count', calls: 0 } },
++    ],
++    [
++      'a draw that called another function',
++      (harness) =>
++        harness.generateText.mockResolvedValueOnce(
++          summaryResult({
++            functionCalls: [{ id: 'x', name: 'read_file', args: {} }],
++          }),
++        ),
++      { kind: 'incomplete', lack: { kind: 'other_function' } },
++    ],
++    [
++      'a draw missing a section',
++      (harness) =>
++        harness.generateText.mockResolvedValueOnce(
++          summaryResult({
++            functionCalls: [
++              {
++                id: 'x',
++                name: STATE_SNAPSHOT_FUNCTION_NAME,
++                args: { ...snapshotSections(), next_step: undefined },
++              },
++            ],
++          }),
++        ),
++      { kind: 'incomplete', lack: { kind: 'schema' } },
++    ],
++    [
++      'a draw with an empty section',
++      (harness) =>
++        harness.generateText.mockResolvedValueOnce(
++          summaryResult({
++            functionCalls: [
++              {
++                id: 'x',
++                name: STATE_SNAPSHOT_FUNCTION_NAME,
++                args: { ...snapshotSections(), learnings: '  ' },
++              },
++            ],
++          }),
++        ),
++      {
++        kind: 'incomplete',
++        lack: { kind: 'empty_sections', sections: ['learnings'] },
++      },
++    ],
++    [
++      'a draw past one inline block',
++      (harness) =>
++        harness.generateText.mockResolvedValueOnce(
++          summaryResult({
++            functionCalls: [
++              snapshotCall('x'.repeat(PARTITION.inlineBlockBytes)),
++            ],
++          }),
++        ),
++      {
++        kind: 'over_bound',
++        bytes: Buffer.byteLength(
++          snapshot('x'.repeat(PARTITION.inlineBlockBytes)),
++          'utf8',
++        ),
++        maxBytes: PARTITION.inlineBlockBytes,
++      },
++    ],
++    [
++      'a draw that did not shrink the history',
++      (harness) =>
++        harness.countCandidate
++          .mockReset()
++          .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
++          .mockResolvedValueOnce({ totalTokens: 240_000, maxModelLen: WINDOW })
++          .mockResolvedValueOnce({ totalTokens: 12_000, maxModelLen: WINDOW }),
++      {
++        kind: 'not_smaller',
++        newTokenCount: 240_000,
++        originalTokenCount: 230_000,
++      },
++    ],
++    [
++      'a draw that left no room for a turn',
++      (harness) =>
++        harness.countCandidate
++          .mockReset()
++          .mockResolvedValueOnce({ totalTokens: 230_000, maxModelLen: WINDOW })
++          .mockResolvedValueOnce({ totalTokens: 190_000, maxModelLen: WINDOW })
++          .mockResolvedValueOnce({ totalTokens: 12_000, maxModelLen: WINDOW }),
++      {
++        kind: 'no_room',
++        newTokenCount: 190_000,
++        trigger: PARTITION.compactionTrigger,
++      },
++    ],
++  ])(
++    'tells the next draw why %s was refused, and what to do instead',
++    async (_name, arrange, refusal) => {
++      const harness = makeHarness();
++      arrange(harness);
++
++      const result = await compress(harness);
++
++      expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++      const [first, redraw] = harness.generateText.mock.calls.map(
++        ([options]) => options as GenerateTextOptions,
++      );
++      expect(harness.generateText).toHaveBeenCalledTimes(2);
++      // The same request under the same ceiling, and one message more.
++      expect({ ...redraw, contents: redraw.contents.slice(0, -1) }).toEqual(
++        first,
++      );
++      expect(redraw.contents.at(-1)).toEqual({
++        role: 'user',
++        parts: [{ text: drawRefusalNotice(refusal) }],
++      });
++      expect(
++        Buffer.byteLength(drawRefusalNotice(refusal), 'utf8'),
++      ).toBeLessThanOrEqual(DRAW_REFUSAL_NOTICE_MAX_BYTES);
++    },
++  );
++
++  it('does not show the next draw the draw that was refused', async () => {
++    // The request's room is proved for one generation; the refused draw would
++    // not fit beside another, so the redraw is told why, not shown what.
++    const harness = makeHarness();
++    const long = 'y'.repeat(PARTITION.inlineBlockBytes);
++    harness.generateText
++      .mockResolvedValueOnce(
++        summaryResult({
++          functionCalls: [snapshotCall(long)],
++          thoughtText: 'the refused reasoning',
++        }),
++      )
++      .mockResolvedValue(summaryResult());
++
++    await compress(harness);
++
++    const redraw = harness.generateText.mock
++      .calls[1]![0] as GenerateTextOptions;
++    const sent = JSON.stringify(redraw.contents);
++    expect(sent).not.toContain(long);
++    expect(sent).not.toContain('the refused reasoning');
++    expect(sent).toContain(
++      `renders to ${Buffer.byteLength(snapshot(long), 'utf8')} bytes, past the ${PARTITION.inlineBlockBytes}-byte limit`,
++    );
++  });
++
++  it('tells each redraw only why the draw just before it was refused', async () => {
++    const harness = makeHarness();
++    harness.generateText
++      .mockResolvedValueOnce(
++        summaryResult({
++          functionCalls: [snapshotCall('z'.repeat(PARTITION.inlineBlockBytes))],
++        }),
++      )
++      .mockResolvedValueOnce(summaryResult({ functionCalls: [] }))
++      .mockResolvedValue(summaryResult());
++
++    const result = await compress(harness);
++
++    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++    const [first, second, third] = harness.generateText.mock.calls.map(
++      ([options]) => options as GenerateTextOptions,
++    );
++    // One notice, never an accumulation: the third draw is the first request
++    // and the notice about the second draw.
++    expect(second.contents).toHaveLength(first.contents.length + 1);
++    expect(third.contents).toHaveLength(first.contents.length + 1);
++    expect(third.contents.at(-1)).toEqual({
++      role: 'user',
++      parts: [
++        {
++          text: drawRefusalNotice({
++            kind: 'incomplete',
++            lack: { kind: 'call_count', calls: 0 },
++          }),
++        },
++      ],
++    });
    });
  
 -  it('slims media only after the cache-sharing request fails', async () => {
@@ -186046,7 +186365,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      finishReason: FinishReason.MAX_TOKENS,
 +    };
 +    expect(result.info.output).toEqual({
-+      maxOutputTokens: WINDOW - 190_000,
++      maxOutputTokens: WINDOW - 190_000 - REDRAW_NOTICE_TOKENS,
 +      ...spend,
      });
 -
@@ -187255,13 +187574,15 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
-@@ -1,256 +1,108 @@
+@@ -1,256 +1,246 @@
 +import {
 +  acceptStateSnapshot,
 +  renderStateSnapshot,
 +  STATE_SNAPSHOT_FUNCTION_NAME,
++  STATE_SNAPSHOT_SECTIONS,
 +  stateSnapshotTool,
 +  type StateSnapshotAcceptance,
++  type StateSnapshotLack,
 +} from './state-snapshot.js';
 +import { requireServedUsage, type ServedUsage } from '../core/served-usage.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
@@ -187290,7 +187611,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
    CompressionStatus,
  } from '../core/turn.js';
 -import { DEFAULT_TOKEN_LIMIT } from '../core/tokenLimits.js';
-+import { partitionContextWindow } from '../core/tokenLimits.js';
++import { partitionContextWindow, tokenizerText } from '../core/tokenLimits.js';
  import { getCompressionPrompt } from '../core/prompts.js';
 -import { runSideQuery } from '../utils/sideQuery.js';
 -import { resolveModelId } from '../utils/modelId.js';
@@ -187450,7 +187771,8 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
   *
 - * Pure function — no I/O, no shared state — safe to call repeatedly.
 + * This bounds resampling; it does not weaken the rule. Every draw is issued
-+ * from the same frozen request and judged against the same requirements, and
++ * from the same request under the same ceiling, a redraw adding only why the
++ * draw before it was refused, and is judged against the same requirements;
 + * causes that are fixed given that request are never resampled at all.
   */
 -export function computeThresholds(
@@ -187502,6 +187824,141 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +  incomplete: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
 +  over_bound: CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
 +};
++
++/**
++ * Why a draw was refused, in the terms the next draw is told.
++ *
++ * A redraw that knows nothing of the draw before it starts over blind and can
++ * throw away a correction the refused draw had already made, so it is told
++ * why in one line: what the draw did against which rule, and what to do
++ * instead. It is not shown the refused draw: the request's room is proved for
++ * one generation, and a second would not fit. Every value here is one the
++ * service measured or a closed name, never text the model wrote, so every
++ * notice has a widest rendering that the preflight can hold before the first
++ * draw is issued.
++ */
++export type DrawRefusal =
++  | { readonly kind: 'truncated'; readonly limit: number }
++  | { readonly kind: 'unfinished' }
++  | { readonly kind: 'incomplete'; readonly lack: StateSnapshotLack }
++  | {
++      readonly kind: 'over_bound';
++      readonly bytes: number;
++      readonly maxBytes: number;
++    }
++  | {
++      readonly kind: 'not_smaller';
++      readonly newTokenCount: number;
++      readonly originalTokenCount: number;
++    }
++  | {
++      readonly kind: 'no_room';
++      readonly newTokenCount: number;
++      readonly trigger: number;
++    };
++
++const CALL_SNAPSHOT_ONCE = `Call ${STATE_SNAPSHOT_FUNCTION_NAME} once, with every section filled in.`;
++const WRITE_MORE_BRIEFLY = 'Write the same state more briefly.';
++
++function lackNotice(lack: StateSnapshotLack): string {
++  switch (lack.kind) {
++    case 'call_count':
++      return `it made ${lack.calls} function calls rather than one ${STATE_SNAPSHOT_FUNCTION_NAME} call. ${CALL_SNAPSHOT_ONCE}`;
++    case 'other_function':
++      return `it called another function instead of ${STATE_SNAPSHOT_FUNCTION_NAME}. ${CALL_SNAPSHOT_ONCE}`;
++    case 'no_arguments':
++      return `its ${STATE_SNAPSHOT_FUNCTION_NAME} call carried no arguments. ${CALL_SNAPSHOT_ONCE}`;
++    case 'schema':
++      return `its ${STATE_SNAPSHOT_FUNCTION_NAME} arguments did not match the six declared sections. Call ${STATE_SNAPSHOT_FUNCTION_NAME} once, with exactly those six sections, each a string.`;
++    case 'empty_sections':
++      return `it left these sections empty: ${lack.sections.join(', ')}. Write something in every section, "None" where there is nothing to report.`;
++    default: {
++      const unhandled: never = lack;
++      throw new Error(`unhandled snapshot lack ${JSON.stringify(unhandled)}`);
++    }
++  }
++}
++
++/** The one line a redraw is told about the draw before it. */
++export function drawRefusalNotice(refusal: DrawRefusal): string {
++  const refused = 'Your previous answer to this request was refused because';
++  switch (refusal.kind) {
++    case 'truncated':
++      return `${refused} it reached its ${refusal.limit}-token limit before its ${STATE_SNAPSHOT_FUNCTION_NAME} call was complete. Reason more briefly, and make the call within the limit.`;
++    case 'unfinished':
++      return `${refused} it ended without completing its ${STATE_SNAPSHOT_FUNCTION_NAME} call. ${CALL_SNAPSHOT_ONCE}`;
++    case 'incomplete':
++      return `${refused} ${lackNotice(refusal.lack)}`;
++    case 'over_bound':
++      return `${refused} its snapshot renders to ${refusal.bytes} bytes, past the ${refusal.maxBytes}-byte limit. ${WRITE_MORE_BRIEFLY}`;
++    case 'not_smaller':
++      return `${refused} its snapshot left the conversation at ${refusal.newTokenCount} tokens, no smaller than the ${refusal.originalTokenCount} it replaces. ${WRITE_MORE_BRIEFLY}`;
++    case 'no_room':
++      return `${refused} its snapshot left the conversation at ${refusal.newTokenCount} tokens, not below the ${refusal.trigger} at which it is compacted. ${WRITE_MORE_BRIEFLY}`;
++    default: {
++      const unhandled: never = refusal;
++      throw new Error(`unhandled draw refusal ${JSON.stringify(unhandled)}`);
++    }
++  }
++}
++
++/**
++ * Every notice at its widest: each kind of refusal with every number at the
++ * most digits a safe integer has and every section named. Keyed by kind, so a
++ * refusal added without its widest form is a compile error rather than a
++ * notice the preflight never held.
++ */
++const WIDEST_DRAW_REFUSALS: Record<
++  DrawRefusal['kind'],
++  readonly DrawRefusal[]
++> = {
++  truncated: [{ kind: 'truncated', limit: Number.MAX_SAFE_INTEGER }],
++  unfinished: [{ kind: 'unfinished' }],
++  incomplete: Object.values({
++    call_count: { kind: 'call_count', calls: Number.MAX_SAFE_INTEGER },
++    other_function: { kind: 'other_function' },
++    no_arguments: { kind: 'no_arguments' },
++    schema: { kind: 'schema' },
++    empty_sections: {
++      kind: 'empty_sections',
++      sections: STATE_SNAPSHOT_SECTIONS,
++    },
++  } satisfies Record<StateSnapshotLack['kind'], StateSnapshotLack>).map(
++    (lack) => ({ kind: 'incomplete', lack }),
++  ),
++  over_bound: [
++    {
++      kind: 'over_bound',
++      bytes: Number.MAX_SAFE_INTEGER,
++      maxBytes: Number.MAX_SAFE_INTEGER,
++    },
++  ],
++  not_smaller: [
++    {
++      kind: 'not_smaller',
++      newTokenCount: Number.MAX_SAFE_INTEGER,
++      originalTokenCount: Number.MAX_SAFE_INTEGER,
++    },
++  ],
++  no_room: [
++    {
++      kind: 'no_room',
++      newTokenCount: Number.MAX_SAFE_INTEGER,
++      trigger: Number.MAX_SAFE_INTEGER,
++    },
++  ],
++};
++
++/**
++ * The most bytes a redraw's refusal notice renders to, in the NFC form the
++ * served tokenizer reads, and so the most tokens its text can cost. Derived
++ * from the notices themselves, never chosen.
++ */
++export const DRAW_REFUSAL_NOTICE_MAX_BYTES = Math.max(
++  ...Object.values(WIDEST_DRAW_REFUSALS)
++    .flat()
++    .map((refusal) => tokenizerText(drawRefusalNotice(refusal)).bytes),
++);
  
 -  return { warn, auto, hard, effectiveWindow };
 -}
@@ -187560,7 +188017,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
     * User-supplied focus directives passed to the compression side-query.
     * Appended to the system prompt as an `Additional Instructions:` block.
     * Sourced from `/compress <text>`. PreCompact hooks may further append
-@@ -318,13 +170,13 @@
+@@ -318,13 +308,13 @@
    }
    if (parts.length === 0) return base;
    return `${base}\n\nAdditional Instructions:\n${parts.join('\n\n')}`;
@@ -187575,7 +188032,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
    if (
      provider.authType === AuthType.USE_GEMINI ||
      provider.authType === AuthType.USE_VERTEX_AI
-@@ -333,161 +185,94 @@
+@@ -333,161 +323,94 @@
    }
    if (provider.enableCacheControl === false) return false;
    if (provider.authType === AuthType.USE_ANTHROPIC) return true;
@@ -187785,7 +188242,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Fire PreCompact hook before compression begins. Pass any user-supplied
      // `/compress` instructions so hook scripts can read / log / amend them
-@@ -509,619 +294,650 @@
+@@ -509,619 +432,691 @@
          // `getAdditionalContext()` sanitises (`<`/`>` → `&lt;`/`&gt;`) so a
          // hook can't inject XML structure into the summary prompt. Mirrors
          // every other call-site in this repo (toolHookTriggers, agent.ts,
@@ -188315,22 +188772,32 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      }
 +      const directiveTokens =
 +        summaryRequestTokenCount - promptOnlyCount.totalTokens;
-+      if (directiveTokens > partition.staticPreamble) {
++      // A redraw appends one message to this request: why the draw before it
++      // was refused. That message is at most the widest notice's bytes, the
++      // most tokens its text can be, framed by at most the partition's `F`,
++      // so it is held to the same share as the directive, and every draw's
++      // room is proved here, before the first draw is issued.
++      const redrawNoticeTokens =
++        partition.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;
++      if (directiveTokens + redrawNoticeTokens > partition.staticPreamble) {
 +        throw new Error(
-+          `The compaction directive renders to ${directiveTokens} tokens, past the ${partition.staticPreamble} the partition declares for the whole static preamble. Shorten the directive, or deploy on a larger window.`,
++          `The compaction directive renders to ${directiveTokens} tokens and a redraw's refusal notice to at most ${redrawNoticeTokens} more, past the ${partition.staticPreamble} the partition declares for the whole static preamble. Shorten the directive, or deploy on a larger window.`,
 +        );
 +      }
 +      // The snapshot is issued at the room the window actually has, not at a
-+      // fixed share of it. The partition proves that room is never below a
++      // fixed share of it, less the room a redraw's notice may take, so every
++      // draw is issued under one ceiling and every request it is issued with
++      // fits the window. The partition proves that ceiling is never below a
 +      // turn's: the prompt this request extends was issued below the trigger,
-+      // so the request is at most T - 1 + D, which leaves at least C + 1.
-+      // Every lighter request leaves more, and spending it is what keeps the
-+      // snapshot from being truncated by the reasoning it shares an output
-+      // stream with.
-+      compactionOutputBudget = contextLimit - summaryRequestTokenCount;
++      // so the request and a redraw's notice are at most T - 1 + D, which
++      // leaves at least C + 1. Every lighter request leaves more, and
++      // spending it is what keeps the snapshot from being truncated by the
++      // reasoning it shares an output stream with.
++      compactionOutputBudget =
++        contextLimit - summaryRequestTokenCount - redrawNoticeTokens;
 +      if (compactionOutputBudget < partition.turnGeneration) {
 +        throw new Error(
-+          `The compaction request renders to ${summaryRequestTokenCount} tokens, leaving ${compactionOutputBudget} for the snapshot, below the ${partition.turnGeneration} tokens the partition guarantees it.`,
++          `The compaction request renders to ${summaryRequestTokenCount} tokens, leaving ${compactionOutputBudget} for the snapshot once a redraw's notice is held back, below the ${partition.turnGeneration} tokens the partition guarantees it.`,
 +        );
 +      }
 +    } catch (error) {
@@ -188401,12 +188868,13 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        }
 +      | {
 +          /**
-+           * Refused for a fault in what the model produced. An independently
-+           * drawn sample is judged by the same rule and could satisfy it, so
-+           * another draw is warranted.
++           * Refused for a fault in what the model produced. Another draw is
++           * judged by the same rule and could satisfy it, so it is warranted,
++           * and it is told why this one was refused.
 +           */
 +          kind: 'resampleable';
 +          status: CompressionStatus;
++          refusal: DrawRefusal;
 +          accounting: AttemptAccounting;
 +          newTokenCount?: number;
 +        }
@@ -188434,15 +188902,20 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      requestAttempts: attempt.requestAttempts,
 +    });
 +
-+    // Draw one candidate and judge it against the frozen acceptance rule. The
-+    // request is never weakened between attempts: this closes over the single
-+    // `sideQueryOptions` and budget computed above, and adds nothing to them.
-+    const drawCandidate = async (): Promise<AttemptOutcome> => {
++    // Draw one candidate and judge it against the acceptance rule. The request
++    // is never weakened between attempts: every draw is issued from the single
++    // `sideQueryOptions` and ceiling computed above, and a redraw's contents
++    // are those contents and one message more, why the draw before it was
++    // refused, which the ceiling already holds room for.
++    const drawCandidate = async (
++      contents: Content[],
++    ): Promise<AttemptOutcome> => {
 +      let summaryResult: GenerateTextResult;
 +      let summaryUsage: ServedUsage;
 +      try {
 +        summaryResult = await config.getBaseLlmClient().generateText({
 +          ...sideQueryOptions,
++          contents,
 +          config: {
 +            ...sideQueryOptions.config,
 +            maxOutputTokens: compactionOutputBudget,
@@ -188524,6 +188997,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        return {
 +          kind: 'resampleable',
 +          status: CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
++          refusal: { kind: 'truncated', limit: compactionOutputBudget },
 +          accounting,
 +        };
 +      }
@@ -188537,6 +189011,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        return {
 +          kind: 'resampleable',
 +          status: CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++          refusal: { kind: 'unfinished' },
 +          accounting,
 +        };
 +      }
@@ -188553,6 +189028,14 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        return {
 +          kind: 'resampleable',
 +          status: SNAPSHOT_REFUSAL_STATUS[acceptance.refused],
++          refusal:
++            acceptance.refused === 'over_bound'
++              ? {
++                  kind: 'over_bound',
++                  bytes: acceptance.bytes,
++                  maxBytes: partition.inlineBlockBytes,
++                }
++              : { kind: 'incomplete', lack: acceptance.lack },
 +          accounting,
 +        };
 +      }
@@ -188782,6 +189265,11 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        return {
 +          kind: 'resampleable',
 +          status: CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++          refusal: {
++            kind: 'not_smaller',
++            newTokenCount,
++            originalTokenCount: exactOriginalTokenCount,
++          },
 +          accounting,
 +          newTokenCount,
 +        };
@@ -188797,6 +189285,11 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        return {
 +          kind: 'resampleable',
 +          status: CompressionStatus.COMPRESSION_FAILED_INSUFFICIENT_ROOM,
++          refusal: {
++            kind: 'no_room',
++            newTokenCount,
++            trigger: partition.compactionTrigger,
++          },
 +          accounting,
 +          newTokenCount,
 +        };
@@ -188819,24 +189312,29 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    };
 +
 +    // The bound is on draws, not on wall time: each pass issues exactly one
-+    // request under the same frozen options, and only a refusal the model
-+    // itself caused reaches this condition.
-+    let outcome = await drawCandidate();
++    // request under the same options and ceiling, and only a refusal the model
++    // itself caused reaches this condition. The next draw is told why the one
++    // before it was refused, and nothing else changes.
++    let outcome = await drawCandidate(sideQueryOptions.contents);
 +    while (
 +      outcome.kind === 'resampleable' &&
 +      rejectedAttempts.length + 1 < MAX_COMPACTION_CANDIDATE_ATTEMPTS
 +    ) {
++      const notice = drawRefusalNotice(outcome.refusal);
 +      config
 +        .getDebugLogger()
 +        .warn(
 +          `[chat-compression] candidate ${rejectedAttempts.length + 1} refused ` +
-+            `(${CompressionStatus[outcome.status]}); drawing another under the same rule.`,
++            `(${CompressionStatus[outcome.status]}); drawing another under the same rule, told: ${notice}`,
 +        );
 +      rejectedAttempts.push({
 +        status: outcome.status,
 +        ...outcome.accounting,
 +      });
-+      outcome = await drawCandidate();
++      outcome = await drawCandidate([
++        ...sideQueryOptions.contents,
++        { role: 'user', parts: [{ text: notice }] },
++      ]);
 +    }
 +
 +    if (outcome.kind !== 'accepted') {
@@ -202101,7 +202599,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/src/services/state-snapshot.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.test.ts
-@@ -0,0 +1,217 @@
+@@ -0,0 +1,268 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -202119,6 +202617,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +  STATE_SNAPSHOT_SECTIONS,
 +  stateSnapshotTool,
 +  type StateSnapshot,
++  type StateSnapshotLack,
 +} from './state-snapshot.js';
 +
 +/**
@@ -202201,6 +202700,11 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +    expect(accepted.refused === 'over_bound' && accepted.rendered).toBe(
 +      renderStateSnapshot(oversized),
 +    );
++    // The measure the bound refused travels with the refusal, so the next
++    // draw can be told it without measuring the draw again.
++    expect(accepted.refused === 'over_bound' && accepted.bytes).toBe(
++      Buffer.byteLength(renderStateSnapshot(oversized), 'utf8'),
++    );
 +  });
 +
 +  it('measures the rendered snapshot in the NFC bytes the tokenizer reads', () => {
@@ -202266,12 +202770,24 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +    expect(renderStateSnapshot(accepted.snapshot!)).toContain(body);
 +  });
 +
-+  it.each([
-+    ['no call', [] as FunctionCall[]],
-+    ['more than one call', [call(sections()), call(sections())]],
-+    ['a different function', [call(sections(), 'read_file')]],
-+    ['no arguments', [call(undefined)]],
-+    ['an array instead of an object', [call(['intent'])]],
++  it.each<[string, FunctionCall[], StateSnapshotLack]>([
++    ['no call', [], { kind: 'call_count', calls: 0 }],
++    [
++      'more than one call',
++      [call(sections()), call(sections())],
++      { kind: 'call_count', calls: 2 },
++    ],
++    [
++      'a different function',
++      [call(sections(), 'read_file')],
++      { kind: 'other_function' },
++    ],
++    ['no arguments', [call(undefined)], { kind: 'no_arguments' }],
++    [
++      'an array instead of an object',
++      [call(['intent'])],
++      { kind: 'no_arguments' },
++    ],
 +    [
 +      'a missing section',
 +      [
@@ -202283,16 +202799,49 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +          ),
 +        ),
 +      ],
++      { kind: 'schema' },
 +    ],
-+    ['an undeclared section', [call({ ...sections(), extra: 'text' })]],
-+    ['a non-string section', [call({ ...sections(), intent: 12 })]],
-+    ['an empty section', [call({ ...sections(), intent: '' })]],
-+    ['a whitespace-only section', [call({ ...sections(), intent: ' \t\r\n ' })]],
-+  ])('refuses %s as declaring no complete snapshot', (_name, calls) => {
++    [
++      'an undeclared section',
++      [call({ ...sections(), extra: 'text' })],
++      { kind: 'schema' },
++    ],
++    [
++      'a non-string section',
++      [call({ ...sections(), intent: 12 })],
++      { kind: 'schema' },
++    ],
++    [
++      'an empty section',
++      [call({ ...sections(), intent: '' })],
++      { kind: 'empty_sections', sections: ['intent'] },
++    ],
++    [
++      'a whitespace-only section',
++      [call({ ...sections(), intent: ' \t\r\n ', next_step: '' })],
++      { kind: 'empty_sections', sections: ['intent', 'next_step'] },
++    ],
++  ])('refuses %s as declaring no complete snapshot', (_name, calls, lack) => {
 +    const accepted = acceptStateSnapshot(calls, INLINE_BLOCK_BYTES);
 +    expect(accepted.snapshot).toBeUndefined();
 +    expect(accepted.refused).toBe('incomplete');
 +    expect(accepted.refusal).toBeTruthy();
++    // What it lacked, in closed terms the next draw can be told.
++    expect(accepted.refused === 'incomplete' && accepted.lack).toEqual(lack);
++  });
++
++  it('says what a draw lacked without repeating anything the model wrote', () => {
++    // The refusal's reason for the log may quote the draw; what a redraw is
++    // told may not, because it must have a widest rendering.
++    const written = 'a_function_the_model_invented';
++    const accepted = acceptStateSnapshot(
++      [call(sections(), written)],
++      INLINE_BLOCK_BYTES,
++    );
++    expect(accepted.refusal).toContain(written);
++    expect(
++      JSON.stringify(accepted.refused === 'incomplete' && accepted.lack),
++    ).not.toContain(written);
 +  });
 +
 +  // What the engine is asked to enforce is whatever survives conversion, so
@@ -202322,7 +202871,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/services/state-snapshot.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.ts
-@@ -0,0 +1,218 @@
+@@ -0,0 +1,242 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -202429,6 +202978,21 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +}
 +
 +/**
++ * What a draw that declared no complete snapshot lacked, in closed terms. The
++ * next draw is told this, so nothing here is text the model wrote: a count,
++ * the declared section names, or which rule it missed.
++ */
++export type StateSnapshotLack =
++  | { readonly kind: 'call_count'; readonly calls: number }
++  | { readonly kind: 'other_function' }
++  | { readonly kind: 'no_arguments' }
++  | { readonly kind: 'schema' }
++  | {
++      readonly kind: 'empty_sections';
++      readonly sections: readonly StateSnapshotSection[];
++    };
++
++/**
 + * An accepted snapshot, or the reason this draw was refused.
 + *
 + * A draw is refused for one of two different things, and each is recorded as
@@ -202447,6 +203011,7 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +      readonly snapshot?: undefined;
 +      readonly refused: 'incomplete';
 +      readonly refusal: string;
++      readonly lack: StateSnapshotLack;
 +    }
 +  | {
 +      readonly snapshot?: undefined;
@@ -202454,6 +203019,8 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +      readonly refusal: string;
 +      /** The declared snapshot, rendered in the form that was measured. */
 +      readonly rendered: string;
++      /** The bytes of that rendering, the measure the bound refused. */
++      readonly bytes: number;
 +    };
 +
 +/**
@@ -202472,6 +203039,7 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +    return {
 +      refused: 'incomplete',
 +      refusal: `expected one ${STATE_SNAPSHOT_FUNCTION_NAME} call, received ${calls.length}`,
++      lack: { kind: 'call_count', calls: calls.length },
 +    };
 +  }
 +  const [call] = calls;
@@ -202479,6 +203047,7 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +    return {
 +      refused: 'incomplete',
 +      refusal: `called ${String(call.name)} instead of ${STATE_SNAPSHOT_FUNCTION_NAME}`,
++      lack: { kind: 'other_function' },
 +    };
 +  }
 +  const args = call.args;
@@ -202486,6 +203055,7 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +    return {
 +      refused: 'incomplete',
 +      refusal: `${STATE_SNAPSHOT_FUNCTION_NAME} carried no argument object`,
++      lack: { kind: 'no_arguments' },
 +    };
 +  }
 +  const schemaError = SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args);
@@ -202493,6 +203063,7 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +    return {
 +      refused: 'incomplete',
 +      refusal: `${STATE_SNAPSHOT_FUNCTION_NAME} arguments ${schemaError}`,
++      lack: { kind: 'schema' },
 +    };
 +  }
 +  const record = args as Record<string, unknown>;
@@ -202503,6 +203074,7 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +    return {
 +      refused: 'incomplete',
 +      refusal: `sections with no text: ${empty.join(', ')}`,
++      lack: { kind: 'empty_sections', sections: empty },
 +    };
 +  }
 +  const snapshot = Object.fromEntries(
@@ -202518,6 +203090,7 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +      refused: 'over_bound',
 +      refusal: `snapshot renders to ${rendered.bytes} bytes, past the ${maxBytes} one inline block may carry; write the same state more briefly`,
 +      rendered: rendered.text,
++      bytes: rendered.bytes,
 +    };
 +  }
 +  return { snapshot };

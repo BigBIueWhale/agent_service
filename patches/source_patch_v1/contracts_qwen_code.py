@@ -3787,9 +3787,12 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         require_text(state, generator_test, case, label=label)
 
-    # The reserve covers the snapshot's generation, and the request it is
-    # issued for is the issued prompt plus the directive: sized from the
-    # request that was counted rather than from a margin.
+    # The snapshot's room is sized from the request that was counted rather
+    # than from a margin: the issued prompt plus the directive, less the
+    # widest notice a redraw appends. The directive and that notice, framed,
+    # are held to the static preamble's share before the first draw, so every
+    # draw -- the first and each redraw -- is issued under one ceiling that is
+    # never below a turn's room.
     service_source = _require_all(
         state,
         service,
@@ -3797,12 +3800,19 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const partition = partitionContextWindow(contextLimit);",
             "const split = chat.renderIssuedTurnSplit(",
             "const issuedPrompt = split.prompt;",
-            "compactionOutputBudget = contextLimit - summaryRequestTokenCount;",
+            "const redrawNoticeTokens =\n        partition.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;",
+            "if (directiveTokens + redrawNoticeTokens > partition.staticPreamble) {",
+            "compactionOutputBudget =\n        contextLimit - summaryRequestTokenCount - redrawNoticeTokens;",
             "if (compactionOutputBudget < partition.turnGeneration) {",
-            "if (directiveTokens > partition.staticPreamble) {",
             "      if (originalTokenCount < partition.compactionTrigger) {",
             "    if (newTokenCount >= partition.compactionTrigger) {",
-            "          maxOutputTokens: compactionOutputBudget,",
+            "          contents,\n          config: {\n            ...sideQueryOptions.config,\n            maxOutputTokens: compactionOutputBudget,",
+            # The widest notice is derived from the notices, every kind of
+            # refusal at its widest, keyed so a kind cannot go unheld.
+            "export const DRAW_REFUSAL_NOTICE_MAX_BYTES = Math.max(",
+            "    .map((refusal) => tokenizerText(drawRefusalNotice(refusal)).bytes),",
+            "const WIDEST_DRAW_REFUSALS: Record<\n  DrawRefusal['kind'],\n  readonly DrawRefusal[]\n> = {",
+            "} satisfies Record<StateSnapshotLack['kind'], StateSnapshotLack>).map(",
         ),
         label=label,
     )
@@ -3814,12 +3824,13 @@ def _validate_compaction_budget_after(state: State) -> None:
         "directiveReserve",
     ):
         forbid_text(state, service, absent, label=label)
-    # The snapshot is issued at the room the window actually has, and that room
-    # is never less than a turn's: the prompt this request extends was issued
-    # below the trigger, so the request is at most T - 1 + D, leaving at least
-    # C + 1. The floor is asserted in the service so a broken partition fails
-    # loudly, rather than clamped so it silently shrinks the snapshot -- a
-    # clamp is what hands a summary a few thousand tokens and truncates it.
+    # The snapshot is issued at the room the window actually has, less the
+    # widest redraw notice, and that room is never less than a turn's: the
+    # prompt this request extends was issued below the trigger, so the request
+    # and a redraw's notice are at most T - 1 + D, leaving at least C + 1. The
+    # floor is asserted in the service so a broken partition fails loudly,
+    # rather than clamped so it silently shrinks the snapshot -- a clamp is
+    # what hands a summary a few thousand tokens and truncates it.
     _require(
         "Math.min(" not in service_source.split("compactionOutputBudget =")[1][:400],
         f"{label}: {service} clamps the summary instead of asserting its floor",
@@ -3850,14 +3861,16 @@ def _validate_compaction_budget_after(state: State) -> None:
         for absent in ("autoCompactThreshold", "getAutoCompactThreshold"):
             forbid_text(state, path, absent, label=label)
 
-    # The compaction request is an ordinary one, and it is the same request on
-    # every attempt. A compaction may draw more than one candidate, because a
-    # candidate the model itself malformed says nothing about the request that
-    # produced it and an independently drawn sample is judged by the same rule.
-    # What is forbidden is a second attempt that asks for less than the first:
-    # a smaller budget, a split output, a shrunken input, a converging backoff.
-    # Those accept through a weaker route, which is a fallback wearing a
-    # retry's name, and the terms below are how that has been reintroduced
+    # The compaction request is an ordinary one, and every attempt is the same
+    # request under the same ceiling. A compaction may draw more than one
+    # candidate, because a candidate the model itself malformed says nothing
+    # about the request that produced it and another draw is judged by the
+    # same rule. A redraw adds one message and nothing else: why the draw
+    # before it was refused, and what to do instead, so it does not start over
+    # blind. What is forbidden is a second attempt that asks for less than the
+    # first: a smaller budget, a split output, a shrunken input, a converging
+    # backoff. Those accept through a weaker route, which is a fallback wearing
+    # a retry's name, and the terms below are how that has been reintroduced
     # before.
     for absent in (
         "COMPACT_THINKING_TOKEN_BUDGET",
@@ -3884,8 +3897,80 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export const MAX_COMPACTION_CANDIDATE_ATTEMPTS = 4;",
             "      outcome.kind === 'resampleable' &&",
             "      rejectedAttempts.length + 1 < MAX_COMPACTION_CANDIDATE_ATTEMPTS",
-            "      outcome = await drawCandidate();",
         ),
+        label=label,
+    )
+    # The first draw is the counted request; each redraw is that request and
+    # one notice about the draw just before it, never an accumulation and
+    # never the refused draw itself, which would not fit the proved room.
+    _require_ordered(
+        service_source,
+        (
+            "let outcome = await drawCandidate(sideQueryOptions.contents);",
+            "const notice = drawRefusalNotice(outcome.refusal);",
+            "rejectedAttempts.push({",
+            "outcome = await drawCandidate([\n        ...sideQueryOptions.contents,\n        { role: 'user', parts: [{ text: notice }] },\n      ]);",
+        ),
+        label=label,
+        location=service,
+    )
+    # The rule this replaced -- every draw the same frozen request, adding
+    # nothing -- no longer describes the code, so its wording may not return.
+    for retired in ("same frozen options", "adds nothing to them"):
+        forbid_text(state, service, retired, label=label)
+    forbid_text(state, service_test, "The request is frozen across draws", label=label)
+    # A notice is built only from what the service measured and closed names:
+    # no refusal field is a string the model could have written, so every
+    # notice has the widest rendering the preflight holds.
+    for path, start in (
+        (service, "export type DrawRefusal ="),
+        ("packages/core/src/services/state-snapshot.ts", "export type StateSnapshotLack ="),
+    ):
+        declared = _source(state, path, label=label)
+        _require(start in declared, f"{label}: {path} lacks '{start}'")
+        block = declared.split(start, 1)[1].split(";\n\n", 1)[0]
+        _require(
+            ": string" not in block,
+            f"{label}: {path} lets a refusal carry text, so a notice has no widest rendering",
+        )
+    _require_all(
+        state,
+        service,
+        (
+            "          refusal: DrawRefusal;",
+            "          refusal: { kind: 'truncated', limit: compactionOutputBudget },",
+            "          refusal: { kind: 'unfinished' },",
+            "              : { kind: 'incomplete', lack: acceptance.lack },",
+            "            kind: 'not_smaller',",
+            "            kind: 'no_room',",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/services/state-snapshot.ts",
+        (
+            "      lack: { kind: 'call_count', calls: calls.length },",
+            "      lack: { kind: 'other_function' },",
+            "      lack: { kind: 'no_arguments' },",
+            "      lack: { kind: 'schema' },",
+            "      lack: { kind: 'empty_sections', sections: empty },",
+            "      bytes: rendered.bytes,",
+        ),
+        label=label,
+    )
+    for case in (
+        "tells the next draw why %s was refused, and what to do instead",
+        "does not show the next draw the draw that was refused",
+        "tells each redraw only why the draw just before it was refused",
+        "holds the widest redraw notice inside the directive's share of the static preamble",
+        "derives the widest notice from the notices themselves",
+    ):
+        require_text(state, service_test, case, label=label)
+    require_text(
+        state,
+        "packages/core/src/services/state-snapshot.test.ts",
+        "says what a draw lacked without repeating anything the model wrote",
         label=label,
     )
     # Only the model's own output earns another draw. A cause that is fixed

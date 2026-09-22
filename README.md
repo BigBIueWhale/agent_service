@@ -282,10 +282,21 @@ under a preamble also bounded by `D` — always leaves the snapshot at least
 carried behind the snapshot verbatim, followed by the tool result it was
 waiting for; nothing synthetic stands between them. The snapshot is issued at
 the room the window actually has — the window less the summary request that
-was just counted — and a request that would leave less than `C` is refused
-instead of quietly shrinking the snapshot. The accepted snapshot is itself one
-inline block: the bound is stated in the declaration the model is given, and a
-draw that renders past it is refused and redrawn whole rather than cut.
+was just counted, and less the most a redraw's notice can add — and a request
+that would leave less than `C` is refused instead of quietly shrinking the
+snapshot. The accepted snapshot is itself one inline block: the bound is stated
+in the declaration the model is given, and a draw that renders past it is
+refused and redrawn whole rather than cut. A redraw is told why the draw before
+it was refused, so it does not start over blind: the request gains one user
+message, one line naming what that draw did against which rule and what to do
+instead, such as a snapshot of so many bytes against the 32,768-byte limit and
+to write the same state more briefly. It is never shown the refused draw,
+which would not fit beside another in the room the request is proved to have.
+The notice is built only from values the service measured and closed names,
+never from text the model wrote, so it has a widest rendering: 228 bytes, and
+with the 61 bytes of framing 289 tokens at most, held inside `D` with the
+directive's 548 before the first draw, which leaves every draw one ceiling.
+Counted through the served path, a redraw's notice costs 44 to 56 tokens.
 
 The compaction request replaces the turn's tool declarations with that single
 function rather than extending them, so the model has exactly one thing it can
