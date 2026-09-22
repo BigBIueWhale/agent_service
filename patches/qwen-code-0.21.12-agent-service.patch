@@ -86484,7 +86484,7 @@ diff --git a/packages/cli/src/utils/cleanup.ts b/packages/cli/src/utils/cleanup.
 diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/src/utils/compression-result.test.ts
 --- /dev/null
 +++ b/packages/cli/src/utils/compression-result.test.ts
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,80 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -86514,6 +86514,7 @@ diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/sr
 +    [CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR, 'error', 'exact token counting failed'],
 +    [CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY, 'error', 'empty summary'],
 +    [CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED, 'error', 'output was truncated'],
++    [CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND, 'error', 'longer than its bound'],
 +    [CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR, 'error', 'protocol step failed'],
 +  ] as const)('names status %s', (compressionStatus, messageType, reason) => {
 +    const output = formatCompressionResult({ ...completed, compressionStatus });
@@ -86567,7 +86568,7 @@ diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/sr
 diff --git a/packages/cli/src/utils/compression-result.ts b/packages/cli/src/utils/compression-result.ts
 --- /dev/null
 +++ b/packages/cli/src/utils/compression-result.ts
-@@ -0,0 +1,118 @@
+@@ -0,0 +1,122 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -86631,6 +86632,10 @@ diff --git a/packages/cli/src/utils/compression-result.ts b/packages/cli/src/uti
 +      break;
 +    case CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED:
 +      content = 'Compaction failed because the model output was truncated.';
++      break;
++    case CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND:
++      content =
++        'Compaction failed because the summary the model wrote was longer than its bound.';
 +      break;
 +    case CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR:
 +      content = 'Compaction failed because a required protocol step failed.';
@@ -170980,7 +170985,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    const providerCallId = request.providerCallId ?? request.callId;
    const message = duplicateProviderToolCallMessage(providerCallId);
    return {
-@@ -345,58 +465,207 @@
+@@ -345,58 +465,216 @@
    COMPRESSION_FAILED_EMPTY_SUMMARY,
  
    /** The compression was not necessary and no action was taken */
@@ -171011,6 +171016,15 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +
 +  /** A smaller candidate still exceeds the next-request admission trigger. */
 +  COMPRESSION_FAILED_INSUFFICIENT_ROOM,
++
++  /**
++   * The model declared a complete snapshot, and it renders past `M`, the one
++   * inline block the history carries it in. The summary was written and is
++   * not empty; it is too long, and another draw can say the same state more
++   * briefly. Kept apart from `COMPRESSION_FAILED_EMPTY_SUMMARY`, which is a
++   * draw that declared no complete snapshot at all.
++   */
++  COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
  }
  
  /**
@@ -171206,7 +171220,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    type: GeminiEventType.Finished;
    value: GeminiFinishedEventValue;
  };
-@@ -450,29 +719,28 @@
+@@ -450,29 +728,28 @@
  };
  
  // The original union type, now composed of the individual types
@@ -171237,7 +171251,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    response: GenerateContentResponse,
  ): ServerGeminiContentPart[] {
    const parts = response.candidates?.[0]?.content?.parts ?? [];
-@@ -525,14 +793,12 @@
+@@ -525,14 +802,12 @@
    async *run(
      model: string,
      req: PartListUnion,
@@ -171252,7 +171266,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
            message: req,
            config: {
              abortSignal: signal,
-@@ -540,46 +806,47 @@
+@@ -540,46 +815,47 @@
          },
          this.prompt_id,
          this.goalContext,
@@ -180985,7 +180999,7 @@ diff --git a/packages/core/src/qwen/qwenContentGenerator.ts b/packages/core/src/
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,1260 @@
+@@ -1,4405 +1,1294 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -184111,6 +184125,13 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      summaryResult({ functionCalls: [], text: 'here is the summary' }),
 +      CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
 +    ],
++    [
++      'a snapshot past one inline block',
++      summaryResult({
++        functionCalls: [snapshotCall('x'.repeat(PARTITION.inlineBlockBytes))],
++      }),
++      CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
++    ],
    ])(
 -    'uses cache sharing for OpenAI-compatible endpoint %s',
 -    async (baseUrl) => {
@@ -184317,6 +184338,33 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +        status: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
 +        usage: refused.usage,
 +        summary: `no snapshot: expected one ${STATE_SNAPSHOT_FUNCTION_NAME} call, received 0`,
++        reasoning: '',
++        finishReason: FinishReason.STOP,
++        requestAttempts: 1,
++      },
++    ]);
++  });
++
++  it('records a snapshot refused for its length as over the bound, with what the model wrote', async () => {
++    const harness = makeHarness();
++    // A complete snapshot one inline block long in one section alone, so its
++    // rendered form, headings included, is past the bound.
++    const long = 'x'.repeat(PARTITION.inlineBlockBytes);
++    const refused = summaryResult({ functionCalls: [snapshotCall(long)] });
++    harness.generateText
++      .mockResolvedValueOnce(refused)
++      .mockResolvedValue(summaryResult());
++
++    const result = await compress(harness);
++
++    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++    // The refused draw was not empty: it is recorded under the rule it failed,
++    // with the snapshot it declared rather than a claim that it had none.
++    expect(result.info.rejectedAttempts).toEqual([
++      {
++        status: CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
++        usage: refused.usage,
++        summary: snapshot(long),
 +        reasoning: '',
 +        finishReason: FinishReason.STOP,
 +        requestAttempts: 1,
@@ -186498,12 +186546,13 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
-@@ -1,256 +1,93 @@
+@@ -1,256 +1,108 @@
 +import {
 +  acceptStateSnapshot,
 +  renderStateSnapshot,
 +  STATE_SNAPSHOT_FUNCTION_NAME,
 +  stateSnapshotTool,
++  type StateSnapshotAcceptance,
 +} from './state-snapshot.js';
 +import { requireServedUsage, type ServedUsage } from '../core/served-usage.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
@@ -186730,6 +186779,20 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -  const hardEdge = effectiveWindow - HARD_BUFFER;
 -  const hard = Math.min(window, Math.max(hardEdge, auto + HARD_BUFFER));
 +export const MAX_COMPACTION_CANDIDATE_ATTEMPTS = 4;
++
++/**
++ * The status a refused snapshot is recorded under, for each reason it can be
++ * refused. A draw that declared no complete snapshot has an empty summary; one
++ * that declared a complete snapshot past the bound has a summary that is too
++ * long, which is a different failure and is never recorded as the first.
++ */
++const SNAPSHOT_REFUSAL_STATUS: Record<
++  NonNullable<StateSnapshotAcceptance['refused']>,
++  CompressionStatus
++> = {
++  incomplete: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
++  over_bound: CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
++};
  
 -  return { warn, auto, hard, effectiveWindow };
 -}
@@ -186788,7 +186851,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
     * User-supplied focus directives passed to the compression side-query.
     * Appended to the system prompt as an `Additional Instructions:` block.
     * Sourced from `/compress <text>`. PreCompact hooks may further append
-@@ -318,13 +155,13 @@
+@@ -318,13 +170,13 @@
    }
    if (parts.length === 0) return base;
    return `${base}\n\nAdditional Instructions:\n${parts.join('\n\n')}`;
@@ -186803,7 +186866,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
    if (
      provider.authType === AuthType.USE_GEMINI ||
      provider.authType === AuthType.USE_VERTEX_AI
-@@ -333,161 +170,94 @@
+@@ -333,161 +185,94 @@
    }
    if (provider.enableCacheControl === false) return false;
    if (provider.authType === AuthType.USE_ANTHROPIC) return true;
@@ -187013,7 +187076,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Fire PreCompact hook before compression begins. Pass any user-supplied
      // `/compress` instructions so hook scripts can read / log / amend them
-@@ -509,619 +279,642 @@
+@@ -509,619 +294,650 @@
          // `getAdditionalContext()` sanitises (`<`/`>` → `&lt;`/`&gt;`) so a
          // hook can't inject XML structure into the summary prompt. Mirrors
          // every other call-site in this repo (toolHookTriggers, agent.ts,
@@ -187725,9 +187788,14 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        summaryResult.functionCalls,
 +        partition.inlineBlockBytes,
 +      );
++      // What the draw produced, as the record keeps it: the snapshot it
++      // declared, rendered, whether it was accepted or refused for its
++      // length; or, when it declared no complete snapshot, why not.
 +      const summary = acceptance.snapshot
 +        ? renderStateSnapshot(acceptance.snapshot)
-+        : `no snapshot: ${acceptance.refusal}`;
++        : acceptance.refused === 'over_bound'
++          ? acceptance.rendered
++          : `no snapshot: ${acceptance.refusal}`;
 +      const accounting: AttemptAccounting = {
 +        usage: summaryUsage,
 +        summary,
@@ -187767,12 +187835,15 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        config
 +          .getDebugLogger()
 +          .warn(
-+            `[chat-compression] STOP response did not carry the declared ` +
-+              `snapshot (${acceptance.refusal}); preserving original history.`,
++            acceptance.refused === 'over_bound'
++              ? `[chat-compression] STOP response carried a snapshot past its ` +
++                  `bound (${acceptance.refusal}); preserving original history.`
++              : `[chat-compression] STOP response did not carry the declared ` +
++                  `snapshot (${acceptance.refusal}); preserving original history.`,
 +          );
 +        return {
 +          kind: 'resampleable',
-+          status: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
++          status: SNAPSHOT_REFUSAL_STATUS[acceptance.refused],
 +          accounting,
 +        };
 +      }
@@ -201176,7 +201247,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/src/services/state-snapshot.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.test.ts
-@@ -0,0 +1,208 @@
+@@ -0,0 +1,217 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -201266,8 +201337,15 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +      INLINE_BLOCK_BYTES,
 +    );
 +    expect(accepted.snapshot).toBeUndefined();
++    expect(accepted.refused).toBe('over_bound');
 +    expect(accepted.refusal).toContain(
 +      `past the ${INLINE_BLOCK_BYTES} one inline block may carry`,
++    );
++    // The draw declared a complete snapshot and wrote too much of it. It is
++    // kept with the refusal, in the form measured, because it is what the
++    // draw produced -- a refusal for length is not a draw with no summary.
++    expect(accepted.refused === 'over_bound' && accepted.rendered).toBe(
++      renderStateSnapshot(oversized),
 +    );
 +  });
 +
@@ -201282,6 +201360,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +    ).toBeLessThan(INLINE_BLOCK_BYTES);
 +    const refused = acceptStateSnapshot([call(drawn)], INLINE_BLOCK_BYTES);
 +    expect(refused.snapshot).toBeUndefined();
++    expect(refused.refused).toBe('over_bound');
 +    expect(refused.refusal).toContain(
 +      `past the ${INLINE_BLOCK_BYTES} one inline block may carry`,
 +    );
@@ -201355,9 +201434,10 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +    ['a non-string section', [call({ ...sections(), intent: 12 })]],
 +    ['an empty section', [call({ ...sections(), intent: '' })]],
 +    ['a whitespace-only section', [call({ ...sections(), intent: ' \t\r\n ' })]],
-+  ])('refuses %s', (_name, calls) => {
++  ])('refuses %s as declaring no complete snapshot', (_name, calls) => {
 +    const accepted = acceptStateSnapshot(calls, INLINE_BLOCK_BYTES);
 +    expect(accepted.snapshot).toBeUndefined();
++    expect(accepted.refused).toBe('incomplete');
 +    expect(accepted.refusal).toBeTruthy();
 +  });
 +
@@ -201388,7 +201468,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/services/state-snapshot.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.ts
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,218 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -201494,10 +201574,33 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +  };
 +}
 +
-+/** An accepted snapshot, or the reason this draw was refused. */
++/**
++ * An accepted snapshot, or the reason this draw was refused.
++ *
++ * A draw is refused for one of two different things, and each is recorded as
++ * what it is. One that does not declare a complete snapshot leaves nothing to
++ * resume from. One that declares a complete snapshot past the bound has
++ * written the state and written too much of it; that snapshot is kept with
++ * the refusal, rendered, because it is what the draw produced.
++ */
 +export type StateSnapshotAcceptance =
-+  | { readonly snapshot: StateSnapshot; readonly refusal?: undefined }
-+  | { readonly snapshot?: undefined; readonly refusal: string };
++  | {
++      readonly snapshot: StateSnapshot;
++      readonly refused?: undefined;
++      readonly refusal?: undefined;
++    }
++  | {
++      readonly snapshot?: undefined;
++      readonly refused: 'incomplete';
++      readonly refusal: string;
++    }
++  | {
++      readonly snapshot?: undefined;
++      readonly refused: 'over_bound';
++      readonly refusal: string;
++      /** The declared snapshot, rendered in the form that was measured. */
++      readonly rendered: string;
++    };
 +
 +/**
 + * Judge one drawn candidate. The request declared one function and forced it,
@@ -201513,27 +201616,40 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +): StateSnapshotAcceptance {
 +  if (calls.length !== 1) {
 +    return {
++      refused: 'incomplete',
 +      refusal: `expected one ${STATE_SNAPSHOT_FUNCTION_NAME} call, received ${calls.length}`,
 +    };
 +  }
 +  const [call] = calls;
 +  if (call.name !== STATE_SNAPSHOT_FUNCTION_NAME) {
-+    return { refusal: `called ${String(call.name)} instead of ${STATE_SNAPSHOT_FUNCTION_NAME}` };
++    return {
++      refused: 'incomplete',
++      refusal: `called ${String(call.name)} instead of ${STATE_SNAPSHOT_FUNCTION_NAME}`,
++    };
 +  }
 +  const args = call.args;
 +  if (!args || typeof args !== 'object' || Array.isArray(args)) {
-+    return { refusal: `${STATE_SNAPSHOT_FUNCTION_NAME} carried no argument object` };
++    return {
++      refused: 'incomplete',
++      refusal: `${STATE_SNAPSHOT_FUNCTION_NAME} carried no argument object`,
++    };
 +  }
 +  const schemaError = SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args);
 +  if (schemaError) {
-+    return { refusal: `${STATE_SNAPSHOT_FUNCTION_NAME} arguments ${schemaError}` };
++    return {
++      refused: 'incomplete',
++      refusal: `${STATE_SNAPSHOT_FUNCTION_NAME} arguments ${schemaError}`,
++    };
 +  }
 +  const record = args as Record<string, unknown>;
 +  const empty = STATE_SNAPSHOT_SECTIONS.filter(
 +    (section) => !String(record[section]).trim(),
 +  );
 +  if (empty.length > 0) {
-+    return { refusal: `sections with no text: ${empty.join(', ')}` };
++    return {
++      refused: 'incomplete',
++      refusal: `sections with no text: ${empty.join(', ')}`,
++    };
 +  }
 +  const snapshot = Object.fromEntries(
 +    STATE_SNAPSHOT_SECTIONS.map((section) => [section, String(record[section])]),
@@ -201545,7 +201661,9 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +  const rendered = tokenizerText(renderStateSnapshot(snapshot));
 +  if (rendered.bytes > maxBytes) {
 +    return {
++      refused: 'over_bound',
 +      refusal: `snapshot renders to ${rendered.bytes} bytes, past the ${maxBytes} one inline block may carry; write the same state more briefly`,
++      rendered: rendered.text,
 +    };
 +  }
 +  return { snapshot };

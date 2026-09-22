@@ -3254,6 +3254,13 @@ def _validate_compaction_budget_after(state: State) -> None:
             "  return tokenizerText(\n    [\n      '# state_snapshot',",
             "SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args)",
             "(section) => !String(record[section]).trim(),",
+            # A draw is refused for one of two things, and says which: it
+            # declared no complete snapshot, or it declared one past the bound,
+            # which it keeps, rendered, because that is what the draw produced.
+            "readonly refused: 'incomplete';",
+            "readonly refused: 'over_bound';",
+            "      refused: 'over_bound',",
+            "      rendered: rendered.text,",
         ),
         label="complete state snapshot",
     )
@@ -4038,10 +4045,30 @@ def _validate_compaction_budget_after(state: State) -> None:
             "mode: FunctionCallingConfigMode.ANY,",
             "acceptStateSnapshot(\n        summaryResult.functionCalls,\n        partition.inlineBlockBytes,\n      )",
             "if (!acceptance.snapshot) {",
+            # A snapshot refused for its length was not empty. It is recorded
+            # under its own status, with the snapshot it declared, and never
+            # as a draw that produced no summary.
+            "  incomplete: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,",
+            "  over_bound: CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,",
+            "status: SNAPSHOT_REFUSAL_STATUS[acceptance.refused],",
+            "        : acceptance.refused === 'over_bound'\n          ? acceptance.rendered",
         ),
         label=label,
     )
     forbid_text(state, service, "isValidStateSnapshot", label=label)
+    forbid_text(
+        state,
+        service,
+        "status: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,",
+        label=label,
+    )
+    for path, case in (
+        (service_test, "records a snapshot refused for its length as over the bound, with what the model wrote"),
+        (service_test, "'a snapshot past one inline block'"),
+        ("packages/core/src/services/state-snapshot.test.ts", "refuses %s as declaring no complete snapshot"),
+        ("packages/cli/src/utils/compression-result.test.ts", "COMPRESSION_FAILED_SUMMARY_OVER_BOUND, 'error', 'longer than its bound'"),
+    ):
+        require_text(state, path, case, label=label)
 
 
 def _validate_compaction_accounting_before(state: State) -> None:
