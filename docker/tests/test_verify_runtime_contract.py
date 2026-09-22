@@ -112,6 +112,8 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             (("model", "maxToolCalls"), -1),
             (("model", "maxToolCalls"), 1000),
             (("model", "sessionTokenLimit"), -1),
+            (("model", "maxToolCallsPerTurn"), 1000),
+            (("model", "maxToolCallsPerTurn"), 0),
             (("context", "clearContextOnIdle"), {}),
             (
                 ("context", "clearContextOnIdle"),

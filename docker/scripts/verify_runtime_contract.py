@@ -38,6 +38,7 @@ RETIRED_SETTINGS = (
     ("model", "maxToolCalls"),
     ("model", "sessionTokenLimit"),
     ("context", "clearContextOnIdle"),
+    ("model", "maxToolCallsPerTurn"),
 )
 
 
@@ -122,11 +123,6 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
         "settings default max session turns",
         settings["model"]["maxSessionTurns"],
         execution["max_session_turns"],
-    )
-    require_equal(
-        "settings per-turn tool-call circuit breaker",
-        settings["model"]["maxToolCallsPerTurn"],
-        execution["max_tool_calls_per_turn"],
     )
     require_equal("settings max subagent depth", settings["model"]["maxSubagentDepth"], 1)
     require_equal(

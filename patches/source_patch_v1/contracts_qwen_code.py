@@ -4743,6 +4743,19 @@ _RETIRED_BUDGET_NAMES = tuple(
         r"\bsessionTokenLimit\b",
         r"SessionTokenLimit",
         r"session-token-limit-error",
+        # The per-turn tool-call cap was a second session budget: its counter
+        # runs across a turn and its ToolResult continuations, which in a
+        # headless run is the whole session, and a run that passed it was
+        # reported as a loop rather than as the budget it had reached. The
+        # session's one budget is its turns.
+        r"maxToolCallsPerTurn",
+        r"MaxToolCallsPerTurn",
+        r"MAX_TOOL_CALLS_PER_TURN",
+        r"max_tool_calls_per_turn",
+        r"TURN_TOOL_CALL_CAP",
+        r"turn_tool_call_cap",
+        r"checkTurnToolCallCap",
+        r"shouldHaltOnTurnToolCallCap",
     )
 )
 
@@ -5187,6 +5200,18 @@ def _validate_terminal_state_before(state: State) -> None:
         label=label,
     )
     require_text(state, cli, "    const budgetEnforcer = new RunBudgetEnforcer(", label=label)
+    # And a per-turn tool-call cap, always on, which counts a turn plus every
+    # ToolResult continuation of it.
+    _require_all(
+        state,
+        "packages/core/src/services/loopDetectionService.ts",
+        (
+            "export const DEFAULT_MAX_TOOL_CALLS_PER_TURN = 100;",
+            "export function shouldHaltOnTurnToolCallCap(",
+            "  private checkTurnToolCallCap(): boolean {",
+        ),
+        label=label,
+    )
     require_text(
         state,
         "packages/core/src/config/config.ts",
@@ -5512,6 +5537,29 @@ def _validate_terminal_state_after(state: State) -> None:
     # though no session does, and a scope's record carries no exit code.
     for absent in (_RUN_BUDGET_MODULE, _RUN_BUDGET_TEST):
         _require(absent not in state, f"{label}: {absent} still ships")
+    # What halts a run short of its budget is repetition, named as such. The
+    # always-on guards are the two repetition signals; neither counts how much
+    # a run has done, because a bound on that is a budget and the session has
+    # one.
+    _require_all(
+        state,
+        "packages/core/src/services/loopDetectionService.ts",
+        (
+            "    if (this.checkToolCallLoop(key, event.value)) {",
+            "    if (this.checkShellCommandStagnation(event.value)) {",
+            "Enforces two guards, both repetition signals",
+        ),
+        label=label,
+    )
+    # The daemon's own turn guard counted a turn's calls to enforce the same
+    # cap; it keeps the repeat counters and counts nothing.
+    for retired in ("totalToolCalls", "shouldHaltOnTurnToolCallCap"):
+        forbid_text(
+            state,
+            "packages/cli/src/acp-integration/session/Session.ts",
+            retired,
+            label=label,
+        )
     for path, source in sorted(state.items()):
         for retired in _RETIRED_BUDGET_NAMES:
             _require(
@@ -8115,9 +8163,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "code are the stream contract's terminal table, read from its generated binding. The "
             "constructed and mapped state sets agree, and every name the contract defines is one a "
             "state produces. A run is bounded by its turn budget and nothing else: the wall-clock and "
-            "cumulative tool-call budgets and the session token limit, which no fixed argv or sealed "
-            "settings file could set, are gone with the state and wire name the tool-call budget ended "
-            "a run in. Budget admission precedes "
+            "cumulative tool-call budgets, the session token limit and the per-turn tool-call cap -- a "
+            "second session budget, smaller than the declared one and reported as a loop -- are gone, "
+            "with the state and wire name the tool-call budget ended a run in. What halts a run short "
+            "of its budget is repetition, named as repetition. Budget admission precedes "
             "charging. One queued-turn lifetime tracks result delivery, so failed cleanup cannot mint a "
             "second terminal; cleanup and output callbacks are awaited."
         ),

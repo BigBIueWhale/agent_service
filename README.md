@@ -374,9 +374,11 @@ for zero, a negative count, a non-integer, or more than 2,000 turns is an error
 naming the value, never a silently clamped session that would end as an ordinary
 exit 53 and be graded as one. The effective budget is recorded in the session
 body and in the bundle's `control/turn-budget.json`, so a finished session can
-be read back to see the bound it actually ran under. Cumulative tool calls
-have no separate cutoff, and one model turn still has a 1,000-tool-call circuit
-breaker for degenerate output. Auto-compaction is due when the rendered request
+be read back to see the bound it actually ran under. Tool calls have no
+separate cutoff of their own: a bound on how much work a run may do is a budget,
+and this deployment has one. What still halts a run is repetition — the same
+call with identical arguments, or the same shell inspection command, repeated
+with nothing changing — reported as the loop it is. Auto-compaction is due when the rendered request
 reaches the compaction trigger, the share of the window the history is allowed.
 Subagents run
 sequentially in the foreground and return concise findings to the same main thread;
