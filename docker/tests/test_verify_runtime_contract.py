@@ -41,6 +41,16 @@ class VerifyRuntimeContractTests(unittest.TestCase):
         candidate.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
         return [candidate, *self.paths[1:]]
 
+    def resealed(self, root: Path, settings: dict) -> list[Path]:
+        """Write `settings` and reseal the contract against it."""
+        settings_path = root / "settings.json"
+        settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+        contract["components"]["settings_sha256"] = MODULE.sha256(settings_path.read_bytes())
+        contract_path = root / "contract.json"
+        contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+        return [contract_path, settings_path, *self.paths[2:]]
+
     def test_rejects_settings_hash_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -114,6 +124,8 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             (("model", "sessionTokenLimit"), -1),
             (("model", "maxToolCallsPerTurn"), 1000),
             (("model", "maxToolCallsPerTurn"), 0),
+            (("compactionModel",), "qwen3.8-27b-nvfp4-k8v4"),
+            (("compactionModel",), ""),
             (("context", "clearContextOnIdle"), {}),
             (
                 ("context", "clearContextOnIdle"),
@@ -136,6 +148,31 @@ class VerifyRuntimeContractTests(unittest.TestCase):
                 paths = [contract_path, settings_path, *self.paths[2:]]
                 with self.assertRaisesRegex(
                     MODULE.ContractError, f"settings carry {'.'.join(path)}, which the client no longer has"
+                ):
+                    MODULE.verify(paths)
+
+    def test_rejects_a_sealed_settings_file_that_sets_a_per_purpose_model(self) -> None:
+        # One model serves this deployment. A second one, named for a purpose,
+        # is refused by key whatever the file's hash says.
+        for key in ("modelFallbacks", "fastModel", "visionModel", "imageModel", "voiceModel"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                settings = json.loads(self.paths[1].read_text(encoding="utf-8"))
+                settings[key] = "some-other-model"
+                paths = self.resealed(root, settings)
+                with self.assertRaisesRegex(MODULE.ContractError, f"settings {key} drift"):
+                    MODULE.verify(paths)
+
+    def test_rejects_a_sealed_settings_file_that_omits_a_per_purpose_model(self) -> None:
+        # Stated as empty, not left out: the file says which selectors are unset.
+        for key in ("modelFallbacks", "fastModel", "visionModel", "imageModel", "voiceModel"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                settings = json.loads(self.paths[1].read_text(encoding="utf-8"))
+                del settings[key]
+                paths = self.resealed(root, settings)
+                with self.assertRaisesRegex(
+                    MODULE.ContractError, f"settings must state {key} as empty"
                 ):
                     MODULE.verify(paths)
 

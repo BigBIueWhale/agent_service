@@ -39,6 +39,7 @@ RETIRED_SETTINGS = (
     ("model", "sessionTokenLimit"),
     ("context", "clearContextOnIdle"),
     ("model", "maxToolCallsPerTurn"),
+    ("compactionModel",),
 )
 
 
@@ -130,14 +131,21 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
         settings["model"]["chatCompression"]["maxRecentImagesToRetain"],
         0,
     )
+    # One model serves this deployment. Each remaining per-purpose selector is
+    # stated as empty rather than left out, so the sealed file says that none
+    # is set, and a file that sets one is refused here whatever its hash says.
     for key in (
         "modelFallbacks",
         "fastModel",
         "visionModel",
-        "compactionModel",
         "imageModel",
         "voiceModel",
     ):
+        if key not in settings:
+            raise ContractError(
+                f"settings must state {key} as empty: the sealed file says which "
+                "per-purpose models are unset rather than leaving them out"
+            )
         require_equal(f"settings {key}", settings[key], "")
     require_equal("settings sandbox", settings["tools"]["sandbox"], False)
     # Compaction is the only thing that rewrites history here, and the size it

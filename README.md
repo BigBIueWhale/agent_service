@@ -533,8 +533,12 @@ below, sequential foreground `general-purpose` and `Explore` children, immutable
 settings and instructions, and per-child scratch and effect journals. Those two
 children are defined by the deployment: a `.qwen/agents/<name>.md` beside the work
 is named in the run and never read, so the workspace cannot replace the prompt,
-the tools, the model or the working time of the agent that works on it. It excludes
-forks, background work, teams, worktrees, alternate child models, and nesting.
+the tools, the model or the working time of the agent that works on it. One model
+serves the session and everything in it, compaction included: the sealed settings
+state each per-purpose selector — fast, vision, image, voice — and the fallback
+list as empty, and the runtime-contract verifier refuses a settings file that sets
+one, resealed or not. It excludes forks, background work, teams, worktrees,
+alternate child models, and nesting.
 Workspace environment/configuration discovery, ambient MCP, hooks, managed memory,
 custom workflows, and injected policy remain disabled through authentication;
 ordinary project `QWEN.md` and `AGENTS.md` instructions remain available. Leading

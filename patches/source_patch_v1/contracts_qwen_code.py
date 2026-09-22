@@ -3225,6 +3225,20 @@ def _validate_compaction_budget_before(state: State) -> None:
         label=label,
     )
     require_text(state, prompts, "<all_user_messages>", label=label)
+    # A second model, named for a purpose, can be set for compaction, and the
+    # request shape is then chosen by comparing it with the session's model.
+    require_text(
+        state,
+        service,
+        "      config.getCompactionModel?.() ?? config.getModel();",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/config/config.ts",
+        "  getCompactionModel(): string | undefined {",
+        label=label,
+    )
 
 
 # The three quantities the partition declares. `D` and `M` are shares of the
@@ -4168,6 +4182,37 @@ def _validate_compaction_budget_after(state: State) -> None:
     # carried it, so no caller can reintroduce a split budget.
     for path in (pipeline, generator):
         forbid_text(state, path, "phaseBudgetOverrides", label=label)
+    # Compaction runs on the session's model. The per-purpose compaction model
+    # is gone -- the setting, the Config field with its getter, setter and
+    # selector resolution, the `/model --compaction` form with its dialog
+    # mode, the documents and the editor schema -- so the request shares the
+    # session's prompt-cache prefix by construction rather than after a
+    # comparison, and what is left to establish is the provider's and the
+    # tokenizer's. No file the transformation writes names it again.
+    _require_all(
+        state,
+        service,
+        (
+            "    // Compaction runs on the session's model, so the shared prompt-cache\n"
+            "    // prefix is the session's own; what is left to establish is that the\n"
+            "    // provider preserves it and that the counts are exact.\n"
+            "    const providerSupportsCacheSharing =\n"
+            "      supportsCompressionCacheSharing(config);\n"
+            "    if (\n"
+            "      !providerSupportsCacheSharing ||\n"
+            "      contentGeneratorConfig.exactTokenCounting !== 'vllm'\n"
+            "    ) {",
+        ),
+        label=label,
+    )
+    for path, source in sorted(state.items()):
+        for retired in _RETIRED_COMPACTION_MODEL_NAMES:
+            _require(
+                retired.search(source) is None,
+                f"{label}: {path} still names the retired compaction model "
+                f"{retired.pattern!r}",
+            )
+
     # The request is the issued prompt as the provider already holds it: the
     # same contents, in the same order, one appended directive, and nothing
     # the turn recorded after that prompt. Reshaping it would re-prefill the
@@ -4781,6 +4826,20 @@ _RETIRED_MICROCOMPACTION_NAMES = (
     "DEFAULT_TOOL_RESULTS_TOTAL_CHARS_THRESHOLD",
     "clearContextDefaults",
     "lastApiCompletionTimestamp",
+)
+
+_RETIRED_COMPACTION_MODEL_NAMES = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"\bcompactionModel\b",
+        r"\bgetCompactionModel\b",
+        r"\bsetCompactionModel\b",
+        r"\bcompactionModelMode\b",
+        r"\bisCompactionModelMode\b",
+        r"--compaction\b",
+        r"compaction-model",
+        r"Compaction Model",
+    )
 )
 
 _RUN_BUDGET_MODULE = "packages/cli/src/utils/runBudget.ts"

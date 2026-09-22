@@ -8686,7 +8686,20 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  
  **model.openAILoggingDir examples:**
  
-@@ -305,41 +294,31 @@
+@@ -283,12 +272,6 @@
+ | Setting       | Type   | Description                                                                                                                                                                                                                                                                                                                                                                                                                         | Default |
+ | ------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+ | `visionModel` | string | Image-capable model used as the vision bridge: when a text-only main model receives an image, or `read_file` needs the bounded PDF visual fallback, it is transcribed by this model first. Setting this explicitly authorizes bridge calls to that model even when it uses another provider; the tool display discloses the endpoint. Leave empty to auto-pick a same-provider vision model. Can also be set via `/model --vision`. | `""`    |
+-
+-#### compactionModel
+-
+-| Setting           | Type   | Description                                                                                                                                                                                                             | Default |
+-| ----------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+-| `compactionModel` | string | Model used for chat compression (auto-compaction). Leave empty to fall back to the main model. A smaller or faster model can reduce compression latency and cost. Can also be set or cleared via `/model --compaction`. | `""`    |
+ 
+ #### imageModel
+ 
+@@ -305,41 +288,31 @@
  #### voiceModel
  
  | Setting      | Type   | Description                                                                                                                                             | Default |
@@ -8739,7 +8752,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  If you are experiencing performance issues with file searching (e.g., with `@` completions), especially in projects with a very large number of files, here are a few things you can try in order of recommendation:
  
  1. **Use an ignore file:** Create a `.qwenignore` or configured custom ignore file in your project root to exclude directories that contain a large number of files that you don't need to reference (e.g., build artifacts, logs, `node_modules`). Reducing the total number of files crawled is the most effective way to improve performance.
-@@ -365,8 +344,6 @@
+@@ -365,8 +338,6 @@
  | `tools.callCommand`                   | string            | Defines a custom shell command for calling a specific tool that was discovered using `tools.discoveryCommand`. The shell command must meet the following criteria: It must take function `name` (exactly as in [function declaration](https://ai.google.dev/gemini-api/docs/function-calling#function-declarations)) as first command line argument. It must read function arguments as JSON on `stdin`, analogous to [`functionCall.args`](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#functioncall). It must return function output as JSON on `stdout`, analogous to [`functionResponse.response.content`](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#functionresponse). | `undefined` |                                                                                                                                                                                                                                                                                                                             |
  | `tools.useRipgrep`                    | boolean           | Use ripgrep for file content search instead of the fallback implementation. Provides faster search performance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `true`      |                                                                                                                                                                                                                                                                                                                             |
  | `tools.useBuiltinRipgrep`             | boolean           | Use the bundled ripgrep binary. When set to `false`, the system-level `rg` command will be used instead. This setting is only effective when `tools.useRipgrep` is `true`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `true`      |                                                                                                                                                                                                                                                                                                                             |
@@ -8748,7 +8761,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  | `tools.computerUse.enabled`           | boolean           | Enable the built-in Computer Use tools (cua-driver native desktop automation). When `true` (default), the `computer_use__*` tools are registered as deferred built-ins; the first invocation downloads the pinned, signed cua-driver binary into `~/.qwen/computer-use/` and walks through macOS Accessibility / Screen Recording permissions.                                                                                                                                                                                                                                                                                                                                                                                                       | `true`      | Requires restart: Yes                                                                                                                                                                                                                                                                                                       |
  | `tools.computerUse.maxImageDimension` | number            | Longest-edge pixel cap applied to cua-driver screenshots (via `set_config`'s `max_image_dimension`). `-1` (default) keeps cua-driver's built-in default (1568); `0` disables resizing (full resolution); a positive value caps the longest edge. Lower caps cut vision-token cost at the expense of fine detail.                                                                                                                                                                                                                                                                                                                                                                                                                                     | `-1`        | Requires restart: Yes. Env override: `QWEN_COMPUTER_USE_MAX_IMAGE_DIMENSION` (a non-negative integer; takes precedence over this setting)                                                                                                                                                                                   |
  | `tools.computerUse.idleTimeoutMs`     | number            | Milliseconds to keep the cua-driver process alive after the last `computer_use__*` call. The default is `300000` (5 minutes). Set to `0` to keep it running until Qwen Code exits.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `300000`    | Requires restart: Yes                                                                                                                                                                                                                                                                                                       |
-@@ -601,13 +578,12 @@
+@@ -601,13 +572,12 @@
  > **Experimental features.** These toggles gate in-development capabilities and may change or be removed in future releases.
  
  | Setting                                | Type    | Description                                                                                                                                                                                                                                                                                                                                                                                                  | Default |
@@ -8762,7 +8775,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  | `experimental.emitToolUseSummaries`    | boolean | Generate a short LLM-based label after each tool-call batch completes. See [Tool-Use Summaries](../features/tool-use-summaries). Requires a fast model to be configured (`fastModel`); silently skipped otherwise. Can be overridden per-session with `QWEN_CODE_EMIT_TOOL_USE_SUMMARIES=0` or `=1`.                                                                                                         | `true`  |
  
  #### mcpServers
-@@ -736,42 +712,42 @@
+@@ -736,42 +706,42 @@
  > [!warning]
  >
  > **Loader-affecting variables are always rejected:** Variables that make a spawned Node.js process or OS loader execute an attacker-chosen file — `NODE_OPTIONS`, `npm_config_node_options` (and npm's config-file redirects `npm_config_userconfig`, `npm_config_globalconfig`, `npm_config_script_shell`, `npm_config_prefix`), `NODE_PATH`, `OPENSSL_CONF` (dlopens an attacker OpenSSL engine at startup), `NODE_REPL_EXTERNAL_MODULE`, `npm_config_node_gyp`, `npm_config_init_module`, `LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`, `BASH_ENV`, `ZDOTDIR`, and exported bash function definitions (`BASH_FUNC_*`) — are never loaded from `.env` files (any scope, including `.qwen/.env` and user-level files) or from the top-level `settings.json` `env` section. A workspace-controlled value there could hijack module resolution for every subprocess Qwen Code spawns, so Qwen Code prints a warning when it rejects such a key (once per process, per key and source — in a multi-workspace daemon each workspace's rejection is reported separately). To use one of these variables, export it in the environment you launch Qwen Code from; sessions hosted by a `qwen serve` daemon deliberately do not inherit them, while direct editor (ACP) sessions and the plain CLI keep the exported value. Library _search_ paths (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`) and the interactive-shell-only `ENV` are intentionally not on this list — rejecting them breaks mainstream toolchains (`ENV=production`, conda/CUDA library dirs) — but a project `.env` still cannot apply them on reload. This rejection applies to the top-level `env` section only: per-server `mcpServers[].env` and per-hook `hooks[].env` are intentionally scoped to that server or hook and still apply (both surfaces are gated by folder trust for workspace-provided configs). Separately, a project `.env` can never set `QWEN_CLI_ENTRY` (the daemon's session-process entrypoint), `QWEN_CDP_MCP_COMMAND` (the command the daemon spawns as the browser-automation MCP adapter), `QWEN_SERVE_CDP_TUNNEL_OVER_WS` (switches that tunnel surface on), `DEV` (the dev-harness launch marker), the TLS trust-anchor variables (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH`, `npm_config_cafile`, `npm_config_ca`, `npm_config_strict_ssl`, `PIP_CERT` — an attacker CA there, or `npm_config_strict_ssl=false`, would enable MITM of the token-bearing traffic a session's `git`/`npm`/`pip`/`curl` calls make), the git command-execution variables (`GIT_SSH_COMMAND`, `GIT_SSH`, `GIT_EXEC_PATH`, `GIT_TEMPLATE_DIR`, `GIT_ASKPASS`, `GIT_PROXY_COMMAND`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_EXTERNAL_DIFF`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_PARAMETERS` and the numbered `GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` pairs — git runs these on any session `git` invocation — and `XDG_CONFIG_HOME`, which redirects the `$XDG_CONFIG_HOME/git/config` git merges with `~/.gitconfig`), the curl/wget rc-file redirects (`CURL_HOME`, `WGETRC` — their rc files can install an attacker proxy or CA), `PIP_CONFIG_FILE` (redirects all of pip's configuration — `index-url`, `trusted-host`, proxy, or cert settings in an attacker file send session pip traffic or credentials to attacker infrastructure), `SSH_ASKPASS` (git/ssh execute it as the fallback passphrase-prompt program on an auth challenge), `LESSOPEN` and `LESSCLOSE` (`less` executes them as input preprocessors on every file a session views), the node-gyp interpreter-selection variables (`NODE_GYP_FORCE_PYTHON`, `npm_config_python`, `PYTHON` — run as the build Python during native-addon installs — and `npm_config_git`, run as npm's git binary), the editor and startup hooks (`VISUAL`, `EDITOR` — git's editor fallback chain, also spawned by the CLI's own external-editor flows — and `PYTHONSTARTUP`, which CPython executes at interactive startup), or `BROWSER` (the CLI execs it via the secure browser launcher). Those stay settable from the shell environment or a user-level `.env`; unlike the loader list above they are rejected from project files only, so a value you export yourself is preserved. They are also frozen at boot from a user-level `.env`: a settings reload does not apply edits to them there — or their removal — until the process restarts. Upgrade note: before this denylist existed, some of these keys could load from `.env` files or `settings.json` `env` on some paths; they are now rejected everywhere with a warning, and a `qwen serve` daemon no longer passes inherited values of them to session subprocesses.
@@ -8838,20 +8851,125 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
 diff --git a/docs/users/features/commands.md b/docs/users/features/commands.md
 --- a/docs/users/features/commands.md
 +++ b/docs/users/features/commands.md
-@@ -20,13 +20,12 @@
+@@ -20,16 +20,15 @@
  
- | Command          | Description                                                              | Usage Examples                                                |
- | ---------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
- | `/init`          | Analyze current directory and create initial context file                | `/init`                                                       |
- | `/summary`       | Generate project summary based on conversation history                   | `/summary` or `/summary docs/my-summary.md`                   |
- | `/compress`      | Replace chat history with summary to save Tokens                         | `/compress` or `/summarize`                                   |
+-| Command          | Description                                                              | Usage Examples                                                |
+-| ---------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+-| `/init`          | Analyze current directory and create initial context file                | `/init`                                                       |
+-| `/summary`       | Generate project summary based on conversation history                   | `/summary` or `/summary docs/my-summary.md`                   |
+-| `/compress`      | Replace chat history with summary to save Tokens                         | `/compress` or `/summarize`                                   |
 -| `/compress-fast` | Fast compression without AI — strips old tool outputs and thinking parts | `/compress-fast`                                              |
- | `/resume`        | Resume a previous conversation session                                   | `/resume` or `/continue`                                      |
- | `/recap`         | Generate a one-line session recap now                                    | `/recap`                                                      |
- | `/restore`       | Revert project files to the checkpoint before a tool call ran            | `/restore` (list) or `/restore <ID>`                          |
- | `/delete`        | Delete a previous session                                                | `/delete`                                                     |
- | `/branch`        | Fork the current conversation into a new session                         | `/branch`                                                     |
- | `/fork`          | Spawn a background agent that inherits the full conversation             | `/fork <directive>`                                           |
+-| `/resume`        | Resume a previous conversation session                                   | `/resume` or `/continue`                                      |
+-| `/recap`         | Generate a one-line session recap now                                    | `/recap`                                                      |
+-| `/restore`       | Revert project files to the checkpoint before a tool call ran            | `/restore` (list) or `/restore <ID>`                          |
+-| `/delete`        | Delete a previous session                                                | `/delete`                                                     |
+-| `/branch`        | Fork the current conversation into a new session                         | `/branch`                                                     |
+-| `/fork`          | Spawn a background agent that inherits the full conversation             | `/fork <directive>`                                           |
+-| `/rewind`        | Rewind conversation to a previous turn                                   | `/rewind` or `/rollback`                                      |
+-| `/export`        | Export session history to file                                           | `/export html`, `/export md`, `/export json`, `/export jsonl` |
+-| `/rename`        | Rename or tag the current session                                        | `/rename My Feature` or `/tag`                                |
++| Command     | Description                                                   | Usage Examples                                                |
++| ----------- | ------------------------------------------------------------- | ------------------------------------------------------------- |
++| `/init`     | Analyze current directory and create initial context file     | `/init`                                                       |
++| `/summary`  | Generate project summary based on conversation history        | `/summary` or `/summary docs/my-summary.md`                   |
++| `/compress` | Replace chat history with summary to save Tokens              | `/compress` or `/summarize`                                   |
++| `/resume`   | Resume a previous conversation session                        | `/resume` or `/continue`                                      |
++| `/recap`    | Generate a one-line session recap now                         | `/recap`                                                      |
++| `/restore`  | Revert project files to the checkpoint before a tool call ran | `/restore` (list) or `/restore <ID>`                          |
++| `/delete`   | Delete a previous session                                     | `/delete`                                                     |
++| `/branch`   | Fork the current conversation into a new session              | `/branch`                                                     |
++| `/fork`     | Spawn a background agent that inherits the full conversation  | `/fork <directive>`                                           |
++| `/rewind`   | Rewind conversation to a previous turn                        | `/rewind` or `/rollback`                                      |
++| `/export`   | Export session history to file                                | `/export html`, `/export md`, `/export json`, `/export jsonl` |
++| `/rename`   | Rename or tag the current session                             | `/rename My Feature` or `/tag`                                |
+@@ -81,47 +80,46 @@
+ 
+ Commands for managing AI tools and models.
+ 
+-| Command               | Description                                                                           | Usage Examples                                                                                            |
+-| --------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+-| `/mcp`                | List configured MCP servers and tools                                                 | `/mcp`, `/mcp desc`, `/mcp nodesc`, `/mcp schema`                                                         |
+-| `/import-config`      | Import MCP servers from Claude configs                                                | `/import-config all`, `/import-config claude-code`, `/import-config claude-desktop --scope user\|project` |
+-| `/tools`              | Display currently available tool list                                                 | `/tools`, `/tools desc`                                                                                   |
+-| `/skills`             | Open the Skills panel to browse, search, toggle, and launch skills                    | `/skills`, `/<skill-name>`                                                                                |
+-| `/learn`              | Create a reusable project skill from a file, directory, URL, video, or text           | `/learn https://docs.example.com/api`, `/learn ./tutorial.mp4 focus on deployment`                        |
+-| `/curator`            | Inspect, pin, archive, or restore inactive project auto-skills                        | `/curator`, `/curator run --dry-run`, `/curator pin <directory>`, `/curator restore <directory>`          |
+-| `/plan`               | Switch to plan mode or exit plan mode                                                 | `/plan`, `/plan <task>`, `/plan exit`                                                                     |
+-| `/approval-mode`      | Change the tool-approval mode (current session only)                                  | `/approval-mode`, `/approval-mode auto-edit`                                                              |
+-| → `plan`              | Analysis only, no execution (secure review)                                           | `/approval-mode plan`                                                                                     |
+-| → `default`           | Require approval for edits (daily use)                                                | `/approval-mode default`                                                                                  |
+-| → `auto-edit`         | Auto-approve edits (trusted environment)                                              | `/approval-mode auto-edit`                                                                                |
+-| → `auto`              | Classifier-evaluated approval (autonomous)                                            | `/approval-mode auto`                                                                                     |
+-| → `yolo`              | Auto-approve everything (quick prototyping)                                           | `/approval-mode yolo`                                                                                     |
+-| `/model`              | Switch model used in current session                                                  | `/model`, `/model <model-id>` (switch immediately)                                                        |
+-| `/model --fast`       | Set a lighter model for prompt suggestions                                            | `/model --fast qwen3-coder-flash`                                                                         |
+-| `/model --voice`      | Set the model used for voice transcription                                            | `/model --voice <model-id>`                                                                               |
+-| `/model --vision`     | Set the vision-bridge model used to transcribe images for a text-only main model      | `/model --vision <model-id>`                                                                              |
+-| `/model --compaction` | Set the model used for chat compression                                               | `/model --compaction <model-id>`, `/model --compaction clear`                                             |
+-| `/model --image`      | Set an image-only model for the built-in image generation tool                        | `/model --image <model-id>`                                                                               |
+-| `/effort`             | Set reasoning effort for thinking-capable models                                      | `/effort` (opens picker), `/effort high` (low/medium/high/xhigh/max; mapped & clamped per provider)       |
+-| `/extensions`         | Manage extensions                                                                     | `/extensions list`, `/extensions manage`                                                                  |
+-| → `list`              | List installed extensions                                                             | `/extensions list`                                                                                        |
+-| → `manage`            | Manage installed extensions (interactive)                                             | `/extensions manage`                                                                                      |
+-| → `explore`           | Open extensions page in browser                                                       | `/extensions explore <Gemini\|ClaudeCode>`                                                                |
+-| → `install`           | Install an extension from a git repo or path                                          | `/extensions install <repo-or-path>`                                                                      |
+-| `/memory`             | Open the Memory Manager dialog                                                        | `/memory`                                                                                                 |
+-| `/remember`           | Save a durable memory                                                                 | `/remember Prefer terse responses`                                                                        |
+-| `/forget`             | Remove matching entries from auto-memory                                              | `/forget <query>`                                                                                         |
+-| `/dream`              | Manually run auto-memory consolidation                                                | `/dream`                                                                                                  |
+-| `/hooks`              | Manage Qwen Code hooks                                                                | `/hooks`, `/hooks list`                                                                                   |
+-| `/reload-plugins`     | Reload extension changes (commands, skills, agents, hooks, MCP/LSP servers) from disk | `/reload-plugins`                                                                                         |
+-| `/permissions`        | Manage permission rules                                                               | `/permissions`                                                                                            |
+-| `/agents`             | Manage subagents                                                                      | `/agents manage`, `/agents create`                                                                        |
+-| `/arena`              | Manage Arena sessions                                                                 | `/arena start`, `/arena stop`, `/arena status`, `/arena select` (alias `choose`)                          |
+-| `/goal`               | Set a goal — keep working until condition met                                         | `/goal <condition>`, `/goal clear`                                                                        |
+-| `/tasks`              | List background tasks                                                                 | `/tasks`                                                                                                  |
+-| `/workflows`          | Inspect workflow runs; cooperatively pause/resume a background run                    | `/workflows`, `/workflows <runId>`, `/workflows p <runId>`                                                |
+-| `/lsp`                | Show LSP server status                                                                | `/lsp`                                                                                                    |
+-| `/trust`              | Manage folder trust settings                                                          | `/trust`                                                                                                  |
++| Command           | Description                                                                           | Usage Examples                                                                                            |
++| ----------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
++| `/mcp`            | List configured MCP servers and tools                                                 | `/mcp`, `/mcp desc`, `/mcp nodesc`, `/mcp schema`                                                         |
++| `/import-config`  | Import MCP servers from Claude configs                                                | `/import-config all`, `/import-config claude-code`, `/import-config claude-desktop --scope user\|project` |
++| `/tools`          | Display currently available tool list                                                 | `/tools`, `/tools desc`                                                                                   |
++| `/skills`         | Open the Skills panel to browse, search, toggle, and launch skills                    | `/skills`, `/<skill-name>`                                                                                |
++| `/learn`          | Create a reusable project skill from a file, directory, URL, video, or text           | `/learn https://docs.example.com/api`, `/learn ./tutorial.mp4 focus on deployment`                        |
++| `/curator`        | Inspect, pin, archive, or restore inactive project auto-skills                        | `/curator`, `/curator run --dry-run`, `/curator pin <directory>`, `/curator restore <directory>`          |
++| `/plan`           | Switch to plan mode or exit plan mode                                                 | `/plan`, `/plan <task>`, `/plan exit`                                                                     |
++| `/approval-mode`  | Change the tool-approval mode (current session only)                                  | `/approval-mode`, `/approval-mode auto-edit`                                                              |
++| → `plan`          | Analysis only, no execution (secure review)                                           | `/approval-mode plan`                                                                                     |
++| → `default`       | Require approval for edits (daily use)                                                | `/approval-mode default`                                                                                  |
++| → `auto-edit`     | Auto-approve edits (trusted environment)                                              | `/approval-mode auto-edit`                                                                                |
++| → `auto`          | Classifier-evaluated approval (autonomous)                                            | `/approval-mode auto`                                                                                     |
++| → `yolo`          | Auto-approve everything (quick prototyping)                                           | `/approval-mode yolo`                                                                                     |
++| `/model`          | Switch model used in current session                                                  | `/model`, `/model <model-id>` (switch immediately)                                                        |
++| `/model --fast`   | Set a lighter model for prompt suggestions                                            | `/model --fast qwen3-coder-flash`                                                                         |
++| `/model --voice`  | Set the model used for voice transcription                                            | `/model --voice <model-id>`                                                                               |
++| `/model --vision` | Set the vision-bridge model used to transcribe images for a text-only main model      | `/model --vision <model-id>`                                                                              |
++| `/model --image`  | Set an image-only model for the built-in image generation tool                        | `/model --image <model-id>`                                                                               |
++| `/effort`         | Set reasoning effort for thinking-capable models                                      | `/effort` (opens picker), `/effort high` (low/medium/high/xhigh/max; mapped & clamped per provider)       |
++| `/extensions`     | Manage extensions                                                                     | `/extensions list`, `/extensions manage`                                                                  |
++| → `list`          | List installed extensions                                                             | `/extensions list`                                                                                        |
++| → `manage`        | Manage installed extensions (interactive)                                             | `/extensions manage`                                                                                      |
++| → `explore`       | Open extensions page in browser                                                       | `/extensions explore <Gemini\|ClaudeCode>`                                                                |
++| → `install`       | Install an extension from a git repo or path                                          | `/extensions install <repo-or-path>`                                                                      |
++| `/memory`         | Open the Memory Manager dialog                                                        | `/memory`                                                                                                 |
++| `/remember`       | Save a durable memory                                                                 | `/remember Prefer terse responses`                                                                        |
++| `/forget`         | Remove matching entries from auto-memory                                              | `/forget <query>`                                                                                         |
++| `/dream`          | Manually run auto-memory consolidation                                                | `/dream`                                                                                                  |
++| `/hooks`          | Manage Qwen Code hooks                                                                | `/hooks`, `/hooks list`                                                                                   |
++| `/reload-plugins` | Reload extension changes (commands, skills, agents, hooks, MCP/LSP servers) from disk | `/reload-plugins`                                                                                         |
++| `/permissions`    | Manage permission rules                                                               | `/permissions`                                                                                            |
++| `/agents`         | Manage subagents                                                                      | `/agents manage`, `/agents create`                                                                        |
++| `/arena`          | Manage Arena sessions                                                                 | `/arena start`, `/arena stop`, `/arena status`, `/arena select` (alias `choose`)                          |
++| `/goal`           | Set a goal — keep working until condition met                                         | `/goal <condition>`, `/goal clear`                                                                        |
++| `/tasks`          | List background tasks                                                                 | `/tasks`                                                                                                  |
++| `/workflows`      | Inspect workflow runs; cooperatively pause/resume a background run                    | `/workflows`, `/workflows <runId>`, `/workflows p <runId>`                                                |
++| `/lsp`            | Show LSP server status                                                                | `/lsp`                                                                                                    |
++| `/trust`          | Manage folder trust settings                                                          | `/trust`                                                                                                  |
+ 
+ > [!warning]
+ >
 diff --git a/docs/users/features/headless.md b/docs/users/features/headless.md
 --- a/docs/users/features/headless.md
 +++ b/docs/users/features/headless.md
@@ -32780,6 +32898,15 @@ diff --git a/packages/cli/src/commands/review/lib/agent-briefs.ts b/packages/cli
  - Race conditions and concurrency; type-safety holes; error-handling gaps and exception propagation
  - **The language-pitfall checklist for this diff's language.** JS/TS: \`==\` coercion, closure-captured loop variables, floating (un-awaited) promises. Python: mutable default arguments, late-binding closures. Go: nil-map writes, range-variable capture. Any language: SQL built by string concatenation, timezone/DST arithmetic, float equality.
  - **Wrapper/proxy routing.** When the diff adds or modifies a type that wraps another (a cache, proxy, decorator, adapter): check that every method routes through the *wrapped instance* and not back through a registry, session, or global — which re-enters the wrapper and recurses — and that the wrapper forwards every method its callers actually use.
+@@ -399,7 +399,7 @@
+ - **Convention drift.** Naming, error-construction, logging, option-passing, module layout: does the new code do it the way the files around it do? Cite the surrounding example you are comparing against. A convention you cannot point at in this codebase is an external style preference, and those are not findings here.
+ - **Misleading names and comments.** A comment that describes behaviour the code no longer has, a name that says the opposite of what the function does, a parameter whose name implies a unit or ordering the code does not honour. These are findings because they misinform the next reader; a merely *absent* comment is not, unless the logic is genuinely confusing.
+ - **Needless complexity in the added code.** A condition that is always true, a branch that duplicates its sibling's body, a nested ternary or callback chain with a flat equivalent, state kept that is only ever written. Say what the simpler form is.
+-- **Documentation parity with siblings.** When the diff adds a user-facing surface — a CLI flag, a slash-command option, a settings key — check whether its SIBLINGS are documented, and where. Three of four sibling selectors having a docs entry is a house convention the fourth just broke; a surface whose behaviour can silently change (a fallback, an automatic swap, an emitted warning) undocumented is a user staring at a message with nowhere to look it up. This is deliberately a **parity** check, not a docs mandate: the finding names the sibling precedent and the file it lives in (\`--fast\` and \`--vision\` are in \`docs/…/commands.md\`; the new \`--compaction\` is not), so "add docs" arrives as the codebase's own standard, not this reviewer's. No documented sibling, no finding. Severity: Suggestion.
++- **Documentation parity with siblings.** When the diff adds a user-facing surface — a CLI flag, a slash-command option, a settings key — check whether its SIBLINGS are documented, and where. Three of four sibling selectors having a docs entry is a house convention the fourth just broke; a surface whose behaviour can silently change (a fallback, an automatic swap, an emitted warning) undocumented is a user staring at a message with nowhere to look it up. This is deliberately a **parity** check, not a docs mandate: the finding names the sibling precedent and the file it lives in (\`--fast\` and \`--vision\` are in \`docs/…/commands.md\`; a new sibling selector may not be), so "add docs" arrives as the codebase's own standard, not this reviewer's. No documented sibling, no finding. Severity: Suggestion.
+ 
+ Not your dimension: whether the code already exists elsewhere (3a) or whether the fix is at the right depth (3b). Formatting a formatter would normalise is not a finding for anyone.`,
+   },
 @@ -622,13 +622,13 @@
      output: 'verdicts',
      acceptsFindings: true,
@@ -34844,7 +34971,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      useRipgrep: settings.tools?.useRipgrep,
      useBuiltinRipgrep: settings.tools?.useBuiltinRipgrep,
      shouldUseNodePtyShell: settings.tools?.shell?.enableInteractiveShell,
-@@ -2351,57 +2263,48 @@
+@@ -2351,57 +2263,47 @@
      preventSystemSleep: settings.general?.preventSystemSleep ?? true,
 -    skipNextSpeakerCheck: settings.model?.skipNextSpeakerCheck,
      skipWorkflowUsageWarning: settings.model?.skipWorkflowUsageWarning ?? false,
@@ -34895,7 +35022,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      webSearch:
        bareMode || safeMode ? undefined : resolveWebSearchSettings(settings),
      visionModel: settings.visionModel || undefined,
-     compactionModel: settings.compactionModel || undefined,
+-    compactionModel: settings.compactionModel || undefined,
      imageModel: settings.imageModel || undefined,
      visionBridgeTimeoutMs: settings.visionBridgeTimeoutMs,
 -    modelFallbacks: resolveModelFallbacks(
@@ -34908,7 +35035,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          ? undefined
          : (hooksConfig?.userHooks ?? settings.hooks),
      projectHooks: bareMode || safeMode ? undefined : hooksConfig?.projectHooks,
-@@ -2416,17 +2319,12 @@
+@@ -2416,17 +2318,12 @@
      // `--input-file` fall back to settings.dualOutput.* when the flag is
      // absent.
      jsonFd: argv.jsonFd,
@@ -35486,7 +35613,25 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
          type: 'object',
          label: 'Accessibility',
          category: 'UI',
-@@ -1443,23 +1418,12 @@
+@@ -1407,17 +1382,6 @@
+     description:
+       'Image-capable model used as the vision bridge: when a text-only main model receives an image, it is transcribed by this model first. Set with /model --vision. Leave empty to auto-pick a same-provider vision model.',
+     showInDialog: true,
+-  },
+-
+-  compactionModel: {
+-    type: 'string',
+-    label: 'Compaction Model',
+-    category: 'Model',
+-    requiresRestart: false,
+-    default: '',
+-    description:
+-      'Model used for chat compression (auto-compaction). Set with /model --compaction. Leave empty to fall back to the main model. A smaller/faster model reduces compression latency and cost.',
+-    showInDialog: false,
+   },
+ 
+   imageModel: {
+@@ -1443,23 +1407,12 @@
      maximum: 2_147_483_647,
      description:
        'Per-attempt timeout in milliseconds for the vision bridge image transcription call (a positive integer up to 2147483647). Unset uses the built-in 30s. Raise for slow or proxied vision endpoints.',
@@ -35510,7 +35655,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
      category: 'Model',
      requiresRestart: false,
      default: '',
-@@ -1523,26 +1487,6 @@
+@@ -1523,26 +1476,6 @@
            'Maximum number of user/model/tool turns to keep in a session. Must be an integer; -1 means unlimited.',
          showInDialog: false,
        },
@@ -35537,7 +35682,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
        maxSubagentDepth: {
          type: 'number',
          label: 'Max Sub-agent Nesting Depth',
-@@ -1563,21 +1507,3 @@
+@@ -1563,21 +1496,3 @@
 -        showInDialog: false,
 -      },
 -      sessionTokenLimit: {
@@ -35559,7 +35704,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
          showInDialog: false,
        },
        skipWorkflowUsageWarning: {
-@@ -1597,17 +1523,7 @@
+@@ -1597,17 +1512,7 @@
          requiresRestart: false,
          default: true,
          description:
@@ -35578,7 +35723,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
          showInDialog: false,
        },
        skipStartupContext: {
-@@ -1897,54 +1813,6 @@
+@@ -1897,54 +1802,6 @@
          default: false,
          description: 'Whether to load memory files from include directories.',
          showInDialog: false,
@@ -35633,7 +35778,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
        },
        fileFiltering: {
          type: 'object',
-@@ -2000,27 +1868,12 @@
+@@ -2000,27 +1857,12 @@
              category: 'Context',
              requiresRestart: true,
              default: true,
@@ -35661,7 +35806,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
    },
  
    memory: {
-@@ -2347,15 +2200,15 @@
+@@ -2347,15 +2189,15 @@
                  properties: {
                    stage2Enabled: {
                      type: 'boolean',
@@ -35679,7 +35824,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
                },
              },
            },
-@@ -2554,14 +2407,13 @@
+@@ -2554,14 +2396,13 @@
              default: 10,
              description:
                'Context-window percentage used as the session-start budget for preloading deferred tools (bundled built-ins and MCP alike). When every deferred tool schema fits within the budget, all are declared upfront instead of loaded on demand, keeping the prompt prefix stable for KV caching. Set 0 to always load deferred tools on demand.',
@@ -35695,7 +35840,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
                maximum: 100,
                default: 10,
              },
-@@ -2746,39 +2598,10 @@
+@@ -2746,39 +2587,10 @@
          requiresRestart: false,
          default: true,
          description:
@@ -35735,7 +35880,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
          type: 'object',
          label: 'Computer Use',
          category: 'Tools',
-@@ -3677,22 +3500,12 @@
+@@ -3677,22 +3489,12 @@
          requiresRestart: true,
          default: false,
          description:
@@ -35758,7 +35903,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
          category: 'Experimental',
          requiresRestart: true,
          default: 7,
-@@ -3936,12 +3749,16 @@
+@@ -3936,12 +3738,16 @@
    -readonly [K in keyof T]?: T[K] extends { properties: SettingsSchema }
      ? InferSettings<T[K]['properties']>
      : T[K]['type'] extends 'enum'
@@ -37329,7 +37474,49 @@ diff --git a/packages/cli/src/i18n/locales/en.js b/packages/cli/src/i18n/locales
    'Skip Loop Detection': 'Skip Loop Detection',
    'Skip Startup Context': 'Skip Startup Context',
    'Enable OpenAI Logging': 'Enable OpenAI Logging',
-@@ -1599,29 +1596,12 @@
+@@ -1500,8 +1497,8 @@
+     'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, [model-id] to switch immediately).',
+   'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).':
+     'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).',
+-  'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --compaction for chat compression model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).':
+-    'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --compaction for chat compression model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).',
++  'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).':
++    'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).',
+   "Inline one-shot override isn't supported in this mode — run '/model {{model}}' first, then send your prompt.":
+     "Inline one-shot override isn't supported in this mode — run '/model {{model}}' first, then send your prompt.",
+   "Inline one-shot override can't switch providers. '{{model}}' belongs to a different provider — run '/model {{model}}' first, then send your prompt.":
+@@ -1517,8 +1514,6 @@
+     'Set the image-capable model used to transcribe images for a text-only main model',
+   'Set the model used to generate images':
+     'Set the model used to generate images',
+-  'Set the model used for chat compression (auto-compaction)':
+-    'Set the model used for chat compression (auto-compaction)',
+   'Persist the model selection to the project settings (workspace scope)':
+     'Persist the model selection to the project settings (workspace scope)',
+   'Persist the model selection to the user settings (global scope)':
+@@ -1526,21 +1521,13 @@
+   'Select Fast Model': 'Select Fast Model',
+   'Select Vision Model': 'Select Vision Model',
+   'Select Image Model': 'Select Image Model',
+-  'Select Compaction Model': 'Select Compaction Model',
+   'Select Voice Model': 'Select Voice Model',
+   'Vision Model': 'Vision Model',
+   'Image Model': 'Image Model',
+-  'Compaction Model': 'Compaction Model',
+   'Compaction model override cleared': 'Compaction model override cleared',
+-  'Current compaction model: {{compactionModel}}\nUse "/model --compaction <model-id>" to set compaction model, or "/model --compaction clear" to clear the override.':
+-    'Current compaction model: {{compactionModel}}\nUse "/model --compaction <model-id>" to set compaction model, or "/model --compaction clear" to clear the override.',
+   'not set (falls back to the main model)':
+     'not set (falls back to the main model)',
+-  'Configure models in settings.modelProviders and ensure the required environment variables are set. In interactive mode, run /auth to configure or switch providers, or run /model --compaction without a model to choose from configured models.':
+-    'Configure models in settings.modelProviders and ensure the required environment variables are set. In interactive mode, run /auth to configure or switch providers, or run /model --compaction without a model to choose from configured models.',
+   'Voice Model': 'Voice Model',
+-  'Selected compaction model is unavailable.':
+-    'Selected compaction model is unavailable.',
+   'Selected voice model is unavailable.':
+     'Selected voice model is unavailable.',
+   'Selected image model is unavailable.':
+@@ -1599,29 +1586,12 @@
    'Starting a new session, resetting chat, and clearing terminal.':
      'Starting a new session, resetting chat, and clearing terminal.',
    'Starting a new session and clearing.':
@@ -37359,7 +37546,7 @@ diff --git a/packages/cli/src/i18n/locales/en.js b/packages/cli/src/i18n/locales
    'Please provide at least one path to add.':
      'Please provide at least one path to add.',
    'The /directory add command is not supported in restrictive sandbox profiles. Please use --include-directories when starting the session instead.':
-@@ -1995,15 +1975,15 @@
+@@ -1995,15 +1965,15 @@
    'Tool Time:': 'Tool Time:',
    'Session Stats': 'Session Stats',
    'Model Usage': 'Model Usage',
@@ -37378,7 +37565,7 @@ diff --git a/packages/cli/src/i18n/locales/en.js b/packages/cli/src/i18n/locales
    'Tool Stats For Nerds': 'Tool Stats For Nerds',
    Metric: 'Metric',
    API: 'API',
-@@ -2348,15 +2328,12 @@
+@@ -2348,15 +2318,12 @@
    // ============================================================================
    'Context Usage': 'Context Usage',
    '% used': '% used',
@@ -37720,7 +37907,43 @@ diff --git a/packages/cli/src/i18n/locales/zh-TW.js b/packages/cli/src/i18n/loca
    'Skip Loop Detection': '跳過循環檢測',
    'Skip Startup Context': '跳過啟動上下文',
    'Enable OpenAI Logging': '啟用 OpenAI 日誌',
-@@ -1405,25 +1402,12 @@
+@@ -1325,8 +1322,8 @@
+     '切換此會話的模型（--fast 可設置建議模型，--voice 可設置語音轉寫模型，[model-id] 可立即切換）',
+   'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).':
+     '切換此會話的模型（--fast 建議模型，--voice 語音轉寫模型，--vision 視覺橋接模型，--project 持久化到專案設定，--global 持久化到使用者設定，[model-id] 立即切換，或用 [model-id] [prompt] 在另一個模型上執行一次性提示；內聯提示按原文發送，不展開 @file）',
+-  'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --compaction for chat compression model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).':
+-    '切換此會話的模型（--fast 建議模型，--voice 語音轉寫模型，--vision 視覺橋接模型，--compaction 聊天壓縮模型，--image 圖像生成模型，--project 持久化到專案設定，--global 持久化到使用者設定，[model-id] 立即切換，或用 [model-id] [prompt] 在另一個模型上執行一次性提示；內聯提示按原文發送，不展開 @file）',
++  'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).':
++    '切換此會話的模型（--fast 建議模型，--voice 語音轉寫模型，--vision 視覺橋接模型，--image 圖像生成模型，--project 持久化到專案設定，--global 持久化到使用者設定，[model-id] 立即切換，或用 [model-id] [prompt] 在另一個模型上執行一次性提示；內聯提示按原文發送，不展開 @file）',
+   "Inline one-shot override isn't supported in this mode — run '/model {{model}}' first, then send your prompt.":
+     "此模式不支援內聯一次性覆寫——請先執行 '/model {{model}}'，再發送你的提示。",
+   "Inline one-shot override can't switch providers. '{{model}}' belongs to a different provider — run '/model {{model}}' first, then send your prompt.":
+@@ -1340,8 +1337,6 @@
+   'Set the image-capable model used to transcribe images for a text-only main model':
+     '設定用於為純文字主模型轉寫圖像的圖像能力模型',
+   'Set the model used to generate images': '設置用於生成圖像的模型',
+-  'Set the model used for chat compression (auto-compaction)':
+-    '設置用於聊天壓縮（自動壓縮）的模型',
+   'Persist the model selection to the project settings (workspace scope)':
+     '將模型選擇持久化到專案設定（工作區）',
+   'Persist the model selection to the user settings (global scope)':
+@@ -1349,15 +1344,10 @@
+   'Select Fast Model': '選擇快速模型',
+   'Select Vision Model': '選擇視覺模型',
+   'Select Image Model': '選擇圖像模型',
+-  'Select Compaction Model': '選擇壓縮模型',
+   'Select Voice Model': '選擇語音模型',
+   'Vision Model': '視覺模型',
+   'Image Model': '圖像模型',
+-  'Compaction Model': '壓縮模型',
+   'Voice Model': '語音模型',
+-  'Selected compaction model is unavailable.': '所選壓縮模型不可用。',
+-  'Configure models in settings.modelProviders and ensure the required environment variables are set. In interactive mode, run /auth to configure or switch providers, or run /model --compaction without a model to choose from configured models.':
+-    '在 settings.modelProviders 中配置模型並確保設置了所需的環境變量。在交互模式下，運行 /auth 配置或切換 provider，或運行 /model --compaction（不帶模型參數）從已配置的模型中選擇。',
+   'Selected voice model is unavailable.': '所選語音模型不可用。',
+   'Selected image model is unavailable.': '所選圖像模型不可用。',
+   "Voice model '{{model}}' is configured more than once. Remove duplicate model ids before selecting it for voice transcription.":
+@@ -1405,25 +1395,12 @@
    'No models available for the current authentication type ({{authType}}).':
      '當前認證類型 ({{authType}}) 沒有可用的模型',
    // Needs translation
@@ -37746,7 +37969,16 @@ diff --git a/packages/cli/src/i18n/locales/zh-TW.js b/packages/cli/src/i18n/loca
      '/directory add 命令在限制性沙箱配置檔案中不受支持。請改為在啟動會話時使用 --include-directories。',
    "Error adding '{{path}}': {{error}}": "添加 '{{path}}' 時出錯：{{error}}",
    'Successfully added QWEN.md files from the following directories if there are:\n- {{directories}}':
-@@ -1748,15 +1732,15 @@
+@@ -1569,8 +1546,6 @@
+   'Current image model: {{imageModel}}\nUse "/model --image <model-id>" to set the image generation model.':
+     '當前圖像模型：{{imageModel}}\n使用 "/model --image <model-id>" 設置圖像生成模型。',
+   'Compaction model override cleared': '壓縮模型覆蓋已清除',
+-  'Current compaction model: {{compactionModel}}\nUse "/model --compaction <model-id>" to set compaction model, or "/model --compaction clear" to clear the override.':
+-    '當前壓縮模型：{{compactionModel}}\n使用 "/model --compaction <model-id>" 設置壓縮模型，或使用 "/model --compaction clear" 清除覆蓋設置。',
+   "Voice model '{{modelName}}' is ambiguous. Configure a unique model id before using /model --voice.":
+     "語音模型 '{{modelName}}' 不唯一。請先配置唯一的模型 ID，再使用 /model --voice。",
+   "Image model '{{modelName}}' matches multiple configured endpoints. Run /model --image without an argument and choose the exact endpoint.":
+@@ -1748,15 +1723,15 @@
    'API Time:': 'API 時間：',
    'Tool Time:': '工具時間：',
    'Session Stats': '會話統計',
@@ -37765,7 +37997,7 @@ diff --git a/packages/cli/src/i18n/locales/zh-TW.js b/packages/cli/src/i18n/loca
    'Tool Stats For Nerds': '工具統計（技術細節）',
    Metric: '指標',
    API: 'API',
-@@ -1912,15 +1896,12 @@
+@@ -1912,15 +1887,12 @@
      '{{region}} 配置更新成功。模型已切換至 "{{model}}"。',
    'Context Usage': '上下文使用情況',
    '% used': '% 已用',
@@ -37801,7 +38033,42 @@ diff --git a/packages/cli/src/i18n/locales/zh.js b/packages/cli/src/i18n/locales
    'Skip Loop Detection': '跳过循环检测',
    'Skip Startup Context': '跳过启动上下文',
    'Enable OpenAI Logging': '启用 OpenAI 日志',
-@@ -1525,28 +1522,12 @@
+@@ -1439,8 +1436,8 @@
+     '切换此会话的模型（--fast 可设置建议模型，--voice 可设置语音转写模型，[model-id] 可立即切换）',
+   'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).':
+     '切换此会话的模型（--fast 建议模型，--voice 语音转写模型，--vision 视觉桥接模型，--project 持久化到项目设置，--global 持久化到用户设置，[model-id] 立即切换，或用 [model-id] [prompt] 在另一个模型上运行一次性提示；内联提示按原文发送，不展开 @file）',
+-  'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --compaction for chat compression model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).':
+-    '切换此会话的模型（--fast 建议模型，--voice 语音转写模型，--vision 视觉桥接模型，--compaction 聊天压缩模型，--image 图像生成模型，--project 持久化到项目设置，--global 持久化到用户设置，[model-id] 立即切换，或用 [model-id] [prompt] 在另一个模型上运行一次性提示；内联提示按原文发送，不展开 @file）',
++  'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).':
++    '切换此会话的模型（--fast 建议模型，--voice 语音转写模型，--vision 视觉桥接模型，--image 图像生成模型，--project 持久化到项目设置，--global 持久化到用户设置，[model-id] 立即切换，或用 [model-id] [prompt] 在另一个模型上运行一次性提示；内联提示按原文发送，不展开 @file）',
+   "Inline one-shot override isn't supported in this mode — run '/model {{model}}' first, then send your prompt.":
+     "此模式不支持内联一次性覆盖——请先运行 '/model {{model}}'，再发送你的提示。",
+   "Inline one-shot override can't switch providers. '{{model}}' belongs to a different provider — run '/model {{model}}' first, then send your prompt.":
+@@ -1454,8 +1451,6 @@
+   'Set the image-capable model used to transcribe images for a text-only main model':
+     '设置用于为纯文本主模型转写图像的图像能力模型',
+   'Set the model used to generate images': '设置用于生成图像的模型',
+-  'Set the model used for chat compression (auto-compaction)':
+-    '设置用于聊天压缩（自动压缩）的模型',
+   'Persist the model selection to the project settings (workspace scope)':
+     '将模型选择持久化到项目设置（工作区）',
+   'Persist the model selection to the user settings (global scope)':
+@@ -1463,14 +1458,9 @@
+   'Select Fast Model': '选择快速模型',
+   'Select Vision Model': '选择视觉模型',
+   'Select Image Model': '选择图像模型',
+-  'Select Compaction Model': '选择压缩模型',
+   'Select Voice Model': '选择语音模型',
+   'Vision Model': '视觉模型',
+   'Image Model': '图像模型',
+-  'Compaction Model': '压缩模型',
+-  'Selected compaction model is unavailable.': '所选压缩模型不可用。',
+-  'Configure models in settings.modelProviders and ensure the required environment variables are set. In interactive mode, run /auth to configure or switch providers, or run /model --compaction without a model to choose from configured models.':
+-    '在 settings.modelProviders 中配置模型并确保设置了所需的环境变量。在交互模式下，运行 /auth 配置或切换 provider，或运行 /model --compaction（不带模型参数）从已配置的模型中选择。',
+   'Voice Model': '语音模型',
+   'Selected voice model is unavailable.': '所选语音模型不可用。',
+   'Selected image model is unavailable.': '所选图像模型不可用。',
+@@ -1525,28 +1515,12 @@
    // ============================================================================
    'Starting a new session, resetting chat, and clearing terminal.':
      '正在开始新会话，重置聊天并清屏。',
@@ -37830,7 +38097,16 @@ diff --git a/packages/cli/src/i18n/locales/zh.js b/packages/cli/src/i18n/locales
    'Please provide at least one path to add.': '请提供至少一个要添加的路径。',
    'The /directory add command is not supported in restrictive sandbox profiles. Please use --include-directories when starting the session instead.':
      '/directory add 命令在限制性沙箱配置文件中不受支持。请改为在启动会话时使用 --include-directories。',
-@@ -1911,15 +1892,15 @@
+@@ -1711,8 +1685,6 @@
+   'Current image model: {{imageModel}}\nUse "/model --image <model-id>" to set the image generation model.':
+     '当前图像模型：{{imageModel}}\n使用 "/model --image <model-id>" 设置图像生成模型。',
+   'Compaction model override cleared': '压缩模型覆盖已清除',
+-  'Current compaction model: {{compactionModel}}\nUse "/model --compaction <model-id>" to set compaction model, or "/model --compaction clear" to clear the override.':
+-    '当前压缩模型：{{compactionModel}}\n使用 "/model --compaction <model-id>" 设置压缩模型，或使用 "/model --compaction clear" 清除覆盖设置。',
+   "Voice model '{{modelName}}' is ambiguous. Configure a unique model id before using /model --voice.":
+     "语音模型 '{{modelName}}' 不唯一。请先配置唯一的模型 ID，再使用 /model --voice。",
+   "Image model '{{modelName}}' matches multiple configured endpoints. Run /model --image without an argument and choose the exact endpoint.":
+@@ -1911,15 +1883,15 @@
    'API Time:': 'API 时间：',
    'Tool Time:': '工具时间：',
    'Session Stats': '会话统计',
@@ -37849,7 +38125,7 @@ diff --git a/packages/cli/src/i18n/locales/zh.js b/packages/cli/src/i18n/locales
    'Tool Stats For Nerds': '工具统计（技术细节）',
    Metric: '指标',
    API: 'API',
-@@ -2135,15 +2116,12 @@
+@@ -2135,15 +2107,12 @@
    'Built-in tools': '内置工具',
    'MCP tools': 'MCP tools',
    'Memory files': '记忆文件',
@@ -59191,7 +59467,15 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
      renderKey: string;
      todos: TodoItem[] | null;
    } | null>(null);
-@@ -1537,13 +1500,12 @@
+@@ -1526,7 +1489,6 @@
+     isFastModelMode,
+     isVoiceModelMode,
+     isVisionModelMode,
+-    isCompactionModelMode,
+     isImageModelMode,
+     modelDialogPersistScope,
+     openModelDialog,
+@@ -1537,13 +1499,12 @@
  
    // Session name state (set via /rename, restored on /resume)
    const [sessionName, setSessionName] = useState<string | null>(null);
@@ -59205,7 +59489,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
      chatRecordingService.setTitleRecordedCallback(
        (customTitle, source, sessionId) => {
          existingCallback?.(customTitle, source, sessionId);
-@@ -2135,14 +2097,12 @@
+@@ -2135,14 +2096,12 @@
      preemptGoalTurn,
      retryLastPrompt,
      handleApprovalModeChange,
@@ -59220,7 +59504,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
      historyManager.addItem,
      config,
      isConfigInitialized,
-@@ -2216,13 +2176,13 @@
+@@ -2216,13 +2175,13 @@
    const tipHistory = useMemo(
      () => (tipsDisabled ? null : getTipHistory()),
      [tipsDisabled],
@@ -59235,7 +59519,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
      addItem: historyManager.addItem,
      hideTips: tipsDisabled,
    });
-@@ -2709,15 +2669,20 @@
+@@ -2709,15 +2668,20 @@
                }
              }
              if (result.nextSuggestion) {
@@ -59259,7 +59543,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
        }
  
        // Abort any running speculation since we're submitting something different
-@@ -2788,13 +2753,12 @@
+@@ -2788,13 +2752,12 @@
    const rawStickyTodos = useMemo(
      () => getStickyTodos(historyManager.history, pendingHistoryItems),
      [historyManager.history, pendingHistoryItems],
@@ -59273,7 +59557,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
  
    cancelHandlerRef.current = useCallback(
      (info?: CancelSubmitInfo) => {
-@@ -3026,20 +2990,19 @@
+@@ -3026,20 +2989,19 @@
    const { handleInput: vimHandleInput } = useVim(buffer, handleFinalSubmit);
  
    /**
@@ -59295,7 +59579,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
    const isFocused = useFocus();
    useBracketedPaste();
  
-@@ -3532,12 +3495,13 @@
+@@ -3532,12 +3494,13 @@
    const closeRewindSelector = useCallback(() => {
      setIsRewindSelectorOpen(false);
    }, []);
@@ -59309,7 +59593,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
          // the conversation stays at the newer state.
          const needsConversation =
            option === 'conversation' || option === 'both';
-@@ -3683,13 +3647,13 @@
+@@ -3683,13 +3646,13 @@
                  'Conversation rewound. Edit your prompt and press Enter to continue.',
                ),
              },
@@ -59324,7 +59608,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
                ? config
                    .getFileHistoryService()
                    .getSnapshots()
-@@ -3734,13 +3698,20 @@
+@@ -3734,13 +3697,20 @@
            Date.now(),
          );
        } finally {
@@ -59346,7 +59630,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
      setRewindEscPending(pending),
    );
  
-@@ -3845,26 +3816,16 @@
+@@ -3845,26 +3815,16 @@
          }
        }
      },
@@ -59375,7 +59659,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
    useAttentionNotifications({
      isFocused,
      streamingState,
-@@ -4113,12 +4074,13 @@
+@@ -4113,12 +4073,13 @@
            return;
          }
  
@@ -59389,7 +59673,7 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
            if (escapeTimerRef.current) {
              clearTimeout(escapeTimerRef.current);
              escapeTimerRef.current = null;
-@@ -4263,12 +4225,13 @@
+@@ -4263,12 +4224,13 @@
        setCtrlDPressedOnce,
        ctrlDTimerRef,
        escapePressedOnce,
@@ -59403,7 +59687,15 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
        activePtyId,
        embeddedShellFocused,
        btwItem,
-@@ -4479,19 +4442,12 @@
+@@ -4376,7 +4338,6 @@
+       isFastModelMode,
+       isVoiceModelMode,
+       isVisionModelMode,
+-      isCompactionModelMode,
+       isImageModelMode,
+       modelDialogPersistScope,
+       isTrustDialogOpen,
+@@ -4479,19 +4440,12 @@
        isMcpDialogOpen,
        // Hooks dialog
        isHooksDialogOpen,
@@ -59423,7 +59715,15 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
        // Prompt suggestion
        promptSuggestion,
        abortPromptSuggestion,
-@@ -4625,19 +4581,12 @@
+@@ -4521,7 +4475,6 @@
+       isFastModelMode,
+       isVoiceModelMode,
+       isVisionModelMode,
+-      isCompactionModelMode,
+       isImageModelMode,
+       modelDialogPersistScope,
+       isTrustDialogOpen,
+@@ -4625,19 +4578,12 @@
        isMcpDialogOpen,
        // Hooks dialog
        isHooksDialogOpen,
@@ -60635,7 +60935,7 @@ diff --git a/packages/cli/src/ui/commands/compressCommand.test.ts b/packages/cli
 -      );
 -      expect(infoCalls).toHaveLength(0);
 +  it('retains the warning in the same completed result', async () => {
-+    const warned = { ...info, warning: 'Compaction model changed.' };
++    const warned = { ...info, warning: 'Compaction telemetry failed.' };
 +    operation.mockResolvedValue(warned);
 +    expect(await compressCommand.action!(context, '')).toEqual({
 +      type: 'compression',
@@ -63219,6 +63519,604 @@ diff --git a/packages/cli/src/ui/commands/goalCommand.ts b/packages/cli/src/ui/c
      }
  
      try {
+diff --git a/packages/cli/src/ui/commands/modelCommand.test.ts b/packages/cli/src/ui/commands/modelCommand.test.ts
+--- a/packages/cli/src/ui/commands/modelCommand.test.ts
++++ b/packages/cli/src/ui/commands/modelCommand.test.ts
+@@ -43,13 +43,13 @@
+     vi.clearAllMocks();
+   });
+ 
+   it('should have the correct name and description', () => {
+     expect(modelCommand.name).toBe('model');
+     expect(modelCommand.description).toBe(
+-      'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --compaction for chat compression model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).',
++      'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).',
+     );
+   });
+ 
+   it('should complete image models across providers', async () => {
+     mockContext.services.config = {
+       getAvailableModels: vi.fn().mockReturnValue([
+@@ -67,50 +67,12 @@
+       ]),
+     } as unknown as Config;
+ 
+     const result = await modelCommand.completion!(mockContext, '--image q');
+ 
+     expect(result).toEqual(['qwen-image-2.0']);
+-  });
+-
+-  it('should complete compaction-eligible models for --compaction flag', async () => {
+-    mockContext.services.config = {
+-      getAvailableModels: vi.fn().mockReturnValue([
+-        {
+-          id: 'qwen-max',
+-          authType: AuthType.USE_OPENAI,
+-        },
+-        {
+-          id: 'qw-voice-model',
+-          authType: AuthType.USE_OPENAI,
+-          voiceOnly: true,
+-        },
+-        {
+-          id: 'qw-image-model',
+-          authType: AuthType.USE_OPENAI,
+-          imageOnly: true,
+-        },
+-        {
+-          id: 'qw-vision-model',
+-          authType: AuthType.USE_OPENAI,
+-          visionOnly: true,
+-        },
+-        {
+-          id: 'qw-fast-model',
+-          authType: AuthType.USE_OPENAI,
+-          fastOnly: true,
+-        },
+-      ]),
+-    } as unknown as Config;
+-
+-    const result = await modelCommand.completion!(
+-      mockContext,
+-      '--compaction qw',
+-    );
+-
+-    expect(result).toEqual(['qwen-max']);
+   });
+ 
+   it('should return error when config is not available', async () => {
+     mockContext.services.config = null;
+ 
+     const result = await modelCommand.action!(mockContext, '');
+@@ -1835,195 +1797,12 @@
+       '--fast-model',
+     );
+     expect(result).toEqual({
+       type: 'message',
+       messageType: 'info',
+       content: 'Model: --fast-model',
+-    });
+-  });
+-
+-  describe('--compaction handler', () => {
+-    it('should set compaction model', async () => {
+-      const setValue = vi.fn();
+-      const setCompactionModel = vi.fn();
+-      mockContext = createMockCommandContext({
+-        invocation: {
+-          raw: '/model --compaction compaction-model',
+-          name: 'model',
+-          args: '--compaction compaction-model',
+-        },
+-        services: {
+-          config: {
+-            getContentGeneratorConfig: vi.fn().mockReturnValue({
+-              model: 'gpt-4',
+-              authType: AuthType.USE_OPENAI,
+-            }),
+-            getAllConfiguredModels: vi.fn().mockReturnValue([
+-              {
+-                id: 'compaction-model',
+-                label: 'Compaction Model',
+-                authType: AuthType.USE_OPENAI,
+-              },
+-              {
+-                id: 'gpt-4',
+-                label: 'GPT-4',
+-                authType: AuthType.USE_OPENAI,
+-              },
+-            ]),
+-            setCompactionModel,
+-          },
+-          settings: createMockSettings(setValue),
+-        },
+-      });
+-
+-      const result = await modelCommand.action!(
+-        mockContext,
+-        '--compaction compaction-model',
+-      );
+-
+-      expect(setValue).toHaveBeenCalledWith(
+-        expect.any(String),
+-        'compactionModel',
+-        'compaction-model',
+-      );
+-      expect(setCompactionModel).toHaveBeenCalledWith('compaction-model');
+-      expect(result).toEqual({
+-        type: 'message',
+-        messageType: 'info',
+-        content: 'Compaction Model: compaction-model',
+-      });
+-    });
+-
+-    it('should reject unavailable compaction models', async () => {
+-      const setCompactionModel = vi.fn();
+-      mockContext = createMockCommandContext({
+-        invocation: {
+-          raw: '/model --compaction missing-model',
+-          name: 'model',
+-          args: '--compaction missing-model',
+-        },
+-        services: {
+-          config: {
+-            getContentGeneratorConfig: vi.fn().mockReturnValue({
+-              model: 'gpt-4',
+-              authType: AuthType.USE_OPENAI,
+-            }),
+-            getAllConfiguredModels: vi
+-              .fn()
+-              .mockReturnValue([{ id: 'gpt-4', label: 'GPT-4' }]),
+-            setCompactionModel,
+-          },
+-          settings: createMockSettings(),
+-        },
+-      });
+-
+-      const result = await modelCommand.action!(
+-        mockContext,
+-        '--compaction missing-model',
+-      );
+-
+-      expect(setCompactionModel).not.toHaveBeenCalled();
+-      expect(result).toMatchObject({
+-        type: 'message',
+-        messageType: 'error',
+-        content: expect.stringContaining('missing-model'),
+-      });
+-    });
+-
+-    it('should show compaction model info in non-interactive mode', async () => {
+-      mockContext = createMockCommandContext({
+-        executionMode: 'non_interactive',
+-        invocation: { args: '--compaction' },
+-        services: {
+-          config: createMockConfig({
+-            model: 'gpt-4',
+-            authType: AuthType.USE_OPENAI,
+-          }),
+-          settings: {
+-            merged: {
+-              compactionModel: 'compaction-model',
+-            } as Record<string, unknown>,
+-          },
+-        },
+-      });
+-
+-      const result = await modelCommand.action!(mockContext, '--compaction');
+-
+-      expect(result).toEqual({
+-        type: 'message',
+-        messageType: 'info',
+-        content:
+-          'Current compaction model: compaction-model\nUse "/model --compaction <model-id>" to set compaction model, or "/model --compaction clear" to clear the override.',
+-      });
+-    });
+-
+-    it('should show fallback info when compaction model is not set', async () => {
+-      mockContext = createMockCommandContext({
+-        executionMode: 'non_interactive',
+-        invocation: { args: '--compaction' },
+-        services: {
+-          config: {
+-            getContentGeneratorConfig: vi.fn().mockReturnValue({
+-              model: 'gpt-4',
+-              authType: AuthType.USE_OPENAI,
+-            }),
+-            getFastModel: vi.fn().mockReturnValue('fast-model'),
+-            getModel: vi.fn().mockReturnValue('gpt-4'),
+-          } as unknown as Partial<Config>,
+-          settings: {
+-            merged: {} as Record<string, unknown>,
+-          },
+-        },
+-      });
+-
+-      const result = await modelCommand.action!(mockContext, '--compaction');
+-
+-      expect(result).toEqual({
+-        type: 'message',
+-        messageType: 'info',
+-        content:
+-          'Current compaction model: not set (falls back to the main model)\nUse "/model --compaction <model-id>" to set compaction model, or "/model --compaction clear" to clear the override.',
+-      });
+-    });
+-
+-    it('should clear compaction model override with --compaction clear', async () => {
+-      const setValue = vi.fn();
+-      const setCompactionModel = vi.fn();
+-      mockContext = createMockCommandContext({
+-        invocation: {
+-          raw: '/model --compaction clear',
+-          name: 'model',
+-          args: '--compaction clear',
+-        },
+-        services: {
+-          config: {
+-            getContentGeneratorConfig: vi.fn().mockReturnValue({
+-              model: 'gpt-4',
+-              authType: AuthType.USE_OPENAI,
+-            }),
+-            setCompactionModel,
+-          },
+-          settings: createMockSettings(setValue),
+-        },
+-      });
+-
+-      const result = await modelCommand.action!(
+-        mockContext,
+-        '--compaction clear',
+-      );
+-
+-      expect(setValue).toHaveBeenCalledWith(
+-        expect.any(String),
+-        'compactionModel',
+-        undefined,
+-      );
+-      expect(setCompactionModel).toHaveBeenCalledWith(undefined);
+-      expect(result).toMatchObject({
+-        type: 'message',
+-        messageType: 'info',
+-      });
+     });
+   });
+ 
+   describe('non-interactive mode', () => {
+     it('should use interactive-only wording for unavailable direct switches', async () => {
+       const setValue = vi.fn();
+@@ -2648,13 +2427,12 @@
+   it.each([
+     '',
+     '   ',
+     '--fast',
+     '--voice',
+     '--vision',
+-    '--compaction',
+     '--image',
+     '--project',
+     '--global',
+     '--fast --project',
+     '--vision --global',
+     '  --fast   --voice  ',
+diff --git a/packages/cli/src/ui/commands/modelCommand.ts b/packages/cli/src/ui/commands/modelCommand.ts
+--- a/packages/cli/src/ui/commands/modelCommand.ts
++++ b/packages/cli/src/ui/commands/modelCommand.ts
+@@ -38,23 +38,19 @@
+ const FAST_MODEL_CONFIGURATION_HINT =
+   'Configure models in settings.modelProviders and ensure the required environment variables are set. In interactive mode, run /auth to configure or switch providers, or run /model --fast without a model to choose from configured models.';
+ 
+ const VISION_MODEL_CONFIGURATION_HINT =
+   'Configure an image-capable model in settings.modelProviders and ensure the required environment variables are set. Run /model --vision <model-id> to set it, or leave it unset to auto-pick a same-provider vision model.';
+ 
+-const COMPACTION_MODEL_CONFIGURATION_HINT =
+-  'Configure models in settings.modelProviders and ensure the required environment variables are set. In interactive mode, run /auth to configure or switch providers, or run /model --compaction without a model to choose from configured models.';
+-
+ const IMAGE_MODEL_CONFIGURATION_HINT =
+   'Configure a model with imageOnly: true, baseUrl, and envKey in settings.modelProviders. Run /model --image <model-id> to select it.';
+ 
+ const MODEL_PICKER_FLAGS = [
+   'fast',
+   'voice',
+   'vision',
+-  'compaction',
+   'image',
+   'project',
+   'global',
+ ] as const;
+ const MODEL_PICKER_FLAG_PATTERN = `(?:${MODEL_PICKER_FLAGS.join('|')})`;
+ const MODEL_PICKER_ONLY_PATTERN = new RegExp(
+@@ -164,18 +160,13 @@
+   persistSetting(settings, 'model.name', modelArg, scopeOverride);
+   persistSetting(settings, 'model.baseUrl', '', scopeOverride);
+   return modelArg;
+ }
+ 
+ function formatUnavailableModelMessage(
+-  kind:
+-    | 'Model'
+-    | 'Fast model'
+-    | 'Vision model'
+-    | 'Compaction model'
+-    | 'Image model',
++  kind: 'Model' | 'Fast model' | 'Vision model' | 'Image model',
+   modelName: string,
+   authType: AuthType,
+   availableModels: AvailableModel[],
+ ): string {
+   const availableModelIds = Array.from(
+     new Set(availableModels.map((model) => model.id)),
+@@ -187,29 +178,27 @@
+ 
+   const hint =
+     kind === 'Fast model'
+       ? FAST_MODEL_CONFIGURATION_HINT
+       : kind === 'Vision model'
+         ? VISION_MODEL_CONFIGURATION_HINT
+-        : kind === 'Compaction model'
+-          ? COMPACTION_MODEL_CONFIGURATION_HINT
+-          : kind === 'Image model'
+-            ? IMAGE_MODEL_CONFIGURATION_HINT
+-            : MAIN_MODEL_CONFIGURATION_HINT;
++        : kind === 'Image model'
++          ? IMAGE_MODEL_CONFIGURATION_HINT
++          : MAIN_MODEL_CONFIGURATION_HINT;
+ 
+   return (
+     `${kind} '${modelName}' is not available for auth type '${authType}'.\n` +
+     `${availableModelsLine}\n` +
+     hint
+   );
+ }
+ 
+ // Auxiliary model selectors share the same "not configured for any auth type"
+ // message shape, differing only in the label and configuration hint.
+ function formatUnavailableAuxModelMessage(
+-  label: 'Fast model' | 'Vision model' | 'Compaction model' | 'Image model',
++  label: 'Fast model' | 'Vision model' | 'Image model',
+   modelName: string,
+   availableModels: AvailableModel[],
+   hint: string,
+ ): string {
+   const availableModelIds = Array.from(
+     new Set(availableModels.map((model) => model.id)),
+@@ -244,24 +233,12 @@
+ ): string {
+   return formatUnavailableAuxModelMessage(
+     'Vision model',
+     modelName,
+     availableModels,
+     VISION_MODEL_CONFIGURATION_HINT,
+-  );
+-}
+-
+-function formatUnavailableCompactionModelMessage(
+-  modelName: string,
+-  availableModels: AvailableModel[],
+-): string {
+-  return formatUnavailableAuxModelMessage(
+-    'Compaction model',
+-    modelName,
+-    availableModels,
+-    COMPACTION_MODEL_CONFIGURATION_HINT,
+   );
+ }
+ 
+ function formatUnavailableImageModelMessage(
+   modelName: string,
+   availableModels: AvailableModel[],
+@@ -348,13 +325,13 @@
+   );
+ }
+ 
+ // Get an array of the available model IDs as strings, filtered by mode
+ function getAvailableModelIds(
+   context: CommandContext,
+-  mode: 'main' | 'fast' | 'voice' | 'vision' | 'compaction' | 'image' = 'main',
++  mode: 'main' | 'fast' | 'voice' | 'vision' | 'image' = 'main',
+ ) {
+   const { services } = context;
+   const { config } = services;
+   if (!config) {
+     return [];
+   }
+@@ -365,28 +342,28 @@
+   const availableModels = models.filter((m) => {
+     if (mode === 'image')
+       return m.imageOnly === true && !m.fastOnly && !m.voiceOnly;
+     if (mode === 'vision') return !m.fastOnly && !m.voiceOnly && !m.imageOnly;
+     if (mode === 'fast') return !m.voiceOnly && !m.imageOnly && !m.visionOnly;
+     if (mode === 'voice') return !m.fastOnly && !m.imageOnly && !m.visionOnly;
+-    // 'main' and 'compaction' exclude all selector-only models.
++    // 'main' excludes all selector-only models.
+     return !m.fastOnly && !m.voiceOnly && !m.imageOnly && !m.visionOnly;
+   });
+   return availableModels.map((model) => model.id);
+ }
+ 
+ export const modelCommand: SlashCommand = {
+   name: 'model',
+   completionPriority: 100,
+   get description() {
+     return t(
+-      'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --compaction for chat compression model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).',
++      'Switch the model for this session (--fast for suggestion model, --voice for voice transcription model, --vision for the vision bridge model, --image for the image generation model, --project to persist to project settings, --global to persist to user settings, [model-id] to switch immediately, or [model-id] [prompt] to run a one-off prompt on another model; the inline prompt is sent verbatim without @file expansion).',
+     );
+   },
+   argumentHint:
+-    '[--fast|--voice|--vision|--compaction|--image] [--project|--global] [<model-id>] | <model-id> <prompt>',
++    '[--fast|--voice|--vision|--image] [--project|--global] [<model-id>] | <model-id> <prompt>',
+   kind: CommandKind.BUILT_IN,
+   supportedModes: ['interactive', 'non_interactive', 'acp'] as const,
+   completion: async (context, partialArg) => {
+     if (partialArg) {
+       const flagCompletions = [
+         {
+@@ -403,18 +380,12 @@
+           value: '--vision',
+           description: t(
+             'Set the image-capable model used to transcribe images for a text-only main model',
+           ),
+         },
+         {
+-          value: '--compaction',
+-          description: t(
+-            'Set the model used for chat compression (auto-compaction)',
+-          ),
+-        },
+-        {
+           value: '--image',
+           description: t('Set the model used to generate images'),
+         },
+         {
+           value: '--project',
+           description: t(
+@@ -430,34 +401,25 @@
+       ].filter((item) => item.value.startsWith(partialArg));
+       if (flagCompletions.length > 0) {
+         return flagCompletions;
+       }
+       const trimmed = partialArg.trim();
+       if (trimmed) {
+-        let mode:
+-          | 'main'
+-          | 'fast'
+-          | 'voice'
+-          | 'vision'
+-          | 'compaction'
+-          | 'image' = 'main';
++        let mode: 'main' | 'fast' | 'voice' | 'vision' | 'image' = 'main';
+         // Strip all known flags to isolate the model prefix for completion
+         const modelPrefix = trimmed
+           .replace(/(?:^|\s)--fast(?:\s|$)/, ' ')
+           .replace(/(?:^|\s)--voice(?:\s|$)/, ' ')
+           .replace(/(?:^|\s)--vision(?:\s|$)/, ' ')
+-          .replace(/(?:^|\s)--compaction(?:\s|$)/, ' ')
+           .replace(/(?:^|\s)--image(?:\s|$)/, ' ')
+           .replace(/(?:^|\s)--project(?:\s|$)/, ' ')
+           .replace(/(?:^|\s)--global(?:\s|$)/, ' ')
+           .trim();
+         if (/(?:^|\s)--fast(?:\s|$)/.test(trimmed)) mode = 'fast';
+         else if (/(?:^|\s)--voice(?:\s|$)/.test(trimmed)) mode = 'voice';
+         else if (/(?:^|\s)--vision(?:\s|$)/.test(trimmed)) mode = 'vision';
+-        else if (/(?:^|\s)--compaction(?:\s|$)/.test(trimmed))
+-          mode = 'compaction';
+         else if (/(?:^|\s)--image(?:\s|$)/.test(trimmed)) mode = 'image';
+         return getAvailableModelIds(context, mode).filter((id) =>
+           id.startsWith(modelPrefix),
+         );
+       }
+       return null;
+@@ -790,110 +752,12 @@
+         : `\n${formatNonVisionModelWarning(modelName)}`;
+       return {
+         type: 'message',
+         messageType: 'info',
+         content:
+           t('Vision Model') + ': ' + modelName + scopeSuffix + visionWarning,
+-      };
+-    }
+-
+-    const isCompactionModelCommand =
+-      args === '--compaction' || args.startsWith('--compaction ');
+-    if (isCompactionModelCommand) {
+-      const modelName = args.replace('--compaction', '').trim();
+-      if (!modelName || modelName === 'clear') {
+-        if (modelName === 'clear') {
+-          if (!settings) {
+-            return {
+-              type: 'message',
+-              messageType: 'error',
+-              content: t('Settings service not available.'),
+-            };
+-          }
+-          persistSetting(settings, 'compactionModel', undefined, scopeOverride);
+-          config.setCompactionModel(undefined);
+-          return {
+-            type: 'message',
+-            messageType: 'info',
+-            content: t('Compaction model override cleared') + scopeSuffix,
+-          };
+-        }
+-        if (context.executionMode !== 'interactive') {
+-          const compactionModel =
+-            context.services.settings?.merged?.compactionModel?.trim() ||
+-            t('not set (falls back to the main model)');
+-          return {
+-            type: 'message',
+-            messageType: 'info',
+-            content: t(
+-              'Current compaction model: {{compactionModel}}\nUse "/model --compaction <model-id>" to set compaction model, or "/model --compaction clear" to clear the override.',
+-              { compactionModel },
+-            ),
+-          };
+-        }
+-        return {
+-          type: 'dialog',
+-          dialog: 'compaction-model',
+-          ...persistScopeSpread(scopeOverride),
+-        };
+-      }
+-      if (!settings) {
+-        return {
+-          type: 'message',
+-          messageType: 'error',
+-          content: t('Settings service not available.'),
+-        };
+-      }
+-
+-      const selector = (() => {
+-        try {
+-          return resolveModelId(modelName);
+-        } catch {
+-          return undefined;
+-        }
+-      })();
+-      if (!selector) {
+-        return {
+-          type: 'message',
+-          messageType: 'error',
+-          content: formatUnavailableCompactionModelMessage(modelName, []),
+-        };
+-      }
+-
+-      const availableModels = (
+-        selector.authType
+-          ? config.getAvailableModelsForAuthType(selector.authType)
+-          : config.getAllConfiguredModels()
+-      ).filter(
+-        (m) => !m.fastOnly && !m.voiceOnly && !m.imageOnly && !m.visionOnly,
+-      );
+-      if (!availableModels.some((model) => model.id === selector.modelId)) {
+-        return {
+-          type: 'message',
+-          messageType: 'error',
+-          content: selector.authType
+-            ? formatUnavailableModelMessage(
+-                'Compaction model',
+-                selector.modelId,
+-                selector.authType,
+-                availableModels,
+-              )
+-            : formatUnavailableCompactionModelMessage(
+-                modelName,
+-                availableModels,
+-              ),
+-        };
+-      }
+-
+-      persistSetting(settings, 'compactionModel', modelName, scopeOverride);
+-      // Sync runtime Config so the compression service picks it up immediately.
+-      config.setCompactionModel(modelName);
+-      return {
+-        type: 'message',
+-        messageType: 'info',
+-        content: t('Compaction Model') + ': ' + modelName + scopeSuffix,
+       };
+     }
+ 
+     const isImageModelCommand =
+       args === '--image' || args.startsWith('--image ');
+     if (isImageModelCommand) {
 diff --git a/packages/cli/src/ui/commands/renameCommand.test.ts b/packages/cli/src/ui/commands/renameCommand.test.ts
 --- a/packages/cli/src/ui/commands/renameCommand.test.ts
 +++ b/packages/cli/src/ui/commands/renameCommand.test.ts
@@ -64868,7 +65766,15 @@ diff --git a/packages/cli/src/ui/commands/types.ts b/packages/cli/src/ui/command
    SessionListItem,
  } from '@qwen-code/qwen-code-core';
  import type {
-@@ -279,13 +280,20 @@
+@@ -208,7 +209,6 @@
+     | 'fast-model'
+     | 'voice-model'
+     | 'vision-model'
+-    | 'compaction-model'
+     | 'image-model'
+     | 'subagent_create'
+     | 'subagent_list'
+@@ -279,13 +279,20 @@
    /** The original invocation context to be re-run after confirmation. */
    originalInvocation: {
      raw: string;
@@ -65153,6 +66059,23 @@ diff --git a/packages/cli/src/ui/components/ContextUsageDisplay.tsx b/packages/c
      return (
        <>
          <Text color={theme.status.error}>
+diff --git a/packages/cli/src/ui/components/DialogManager.tsx b/packages/cli/src/ui/components/DialogManager.tsx
+--- a/packages/cli/src/ui/components/DialogManager.tsx
++++ b/packages/cli/src/ui/components/DialogManager.tsx
+@@ -269,13 +269,12 @@
+     return (
+       <ModelDialog
+         onClose={uiActions.closeModelDialog}
+         isFastModelMode={uiState.isFastModelMode}
+         isVoiceModelMode={uiState.isVoiceModelMode}
+         isVisionModelMode={uiState.isVisionModelMode}
+-        isCompactionModelMode={uiState.isCompactionModelMode}
+         isImageModelMode={uiState.isImageModelMode}
+         persistScope={uiState.modelDialogPersistScope}
+         availableTerminalHeight={listDialogHeight}
+       />
+     );
+   }
 diff --git a/packages/cli/src/ui/components/Footer.test.tsx b/packages/cli/src/ui/components/Footer.test.tsx
 --- a/packages/cli/src/ui/components/Footer.test.tsx
 +++ b/packages/cli/src/ui/components/Footer.test.tsx
@@ -66037,10 +66960,107 @@ diff --git a/packages/cli/src/ui/components/MainContent.test.tsx b/packages/cli/
      abortPromptSuggestion: vi.fn(),
      isRewindSelectorOpen: false,
      rewindEscPending: false,
+diff --git a/packages/cli/src/ui/components/ModelDialog.test.tsx b/packages/cli/src/ui/components/ModelDialog.test.tsx
+--- a/packages/cli/src/ui/components/ModelDialog.test.tsx
++++ b/packages/cli/src/ui/components/ModelDialog.test.tsx
+@@ -789,66 +789,12 @@
+       'model.name',
+       expect.any(String),
+     );
+     expect(props.onClose).toHaveBeenCalledTimes(1);
+   });
+ 
+-  it('stores compaction model selector without switching models', async () => {
+-    const switchModel = vi.fn();
+-    const setCompactionModel = vi.fn();
+-    const { props, mockSettings, recordSlashCommand } = renderComponent(
+-      { isCompactionModelMode: true },
+-      {
+-        getAuthType: vi.fn(() => AuthType.USE_OPENAI),
+-        getModel: vi.fn(() => 'gpt-4'),
+-        switchModel,
+-        getAllConfiguredModels: vi.fn(() => [
+-          {
+-            id: 'compaction-model',
+-            label: 'compaction-model',
+-            authType: AuthType.USE_OPENAI,
+-          },
+-          {
+-            id: 'gpt-4',
+-            label: 'gpt-4',
+-            authType: AuthType.USE_OPENAI,
+-          },
+-        ]),
+-        getContentGeneratorConfig: vi.fn(() => ({
+-          authType: AuthType.USE_OPENAI,
+-          model: 'gpt-4',
+-        })),
+-        isCurrentPrimaryModel: (m: { id: string; authType?: string }) =>
+-          m.id === 'gpt-4' && m.authType === AuthType.USE_OPENAI,
+-        setCompactionModel,
+-      } as unknown as Partial<Config>,
+-    );
+-
+-    const childOnSelect = mockedSelect.mock.calls[0][0].onSelect;
+-    await childOnSelect(`${AuthType.USE_OPENAI}::compaction-model`);
+-
+-    expect(mockSettings.setValue).toHaveBeenCalledWith(
+-      SettingScope.User,
+-      'compactionModel',
+-      'openai:compaction-model',
+-    );
+-    expect(setCompactionModel).toHaveBeenCalledWith('openai:compaction-model');
+-    expect(recordSlashCommand).toHaveBeenCalledWith({
+-      phase: 'result',
+-      rawCommand: '/model',
+-      outputHistoryItems: [
+-        {
+-          type: 'success',
+-          text: 'Compaction Model: openai:compaction-model',
+-        },
+-      ],
+-    });
+-    expect(switchModel).not.toHaveBeenCalled();
+-    expect(props.onClose).toHaveBeenCalledTimes(1);
+-  });
+-
+   it('shows only image-generation models and stores the exact provider route', async () => {
+     const setImageModel = vi.fn().mockResolvedValue(undefined);
+     const baseUrl = 'https://images.example.com/api/v1';
+     const persisted = `openai:qwen-image-2.0\0${baseUrl}`;
+     const { props, mockSettings, getByText, recordSlashCommand } =
+       renderComponent({ isImageModelMode: true }, {
+@@ -1458,18 +1404,16 @@
+   });
+ 
+   it.each([
+     [{ isFastModelMode: true }, 'escape'],
+     [{ isVoiceModelMode: true }, 'escape'],
+     [{ isVisionModelMode: true }, 'escape'],
+-    [{ isCompactionModelMode: true }, 'escape'],
+     [{ isImageModelMode: true }, 'escape'],
+     [{ isFastModelMode: true }, 'left'],
+     [{ isVoiceModelMode: true }, 'left'],
+     [{ isVisionModelMode: true }, 'left'],
+-    [{ isCompactionModelMode: true }, 'left'],
+     [{ isImageModelMode: true }, 'left'],
+   ])(
+     'does not report the primary model when closing an auxiliary picker (%j, %s)',
+     (modeProps, keyName) => {
+       const { props, mockHistoryManager } = renderComponent(modeProps);
+ 
 diff --git a/packages/cli/src/ui/components/ModelDialog.tsx b/packages/cli/src/ui/components/ModelDialog.tsx
 --- a/packages/cli/src/ui/components/ModelDialog.tsx
 +++ b/packages/cli/src/ui/components/ModelDialog.tsx
-@@ -255,13 +255,13 @@
+@@ -118,7 +118,6 @@
+   isFastModelMode?: boolean;
+   isVoiceModelMode?: boolean;
+   isVisionModelMode?: boolean;
+-  isCompactionModelMode?: boolean;
+   isImageModelMode?: boolean;
+   /** Override which settings scope to persist the selection to. */
+   persistScope?: 'workspace' | 'user';
+@@ -255,13 +254,13 @@
        `\n` +
        `Base URL: ${baseUrl}` +
        `\n` +
@@ -66055,7 +67075,97 @@ diff --git a/packages/cli/src/ui/components/ModelDialog.tsx b/packages/cli/src/u
    });
  }
  
-@@ -669,13 +669,13 @@
+@@ -294,7 +293,6 @@
+   isFastModelMode,
+   isVoiceModelMode,
+   isVisionModelMode,
+-  isCompactionModelMode,
+   isImageModelMode,
+   persistScope,
+   availableTerminalHeight,
+@@ -531,7 +529,6 @@
+     isFastModelMode ||
+     isVoiceModelMode ||
+     isVisionModelMode ||
+-    isCompactionModelMode ||
+     isImageModelMode;
+   // Check if current model is a runtime model
+   // Runtime snapshot ID is already in $runtime|${authType}|${modelId} format
+@@ -602,28 +599,6 @@
+                 model.baseUrl === parsedImageModelValue.baseUrl),
+           )
+       : undefined;
+-  const parsedCompactionSetting = useMemo(() => {
+-    if (!isCompactionModelMode) return undefined;
+-    const raw = settings?.merged?.compactionModel?.trim();
+-    if (!raw) return undefined;
+-    try {
+-      return resolveModelId(raw);
+-    } catch {
+-      return undefined;
+-    }
+-  }, [settings?.merged?.compactionModel, isCompactionModelMode]);
+-  const preferredCompactionModelEntry =
+-    isCompactionModelMode && parsedCompactionSetting
+-      ? parsedCompactionSetting.authType
+-        ? availableModelEntries.find(
+-            ({ authType: t2, model }) =>
+-              t2 === parsedCompactionSetting.authType &&
+-              model.id === parsedCompactionSetting.modelId,
+-          )
+-        : availableModelEntries.find(
+-            ({ model }) => model.id === parsedCompactionSetting.modelId,
+-          )
+-      : undefined;
+   const preferredKey = activeRuntimeSnapshot
+     ? activeRuntimeSnapshot.id
+     : preferredVoiceModelEntry
+@@ -638,31 +613,25 @@
+             preferredVisionModelEntry.model.id,
+             preferredVisionModelEntry.model.baseUrl,
+           )
+-        : preferredCompactionModelEntry
++        : preferredImageModelEntry
+           ? buildModelSelectionKey(
+-              preferredCompactionModelEntry.authType,
+-              preferredCompactionModelEntry.model.id,
+-              preferredCompactionModelEntry.model.baseUrl,
++              preferredImageModelEntry.authType,
++              preferredImageModelEntry.model.id,
++              preferredImageModelEntry.model.baseUrl,
+             )
+-          : preferredImageModelEntry
++          : preferredFastModelEntry
+             ? buildModelSelectionKey(
+-                preferredImageModelEntry.authType,
+-                preferredImageModelEntry.model.id,
+-                preferredImageModelEntry.model.baseUrl,
++                preferredFastModelEntry.authType,
++                preferredFastModelEntry.model.id,
++                preferredFastModelEntry.model.baseUrl,
+               )
+-            : preferredFastModelEntry
++            : authType
+               ? buildModelSelectionKey(
+-                  preferredFastModelEntry.authType,
+-                  preferredFastModelEntry.model.id,
+-                  preferredFastModelEntry.model.baseUrl,
++                  authType,
++                  preferredModelId,
++                  currentBaseUrl,
+                 )
+-              : authType
+-                ? buildModelSelectionKey(
+-                    authType,
+-                    preferredModelId,
+-                    currentBaseUrl,
+-                  )
+-                : '';
++              : '';
+ 
+   // Escape can arrive twice in one stdin chunk before the parent unmounts
+   // the dialog; latch so the close feedback and onClose fire only once.
+@@ -669,13 +638,13 @@
    const closeLatchRef = useRef(false);
    const selectionInFlightRef = useRef(false);
    const selectionCommittedRef = useRef(false);
@@ -66070,7 +67180,7 @@ diff --git a/packages/cli/src/ui/components/ModelDialog.tsx b/packages/cli/src/u
        });
      },
      [config, uiState],
-@@ -688,13 +688,13 @@
+@@ -688,13 +657,13 @@
          type: 'info' as const,
          text: t('Kept model as {{model}}', {
            model: activeRuntimeSnapshot?.modelId ?? preferredModelId,
@@ -66085,6 +67195,65 @@ diff --git a/packages/cli/src/ui/components/ModelDialog.tsx b/packages/cli/src/u
        });
      }
      onClose();
+@@ -866,31 +835,6 @@
+         return;
+       }
+ 
+-      // Compaction model mode: persist the selected model for chat compression.
+-      if (isCompactionModelMode) {
+-        if (!selectedEntry || !config) {
+-          setErrorMessage(t('Selected compaction model is unavailable.'));
+-          return;
+-        }
+-        const compactionModelId = encodeAuxModelSelector(selected);
+-        const scope = resolvePersistScope(settings, persistScope);
+-        settings.setValue(scope, 'compactionModel', compactionModelId);
+-        // Sync runtime Config so the compression service picks it up immediately.
+-        config.setCompactionModel(compactionModelId);
+-        const scopeSuffix =
+-          persistScope === 'workspace'
+-            ? t(' (this project)')
+-            : persistScope === 'user'
+-              ? t(' (global)')
+-              : '';
+-        reportAuxiliaryModelSelection({
+-          type: 'success',
+-          text: `${t('Compaction Model')}: ${compactionModelId}${scopeSuffix}`,
+-        });
+-        onClose();
+-        return;
+-      }
+-
+       if (isImageModelMode) {
+         if (!selectedEntry || !config) {
+           setErrorMessage(t('Selected image model is unavailable.'));
+@@ -1063,7 +1007,6 @@
+       isFastModelMode,
+       isVoiceModelMode,
+       isVisionModelMode,
+-      isCompactionModelMode,
+       isImageModelMode,
+       availableModelEntries,
+       persistScope,
+@@ -1086,13 +1029,11 @@
+           ? t('Select Voice Model')
+           : isVisionModelMode
+             ? t('Select Vision Model')
+-            : isCompactionModelMode
+-              ? t('Select Compaction Model')
+-              : isImageModelMode
+-                ? t('Select Image Model')
+-                : isFastModelMode
+-                  ? t('Select Fast Model')
+-                  : t('Select Model')) +
++            : isImageModelMode
++              ? t('Select Image Model')
++              : isFastModelMode
++                ? t('Select Fast Model')
++                : t('Select Model')) +
+           (persistScope === 'workspace'
+             ? t(' (this project)')
+             : persistScope === 'user'
 diff --git a/packages/cli/src/ui/components/ModelStatsDisplay.test.tsx b/packages/cli/src/ui/components/ModelStatsDisplay.test.tsx
 --- a/packages/cli/src/ui/components/ModelStatsDisplay.test.tsx
 +++ b/packages/cli/src/ui/components/ModelStatsDisplay.test.tsx
@@ -75136,10 +76305,35 @@ diff --git a/packages/cli/src/ui/contexts/SessionContext.tsx b/packages/cli/src/
    const startNewPrompt = useCallback(() => {
      setStats((prevState) => ({
        ...prevState,
+diff --git a/packages/cli/src/ui/contexts/UIActionsContext.tsx b/packages/cli/src/ui/contexts/UIActionsContext.tsx
+--- a/packages/cli/src/ui/contexts/UIActionsContext.tsx
++++ b/packages/cli/src/ui/contexts/UIActionsContext.tsx
+@@ -54,13 +54,12 @@
+   closeMemoryDialog: () => void;
+   closeModelDialog: () => void;
+   openModelDialog: (options?: {
+     fastModelMode?: boolean;
+     voiceModelMode?: boolean;
+     visionModelMode?: boolean;
+-    compactionModelMode?: boolean;
+     imageModelMode?: boolean;
+   }) => void;
+   openArenaDialog: (type: Exclude<ArenaDialogType, null>) => void;
+   closeArenaDialog: () => void;
+   handleArenaModelsSelected?: (models: string[]) => void;
+   dismissProviderUpdate: () => void;
 diff --git a/packages/cli/src/ui/contexts/UIStateContext.tsx b/packages/cli/src/ui/contexts/UIStateContext.tsx
 --- a/packages/cli/src/ui/contexts/UIStateContext.tsx
 +++ b/packages/cli/src/ui/contexts/UIStateContext.tsx
-@@ -198,20 +198,12 @@
+@@ -72,7 +72,6 @@
+   isFastModelMode: boolean;
+   isVoiceModelMode: boolean;
+   isVisionModelMode: boolean;
+-  isCompactionModelMode: boolean;
+   isImageModelMode: boolean;
+   modelDialogPersistScope: 'workspace' | 'user' | undefined;
+   isTrustDialogOpen: boolean;
+@@ -198,20 +197,12 @@
    isMcpDialogOpen: boolean;
    // Hooks dialog
    isHooksDialogOpen: boolean;
@@ -75487,7 +76681,15 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.test.ts b/packages/
            sentToModel: false,
            hiddenInvocation: true,
          });
-@@ -852,13 +859,13 @@
+@@ -840,7 +847,6 @@
+       '/model --fast',
+       '/model --voice --project',
+       '/model --vision --global',
+-      '/model --compaction',
+       '/model --image',
+       '/stats 2026-01',
+     ])('hides the invocation for the picker-only form %s', async (input) => {
+@@ -852,13 +858,13 @@
        await act(async () => {
          await result.current.handleSlashCommand(input);
        });
@@ -75502,7 +76704,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.test.ts b/packages/
          sentToModel: false,
          hiddenInvocation: true,
        });
-@@ -884,13 +891,13 @@
+@@ -884,13 +890,13 @@
        expect(mockAddItem).toHaveBeenNthCalledWith(
          1,
          { type: MessageType.USER, text: input, sentToModel: false },
@@ -75517,7 +76719,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.test.ts b/packages/
          sentToModel: false,
          hiddenInvocation: false,
        });
-@@ -919,13 +926,13 @@
+@@ -919,13 +925,13 @@
  
          expect(mockAddItem).toHaveBeenCalledWith(
            { type: MessageType.USER, text: '/theme', sentToModel: false },
@@ -75532,7 +76734,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.test.ts b/packages/
            sentToModel: false,
            hiddenInvocation: false,
          });
-@@ -949,13 +956,13 @@
+@@ -949,13 +955,13 @@
  
        await act(async () => {
          await result.current.handleSlashCommand(input);
@@ -75547,7 +76749,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.test.ts b/packages/
          outputHistoryItems: [
            {
              type: MessageType.ERROR,
-@@ -1023,13 +1030,13 @@
+@@ -1023,13 +1029,13 @@
          expect(mockAddItem).toHaveBeenCalledTimes(1);
          expect(mockAddItem).toHaveBeenCalledWith(
            { type: MessageType.USER, text: input, sentToModel: false },
@@ -75562,7 +76764,33 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.test.ts b/packages/
            sentToModel: false,
            hiddenInvocation: false,
          });
-@@ -1625,12 +1632,118 @@
+@@ -1185,25 +1191,6 @@
+ 
+       expect(mockOpenModelDialog).toHaveBeenCalledWith({
+         imageModelMode: true,
+-      });
+-    });
+-
+-    it('should handle "dialog: compaction-model" action', async () => {
+-      const command = createTestCommand({
+-        name: 'compactionmodelcmd',
+-        action: vi
+-          .fn()
+-          .mockResolvedValue({ type: 'dialog', dialog: 'compaction-model' }),
+-      });
+-      const result = setupProcessorHook([command]);
+-      await waitFor(() => expect(result.current.slashCommands).toHaveLength(1));
+-
+-      await act(async () => {
+-        await result.current.handleSlashCommand('/compactionmodelcmd');
+-      });
+-
+-      expect(mockOpenModelDialog).toHaveBeenCalledWith({
+-        compactionModelMode: true,
+       });
+     });
+ 
+@@ -1625,12 +1612,118 @@
            { text: 'The actual prompt from the TOML file.' },
            { text: '\n\nHook context' },
          ],
@@ -75702,7 +76930,15 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
    ExtensionRefreshState,
  } from '../../config/extension-refresh-state.js';
  import {
-@@ -418,29 +423,28 @@
+@@ -189,7 +194,6 @@
+     fastModelMode?: boolean;
+     voiceModelMode?: boolean;
+     visionModelMode?: boolean;
+-    compactionModelMode?: boolean;
+     imageModelMode?: boolean;
+     persistScope?: 'workspace' | 'user';
+   }) => void;
+@@ -418,29 +422,28 @@
      btwAbortControllerRef.current = null;
      setBtwItem(null);
    }, []);
@@ -75739,7 +76975,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
        if (key.name === 'escape') {
          cancelSlashCommand();
        }
-@@ -490,16 +494,13 @@
+@@ -490,16 +493,13 @@
        } else if (message.type === MessageType.QUIT) {
          historyItemContent = {
            type: 'quit',
@@ -75757,7 +76993,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
            summary: message.summary,
          };
        } else if (message.type === MessageType.INSIGHT_PROGRESS) {
-@@ -877,12 +878,13 @@
+@@ -877,12 +877,13 @@
    const handleSlashCommand = useCallback(
      async (
        rawQuery: PartListUnion,
@@ -75771,7 +77007,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
        }
  
        const trimmed = rawQuery.trim();
-@@ -895,12 +897,25 @@
+@@ -895,12 +896,25 @@
  
        const {
          commandToExecute,
@@ -75797,7 +77033,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
          recordedItems.push(item);
        };
        const addItemWithRecording: UseHistoryManagerReturn['addItem'] = (
-@@ -908,34 +923,22 @@
+@@ -908,34 +922,22 @@
          timestamp,
        ) => {
          recordItem(item);
@@ -75832,7 +77068,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
            resolvedCommandPath.join(' ') !== 'model' ||
            !hideInvocation ||
            invocationItemId !== undefined
-@@ -972,32 +975,43 @@
+@@ -972,32 +974,43 @@
            success,
          });
          skillInvocationRecorded = true;
@@ -75876,7 +77112,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                refreshContextFilesOnWrite ||= Boolean(
                  skillResult.refreshContextFilesOnWrite,
                );
-@@ -1104,43 +1118,51 @@
+@@ -1104,43 +1117,51 @@
                  sessionShellAllowlist: new Set([
                    ...fullCommandContext.session.sessionShellAllowlist,
                    ...oneTimeShellAllowlist,
@@ -75947,7 +77183,20 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                    revealHiddenInvocation();
                    if (result.messageType === 'info') {
                      addItemWithRecording(
-@@ -1398,12 +1420,16 @@
+@@ -1244,12 +1265,6 @@
+                         persistScope: result.persistScope,
+                       });
+                       return { type: 'handled' };
+-                    case 'compaction-model':
+-                      actions.openModelDialog({
+-                        compactionModelMode: true,
+-                        persistScope: result.persistScope,
+-                      });
+-                      return { type: 'handled' };
+                     case 'image-model':
+                       actions.openModelDialog({
+                         imageModelMode: true,
+@@ -1398,12 +1413,16 @@
                  }
                  case 'confirm_shell_commands': {
                    const { outcome, approvedCommands } = await new Promise<{
@@ -75964,7 +77213,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                          resolvedOutcome,
                          resolvedApprovedCommands,
                        ) => {
-@@ -1413,13 +1439,15 @@
+@@ -1413,13 +1432,15 @@
                            approvedCommands: resolvedApprovedCommands,
                          });
                        },
@@ -75980,7 +77229,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                    ) {
                      return { type: 'handled' };
                    }
-@@ -1434,28 +1462,34 @@
+@@ -1434,28 +1455,34 @@
                    return await handleSlashCommand(
                      result.originalInvocation.raw,
                      // Pass the approved commands as a one-time grant for this execution.
@@ -76016,7 +77265,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                          text: 'Operation cancelled.',
                        },
                        Date.now(),
-@@ -1466,12 +1500,13 @@
+@@ -1466,12 +1493,13 @@
                    delegatedToRecursiveInvocation = true;
                    return await handleSlashCommand(
                      result.originalInvocation.raw,
@@ -76030,7 +77279,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                    // stream_messages is only used in ACP/Zed integration mode
                    // and should not be returned in interactive UI mode
                    throw new Error(
-@@ -1506,16 +1541,12 @@
+@@ -1506,16 +1534,12 @@
            content: `Unknown command: ${trimmed}`,
            timestamp: new Date(),
          });
@@ -76047,7 +77296,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
            const event = makeSlashCommandEvent({
              command: resolvedCommandPath[0],
              subcommand,
-@@ -1529,59 +1560,74 @@
+@@ -1529,59 +1553,74 @@
              text: e instanceof Error ? e.message : String(e),
            },
            Date.now(),
@@ -80587,6 +81836,104 @@ diff --git a/packages/cli/src/ui/hooks/useLoadingIndicator.ts b/packages/cli/src
      currentLoadingPhrase,
 -    taskStartTokens,
 -    taskStartStreamingChars,
+   };
+ };
+diff --git a/packages/cli/src/ui/hooks/useModelCommand.ts b/packages/cli/src/ui/hooks/useModelCommand.ts
+--- a/packages/cli/src/ui/hooks/useModelCommand.ts
++++ b/packages/cli/src/ui/hooks/useModelCommand.ts
+@@ -10,91 +10,76 @@
+ 
+ interface UseModelCommandReturn {
+   isModelDialogOpen: boolean;
+   isFastModelMode: boolean;
+   isVoiceModelMode: boolean;
+   isVisionModelMode: boolean;
+-  isCompactionModelMode: boolean;
+   isImageModelMode: boolean;
+   modelDialogPersistScope: ModelDialogPersistScope | undefined;
+   openModelDialog: (options?: {
+     fastModelMode?: boolean;
+     voiceModelMode?: boolean;
+     visionModelMode?: boolean;
+-    compactionModelMode?: boolean;
+     imageModelMode?: boolean;
+     persistScope?: ModelDialogPersistScope;
+   }) => void;
+   closeModelDialog: () => void;
+ }
+ 
+ export const useModelCommand = (): UseModelCommandReturn => {
+   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false);
+   const [isFastModelMode, setIsFastModelMode] = useState(false);
+   const [isVoiceModelMode, setIsVoiceModelMode] = useState(false);
+   const [isVisionModelMode, setIsVisionModelMode] = useState(false);
+-  const [isCompactionModelMode, setIsCompactionModelMode] = useState(false);
+   const [isImageModelMode, setIsImageModelMode] = useState(false);
+   const [modelDialogPersistScope, setModelDialogPersistScope] = useState<
+     ModelDialogPersistScope | undefined
+   >(undefined);
+ 
+   const openModelDialog = useCallback(
+     (options?: {
+       fastModelMode?: boolean;
+       voiceModelMode?: boolean;
+       visionModelMode?: boolean;
+-      compactionModelMode?: boolean;
+       imageModelMode?: boolean;
+       persistScope?: ModelDialogPersistScope;
+     }) => {
+       const voiceModelMode = options?.voiceModelMode ?? false;
+       const visionModelMode = options?.visionModelMode ?? false;
+-      const compactionModelMode = options?.compactionModelMode ?? false;
+       const imageModelMode = options?.imageModelMode ?? false;
+       // Modes are mutually exclusive; a specialized mode suppresses fast mode.
+       setIsFastModelMode(
+-        voiceModelMode ||
+-          visionModelMode ||
+-          compactionModelMode ||
+-          imageModelMode
++        voiceModelMode || visionModelMode || imageModelMode
+           ? false
+           : (options?.fastModelMode ?? false),
+       );
+       setIsVoiceModelMode(
+-        visionModelMode || compactionModelMode || imageModelMode
+-          ? false
+-          : voiceModelMode,
++        visionModelMode || imageModelMode ? false : voiceModelMode,
+       );
+-      setIsVisionModelMode(
+-        compactionModelMode || imageModelMode ? false : visionModelMode,
+-      );
+-      setIsCompactionModelMode(imageModelMode ? false : compactionModelMode);
++      setIsVisionModelMode(imageModelMode ? false : visionModelMode);
+       setIsImageModelMode(imageModelMode);
+       setModelDialogPersistScope(options?.persistScope);
+       setIsModelDialogOpen(true);
+     },
+     [],
+   );
+ 
+   const closeModelDialog = useCallback(() => {
+     setIsModelDialogOpen(false);
+     setIsFastModelMode(false);
+     setIsVoiceModelMode(false);
+     setIsVisionModelMode(false);
+-    setIsCompactionModelMode(false);
+     setIsImageModelMode(false);
+     setModelDialogPersistScope(undefined);
+   }, []);
+ 
+   return {
+     isModelDialogOpen,
+     isFastModelMode,
+     isVoiceModelMode,
+     isVisionModelMode,
+-    isCompactionModelMode,
+     isImageModelMode,
+     modelDialogPersistScope,
+     openModelDialog,
+     closeModelDialog,
    };
  };
 diff --git a/packages/cli/src/ui/hooks/useProviderUpdates.test.ts b/packages/cli/src/ui/hooks/useProviderUpdates.test.ts
@@ -88552,7 +89899,7 @@ diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/sr
 +  it('preserves committed counts alongside independent finalization failure', () => {
 +    const outcome = {
 +      ...completed,
-+      warning: 'Selected compaction model changed.',
++      warning: 'Compaction telemetry failed: no sink.',
 +      finalizationFailure: 'Startup failed.',
 +    };
 +    const output = formatCompressionResult(outcome);
@@ -116087,120 +117434,225 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  
      it('returns undefined when the fast model selector is malformed', () => {
        const config = new Config({
-@@ -5327,13 +5317,13 @@
- 
-         await config.refreshAuth(AuthType.USE_OPENAI);
- 
-         expect(config.getCompactionModel()).toBe('compaction-model');
-       });
- 
--      it('resolves an authType-qualified compaction model selector', async () => {
-+      it('resolves an authType-qualified compaction model selector', () => {
-         const config = new Config({
-           ...baseParams,
-           authType: AuthType.USE_ANTHROPIC,
-           model: 'claude-opus-4-7',
-           compactionModel: 'openai:compaction-model',
-           modelProvidersConfig: {
-@@ -5353,18 +5343,16 @@
-                 envKey: 'IDEALAB_OPUS_API_KEY',
-               },
-             ],
-           },
-         });
- 
--        await config.refreshAuth(AuthType.USE_ANTHROPIC);
+@@ -5303,230 +5293,13 @@
+-    describe('getCompactionModel', () => {
+-      it('returns the compaction model when set', async () => {
+-        const config = new Config({
+-          ...baseParams,
+-          authType: AuthType.USE_OPENAI,
+-          model: 'gpt-4',
+-          compactionModel: 'compaction-model',
+-          modelProvidersConfig: {
+-            [AuthType.USE_OPENAI]: [
+-              {
+-                id: 'gpt-4',
+-                name: 'GPT-4',
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-              {
+-                id: 'compaction-model',
+-                name: 'Compaction Model',
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-            ],
+-          },
+-        });
 -
-         expect(config.getCompactionModel()).toBe('openai:compaction-model');
-       });
- 
--      it('falls back to the main model when compactionModel is not set', async () => {
-+      it('selects the main model when compactionModel is not set', async () => {
-         const config = new Config({
-           ...baseParams,
-           authType: AuthType.USE_OPENAI,
-           model: 'gpt-4',
-           fastModel: 'fast-model',
-           modelProvidersConfig: {
-@@ -5384,17 +5372,17 @@
-             ],
-           },
-         });
- 
-         await config.refreshAuth(AuthType.USE_OPENAI);
- 
--        // fastModel is intentionally ignored — compaction falls back to main
-+        // fastModel is intentionally ignored — compaction selects main
-         expect(config.getCompactionModel()).toBe('gpt-4');
-       });
- 
--      it('falls back to main model when neither compactionModel nor fastModel is set', () => {
-+      it('selects the main model when neither compactionModel nor fastModel is set', () => {
-         const config = new Config({
-           ...baseParams,
-           authType: AuthType.USE_OPENAI,
-           model: 'gpt-4',
-           modelProvidersConfig: {
-             [AuthType.USE_OPENAI]: [
-@@ -5468,17 +5456,17 @@
- 
-         await config.refreshAuth(AuthType.USE_OPENAI);
- 
-         expect(config.getCompactionModel()).toBeUndefined();
-       });
- 
--      it('falls back to the main model when the compaction model selector is malformed', async () => {
-+      it('returns undefined when the compaction model selector is malformed', async () => {
-         const config = new Config({
-           ...baseParams,
+-        await config.refreshAuth(AuthType.USE_OPENAI);
+-
+-        expect(config.getCompactionModel()).toBe('compaction-model');
+-      });
+-
+-      it('resolves an authType-qualified compaction model selector', async () => {
+-        const config = new Config({
+-          ...baseParams,
 -          authType: AuthType.USE_ANTHROPIC,
 -          model: 'claude-opus-4-7',
-+          authType: AuthType.USE_OPENAI,
-+          model: 'deepseek-v4-flash',
-           compactionModel: 'openai:',
-           modelProvidersConfig: {
-             [AuthType.USE_OPENAI]: [
-               {
-                 id: 'deepseek-v4-flash',
-                 name: 'deepseek-v4-flash',
-@@ -5486,18 +5474,18 @@
-                 envKey: 'DASHSCOPE_API_KEY',
-               },
-             ],
-           },
-         });
- 
+-          compactionModel: 'openai:compaction-model',
+-          modelProvidersConfig: {
+-            [AuthType.USE_OPENAI]: [
+-              {
+-                id: 'compaction-model',
+-                name: 'Compaction Model',
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-            ],
+-            [AuthType.USE_ANTHROPIC]: [
+-              {
+-                id: 'claude-opus-4-7',
+-                name: 'claude-opus-4-7',
+-                baseUrl: 'https://idealab.alibaba-inc.com/api/anthropic',
+-                envKey: 'IDEALAB_OPUS_API_KEY',
+-              },
+-            ],
+-          },
+-        });
+-
+-        await config.refreshAuth(AuthType.USE_ANTHROPIC);
+-
+-        expect(config.getCompactionModel()).toBe('openai:compaction-model');
+-      });
+-
+-      it('falls back to the main model when compactionModel is not set', async () => {
+-        const config = new Config({
+-          ...baseParams,
+-          authType: AuthType.USE_OPENAI,
+-          model: 'gpt-4',
+-          fastModel: 'fast-model',
+-          modelProvidersConfig: {
+-            [AuthType.USE_OPENAI]: [
+-              {
+-                id: 'gpt-4',
+-                name: 'GPT-4',
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-              {
+-                id: 'fast-model',
+-                name: 'Fast Model',
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-            ],
+-          },
+-        });
+-
+-        await config.refreshAuth(AuthType.USE_OPENAI);
+-
+-        // fastModel is intentionally ignored — compaction falls back to main
+-        expect(config.getCompactionModel()).toBe('gpt-4');
+-      });
+-
+-      it('falls back to main model when neither compactionModel nor fastModel is set', () => {
+-        const config = new Config({
+-          ...baseParams,
+-          authType: AuthType.USE_OPENAI,
+-          model: 'gpt-4',
+-          modelProvidersConfig: {
+-            [AuthType.USE_OPENAI]: [
+-              {
+-                id: 'gpt-4',
+-                name: 'GPT-4',
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-            ],
+-          },
+-        });
+-
+-        expect(config.getCompactionModel()).toBe('gpt-4');
+-      });
+-
+-      it('returns undefined when the compaction model is voiceOnly', async () => {
+-        const config = new Config({
+-          ...baseParams,
+-          authType: AuthType.USE_OPENAI,
+-          model: 'gpt-4',
+-          compactionModel: 'voice-model',
+-          modelProvidersConfig: {
+-            [AuthType.USE_OPENAI]: [
+-              {
+-                id: 'gpt-4',
+-                name: 'GPT-4',
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-              {
+-                id: 'voice-model',
+-                name: 'Voice Model',
+-                voiceOnly: true,
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-            ],
+-          },
+-        });
+-
+-        await config.refreshAuth(AuthType.USE_OPENAI);
+-
+-        expect(config.getCompactionModel()).toBeUndefined();
+-      });
+-
+-      it('returns undefined when the compaction model is visionOnly', async () => {
+-        const config = new Config({
+-          ...baseParams,
+-          authType: AuthType.USE_OPENAI,
+-          model: 'gpt-4',
+-          compactionModel: 'vision-model',
+-          modelProvidersConfig: {
+-            [AuthType.USE_OPENAI]: [
+-              {
+-                id: 'gpt-4',
+-                name: 'GPT-4',
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-              {
+-                id: 'vision-model',
+-                name: 'Vision Model',
+-                visionOnly: true,
+-                baseUrl: 'https://api.openai.com/v1',
+-                envKey: 'OPENAI_API_KEY',
+-              },
+-            ],
+-          },
+-        });
+-
+-        await config.refreshAuth(AuthType.USE_OPENAI);
+-
+-        expect(config.getCompactionModel()).toBeUndefined();
+-      });
+-
+-      it('falls back to the main model when the compaction model selector is malformed', async () => {
+-        const config = new Config({
+-          ...baseParams,
+-          authType: AuthType.USE_ANTHROPIC,
+-          model: 'claude-opus-4-7',
+-          compactionModel: 'openai:',
+-          modelProvidersConfig: {
+-            [AuthType.USE_OPENAI]: [
+-              {
+-                id: 'deepseek-v4-flash',
+-                name: 'deepseek-v4-flash',
+-                baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+-                envKey: 'DASHSCOPE_API_KEY',
+-              },
+-            ],
+-          },
+-        });
+-
 -        await config.refreshAuth(AuthType.USE_ANTHROPIC);
 -
 -        expect(config.getCompactionModel()).toBe('claude-opus-4-7');
 -      });
 -
 -      it('returns undefined when the compaction model is not configured for the current auth type', async () => {
-+        await config.refreshAuth(AuthType.USE_OPENAI);
-+
-+        expect(config.getCompactionModel()).toBeUndefined();
-+      });
-+
-+      it('returns undefined when the compaction model is not configured for the current auth type', () => {
-         const config = new Config({
-           ...baseParams,
-           authType: AuthType.USE_ANTHROPIC,
-           model: 'claude-opus-4-7',
-           compactionModel: 'missing-model',
-           modelProvidersConfig: {
-@@ -5509,24 +5497,23 @@
-                 envKey: 'IDEALAB_OPUS_API_KEY',
-               },
-             ],
-           },
-         });
- 
+-        const config = new Config({
+-          ...baseParams,
+-          authType: AuthType.USE_ANTHROPIC,
+-          model: 'claude-opus-4-7',
+-          compactionModel: 'missing-model',
+-          modelProvidersConfig: {
+-            [AuthType.USE_ANTHROPIC]: [
+-              {
+-                id: 'claude-opus-4-7',
+-                name: 'Claude Opus 4',
+-                baseUrl: 'https://idealab.alibaba-inc.com/api/anthropic',
+-                envKey: 'IDEALAB_OPUS_API_KEY',
+-              },
+-            ],
+-          },
+-        });
+-
 -        await config.refreshAuth(AuthType.USE_ANTHROPIC);
 -
-         expect(config.getCompactionModel()).toBeUndefined();
-       });
-     });
- 
+-        expect(config.getCompactionModel()).toBeUndefined();
+-      });
+-    });
+-
      it('should refresh auth when switching to model with different envKey', async () => {
        // This test verifies the fix for switching between modelProvider models
        // with different envKeys (e.g., deepseek-chat with DEEPSEEK_API_KEY)
@@ -116214,7 +117666,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
                id: 'model-a',
                name: 'Model A',
                baseUrl: 'https://api.example.com/v1',
-@@ -5567,13 +5554,13 @@
+@@ -5567,13 +5340,13 @@
          },
        );
  
@@ -116229,7 +117681,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        // Initialize with model-a
        await configWithModelProviders.refreshAuth(AuthType.USE_OPENAI);
  
-@@ -5951,41 +5938,46 @@
+@@ -5951,41 +5724,46 @@
      expect(getTeamMemoryShareabilityWarning).toHaveBeenCalledTimes(1);
      expect(config.getWarnings()).toContainEqual(
        expect.stringContaining('is git-ignored'),
@@ -116285,7 +117737,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      });
  
      vi.mocked(loadServerHierarchicalMemory).mockResolvedValueOnce({
-@@ -5995,59 +5987,45 @@
+@@ -5995,59 +5773,45 @@
        conditionalRules: [],
        projectRoot: '/tmp',
      });
@@ -116367,7 +117819,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        memoryContent: 'short project context',
        fileCount: 1,
        ruleCount: 0,
-@@ -6055,21 +6033,14 @@
+@@ -6055,21 +5819,14 @@
        projectRoot: '/tmp',
      });
      vi.mocked(readAutoMemoryIndexWithStats).mockResolvedValueOnce(null);
@@ -116391,7 +117843,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config(baseParams);
      const disposeResidentAgents = vi.spyOn(
        config.getBackgroundTaskRegistry(),
-@@ -6090,13 +6061,13 @@
+@@ -6090,13 +5847,13 @@
      expect(config.getTargetDir()).toBe(newDir);
      expect(config.getProjectRoot()).toBe(newDir);
      expect(config.getCwd()).toBe(newDir);
@@ -116406,7 +117858,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        newDir,
        expect.any(Array),
        expect.any(Object),
-@@ -6108,48 +6079,52 @@
+@@ -6108,48 +5865,52 @@
      );
  
      chdirSpy.mockRestore();
@@ -116494,7 +117946,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const newDir = path.resolve('/path/to/other');
      const chdirSpy = vi.spyOn(process, 'chdir').mockImplementation(() => {
        // Keep the test process in its original directory.
-@@ -6220,264 +6195,71 @@
+@@ -6220,264 +5981,71 @@
      expect(result.mcpRefreshError).toEqual(new Error('MCP failed'));
  
      chdirSpy.mockRestore();
@@ -116809,7 +118261,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config(baseParams);
      const oldDir = config.getTargetDir();
      const newDir = path.resolve('/path/to/other');
-@@ -7321,27 +7103,12 @@
+@@ -7321,27 +6889,12 @@
        };
        const config = new Config(paramsWithUndefinedBuiltinRipgrep);
        expect(config.getUseBuiltinRipgrep()).toBe(true);
@@ -116837,7 +118289,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        // A first-run / text-only session reports no image modality, yet the tool
        // must still register: the gate moved to execute time so a hot /model
        // switch to an image model picks it up without re-running initialize().
-@@ -7802,191 +7569,31 @@
+@@ -7802,191 +7355,31 @@
          ).mock.calls.some((call) => call[0] === ToolNames.SHELL);
          expect(wasShellToolRegistered).toBe(true);
        });
@@ -117039,7 +118491,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
 -    });
 -  });
 -
-@@ -8104,13 +7711,12 @@
+@@ -8104,13 +7497,12 @@
  describe('setApprovalMode with folder trust', () => {
    const baseParams: ConfigParameters = {
      targetDir: '.',
@@ -117053,7 +118505,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      // #4297 fold-in 1 (16:32:44-round S3): assert on the typed class,
      // not just message text. The 403 mapping in `serve/server.ts`
      // matches `err instanceof TrustGateError`; an accidental revert
-@@ -9107,13 +8713,12 @@
+@@ -9107,13 +8499,12 @@
  describe('disabledTools runtime sync (#4282 fold-in 5 P2-2 / #4297 fold-in 5)', () => {
    const baseParams: ConfigParameters = {
      targetDir: '.',
@@ -117067,7 +118519,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config({
        ...baseParams,
        disabledTools: ['Foo', 'Bar'],
-@@ -9170,13 +8775,12 @@
+@@ -9170,13 +8561,12 @@
  describe('visibleTools', () => {
    const baseParams: ConfigParameters = {
      targetDir: '.',
@@ -117081,7 +118533,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config({
        ...baseParams,
        visibleTools: ['Foo', 'Bar'],
-@@ -9217,13 +8821,12 @@
+@@ -9217,13 +8607,12 @@
  describe('computer use settings', () => {
    const baseParams: ConfigParameters = {
      targetDir: '.',
@@ -117095,7 +118547,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config({
        ...baseParams,
        computerUseIdleTimeoutMs: 12_345,
-@@ -9231,12 +8834,236 @@
+@@ -9231,12 +8620,236 @@
      expect(config.getComputerUseIdleTimeoutMs()).toBe(12_345);
    });
  
@@ -117332,7 +118784,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  describe('BaseLlmClient Lifecycle', () => {
    const MODEL = 'gemini-pro';
    const SANDBOX: SandboxConfig = {
-@@ -9256,51 +9083,48 @@
+@@ -9256,51 +8869,48 @@
      targetDir: TARGET_DIR,
      debugMode: DEBUG_MODE,
      question: QUESTION,
@@ -117394,7 +118846,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  
      expect(llmService.clearPerModelGeneratorCache).toHaveBeenCalledOnce();
    });
-@@ -9309,28 +9133,29 @@
+@@ -9309,28 +8919,29 @@
  describe('Model Switching and Config Updates', () => {
    const baseParams: ConfigParameters = {
      cwd: '/tmp',
@@ -117428,7 +118880,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        ['enableCacheControl']: true,
        ['forceGlobalCacheScope']: true,
      };
-@@ -9340,23 +9165,24 @@
+@@ -9340,23 +8951,24 @@
        sources: {
          model: { kind: 'settings' },
          contextWindowSize: { kind: 'computed', detail: 'auto' },
@@ -117456,7 +118908,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        ['enableCacheControl']: false,
        ['forceGlobalCacheScope']: false,
        ['toolResultContentFormat']: 'string',
-@@ -9373,31 +9199,23 @@
+@@ -9373,31 +8985,23 @@
          forceGlobalCacheScope: { kind: 'settings' },
          toolResultContentFormat: { kind: 'settings' },
          modalities: { kind: 'computed', detail: 'auto' },
@@ -117491,7 +118943,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  
      // Verify sources are also updated
      const sources = config.getContentGeneratorConfigSources();
-@@ -9409,107 +9227,78 @@
+@@ -9409,107 +9013,78 @@
      expect(sources['enableCacheControl']?.kind).toBe('settings');
      expect(sources['forceGlobalCacheScope']?.kind).toBe('settings');
      expect(sources['toolResultContentFormat']?.kind).toBe('settings');
@@ -117661,7 +119113,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      it('should return false when hookSystem is not initialized', () => {
        const config = new Config(baseParams);
        expect(config.hasHooksForEvent('Stop')).toBe(false);
-@@ -9551,23 +9340,12 @@
+@@ -9551,23 +9126,12 @@
    describe('runtime ContentGenerator view (AsyncLocalStorage)', () => {
      // The Config getters consult the per-run ALS view published by the
      // agent runtime when a sub-agent runs on a different model than the
@@ -117685,7 +119137,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        );
        const config = new Config(baseParams);
        const parentGenerator = {
-@@ -9575,75 +9353,74 @@
+@@ -9575,75 +9139,74 @@
        } as unknown as ContentGenerator;
        const parentGeneratorConfig: ContentGeneratorConfig = {
          model: 'parent-model',
@@ -117775,7 +119227,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
    });
  
    describe('Config runtime MCP overlay', () => {
-@@ -9805,27 +9582,33 @@
+@@ -9805,27 +9368,33 @@
      });
    });
  
@@ -117812,7 +119264,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  
        // String values (MCP might send strings): Number.isFinite rejects strings
        // @ts-expect-error - testing runtime validation
-@@ -10061,115 +9844,73 @@
+@@ -10061,115 +9630,73 @@
      });
    });
  
@@ -117955,7 +119407,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
 -    child.setActiveTodoReminder('child-prompt', 'child work');
      child.startActiveTodoWorkChain('child-retry', 'child-prompt');
  
-@@ -10176,17 +9917,20 @@
+@@ -10176,17 +9703,20 @@
 -    expect(parent.getActiveTodoReminder('parent-prompt')).toBe('parent work');
 -    expect(parent.getActiveTodoReminder('child-retry')).toBeUndefined();
 -    expect(child.getActiveTodoReminder('parent-prompt')).toBeUndefined();
@@ -118299,8 +119751,13 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * shell tool falls back to its built-in default. See
     * getShellDefaultTimeoutMs.
     */
-@@ -1336,20 +1267,12 @@
-   /**
+@@ -1331,25 +1262,11 @@
+-   * Dedicated model for chat compression (auto-compaction). Falls back to
+-   * the main model. Corresponds to the `compactionModel` setting
+-   * (configurable via `/model --compaction`).
+-   */
+-  compactionModel?: string;
+-  /**
     * Per-attempt timeout in milliseconds for the vision bridge transcription
     * call. Unset → built-in 30s. Corresponds to the `visionBridgeTimeoutMs`
     * setting; useful for slow or proxied vision endpoints.
@@ -118320,7 +119777,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Users with old settings.json containing hooksConfig.enabled should migrate
     * to use disableAllHooks instead (note: inverted logic - enabled:true → disableAllHooks:false).
     */
-@@ -1470,7 +1393,7 @@
+@@ -1470,7 +1387,7 @@
  
  /** Default sub-agent nesting cap (1-based levels). */
  export const DEFAULT_MAX_SUBAGENT_DEPTH = 5;
@@ -118329,7 +119786,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  export const MAX_SUBAGENT_DEPTH_LIMIT = 100;
  
  /**
-@@ -1490,57 +1413,10 @@
+@@ -1490,57 +1407,10 @@
  ): number {
    return value == null || !Number.isFinite(value)
      ? DEFAULT_MAX_SUBAGENT_DEPTH
@@ -118387,7 +119844,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    const raw = process.env[envName];
    if (!raw) {
      return fallback;
-@@ -1737,19 +1613,32 @@
+@@ -1737,19 +1607,32 @@
        error.cause instanceof AggregateError &&
        error.cause.errors.includes(candidate))
    );
@@ -118421,7 +119878,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private goalRestoreActivation?: () => Promise<void>;
    private rejectGoalRestoreActivation?: (reason?: unknown) => void;
    private readonly sessionRuntimeBaseDir: string;
-@@ -1759,12 +1648,13 @@
+@@ -1759,12 +1642,13 @@
      | { lease: SessionWriterLease; promise: Promise<void> }
      | undefined;
    private sessionWriterReclaimPolicy: 'local' | 'never' = 'local';
@@ -118435,7 +119892,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * One-shot notice produced by `setupStartupWorktree` (Phase D-1) when the
     * CLI was launched with `--worktree`. The active entry point (TUI XOR
     * headless) reads it via {@link consumePendingStartupWorktreeNotice} on
-@@ -1822,15 +1712,15 @@
+@@ -1822,15 +1706,15 @@
      | null = null;
    // Skill keys (e.g. "skill:foo") that coreToolScheduler announced inline on a
    // tool result. The client's drain consumes this set so it can mark them as
@@ -118453,7 +119910,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly modelProvidersConfig?: ModelProvidersConfig;
    private readonly providerProtocolConfig?: ProviderProtocolConfig;
    private readonly sandbox: SandboxConfig | undefined;
-@@ -1842,12 +1732,14 @@
+@@ -1842,12 +1726,14 @@
    private readonly includePartialMessages: boolean;
    private readonly question: string | undefined;
    private readonly systemPrompt: string | undefined;
@@ -118468,7 +119925,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly disabledSkillNamesProvider:
      | (() => ReadonlySet<string>)
      | null;
-@@ -1944,13 +1836,12 @@
+@@ -1944,13 +1830,12 @@
    };
    private manualPlanExitNoticeCursorState: ManualPlanExitNoticeCursorState = {
      seenVersion: 0,
@@ -118482,14 +119939,14 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly gitCoAuthor: GitCoAuthorSettings;
    private readonly usageStatisticsEnabled: boolean;
    private readonly fileReadCacheDisabled: boolean;
-@@ -1957,6 +1848,4 @@
+@@ -1957,6 +1842,4 @@
 -  private activeTodoReminders = new Map<string, string>();
    private activeTodoWorkChainOwners = new Map<string, string>();
 -  private activeTodoReminderTurns = new Map<string, number>();
    private geminiClient!: GeminiClient;
    private baseLlmClient!: BaseLlmClient;
    private cronScheduler: CronScheduler | null = null;
-@@ -1966,13 +1855,13 @@
+@@ -1966,13 +1849,13 @@
      customIgnoreFiles: string[];
      enableRecursiveFileSearch: boolean;
      enableFuzzySearch: boolean;
@@ -118504,7 +119961,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * A Goal restore held back because the session writer is not accepting
     * writes yet. Settled by {@link startPendingGoalRestore} once the
     * recorder has its lease, or by {@link settlePendingGoalRestore} when the
-@@ -1988,15 +1877,12 @@
+@@ -1988,15 +1871,12 @@
    private goalTurnHost: GoalTurnHost | undefined;
    private goalTurnHostUnbind: (() => void) | undefined;
    private goalTurnHostGeneration = 0;
@@ -118520,7 +119977,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly explicitIncludeDirectories: string[];
    private readonly bugCommand: BugCommandSettings | undefined;
    private outputLanguageFilePath?: string;
-@@ -2007,7 +1893,3 @@
+@@ -2007,7 +1887,3 @@
  
    private readonly maxSessionTurns: number;
    private readonly maxSubagentDepth: number;
@@ -118528,7 +119985,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -  private readonly maxToolCalls: number;
 -  private readonly clearContextOnIdle: ClearContextOnIdleSettings;
 -  private readonly sessionTokenLimit: number;
-@@ -2014,13 +1896,12 @@
+@@ -2014,13 +1890,12 @@
    private readonly listExtensions: boolean;
    private readonly overrideExtensions?: string[];
  
@@ -118542,7 +119999,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly cronRecurringMaxAgeDays: number;
    private readonly agentTeamEnabled: boolean = false;
    private readonly artifactEnabled: boolean = true;
-@@ -2031,17 +1912,15 @@
+@@ -2031,17 +1906,15 @@
    private workflowsEnabled = false;
    private readonly skipWorkflowUsageWarning: boolean = false;
    private readonly computerUseEnabled: boolean = true;
@@ -118560,12 +120017,12 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly useBuiltinRipgrep: boolean;
    private readonly shouldUseNodePtyShell: boolean;
    private readonly preventSystemSleep: boolean;
-@@ -2048,4 +1927,3 @@
+@@ -2048,4 +1921,3 @@
 -  private readonly skipNextSpeakerCheck: boolean;
    private shellExecutionConfig: ShellExecutionConfig;
    private arenaManager: ArenaManager | null = null;
    private arenaManagerChangeCallback:
-@@ -2060,8 +1938,6 @@
+@@ -2060,8 +1932,6 @@
    private readonly agentsSettings: AgentsCollabSettings;
    private readonly worktreeSettings: WorktreeSettings;
    private readonly skipLoopDetection: boolean;
@@ -118574,7 +120031,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly skipStartupContext: boolean;
    private readonly bareMode: boolean;
    private readonly safeMode: boolean;
-@@ -2078,19 +1954,15 @@
+@@ -2078,19 +1948,15 @@
    private initializationSucceeded = false;
    private initializationSettled = false;
    private shutdownRequested = false;
@@ -118595,11 +120052,11 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly channel: string | undefined;
    private readonly jsonFd: number | undefined;
    private readonly jsonFile: string | undefined;
-@@ -2116,13 +1988,12 @@
+@@ -2116,13 +1982,11 @@
    private readonly webSearchSettings?: WebSearchSettings;
    private webSearchNoticeEmitted = false;
    private visionModel?: string;
-   private compactionModel?: string;
+-  private compactionModel?: string;
    private imageModel?: string;
    private readonly visionBridgeTimeoutMs: number | undefined;
 -  private readonly modelFallbacks: string[];
@@ -118609,7 +120066,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly userHooks?: Record<string, unknown>;
    /** Project-level hooks (only loaded in trusted folders) */
    private readonly projectHooks?: Record<string, unknown>;
-@@ -2138,25 +2009,25 @@
+@@ -2138,25 +2002,25 @@
    private readonly ownsModelEnvSlot: boolean = false;
    private readonly settingsWatcher?: { stopWatching(): void };
  
@@ -118636,7 +120093,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.fileSystemService = new StandardFileSystemService();
      this.sandbox = params.sandbox;
      this.targetDir = path.resolve(params.targetDir);
-@@ -2177,12 +2048,14 @@
+@@ -2177,12 +2041,14 @@
      this.outputFormat = normalizedOutputFormat ?? OutputFormat.TEXT;
      this.includePartialMessages = params.includePartialMessages ?? false;
      this.question = params.question;
@@ -118651,7 +120108,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        ...(params.disabledSlashCommands ?? []),
      ]);
      this.disabledSkillNamesProvider = params.disabledSkillNamesProvider ?? null;
-@@ -2223,14 +2096,12 @@
+@@ -2223,14 +2089,12 @@
      this.sdkMode = params.sdkMode ?? false;
      this.userMemory = params.userMemory ?? '';
      this.geminiMdFileCount = params.geminiMdFileCount ?? 0;
@@ -118666,7 +120123,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        otlpEndpoint: params.telemetry?.otlpEndpoint,
        otlpProtocol: params.telemetry?.otlpProtocol,
        otlpTracesEndpoint: params.telemetry?.otlpTracesEndpoint,
-@@ -2282,29 +2153,11 @@
+@@ -2282,29 +2146,11 @@
      this.bugCommand = params.bugCommand;
      this.maxSessionTurns = validateMaxSessionTurns(params.maxSessionTurns);
      this.maxSubagentDepth = normalizeMaxSubagentDepth(params.maxSubagentDepth);
@@ -118696,7 +120153,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      );
      this.agentTeamEnabled = params.agentTeamEnabled ?? false;
      this.artifactEnabled = params.artifactEnabled ?? true;
-@@ -2325,22 +2178,13 @@
+@@ -2325,22 +2171,13 @@
      this.folderTrust = params.folderTrust ?? false;
      this.ideMode = params.ideMode ?? false;
      this.modelProvidersConfig = params.modelProvidersConfig;
@@ -118719,14 +120176,14 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    // Whether the user explicitly set the cap (vs. the resolved default). An
 -    // explicit value is honored as a hard cap; the default is adaptive.
 -    this.maxToolCallsPerTurnExplicit = params.maxToolCallsPerTurn !== undefined;
-@@ -2364,6 +2208,5 @@
+@@ -2364,6 +2201,5 @@
      this.shouldUseNodePtyShell =
        params.shouldUseNodePtyShell ?? shouldDefaultToNodePty();
      this.preventSystemSleep = params.preventSystemSleep ?? true;
 -    this.skipNextSpeakerCheck = params.skipNextSpeakerCheck ?? true;
      this.shellExecutionConfig = {
        terminalWidth: params.shellExecutionConfig?.terminalWidth ?? 80,
-@@ -2370,23 +2213,12 @@
+@@ -2370,23 +2206,12 @@
        terminalHeight: params.shellExecutionConfig?.terminalHeight ?? 24,
        showColor: params.shellExecutionConfig?.showColor ?? false,
        pager: params.shellExecutionConfig?.pager,
@@ -118750,7 +120207,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // a negative or fractional value would throw RangeError or silently degrade
      // to a 1ms timeout. Unlike the vision bridge, 0 is valid here and disables
      // the timeout. Reject anything the timer can't take and fall back to the
-@@ -2430,13 +2262,13 @@
+@@ -2430,13 +2255,13 @@
        process.env['QWEN_CODE_PROJECT_DIR'] = this.storage.getProjectDir();
        projectDirEnvClaimed = true;
      }
@@ -118765,7 +120222,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          ? {
              maxConcurrentBackgroundAgents:
                this.agentsSettings.maxParallelAgents,
-@@ -2541,25 +2373,15 @@
+@@ -2541,25 +2366,15 @@
          });
        // Swallow an early rejection so it cannot become an unhandledRejection
        // before initialize() awaits (and surfaces) the stored promise.
@@ -118794,7 +120251,15 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        enabledExtensionOverrides: this.overrideExtensions,
        isWorkspaceTrusted: this.isTrustedFolder(),
        locale: params.locale,
-@@ -2599,13 +2421,12 @@
+@@ -2587,7 +2402,6 @@
+     this.fastModel = params.fastModel || undefined;
+     this.webSearchSettings = params.webSearch;
+     this.visionModel = params.visionModel || undefined;
+-    this.compactionModel = params.compactionModel || undefined;
+     this.imageModel = params.imageModel || undefined;
+     // Guard: nothing validates settings.json on the load path, so this is the
+     // only real gate. `AbortSignal.timeout()` requires an integer in
+@@ -2599,13 +2413,12 @@
        params.visionBridgeTimeoutMs !== undefined &&
        Number.isInteger(params.visionBridgeTimeoutMs) &&
        params.visionBridgeTimeoutMs > 0 &&
@@ -118808,7 +120273,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      );
      // Store user and project hooks separately for proper source attribution
      this.userHooks = params.userHooks;
-@@ -2618,45 +2439,50 @@
+@@ -2618,45 +2431,50 @@
  
    /**
     * Must only be called once, throws if called again.
@@ -118875,7 +120340,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          unregisterSessionProjectDir(this.sessionId);
          this.sessionProjectDirRegistered = false;
        }
-@@ -2695,25 +2521,33 @@
+@@ -2695,25 +2513,33 @@
      const explicitExtensionNames = this.isSafeMode()
        ? []
        : (this.overrideExtensions ?? []).filter(
@@ -118911,7 +120376,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
        // Initialize MessageBus for hook execution
        this.messageBus = new MessageBus();
-@@ -2772,13 +2606,13 @@
+@@ -2772,13 +2598,13 @@
                  );
                  break;
                case 'Stop': {
@@ -118926,7 +120391,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
                    (input['stop_hook_active'] as boolean) || false,
                    (input['last_assistant_message'] as string) || '',
                    contextUsageData,
-@@ -2962,13 +2796,13 @@
+@@ -2962,13 +2788,13 @@
        this.debugLogger.debug('Hook system disabled, skipping initialization');
      }
      recordStartupEvent('config_initialize_hooks_end');
@@ -118941,7 +120406,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
              this.getProjectRoot(),
            );
            if (curatorResult.status === 'ran') {
-@@ -3008,13 +2842,17 @@
+@@ -3008,13 +2834,17 @@
      // Load session subagents if they were provided before initialization
      if (this.sessionSubagents.length > 0) {
        this.subagentManager.loadSessionSubagents(this.sessionSubagents);
@@ -118960,7 +120425,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
      recordStartupEvent('config_initialize_hierarchical_memory_start');
      await this.refreshHierarchicalMemory('session_start');
-@@ -3175,28 +3013,36 @@
+@@ -3175,28 +3005,36 @@
            );
          }
        })();
@@ -119002,7 +120467,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          onOwnershipAcquired: (acquiredLease) => {
            lease = acquiredLease;
            this.pendingSessionWriterLease = acquiredLease;
-@@ -3217,16 +3063,12 @@
+@@ -3217,16 +3055,12 @@
        if (location === 'conflict' || location === 'archived') {
          throw new SessionTranscriptChangedError();
        }
@@ -119019,7 +120484,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          authoritative = await this.getSessionService().loadSession(
            this.sessionId,
          );
-@@ -3625,39 +3467,12 @@
+@@ -3625,39 +3459,12 @@
      this.getFileReadCache().recordRead(indexPath, indexRead.stats, {
        full: true,
        cacheable: true,
@@ -119059,7 +120524,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      }
  
      if (this.getBareMode()) {
-@@ -3683,15 +3498,19 @@
+@@ -3683,15 +3490,19 @@
    }
  
    getContextRuleExcludes(): string[] {
@@ -119082,7 +120547,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    /**
     * Get the ModelsConfig instance for model-related operations.
     * External code (e.g., CLI) can use this to access model configuration.
-@@ -3736,98 +3555,101 @@
+@@ -3736,98 +3547,101 @@
      this.baseLlmClient?.clearPerModelGeneratorCache();
    }
  
@@ -119264,7 +120729,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getSessionId(): string {
      return this.sessionId;
    }
-@@ -3919,64 +3741,111 @@
+@@ -3919,64 +3733,111 @@
    /**
     * Returns warnings generated during configuration resolution.
     * These warnings are collected from model configuration resolution
@@ -119404,7 +120869,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (process.env) {
        process.env['QWEN_CODE_SESSION_ID'] = this.sessionId;
      }
-@@ -3986,43 +3855,54 @@
+@@ -3986,43 +3847,54 @@
      // model by the new id, miss, and fall back to another session's value.
      // Drop the orphaned entry too — shutdown only unregisters the current id.
      unregisterSessionModel(previousSessionId);
@@ -119465,7 +120930,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          sessionData && isSessionTransition ? previousSessionId : undefined,
        );
      }
-@@ -4118,17 +3998,53 @@
+@@ -4118,17 +3990,53 @@
    }
  
    getImportFormat(): 'tree' | 'flat' {
@@ -119524,7 +120989,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // If contentGeneratorConfigSources is empty (before initializeAuth),
      // get sources from ModelsConfig
      if (
-@@ -4139,13 +4055,13 @@
+@@ -4139,13 +4047,13 @@
      }
      return this.contentGeneratorConfigSources;
    }
@@ -119539,36 +121004,73 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getCurrentModelRegistryBaseUrl(): string | null | undefined {
      return this.modelsConfig.getCurrentRegistryBaseUrl();
    }
-@@ -4290,12 +4206,13 @@
- 
-   /**
-    * Resolve the compaction model for chat compression (auto-compaction).
-    * Priority: compactionModel (if set) → main model.
-    */
-   getCompactionModel(): string | undefined {
-+    if (!this.compactionModel) return this.getModel();
-     const selector = this.resolveCompactionModelSelector();
-     if (selector) {
-       const available = selector.authType
-         ? this.getAllConfiguredModels([selector.authType])
-         : this.getAllConfiguredModels();
-       if (
-@@ -4312,13 +4229,13 @@
-       }
-       const rawSelector = resolveModelId(this.compactionModel);
-       return rawSelector?.authType
-         ? `${rawSelector.authType}:${selector.modelId}`
-         : selector.modelId;
-     }
+@@ -4288,65 +4196,1 @@
+     this.visionModel = model || undefined;
+-  }
+-
+-  /**
+-   * Resolve the compaction model for chat compression (auto-compaction).
+-   * Priority: compactionModel (if set) → main model.
+-   */
+-  getCompactionModel(): string | undefined {
+-    const selector = this.resolveCompactionModelSelector();
+-    if (selector) {
+-      const available = selector.authType
+-        ? this.getAllConfiguredModels([selector.authType])
+-        : this.getAllConfiguredModels();
+-      if (
+-        !available.some(
+-          (m) =>
+-            m.id === selector.modelId &&
+-            !m.fastOnly &&
+-            !m.voiceOnly &&
+-            !m.imageOnly &&
+-            !m.visionOnly,
+-        )
+-      ) {
+-        return undefined;
+-      }
+-      const rawSelector = resolveModelId(this.compactionModel);
+-      return rawSelector?.authType
+-        ? `${rawSelector.authType}:${selector.modelId}`
+-        : selector.modelId;
+-    }
 -    return this.getModel();
-+    return undefined;
-   }
- 
-   private resolveCompactionModelSelector() {
-     if (!this.compactionModel) return undefined;
-     try {
-       const rawSelector = resolveModelId(this.compactionModel);
-@@ -4360,21 +4277,12 @@
+-  }
+-
+-  private resolveCompactionModelSelector() {
+-    if (!this.compactionModel) return undefined;
+-    try {
+-      const rawSelector = resolveModelId(this.compactionModel);
+-      if (!rawSelector) return undefined;
+-      if (rawSelector.authType) return rawSelector;
+-
+-      const currentAuthType = this.getContentGeneratorConfig()?.authType;
+-      if (!currentAuthType) {
+-        this.debugLogger.debug(
+-          'No active auth type; skipping bare compaction model resolution',
+-        );
+-        return undefined;
+-      }
+-
+-      return resolveModelId(this.compactionModel, {
+-        currentAuthType,
+-        getAvailableModels: () =>
+-          this.getAllConfiguredModels([currentAuthType]),
+-      });
+-    } catch {
+-      return undefined;
+-    }
+-  }
+-
+-  /**
+-   * Update the compaction model at runtime (e.g. `/model --compaction <model>`).
+-   * Pass undefined or an empty string to clear the override and fall back to
+-   * the main model.
+-   */
+-  setCompactionModel(model: string | undefined): void {
+-    this.compactionModel = model || undefined;
+@@ -4360,21 +4204,12 @@
      this.imageModel = model || undefined;
      if (!this.initialized || !this.isImageGenerationEnabled()) {
        return;
@@ -119590,7 +121092,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Read the active reasoning-effort tier from the live content-generator
     * config. Returns undefined when thinking is disabled (`reasoning: false`) or
     * no tier is set (the model/provider default applies).
-@@ -4476,15 +4384,18 @@
+@@ -4476,15 +4311,18 @@
        // `if (cfg.reasoning)` checks would treat reasoning as active and the
        // pipeline would emit `reasoning: {}` as wire noise.
        cfg.reasoning = Object.keys(next).length > 0 ? next : undefined;
@@ -119611,7 +121113,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      applyEffort(this.modelsConfig?.getGenerationConfig());
    }
  
-@@ -4618,36 +4529,29 @@
+@@ -4618,36 +4456,29 @@
     */
    getVisionBridgeTimeoutMs(): number | undefined {
      return this.visionBridgeTimeoutMs;
@@ -119651,7 +121153,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // Reasoning effort is a global, model-independent preference (set via
      // /effort). Capture it before the rebuild and re-apply after, so switching
      // models never silently drops the user's chosen effort — neither the
-@@ -4655,101 +4559,12 @@
+@@ -4655,101 +4486,12 @@
      // full refresh path (which rebuilds the config from scratch).
      const priorReasoningEffort = this.getReasoningEffort();
  
@@ -119753,7 +121255,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // preceding switchModel() ran applyResolvedModelDefaults(), which overwrote
      // modelsConfig's `reasoning` with the new model's preset (undefined for most
      // models), BEFORE this callback fires. So refreshAuth reads `undefined` and
-@@ -4837,20 +4652,4 @@
+@@ -4837,20 +4579,4 @@
      return this.maxSubagentDepth;
 -  }
 -
@@ -119774,7 +121276,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getEmbeddingModel(): string {
-@@ -4873,135 +4672,20 @@
+@@ -4873,135 +4599,20 @@
    }
  
    getTargetDir(): string {
@@ -119911,7 +121413,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      const targetPath = path.resolve(newDir);
      const expected = expectedCanonicalDir ?? fs.realpathSync(targetPath);
      if (!fs.statSync(targetPath).isDirectory()) {
-@@ -5030,29 +4714,16 @@
+@@ -5030,29 +4641,16 @@
          throw new Error(
            `Realpath mismatch: resolved ${actualCanonical}, expected ${expected}.`,
          );
@@ -119942,7 +121444,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.sessionService = undefined;
      this.fileHistoryService = undefined;
      this.getFileReadCache().clear();
-@@ -5125,51 +4796,46 @@
+@@ -5125,51 +4723,46 @@
    async shutdown(options?: {
      shutdownTelemetry?: boolean;
      skipSessionWriter?: boolean;
@@ -120023,7 +121525,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      waitForInitialization: boolean,
    ): Promise<void> {
      if (waitForInitialization) {
-@@ -5219,67 +4885,67 @@
+@@ -5219,67 +4812,67 @@
      };
      void shutdown.then(clear, clear);
      return shutdown;
@@ -120146,7 +121648,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      return this.promptRegistry;
    }
  
-@@ -5313,12 +4979,25 @@
+@@ -5313,12 +4906,25 @@
    /** @deprecated Use getPermissionsAllow() instead. */
    getCoreTools(): string[] | undefined {
      if (this.getBareMode()) {
@@ -120172,7 +121674,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Returns the merged allow-rules for PermissionManager.
     *
     * This merges all sources so that PermissionManager receives a single,
-@@ -6515,16 +6194,12 @@
+@@ -6515,16 +6121,12 @@
    }
  
    getAccessibility(): AccessibilitySettings {
@@ -120189,7 +121691,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
    isTelemetryInitializationDeferred(): boolean {
      return this.telemetryInitializationDeferred;
-@@ -6603,13 +6278,6 @@
+@@ -6603,13 +6205,6 @@
      return this.geminiClient;
    }
  
@@ -120203,7 +121705,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private getOwnActiveTodoWorkChainOwners(): Map<string, string> {
      if (
        !Object.prototype.hasOwnProperty.call(this, 'activeTodoWorkChainOwners')
-@@ -6617,15 +6285,6 @@
+@@ -6617,15 +6212,6 @@
        this.activeTodoWorkChainOwners = new Map();
      }
      return this.activeTodoWorkChainOwners;
@@ -120219,7 +121721,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getActiveTodoWorkChainOwner(
-@@ -6637,62 +6296,11 @@
+@@ -6637,62 +6223,11 @@
      );
    }
  
@@ -120285,7 +121787,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      owners.clear();
      owners.set(promptId, owner);
    }
-@@ -6701,22 +6309,14 @@
+@@ -6701,22 +6236,14 @@
      promptId: string,
      continuedFrom?: string,
    ): void {
@@ -120310,7 +121812,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    /**
-@@ -6974,13 +6574,13 @@
+@@ -6974,13 +6501,13 @@
        const service = new FileHistoryService(
          this.sessionId,
          this.fileCheckpointingEnabled,
@@ -120325,7 +121827,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        const snapshots = this.sessionData?.fileHistorySnapshots;
        if (snapshots?.length && service.isEnabled()) {
          service.restoreFromSnapshots(snapshots);
-@@ -7031,16 +6631,12 @@
+@@ -7031,16 +6558,12 @@
    }
  
    getExperimentalZedIntegration(): boolean {
@@ -120342,7 +121844,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
    getExtensionManager(): ExtensionManager {
      return this.extensionManager;
-@@ -7069,32 +6665,40 @@
+@@ -7069,32 +6592,40 @@
    }
  
    /**
@@ -120386,7 +121888,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7108,13 +6712,13 @@
+@@ -7108,13 +6639,13 @@
     * Whether the daemon/session should auto-sync team memory with the git
     * remote (pull + commit + push). Resolves the `memory.enableTeamMemorySync`
     * setting, with env `QWEN_CODE_MEMORY_TEAM_SYNC` ('0'/'1') as an override.
@@ -120401,7 +121903,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7122,23 +6726,35 @@
+@@ -7122,23 +6653,35 @@
        return true;
      }
      return this.enableTeamMemorySync;
@@ -120440,7 +121942,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Toggle auto-skill for the running session. The startup value is copied from
     * settings, so persisting a settings change alone would not take effect until
     * the next launch; the skill-review scheduler reads `getAutoSkillEnabled()`
-@@ -7149,13 +6765,17 @@
+@@ -7149,13 +6692,17 @@
     */
    setAutoSkillEnabled(enabled: boolean): void {
      this.enableAutoSkill = enabled;
@@ -120459,7 +121961,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Max runtime in minutes for background memory agents (extraction, dream,
     * remember, skill review). Resolves the `memory.agentTimeoutMinutes`
     * setting. Unset → each agent's built-in default; 0 → no time limit.
-@@ -7418,20 +7038,12 @@
+@@ -7418,20 +6965,12 @@
    setFileSystemService(fileSystemService: FileSystemService): void {
      this.fileSystemService = fileSystemService;
    }
@@ -120480,7 +121982,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      return this.interactive;
    }
  
-@@ -7456,10 +7068,6 @@
+@@ -7456,10 +6995,6 @@
      return this.shouldUseNodePtyShell;
    }
  
@@ -120491,7 +121993,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getShellExecutionConfig(): ShellExecutionConfig {
      return this.shellExecutionConfig;
    }
-@@ -7487,26 +7095,4 @@
+@@ -7487,26 +7022,4 @@
    getSkipLoopDetection(): boolean {
      return this.skipLoopDetection;
    }
@@ -120518,7 +122020,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.maxToolCallsPerTurnExplicit;
 -  }
 -
-@@ -7523,26 +7109,6 @@
+@@ -7523,26 +7036,6 @@
     * extensions, skills, MCP servers, rules) for troubleshooting.
     */
    isSafeMode(): boolean {
@@ -120545,7 +122047,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.truncateToolOutputLines;
 -  }
 -
-@@ -7562,52 +7128,25 @@
+@@ -7562,52 +7055,25 @@
     * default). 0 disables heartbeats.
     */
    getShellHeartbeatIntervalMs(): number | undefined {
@@ -120600,7 +122102,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getGoalRuntimeReady(): Promise<GoalRuntime> {
-@@ -7624,15 +7163,12 @@
+@@ -7624,15 +7090,12 @@
      return runtime.getPreparedRestore().then(() => runtime);
    }
  
@@ -120616,7 +122118,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      runtime.dispose();
      this.initializeGoalRuntime(records);
      await this.goalRuntimeReady;
-@@ -7666,20 +7202,15 @@
+@@ -7666,20 +7129,15 @@
      return () => {
        this.chatRecordingFailureListeners.delete(listener);
      };
@@ -120640,7 +122142,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      records?: readonly GoalRecoveryRecord[],
      restoreRuntime?: SessionRuntimeResumeState,
    ): void {
-@@ -7694,35 +7225,25 @@
+@@ -7694,35 +7152,25 @@
      // writer: its records belong to the outgoing session.
      this.settlePendingGoalRestore(
        new GoalPersistenceUnavailableError(
@@ -120678,7 +122180,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          restoreRuntime.goalCheckpointWindow,
        );
        let resolveActivation!: () => void;
-@@ -7737,16 +7258,13 @@
+@@ -7737,16 +7185,13 @@
          void started.then(resolveActivation, rejectActivation);
          return started;
        };
@@ -120696,7 +122198,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        this.goalRuntimeReady = ready;
      } else {
        this.goalRuntimeReady = runtime
-@@ -7835,34 +7353,32 @@
+@@ -7835,34 +7280,32 @@
      }
    }
  
@@ -120737,7 +122239,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    setSessionWriterReclaimPolicy(policy: 'local' | 'never'): void {
      if (this.initialized) {
        throw new SessionWriterUnavailableError();
-@@ -7879,13 +7395,13 @@
+@@ -7879,13 +7322,13 @@
  
    closeSessionWriter(options?: { handoff?: boolean }): Promise<void> {
      if (options?.handoff && this.sessionWriterTakeoverPolicy === 'certified') {
@@ -120752,7 +122254,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.sessionWriterClosePromise ??= this.closeSessionWriterOnce();
      return this.sessionWriterClosePromise;
    }
-@@ -7898,13 +7414,13 @@
+@@ -7898,13 +7341,13 @@
      } catch (error) {
        if (!(error instanceof SessionWriterShutdownError)) {
          failures.push(error);
@@ -122514,7 +124016,7 @@ diff --git a/packages/core/src/core/anthropicContentGenerator/anthropicContentGe
 diff --git a/packages/core/src/core/authored-instructions.test.ts b/packages/core/src/core/authored-instructions.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/authored-instructions.test.ts
-@@ -0,0 +1,565 @@
+@@ -0,0 +1,564 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -123019,7 +124521,6 @@ diff --git a/packages/core/src/core/authored-instructions.test.ts b/packages/cor
 +        getContentGeneratorConfig: preparedConfig,
 +        requireContentGeneratorConfig: preparedConfig,
 +        getHookSystem: () => undefined,
-+        getCompactionModel: () => 'fixture-model',
 +        getModel: () => 'fixture-model',
 +        getBaseLlmClient: () => ({
 +          countRequestTokens: countSideQuery,
@@ -177909,7 +179410,8 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 -  newTokenCountIsEstimated?: boolean;
    compressionStatus: CompressionStatus;
    triggerReason?: CompactionTriggerReason;
-   /** Set when the compaction model was swapped for the main model at runtime. */
+-  /** Set when the compaction model was swapped for the main model at runtime. */
++  /** Set when the attempt has something to report beside its counts. */
    warning?: string;
 +  /** Absent when the attempt was refused before any generation ran. */
 +  output?: CompactionOutputAccounting;
@@ -187801,7 +189303,7 @@ diff --git a/packages/core/src/qwen/qwenContentGenerator.ts b/packages/core/src/
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,1611 @@
+@@ -1,4405 +1,1604 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -188009,7 +189511,6 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    contextWindowSize: number;
 +    enableCacheControl?: boolean;
 +  };
-+  setCompactionModel(model: string | undefined): void;
 +  setHistory(history: Content[]): void;
 +  setHookSystem(enabled: boolean): void;
 +  setStartupContext(content: Content | undefined): void;
@@ -188017,7 +189518,6 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +
 +function makeHarness(): Harness {
 +  let history = baseHistory();
-+  let compactionModel: string | undefined = MODEL;
 +  let hooksEnabled = false;
 +  let startupContext: Content | undefined;
 +  const generationConfig: GenerateContentConfig = {
@@ -188066,7 +189566,6 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    getContentGeneratorConfig: preparedConfig,
 +    requireContentGeneratorConfig: preparedConfig,
 +    getHookSystem: () => (hooksEnabled ? hookSystem : undefined),
-+    getCompactionModel: () => compactionModel,
 +    getModel: () => MODEL,
 +    getBaseLlmClient: () => baseLlmClient,
 +    getDebugLogger: () => ({ debug, warn }),
@@ -188110,9 +189609,6 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    warn,
 +    generationConfig,
 +    contentGeneratorConfig,
-+    setCompactionModel(model) {
-+      compactionModel = model;
-+    },
 +    setHistory(next) {
 +      history = next;
 +    },
@@ -189453,7 +190949,6 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -    });
 -
 +  it.each([
-+    ['different model', (h: Harness) => h.setCompactionModel('other-model')],
 +    [
 +      'no exact tokenizer',
 +      (h: Harness) => {
@@ -194333,7 +195828,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Fire PreCompact hook before compression begins. Pass any user-supplied
      // `/compress` instructions so hook scripts can read / log / amend them
-@@ -509,619 +432,691 @@
+@@ -509,619 +432,688 @@
          // `getAdditionalContext()` sanitises (`<`/`>` → `&lt;`/`&gt;`) so a
          // hook can't inject XML structure into the summary prompt. Mirrors
          // every other call-site in this repo (toolHookTriggers, agent.ts,
@@ -194580,8 +196075,9 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -    const usesMainModel = effectiveCompactionModel === config.getModel();
 +    const abortSignal = signal ?? new AbortController().signal;
 +    abortSignal.throwIfAborted();
-+    const configuredCompactionModel =
-+      config.getCompactionModel?.() ?? config.getModel();
++    // Compaction runs on the session's model, so the shared prompt-cache
++    // prefix is the session's own; what is left to establish is that the
++    // provider preserves it and that the counts are exact.
      const providerSupportsCacheSharing =
        supportsCompressionCacheSharing(config);
 -    // The anchor must be provider-reported, not merely non-zero: an
@@ -194720,7 +196216,6 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -      compressionOutputTokenCount === undefined &&
 -      typeof compressionUsageMetadata?.totalTokenCount === 'number' &&
 -      typeof compressionInputTokenCount === 'number'
-+      configuredCompactionModel !== config.getModel() ||
 +      !providerSupportsCacheSharing ||
 +      contentGeneratorConfig.exactTokenCounting !== 'vllm'
      ) {
@@ -194734,12 +196229,9 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -        summary,
 -        slimmingConfig.imageTokenEstimate,
 -      );
-+      const reason =
-+        configuredCompactionModel !== config.getModel()
-+          ? `compaction model ${configuredCompactionModel} differs from the main model ${config.getModel()}`
-+          : !providerSupportsCacheSharing
-+            ? 'the active provider cannot preserve the main prompt-cache prefix'
-+            : 'exactTokenCounting=vllm is not active';
++      const reason = !providerSupportsCacheSharing
++        ? 'the active provider cannot preserve the main prompt-cache prefix'
++        : 'exactTokenCounting=vllm is not active';
        config
          .getDebugLogger()
          .warn(
@@ -282333,7 +283825,19 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
          "accessibility": {
            "description": "Accessibility settings.",
            "type": "object",
-@@ -631,17 +621,12 @@
+@@ -616,11 +606,6 @@
+     },
+     "visionModel": {
+       "description": "Image-capable model used as the vision bridge: when a text-only main model receives an image, it is transcribed by this model first. Set with /model --vision. Leave empty to auto-pick a same-provider vision model.",
+-      "type": "string",
+-      "default": ""
+-    },
+-    "compactionModel": {
+-      "description": "Model used for chat compression (auto-compaction). Set with /model --compaction. Leave empty to fall back to the main model. A smaller/faster model reduces compression latency and cost.",
+       "type": "string",
+       "default": ""
+     },
+@@ -631,17 +616,12 @@
      },
      "visionBridgeTimeoutMs": {
        "description": "Per-attempt timeout in milliseconds for the vision bridge image transcription call (a positive integer up to 2147483647). Unset uses the built-in 30s. Raise for slow or proxied vision endpoints.",
@@ -282351,7 +283855,7 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
        "type": "string",
        "default": ""
      },
-@@ -672,16 +657,6 @@
+@@ -672,16 +652,6 @@
            "type": "integer",
            "default": -1
          },
@@ -282368,7 +283872,7 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
          "maxSubagentDepth": {
            "description": "Maximum sub-agent nesting depth (1-based levels: a top-level sub-agent is level 1). 1 keeps sub-agents available but disables nesting; the default 5 allows nesting up to five levels deep. Values clamp to the range 1-100; non-finite values fall back to the default. Teammates, forks, and workflow-spawned agents never nest regardless of this setting. Overridable via --max-subagent-depth.",
            "type": "number",
-@@ -694,12 +669,3 @@
+@@ -694,12 +664,3 @@
 -        },
 -        "sessionTokenLimit": {
 -          "description": "The maximum number of tokens allowed in a session.",
@@ -282381,7 +283885,7 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
          },
          "skipWorkflowUsageWarning": {
            "description": "Suppress the one-time Workflow tool usage banner that describes the QWEN_CODE_MAX_TOKENS_PER_WORKFLOW env knob. The banner fires at most once per session regardless of this setting.",
-@@ -707,14 +673,9 @@
+@@ -707,14 +668,9 @@
            "default": false
          },
          "skipLoopDetection": {
@@ -282397,7 +283901,7 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
          },
          "skipStartupContext": {
            "description": "Avoid sending the workspace startup context at the beginning of each session.",
-@@ -873,27 +834,6 @@
+@@ -873,27 +829,6 @@
            "description": "Whether to load memory files from include directories.",
            "type": "boolean",
            "default": false
@@ -282425,7 +283929,7 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
          },
          "fileFiltering": {
            "description": "Settings for git-aware file filtering.",
-@@ -928,18 +868,12 @@
+@@ -928,18 +863,12 @@
              "enableFuzzySearch": {
                "description": "Enable fuzzy search when searching for files.",
                "type": "boolean",
@@ -282444,7 +283948,7 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
      "memory": {
        "description": "Settings for managed auto-memory.",
        "type": "object",
-@@ -1095,15 +1029,14 @@
+@@ -1095,15 +1024,14 @@
                  },
                  "thinking": {
                    "description": "Provider/API-level thinking controls for the AUTO classifier.",
@@ -282462,7 +283966,7 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
                }
              },
              "hints": {
-@@ -1311,26 +1244,11 @@
+@@ -1311,26 +1239,11 @@
          },
          "useBuiltinRipgrep": {
            "description": "Use the bundled ripgrep binary. When set to false, the system-level \"rg\" command will be used instead. This setting is only effective when useRipgrep is true.",
@@ -282489,7 +283993,7 @@ diff --git a/packages/vscode-ide-companion/schemas/settings.schema.json b/packag
            "type": "object",
            "properties": {
              "enabled": {
-@@ -3411,17 +3329,12 @@
+@@ -3411,17 +3324,12 @@
          },
          "todoStopGuard": {
            "description": "Allow daemon and ACP sessions to continue an unfinished top-level Todo list for at most two consecutive primary-model calls without new user input. Mid-turn user input starts a fresh two-attempt stage. Disabled in safe, bare, and Approval plan modes.",
