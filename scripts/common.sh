@@ -61,25 +61,49 @@ validate_release_lock() {
   ' "${lock_path}" >/dev/null || die "Release lock violates its exact schema or one-mode identity contract"
 }
 
-# The archive has exactly ONE name, deliberately carrying no release identity.
-# A name derived from release state invites a gate that asserts the
-# derivation, and any such gate reachable from the build wedges the release
-# loop: seal() advances implementation_commit at the FIRST round of an
-# input-changing release, while the bundle that could satisfy an archive
-# assertion exists only after the LAST round converges — a failure adoption
-# cannot repair. The commit already lives in the lock beside the hash, so a
-# derived name would duplicate information while buying that coupling. One
-# fixed name also means a release REPLACES the previous bundle (only after
-# proving the new one), so artifacts/ never accumulates stale tars for a
-# wrong restore to reach.
-readonly SERVICE_ARCHIVE_PATH="${PROJECT_DIR}/artifacts/agent-service-images.tar"
+# Every release's archive has its own name, and the name is the release:
+#
+#   artifacts/agent-service-images-<implementation_commit>-<service image>.tar
+#
+# with the service image ID's hex after `sha256:`. An archive is the only way
+# a release reaches another machine, because images do not reproduce across
+# hosts, so one name shared by every release let each release destroy the only
+# transport of the one before it. The implementation commit fixes the stack
+# lock, and with it every image the archive carries but the service's; the
+# service image is the one component a release adopts without advancing that
+# commit -- the loop's terminal repin -- so it is part of the name as well, and
+# two releases cannot share one. A re-bundle of the same release carries the
+# same images and replaces only its own archive, after proving the new one, the
+# way the backend's save-images.sh replaces its own version's.
+#
+# The name is derived, never recorded: the lock already holds both values, and
+# a second copy of them is what a gate asserting the derivation would grow back
+# from. No such gate may be reachable from the build. seal() advances
+# implementation_commit at the FIRST round of an input-changing release, while
+# the bundle exists only after the LAST round converges -- a failure adoption
+# cannot repair -- so the name is derived only by the post-convergence bundling
+# step and by the archive's consumers. The derivation reads the two identity
+# values and nothing else, so a lock that pins no archive yet still names the
+# file its bundle will be. Takes the lock explicitly, on the same terms as
+# validate_release_lock, so the release test harness proves it against copies.
+service_archive_path() {
+  local lock_path="${1:-${RELEASE_LOCK}}" commit service
+  commit="$(jq -er '.implementation_commit' "${lock_path}")" || \
+    die "The release lock names no implementation commit: ${lock_path}"
+  service="$(jq -er '.images.service' "${lock_path}")" || \
+    die "The release lock names no service image: ${lock_path}"
+  [[ "${commit}" =~ ^[0-9a-f]{40}$ && "${service}" =~ ^sha256:[0-9a-f]{64}$ ]] || \
+    die "The release lock's implementation commit or service image is malformed: ${lock_path}"
+  printf '%s/artifacts/agent-service-images-%s-%s.tar\n' \
+    "${PROJECT_DIR}" "${commit}" "${service#sha256:}"
+}
 
 # Fail closed on an unpinned, missing or byte-drifted archive before anything
-# consumes it. The pinned SHA256 is the archive's only trust anchor: a stale
-# bundle from an earlier release and a corrupt copy die identically on their
-# hash, and a bundle that hashes correctly cannot carry the wrong images,
-# because the hash is adopted only after the bundle's own OCI index is proved
-# against the pins.
+# consumes it. The name only finds the file the lock describes; the pinned
+# SHA256 is the archive's only trust anchor: a bundle copied in under the
+# wrong name and a corrupt copy die identically on their hash, and a bundle
+# that hashes correctly cannot carry the wrong images, because the hash is
+# adopted only after the bundle's own OCI index is proved against the pins.
 #
 # `archive: null` is that adoption not having happened yet. A lock names the
 # images this release built the moment they are pinned, and rounds may pass
@@ -101,15 +125,17 @@ require_pinned_archive() {
 }
 
 verify_service_archive() {
+  local archive
   require_pinned_archive
-  [[ -f "${SERVICE_ARCHIVE_PATH}" && ! -L "${SERVICE_ARCHIVE_PATH}" ]] || \
+  archive="$(service_archive_path)"
+  [[ -f "${archive}" && ! -L "${archive}" ]] || \
     die "The pinned release image archive is missing or not a regular file." \
-      "Expected: ${SERVICE_ARCHIVE_PATH}" \
+      "Expected: ${archive}" \
       "Cut it with ./release.sh on the machine that built this release."
-  printf '%s  %s\n' "$(release_value '.archive.sha256')" "${SERVICE_ARCHIVE_PATH}" | \
+  printf '%s  %s\n' "$(release_value '.archive.sha256')" "${archive}" | \
     sha256sum --check --strict >/dev/null || \
     die "The release image archive does not match its pinned SHA256." \
-      "Archive: ${SERVICE_ARCHIVE_PATH}"
+      "Archive: ${archive}"
 }
 
 # Prove the archive CONTAINS the release it claims to, without loading it.

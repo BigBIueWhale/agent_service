@@ -16,14 +16,17 @@ require_no_arguments "./scripts/restore-service-images.sh" "$@"
 check_host_tools_and_versions
 validate_release_lock
 
-# Bytes fail closed before Docker sees anything: the pinned SHA256 is the
-# archive's only trust anchor, so a stale bundle from an earlier release and
-# a corrupt copy die identically on their hash — there is no name-derived
-# second identity to trust or to drift.
+# Bytes fail closed before Docker sees anything. The archive is found by the
+# name the release lock derives -- its implementation commit and its service
+# image, so every release's archive keeps its own file -- but the name is not
+# trusted: the pinned SHA256 is the archive's only trust anchor, so a bundle
+# copied in under the wrong name and a corrupt copy die identically on their
+# hash.
 verify_service_archive
+archive="$(service_archive_path)"
 
 printf 'Loading the exact pinned component images from the verified local archive...\n'
-docker load --input "${SERVICE_ARCHIVE_PATH}"
+docker load --input "${archive}"
 
 # Loading proves nothing by itself; every image the archive claims to carry
 # must now be present under its pinned tag with its pinned ID. Any mismatch

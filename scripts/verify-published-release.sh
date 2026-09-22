@@ -15,7 +15,8 @@ require_published_release
 # archive is gitignored, so this runs where the release was cut or restored —
 # the same boundary the backend's archive discipline has.)
 verify_service_archive
-verify_service_archive_contents "${SERVICE_ARCHIVE_PATH}"
+archive="$(service_archive_path)"
+verify_service_archive_contents "${archive}"
 
 printf 'PUBLISHED RELEASE VERIFIED\n'
 printf 'remote https://github.com/BigBIueWhale/agent_service\n'

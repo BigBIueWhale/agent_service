@@ -1143,8 +1143,22 @@ The question is asked of the lock and not of whether the manifest file was stale
 on disk, so regenerating and committing the manifest with the change that moved
 it — a self-consistent tree — is still a release the loop can cut.
 `scripts/test-release.sh` proves the pin locations, the refusal to rewrite an
-ambiguous value, the seal decision, and the termination condition, and it runs
-as part of every `./build.sh`.
+ambiguous value, the seal decision, the termination condition, and the archive's
+name, and it runs as part of every `./build.sh`.
+
+Once the loop has converged, `./release.sh` bundles the five images it pinned and
+the two bases into one offline archive and pins its SHA-256 in the release lock's
+`archive` field. The archive is named by the release it carries,
+`artifacts/agent-service-images-<implementation commit>-<service image>.tar`, with
+the service image ID's hex after `sha256:`: the commit fixes the stack lock and
+every other image, and the service image is the one component a release adopts
+without advancing the commit. So every release's archive keeps its own file beside
+the others. That matters because images do not reproduce across hosts: an archive
+is the only way a release reaches another machine, and
+`./scripts/restore-service-images.sh` loads there the archive the checked-out
+release lock names, refusing it unless its hash is the pinned one. Bundling the
+same release again replaces only that release's archive, after proving the new
+one.
 
 Start both the pinned backend (if absent) and the agent service:
 

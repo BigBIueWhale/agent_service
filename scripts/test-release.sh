@@ -136,10 +136,10 @@ printf 'RELEASE_CONTRACT_OK pin-locations=proved unique-substitution=enforced am
 # ---------------------------------------------------------------------------
 # The release lock's exact schema includes the archive identity, and every
 # malformed shape is refused: a lock without the archive pin, one that
-# records an archive name (the name is a constant, not release state — a
-# recorded name is exactly what a derivation gate grows back from), and a
-# hash that is not a SHA256. The real checked-in lock must pass the same
-# gate.
+# records an archive name (the name is derived from the implementation commit
+# and the service image the lock already holds, never recorded — a recorded
+# copy is exactly what a derivation gate grows back from), and a hash that is
+# not a SHA256. The real checked-in lock must pass the same gate.
 # ---------------------------------------------------------------------------
 validate_release_lock >/dev/null || fail 'the checked-in release lock violates its own schema'
 lock_copy="${TEST_DIR}/release.lock.json"
@@ -147,10 +147,10 @@ jq 'del(.archive)' "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
 if (validate_release_lock "${lock_copy}") >/dev/null 2>&1; then
   fail 'a release lock without the archive identity was accepted'
 fi
-jq '.archive.name = "agent-service-images.tar"' \
+jq --arg name "$(basename "$(service_archive_path)")" '.archive.name = $name' \
   "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
 if (validate_release_lock "${lock_copy}") >/dev/null 2>&1; then
-  fail 'a release lock recording an archive name was accepted'
+  fail 'a release lock recording an archive name was accepted, even its own derived one'
 fi
 jq '.archive.sha256 = "not-a-hash"'   "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
 if (validate_release_lock "${lock_copy}") >/dev/null 2>&1; then
@@ -169,6 +169,48 @@ jq --arg sha "$(printf 'a%.0s' {1..64})" '.archive = {"sha256": $sha}' \
   "${PROJECT_DIR}/config/release.lock.json" >"${lock_copy}"
 (require_pinned_archive "${lock_copy}") >/dev/null ||
   fail 'a bundled archive was refused by the gate every consumer goes through'
+
+# ---------------------------------------------------------------------------
+# Every release's archive has its own name, derived from the two values that
+# identify the release: the implementation commit, which fixes the stack lock
+# and every image but the service's, and the service image, which a release
+# adopts without advancing that commit. So a second release never overwrites
+# the first one's archive, which would leave that release no way to reach
+# another machine. Proved on copies: the exact name; a new commit and a new
+# service image each move it; the archive pin does not, because the name is
+# the file a bundle of these images will be before one exists; and a lock
+# whose identity values are malformed names no file at all.
+# ---------------------------------------------------------------------------
+name_probe="${TEST_DIR}/archive-name.lock.json"
+probe_commit="$(printf '1%.0s' {1..40})"
+probe_service="$(printf '2%.0s' {1..64})"
+jq --arg commit "${probe_commit}" --arg service "sha256:${probe_service}" \
+  '.implementation_commit = $commit | .images.service = $service' \
+  "${PROJECT_DIR}/config/release.lock.json" >"${name_probe}"
+probe_name="$(service_archive_path "${name_probe}")" ||
+  fail 'a release lock with a valid identity named no archive'
+[[ "${probe_name}" == "${PROJECT_DIR}/artifacts/agent-service-images-${probe_commit}-${probe_service}.tar" ]] ||
+  fail "the archive name is not the release identity: ${probe_name}"
+jq --arg commit "$(printf '3%.0s' {1..40})" '.implementation_commit = $commit' \
+  "${name_probe}" >"${lock_copy}"
+[[ "$(service_archive_path "${lock_copy}")" != "${probe_name}" ]] ||
+  fail 'two implementation commits share an archive name; the later release would replace the earlier one'
+jq --arg service "sha256:$(printf '4%.0s' {1..64})" '.images.service = $service' \
+  "${name_probe}" >"${lock_copy}"
+[[ "$(service_archive_path "${lock_copy}")" != "${probe_name}" ]] ||
+  fail 'two service images of one implementation commit share an archive name; a service repin would replace the earlier release'
+jq '.archive = null' "${name_probe}" >"${lock_copy}"
+[[ "$(service_archive_path "${lock_copy}")" == "${probe_name}" ]] ||
+  fail 'the archive name depends on the archive pin; a lock that has not bundled yet would name another file than its bundle'
+for malformed in '.implementation_commit = "c85eca7"' \
+  '.implementation_commit = ("G" * 40)' \
+  '.images.service = ("2" * 64)' \
+  '.images.service = ("sha256:" + ("2" * 63))'; do
+  jq "${malformed}" "${name_probe}" >"${lock_copy}"
+  if (service_archive_path "${lock_copy}") >/dev/null 2>&1; then
+    fail "a release lock with a malformed identity (${malformed}) named an archive"
+  fi
+done
 
 # ---------------------------------------------------------------------------
 # A release that changes any build input advances implementation_commit at
@@ -335,17 +377,18 @@ if (verify_service_archive_contents "${probe_tar}") >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# Deliberately absent: any assertion about the tar under artifacts/. This
+# Deliberately absent: any assertion about a tar under artifacts/. This
 # harness is a build input and runs inside every build of the release loop,
-# where the tar on disk is legitimately the PREVIOUS release's bundle (the
-# new one is produced only after the loop converges, and mid-loop the lock's
-# image pins have already moved past it). An on-disk check here is an
-# assertion about a post-convergence artifact from inside the loop — the
-# wedge class the advancing-release probe above proves refused. The tar is
-# verified where it is produced (./release.sh, before and after the pin is
-# adopted) and everywhere it is consumed (scripts/restore-service-images.sh,
+# where the release the lock names has legitimately no bundle yet (it is
+# produced only after the loop converges, and mid-loop the lock's image pins
+# have already moved past every tar on disk, each of which is an earlier
+# release's). An on-disk check here is an assertion about a post-convergence
+# artifact from inside the loop — the wedge class the advancing-release probe
+# above proves refused. The tar is verified where it is produced
+# (./release.sh, before and after the pin is adopted) and everywhere it is
+# consumed (scripts/restore-service-images.sh,
 # scripts/verify-published-release.sh) — every path that touches its bytes,
 # none of which run inside the build.
 # ---------------------------------------------------------------------------
 
-printf 'RELEASE_ARCHIVE_OK schema=exact identity=sha256-only contents=proved advancing-release=accepted termination=artifacts-excluded\n'
+printf 'RELEASE_ARCHIVE_OK schema=exact identity=sha256-only name=per-release contents=proved advancing-release=accepted termination=artifacts-excluded\n'

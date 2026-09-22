@@ -323,17 +323,22 @@ commit_sealed() {
 # build input, pinning the archive would change the inputs, which would
 # change the service image's baked SOURCE_COMMIT, which would change the
 # bundle bytes — a chase with no fixed point. The same ordering rule is why
-# the archive's NAME is a constant rather than derived from the release:
-# implementation_commit advances at the FIRST seal of an input-changing
-# release, the bundle exists only after the LAST build agrees, and a
-# build-input test once asserted the derivation between them — a failure the
-# loop cannot repair by adoption, wedging every release that changed source.
-# Nothing reachable from the build may assert anything about this bundle.
-# The release-test harness proves the exclusions and that ordering so they
-# cannot rot silently.
+# the archive's name, which is the release's own identity (see
+# service_archive_path), is derived here and by the archive's consumers and
+# nowhere else: implementation_commit advances at the FIRST seal of an
+# input-changing release, the bundle exists only after the LAST build agrees,
+# and a build-input test once asserted a derivation between them — a failure
+# the loop cannot repair by adoption, wedging every release that changed
+# source. Nothing reachable from the build may assert anything about this
+# bundle. The name is derived now, after the loop converged, from the lock
+# the converged build agreed with, so it names exactly the release this
+# bundle carries and no earlier release's archive is replaced. The
+# release-test harness proves the exclusions, that ordering and the
+# derivation so they cannot rot silently.
 bundle_release_archive() {
-  local staging component tag base
+  local archive staging component tag base
   local -a save_tags=()
+  archive="$(service_archive_path "${RELEASE_LOCK_PATH}")"
   install --directory --mode=0755 "${PROJECT_DIR}/artifacts"
   # The generic bases travel with the release. They are not components -- this
   # release did not build them and does not re-pin them -- but our images are
@@ -346,23 +351,23 @@ bundle_release_archive() {
     tag="$(lock_value "$(component_tag_path "${component}")")"
     save_tags+=("${tag}")
   done
-  printf 'Bundling the release archive: %s\n' "$(basename "${SERVICE_ARCHIVE_PATH}")"
-  staging="${SERVICE_ARCHIVE_PATH}.releasing"
+  printf 'Bundling the release archive: %s\n' "$(basename "${archive}")"
+  staging="${archive}.releasing"
   rm -f -- "${staging}"
   docker save --output "${staging}" "${save_tags[@]}" ||
     die "docker save failed; a release without its offline archive is not a release"
   # The bundle must contain exactly the images whose IDs this release just
   # pinned — verified from the tar's own manifest before anything is adopted
-  # and before the previous release's proven bundle is replaced.
+  # and before an earlier bundle of this same release is replaced.
   verify_service_archive_contents "${staging}" ||
     die "the freshly bundled archive disagrees with the pins this release wrote"
-  mv -- "${staging}" "${SERVICE_ARCHIVE_PATH}"
+  mv -- "${staging}" "${archive}"
   write_release_archive_pin "${RELEASE_LOCK_PATH}" \
-    "$(sha256_file "${SERVICE_ARCHIVE_PATH}")"
+    "$(sha256_file "${archive}")"
   # Re-read the adopted pin through the same gate every consumer uses, so a
   # release cannot end with an archive its own verifier would refuse.
   verify_service_archive
-  printf '  archive %s sha256 %s\n' "$(basename "${SERVICE_ARCHIVE_PATH}")" \
+  printf '  archive %s sha256 %s\n' "$(basename "${archive}")" \
     "$(json_value "${RELEASE_LOCK_PATH}" '.archive.sha256' | cut -c1-12)"
 }
 
@@ -392,7 +397,7 @@ require_release_lock_describes_its_own_tree() {
 }
 
 main() {
-  local round drift drifted_name drifted_id component_name
+  local round drift drifted_name drifted_id component_name archive_name
   check_host_tools_and_versions
   # Repinning while the stack is up would leave the running containers
   # describing a release the lock no longer names, and ./stop.sh would then
@@ -426,8 +431,8 @@ main() {
           "$(json_value "${RELEASE_LOCK_PATH}" ".images.${component_name}")"
       done
       printf '  commit   %s\n' "$(json_value "${RELEASE_LOCK_PATH}" '.implementation_commit')"
-      printf '  archive  artifacts/%s sha256:%s\n' \
-        "$(basename "${SERVICE_ARCHIVE_PATH}")" \
+      archive_name="$(basename "$(service_archive_path "${RELEASE_LOCK_PATH}")")"
+      printf '  archive  artifacts/%s sha256:%s\n' "${archive_name}" \
         "$(json_value "${RELEASE_LOCK_PATH}" '.archive.sha256')"
       printf 'Deploy it with ./start.sh; restore its images elsewhere with ./scripts/restore-service-images.sh.\n'
       printf 'Verify a checkout of this commit with ./build.sh.\n'
