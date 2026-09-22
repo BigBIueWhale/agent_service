@@ -301,11 +301,13 @@ The tool result it appends is bounded before it gets there: every result is held
 to one inline block where its model copy is made — the tool's output with every
 hook and reminder that joined it, measured once in the bytes of its NFC form —
 and the deployment's `parallel_tool_calls: false` holds the backend's call
-grammar to one call a turn, so a turn appends one result. A result past the
-bound keeps its start and its end, with a notice in the cut giving its true
-total and the `read_file` call that returns the cut lines from the session's
-copy of the whole, or the reason no copy could be kept; a send that finds a
-result past the bound refuses it as the defect it is rather than sending it.
+grammar to one call a turn, so a turn appends one result; a turn that carries
+more is refused where the client assembles it, as the deployment defect it is,
+and never cut down to one call. A result past the bound keeps its start and its
+end, with a notice in the cut giving its true total and the `read_file` call
+that returns the cut lines from the session's copy of the whole, or the reason
+no copy could be kept; a send that finds a result past the bound refuses it as
+the defect it is rather than sending it.
 There is no character division, `target // 8`, image-token guess, padding
 margin, local tokenizer, or tokenizer fallback anywhere in the compaction
 trigger, the outbound sizing, or the tool-result bound. If the tokenizer is

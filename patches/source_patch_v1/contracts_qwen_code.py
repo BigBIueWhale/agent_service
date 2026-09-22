@@ -5490,6 +5490,47 @@ def _validate_tool_result_bound_after(state: State) -> None:
         label=label,
         location=chat,
     )
+    # The fit's "one result a turn" rests on one call a turn. The deployment
+    # decides that -- every request asks for parallel_tool_calls: false and
+    # the backend's grammar stops after the first call -- and the client
+    # checks it where a turn is assembled: a turn that carries more is refused
+    # whole, before any of it is recorded, committed or run, as a defect of
+    # the serving side, naming the backend and its grammar. It is never cut
+    # down to one call.
+    count_path = "packages/core/src/core/tool-call-count.ts"
+    _require_all(
+        state,
+        count_path,
+        (
+            "export class ToolCallCountDefectError extends Error {",
+            "export function assertOneToolCallPerTurn(parts: readonly Part[]): void {",
+            "if (calls.length <= 1) return;",
+            "throw new ToolCallCountDefectError(",
+            "\"parallel_tool_calls: false, and the vLLM backend's Qwen structural-tag \" +",
+            "'model slip; none of these calls was run or added to the conversation. ' +",
+        ),
+        label=label,
+    )
+    for absent in ("calls.slice(0, 1)", "calls[0]", ".slice(0, 1)"):
+        forbid_text(state, count_path, absent, label=label)
+    _require_ordered(
+        chat_source,
+        (
+            "if (streamError) throw streamError.error;",
+            "assertOneToolCallPerTurn(consolidatedHistoryParts);",
+            "await this.chatRecordingService.recordAssistantTurn({",
+            "      this.history.push({",
+            "const committedCalls = consolidatedHistoryParts.filter(",
+        ),
+        label=label,
+        location=chat,
+    )
+    require_text(state, "packages/core/src/index.ts", "export * from './core/tool-call-count.js';", label=label)
+    for path, case in (
+        ("packages/core/src/core/geminiChat.test.ts", "refuses a turn that carries two tool calls, as the deployment defect it is"),
+        ("packages/core/src/core/tool-call-count.test.ts", "refuses a turn with two calls as a deployment defect, naming the backend and its grammar"),
+    ):
+        require_text(state, path, case, label=label)
     client = _source(state, "packages/core/src/core/client.ts", label=label)
     adopt = client.split("async adoptHistory(contents: readonly Content[]): Promise<void> {", 1)
     _require(len(adopt) == 2, f"{label}: adoptHistory is missing from client.ts")
