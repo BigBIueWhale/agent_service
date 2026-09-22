@@ -3517,10 +3517,40 @@ def _validate_compaction_budget_after(state: State) -> None:
             "  declareStartupContext(\n    declaration: StartupContextDeclaration | undefined,\n  ): void {",
             "JSON.stringify(this.history[0]) !== JSON.stringify(declaration.content)",
             "  getStartupContext(): Content | undefined {",
-            "    this.preambleDeclaration = declaration;\n    // A new declaration is a new preamble, proved before the next turn.\n    this.declarationsVerified = false;",
+            "    // A new declaration is a new preamble, proved before the next turn.\n    this.preambleDeclaration = declaration;",
         ),
         label=label,
     )
+    # Tool declarations change after startup -- the agent tool re-declares
+    # itself when its subagent list finishes loading, and discovered or
+    # deferred tools are declared later -- so a proof is held to the preamble
+    # it measured, as the counter rendered it, and a turn whose preamble
+    # differs in any part is proved again before it is issued. A flag that a
+    # proof once ran says nothing about the declarations a chat sends later.
+    _require_ordered(
+        chat_source,
+        (
+            "private provenPreamble: string | undefined;",
+            "rendered: Pick<ChatGenerationConfig, 'tools' | 'systemInstruction'>,",
+            "const preambleProved = JSON.stringify({",
+            "tools: rendered.tools,",
+            "declared?.systemInstruction ?? rendered.systemInstruction,",
+            "repositoryDataBytes: declared?.repositoryDataBytes ?? 0,",
+            "if (this.provenPreamble === preambleProved) return;",
+            "const bare = await counted([]);",
+            "this.provenPreamble = preambleProved;",
+            "        countExactTextTokens,\n        { ...this.generationConfig, ...params.config },\n      );",
+        ),
+        label=label,
+        location=chat,
+    )
+    forbid_text(state, chat, "declarationsVerified", label=label)
+    for case in (
+        "proves an unchanged preamble once, however many turns send it",
+        "re-proves the preamble before the next turn when its tool declarations change",
+        "refuses the turn that would send re-declared tools past the share",
+    ):
+        require_text(state, chat_test, case, label=label)
     require_text(
         state,
         "packages/core/src/core/client.ts",

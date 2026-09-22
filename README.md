@@ -201,32 +201,34 @@ two derived from them:
 | `C`, a turn's generation room | derived from the fit | 69,509 tokens |
 | `T`, the compaction trigger | `W − C − D` | 180,347 tokens |
 
-`D` is a capacity, not a derivation: the system prompt and the tool
-declarations are texts this repo ships, and the window holds them before it
-holds any conversation. It is chosen here and then proved — the real turn
-preamble is counted by the served tokenizer before the first turn, and a
-deployment whose own preamble does not fit is refused at startup rather than
-part-way through a session; each compaction's preflight holds what its
-directive adds to the same share. The proof counts this deployment's turn
+`D` is a capacity, not a derivation: the system prompt and the tool declarations
+are texts this repo ships, and the window holds them before it holds any
+conversation. It is chosen here and then proved — the real turn preamble is
+counted by the served tokenizer before the first turn, and again before any
+later turn whose preamble has changed, as when a tool is re-declared after
+startup; a deployment whose own preamble does not fit is refused at startup
+rather than part-way through a session, and a preamble that grows past it is
+refused at the turn that would send it; each compaction's preflight holds what
+its directive adds to the same share. The proof counts this deployment's turn
 preamble with the Git snapshot's repository values left out — 7,748 tokens,
 rendered by the served template and counted by the served tokenizer — and the
 startup context that opens every history with its workspace data left out, 46
-more. It adds the most bytes the data left out may hold, capped in the NFC
-form the tokenizer reads, as the most tokens they can cost: 1,920 for the
-snapshot's branch, status and commits, and 1,280 for the startup context's
-environment lines and folder listing. That is a bound of 10,994, the same for
-every repository and every workspace, so neither can make a deployment refuse
-to start, with 1,294 left for the prompt and the declarations to grow into.
-Each run of data sits between fixed lines at a boundary no token spans, so
-the context costs its fixed text plus each run's own tokens exactly; counted
-through the served path, it does. The startup context is kept whole at the
-head of every history a compaction builds, never summarized and rebuilt, so
-nothing can fail to put it back. In the compaction shape, without a snapshot,
-the preamble is 3,358 before the 548 its directive adds. `F` is proved against
-the served template too: a user message, an assistant turn and a tool result,
-each counted with the request and without it, less its content counted
-alone. The served template frames them in 5, 10 and 24 tokens, the last with
-the markup of the call it answers.
+more. It adds the most bytes the data left out may hold, capped in the NFC form
+the tokenizer reads, as the most tokens they can cost: 1,920 for the snapshot's
+branch, status and commits, and 1,280 for the startup context's environment
+lines and folder listing. That is a bound of 10,994, the same for every
+repository and every workspace, so neither can make a deployment refuse to
+start, with 1,294 left for the prompt and the declarations to grow into. Each
+run of data sits between fixed lines at a boundary no token spans, so the
+context costs its fixed text plus each run's own tokens exactly; counted through
+the served path, it does. The startup context is kept whole at the head of every
+history a compaction builds, never summarized and rebuilt, so nothing can fail
+to put it back. In the compaction shape, without a snapshot, the preamble is
+3,358 before the 548 its directive adds. `F` is proved against the served
+template too: a user message, an assistant turn and a tool result, each counted
+with the request and without it, less its content counted alone. The served
+template frames them in 5, 10 and 24 tokens, the last with the markup of the
+call it answers.
 
 `M` is the one declared magnitude and is openly a policy: it is the most any
 single block placed inline may be — one tool result, one `read_file` page, one

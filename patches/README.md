@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `67e7666b46343e9847b8deea735c3a5f87bae863a13bdff25f55fc31c7603ce6`
+- Review-diff SHA-256: `99c4a8634c7cd511748c327fec84cbf5977a9a898ae4de55fb89987a59e1d276`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `29a76495af3c73d0150fcfd2235f2e28eded25910bb42bdcb610650020f1d407`
+- Transformer-manifest SHA-256: `f303bacb0b7fb9e2ca34476e45d95ed9354ae1f880131df37dd733d219f0fc78`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -69,22 +69,22 @@ notices, and its parent is told the assignment is unfinished.
 
 ## Context and instructions
 
-The context partition spends the window exactly, from three declared
-quantities. `D`, the static preamble, is 3W/64 — 12,288 tokens at 262,144 — a
-declared capacity rather than a derivation: the system prompt and the tool
-declarations are texts this repo ships, so the turn preamble is counted
-exactly against it by the served tokenizer before the first turn, with the Git
-snapshot's repository values bounded by their byte caps rather than counted,
-and so is the startup context that opens every history, its environment lines
-and folder listing bounded the same way; a preamble that does not fit is a
-startup refusal naming shorten-or-deploy-larger; each compaction's preflight
-holds what its directive adds to the same share. The startup context is kept
-whole at the head of every history a compaction builds rather than rebuilt
-after it, so it is in the candidate the compaction counts and cannot go
-missing. `M`, one inline block, is W/8 bytes — 32,768 — the one declared
-magnitude and openly a policy: it is the most any single block placed
-inline may be, and anything larger is kept whole in a file and paged back
-rather than shortened. `F`, the per-message framing, is the 61 bytes the served
+The context partition spends the window exactly, from three declared quantities.
+`D`, the static preamble, is 3W/64 — 12,288 tokens at 262,144 — a declared
+capacity rather than a derivation: the system prompt and the tool declarations
+are texts this repo ships, so the turn preamble is counted exactly against it by
+the served tokenizer before the first turn, and again before any later turn
+whose preamble has changed, with the Git snapshot's repository values bounded by
+their byte caps rather than counted, and so is the startup context that opens
+every history, its environment lines and folder listing bounded the same way; a
+preamble that does not fit is a startup refusal naming shorten-or-deploy-larger;
+each compaction's preflight holds what its directive adds to the same share. The
+startup context is kept whole at the head of every history a compaction builds
+rather than rebuilt after it, so it is in the candidate the compaction counts
+and cannot go missing. `M`, one inline block, is W/8 bytes — 32,768 — the one
+declared magnitude and openly a policy: it is the most any single block placed
+inline may be, and anything larger is kept whole in a file and paged back rather
+than shortened. `F`, the per-message framing, is the 61 bytes the served
 template wraps around one message at its widest, declared here and verified
 against the template rather than copied from it.
 
