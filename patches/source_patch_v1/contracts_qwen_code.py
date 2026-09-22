@@ -4469,18 +4469,31 @@ def _validate_incomplete_generation_after(state: State) -> None:
 
     # One predicate decides it, in core, so the main line and every subagent
     # answer the question the same way. STOP is the only self-ended terminal.
+    # A terminal carries what its generation was issued with by construction:
+    # it is made in one place, which refuses a finished generation without its
+    # served counts or its window, so no description can name a limit
+    # without the numbers. The one absence left is a turn with no terminal.
     turn_source = _require_all(
         state,
         turn,
         (
-            "export function describeIncompleteGeneration(",
-            "reason: FinishReason | undefined,",
-            "issued?: IssuedGeneration,",
-            "export function issuedGeneration(",
+            "export interface GenerationTerminal {\n"
+            "  reason: FinishReason;\n"
+            "  issued: IssuedGeneration;\n"
+            "}",
+            "export function generationTerminal(",
+            "): GenerationTerminal {",
+            "    throw new Error(\n"
+            "      `A finished generation carries its terminal reason and its served prompt "
+            "and output counts, on a route that declares its context window;",
+            "export function describeIncompleteGeneration(\n"
+            "  terminal: GenerationTerminal | undefined,\n"
+            "  turn: number,\n"
+            "): string | null {",
             # The limit the model is told about is read from the rule that
             # sets it, not restated as arithmetic beside it, so the sentence
             # cannot drift from the partition.
-            "turnOutputLimit(partitionContextWindow(issued.window))",
+            "turnOutputLimit(partitionContextWindow(terminal.issued.window))",
         ),
         label=label,
     )
@@ -4488,13 +4501,21 @@ def _validate_incomplete_generation_after(state: State) -> None:
         turn_source,
         (
             "export function describeIncompleteGeneration(",
-            "if (reason === FinishReason.STOP) {",
+            "if (terminal?.reason === FinishReason.STOP) {",
             "return null;",
-            "reason ?? 'no terminal reason'",
+            "terminal?.reason === FinishReason.MAX_TOKENS",
+            "terminal?.reason ?? 'no terminal reason'",
         ),
         label=label,
         location=turn,
     )
+    for retired in (
+        "issued?: IssuedGeneration",
+        "IssuedGeneration | undefined",
+        "export function issuedGeneration(",
+        "issued !== undefined",
+    ):
+        forbid_text(state, turn, retired, label=label)
 
     # The session's success path is gated on it, and the reason it carries is
     # the one the last generation reported, in whichever loop produced it.
@@ -4502,26 +4523,28 @@ def _validate_incomplete_generation_after(state: State) -> None:
         state,
         cli,
         (
-            "let lastGenerationFinishReason: GeminiFinishedEventValue['reason'];",
-            "let lastGenerationUsage: GeminiFinishedEventValue['usageMetadata'];",
-            "const incompleteGeneration = describeIncompleteGeneration(",
-            "                issuedGeneration(\n                  lastGenerationUsage,",
+            "let lastGenerationTerminal: GenerationTerminal | undefined;",
+            "const incompleteGeneration = describeIncompleteGeneration(\n"
+            "                lastGenerationTerminal,\n"
+            "                turnCount,\n"
+            "              );",
             "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
         ),
         label=label,
     )
     _require(
-        cli_source.count("lastGenerationUsage = event.value.usageMetadata;") == 2,
-        f"{label}: the main-turn and drain loops do not both record the served usage the terminal reason belongs to",
+        cli_source.count(
+            "lastGenerationTerminal = generationTerminal(\n"
+        ) == 2
+        and cli_source.count("event.value.usageMetadata,\n") == 2,
+        f"{label}: the main-turn and drain loops do not both record the terminal with the served usage it belongs to",
     )
     _require(
-        cli_source.count("lastGenerationFinishReason = event.value.reason;") == 2,
-        f"{label}: the main-turn and drain loops do not both record the terminal reason",
+        cli_source.count("lastGenerationTerminal = undefined;") == 2,
+        f"{label}: a turn head can inherit a stale terminal, or its numbers",
     )
-    _require(
-        cli_source.count("lastGenerationFinishReason = undefined;") == 2,
-        f"{label}: a turn head can inherit a stale terminal reason",
-    )
+    for retired in ("lastGenerationFinishReason", "lastGenerationUsage", "issuedGeneration("):
+        forbid_text(state, cli, retired, label=label)
     _require_ordered(
         cli_source,
         (
@@ -4550,8 +4573,10 @@ def _validate_incomplete_generation_after(state: State) -> None:
         state,
         agent_core,
         (
-            "let roundFinishReason: FinishReason | undefined;",
-            "roundFinishReason = chunkFinishReason;",
+            "let roundTerminal: GenerationTerminal | undefined;",
+            "roundTerminal = generationTerminal(\n"
+            "                chunkFinishReason,\n"
+            "                resp.usageMetadata,",
             "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
             "// No tool calls and a self-ended generation \u2014 this is the",
         ),
@@ -4560,18 +4585,16 @@ def _validate_incomplete_generation_after(state: State) -> None:
     _require_ordered(
         agent_core_source,
         (
-            "roundFinishReason = undefined;",
-            "roundFinishReason = chunkFinishReason;",
-            "describeIncompleteGeneration(",
-            "roundFinishReason,",
-            "this.reasoningTurnsUsed,",
-            "issuedGeneration(",
-            "lastUsage,",
+            "roundTerminal = undefined;",
+            "roundTerminal = generationTerminal(",
+            "describeIncompleteGeneration(roundTerminal, this.reasoningTurnsUsed)",
             "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
         ),
         label=label,
         location=agent_core,
     )
+    for retired in ("roundFinishReason", "issuedGeneration("):
+        forbid_text(state, agent_core, retired, label=label)
     require_text(
         state,
         agent_types,
@@ -4607,6 +4630,13 @@ def _validate_incomplete_generation_after(state: State) -> None:
     )
     require_text(
         state,
+        turn_test,
+        "refuses a finished generation with %s rather than naming no numbers",
+        label=label,
+    )
+    forbid_text(state, turn_test, "names no numbers it was not served", label=label)
+    require_text(
+        state,
         cli_test,
         "reports a run whose last generation was stopped by $name as incomplete",
         label=label,
@@ -4621,6 +4651,18 @@ def _validate_incomplete_generation_after(state: State) -> None:
         state,
         cli_test,
         "reads the last generation of the run, not an earlier completed one",
+        label=label,
+    )
+    require_text(
+        state,
+        cli_test,
+        "names what a limit-stopped last generation was issued with",
+        label=label,
+    )
+    require_text(
+        state,
+        cli_test,
+        "does not carry the terminal of an earlier turn into a turn that reported none",
         label=label,
     )
     # A fixture that leaves the terminal reason unstated would exercise the
@@ -4818,7 +4860,7 @@ def _validate_final_message_slip_after(state: State) -> None:
         label=label,
     )
     _require(
-        cli_source.count("lastGenerationFinishReason === FinishReason.STOP") == 2,
+        cli_source.count("lastGenerationTerminal?.reason === FinishReason.STOP") == 2,
         f"{label}: both reasoning loops must read a slip only from a turn the "
         "model ended itself",
     )
@@ -4836,7 +4878,7 @@ def _validate_final_message_slip_after(state: State) -> None:
         cli_source,
         (
             "return emitLoopDetectedResult();",
-            "lastGenerationFinishReason === FinishReason.STOP",
+            "lastGenerationTerminal?.reason === FinishReason.STOP",
             "? describeFinalMessageSlip(turnText)",
             "await noticeForFinalMessageSlip(",
             "hasUnsentContinuation = true;",
@@ -7843,7 +7885,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         rationale=(
             "Only a self-ended STOP can satisfy the completed-generation predicate. Missing or "
             "externally stopped terminals retain an explicit incomplete state in root and child "
-            "reasoning loops and UI."
+            "reasoning loops and UI. A terminal always carries the served counts and the window its "
+            "generation was issued with, so one stopped at its limit is always described with them."
         ),
         removal_condition=(
             "Upstream distinguishes self-ended generation from a severed response and preserves that "
