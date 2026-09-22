@@ -34,7 +34,7 @@ The fixed stack is:
 | Served name | `qwen3.8-27b-nvfp4-k8v4` |
 | vLLM source | `9df9b0b0a1816b6d0d0f6ecd0da563cc37fd72f5` |
 | vLLM runtime | `0.27.2rc1.dev106+g9df9b0b0a`, socket-isolated non-root v21 profile |
-| Backend image target | `qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v25`, pinned by `config/stack.lock.json` |
+| Backend image target | `qwen38-vllm:qwen38-27b-nvfp4-k8v4-runtime-v26`, pinned by `config/stack.lock.json` |
 | Served template | Derived and pinned by the backend repository, and included in its image |
 | Weights | Mixed NVFP4/FP8, Compressed Tensors |
 | KV cache | TurboQuant K8V4: FP8 keys, packed 4-bit values |
@@ -55,11 +55,11 @@ The fixed stack is:
 | Service listener | `127.0.0.1:8090` only |
 | Model listener | `127.0.0.1:8000` only |
 
-This source targets the corrected v25 backend. The image ID is adopted in both
+This source targets the corrected v26 backend. The image ID is adopted in both
 `config/stack.lock.json` and `src/config.rs`, and is the ID the backend's own
 build verified as reproducible. The launch profile and cache volume remain v21,
 because they track the backend's `PROFILE_VERSION`, which did not move; the
-image profile is v25. The template is derived and hash-pinned in the backend,
+image profile is v26. The template is derived and hash-pinned in the backend,
 then covered by the adopted image identity. No separate template file is built
 by this service. The build-input and release locks are advanced only by
 `release.sh`, which seals the implementation and then builds it. Prior live
