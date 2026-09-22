@@ -237,8 +237,22 @@ def verify_prompts(
             "Explore is investigative in purpose, not mechanically read-only.",
             "Journal failure makes the tool call fail; changes are never silently reverted.",
             "PDF handling is local computation, not direct PDF vision.",
+            # Where the model puts its notes and deliverables decides whether
+            # they outlive the session, so what teardown keeps is stated in
+            # the model's words rather than the service's.
+            "`/workspace` is a read-write staged copy of the submitted folder. "
+            "Its final state is kept at session teardown.",
+            "`/artifacts` starts empty, is kept at session teardown,",
+            "`/tmp` is discarded at session teardown, as is anything written "
+            "outside `/workspace` and `/artifacts`; anything that must survive "
+            "belongs in one of them.",
         ],
     )
+    if "bundled" in deployment.lower():
+        raise ContractError(
+            "deployment contract says 'bundled': what session teardown keeps and "
+            "discards is stated once, in plain words"
+        )
     require_fragments(
         "QWEN instructions",
         instructions,

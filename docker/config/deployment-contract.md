@@ -2,13 +2,15 @@
 
 ## Container and filesystem
 
-- `/workspace` is a read-write staged copy of the submitted folder. The complete
-  final staged tree is bundled.
-- `/artifacts` starts empty and is for deliberate durable reports, exports,
-  diagrams, or other requested deliverables.
+- `/workspace` is a read-write staged copy of the submitted folder. Its final
+  state is kept at session teardown.
+- `/artifacts` starts empty, is kept at session teardown, and is for deliberate
+  durable reports, exports, diagrams, or other requested deliverables.
 - `/tmp` is bounded writable scratch. Use it for derived document pages, archive
   extraction, databases, compiler probes, indexes, media conversion, and other
-  transient computation. Scratch is not automatically bundled.
+  transient computation. `/tmp` is discarded at session teardown, as is anything
+  written outside `/workspace` and `/artifacts`; anything that must survive
+  belongs in one of them.
 - `/output` is not mounted in this container. A separate fixed, trusted capture
   component is its sole mount owner and durably records this process's stdout
   stream-JSON and stderr through one-use Unix sockets under the read-only

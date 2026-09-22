@@ -135728,7 +135728,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 + * the preamble, the probe word alone, and the framing of each probed kind,
 + * the tool result's with the call markup it is measured behind.
 + */
-+const DECLARED_PREAMBLE_TOKENS = 7_775;
++const DECLARED_PREAMBLE_TOKENS = 7_813;
 +const FRAMING_PROBE_TOKENS = 2;
 +type ProbedKind = 'message' | 'turn' | 'result';
 +const SERVED_FRAMING_TOKENS: Record<ProbedKind, number> = {
@@ -171181,28 +171181,28 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * The startup proof counts this deployment's own preamble -- the served
 + * template's rendering of the system message, the ten tool declarations and
 + * the generation prompt -- with the Git snapshot's repository values and the
-+ * turn budget's number left out, at 7,775 tokens, counted whole by the served
-+ * tokenizer. By where each token starts, that is 2,652 of system message,
++ * turn budget's number left out, at 7,813 tokens, counted whole by the served
++ * tokenizer. By where each token starts, that is 2,690 of system message,
 + * 4,878 of tool declarations and 245 of the template's own text. Counting
 + * each token once, in the piece it starts in, is what makes the parts sum to
 + * the whole: a token can span two pieces, so pieces counted one at a time
 + * need not add up to the count that governs. The startup context opens every
 + * history, so it is counted too, with its workspace data left out: 46 more,
-+ * its template framing included, for 7,821.
++ * its template framing included, for 7,859.
 + *
 + * The proof then adds the most bytes the data left out can hold, as the most
 + * tokens it can cost: the Git snapshot's values, 128 + 1,024 + 768 = 1,920
 + * (`GIT_SNAPSHOT_REPOSITORY_BYTES`), the startup context's environment lines
 + * and folder listing, 256 + 1,024 = 1,280 (`STARTUP_CONTEXT_WORKSPACE_BYTES`),
 + * and the turn budget's number, at most 16 digits of one token each
-+ * (`QWEN38_TURN_BUDGET_BYTES`). That is a bound of 11,037 that no repository,
-+ * workspace or budget changes. The 1,251 tokens left are headroom for the
++ * (`QWEN38_TURN_BUDGET_BYTES`). That is a bound of 11,075 that no repository,
++ * workspace or budget changes. The 1,213 tokens left are headroom for the
 + * prompt and the declarations to grow into -- most of one more declaration
 + * the size of `run_shell_command`, the largest at 1,479. Exceeding it is a
 + * startup refusal, not a silent overrun.
 + *
 + * `D` scales with the window and the preamble does not: `floor(3W/64)` first
-+ * reaches 11,037 at a 235,456-token window, so no smaller window holds this
++ * reaches 11,075 at a 236,267-token window, so no smaller window holds this
 + * preamble. A 131,072-token deployment of this same preamble refuses at
 + * startup, which is the check working rather than the partition failing.
 + */

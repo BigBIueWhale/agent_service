@@ -243,6 +243,53 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             ):
                 MODULE.verify(paths)
 
+    def test_rejects_a_contract_that_misstates_what_teardown_keeps_even_if_resealed(
+        self,
+    ) -> None:
+        # Session teardown keeps the final /workspace and /artifacts and
+        # discards everything else, /tmp included. A contract that says less,
+        # or says it again as "bundled", is refused even when resealed.
+        source = self.paths[4].read_text(encoding="utf-8")
+        for old, new, refusal in (
+            (
+                "Its final\n  state is kept",
+                "Its initial\n  state is kept",
+                "missing canonical fragment",
+            ),
+            (
+                "`/artifacts` starts empty, is kept at session teardown, and is",
+                "`/artifacts` starts empty and is",
+                "missing canonical fragment",
+            ),
+            (
+                "`/tmp` is discarded at session teardown",
+                "`/tmp` is kept at session teardown",
+                "missing canonical fragment",
+            ),
+            (
+                "belongs in one of them.\n",
+                "belongs in one of them. Scratch is not automatically bundled.\n",
+                "deployment contract says 'bundled'",
+            ),
+        ):
+            with self.subTest(new=new), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                resealed = source.replace(old, new)
+                self.assertNotEqual(source, resealed)
+                deployment_path = root / "deployment-contract.md"
+                deployment_path.write_text(resealed, encoding="utf-8")
+                contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+                contract["components"]["deployment_contract_sha256"] = MODULE.sha256(
+                    deployment_path.read_bytes()
+                )
+                contract_path = root / "contract.json"
+                contract_path.write_text(
+                    json.dumps(contract, indent=2) + "\n", encoding="utf-8"
+                )
+                paths = [contract_path, *self.paths[1:4], deployment_path, *self.paths[5:]]
+                with self.assertRaisesRegex(MODULE.ContractError, refusal):
+                    MODULE.verify(paths)
+
     def test_rejects_extra_native_tool(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
