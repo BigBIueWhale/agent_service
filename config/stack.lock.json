@@ -53,7 +53,7 @@
     "image_tag": "qwen38-docker-broker:1.1.0",
     "image_id": "sha256:f2203aa3fe7dda3b03d814efe155efc2d77bf4b36e1dd807d977c27b09f448c2",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
-    "policy_sha256": "a5f0ffef3e48dc54bcb22865d1410528f3566d346b103be6c284ea571e51d4a3",
+    "policy_sha256": "5abd7e14a85057d3992394d196fc477c015c9aa93f6b503acfa4e02ba49267b2",
     "source_sha256": "80b137e1e52b75e7da629361f44f49b7f4d9051021531053c0d27eba608e05f9",
     "memory": "128m",
     "memory_swap": "128m",
@@ -61,7 +61,7 @@
   },
   "relay": {
     "image_tag": "qwen38-fixed-relay:1.0.0",
-    "image_id": "sha256:0e1c8be9644e7a5e09b1fbdf697be22c11b6c106b9cd167d3f046f78f9aa3657",
+    "image_id": "sha256:568e6bc1ae204600c030b98b472f20ebc35706bdfb7e5218547378579912c8f2",
     "source_sha256": "051dc82af7b9b12e229f9a127183d051ef47a6d44f03d99346762e84bd69c815",
     "sandbox": "landlock-net-v4+seccomp-socket-v2",
     "memory": "32m",

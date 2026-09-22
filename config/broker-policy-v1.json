@@ -36,7 +36,7 @@
   },
   "relay": {
     "image_tag": "qwen38-fixed-relay:1.0.0",
-    "image_id": "sha256:0e1c8be9644e7a5e09b1fbdf697be22c11b6c106b9cd167d3f046f78f9aa3657",
+    "image_id": "sha256:568e6bc1ae204600c030b98b472f20ebc35706bdfb7e5218547378579912c8f2",
     "sandbox": "landlock-net-v4+seccomp-socket-v2",
     "memory": "32m",
     "memory_swap": "32m",
