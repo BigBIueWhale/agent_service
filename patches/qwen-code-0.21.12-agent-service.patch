@@ -300,6 +300,41 @@ diff --git a/docs/design/2026-06-24-stream-inactivity-timeout-design.md b/docs/d
 -7. **Orphaned SDK `next()` rejection** → after the watchdog aborts the request,
 -   a later SDK `AbortError` rejection from the pending `next()` is swallowed and
 -   does not emit `unhandledRejection`.
+diff --git a/docs/design/2026-07-11-managed-memory-microcompaction.md b/docs/design/2026-07-11-managed-memory-microcompaction.md
+--- a/docs/design/2026-07-11-managed-memory-microcompaction.md
++++ /dev/null
+@@ -1,31 +0,0 @@
+-# Managed Memory Microcompaction Preservation
+-
+-## Problem
+-
+-Managed-memory topic files are loaded lazily with `read_file`. Microcompaction currently treats those results like ordinary tool output and replaces older content with `[Old tool result content cleared]`. The memory index remains available, and recent fixes let a later `read_file` return real bytes again, but the active model is not guaranteed to notice that it must reload the memory.
+-
+-Issue #6487 also reports a stale index after `/remember`; PR #6497 already owns that part. This design only addresses managed-memory content removed by microcompaction.
+-
+-## Chosen design
+-
+-Add a narrow `MicrocompactOptions` callback that identifies `read_file` paths whose successful results must be preserved. Before building idle, forced, or size-based clearing plans, microcompaction correlates each response with its request-side `file_path` and removes protected results from the compactable set. Other tools, ordinary file reads, errors, and responses whose path cannot be resolved retain the current behavior.
+-
+-Every production microcompaction entry point supplies the same predicate:
+-
+-- pre-send idle and size-based compaction
+-- `/compress-fast`
+-- memory-pressure history compaction
+-
+-The predicate recognizes project, user, and team managed-memory roots using realpath-aware containment. Symlinks that escape a managed root are not protected.
+-
+-## Why this level
+-
+-Injecting every loaded memory body into the system instruction would make memory permanently consume context and would replace the existing index-plus-lazy-read design. Reattaching every memory file after full compaction needs a separate token budget and restoration policy. Preserving only managed-memory reads from microcompaction directly fixes the reproduced clearing behavior with a bounded change and leaves full compaction as the existing hard context-reduction boundary.
+-
+-Full compaction is therefore intentionally not byte-preserving. Its summary sees the pre-compaction memory content, `MEMORY.md` indexes remain in the system instruction, and the file-read cache is cleared so the model can reload exact bytes. This change guarantees preservation only across microcompaction.
+-
+-## Risk and tests
+-
+-Repeated reads of managed-memory files can retain multiple copies until full compaction. That is an intentional tradeoff: durable guidance is more important than reclaiming those tool-result tokens, while full compaction remains available as the hard cap.
+-
+-Tests cover project, user, and team roots; ordinary reads; symlink escapes; idle, forced, and size-based paths; mixed protected and compactable results; ambiguous or missing response IDs; and eviction metadata.
 diff --git a/docs/design/2026-07-11-tool-call-preparing-events.md b/docs/design/2026-07-11-tool-call-preparing-events.md
 --- a/docs/design/2026-07-11-tool-call-preparing-events.md
 +++ b/docs/design/2026-07-11-tool-call-preparing-events.md
@@ -421,6 +456,156 @@ diff --git a/docs/design/2026-07-14-chat-record-daemon-transcript-block-projecti
  Live emitters and the replay machine share update builders, so fields in `SessionUpdate` generated for the same semantic event must match.
  
  ### Explicitly Allowed Adapter Differences
+diff --git a/docs/design/2026-07-17-adaptive-tool-call-cap.md b/docs/design/2026-07-17-adaptive-tool-call-cap.md
+--- a/docs/design/2026-07-17-adaptive-tool-call-cap.md
++++ /dev/null
+@@ -1,146 +0,0 @@
+-# Adaptive per-turn tool-call cap
+-
+-Date: 2026-07-17
+-Status: Implemented
+-Area: `packages/core` loop detection
+-
+-## Problem
+-
+-The always-on per-turn tool-call cap (`model.maxToolCallsPerTurn`, default 100)
+-is a blunt circuit breaker: it halts the turn on the 101st tool call regardless
+-of whether the model is actually stuck or doing productive work. Large
+-multi-package implementation turns legitimately exceed 100 tool calls, so the
+-cap kills productive work — a false positive.
+-
+-Concrete case: session `80db472f-…` (qwen-code-x1, "Web Shell git status/diff
+-chip"). The `继续Phase 2` turn made exactly 100 tool calls and was hard-halted
+-mid-`npm run build` with no completion summary. Analysis of that turn and its
+-siblings:
+-
+-| turn | tool calls | distinct (tool,args) keys | max repeat of one key | max same-name streak |
+-| ---- | ---------- | ------------------------- | --------------------- | -------------------- |
+-| 7    | 96         | 96                        | 1                     | 7                    |
+-| 8    | 100        | 99                        | 2                     | 3                    |
+-| 9    | 95         | 95                        | 1                     | 7                    |
+-
+-Productive turns are highly diverse: no single `(tool, args)` call repeats more
+-than twice. A genuinely stuck turn repeats the same call many times.
+-
+-## Design
+-
+-The behavior depends on whether `maxToolCallsPerTurn` was **explicitly
+-configured** (tracked by `Config.isMaxToolCallsPerTurnExplicit()`):
+-
+-- **Explicit value `N`** → a **hard cap** (the released contract): the turn
+-  halts on the call that exceeds `N`, with no adaptive extension. This preserves
+-  backward compatibility — a user who set the value to bound unattended cost
+-  still gets exactly that bound. (v0.19.10 shipped the cap as a hard cap; an
+-  earlier iteration of this PR multiplied explicit values by 3, which was a
+-  breaking change — reverted.)
+-- **Default (unset, `S = 100`)** → **adaptive**: distinguish a productive long
+-  turn from a stuck one using a repetition signal, and only hard-halt the latter
+-  (plus an absolute backstop). Modern models legitimately make hundreds of calls
+-  per task, so the default must not hard-halt productive long turns.
+-
+-Two thresholds for the adaptive (default) cap:
+-
+-- **Soft cap `S`** (100): when the turn exceeds `S` tool calls, halt only if a
+-  stuck-repetition signal is present; otherwise treat the turn as productive and
+-  let it continue.
+-- **Hard cap `S * ADAPTIVE_CAP_HARD_MULTIPLIER`** (multiplier 10 → 1000):
+-  absolute backstop. Halt regardless of repetition once exceeded, so a runaway
+-  that varies arguments on every call (which no repetition signal catches) is
+-  still bounded. The multiplier is high enough that hundreds-of-calls productive
+-  turns are not false-positived.
+-
+-Stuck-repetition signal: the maximum number of times any single `(tool, args)`
+-key has appeared in the turn reaches `GLOBAL_DUPLICATE_THRESHOLD` (6). This
+-reuses the existing global-duplicate semantics and has a wide safety margin
+-(productive turns observed ≤ 2).
+-
+-The same-name streak is intentionally NOT used as a gate signal: parallel tool
+-batches (e.g. several `read_file` of different files in one assistant message)
+-legitimately produce same-name streaks of 6–7, too close to the action
+-stagnation threshold of 8.
+-
+-### Always-on tracking
+-
+-The cap is always-on (not gated by `skipLoopDetection`), but the existing
+-`globalToolCallCounts` map is only maintained inside the gated heuristic path.
+-To keep the always-on cap independent of the gated path, the cap maintains its
+-own small always-on tracker:
+-
+-- `capKeyCounts: Map<string, number>` — per-`(tool,args)` counts this turn.
+-- `capMaxKeyRepeat: number` — running max of any single key's count.
+-
+-Maintained in `checkAlwaysOnSafeties` for every `ToolCallRequest`, cleared in
+-`reset()` and on `Retry` (consistent with how the heuristic path clears
+-`globalToolCallCounts` on retry).
+-
+-## Behavior matrix
+-
+-Explicit value `N` (hard cap):
+-
+-| total calls | result      |
+-| ----------- | ----------- |
+-| `≤ N`       | allow       |
+-| `> N`       | halt (hard) |
+-
+-Default (unset), soft cap `S = 100`, hard cap `H = 1000`:
+-
+-| total calls     | repetition signal    | result             |
+-| --------------- | -------------------- | ------------------ |
+-| `≤ S`           | any                  | allow              |
+-| `S < total ≤ H` | max key repeat `< 6` | allow (productive) |
+-| `S < total ≤ H` | max key repeat `≥ 6` | halt (stuck)       |
+-| `> H`           | any                  | halt (backstop)    |
+-
+-When `S ≤ 0` the cap is disabled (`getMaxToolCallsPerTurn()` returns
+-`Infinity`); behavior is unchanged (never fires).
+-
+-## Files changed
+-
+-- `packages/core/src/config/config.ts` — track `maxToolCallsPerTurnExplicit` +
+-  `isMaxToolCallsPerTurnExplicit()` getter.
+-- `packages/core/src/services/loopDetectionService.ts` — explicit-vs-default
+-  cap logic + always-on tracker + canonicalized tool-call key.
+-- `packages/core/src/services/loopDetectionService.test.ts` — explicit hard-cap
+-  regression + adaptive (default) cases.
+-- `packages/core/src/core/client.test.ts` — Stop-hook budget test (explicit
+-  hard cap).
+-- `packages/core/src/config/config.test.ts` — explicit-flag tracking.
+-- `packages/cli/src/config/settingsSchema.ts` — `maxToolCallsPerTurn`
+-  description.
+-- `docs/users/configuration/settings.md` — same.
+-
+-## Non-goals / follow-ups
+-
+-- Resuming a halted turn in place (architecturally infeasible: the turn is
+-  already returned when the dialog appears).
+-- Changing the loop-detected dialog UI (separate improvement).
+-- A separate config knob for the hard cap (derived from the soft cap; raising
+-  `maxToolCallsPerTurn` scales both).
+-- A recency-windowed or result-aware stuck signal. The current signal is a
+-  monotone per-turn max: the same `(tool, args)` repeated 6 times anywhere in
+-  the turn marks it stuck, even if those repeats are legitimate (e.g. re-running
+-  the same build/test after successive fixes). This is never a regression — the
+-  signal only acts past the soft cap, where the old cap always halted — but that
+-  productive class does not benefit. The "productive turns repeat ≤ 2" evidence
+-  comes from one session's three turns; revisit with a windowed signal if
+-  telemetry shows this false-stuck pattern.
+-- Telemetry differentiation of the two halt reasons. Soft-cap-stuck and
+-  hard-backstop both emit `TURN_TOOL_CALL_CAP`; a boolean/attribute on
+-  `LoopDetectedEvent` would tell which fired in the wild (useful for validating
+-  the 10× multiplier). The headless message already hedges to cover both.
+-- The ACP/daemon path (`recordDaemonToolCalls` in
+-  `packages/cli/src/acp-integration/session/Session.ts`) had its own blunt
+-  per-turn cap that did not use `LoopDetectionService` and always treated the
+-  value as a hard cap regardless of repetition. Landed in #8631: the daemon
+-  now mirrors the adaptive default (explicit value = hard cap; default =
+-  adaptive with the same stuck-repetition signal and hard backstop, reusing
+-  the thresholds and the `(tool,args)` repeat key exported from this module),
+-  and mirrors `checkGlobalDuplicate` on the same side of the
+-  `skipLoopDetection` gate as core (off by default, since this detector
+-  class is the false-positive-prone one; the always-on stuck signal still
+-  only acts past the soft cap, as argued above). The interactive TUI path
+-  that produced the reported false positive is fixed here.
 diff --git a/docs/design/2026-07-20-plan-mode-mid-turn-guidance.md b/docs/design/2026-07-20-plan-mode-mid-turn-guidance.md
 --- a/docs/design/2026-07-20-plan-mode-mid-turn-guidance.md
 +++ b/docs/design/2026-07-20-plan-mode-mid-turn-guidance.md
@@ -7799,6 +7984,78 @@ diff --git a/docs/plans/2026-05-14-auto-compaction-threshold-redesign.md b/docs/
 -- [ ] **Step 5: PR 描述统一脚本（可选）**
 -
 -如果 PR 是分批提交的，每个 PR 描述里链接 [docs/design/auto-compaction-threshold-redesign.md](docs/design/auto-compaction-threshold-redesign.md) 并标注 Phase / Task。
+diff --git a/docs/plans/2026-07-11-managed-memory-microcompaction.md b/docs/plans/2026-07-11-managed-memory-microcompaction.md
+--- a/docs/plans/2026-07-11-managed-memory-microcompaction.md
++++ /dev/null
+@@ -1,68 +0,0 @@
+-# Managed Memory Microcompaction Implementation Plan
+-
+-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+-
+-**Goal:** Keep successful managed-memory `read_file` results available across every microcompaction trigger without changing ordinary tool-result compaction.
+-
+-**Architecture:** A realpath-safe memory-path helper classifies project, user, and team memory. Microcompaction receives a pure preservation predicate, correlates response IDs to request paths, and excludes protected reads before calculating clear plans and metadata. The three production callers pass the same predicate.
+-
+-**Tech Stack:** TypeScript, Vitest, Node.js filesystem/path APIs.
+-
+-### Task 1: Specify preservation behavior
+-
+-**Files:**
+-
+-- Modify: `packages/core/src/services/microcompaction/microcompact.test.ts`
+-
+-1. Add helpers that build paired `read_file` calls/results with IDs and paths.
+-2. Add failing tests for idle/force and size-only preservation, ordinary reads, mixed/ambiguous IDs, and eviction metadata.
+-3. Run `cd packages/core && npx vitest run src/services/microcompaction/microcompact.test.ts` and confirm the new assertions fail because the option is ignored.
+-
+-### Task 2: Add safe memory path classification
+-
+-**Files:**
+-
+-- Modify: `packages/core/src/memory/paths.ts`
+-- Modify: `packages/core/src/memory/team-paths.test.ts`
+-
+-1. Add failing tests for project, user, team, outside, and symlink-escape paths.
+-2. Add a read/retention-specific helper that resolves the nearest existing real path and checks all three managed roots without changing write-approval semantics.
+-3. Run the path tests and confirm they pass.
+-
+-### Task 3: Exclude protected reads from clear plans
+-
+-**Files:**
+-
+-- Modify: `packages/core/src/services/microcompaction/microcompact.ts`
+-
+-1. Extend `MicrocompactOptions` with the preservation predicate.
+-2. Correlate `functionResponse.id` to request-side `read_file` paths.
+-3. Exclude a result only when its path mapping is unambiguous and every candidate path is protected.
+-4. Apply the filtered tool-reference set before idle/force and size-based planning so token counts and eviction metadata stay accurate.
+-5. Run the focused microcompaction tests and confirm they pass.
+-
+-### Task 4: Wire every production caller
+-
+-**Files:**
+-
+-- Modify: `packages/core/src/core/client.ts`
+-- Modify: `packages/core/src/core/geminiChat.ts`
+-- Modify: `packages/core/src/services/memoryPressureMonitor.ts`
+-- Test: corresponding focused test files
+-
+-1. Resolve relative paths against the configured target directory.
+-2. Pass the same managed-memory predicate through pre-send idle/size, `/compress-fast`, and memory-pressure compaction.
+-3. Add or update focused caller tests that verify the option reaches microcompaction.
+-4. Run all affected focused tests.
+-
+-### Task 5: Verify and review
+-
+-**Files:**
+-
+-- Review all changed files.
+-
+-1. Run Prettier on changed files.
+-2. Run focused tests for microcompaction, path classification, client, GeminiChat, and memory-pressure behavior.
+-3. Run `npm run build && npm run typecheck` from the worktree root.
+-4. Run an independent code review, fix important findings, and repeat focused verification.
+-5. Re-run the original E2E reproduction against `node dist/cli.js` after a fresh bundle.
 diff --git a/docs/plans/2026-08-08-selective-session-restore.md b/docs/plans/2026-08-08-selective-session-restore.md
 --- a/docs/plans/2026-08-08-selective-session-restore.md
 +++ b/docs/plans/2026-08-08-selective-session-restore.md
@@ -48815,7 +49072,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
  
  const restoredBackgroundAgentSessions = new WeakMap<Config, Set<string>>();
  
-@@ -150,46 +215,20 @@
+@@ -150,47 +215,19 @@
  
  import {
    normalizePartList,
@@ -48865,9 +49122,11 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +  const described = describeLoopType(loopType);
 +  const detail = described ? ` (${described})` : '';
    // The always-on guards run before the skipLoopDetection gate, so that
-   // setting can't disable them — don't suggest it for those loop types. The
-   // per-turn cap is also always-on but has its own knob, so it gets a
-@@ -200,12 +239,9 @@
+-  // setting can't disable them — don't suggest it for those loop types. The
+-  // per-turn cap is also always-on but has its own knob, so it gets a
+-  // dedicated hint instead of membership in this list.
++  // setting can't disable them — don't suggest it for those loop types.
+@@ -200,12 +237,9 @@
      loopType === LoopType.GLOBAL_TOOL_CALL_DUPLICATE ||
      loopType === LoopType.INVALID_TOOL_PARAMS_STAGNATION ||
      loopType === LoopType.REPEATED_TOOL_EXECUTION_FAILURE;
@@ -48883,7 +49142,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    return `Loop detection halted the run${detail}.${hint}`;
  }
  
-@@ -363,62 +399,22 @@
+@@ -363,62 +397,22 @@
    return true;
  }
  
@@ -48954,7 +49213,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
  }
  
  /**
-@@ -439,13 +435,6 @@
+@@ -439,13 +433,6 @@
    captureMonitorNotifications?: boolean;
    captureMonitorRegistrations?: boolean;
    onResultEmitted?: () => void;
@@ -48968,7 +49227,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    /**
     * Continue the most recent unfinished turn from chat history instead of
     * submitting `input` (which is ignored). No new user message enters the
-@@ -528,11 +517,10 @@
+@@ -528,11 +515,10 @@
        result: Parameters<JsonOutputAdapterInterface['emitResult']>[0],
      ): Promise<void> => {
        await settleBeforeTerminalOutput();
@@ -48983,7 +49242,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
        options.onResultEmitted?.();
      };
  
-@@ -551,7 +539,13 @@
+@@ -551,7 +537,13 @@
      );
  
      let turnCount = 0;
@@ -48998,7 +49257,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      let totalApiDurationMs = 0;
      const startTime = Date.now();
      let activeInteractionPromptId = prompt_id;
-@@ -609,19 +603,25 @@
+@@ -609,19 +601,25 @@
      const observeGoalRuntime = (runtime: GoalRuntime) => {
        goalRuntimeUnsubscribe ??= runtime.subscribe(emitGoalSnapshot);
      };
@@ -49036,7 +49295,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
        }
      };
      let goalHostUnbind: (() => void) | undefined;
-@@ -678,31 +678,25 @@
+@@ -678,31 +676,25 @@
              return;
            }
  
@@ -49087,7 +49346,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
          } finally {
            if (activeGoalTurn === turn) {
              activeGoalTurn = undefined;
-@@ -716,95 +710,63 @@
+@@ -716,95 +708,63 @@
        return goalTurnSettlement;
      };
      const finishGoalTurn = async (turn: HeadlessGoalTurn): Promise<void> => {
@@ -49233,7 +49492,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      };
  
      interface LocalQueueItem {
-@@ -818,7 +780,7 @@
+@@ -818,7 +778,7 @@
          tool_use_id?: string;
          status: BackgroundTaskStatus;
          usage?: {
@@ -49242,7 +49501,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
            tool_uses: number;
            duration_ms: number;
          };
-@@ -862,11 +824,90 @@
+@@ -862,11 +822,90 @@
        flushQueuedNotificationsToSdk(sdkOnlyMonitorQueue);
      };
  
@@ -49338,7 +49597,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      let pipeBroken = false;
      let workflowApprovalChannelRegistered = false;
      const stdoutErrorHandler = (err: NodeJS.ErrnoException) => {
-@@ -996,2175 +1037,2169 @@
+@@ -996,2175 +1035,2169 @@
      // the regular options.sendMessageType / UserQuery selection applies.
      let continueSendType: SendMessageType | null = null;
  
@@ -80332,7 +80591,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
 -            message: 'limit reached',
 +            error: {
 +              message:
-+                'Rendered request exceeds the configured session token limit',
++                'Exact request preflight refused admission',
 +            },
            },
          },
@@ -80342,7 +80601,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
 -          text: expect.stringContaining('Session token limit exceeded'),
 -        },
 +          text: expect.stringContaining(
-+            'Rendered request exceeds the configured session token limit',
++            'Exact request preflight refused admission',
 +          ),
 +        }),
        },
@@ -135348,7 +135607,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
                await arenaAgentClient.reportError('Loop detected');
              }
 -            this.lastApiCompletionTimestamp = Date.now();
-@@ -3313,12 +3202,25 @@
+@@ -3313,13 +3202,26 @@
              endCurrentInteraction('error', 'loop detected', 'loop_detected');
              this.cancelPendingMemoryPrefetch('no_safe_delivery_point');
              this.fireLoopDetectedStopFailure(loopType);
@@ -135373,7 +135632,10 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            // interruptions. Only the historically false-positive-prone heuristics
            // (content/thought repetition, read-file and action stagnation,
            // global-duplicate and alternating tool-call patterns) sit behind this
-           // flag. The precise consecutive-identical guard, shell inspection
+-          // flag. The precise consecutive-identical guard, shell inspection
+-          // stagnation guard, and per-turn cap run unconditionally in
++          // flag. The precise consecutive-identical guard and the shell
++          // inspection stagnation guard run unconditionally in
 @@ -3341,7 +3243,6 @@
              if (arenaAgentClient) {
                await arenaAgentClient.reportError('Loop detected');
@@ -201955,6 +202217,17 @@ diff --git a/packages/core/src/services/loopDetectionService.test.ts b/packages/
      it('should detect a loop on subsequent identical calls', () => {
        const event = createToolCallRequestEvent('testTool', { param: 'value' });
        for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD; i++) {
+@@ -237,8 +239,8 @@
+     it('always-on consecutive guard honors an in-session disable', () => {
+       service.disableForSession();
+       const event = createToolCallRequestEvent('stuck_tool', { p: 'same' });
+-      // Well past the threshold, but an explicit in-session disable suppresses
+-      // the consecutive guard (unlike the per-turn cap, which is unconditional).
++      // Well past the threshold, but an explicit in-session disable
++      // suppresses the consecutive guard.
+       for (let i = 0; i < TOOL_CALL_LOOP_THRESHOLD + 2; i++) {
+         expect(service.checkAlwaysOnSafeties(event)).toBe(false);
+       }
 @@ -253,12 +255,102 @@
          expect(service.addAndCheck(event)).toBe(false);
        }
@@ -202649,6 +202922,17 @@ diff --git a/packages/core/src/services/loopDetectionService.ts b/packages/core/
  
    // Loop type of the most recent firing. Bubbled up through the
    // LoopDetected event so callers (non-interactive CLI, telemetry) can tell
+@@ -271,8 +266,8 @@
+ 
+   /**
+    * Convenience aggregate that runs every tier in order: the always-on
+-   * safeties (consecutive-identical guard, shell inspection-command
+-   * stagnation guard, and per-turn cap) followed by the opt-in heuristics.
++   * safeties (consecutive-identical guard and shell inspection-command
++   * stagnation guard) followed by the opt-in heuristics.
+    * Intended as a single "check everything" entry point for unit tests.
+    * Production code (client.ts) intentionally calls the tiers separately so
+    * the `skipLoopDetection` gate can sit between them — a new guard added here
 @@ -344,40 +339,24 @@
  
    /**
@@ -202720,10 +203004,11 @@ diff --git a/packages/core/src/services/loopDetectionService.ts b/packages/core/
      // identical call returns an identical result, so it is never productive.
      // Promoted here from the opt-in tier so it protects every user regardless
      // of the `skipLoopDetection` config default: the DashScope server rejects
-     // this pattern with a 400 (issue #5019) far below the per-turn cap, so
+-    // this pattern with a 400 (issue #5019) far below the per-turn cap, so
 -    // the gated default left users unprotected.
 -    if (this.checkToolCallLoop(key)) {
-+    // the gated default left users unprotected. The first time it fires the
++    // this pattern with a 400 (issue #5019) after a handful of calls, so the
++    // gated default left users unprotected. The first time it fires the
 +    // call is refused and answered rather than run; see checkToolCallLoop.
 +    if (this.checkToolCallLoop(key, event.value)) {
        this.loopDetected = true;
@@ -226714,15 +226999,15 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
  export class FlashFallbackEvent implements BaseTelemetryEvent {
    'event.name': 'flash_fallback';
    'event.timestamp': string;
-@@ -484,7 +518,6 @@
+@@ -484,7 +518,5 @@
    /** Two tools alternating in a fixed pattern (A B A B A B ...). */
    ALTERNATING_TOOL_CALL_PATTERN = 'alternating_tool_call_pattern',
-   /** Total tool calls in a single turn exceeded the always-on hard cap, regardless of pattern. */
+-  /** Total tool calls in a single turn exceeded the always-on hard cap, regardless of pattern. */
 -  TURN_TOOL_CALL_CAP = 'turn_tool_call_cap',
    /** The same tool repeatedly failed schema validation with fresh tool-call ids. */
    INVALID_TOOL_PARAMS_STAGNATION = 'invalid_tool_params_stagnation',
    /** The same tool execution failure continued after a corrective reminder. */
-@@ -606,22 +639,6 @@
+@@ -606,22 +638,6 @@
    }
  }
  
@@ -226745,7 +227030,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
  export interface SlashCommandEvent extends BaseTelemetryEvent {
    'event.name': 'slash_command';
    'event.timestamp': string;
-@@ -805,45 +822,19 @@
+@@ -805,45 +821,19 @@
      this.error_type = error_type;
      this.retry_delay_ms = retry_delay_ms;
      this.model = model;
@@ -226792,7 +227077,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
  export class ApiRetryEvent implements BaseTelemetryEvent {
    'event.name': 'api_retry';
    'event.timestamp': string; // ISO 8601
-@@ -940,43 +931,12 @@
+@@ -940,43 +930,12 @@
      this.extension_version = extension_version;
      this.extension_source = extension_source;
      this.status = status;
@@ -226836,7 +227121,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
    'event.name': string;
    tool_name: string;
    bytes_written: number;
-@@ -1223,12 +1183,12 @@
+@@ -1223,12 +1182,12 @@
    | UserPromptEvent
    | ToolCallEvent
    | ApiRequestEvent
@@ -226850,7 +227135,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
    | RepeatedToolFailureGuardEvent
    | LoopDetectionDisabledEvent
 -  | NextSpeakerCheckEvent
-@@ -1237,20 +1197,18 @@
+@@ -1237,20 +1196,18 @@
    | IdeConnectionEvent
    | ConversationFinishedEvent
    | SlashCommandEvent
@@ -226871,7 +227156,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
    | HookCallEvent
    | SkillLaunchEvent
    | UserFeedbackEvent
-@@ -1287,47 +1245,38 @@
+@@ -1287,47 +1244,38 @@
    'event.name': 'arena_agent_completed';
    arena_session_id: string;
    agent_session_id: string;

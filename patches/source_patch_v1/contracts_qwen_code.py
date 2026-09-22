@@ -4812,6 +4812,8 @@ _MICROCOMPACTION_TEST = "packages/core/src/services/microcompaction/microcompact
 _FAST_COMPACTION_COMMAND = "packages/cli/src/ui/commands/compressFastCommand.ts"
 _FAST_COMPACTION_COMMAND_TEST = "packages/cli/src/ui/commands/compressFastCommand.test.ts"
 _CLEAR_CONTEXT_DEFAULTS = "packages/core/src/config/clearContextDefaults.ts"
+_MICROCOMPACTION_DESIGN = "docs/design/2026-07-11-managed-memory-microcompaction.md"
+_MICROCOMPACTION_PLAN = "docs/plans/2026-07-11-managed-memory-microcompaction.md"
 _RETIRED_MICROCOMPACTION_NAMES = (
     "microcompact",
     "Microcompact",
@@ -4844,6 +4846,7 @@ _RETIRED_COMPACTION_MODEL_NAMES = tuple(
 
 _RUN_BUDGET_MODULE = "packages/cli/src/utils/runBudget.ts"
 _RUN_BUDGET_TEST = "packages/cli/src/utils/runBudget.test.ts"
+_TURN_TOOL_CALL_CAP_DESIGN = "docs/design/2026-07-17-adaptive-tool-call-cap.md"
 _RETIRED_BUDGET_NAMES = tuple(
     re.compile(pattern)
     for pattern in (
@@ -4859,6 +4862,13 @@ _RETIRED_BUDGET_NAMES = tuple(
         r"\bmaxToolCalls\b",
         r"\bmax_tool_calls\b",
         r"AgentTerminateMode\.MAX_TOOL_CALLS",
+        # The prose too: a comment or a fixture that still describes one of
+        # these bounds describes a mechanism the reader cannot find. "per-turn
+        # cap" is deliberately not among them: the vision bridge's per-turn
+        # image cap and the file-history service's per-turn file cap are other
+        # mechanisms with the same shape of name, and both still exist.
+        r"always-on hard cap",
+        r"session token limit",
         r"MAX_TOOL_CALLS = 'MAX_TOOL_CALLS'",
         r"error_max_tool_calls",
         r"\bsessionTokenLimit\b",
@@ -5656,7 +5666,7 @@ def _validate_terminal_state_after(state: State) -> None:
     # a run is bounded by its turn budget alone. `error_timeout` stays: a
     # subagent whose definition allows it a working time still ends there,
     # though no session does, and a scope's record carries no exit code.
-    for absent in (_RUN_BUDGET_MODULE, _RUN_BUDGET_TEST):
+    for absent in (_RUN_BUDGET_MODULE, _RUN_BUDGET_TEST, _TURN_TOOL_CALL_CAP_DESIGN):
         _require(absent not in state, f"{label}: {absent} still ships")
     # What halts a run short of its budget is repetition, named as such. The
     # always-on guards are the two repetition signals; neither counts how much
@@ -6819,6 +6829,8 @@ def _validate_manual_compaction_after(state: State) -> None:
         _FAST_COMPACTION_COMMAND,
         _FAST_COMPACTION_COMMAND_TEST,
         _CLEAR_CONTEXT_DEFAULTS,
+        _MICROCOMPACTION_DESIGN,
+        _MICROCOMPACTION_PLAN,
     ):
         _require(absent not in state, f"{label}: {absent} still ships")
     for path, source in sorted(state.items()):
