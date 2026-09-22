@@ -33,6 +33,20 @@ class GateFailure(RuntimeError):
     pass
 
 
+def records_subtree(source: Path) -> str:
+    """`results/schema-<n>`, where the service keeps the records it writes.
+
+    Read from the service's own source rather than typed here, so a schema
+    bump moves the harness with the records instead of leaving it looking in
+    the subtree the previous release wrote.
+    """
+    text = (source / "src" / "config.rs").read_text(encoding="utf-8")
+    match = re.search(r"pub const RESULT_RECORD_SCHEMA: u32 = (\d+);", text)
+    if match is None:
+        raise GateFailure("the service no longer names its record schema")
+    return f"results/schema-{match.group(1)}"
+
+
 def require(condition, message):
     if not condition:
         raise GateFailure(message)
@@ -261,7 +275,10 @@ class Harness:
         for identity in self.images.values():
             require(len(identity) == 71 and identity.startswith("sha256:") and
                     all(c in "0123456789abcdef" for c in identity[7:]), "candidate must be an immutable image ID")
-        for directory in ("state", "state/sessions", "state/spool", "results", "control", "model-socket", "input", "evidence"):
+        records = records_subtree(self.source)
+        self.records = self.root / records
+        for directory in ("state", "state/sessions", "state/spool", "results",
+                          records, "control", "model-socket", "input", "evidence"):
             (self.root / directory).mkdir(mode=0o700)
         self.terminal_plans = []
         if self.case.startswith("terminal_"):
@@ -528,7 +545,7 @@ print(json.dumps(found))
             status, raw = self.http(service, "POST", route + "/cancel")
             require(status == 202, f"durable cancellation failed: {raw!r}")
             save_json(self.root / "evidence/cancel-receipt.json", json.loads(raw))
-            intent = self.root / "results" / self.session / "cancel-requested.json"
+            intent = self.records / self.session / "cancel-requested.json"
             require(intent.is_file(), "HTTP cancellation lacked its durable intent")
             save(self.root / "evidence/cancel-intent.json", intent.read_bytes())
             body = self.wait_terminal(service, route)
@@ -542,7 +559,7 @@ print(json.dumps(found))
             "durable cancellation became observable while the broker's create transaction was in flight; ownership-checked removal remained serialized behind that transaction while the agent start gate stayed locked"
         ], "locked-gate cancellation contains unrelated lifecycle failures")
         require(end["raw_session_tree_retained"] is False, "settled setup cancellation retained undisposed raw state")
-        persisted = self.root / "results" / self.session / "finished.json"
+        persisted = self.records / self.session / "finished.json"
         require(json.loads(persisted.read_bytes()) == body and
                 not persisted.with_name("finished.json.tmp").exists(), "cancellation publication is incomplete")
         for name, registration in self.expected.items():
@@ -576,7 +593,7 @@ print(json.dumps(found))
         status, raw = self.http(service, "POST", route + "/cancel")
         require(status == 202, f"durable cancellation failed: {raw!r}")
         save_json(self.root / "evidence/cancel-receipt.json", json.loads(raw))
-        intent = self.root / "results" / self.session / "cancel-requested.json"
+        intent = self.records / self.session / "cancel-requested.json"
         require(intent.is_file(), "cancellation response preceded its durable intent")
         save(self.root / "evidence/cancel-intent.json", intent.read_bytes())
         self.wait_for(lambda: (self.root / "control/remove-held.json").exists(), "real teardown held before removal dispatch")
@@ -607,7 +624,7 @@ print(json.dumps(found))
                 end["raw_session_tree_retained"] is False and
                 not (self.root / "state/sessions" / self.session).exists(),
                 "cancelled result lacked certification or mandatory evidence/teardown failed")
-        persisted = self.root / "results" / self.session / "finished.json"
+        persisted = self.records / self.session / "finished.json"
         require(json.loads(persisted.read_bytes()) == body and
                 not persisted.with_name("finished.json.tmp").exists(), "cancelled terminal publication is incomplete")
         status, bundle = self.http(service, "GET", route + "/bundle")
@@ -667,7 +684,7 @@ print(json.dumps(found))
                 body["observed_reasoning_tokens"] == 0 and body["num_turns"] == 2, "served observation mismatch")
         require(end["raw_session_tree_retained"] is False and not (self.root / "state/sessions" / self.session).exists(),
                 "successful terminal did not dispose raw state through its transaction")
-        persisted = self.root / "results" / self.session / "finished.json"
+        persisted = self.records / self.session / "finished.json"
         require(json.loads(persisted.read_bytes()) == body, "HTTP terminal differs from published bytes")
         require(not persisted.with_name("finished.json.tmp").exists(), "unpublished draft remains")
         terminal_hash = digest(persisted.read_bytes())
@@ -778,7 +795,7 @@ print(json.dumps(found))
             }}, "lost proof did not establish the intended stopped physical state")
             status, raw = self.http(service, "GET", route)
             require(status == 200 and json.loads(raw)["terminal"] is None, "quiescence was inferred before its actual proof")
-            require(not (self.root / "results" / self.session / "bundle.tar.zst").exists(),
+            require(not (self.records / self.session / "bundle.tar.zst").exists(),
                     "bundle was created while independent proof remained unavailable")
             save(self.root / "control/release-observation", b"true quiescence observed only by the fault harness\n")
         body = self.wait_terminal(service, route)
@@ -804,7 +821,7 @@ print(json.dumps(found))
         expected_retention = "container-quiescence-unproved" if self.case == "quiescence_observation_lost" else "container-teardown-incomplete"
         require(marker.startswith("RAW_SESSION_TREE_RETAINED\ncause=" + expected_retention + "\n"),
                 "retained raw state has the wrong authority cause")
-        result_dir = self.root / "results" / self.session
+        result_dir = self.records / self.session
         persisted = result_dir / "finished.json"
         require(json.loads(persisted.read_bytes()) == body and not persisted.with_name("finished.json.tmp").exists(),
                 "teardown fault did not publish its exact retained resource")
@@ -928,7 +945,7 @@ print(json.dumps(found))
                     for detail in end["teardown_diagnostics"]), "live owner did not retain the actual publication failure")
         require(self.stub.generations == 2 and not self.stub.failures, "publication fault changed model execution")
         self.audit_terminal_faults()
-        result_dir = self.root / "results" / self.session
+        result_dir = self.records / self.session
         temporary = result_dir / "finished.json.tmp"
         finished = result_dir / "finished.json"
         raw_tree = self.root / "state/sessions" / self.session
@@ -1066,7 +1083,7 @@ print(json.dumps(found))
         require(agent is not None and not agent["State"]["Running"] and
                 agent["State"]["ExitCode"] == 0 and capture is not None and capture["State"]["Running"],
                 "observation barrier is not after the successful producer exit with capture owned")
-        result_dir = self.root / "results" / self.session
+        result_dir = self.records / self.session
         output = self.root / "state/sessions" / self.session / "output"
         if lost_wait:
             require(observation["data"] == {"exit_code": 0}, "withheld wait was not the actual zero exit")
@@ -1200,7 +1217,7 @@ print(json.dumps(found))
         require(end["raw_session_tree_retained"] is False and
                 not (self.root / "state/sessions" / self.session).exists(),
                 "settled provider failure did not dispose the committed raw tree")
-        persisted = self.root / "results" / self.session / "finished.json"
+        persisted = self.records / self.session / "finished.json"
         require(json.loads(persisted.read_bytes()) == body and
                 not persisted.with_name("finished.json.tmp").exists(),
                 "failed invocation publication is incomplete")

@@ -1219,10 +1219,16 @@ socket, and persist the terminal record before the service exits:
 ./stop.sh
 ```
 
-Result records remain in `.runtime/results/<session-id>/` until explicitly deleted
-through the API. Startup removes only labelled orphan containers, abandoned staging
-trees, and incomplete result directories. It never prunes completed sessions by age
-or count.
+Result records remain in `.runtime/results/schema-<n>/<session-id>/` until
+explicitly deleted through the API, where `<n>` is the schema of the records the
+running release writes. A release that changes that schema writes in its own
+subtree: the records an earlier release wrote stay readable exactly where they
+were written, nobody moves them, and the new release starts on an empty subtree
+rather than on records it would have to refuse. Inside the current subtree the
+rule is unchanged — a record this release cannot read stops startup before it
+adopts the directory. Startup removes only labelled orphan containers, abandoned
+staging trees, and incomplete result directories. It never prunes completed
+sessions by age or count.
 
 ## HTTP API
 

@@ -813,7 +813,7 @@ pub async fn run_one(
         diagnostics.push(format!("publish bundle progress: {error}"));
         is_process_error = true;
     }
-    let archive = cfg.results_dir.join(session_id).join("bundle.tar.zst");
+    let archive = cfg.records_dir().join(session_id).join("bundle.tar.zst");
     let bundle_result = if teardown.quiescent {
         bundle::create_bundle(&paths.root, &archive).await
     } else {
@@ -1143,7 +1143,7 @@ pub async fn recover_after_execution_panic(
                 ));
             }
 
-            let archive = cfg.results_dir.join(session_id).join("bundle.tar.zst");
+            let archive = cfg.records_dir().join(session_id).join("bundle.tar.zst");
             match std::fs::symlink_metadata(&archive) {
                 Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
                     diagnostics.push(
@@ -1323,7 +1323,7 @@ pub async fn recover_after_service_restart(
             None
         });
 
-    let archive = cfg.results_dir.join(session_id).join("bundle.tar.zst");
+    let archive = cfg.records_dir().join(session_id).join("bundle.tar.zst");
     let mut accepted_bundle = None;
     match std::fs::symlink_metadata(&archive) {
         Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
@@ -1875,7 +1875,7 @@ async fn finalize_setup_failure(
         process_error = true;
     }
 
-    let archive = cfg.results_dir.join(session_id).join("bundle.tar.zst");
+    let archive = cfg.records_dir().join(session_id).join("bundle.tar.zst");
     let bundle_result = if teardown.quiescent {
         bundle::create_bundle(&paths.root, &archive).await
     } else {

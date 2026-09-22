@@ -453,7 +453,7 @@ async fn download_bundle(
         .ok_or_else(|| ServiceError::BundleAbsent {
             session_id: id.clone(),
         })?;
-    let archive = state.cfg.results_dir.join(&id).join("bundle.tar.zst");
+    let archive = state.cfg.records_dir().join(&id).join("bundle.tar.zst");
     let file = tokio::fs::File::open(&archive).await.map_err(|error| {
         ServiceError::Internal(format!(
             "terminal {} accepts a bundle but {} cannot be opened: {error}",
@@ -681,10 +681,15 @@ pub async fn pre_flight(cfg: &Config) -> ServiceResult<()> {
 
     // The host launcher creates the two durable roots. The service validates
     // rather than chmodding/adopting an unexpected object. Only the fixed
-    // `state/sessions` child may be created here, exclusively, before any
-    // request is accepted.
+    // `state/sessions`, `state/spool` and records children may be created
+    // here, exclusively, before any request is accepted. The records child is
+    // this schema's own subtree of the results root: a release whose schema
+    // number differs creates its own beside it and reads nothing else, which
+    // is how records written under an earlier schema stay where they were
+    // written instead of being moved, translated or refused for ever.
     require_owned_runtime_directory(&cfg.state_dir, 0o700, 1000, 1000, false)?;
     require_owned_runtime_directory(&cfg.results_dir, 0o700, 1000, 1000, false)?;
+    require_owned_runtime_directory(&cfg.records_dir(), 0o700, 1000, 1000, true)?;
     require_owned_runtime_directory(&cfg.state_dir.join("sessions"), 0o700, 1000, 1000, true)?;
     require_owned_runtime_directory(&cfg.state_dir.join("spool"), 0o700, 1000, 1000, true)?;
 
@@ -712,8 +717,8 @@ pub(crate) async fn recover_local_state(cfg: &Config) -> ServiceResult<()> {
     // still exists beside an incomplete result directory, state reconciliation
     // either completes the durable terminal publication or refuses startup
     // without deleting either source of evidence.
-    sweep_state_dir(&cfg.state_dir, &cfg.results_dir, 1000, 1000)?;
-    sweep_partial_results(&cfg.results_dir, &cfg.state_dir, 1000, 1000)?;
+    sweep_state_dir(&cfg.state_dir, &cfg.records_dir(), 1000, 1000)?;
+    sweep_partial_results(&cfg.records_dir(), &cfg.state_dir, 1000, 1000)?;
 
     Ok(())
 }
@@ -2093,7 +2098,7 @@ async fn curl_json(
 ///   startup stops instead of announcing partial cleanup.
 fn sweep_state_dir(
     state_dir: &std::path::Path,
-    results_dir: &std::path::Path,
+    records_dir: &std::path::Path,
     service_uid: u32,
     service_gid: u32,
 ) -> ServiceResult<()> {
@@ -2150,7 +2155,7 @@ fn sweep_state_dir(
                 "sweep_state_dir: unexpected session directory name {name:?}"
             )));
         }
-        let result_dir = results_dir.join(name);
+        let result_dir = records_dir.join(name);
         let terminal = committed_terminal_for_sweep(&result_dir, name, service_uid, service_gid)?;
         if let Some(body) = &terminal {
             validate_terminal_storage(&result_dir, body, service_uid, service_gid)?;
@@ -2297,7 +2302,7 @@ fn sweep_state_dir(
     Ok(())
 }
 
-/// Reconcile `<results_dir>/<id>/` directories and terminal publications.
+/// Reconcile `<records_dir>/<id>/` directories and terminal publications.
 ///
 /// A completely empty result directory has no evidence and may be removed.
 /// A nonempty directory without a recoverable terminal is preserved and blocks
@@ -2308,20 +2313,20 @@ fn sweep_state_dir(
 /// A directory with `finished.json` is retained only after validating its
 /// name, file type, terminal JSON shape, and session identity.
 fn sweep_partial_results(
-    results_dir: &std::path::Path,
+    records_dir: &std::path::Path,
     state_dir: &std::path::Path,
     service_uid: u32,
     service_gid: u32,
 ) -> ServiceResult<()> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
-    let entries = match std::fs::read_dir(results_dir) {
+    let entries = match std::fs::read_dir(records_dir) {
         Ok(e) => e,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(e) => {
             return Err(ServiceError::Internal(format!(
                 "sweep_partial_results: cannot read {}: {e}",
-                results_dir.display()
+                records_dir.display()
             )));
         }
     };
@@ -2330,7 +2335,7 @@ fn sweep_partial_results(
         let entry = entry.map_err(|e| {
             ServiceError::Internal(format!(
                 "sweep_partial_results: cannot read an entry under {}: {e}",
-                results_dir.display()
+                records_dir.display()
             ))
         })?;
         let path = entry.path();
@@ -2405,7 +2410,7 @@ fn sweep_partial_results(
         );
     }
     sync_directory(
-        results_dir,
+        records_dir,
         "sweep_partial_results: sync removed result entries",
     )?;
     if removed > 0 {

@@ -9,10 +9,14 @@ when durable records are read or written.
 
 The service reads only the record formats it writes. It translates, defaults and
 skips no other format, and it never moves or deletes a record it cannot read.
-Startup first completes interrupted deletions. Before acceptance recovery or any
-startup sweep acts on the results directory, startup reads every result
-directory's committed terminal, acceptance, progress and cancellation records
-with the service's strict readers. A directory whose name is not a session
+The records it writes live in the subtree named for their schema,
+`<results-root>/schema-<n>/`, so a release that changes the schema begins on an
+empty subtree of its own and the records written under earlier schemas stay
+where they are, readable by the releases that wrote them. Startup first
+completes interrupted deletions. Before acceptance recovery or any startup sweep
+acts on that subtree, startup reads every result directory's committed terminal,
+acceptance, progress and cancellation records with the service's strict
+readers. A directory whose name is not a session
 handle (`s-` followed by 64 lowercase hexadecimal characters), or whose records
 do not read, makes startup refuse. One error names
 every such directory, the reason, and any raw state tree beside it. The operator

@@ -117,6 +117,19 @@ const _: () = assert!(
     "the default session turn budget must lie inside the requestable range"
 );
 
+/// The schema of the records this release writes, and the name of the subtree
+/// it writes them in: `<results_dir>/schema-<n>/<session-id>/`.
+///
+/// Records are read only by the release that can read them, so a schema change
+/// is a different set of records rather than a rewrite of the old ones. Putting
+/// the number in the path is what makes that automatic: a release with a new
+/// number starts an empty subtree, the previous subtree keeps every record it
+/// held, exactly where it was written, and nobody has to move or delete
+/// anything to start the new one. Inside the current subtree the rule is
+/// unchanged: a record this release cannot read stops it before it adopts the
+/// directory.
+pub const RESULT_RECORD_SCHEMA: u32 = 4;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub lock: StackLock,
@@ -528,6 +541,19 @@ struct BrokerPolicyCapture {
 }
 
 impl Config {
+    /// Where this release's session records live: the schema's own subtree of
+    /// the results root. The root itself is the mount, and holds one subtree
+    /// per schema that has ever run here.
+    pub fn records_dir(&self) -> PathBuf {
+        Self::records_dir_of(&self.results_dir)
+    }
+
+    /// The same rule applied to a results root that is not this config's, so
+    /// that the name of the subtree is written once.
+    pub fn records_dir_of(results_dir: &std::path::Path) -> PathBuf {
+        results_dir.join(format!("schema-{RESULT_RECORD_SCHEMA}"))
+    }
+
     pub fn load() -> ServiceResult<Self> {
         reject_legacy_overrides()?;
 
