@@ -36,7 +36,10 @@ class HeadlessSmokeTests(unittest.TestCase):
             entry.write_text(source)
             (entry.parent / "stream-binding-manifest.json").write_text(
                 json.dumps({"schema_sha256": "0" * 64}))
+            # A fake entry never reaches the model, so it is served on an unused port rather
+            # than the sealed one a live stack on this host may hold.
             with patch("check_headless_cli.WORKSPACE", Path(temporary)), \
+                 patch("check_headless_cli.stub_address", return_value=("127.0.0.1", 0)), \
                  patch("check_headless_cli.contract_identity", return_value="0" * 64):
                 return check(entry, ROOT / "docker/config/settings.json", ROOT / "src/bin/agent_exec.rs",
                              Path(temporary) / "unreachable-certifier")

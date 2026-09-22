@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""Qualify the shipped CLI through production certification and an owned protocol fixture."""
+"""Qualify the shipped CLI through production certification and an owned protocol fixture.
+
+The CLI runs as the launcher runs it: its home is the sealed directory that holds the
+settings, read in place, so the instructions production sends are the ones qualified,
+and the fixture serves the model endpoint those settings name rather than a rewritten
+copy of them.
+"""
 from __future__ import annotations
 
 import argparse
+import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
@@ -13,10 +20,38 @@ import signal
 import subprocess
 import tempfile
 import threading
+import urllib.parse
 
 from verify_runtime_contract import cli_arguments
 
 WORKSPACE = Path("/workspace")
+# The client's own system-scope settings files. Production names no override for them and
+# the image carries neither, so the sealed settings are the one source; a host that had
+# either would qualify another configuration, and is refused instead.
+SYSTEM_SETTINGS_FILES = (
+    Path("/etc/qwen-code/settings.json"),
+    Path("/etc/qwen-code/system-defaults.json"),
+)
+# The two-turn cycle's requests, in order: the startup proof's six counts (the preamble,
+# the preamble with its startup context, the framing text alone, and the message, turn and
+# tool-result probes), then for each turn the request with its pending message counted, the
+# request about to be issued counted, and the generation. A tool result is bounded where it
+# is made, so no turn counts a baseline without it.
+EXPECTED_ROUTES = ["/tokenize"] * 8 + ["/v1/chat/completions"] + ["/tokenize"] * 2 + ["/v1/chat/completions"]
+EXPECTED_ROLES = [
+    ["system"],
+    ["system", "user"],
+    None,
+    ["system", "user"],
+    ["system", "user", "assistant"],
+    ["system", "user", "assistant", "tool"],
+    ["system", "user"],
+    ["system", "user"],
+    ["system", "user"],
+    ["system", "user", "assistant", "tool"],
+    ["system", "user", "assistant", "tool"],
+    ["system", "user", "assistant", "tool"],
+]
 
 
 class SmokeFailure(RuntimeError):
@@ -41,6 +76,60 @@ def certify(stdout: bytes, certifier: Path, events_path: Path) -> dict:
     require(certificate["certification"]["state"] == "certified",
             "production reader did not supply a certificate")
     return certificate
+
+
+def stub_address(settings: dict) -> tuple[str, int]:
+    """The loopback address the sealed settings send the model's requests to."""
+    base = urllib.parse.urlsplit(settings["model"]["baseUrl"])
+    require(base.scheme == "http" and base.hostname == "127.0.0.1" and base.port is not None
+            and base.path == "/v1", "the sealed model endpoint is not a loopback /v1 base URL")
+    return base.hostname, base.port
+
+
+def sealed_digests(home: Path) -> dict[str, str]:
+    return {str(path.relative_to(home)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(home.rglob("*")) if path.is_file()}
+
+
+def require_production_requests(requests: list[dict], settings: dict, instructions: str,
+                                instructions_label: str, strict_tools: list[str], turn_budget: int) -> None:
+    """The requests are the ones production sends, in shape and in their sealed inputs."""
+    routes = [r["path"] for r in requests]
+    require(routes == EXPECTED_ROUTES, f"the two-turn cycle issued another request sequence: {routes}")
+    model = settings["model"]["name"]
+    config = settings["modelProviders"]["openai"][0]["generationConfig"]
+    require(requests[2]["body"] == {"model": model, "prompt": "framing", "add_special_tokens": False},
+            f"the framing probe drifted: {requests[2]['body']!r}")
+    block = (f"--- Context from: {instructions_label} ---\n{instructions.strip()}\n"
+             f"--- End of Context from: {instructions_label} ---")
+    tools = None
+    for index, (request, roles) in enumerate(zip(requests, EXPECTED_ROLES)):
+        body = request["body"]
+        if roles is None:
+            continue
+        observed = [m.get("role") for m in body["messages"]]
+        require(observed == roles, f"request {index} carries roles {observed}, not {roles}")
+        system = body["messages"][0]["content"]
+        # The sealed instructions travel in every system message, whole, once.
+        require(isinstance(system, str) and system.count(block) == 1,
+                f"request {index}'s system message does not carry the sealed QWEN.md once")
+        require(body["chat_template_kwargs"] == config["extra_body"]["chat_template_kwargs"],
+                f"request {index}'s template arguments are not the sealed ones")
+        tools = tools if tools is not None else body["tools"]
+        require(body["tools"] == tools, f"request {index} declares other tools than the first")
+        # Every turn states the budget a session that names none runs under; the startup
+        # proof counts its line with the widest number left out.
+        if index >= 6:
+            require(f"- This session may run at most {turn_budget} turns." in system,
+                    f"request {index} does not state the sealed {turn_budget}-turn budget")
+    require(sorted(t["function"]["name"] for t in tools) == sorted(strict_tools),
+            "the declared tools are not the launcher's strict tools")
+    for index in (8, 11):
+        body = requests[index]["body"]
+        for key, value in config["samplingParams"].items():
+            require(body[key] == value, f"generation {index} sends {key}={body[key]!r}, not {value!r}")
+        for key, value in config["extra_body"].items():
+            require(body[key] == value, f"generation {index} sends {key}={body[key]!r}, not {value!r}")
 
 
 def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], certifier: Path) -> dict:
@@ -76,7 +165,6 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     generations = [r["body"] for r in requests if r["path"] == "/v1/chat/completions"]
     require(len(generations) == 2, "stub did not serve both generations")
     require(all(g["kv_scope"] == session for g in generations), "provider requests lost their session owner")
-    require(any(r["path"] == "/tokenize" for r in requests), "exact sizing was not exercised")
     transcripts = list(runtime.rglob(f"chats/{session}.jsonl"))
     require(len(transcripts) == 1, "canonical session transcript is missing or ambiguous")
     raw = transcripts[0].read_bytes()
@@ -121,12 +209,25 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
     require(isinstance(manifest, dict) and manifest.get("schema_sha256") == expected_contract,
             "CLI and native certifier contract identities differ before provider admission")
     arguments = cli_arguments(launcher_source.read_text())
+    strict_tools = [a.removeprefix("--strict-tools=") for a in arguments if a.startswith("--strict-tools=")]
+    require(len(strict_tools) == 1, "the launcher names its strict tools once")
     settings = json.loads(settings_path.read_text())
     model = settings["model"]["name"]
     providers = settings["modelProviders"]["openai"]
     require(len(providers) == 1 and providers[0]["id"] == model, "shipping model declaration drifted")
+    require(providers[0]["baseUrl"] == settings["model"]["baseUrl"], "the sealed provider names another endpoint")
     credential_key = providers[0]["envKey"]
     credential = settings["env"][credential_key]
+    # QWEN_HOME is the sealed directory that holds these settings, as run_agent.sh sets it,
+    # so the CLI reads the settings and the instructions beside them in place.
+    require(settings_path.name == "settings.json", "the sealed settings are not a QWEN_HOME settings.json")
+    sealed_home = settings_path.parent
+    instructions_path = sealed_home / "QWEN.md"
+    instructions = instructions_path.read_text()
+    for present in SYSTEM_SETTINGS_FILES:
+        require(not present.exists(), f"{present} exists; the sealed settings would not be the only source")
+    turn_budget = settings["model"]["maxSessionTurns"]
+    sealed_before = sealed_digests(sealed_home)
     node = shutil.which("node")
     require(node is not None, "Node is missing")
     requests: list[dict] = []
@@ -136,8 +237,8 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
         root = Path(temporary)
         home, runtime = [root / name for name in ("home", "runtime")]
         workspace = WORKSPACE
-        for directory in (home, runtime, home / ".qwen"):
-            directory.mkdir()
+        for directory in (home, runtime):
+            directory.mkdir(mode=0o700)
         nonce = secrets.token_hex(16)
         fixture_fd, fixture_name = tempfile.mkstemp(prefix="headless-probe-", suffix=".txt", dir=workspace)
         fixture = Path(fixture_name)
@@ -166,13 +267,7 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                     require(0 < size < 2 * 1024 * 1024, "unexpected request size")
                     body = json.loads(self.rfile.read(size))
                     requests.append({"path": self.path, "body": body})
-                    # The two-turn cycle issues twelve requests: the startup proof's six counts (the
-                    # preamble, the preamble with its startup context, the framing text alone, and the
-                    # message, turn and tool-result probes), each turn's two counts (the request with
-                    # its pending message, and the request about to be issued), and the two
-                    # generations. A tool result is bounded where it is made, so no turn counts a
-                    # baseline without it.
-                    require(len(requests) <= 12, "CLI exceeded the smoke request bound")
+                    require(len(requests) <= len(EXPECTED_ROUTES), "CLI exceeded the smoke request bound")
                     require(body["model"] == model, "CLI selected a different model")
                     if self.path == "/tokenize":
                         # Both forms the served /tokenize accepts: a rendered chat request, and a text
@@ -225,29 +320,28 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
             def log_message(self, *_args):
                 pass
 
-        server = HTTPServer(("127.0.0.1", 0), Stub)
+        server = HTTPServer(stub_address(settings), Stub)
         worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05})
         worker.start()
         try:
-            endpoint = f"http://127.0.0.1:{server.server_port}/v1"
-            settings["model"]["baseUrl"] = endpoint
-            providers[0]["baseUrl"] = endpoint
-            local_settings = root / "settings.json"
-            local_settings.write_text(json.dumps(settings))
-            env = {"PATH": os.environ["PATH"], "HOME": str(home), "QWEN_HOME": str(home / ".qwen"),
-                "QWEN_STREAM_CONTRACT_SHA256": expected_contract,
-                "QWEN_RUNTIME_DIR": str(runtime), "QWEN_CODE_SYSTEM_SETTINGS_PATH": str(local_settings),
-                "QWEN_CODE_SYSTEM_DEFAULTS_PATH": str(root / "absent-defaults.json"),
-                "QWEN38_AGENT_SERVICE_LOCKED": "1", "QWEN_SYSTEM_MD": "/opt/agent/system.md",
-                "QWEN_DEPLOYMENT_CONTRACT_MD": "/opt/agent/deployment-contract.md",
-                "NO_PROXY": "127.0.0.1,localhost", "NO_COLOR": "1", "CI": "1", "LANG": "C.UTF-8",
-                "XDG_CACHE_HOME": str(root / "cache"), "NODE_OPTIONS": "--max-old-space-size=512"}
-            env[credential_key] = credential
-            command = [node, "--expose-gc", str(entry), *arguments, "--max-session-turns=4"]
+            # run_agent.sh's exports and agent_exec's one addition. The runtime root is the one
+            # substitution: the image has no /qwen-runtime tmpfs, and nothing the model is sent
+            # names it.
+            env = {"PATH": os.environ["PATH"], "HOME": str(home), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
+                "QWEN_RUNTIME_DIR": str(runtime), "QWEN_HOME": str(sealed_home),
+                "QWEN38_AGENT_SERVICE_LOCKED": "1", "QWEN_SYSTEM_MD": str(sealed_home / "system.md"),
+                "QWEN_DEPLOYMENT_CONTRACT_MD": str(sealed_home / "deployment-contract.md"),
+                credential_key: credential, "NO_COLOR": "1", "QWEN_TELEMETRY_ENABLED": "false",
+                "XDG_CACHE_HOME": str(runtime / "cache"), "NPM_CONFIG_CACHE": str(runtime / "npm"),
+                "PIP_CACHE_DIR": str(runtime / "pip"), "CARGO_HOME": str(runtime / "cargo"),
+                "GOPATH": str(runtime / "go"),
+                "QWEN_STREAM_CONTRACT_SHA256": expected_contract}
+            # The budget a session that names none is launched with.
+            command = [node, "--expose-gc", str(entry), *arguments, f"--max-session-turns={turn_budget}"]
             prompt = f"Read {fixture} with read_file using offset 0, then reply HEADLESS_SMOKE_OK followed by its exact content.\n"
             try:
                 with subprocess.Popen(
-                    command, cwd=workspace, env=env, start_new_session=True,
+                    command, cwd=workspace, env=env, start_new_session=True, umask=0o077,
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 ) as process:
                     try:
@@ -265,7 +359,12 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                 ) from error
             require(process.returncode == 0, f"CLI exited {process.returncode}; stdout={stdout!r}; stderr={stderr!r}")
             require(not failures, f"provider protocol failed: {failures}")
-            return qualify(stdout, runtime, nonce, requests, certifier)
+            require(sealed_digests(sealed_home) == sealed_before, "the run changed a file in the sealed home")
+            result = qualify(stdout, runtime, nonce, requests, certifier)
+            require_production_requests(requests, settings, instructions,
+                                        os.path.relpath(instructions_path, workspace), strict_tools[0].split(","),
+                                        turn_budget)
+            return result
         finally:
             server.shutdown()
             worker.join()
