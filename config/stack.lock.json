@@ -92,11 +92,11 @@
     "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
     "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
     "settings_sha256": "5f24f2b613261694a156513a4481b008d767753d0e3e30261b654a7854b591de",
-    "instructions_sha256": "d415bbcc6f062c0ac1a2f1114b3bc8616c0d2d43a1b7f6eb7fe5bbabd3410a3e",
+    "instructions_sha256": "3194de23e874dd998407cf8b301eb6875c670bf1da87c45d381200dcf0c0e46d",
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "8aa4379bbf19749f26eaecff549524e7c85300d4235a06baeba4579762cc207b",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "runtime_contract_sha256": "5fb57855d03c7b0985e73cfb15bea8a618f76a807e6e73f52165ad751e224d8f",
+    "runtime_contract_sha256": "02d593902b0f26b36484e4f06086acb67a75989c5a029e86dc6009eb9e8b6e40",
     "wrapper_sha256": "0fdb2ac4b0f2fa4aafe1ea81322895ad4292ac88919c010f7eeea6f387ebc9d8",
     "agent_exec_source_sha256": "e6ddbbdc5f78b4e5fdcf3e6f96483e670c02ca50c94a4b5131f2a18d0c9ceb0b",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
@@ -120,8 +120,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "e863e05ee781e52fe8f981774eb08920df8dd061f13e2e0ad16bab6d32017bca",
-      "source_patch_manifest_sha256": "874eeec3f437769fa0fc7994984c93914fb499e09bab0d5fd92112fc95e83264"
+      "patch_sha256": "9b87a7d33ad3a576d1e8b9a8c8bc102c289b30a819ab05a695b674c363011490",
+      "source_patch_manifest_sha256": "12d502cfbfff1621b0134cbee68428ad992aa0c83c6aee31c08d434c25766603"
     }
   },
   "backend": {

@@ -232,9 +232,10 @@ call it answers.
 
 `M` is the one declared magnitude and is openly a policy: it is the most any
 single block placed inline may be — one tool result, one `read_file` page, one
-accepted snapshot, one submitted prompt. A tool result past it keeps its head
-inline, led by a notice naming the `read_file` call that continues it from a
-file holding the whole, or saying why no such file could be kept. It is
+accepted snapshot, one submitted prompt. A tool result past it keeps its start
+and its end inline, split as upstream's truncation split them, with a notice in
+the cut naming the `read_file` call that returns the cut lines from a file
+holding the whole, or saying why no such file could be kept. It is
 measured in the UTF-8 bytes of a text's NFC form, and that is a token bound
 because the served tokenizer normalizes to NFC before it splits anything and
 every token covers at least one byte of what that produced: a text's tokens are
@@ -301,14 +302,15 @@ to one inline block where its model copy is made — the tool's output with ever
 hook and reminder that joined it, measured once in the bytes of its NFC form —
 and the deployment's `parallel_tool_calls: false` holds the backend's call
 grammar to one call a turn, so a turn appends one result. A result past the
-bound keeps its head, led by a notice with its true total and the `read_file`
-call that continues it from the session's copy of the whole, or the reason no
-copy could be kept; a send that finds a result past the bound refuses it as the
-defect it is rather than sending it. There is no character division,
-`target // 8`, image-token guess, padding margin, local tokenizer, or tokenizer
-fallback anywhere in the compaction trigger, the outbound sizing, or the
-tool-result bound. If the tokenizer is missing, malformed, or reports another
-model window, the turn fails before generation.
+bound keeps its start and its end, with a notice in the cut giving its true
+total and the `read_file` call that returns the cut lines from the session's
+copy of the whole, or the reason no copy could be kept; a send that finds a
+result past the bound refuses it as the defect it is rather than sending it.
+There is no character division, `target // 8`, image-token guess, padding
+margin, local tokenizer, or tokenizer fallback anywhere in the compaction
+trigger, the outbound sizing, or the tool-result bound. If the tokenizer is
+missing, malformed, or reports another model window, the turn fails before
+generation.
 
 A session is bounded by model turns, never by wall-clock time: the default
 budget is 400 turns (`limits.max_session_turns`), a submission may name any

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `e863e05ee781e52fe8f981774eb08920df8dd061f13e2e0ad16bab6d32017bca`
+- Review-diff SHA-256: `9b87a7d33ad3a576d1e8b9a8c8bc102c289b30a819ab05a695b674c363011490`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `874eeec3f437769fa0fc7994984c93914fb499e09bab0d5fd92112fc95e83264`
+- Transformer-manifest SHA-256: `12d502cfbfff1621b0134cbee68428ad992aa0c83c6aee31c08d434c25766603`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -124,9 +124,13 @@ made, and nowhere else. The scheduler finishes each call's copy once every
 hook, rule and skill reminder has joined it, and each runtime that executes a
 call itself — the ACP session, speculation, a subagent's refusal of a tool it
 does not have — finishes its copy the same way. The joined text is measured
-once, whole; a longer one keeps its head, the complete text is retained as a
-session artifact, and one notice leads the head with the true total and the
-exact call that reads the rest back, or why the rest was not kept. Tools do not
+once, whole; a longer one keeps its start and its end, split as upstream's own
+truncation split them -- one fifth of the room to the start, the rest to the
+end -- the complete text is retained as a session artifact, and one notice
+stands in the cut with the true total and the exact call that reads the cut
+lines back, or why they were not kept. Upstream's tool layouts are kept as
+upstream lays them out: what a result says last, such as an exit code, an error
+or a test summary, stays last and survives because the end does. Tools do not
 bound themselves: how much a command prints, a page holds or a server replies
 is not the tool's to decide, and a bound applied inside a tool was one more rule
 a result could be cut by, and one more place for text joined after it to pass
@@ -154,7 +158,7 @@ and stays a failure. A failure message is the one place a tool writes
 model-supplied input back out — the path it could not open, the pattern it
 could not compile, the tool name it did not recognise — and an argument that
 arrived merged or malformed makes that copy as large as the argument. The
-operational summary leads the tool's own words to the model, so the head a
+operational summary follows the tool's own words to the model, so the end a
 bound keeps says what failed. `error.message` is left whole on purpose, because
 the scrollback, the `PostToolUseFailure` hook and the sanitized telemetry span
 read it and want the operational summary in full.
@@ -244,9 +248,9 @@ Its capacity, 500 MiB, is declared in one place and is a policy rather than a
 derivation. It counts actual retained files under the store's writer lock,
 including interrupted-write remnants, and recreating Config does not reset it.
 Reaching it is an outcome the caller states, not an error: a bounded result
-keeps its head and says the rest was not kept, why, and what to ask for
-instead, and a fetched binary that cannot be kept is refused with the download
-to make instead.
+keeps its start and its end and says the cut part was not kept, why, and what
+to ask for instead, and a fetched binary that cannot be kept is refused with
+the download to make instead.
 
 Artifacts are retained by ownership and references. There is no age-based
 collection. Forks and exports may refer to an artifact after its original chat

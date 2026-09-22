@@ -1536,13 +1536,13 @@ def _validate_subagent_result_scope_after(state: State) -> None:
     require_text(
         state,
         agent_tool,
-        "          const report = toModelVisibleSubagentResult(\n"
-        "            subagent.getFinalText(),\n"
-        "            terminateMode,\n"
-        "            subagent.getTurnsUsed(),\n"
-        "            subagent.getLoopType(),\n"
-        "            subagent.getFinalMessageSlip(),\n"
-        "          );",
+        "              toModelVisibleSubagentResult(\n"
+        "                subagent.getFinalText(),\n"
+        "                terminateMode,\n"
+        "                subagent.getTurnsUsed(),\n"
+        "                subagent.getLoopType(),\n"
+        "                subagent.getFinalMessageSlip(),\n"
+        "              ),",
         label=label,
     )
     forbid_text(
@@ -2553,7 +2553,7 @@ def _validate_model_facing_failure_after(state: State) -> None:
         label=label,
     )
 
-    # ── The summary leads; the one bound holds the copy ──────────────────
+    # ── The tool's words, then the summary; the one bound holds the copy ─
     #
     # A failure message is the one place a tool writes model-supplied input
     # back out -- the path it could not open, the pattern it could not
@@ -2561,9 +2561,9 @@ def _validate_model_facing_failure_after(state: State) -> None:
     # arrived merged makes that copy as large as the argument itself. It is
     # held to one inline block by the same step that holds every tool
     # result, where the model's copy is made (see tool-result-bound), and
-    # that step keeps the head. So the operational summary, the short half
-    # that says what failed, leads the tool's own words: led by long output,
-    # it would be the part a bound cuts.
+    # that step keeps the start and the end. So the operational summary, the
+    # short half that says what failed, follows the tool's own words, and the
+    # end a bound keeps holds it.
     #
     # `error.message` is deliberately left whole. The scrollback, the
     # PostToolUseFailure hook and the sanitized telemetry span read it and
@@ -2572,10 +2572,10 @@ def _validate_model_facing_failure_after(state: State) -> None:
         "\n}\n", 1
     )[0]
     _require(
-        "return `${operational}\\n${modelFacing}`;" in merge
-        and "return `${modelFacing}\\n${operational}`;" not in merge,
-        f"{label}: the operational summary no longer leads the model-facing half "
-        f"of a merged failure, so a bound that keeps the head can cut it.",
+        "return `${modelFacing}\\n${operational}`;" in merge
+        and "return `${operational}\\n${modelFacing}`;" not in merge,
+        f"{label}: the operational summary no longer follows the model-facing "
+        f"half of a merged failure, where the end a bound keeps holds it.",
     )
     # No failure is bounded by a rule of its own any more; a second rule for
     # failures was one more place for a result to be cut differently.
@@ -2671,7 +2671,7 @@ def _validate_model_facing_failure_after(state: State) -> None:
         ),
         (
             "packages/core/src/core/coreToolScheduler.test.ts",
-            "keeps an operational reason that exists only in error.message, ahead of the output",
+            "keeps an operational reason that exists only in error.message, after the output",
         ),
     ):
         require_text(state, path, case, label=label)
@@ -2911,8 +2911,8 @@ def _validate_subagent_progress_after(state: State) -> None:
     require_text(
         state,
         agent_tool,
-        "            subagent.getTurnsUsed(),\n            subagent.getLoopType(),\n"
-        "            subagent.getFinalMessageSlip(),\n          );",
+        "                subagent.getTurnsUsed(),\n                subagent.getLoopType(),\n"
+        "                subagent.getFinalMessageSlip(),\n              ),",
         label=label,
     )
     # One vocabulary for the rules, beside the detector, used by the headless
@@ -5279,8 +5279,8 @@ _RETIRED_BOUND_MODULES = (
 )
 
 # Tools that produce text whose size they do not decide. None bounds it: each
-# returns its whole output, laid out so that what the model must know leads,
-# and the one bound is taken where the model's copy is made.
+# returns its whole output, laid out as upstream lays it out, and the one bound
+# is taken where the model's copy is made.
 _UNBOUNDED_PRODUCERS = (
     "packages/core/src/tools/shell.ts",
     "packages/core/src/tools/mcp-tool.ts",
@@ -5292,7 +5292,6 @@ _UNBOUNDED_PRODUCERS = (
     "packages/core/src/tools/monitor.ts",
     "packages/core/src/tools/notebook-edit.ts",
     "packages/core/src/tools/todoWrite.ts",
-    "packages/core/src/tools/create-sub-session.ts",
 )
 
 
@@ -5375,7 +5374,8 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "const maxBytes = config.getInlineBlockBytes();",
             "function withNestedTextJoined(",
             "export function assertToolResponsesBounded(",
-            "import { cutToTokenizerBytes, tokenizerText } from './tokenLimits.js';",
+            "  cutTailToTokenizerBytes,\n  cutToTokenizerBytes,\n  tokenizerText,\n} from './tokenLimits.js';",
+            "import { middleCutContent, type OutputBound } from '../tools/tools.js';",
             "SESSION_ARTIFACT_CAPACITY_BYTES,",
         ),
         label=label,
@@ -5387,9 +5387,16 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "const filepath = sessionArtifactPath(config, bytes, 'txt');",
             "const widest = Math.max(",
             "if (widest > maxBytes) {",
-            "const head = cutToTokenizerBytes(whole.text, maxBytes - widest);",
+            # Upstream's split: one fifth of the room to the start, and the
+            # rest to the end, so what a result says last is what it keeps.
+            "const room = maxBytes - widest;",
+            "const head = cutToTokenizerBytes(whole.text, Math.floor(room / 5));",
+            "const tail = cutTailToTokenizerBytes(whole.text, room - head.bytes);",
             "const retention = await persistSessionArtifact(config, bytes, 'txt');",
-            "retention.retained ? readBack(continueAt) : unretained",
+            "const firstCut = lineBreaks(head.text);",
+            "tailFrom > 0 && whole.text[tailFrom - 1] === '\\n' ? tailLine - 1 : tailLine;",
+            "middleCutContent(\n      head.text,",
+            "? readBack(firstCut, lastCut - firstCut + 1)",
             "if (emitted.bytes > maxBytes) {",
             "async function boundedPart(",
             "const functionResponse = withNestedTextJoined(part.functionResponse);",
@@ -5401,8 +5408,31 @@ def _validate_tool_result_bound_after(state: State) -> None:
         location=seam_path,
     )
     # Nothing in the seam converts bytes into tokens or keeps a second store.
-    for absent in ("inlineBlockTokenBound", "500 * 1024 * 1024", "normalize('NF"):
+    for absent in ("inlineBlockTokenBound", "500 * 1024 * 1024", "normalize('NF", "boundedContent("):
         forbid_text(state, seam_path, absent, label=label)
+    # The one notice's two placements live beside it: leading what a tool
+    # returned the first part of, and standing in the cut of a result whose
+    # middle was cut.
+    _require_all(
+        state,
+        "packages/core/src/tools/tools.ts",
+        (
+            "export function middleCutContent(",
+            "  return `${head}\\n\\n---\\n${MIDDLE_CUT_LEAD}${formatOutputBound(bound)}\\n---\\n\\n${tail}`;",
+            "'The middle of this result is cut here: above is its start, below is its end. ';",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/tokenLimits.ts",
+        (
+            "export function cutTailToTokenizerBytes(",
+            "if (tail.text !== cut) {",
+            "if (tail.bytes > maxBytes) {",
+        ),
+        label=label,
+    )
 
     # The scheduler finishes every call's copy after the batch hook has joined
     # it and before anything logs, records or delivers it. A copy that cannot
@@ -5542,14 +5572,18 @@ def _validate_tool_result_bound_after(state: State) -> None:
 
     # Executed in the build.
     for path, case in (
-        ("packages/core/src/core/toolResultBound.test.ts", "bounds the complete text of a result past the bound, notice included, and retains the whole"),
-        ("packages/core/src/core/toolResultBound.test.ts", "continues from the line the head was cut in"),
+        ("packages/core/src/core/toolResultBound.test.ts", "keeps the start and the end of a result past the bound, split as upstream split them, with the notice in the cut"),
+        ("packages/core/src/core/toolResultBound.test.ts", "reads back from the line the start was cut in through the line the end begins in"),
+        ("packages/core/src/core/toolResultBound.test.ts", "never splits a multi-byte code point at either boundary"),
+        ("packages/core/src/core/tokenLimits.test.ts", "keeps the end of the normalized text, cut on a code-point boundary within the bound"),
+        ("packages/core/src/core/tokenLimits.test.ts", "keeps the tail of what U+1D1C0 normalizes to, and that tail is normalized too"),
+        ("packages/core/src/tools/tools.test.ts", "stands in the cut between the start and the end of a result cut in the middle"),
         ("packages/core/src/core/toolResultBound.test.ts", "bounds the joined text, not the tool output alone"),
         ("packages/core/src/core/toolResultBound.test.ts", "says the rest was not retained when the store is full, with what to do instead, and does not throw"),
         ("packages/core/src/core/toolResultBound.test.ts", "throws when the store fails its integrity check, because that is a defect and not a capacity"),
         ("packages/core/src/core/toolResultBound.test.ts", "joins text nested beside media to the response text, and bounds the joined text"),
         ("packages/core/src/core/toolResultBound.test.ts", "refuses a result that skipped the bound, naming the call, in the bytes the tokenizer reads"),
-        ("packages/core/src/core/toolResultBound.test.ts", "keeps the head of a long result and retains the whole"),
+        ("packages/core/src/core/toolResultBound.test.ts", "keeps the start and the end of a long result and retains the whole"),
         ("packages/core/src/core/toolResultBound.test.ts", "bounds the text a hook joined to the output, not the output alone"),
         ("packages/core/src/core/toolResultBound.test.ts", "bounds the text a batch hook joined after every call finished"),
         ("packages/core/src/core/toolResultBound.test.ts", "fails a call whose copy cannot be finished, naming the cause, rather than hanging the batch"),
@@ -6560,8 +6594,8 @@ def _validate_bounded_output_after(state: State) -> None:
                 f"applies here by name instead.",
             )
         require_text(state, path, "formatOutputBound(", count=1, label=label)
-    # The capture notice leads the output it describes, where the head of a
-    # long result reaches.
+    # The capture notice follows the output it describes, as upstream placed
+    # it.
     _require_all(
         state,
         "packages/core/src/services/shellExecutionService.ts",
@@ -6569,27 +6603,99 @@ def _validate_bounded_output_after(state: State) -> None:
             "outputCaptureLimitExceeded?: boolean;",
             "unit: 'bytes of output',",
             "total: totalBytesReceived,",
-            "return output ? boundedContent(output, bound) : formatOutputBound(bound);",
+            "return output ? `${output}\\n\\n${notice}` : notice;",
         ),
         label=label,
     )
 
-    # A tool returns its whole result, laid out so that what the model must
-    # know leads it, and the one bound keeps the head. Executed in the build.
+    # Upstream's layouts, kept. Nothing moves the facts a result closes with
+    # ahead of what they describe to survive a cut that keeps only the start:
+    # the cut keeps the end, so an exit status, an error or a note on where
+    # the bytes went stays where upstream put it and where the model was
+    # trained to read it.
+    for path, ordered in (
+        (
+            "packages/core/src/tools/shell.ts",
+            (
+                "`Output: ${result.output || '(empty)'}`,",
+                "`Error: ${finalError}`,",
+                "`Exit Code: ${result.exitCode ?? '(none)'}`,",
+                "`Signal: ${result.signal ?? '(none)'}`,",
+                "`Process Group PGID: ${result.pid ?? '(none)'}`,",
+            ),
+        ),
+        (
+            "packages/core/src/tools/web-search.ts",
+            (
+                "      sections.push(answerText);",
+                "'Opened evidence pages (read in full by the search agent):\\n' +",
+                "formatSearchBody(this.params.query, data, partialNote) +",
+                "      CITATION_POLICY +",
+                "      SAFETY_FOOTER;",
+            ),
+        ),
+        (
+            "packages/core/src/tools/write-file.ts",
+            (
+                "`User modified the \\`content\\` to be: ${content}`,",
+                "formatRecordArtifactReminder(artifact.workspacePath),",
+            ),
+        ),
+        (
+            "packages/core/src/tools/ls.ts",
+            (
+                "let resultMessage = `Listed ${totalEntryCount} item(s) in ${this.params.path}:\\n---\\n${directoryContent}`;",
+                "resultMessage += `\\n\\n(${ignoredMessages.join(', ')})`;",
+            ),
+        ),
+    ):
+        _require_ordered(
+            _source(state, path, label=label), ordered, label=label, location=path
+        )
+    for path, needle in (
+        ("packages/core/src/tools/shell.ts", "llmContent += `\\n\\n${longRunHint}`;"),
+        ("packages/core/src/tools/shell.ts", "llmContent += `\\n\\n${attributionWarning}`;"),
+        (
+            "packages/core/src/tools/web-fetch.ts",
+            "llmContent: `${header}\\n\\n${entry.content}${sourceNote}`,",
+        ),
+        ("packages/core/src/tools/agent/agent.ts", "            ) + effectSuffix;"),
+    ):
+        require_text(state, path, needle, label=label)
+    require_text(
+        state,
+        "packages/core/src/tools/web-search.ts",
+        "listing the relevant URLs from above as markdown links.",
+        label=label,
+    )
+    # create_sub_session is upstream's own again: upstream returns a first
+    # turn whole, its link warning after it, and bounds nothing itself.
+    _require(
+        "packages/core/src/tools/create-sub-session.ts" not in state,
+        f"{label}: packages/core/src/tools/create-sub-session.ts is patched "
+        f"again; upstream's returns a first turn whole, its link warning "
+        f"after it, and bounds nothing itself.",
+    )
+
+    # A tool returns its whole result, laid out as upstream lays it out, and
+    # the one bound keeps its start and its end, so what a result says last
+    # survives in the place the model was trained to find it. Executed in the
+    # build.
     for path, case in (
         ("packages/core/src/tools/tools.test.ts", "names the limit that cut a result and the call that continues"),
         ("packages/core/src/tools/tools.test.ts", "names no cut for a result no limit cut, only the coverage it could not reach"),
         ("packages/core/src/tools/tools.test.ts", "says the rest was not retained, and why, instead of naming a read that cannot succeed"),
         ("packages/core/src/tools/tools.test.ts", "leads the content it bounds"),
-        ("packages/core/src/tools/shell.test.ts", "returns command output whole, after every fact of how the command ended"),
+        ("packages/core/src/tools/shell.test.ts", "returns command output whole, in upstream field order with the exit status after it"),
         ("packages/core/src/services/shellExecutionService.test.ts", "bounds buffered PTY output before building the final string"),
         ("packages/core/src/tools/web-fetch.test.ts", "returns preapproved markdown whole for the one bound on a tool result to hold"),
         ("packages/core/src/tools/web-fetch.test.ts", "says a binary body cannot be kept when the artifact store is full, with what to do instead"),
         ("packages/core/src/tools/mcp-tool.test.ts", "returns a reply whose parts together pass one inline block whole, for the one bound on a tool result to hold"),
-        ("packages/core/src/tools/web-search.test.ts", "leads a long answer with the guidance and evidence the bounded head must keep"),
+        ("packages/core/src/tools/web-search.test.ts", "keeps a long answer before its evidence and guidance, and the cut keeps both ends"),
         ("packages/core/src/tools/read-mcp-resource.test.ts", "returns a resource whole however large, leaving its bound to where the model copy is made"),
-        ("packages/core/src/tools/create-sub-session.test.ts", "returns a long first turn whole, its link warning ahead of it"),
-        ("packages/core/src/tools/write-file.test.ts", "quotes user-modified content whole and last, leaving its bound to where the model copy is made"),
+        ("packages/core/src/tools/create-sub-session.test.ts", "returns a long first turn whole, its link warning after it as upstream lays it out"),
+        ("packages/core/src/tools/write-file.test.ts", "quotes user-modified content whole, where upstream puts it, leaving its bound to where the model copy is made"),
+        ("packages/core/src/tools/ls.test.ts", "says what it left out after the entries, as upstream lays it out"),
         ("packages/core/src/tools/glob.test.ts", "returns every match below the scan ceiling, leaving the inline bound to the one bound on a tool result"),
         ("packages/core/src/tools/ls.test.ts", "lists every entry, leaving the inline bound to the one bound on a tool result"),
         ("packages/core/src/services/monitorRegistry.test.ts", "bounds a long event line through the one notice"),
