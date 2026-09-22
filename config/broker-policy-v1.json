@@ -45,7 +45,7 @@
   },
   "capture": {
     "image_tag": "qwen38-session-capture:1.0.0",
-    "image_id": "sha256:b4dc02670833c08f61196495c88f229c9ea20ac1d3f28c2b6cc4d5d0718a7f89",
+    "image_id": "sha256:1658271fc7a12695376eef81371401816037dd6ce2f2754f85426681c2935c4e",
     "capture_id": "unix-stream-capture-v1",
     "memory": "32m",
     "memory_swap": "32m",
