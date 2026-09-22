@@ -177,9 +177,7 @@
       "top_k": 20,
       "min_p": 0.0,
       "presence_penalty": 0.0,
-      "repetition_penalty": 1.0,
-      "thinking_token_budget": 262144,
-      "final_response_token_budget": 131072
+      "repetition_penalty": 1.0
     },
     "environment": [
       "HOME=/home/vllm",
@@ -228,7 +226,7 @@
       "--generation-config",
       "/model",
       "--override-generation-config",
-      "{\"temperature\":1.0,\"top_p\":0.95,\"top_k\":20,\"min_p\":0.0,\"presence_penalty\":0.0,\"repetition_penalty\":1.0,\"thinking_token_budget\":262144,\"final_response_token_budget\":131072}",
+      "{\"temperature\":1.0,\"top_p\":0.95,\"top_k\":20,\"min_p\":0.0,\"presence_penalty\":0.0,\"repetition_penalty\":1.0}",
       "--quantization",
       "compressed-tensors",
       "--dtype",

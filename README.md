@@ -151,11 +151,8 @@ by the window, which the patched server and client enforce:
 rendered prompt + reasoning + tools + final response <= 262144
 ```
 
-The backend's launch still defaults a 262,144-token reasoning budget and a
-131,072-token final-response budget, and neither can bind first: the reasoning
-budget is the whole window, a turn's output limit is `C`, and a compaction's
-final response is accepted only up to `M` bytes. Qwen Code sends neither; a
-caller may still set either per request.
+The backend's launch defaults no phase budget, and Qwen Code sends none; a
+caller may still set either budget per request.
 
 Thinking, its effort and the tuple above are defaults at both layers, not
 suggestions in prose. vLLM defaults omitted request fields to thinking enabled,

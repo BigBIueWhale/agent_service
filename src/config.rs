@@ -426,8 +426,6 @@ pub struct AgentDefaultsLock {
     pub min_p: f64,
     pub presence_penalty: f64,
     pub repetition_penalty: f64,
-    pub thinking_token_budget: u64,
-    pub final_response_token_budget: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1055,8 +1053,6 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || defaults.min_p != 0.0
         || defaults.presence_penalty != 0.0
         || defaults.repetition_penalty != 1.0
-        || defaults.thinking_token_budget != 262_144
-        || defaults.final_response_token_budget != 131_072
     {
         return fail(
             "backend agent defaults differ from Qwen3.8 xhigh thinking-mode policy".into(),
@@ -1472,7 +1468,7 @@ mod tests {
     }
 
     #[test]
-    fn sampling_or_phase_budget_drift_is_rejected() {
+    fn sampling_drift_is_rejected() {
         let mut lock = checked_in_lock();
         lock.backend.agent_defaults.temperature = 0.7;
         assert_agent_policy_rejected(lock);
@@ -1496,14 +1492,23 @@ mod tests {
         let mut lock = checked_in_lock();
         lock.backend.agent_defaults.repetition_penalty = 1.1;
         assert_agent_policy_rejected(lock);
+    }
 
-        let mut lock = checked_in_lock();
-        lock.backend.agent_defaults.thinking_token_budget = 262_143;
-        assert_agent_policy_rejected(lock);
-
-        let mut lock = checked_in_lock();
-        lock.backend.agent_defaults.final_response_token_budget = 131_071;
-        assert_agent_policy_rejected(lock);
+    #[test]
+    fn a_served_phase_budget_is_refused() {
+        // The backend serves no phase budget, so the lock has no field for
+        // one: a lock that declares either does not parse at all.
+        for field in ["thinking_token_budget", "final_response_token_budget"] {
+            let mut lock: serde_json::Value =
+                serde_json::from_str(STACK_LOCK_JSON).expect("checked-in lock must be JSON");
+            lock["backend"]["agent_defaults"][field] = serde_json::json!(1);
+            let error = serde_json::from_value::<StackLock>(lock)
+                .expect_err("a served phase budget must not parse");
+            assert!(
+                error.to_string().contains(&format!("unknown field `{field}`")),
+                "unexpected parse error: {error}"
+            );
+        }
     }
 
     #[test]
