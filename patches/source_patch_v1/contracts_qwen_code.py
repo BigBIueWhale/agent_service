@@ -726,6 +726,8 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         (
             "appendQwen38DeploymentContract",
             "appendQwen38MainSessionFrame(fs.readFileSync(systemMdPath, 'utf8'))",
+            "  turnBudget?: Qwen38TurnBudget,\n): string {",
+            "      contextPartition,\n      turnBudget,\n    );",
         ),
         label=label,
     )
@@ -740,6 +742,68 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         ),
         label=label,
     )
+    # Reaching the session turn budget ends the session, so the model is told
+    # the number: once, as a fixed line of the `## Context` section, read from
+    # the budget the session was started with -- a subagent's is its own run's
+    # -- and never counted down. A budget that is no whole number of turns
+    # cannot be stated, and a locked contract built without one is refused.
+    # The number is what the startup proof leaves out and bounds by the widest
+    # a safe integer renders to, so the form it counts must differ from the
+    # form sent in the digits alone.
+    prompt_source = _require_all(
+        state,
+        prompt,
+        (
+            "export const QWEN38_TURN_BUDGET_LEFT_OUT = 'left out';",
+            "export const QWEN38_TURN_BUDGET_BYTES = String(Number.MAX_SAFE_INTEGER).length;",
+            "  if (turnBudget === QWEN38_TURN_BUDGET_LEFT_OUT) return '';\n  if (!Number.isSafeInteger(turnBudget) || turnBudget < 1) {",
+            "`- This session may run at most ${turnBudgetText(turnBudget)} turns. Reaching that number ends the session.`,",
+            "'locked agent-service states its turn budget in the deployment contract, and none was supplied',",
+            "${qwen38ContextSection(partition, turnBudget)}",
+        ),
+        label=label,
+    )
+    _require(
+        prompt_source.count("turnBudgetText(") == 2,
+        f"{label}: {prompt} states the turn budget somewhere other than its one line",
+    )
+    _require_ordered(
+        _source(state, core, label=label),
+        (
+            "const deploymentPrompt = appendQwen38DeploymentContract(",
+            "appendQwen38EngineeringDiscipline(finalPrompt),",
+            "partitionContextWindow(subagentWindow),",
+            "this.runConfig.max_turns,",
+        ),
+        label=label,
+        location=core,
+    )
+    for counted in (
+        prompt,
+        "packages/core/src/core/client.ts",
+        "packages/core/src/core/geminiChat.ts",
+        "packages/cli/src/nonInteractiveCli.ts",
+        core,
+    ):
+        for countdown in (
+            "turns remaining",
+            "Turns remaining",
+            "remaining turns",
+            "Remaining turns",
+            "turns left",
+            "Turns left",
+            "turnsRemaining",
+            "remainingTurns",
+        ):
+            forbid_text(state, counted, countdown, label=label)
+    for case in (
+        "states the turn budget the session was given, once, and that reaching it ends the session",
+        "leaves out only the budget's digits in the form the startup proof counts",
+        "refuses a turn budget that is not a whole number of turns",
+    ):
+        require_text(
+            state, "packages/core/src/core/qwen38-deployment-prompt.test.ts", case, label=label
+        )
     _require_all(
         state,
         context,
@@ -3409,9 +3473,11 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const bare = await counted([]);",
             "const withStartup = startup ? await counted([startup.counted]) : bare;",
             "const repositoryData = declared?.repositoryDataBytes ?? 0;",
+            "const turnBudget = declared?.turnBudgetBytes ?? 0;",
             "const workspaceData = startup?.workspaceDataBytes ?? 0;",
-            "const preamble = withStartup + repositoryData + workspaceData;",
+            "const preamble = withStartup + repositoryData + turnBudget + workspaceData;",
             "if (preamble > partition.staticPreamble) {",
+            "`room for ${turnBudget} bytes of turn budget`",
             "const probe = await countText(FRAMING_PROBE_TEXT);",
             "const withMessage = await counted([message]);",
             "const withTurn = await counted([message, turn]);",
@@ -3447,14 +3513,16 @@ def _validate_compaction_budget_after(state: State) -> None:
     # fail. The probe carries content, the text count takes it back out, and
     # the tests prove a template wider than `F` is refused on the wire.
     require_text(state, chat, "const FRAMING_PROBE_TEXT = 'framing';", label=label)
-    # The main session's instruction carries repository data, so its chat is
-    # declared with that instruction's fixed text and the data's byte bound;
-    # replacing the instruction clears the declaration it no longer matches.
+    # The main session's instruction carries repository data and states the
+    # turn budget, so its chat is declared with that instruction's fixed text
+    # -- the snapshot without its values, the budget's line without its
+    # number -- and the byte bound of each; replacing the instruction clears
+    # the declaration it no longer matches.
     _require_all(
         state,
         chat,
         (
-            "export interface PreambleDeclaration {",
+            "export interface PreambleDeclaration {\n  readonly systemInstruction: string;\n  readonly repositoryDataBytes: number;\n  readonly turnBudgetBytes: number;\n}",
             "    this.preambleDeclaration = undefined;",
             "  declarePreamble(declaration: PreambleDeclaration): void {",
         ),
@@ -3466,6 +3534,10 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "gitStatus: GIT_SNAPSHOT_WITHOUT_REPOSITORY_DATA,",
             "repositoryDataBytes: GIT_SNAPSHOT_REPOSITORY_BYTES,",
+            "const base = baseStating(this.config.getMaxSessionTurns());",
+            "const declaredBase = baseStating(QWEN38_TURN_BUDGET_LEFT_OUT);",
+            "          base: declaredBase,\n          gitStatus: GIT_SNAPSHOT_WITHOUT_REPOSITORY_DATA,",
+            "turnBudgetBytes: declaredBase === base ? 0 : QWEN38_TURN_BUDGET_BYTES,",
             "chat.declarePreamble(declaration);",
             "this.chat.declarePreamble(preamble.declaration);",
         ),
@@ -3521,6 +3593,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "tools: rendered.tools,",
             "declared?.systemInstruction ?? rendered.systemInstruction,",
             "repositoryDataBytes: declared?.repositoryDataBytes ?? 0,",
+            "turnBudgetBytes: declared?.turnBudgetBytes ?? 0,",
             "if (this.provenPreamble === preambleProved) return;",
             "const bare = await counted([]);",
             "this.provenPreamble = preambleProved;",
@@ -3600,8 +3673,16 @@ def _validate_compaction_budget_after(state: State) -> None:
             "'shows why an empty probe measured nothing: the converter never sends it'",
             "'measures every framing from the wire requests the converter really sends'",
             "'counts the declared instruction and bounds its repository data by bytes'",
+            "'counts the instruction with its turn budget left out and bounds the budget by its widest rendering'",
+            "'refuses a declared preamble whose turn budget bound passes its share, naming that room'",
             "'drops a declaration when the instruction it describes is replaced'",
         ),
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/core/client.test.ts",
+        "declares the turn budget's place left empty and its widest rendering, whatever budget the session was given",
         label=label,
     )
     for absent in (
@@ -7226,18 +7307,22 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="context-window-partition",
         rationale=(
-            "Only the generation reserve and the directive reserve are held back from the served "
-            "window; a turn's output limit is the generation reserve, the one tuned number, and nothing "
-            "else, and a configured ceiling is refused. Compaction summarises the prompt the last "
-            "turn was issued against and carries that turn verbatim behind the snapshot, so the "
-            "snapshot always has at least the reserve. Exact before/after sizing governs compaction. "
-            "Original authored inputs are retained independently of model summaries; summaries must "
-            "satisfy the six-section structural contract. No phase budget forces reasoning to stop."
+            "The served window is spent from three declared quantities: the static preamble, a "
+            "capacity proved against the real preamble before the first turn, with the Git "
+            "snapshot's values, the startup context's workspace data and the stated turn budget's "
+            "number bounded by their bytes; one inline block; and the per-message framing. A turn's "
+            "room and the compaction trigger are derived from the fit; a turn's output limit is "
+            "that room and nothing else, and a configured ceiling is refused. Compaction summarises "
+            "the prompt the last turn was issued against and carries that turn verbatim behind the "
+            "snapshot, so the snapshot always has at least a turn's room. Exact before/after sizing "
+            "governs compaction. Original authored inputs are retained independently of model "
+            "summaries; summaries must satisfy the six-section structural contract. No phase budget "
+            "forces reasoning to stop."
         ),
         removal_condition=(
-            "Upstream provides the same remainder-limited turns, issued-prompt compaction with a "
-            "verbatim turn, exact request sizing, durable authored-input retention, and structural "
-            "summary validation."
+            "Upstream provides the same derived turn room, a preamble proved against its declared "
+            "share, issued-prompt compaction with a verbatim turn, exact request sizing, durable "
+            "authored-input retention, and structural summary validation."
         ),
         validate_before=_validate_compaction_budget_before,
         validate_after=_validate_compaction_budget_after,

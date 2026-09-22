@@ -210,21 +210,23 @@ startup; a deployment whose own preamble does not fit is refused at startup
 rather than part-way through a session, and a preamble that grows past it is
 refused at the turn that would send it; each compaction's preflight holds what
 its directive adds to the same share. The proof counts this deployment's turn
-preamble with the Git snapshot's repository values left out — 7,748 tokens,
-rendered by the served template and counted by the served tokenizer — and the
-startup context that opens every history with its workspace data left out, 46
-more. It adds the most bytes the data left out may hold, capped in the NFC form
-the tokenizer reads, as the most tokens they can cost: 1,920 for the snapshot's
-branch, status and commits, and 1,280 for the startup context's environment
-lines and folder listing. That is a bound of 10,994, the same for every
-repository and every workspace, so neither can make a deployment refuse to
-start, with 1,294 left for the prompt and the declarations to grow into. Each
-run of data sits between fixed lines at a boundary no token spans, so the
-context costs its fixed text plus each run's own tokens exactly; counted through
-the served path, it does. The startup context is kept whole at the head of every
-history a compaction builds, never summarized and rebuilt, so nothing can fail
-to put it back. In the compaction shape, without a snapshot, the preamble is
-3,358 before the 548 its directive adds. `F` is proved against the served
+preamble with the Git snapshot's repository values and the turn budget's number
+left out — 7,775 tokens, rendered by the served template and counted by the
+served tokenizer — and the startup context that opens every history with its
+workspace data left out, 46 more. It adds the most bytes the data left out may
+hold, capped in the NFC form the tokenizer reads, as the most tokens they can
+cost: 1,920 for the snapshot's branch, status and commits, 1,280 for the startup
+context's environment lines and folder listing, and 16 for the turn budget, the
+widest a safe integer renders to. That is a bound of 11,037, the same for every
+repository, every workspace and every budget, so none of them can make a
+deployment refuse to start, with 1,251 left for the prompt and the declarations
+to grow into. Each run of data sits between fixed lines at a boundary no token
+spans, so the context costs its fixed text plus each run's own tokens exactly;
+counted through the served path, it does, and the budget's number costs one
+token a digit. The startup context is kept whole at the head of every history a
+compaction builds, never summarized and rebuilt, so nothing can fail to put it
+back. In the compaction shape, without a snapshot, the preamble is 3,388 before
+the 548 its directive adds. `F` is proved against the served
 template too: a user message, an assistant turn and a tool result, each counted
 with the request and without it, less its content counted alone. The served
 template frames them in 5, 10 and 24 tokens, the last with the markup of the
@@ -319,7 +321,10 @@ budget is 400 turns (`limits.max_session_turns`), a submission may name any
 budget from 1 to the locked 2,000-turn ceiling
 (`limits.max_session_turns_ceiling`) in its optional `max_session_turns` field,
 the chosen budget is enforced by the client itself, and `max_wall_time_seconds`
-is disabled everywhere. The budget counts the owning session's own turns, so a
+is disabled everywhere. The model is told its budget once, as a fixed line of
+the `## Context` section — the number, and that reaching it ends the session —
+and it is never counted down; a subagent is told its own the same way. The
+budget counts the owning session's own turns, so a
 foreground subagent that spends sixty turns costs its parent one; a subagent is
 bounded by the same budget in its own right, and if it exhausts it the parent is
 told so explicitly, with the turn count, and treats the assignment as unfinished
