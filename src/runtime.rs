@@ -369,10 +369,10 @@ pub struct RunningSnapshot {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AcceptanceRecord {
-    /// Version 3 records the streamed-archive commitment and the release
-    /// that accepted the session, and is the only version this service
-    /// writes. Terminal reads cross-check the record against the published
-    /// terminal body.
+    /// Version 4 records the streamed-archive commitment and the release
+    /// that accepted the session, the backend's launch profile named as the
+    /// launch profile, and is the only version this service writes. Terminal
+    /// reads cross-check the record against the published terminal body.
     pub schema_version: u32,
     pub session_id: String,
     pub accepted_at_unix: u64,
@@ -391,7 +391,7 @@ impl AcceptanceRecord {
         release: &crate::config::ReleaseIdentity,
     ) -> Self {
         Self {
-            schema_version: 3,
+            schema_version: 4,
             session_id: session_id.to_string(),
             accepted_at_unix,
             archive_bytes: req.archive.bytes,
@@ -409,7 +409,7 @@ impl AcceptanceRecord {
         archive_sha256: &str,
         max_session_turns: u32,
     ) -> bool {
-        self.schema_version == 3
+        self.schema_version == 4
             && self.archive_bytes == archive_bytes
             && self.archive_sha256 == archive_sha256
             && self.prompt == prompt
@@ -2495,11 +2495,12 @@ fn read_acceptance_file(
     let record: AcceptanceRecord = serde_json::from_slice(&bytes).map_err(|error| {
         ServiceError::Internal(format!("{role} {} is malformed: {error}", path.display()))
     })?;
-    // Version 3 is the only version this service writes: version 2 lacked the
-    // release identity, and the service reads only the formats it writes, so
-    // an older record here is one startup names for the operator to move
-    // aside rather than one it translates.
-    if record.schema_version != 3 || record.session_id != session_id {
+    // Version 4 is the only version this service writes: version 3 called the
+    // backend's launch profile `profile`, version 2 lacked the release
+    // identity, and the service reads only the formats it writes, so an older
+    // record here is one startup names for the operator to move aside rather
+    // than one it translates.
+    if record.schema_version != 4 || record.session_id != session_id {
         return Err(ServiceError::Internal(format!(
             "{role} {} has identity/schema drift",
             path.display()
@@ -4373,7 +4374,7 @@ mod tests {
             let paths = SessionPaths::new(&state, session_id);
             let archive = b"original archive";
             let acceptance = AcceptanceRecord {
-                schema_version: 3,
+                schema_version: 4,
                 session_id: session_id.into(),
                 accepted_at_unix: 1,
                 archive_bytes: archive.len() as u64,
@@ -4551,9 +4552,16 @@ mod tests {
             serde_json::json!("s-2222222222222222222222222222222222222222222222222222222222222222");
         let mut running = original.clone();
         running["status"] = serde_json::json!("running");
-        // What every release before this one wrote: no release identity.
+        // What every release before the one that recorded it wrote: no
+        // release identity.
         let mut unidentified = original.clone();
         unidentified.as_object_mut().unwrap().remove("release");
+        // What the previous release wrote: the backend's launch profile
+        // under the bare name `profile`.
+        let mut unnamed_profile = original.clone();
+        let backend = unnamed_profile["release"]["backend"].as_object_mut().unwrap();
+        let launch_profile = backend.remove("launch_profile").unwrap();
+        backend.insert("profile".into(), launch_profile);
         let mut contradictory = original;
         contradictory["observed_output_tokens"] = serde_json::json!(0);
         contradictory["observed_reasoning_tokens"] = serde_json::json!(1);
@@ -4590,6 +4598,11 @@ mod tests {
                 "missing field `release`",
             ),
             (
+                "an unnamed launch profile",
+                serde_json::to_vec(&unnamed_profile).unwrap(),
+                "unknown field `profile`",
+            ),
+            (
                 "semantic contradiction",
                 serde_json::to_vec(&contradictory).unwrap(),
                 "reasoning tokens exceed",
@@ -4606,6 +4619,60 @@ mod tests {
         }
     }
 
+    /// The acceptance this release writes is the one it reads and replays,
+    /// with the backend's launch profile under its own name: a writer and a
+    /// reader that disagreed on the version would refuse every session this
+    /// release accepted the next time it started.
+    #[test]
+    fn the_written_acceptance_is_the_read_and_replayed_one() {
+        let tree = TestTree::new("written-acceptance");
+        let results = tree.0.join("results");
+        let session_id = "s-5959595959595959595959595959595959595959595959595959595959595959";
+        std::fs::create_dir_all(results.join(session_id)).expect("create acceptance directory");
+        let request = crate::validation::ValidatedRequest {
+            prompt: "written acceptance fixture".to_string(),
+            max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            archive: crate::validation::SpooledArchive {
+                path: PathBuf::from("/written-acceptance-fixture.zip"),
+                bytes: 7,
+                sha256: "7".repeat(64),
+            },
+        };
+        let written = AcceptanceRecord::from_request(
+            session_id,
+            1,
+            &request,
+            &crate::config::test_release_identity(),
+        );
+        assert!(
+            written.matches_wire(
+                &request.prompt,
+                request.archive.bytes,
+                &request.archive.sha256,
+                request.max_session_turns,
+            ),
+            "a replay of the accepted request is not recognised as the same operation"
+        );
+        let encoded = serde_json::to_value(&written).unwrap();
+        assert_eq!(
+            encoded["release"]["backend"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            ["image_id", "launch_profile"]
+        );
+        let path = results.join(session_id).join("accepted.json");
+        private_write(&path, &serde_json::to_vec_pretty(&written).unwrap());
+        make_service_owned(&path);
+        assert_eq!(
+            super::read_acceptance(&results, session_id)
+                .expect("the reader accepts the record the writer wrote"),
+            written
+        );
+    }
+
     #[test]
     fn acceptance_records_are_read_strictly() {
         let tree = TestTree::new("strict-acceptance");
@@ -4613,7 +4680,7 @@ mod tests {
         let session_id = "s-5757575757575757575757575757575757575757575757575757575757575757";
         std::fs::create_dir_all(results.join(session_id)).expect("create acceptance directory");
         let current = AcceptanceRecord {
-            schema_version: 3,
+            schema_version: 4,
             session_id: session_id.to_string(),
             accepted_at_unix: 1,
             archive_bytes: 1,
@@ -4627,10 +4694,22 @@ mod tests {
         unknown["preserve_thinking"] = serde_json::json!(false);
         let mut missing = encoded.clone();
         missing.as_object_mut().unwrap().remove("max_session_turns");
-        // A version-2 record, as every release before this one wrote.
+        // A version-2 record, as every release before the one that recorded
+        // the release wrote.
         let mut unidentified = encoded.clone();
         unidentified.as_object_mut().unwrap().remove("release");
         unidentified["schema_version"] = serde_json::json!(2);
+        // A version-3 record, as the previous release wrote: its backend's
+        // launch profile under the bare name `profile`.
+        let mut unnamed_profile = encoded.clone();
+        unnamed_profile["schema_version"] = serde_json::json!(3);
+        let backend = unnamed_profile["release"]["backend"].as_object_mut().unwrap();
+        let launch_profile = backend.remove("launch_profile").unwrap();
+        backend.insert("profile".into(), launch_profile);
+        // The current shape under the previous version number is a record no
+        // release wrote, and is refused on its number alone.
+        let mut renumbered = encoded.clone();
+        renumbered["schema_version"] = serde_json::json!(3);
         let path = results.join(session_id).join("accepted.json");
         for (case, record, expected) in [
             ("current", encoded, None),
@@ -4648,6 +4727,16 @@ mod tests {
                 "no release identity",
                 unidentified,
                 Some("missing field `release`"),
+            ),
+            (
+                "an unnamed launch profile",
+                unnamed_profile,
+                Some("unknown field `profile`"),
+            ),
+            (
+                "the previous version number",
+                renumbered,
+                Some("identity/schema drift"),
             ),
         ] {
             match std::fs::remove_file(&path) {
@@ -4708,7 +4797,7 @@ mod tests {
         terminal.progress_phase = latest.phase;
         terminal.progress_message = latest.message.clone();
         let acceptance = AcceptanceRecord {
-            schema_version: 3,
+            schema_version: 4,
             session_id: current_id.to_string(),
             accepted_at_unix: terminal.started_at_unix,
             archive_bytes: terminal.archive_bytes,
@@ -4782,6 +4871,43 @@ mod tests {
             b"irreplaceable raw evidence",
         );
 
+        // A result directory the previous release wrote: version 3, whose
+        // release named the backend's launch profile `profile`.
+        let previous_id = "s-5858585858585858585858585858585858585858585858585858585858585858";
+        let previous_dir = results.join(previous_id);
+        std::fs::create_dir(&previous_dir).expect("create previous-release result directory");
+        std::fs::set_permissions(&previous_dir, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod previous-release result directory");
+        let unname_profile = |record: &mut serde_json::Value| {
+            let backend = record["release"]["backend"].as_object_mut().unwrap();
+            let launch_profile = backend.remove("launch_profile").unwrap();
+            backend.insert("profile".into(), launch_profile);
+        };
+        let mut previous_terminal = serde_json::to_value(body(previous_id)).unwrap();
+        unname_profile(&mut previous_terminal);
+        let mut previous_acceptance = serde_json::to_value(AcceptanceRecord {
+            session_id: previous_id.to_string(),
+            ..acceptance.clone()
+        })
+        .unwrap();
+        previous_acceptance["schema_version"] = serde_json::json!(3);
+        unname_profile(&mut previous_acceptance);
+        private_write(
+            &previous_dir.join("finished.json"),
+            &serde_json::to_vec_pretty(&previous_terminal).unwrap(),
+        );
+        private_write(
+            &previous_dir.join("accepted.json"),
+            &serde_json::to_vec_pretty(&previous_acceptance).unwrap(),
+        );
+        for path in [
+            previous_dir.clone(),
+            previous_dir.join("finished.json"),
+            previous_dir.join("accepted.json"),
+        ] {
+            make_service_owned(&path);
+        }
+
         // A result directory named by the retired 128-bit handle shape.
         let historical_id = "s-0123456789abcdef0123456789abcdef";
         let historical_dir = results.join(historical_id);
@@ -4800,6 +4926,8 @@ mod tests {
             legacy_dir.join("accepted.json"),
             legacy_dir.join("finished.json"),
             legacy_state.join("raw-evidence"),
+            previous_dir.join("accepted.json"),
+            previous_dir.join("finished.json"),
             historical_dir.join("finished.json"),
         ];
         let snapshot = || {
@@ -4834,8 +4962,13 @@ mod tests {
                     "{}: not a session result directory",
                     historical_dir.display()
                 ),
+                format!(
+                    "{}: terminal record {} is malformed: unknown field `profile`",
+                    previous_dir.display(),
+                    previous_dir.join("finished.json").display()
+                ),
                 "unknown field".to_string(),
-                "2 result directories cannot be read".to_string(),
+                "3 result directories cannot be read".to_string(),
                 "remove these paths".to_string(),
             ] {
                 assert!(message.contains(&expected), "missing {expected:?}: {message}");
@@ -4853,6 +4986,8 @@ mod tests {
         std::fs::rename(&legacy_state, tree.0.join("kept-state")).expect("move legacy state");
         std::fs::rename(&historical_dir, tree.0.join("kept-historical"))
             .expect("move historical result");
+        std::fs::rename(&previous_dir, tree.0.join("kept-previous"))
+            .expect("move previous-release result");
         crate::api::recover_local_state(&cfg)
             .await
             .expect("startup adopts a results directory it can read");
@@ -5209,7 +5344,7 @@ mod tests {
                 archive_sha256: "0".repeat(64),
             },
             acceptance: AcceptanceRecord {
-                schema_version: 3,
+                schema_version: 4,
                 session_id: session_id.clone(),
                 accepted_at_unix: 1,
                 archive_bytes: 22,
@@ -5246,7 +5381,7 @@ mod tests {
     /// pinned acceptance records to schema version 1 while the wire protocol
     /// has only ever written version 2.
     #[tokio::test]
-    async fn current_handle_terminal_read_accepts_persistent_v3_acceptance() {
+    async fn current_handle_terminal_read_accepts_persistent_v4_acceptance() {
         let tree = TestTree::new("current-terminal-read");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
@@ -5275,7 +5410,7 @@ mod tests {
         terminal.progress_phase = latest.phase;
         terminal.progress_message = latest.message.clone();
         let acceptance = AcceptanceRecord {
-            schema_version: 3,
+            schema_version: 4,
             session_id: session_id.to_string(),
             accepted_at_unix: terminal.started_at_unix,
             archive_bytes: 22,
@@ -5308,7 +5443,7 @@ mod tests {
         let cfg = test_config(state, results.clone());
         let recovered = read_terminal(&cfg, session_id)
             .await
-            .expect("terminal read must accept the persistent schema-3 acceptance record");
+            .expect("terminal read must accept the persistent schema-4 acceptance record");
         assert_eq!(recovered.session_id, session_id);
         assert_eq!(recovered.status, SessionStatus::Completed);
         assert_eq!(recovered.release, acceptance.release);
@@ -5339,24 +5474,38 @@ mod tests {
         );
         make_service_owned(&result_dir.join("finished.json"));
 
-        // Version 2 lacked the release identity and version 1 never reached
-        // disk; the strict reader refuses an older version instead of
-        // trusting it.
+        // Version 3 called the backend's launch profile `profile`, version 2
+        // lacked the release identity, and version 1 never reached disk; the
+        // strict reader refuses an older version instead of trusting it.
+        let mut previous = serde_json::to_value(&acceptance).expect("encode acceptance fixture");
+        previous["schema_version"] = serde_json::json!(3);
+        let backend = previous["release"]["backend"].as_object_mut().unwrap();
+        let launch_profile = backend.remove("launch_profile").unwrap();
+        backend.insert("profile".into(), launch_profile);
         let mut downgraded = acceptance;
         downgraded.schema_version = 2;
-        std::fs::remove_file(result_dir.join("accepted.json")).expect("remove schema-3 fixture");
-        private_write(
-            &result_dir.join("accepted.json"),
-            &serde_json::to_vec_pretty(&downgraded).expect("serialize downgraded fixture"),
-        );
-        make_service_owned(&result_dir.join("accepted.json"));
-        let error = read_terminal(&cfg, session_id)
-            .await
-            .expect_err("schema-version-2 acceptance record must be rejected");
-        assert!(
-            error.to_string().contains("identity/schema drift"),
-            "unexpected rejection: {error}"
-        );
+        for (case, record, expected) in [
+            ("schema-version-3", previous, "unknown field `profile`"),
+            (
+                "schema-version-2",
+                serde_json::to_value(&downgraded).expect("encode downgraded fixture"),
+                "identity/schema drift",
+            ),
+        ] {
+            std::fs::remove_file(result_dir.join("accepted.json")).expect("remove acceptance fixture");
+            private_write(
+                &result_dir.join("accepted.json"),
+                &serde_json::to_vec_pretty(&record).expect("serialize older fixture"),
+            );
+            make_service_owned(&result_dir.join("accepted.json"));
+            let error = read_terminal(&cfg, session_id)
+                .await
+                .expect_err(&format!("{case} acceptance record must be rejected"));
+            assert!(
+                error.to_string().contains(expected),
+                "{case}: unexpected rejection: {error}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -5664,7 +5813,7 @@ mod tests {
             let session_id = "s-6767676767676767676767676767676767676767676767676767676767676767";
             let paths = SessionPaths::new(&state, session_id);
             let acceptance = AcceptanceRecord {
-                schema_version: 3,
+                schema_version: 4,
                 session_id: session_id.to_string(),
                 accepted_at_unix: 1,
                 archive_bytes: 24,

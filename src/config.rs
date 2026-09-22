@@ -139,7 +139,7 @@ pub struct Config {
 /// Every value is read from a lock this service validates, never typed here:
 /// the implementation commit and every component image from the release lock,
 /// which must name the stack lock compiled into this binary, and the backend
-/// image and profile from that stack lock.
+/// image and launch profile from that stack lock.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ReleaseIdentity {
@@ -159,12 +159,22 @@ pub struct ReleaseImages {
     pub service: String,
 }
 
-/// The backend image the service is locked to, and its profile label.
+/// The backend the service is locked to: the image it runs, and the profile it
+/// is launched under.
+///
+/// The two are different facts with different values. The launch profile is
+/// the `qwen38.runtime.profile` label the backend's container and cache volume
+/// carry, `.backend.profile_label` in the stack lock, which the service checks
+/// on both before it accepts a session; it deliberately lags the image, whose
+/// own build writes a profile label of its own that no lock this service
+/// validates records. The image ID names the image exactly, so the record
+/// carries it rather than that second label, and names the profile it does
+/// carry for what it is.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct BackendIdentity {
     pub image_id: String,
-    pub profile: String,
+    pub launch_profile: String,
 }
 
 /// `config/release.lock.json`, exactly as `scripts/common.sh` validates it.
@@ -608,7 +618,7 @@ pub(crate) fn test_release_identity() -> ReleaseIdentity {
         },
         backend: BackendIdentity {
             image_id: lock.backend.image_id,
-            profile: lock.backend.profile_label,
+            launch_profile: lock.backend.profile_label,
         },
     }
 }
@@ -700,7 +710,7 @@ fn release_identity(
         images: release.images,
         backend: BackendIdentity {
             image_id: lock.backend.image_id.clone(),
-            profile: lock.backend.profile_label.clone(),
+            launch_profile: lock.backend.profile_label.clone(),
         },
     })
 }
@@ -1735,7 +1745,7 @@ mod tests {
                 },
                 backend: super::BackendIdentity {
                     image_id: lock.backend.image_id.clone(),
-                    profile: lock.backend.profile_label.clone(),
+                    launch_profile: lock.backend.profile_label.clone(),
                 },
             }
         );

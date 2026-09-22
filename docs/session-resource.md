@@ -24,7 +24,7 @@ the record and the refusal. The collection response is `{"sessions": [...]}`.
 | Location | Fields | Meaning |
 |---|---|---|
 | Resource | `session_id`, `status`, `started_at_unix`, `model`, `context_window`, `max_session_turns`, `archive_bytes`, `archive_sha256`, `prompt_preview` | Identity and accepted request facts |
-| Resource | `release` | The release that accepted the session: `implementation_commit`, `images` (`agent`, `relay`, `capture`, `broker`, `service`) and `backend` (`image_id`, `profile`) |
+| Resource | `release` | The release that accepted the session: `implementation_commit`, `images` (`agent`, `relay`, `capture`, `broker`, `service`) and `backend` (`image_id`, `launch_profile`) |
 | Resource | `progress_revision`, `progress_at_unix_ms`, `progress_phase`, `progress_message`, `progress_events` | Durable lifecycle observations, including the complete ordered history |
 | Resource | `staged_bytes`, `staged_entries`, `staged_regular_files`, `output_event_bytes`, `num_turns` | Observed work counters, retained at terminal; zero means no such work observed |
 | Resource | `last_event_at_unix` | Event-file modification time in Unix seconds; `null` if no trustworthy event-file timestamp was observed |
@@ -57,16 +57,23 @@ incomplete tail. This rule applies to captured wire output. Canonical session
 journals used to restore or mutate history retain their own strict durability
 and framing requirements.
 
-`release` is recorded in the acceptance record (schema version 3) when the
+`release` is recorded in the acceptance record (schema version 4) when the
 session is accepted and carried unchanged into every state of the resource,
 the terminal record included; a terminal read refuses a terminal that names
 another release than its acceptance. Its values are read at startup from the
 locks the service validates, never typed: the implementation commit and all
 five image IDs from `config/release.lock.json`, which must name, by hash, the
 stack lock compiled into the service and pin the same agent, relay, capture
-and broker images, and the backend image ID and profile label from that stack
-lock. A service whose release lock does not describe it refuses to start. A
-session recovered after a restart keeps the release that accepted it.
+and broker images, and the backend image ID and launch profile from that stack
+lock. The launch profile is `.backend.profile_label`, the profile label the
+backend's container and cache volume carry, which the service checks on both;
+it deliberately lags the backend image, whose own profile label no lock the
+service validates records, so the record names the image by its ID and the
+profile it carries as the launch profile. A service whose release lock does
+not describe it refuses to start. A session recovered after a restart keeps
+the release that accepted it. Version 3 records called the launch profile
+`profile`; like every older format they are refused at startup, which names
+each such result directory for the operator to move aside.
 
 The `terminal` object has these required fields:
 

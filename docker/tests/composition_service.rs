@@ -51,7 +51,7 @@ async fn final_image_service() {
         },
         backend: crate::config::BackendIdentity {
             image_id: lock.backend.image_id.clone(),
-            profile: lock.backend.profile_label.clone(),
+            launch_profile: lock.backend.profile_label.clone(),
         },
     };
     lock.service.runtime_root = fixture.root.to_str().unwrap().into();
