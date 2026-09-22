@@ -12,7 +12,7 @@
     "agent_apt_lock_sha256": "b653bee65b0d55f999b96a73102bdd3de03d72a4136a62810b9c89f091997770",
     "toolchain_verifier_sha256": "092f465dc47c3d102d7abe9d92d8317eea7e732d3133a7449607eb1dd46fe3ec",
     "toolchain_verifier_test_sha256": "932d6c5956a0e18a9f31a473ef68d1359d7bbd88a5b4fecdd5741568c3183011",
-    "runtime_contract_verifier_sha256": "e878567504844287312c4c06c593fa96502cc1a3fa3a19190e6bf524d34de6ea",
+    "runtime_contract_verifier_sha256": "4f101415b57a63aec66efa079e4e7b5c5a3280995d589b8f19ed7a4ca8edac10",
     "runtime_contract_verifier_test_sha256": "1224506b32f33ceec79ec74b4d5e7dcf3f9c4f43b7b8b79ee02fd8f53d3c125f",
     "wrapper_contract_test_sha256": "4d152995741166a803388cb4741c15753d8b94f0d58ae6b71b19cc64b01ff18a",
     "jks_normalizer_sha256": "309570025cc08c1ea865d67607e357d92cbb32ce2afe9af5e17c2cd7af8c3d6a",
@@ -92,11 +92,11 @@
     "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
     "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
     "settings_sha256": "5be5eb3e2287654acea147942aca944fed5c90656e98850f55fb5c6d25731e03",
-    "instructions_sha256": "311e41d2debc5ecaeb6934607a8232eeeae57022adf6aecbee55083b2b12abf6",
+    "instructions_sha256": "d415bbcc6f062c0ac1a2f1114b3bc8616c0d2d43a1b7f6eb7fe5bbabd3410a3e",
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "8aa4379bbf19749f26eaecff549524e7c85300d4235a06baeba4579762cc207b",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "runtime_contract_sha256": "389aac969609d9542f183f36bf53f3d7f5a83e89d108096900c114d20d93ec4a",
+    "runtime_contract_sha256": "d68c7f7b85041cc98602f615b2a91f6b24032d6725319f11b4bb530ebb4d1570",
     "wrapper_sha256": "0fdb2ac4b0f2fa4aafe1ea81322895ad4292ac88919c010f7eeea6f387ebc9d8",
     "agent_exec_source_sha256": "e6ddbbdc5f78b4e5fdcf3e6f96483e670c02ca50c94a4b5131f2a18d0c9ceb0b",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
@@ -120,8 +120,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "35211202788a79afccfc51f590e71efd7ae14859ee3d08396f3887a67674c9f1",
-      "source_patch_manifest_sha256": "2094cd3486a94f37c64d00420f932076773e0922fb0aefc05018d3ffcc90f2d5"
+      "patch_sha256": "c1454488ef2d1aaae57356367ffa7e34f244bea999fe8372a1a730eedecdc59f",
+      "source_patch_manifest_sha256": "1ff2ae2cc53cbe15ff9d4f753b5be22eb97adc37f97b179e423e4166011df368"
     }
   },
   "backend": {

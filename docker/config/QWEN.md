@@ -36,8 +36,8 @@ fallback configuration.
   so far, which is an ordinary outcome and not an error.
 - There is no Qwen wall-clock cutoff. Use each shell call's explicit timeout
   carefully and keep long-running commands observable.
-- A turn's tool results are held to one inline block, measured on the rendered
-  request. A batch over that bound is not shortened: its largest result is
-  written to a file whole and replaced by a reference naming the path, which
-  `read_file` returns in pages of the same size. Nothing is lost, so prefer one
-  narrow read or search over a broad one you will have to page back.
+- A tool result is held to one inline block. A longer one keeps its head, led
+  by a notice that states its true total and the exact `read_file` call that
+  reads on from a copy of the whole kept for the session, or why no copy could
+  be kept. Prefer one narrow read or search over a broad one you will have to
+  page back.

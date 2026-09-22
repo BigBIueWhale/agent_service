@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `35211202788a79afccfc51f590e71efd7ae14859ee3d08396f3887a67674c9f1`
+- Review-diff SHA-256: `c1454488ef2d1aaae57356367ffa7e34f244bea999fe8372a1a730eedecdc59f`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `2094cd3486a94f37c64d00420f932076773e0922fb0aefc05018d3ffcc90f2d5`
+- Transformer-manifest SHA-256: `1ff2ae2cc53cbe15ff9d4f753b5be22eb97adc37f97b179e423e4166011df368`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -103,8 +103,8 @@ not depend on `D`, which cancels, so the preamble trades against turn room and
 never against the trigger. One number is the whole of what a generation is
 given: the output limit of every turn whatever its prompt, and the room a
 compaction's snapshot is issued with. The route refuses a configured ceiling,
-including `QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive, displaced results,
-and candidate histories are counted using the actual rendered request.
+including `QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive and candidate
+histories are counted using the actual rendered request.
 
 A tool result says whether it is complete. One notice states what was asked
 for, what came back, the bound and its unit, the real total or why the tool
@@ -119,40 +119,45 @@ newline, and only the sentence subtracts it. A cap a service
 applied travels back with its items rather than being discarded, because a
 layer cannot declare a limit it was never told about.
 
-A result whose size is decided outside this process — a fetched page, an MCP
-server's reply — is held to `M`, one inline block, before it enters the
-conversation; the complete text is retained as a session artifact and the
-notice names the exact call that reads it back. `M` is a share of the served
-window, so the session is what knows it and every bounded producer asks the
-session rather than a constant of its own; a provider that declares no window
-has no share to take and is refused. The two producers that hold their session
-optionally refuse and name themselves rather than fall back to an unbounded
-mode. That a bound exists is required: the window is guarded in exact tokens by
-the compaction trigger, which refuses a request that no longer fits, and this
-budget is what keeps that refusal unreachable in ordinary work. Its magnitude
-is a declared policy, not a derivation. Bytes stand in for tokens in exactly
-one place and one direction — `inlineBlockTokenBound`, where a block of `M`
-bytes of NFC cannot exceed `M` tokens, because the tokenizer normalizes to NFC
-and then spends at least a byte per token — and nothing else converts between
-the two units. The bytes a text is written in are not that bound: NFC can make
-a text three times longer, and U+1D1C0, four bytes, normalizes to twelve. So
-one function, `tokenizerText`, measures every such bound in NFC, and a bounded
-text is cut on a character boundary in that form, measured again whole, and
-handed on in the form measured; its notice is inside the bound, not on top of
-it. The service refuses a prompt not in NFC, and the suite materializer
-excludes one on the same terms with the same Unicode version.
+Every tool result is held to `M`, one inline block, where its model copy is
+made, and nowhere else. The scheduler finishes each call's copy once every
+hook, rule and skill reminder has joined it, and each runtime that executes a
+call itself — the ACP session, speculation, a subagent's refusal of a tool it
+does not have — finishes its copy the same way. The joined text is measured
+once, whole; a longer one keeps its head, the complete text is retained as a
+session artifact, and one notice leads the head with the true total and the
+exact call that reads the rest back, or why the rest was not kept. Tools do not
+bound themselves: how much a command prints, a page holds or a server replies
+is not the tool's to decide, and a bound applied inside a tool was one more rule
+a result could be cut by, and one more place for text joined after it to pass
+it. `M` is a share of the served window, so the session is what knows it; a
+provider that declares no window has no share to take and is refused. That a
+bound exists is required: the window is guarded in exact tokens by the
+compaction trigger, which refuses a request that no longer fits, and this bound
+is what keeps that refusal unreachable in ordinary work. Its magnitude is a
+declared policy, not a derivation. Bytes stand in for tokens in exactly one
+place and one direction — the partition's framed block, `M + F`, where a block
+of `M` bytes of NFC cannot exceed `M` tokens, because the tokenizer normalizes
+to NFC and then spends at least a byte per token — and nothing else converts
+between the two units. The bytes a text is written in are not that bound: NFC
+can make a text three times longer, and U+1D1C0, four bytes, normalizes to
+twelve. So one function, `tokenizerText`, measures every such bound in NFC, and
+a bounded text is cut on a character boundary in that form, measured again
+whole, and handed on in the form measured; its notice is inside the bound, not
+on top of it. A send, and the adoption of a speculated turn, refuse a result
+past the bound as a defect of the path that made it rather than repairing it.
+The service refuses a prompt not in NFC, and the suite materializer excludes
+one on the same terms with the same Unicode version.
 
-A failed call's model-facing text is held to that same budget. A failure
-message is the one place a tool writes model-supplied input back out — the path
-it could not open, the pattern it could not compile, the tool name it did not
-recognise — and an argument that arrived merged or malformed makes that copy as
-large as the argument. The bound is applied where the model's copy is made
-rather than in each tool, so a tool cannot opt out of it and a new one inherits
-it. No continuation is named: the bytes past the cut are the tool's own prose
-plus a second copy of what the model just sent, so a file holding them would
-cost the window twice and return nothing the sender lacks. `error.message` is
-left whole on purpose, because the scrollback, the `PostToolUseFailure` hook and
-the sanitized telemetry span read it and want the operational summary in full.
+A failed call's model-facing text is held to the same bound by the same step,
+and stays a failure. A failure message is the one place a tool writes
+model-supplied input back out — the path it could not open, the pattern it
+could not compile, the tool name it did not recognise — and an argument that
+arrived merged or malformed makes that copy as large as the argument. The
+operational summary leads the tool's own words to the model, so the head a
+bound keeps says what failed. `error.message` is left whole on purpose, because
+the scrollback, the `PostToolUseFailure` hook and the sanitized telemetry span
+read it and want the operational summary in full.
 
 Compaction summarises the prompt the last turn was issued against and carries
 that turn, reasoning included, verbatim behind the snapshot, so the summary
@@ -235,20 +240,26 @@ the delegated task; its cleanup and accounting settle before completion. Child t
 Oversized text results and downloaded binary payloads share one immutable,
 content-addressed session artifact store. Exclusive creation prevents collisions;
 deduplication verifies existing bytes. Payloads and directory ancestry are synced.
-The 500 MiB storage quota counts actual retained files under the store's writer
-lock, including interrupted-write remnants. Recreating Config does not reset it.
+Its capacity, 500 MiB, is declared in one place and is a policy rather than a
+derivation. It counts actual retained files under the store's writer lock,
+including interrupted-write remnants, and recreating Config does not reset it.
+Reaching it is an outcome the caller states, not an error: a bounded result
+keeps its head and says the rest was not kept, why, and what to ask for
+instead, and a fetched binary that cannot be kept is refused with the download
+to make instead.
 
 Artifacts are retained by ownership and references. There is no age-based
 collection. Forks and exports may refer to an artifact after its original chat
 is deleted. A lock is not stolen based on elapsed time; an abandoned lock
-requires explicit administrative recovery. Persistence, integrity, quota, and
+requires explicit administrative recovery. Persistence, integrity, lock and
 cleanup failures retain their causes and refuse the operation.
 
-Fetched and decoded tool content is retained whole before displacement. Range
-bounds are explicit query facts. Text paging uses UTF-8 bytes and returns the
-next line offset without consuming a line it did not return. Text decoding follows
-a Unicode BOM or UTF-8 when absent; large streaming reads require UTF-8. Invalid
-encoding, unreadable oversized lines, and unsupported media fail explicitly.
+A fetched body is retained whole, and its note says where, or why it was not.
+Range bounds are explicit query facts. Text paging uses UTF-8 bytes and returns
+the next line offset without consuming a line it did not return. Text decoding
+follows a Unicode BOM or UTF-8 when absent; large streaming reads require UTF-8.
+Invalid encoding, unreadable oversized lines, and unsupported media fail
+explicitly.
 
 ## Tool and deployment contracts
 

@@ -221,7 +221,7 @@ the context costs its fixed text plus each run's own tokens exactly; counted
 through the served path, it does. The startup context is kept whole at the
 head of every history a compaction builds, never summarized and rebuilt, so
 nothing can fail to put it back. In the compaction shape, without a snapshot,
-the preamble is 3,365 before the 559 its directive adds. `F` is proved against
+the preamble is 3,358 before the 559 its directive adds. `F` is proved against
 the served template too: a user message, an assistant turn and a tool result,
 each counted with the request and without it, less its content counted
 alone. The served template frames them in 5, 10 and 24 tokens, the last with
@@ -229,16 +229,17 @@ the markup of the call it answers.
 
 `M` is the one declared magnitude and is openly a policy: it is the most any
 single block placed inline may be — one tool result, one `read_file` page, one
-accepted snapshot, one submitted prompt — and anything larger is kept whole in
-a file and read back a page at a time rather than shortened. It is measured in
-the UTF-8 bytes of a text's NFC form, and that is a token bound because the
-served tokenizer normalizes to NFC before it splits anything and every token
-covers at least one byte of what that produced: a text's tokens are at most the
-UTF-8 bytes of its NFC form. The bytes a text is written in bound nothing, since
-NFC can make a text three times longer — U+1D1C0 is four bytes and normalizes
-to twelve. One function, `tokenizerText`, takes that measure for every bound,
-and a bounded text is handed on in the form it was measured in: the
-tokenizer's normalizer follows an older Unicode and composes less than the
+accepted snapshot, one submitted prompt. A tool result past it keeps its head
+inline, led by a notice naming the `read_file` call that continues it from a
+file holding the whole, or saying why no such file could be kept. It is
+measured in the UTF-8 bytes of a text's NFC form, and that is a token bound
+because the served tokenizer normalizes to NFC before it splits anything and
+every token covers at least one byte of what that produced: a text's tokens are
+at most the UTF-8 bytes of its NFC form. The bytes a text is written in bound
+nothing, since NFC can make a text three times longer — U+1D1C0 is four bytes
+and normalizes to twelve. One function, `tokenizerText`, takes that measure for
+every bound, and a bounded text is handed on in the form it was measured in:
+the tokenizer's normalizer follows an older Unicode and composes less than the
 measuring ones, so a text as written can normalize there to more bytes than it
 measured, while text already in the measured form it leaves no longer.
 `scripts/test-normalizer-agreement.sh` runs every code point, alone and in
@@ -292,15 +293,19 @@ fully rendered request. Before compaction and again before generation, Qwen Code
 sends the exact messages, typed tool history, image parts, tool schemas, and
 template arguments to the backend `/tokenize` endpoint. A turn is issued below
 the compaction trigger or it is not issued at all, and it is issued with `C`.
-The tool results it appends are measured the same way — the rendered request
-counted with the pending batch and without it, the difference being what the
-batch costs — and a batch over one framed inline block, 32,829 tokens at the
-served window, is written to disk whole and replaced by references to the
-files rather than shortened. There is no character division, `target // 8`,
-image-token guess, padding margin, local tokenizer, or tokenizer fallback
-anywhere in the compaction trigger, the outbound sizing, or the tool-result
-bound. If the tokenizer is missing, malformed, or reports another model window,
-the turn fails before generation.
+The tool result it appends is bounded before it gets there: every result is held
+to one inline block where its model copy is made — the tool's output with every
+hook and reminder that joined it, measured once in the bytes of its NFC form —
+and the deployment's `parallel_tool_calls: false` holds the backend's call
+grammar to one call a turn, so a turn appends one result. A result past the
+bound keeps its head, led by a notice with its true total and the `read_file`
+call that continues it from the session's copy of the whole, or the reason no
+copy could be kept; a send that finds a result past the bound refuses it as the
+defect it is rather than sending it. There is no character division,
+`target // 8`, image-token guess, padding margin, local tokenizer, or tokenizer
+fallback anywhere in the compaction trigger, the outbound sizing, or the
+tool-result bound. If the tokenizer is missing, malformed, or reports another
+model window, the turn fails before generation.
 
 A session is bounded by model turns, never by wall-clock time: the default
 budget is 400 turns (`limits.max_session_turns`), a submission may name any
@@ -444,11 +449,11 @@ A terminal conversation and a headless conversation share the same obligations:
 - A tool result declares whether it is complete. The one notice in
   `packages/core/src/tools/tools.ts` states what was asked for, what came back,
   the bound and its unit, the true total or an explicit reason the tool cannot
-  know it, and the exact next call. Tools do not word their own: a tool that
-  cuts a result to a named cap without it refuses the build, so a bound cannot
-  become invisible by a tool forgetting to mention it. A cap applied inside a
-  service is returned with the items, because the layer asked to declare a
-  limit has to be told one was hit.
+  know it, and the exact next call, or why the rest was not kept and what to ask
+  for instead. Tools do not word their own: a tool that cuts a result to a named
+  cap without it refuses the build, so a bound cannot become invisible by a tool
+  forgetting to mention it. A cap applied inside a service is returned with the
+  items, because the layer asked to declare a limit has to be told one was hit.
 - The snapshot is a declared tool call, not hand-written markup. The compaction
   request advertises one function whose closed parameter schema is the six
   sections, and forces it, so the structure is constrained where the tokens are

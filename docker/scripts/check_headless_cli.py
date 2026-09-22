@@ -166,11 +166,13 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                     require(0 < size < 2 * 1024 * 1024, "unexpected request size")
                     body = json.loads(self.rfile.read(size))
                     requests.append({"path": self.path, "body": body})
-                    # The two-turn cycle issues thirteen requests: the startup proof's six counts (the
+                    # The two-turn cycle issues twelve requests: the startup proof's six counts (the
                     # preamble, the preamble with its startup context, the framing text alone, and the
-                    # message, turn and tool-result probes), each turn's pending-results and pre-issue
-                    # counts, the second turn's tool-result baseline, and the two generations.
-                    require(len(requests) <= 13, "CLI exceeded the smoke request bound")
+                    # message, turn and tool-result probes), each turn's two counts (the request with
+                    # its pending message, and the request about to be issued), and the two
+                    # generations. A tool result is bounded where it is made, so no turn counts a
+                    # baseline without it.
+                    require(len(requests) <= 12, "CLI exceeded the smoke request bound")
                     require(body["model"] == model, "CLI selected a different model")
                     if self.path == "/tokenize":
                         # Both forms the served /tokenize accepts: a rendered chat request, and a text

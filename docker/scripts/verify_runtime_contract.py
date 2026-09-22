@@ -246,7 +246,7 @@ def verify_prompts(
         "QWEN instructions",
         instructions,
         [
-            "A turn's tool results are held to one inline block",
+            "A tool result is held to one inline block.",
         ],
     )
 
